@@ -1,0 +1,69 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Index
+    //* クラス日本語名  ：UsersAdminのスキャフォ（UsersのDelete）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Resources;
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+@model ApplicationUser
+
+@{
+    ViewBag.Title = AdminViews.UsersAdminDeleteTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<div class="form-horizontal">
+    <h4>@AdminViews.UsersAdminDeleteH4</h4>
+    <hr />
+
+    <p><b>@AdminViews.UsersAdminDeleteB</b></p>
+    
+    <div class="form-group">
+        <div class="col-md-10">
+            @using (Html.BeginForm())
+            {
+                @Html.AntiForgeryToken()
+                <b>@AdminViews.UsersAdminUserName</b> <text>&#058;</text> <span>@Html.DisplayFor(model => model.UserName)</span>
+                if (Model.Id == Model.ParentId)
+                {
+                    // submitボタンを表示しない。
+                }
+                else
+                { 
+                    <input type="submit" value="@AdminViews.UsersAdminDeleteSubmit" class="btn btn-default" />
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<div>
+    @Html.ActionLink(AdminViews.ReturnList, "Index")
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

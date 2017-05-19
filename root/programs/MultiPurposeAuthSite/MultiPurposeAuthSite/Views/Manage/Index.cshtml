@@ -1,0 +1,202 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Manage/Index
+    //* クラス日本語名  ：管理用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Resources;
+@using MultiPurposeAuthSite.Models.ViewModels
+@using MultiPurposeAuthSite.Models.ASPNETIdentity;
+
+@model ManageIndexViewModel
+@{
+    ViewBag.Title = ManageViews.IndexTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<p class="text-success">@ViewBag.StatusMessage</p>
+<div class="row">
+    <div class="col-md-8">
+        <h4>@ManageViews.IndexH4</h4>
+        <hr />
+        <dl class="dl-horizontal">
+            <dt>Password :</dt>
+            <dd>
+                [
+                @if (Model.HasPassword)
+                {
+                    @Html.ActionLink(ManageViews.IndexChangePasswordActionLink, "ChangePassword")
+                }
+                else
+                {
+                    @Html.ActionLink(ManageViews.IndexSetPasswordActionLink, "SetPassword")                }
+                ]
+            </dd>
+
+            <dt>@ManageViews.IndexExternalLogins:</dt>
+            <dd>
+                @Model.Logins.Count [
+                @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
+            </dd>
+
+            @*
+                Phone Numbers can used as a second factor of verification in a two-factor authentication system.
+                 See <a href="http://go.microsoft.com/fwlink/?LinkId=403804">this article</a>
+                    for details on setting up this ASP.NET application to support two-factor authentication using SMS.
+                 Uncomment the following block after you have set up two-factor authentication
+            *@
+            @*
+                電話番号を 2FAシステムの第 2 認証要素としてお使いいただけます。
+                SMS を使用する 2FAをサポートするようにこの ASP.NET アプリケーションを設定する方法の詳細については、
+                <a href="http://go.microsoft.com/fwlink/?LinkId=403804">こちらの記事</a>をご覧ください。
+                2FAの設定が完了したら、次のブロックのコメントを解除してください。
+            *@
+           
+            @* UID ≠ 非メアド の場合、メアドの "Add" or "Remove" は実装しない。*@
+            @* ・ユーザストアが管理者から提供されるエンプラ向き実装。*@
+            @* ・このため、管理者から提供されたメアドを使用する。 *@
+             
+@*@if (!ASPNETIdentityConfig.RequireUniqueEmail)
+{
+            <dt>@ManageViews.IndexEmail :</dt>
+            <dd>
+                @if (string.IsNullOrEmpty(Model.Email))
+                {
+                    <text>None</text><br />
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
+                }
+                else
+                {
+                    <text>@Model.Email</text><br />
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
+                    using (Html.BeginForm("RemoveEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexEmailRemoveButton" class="btn-link" />]</text>
+                    }
+                }
+            </dd>
+}*@
+
+            <dt>@ManageViews.IndexPhoneNumber :</dt>
+            <dd>
+                @*"Add" or "Remove"*@
+                @if (string.IsNullOrEmpty(Model.PhoneNumber))
+                {
+                    <text>None</text><br />
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
+                }
+                else
+                {
+                    <text>@Model.PhoneNumber</text><br/>
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
+
+                    
+                    using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn-link" />]</text>
+                    }
+                    
+                }
+            </dd>
+    
+            <dt>@ManageViews.IndexTwoFactorAuth :</dt>
+            <dd>
+                @*<p>
+                    There are no two-factor authentication providers configured. See <a href="http://go.microsoft.com/fwlink/?LinkId=403804">this article</a>
+                    for details on setting up this ASP.NET application to support two-factor authentication.
+                </p>*@
+                @*<p>
+                    構成済みの 2FAプロバイダーはありません。2FAをサポートするようにこの ASP.NET アプリケーションを設定する方法の
+                    詳細については、<a href="http://go.microsoft.com/fwlink/?LinkId=403804">こちらの記事</a>をご覧ください。
+                </p>*@
+
+                @if (Model.TwoFactor)
+                {
+                    using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>@ManageViews.IndexTwoFactorAuthEnableStatus
+                            <input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabled" class="btn btn-link" />
+                        </text>
+                    }
+                }
+                else
+                {
+                    using (Html.BeginForm("EnableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>@ManageViews.IndexTwoFactorAuthDisableStatus
+                            <input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabled" class="btn btn-link" />
+                        </text>
+                    }
+                }
+            </dd>
+
+@if (ASPNETIdentityConfig.EnableStripe || ASPNETIdentityConfig.EnablePAYJP)
+{
+            <dt>@ManageViews.IndexPaymentInformation :</dt>
+}
+
+            <dd>
+
+@*"Add" or "Remove or Charge"*@
+@if (!Model.HasPaymentInformation)
+{
+    if (ASPNETIdentityConfig.EnableStripe || ASPNETIdentityConfig.EnablePAYJP)
+    {
+                        <text>None</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationAddActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
+    }
+}
+else
+{
+                        <text>XXXXXXXXXX</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationAddActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
+
+    using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+    {
+                        @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn-link" />]</text>
+    }
+
+    if (ASPNETIdentityConfig.IsDebug)
+    {
+        using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+        {
+                        @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn-link" />]</text>
+        }
+    }
+}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

@@ -1,0 +1,117 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：_Layout
+    //* クラス日本語名  ：マスタ・ページ相当
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using Microsoft.AspNet.Identity
+@using MultiPurposeAuthSite.Resources;
+@* マスタ・ページに相当 *@
+@using MultiPurposeAuthSite.Models.ViewModels
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewBag.Title</title>
+    @Styles.Render("~/bundles/css")
+    @Scripts.Render("~/bundles/modernizr")
+    @Scripts.Render("~/bundles/jquery")
+
+    @RenderSection("HeaderScriptsSection", required: true)
+
+    <script type="text/javascript">
+        // Resolve URL in the javascript
+        var baseUrl = '@Url.Content("~/")'
+    </script>
+
+</head>
+<body onload="Fx_Document_OnLoad();Fx_AdjustStyle();">
+    <div class="page-header row">
+        <div class="col-xs-10" style="padding: 0">
+            <div id="header-logo"><a href="@Url.Action("Index", "Home")"><img alt="logo" src="~/images/touryo/logo.png" /></a></div>
+            <div id="header-title">
+                <div style="margin:30px;">
+@if (User.Identity.IsAuthenticated)
+{
+                    <ul class="nav navbar-nav navbar-right">
+                        <li>
+                            @Html.ActionLink(string.Format(SharedViews.LoginPartial, User.Identity.GetUserName()), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage" })
+                        </li>
+                    </ul>
+}
+                </div>
+            </div>
+        </div>
+        <div id="header-button" class="col-xs-2">
+@if (User.Identity.IsAuthenticated)
+{
+            @* サインアウトボタンは、ユーザーが認証されている時だけ表示する *@
+            <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Logoff", "Account")';">Sign-out</button>
+}
+else
+{
+            <ul class="nav navbar-nav navbar-right">
+                <li><button type="button" class="btn btn-info" onclick="window.location.href = '@Url.Action("Register", "Account")';">Sign-up</button></li>
+                <li><button type="button" class="btn btn-default" onclick="window.location.href = '@Url.Action("Login", "Account")';">Sign-in</button></li>
+            </ul>
+}
+        </div>
+    </div>
+    <div id="body-bk">
+        <div id="body" class="row">
+            <div class="nav-side-menu col-sm-2">
+                <div class="brand">メニュー</div>
+                <i class="fa fa-bars fa-2x toggle-btn" data-toggle="collapse" data-target="#menu-content"></i>
+                <div class="menu-list">
+                    <ul id="menu-content" class="menu-content collapse out">
+                        <li onclick="window.location.href = '@Url.Action("Index", "Home")';">
+                            <i class="fa fa-arrow-circle-right"></i> メニュートップ
+                        </li>
+@if (User.Identity.IsAuthenticated)
+{
+                        @* 各メニューは、ユーザーが認証されている時だけ表示する *@
+                        <li onclick="window.location.href = '@Url.Content("~/")';">
+                            <i class="fa fa-arrow-circle-right"></i> メニュー１
+                        </li>
+                        <li onclick="window.location.href = '@Url.Content("~/")';">
+                            <i class="fa fa-arrow-circle-right"></i> メニュー２
+                        </li>
+}
+                    </ul>
+                </div>
+            </div>
+            <div id="contents" class="col-sm-10">
+                @RenderBody()
+            </div>
+        </div>
+    </div>
+    <footer class="footer">
+        <div class="container">
+            <p class="text-muted">Powered by <a target="_blank" href="https://github.com/OpenTouryoProject">OpenTouryo</a></p>
+    </div>
+    </footer>
+
+    @Scripts.Render("~/bundles/bootstrap")
+    @Scripts.Render("~/bundles/touryo")
+    @Scripts.Render("~/bundles/app")
+
+    @RenderSection("FooterScriptsSection", required: true)
+
+</body>
+</html>

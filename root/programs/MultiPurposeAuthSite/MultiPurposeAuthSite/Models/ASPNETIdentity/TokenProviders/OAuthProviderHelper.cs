@@ -1,0 +1,480 @@
+﻿//**********************************************************************************
+//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//**********************************************************************************
+
+#region Apache License
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License. 
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+#endregion
+
+//**********************************************************************************
+//* クラス名        ：OAuthProviderHelper
+//* クラス日本語名  ：OAuthProviderHelper（ライブラリ）
+//*
+//* 作成日時        ：－
+//* 作成者          ：－
+//* 更新履歴        ：－
+//*
+//*  日時        更新者            内容
+//*  ----------  ----------------  -------------------------------------------------
+//*  2017/04/24  西野 大介         新規
+//**********************************************************************************
+
+using MultiPurposeAuthSite.Models.Util;
+
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Security.Claims;
+
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+
+using System.Web;
+
+using Newtonsoft.Json;
+
+namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+{
+    /// <summary>OAuthProviderHelper（ライブラリ）</summary>
+    public class OAuthProviderHelper
+    {
+        #region member variable
+
+        /// <summary>Singleton (instance)</summary>
+        private static OAuthProviderHelper _oAuthHelper = new OAuthProviderHelper();
+        
+        /// <summary>クライアント識別子情報</summary>
+        private Dictionary<string, Dictionary<string, string>> _oauthClientsInfo = null;
+
+        /// <summary>
+        /// OAuth Server
+        /// ・AuthorizationServerのTokenエンドポイント、
+        /// ・ResourceServerの保護リソース（WebAPI）
+        /// にアクセスするためのHttpClient
+        /// 
+        /// </summary>
+        /// <remarks>
+        /// HttpClientの類の使い方 - マイクロソフト系技術情報 Wiki
+        ///  > HttpClientクラス > ポイント
+        /// https://techinfoofmicrosofttech.osscons.jp/index.php?HttpClient%E3%81%AE%E9%A1%9E%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9#l0c18008
+        /// Singletonで使うので、ここではstaticではない。
+        /// </remarks>
+        private HttpClient _oAuthHttpClient = null;
+
+        #endregion
+
+        #region constructor
+
+        /// <summary>constructor</summary>
+        private OAuthProviderHelper()
+        {
+            // クライアント識別子情報
+            this._oauthClientsInfo =
+                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(ASPNETIdentityConfig.OAuthClientsInformation);
+            // OAuth ServerにアクセスするためのHttpClient
+            this._oAuthHttpClient = HttpClientBuilder(EnumProxyType.Intranet);
+        }
+
+        #endregion
+
+        #region property
+
+        /// <summary>
+        /// OauthClientsInfo
+        /// </summary>
+        private Dictionary<string, Dictionary<string, string>> OauthClientsInfo
+        {
+            get
+            {
+                return this._oauthClientsInfo;
+            }
+        }
+
+        /// <summary>
+        /// OAuthHttpClient
+        /// </summary>
+        private HttpClient OAuthHttpClient
+        {
+            get
+            {
+                return this._oAuthHttpClient;
+            }
+        }
+        
+        #endregion
+
+        #region GetInstance
+
+        /// <summary>GetInstance</summary>
+        /// <returns>OAuthHelper</returns>
+        public static OAuthProviderHelper GetInstance()
+        {
+            return OAuthProviderHelper._oAuthHelper;
+        }
+
+        #endregion
+
+        #region instanceメソッド
+
+        #region HttpClient
+
+        #region ClientBuilder
+
+        /// <summary>
+        /// TOAuth Serverにアクセスするための
+        /// HttpClientを生成するメソッド
+        /// </summary>
+        /// <returns>
+        /// HttpClient
+        /// </returns>
+        private HttpClient HttpClientBuilder(EnumProxyType proxyType)
+        {
+            IWebProxy proxy = null;
+
+            switch (proxyType)
+            {
+                case EnumProxyType.Internet:
+                    proxy = CreateProxy.GetInternetProxy();
+                    break;
+                case EnumProxyType.Intranet:
+                    proxy = CreateProxy.GetIntranetProxy();
+                    break;
+                case EnumProxyType.Debug:
+                    proxy = CreateProxy.GetDebugProxy();
+                    break;
+            }
+
+            HttpClientHandler handler = new HttpClientHandler
+            {
+                Proxy = proxy,
+            };
+            
+            return new HttpClient(handler);
+            //return new HttpClient();
+        }
+
+        #endregion
+
+        #region Access Token
+
+        /// <summary>仲介コードからAccess Tokenを取得する。</summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">仲介コード</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code)
+        {
+            // 4.1.3.  アクセストークンリクエスト
+            // http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req
+
+            // 通信用の変数
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = tokenEndpointUri,
+            };
+
+            // HttpRequestMessage (Headers & Content)
+
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(
+                    string.Format("{0}:{1}",
+                    client_id, client_secret))));
+
+            httpRequestMessage.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    { "grant_type", "authorization_code" },
+                    { "code", code },
+                    { "redirect_uri", HttpUtility.HtmlEncode(redirect_uri) },
+                });
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+
+        /// <summary>Refresh Tokenを使用してAccess Tokenを更新</summary>
+        /// <param name="tokenEndpointUri">tokenEndpointUri</param>
+        /// <param name="refreshToken">refreshToken</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> UpdateAccessTokenByRefreshTokenAsync(
+            Uri tokenEndpointUri, string refreshToken)
+        {
+            // 6.  アクセストークンの更新
+            // http://openid-foundation-japan.github.io/rfc6749.ja.html#token-refresh
+
+            // 通信用の変数
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = tokenEndpointUri,
+            };
+
+            // HttpRequestMessage (Content)
+            httpRequestMessage.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    { "grant_type", "refresh_token" },
+                    { "refresh_token", refreshToken },
+                });
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+
+        #endregion
+
+        #region OAuthWebAPI
+        
+        /// <summary>認可したユーザに課金するWebAPIを呼び出す</summary>
+        /// <param name="accessToken">accessToken</param>
+        /// <param name="currency">通貨</param>
+        /// <param name="amount">料金</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> CallOAuthChageToUserWebAPIAsync(
+            string accessToken, string currency, string amount)
+        {
+            // 通信用の変数
+
+            // 認証用のWebAPI（認証を認可したユーザのClaim情報を取得）
+            Uri webApiEndpointUri = new Uri(
+                ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuthChageToUserWebAPI);
+
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = webApiEndpointUri,
+            };
+
+            // HttpRequestMessage (Headers & Content)
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            httpRequestMessage.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    { "currency", currency },
+                    { "amount", amount },
+                });
+            httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+
+        /// <summary>認可したユーザのClaim情報を取得するWebAPIを呼び出す</summary>
+        /// <param name="accessToken">accessToken</param>
+        /// <returns>結果のJSON文字列（認可したユーザのClaim情報）</returns>
+        public async Task<string> CallOAuthGetUserClaimWebAPIAsync(string accessToken)
+        {
+            // 通信用の変数
+            
+            // 認可したユーザのClaim情報を取得するWebAPI
+            Uri webApiEndpointUri = new Uri(
+                ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuthGetUserClaimWebAPI);
+
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri = webApiEndpointUri,
+            };
+
+            // HttpRequestMessage (Headers)
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+
+        #endregion
+        
+        #endregion
+
+        #region OAuthClients
+        
+        /// <summary>client_idからclient_secretを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>client_secret</returns>
+        public string GetClientSecret(string client_id)
+        {
+            client_id = client_id ?? "";
+            return this.OauthClientsInfo[client_id]["client_secret"];
+        }
+
+        /// <summary>client_idからclient_nameを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>client_name</returns>
+        public string GetClientName(string client_id)
+        {
+            client_id = client_id ?? "";
+            return this.OauthClientsInfo[client_id]["client_name"];
+        }
+
+        /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">response_type</param>
+        /// <returns>redirect_uri</returns>
+        public string GetClientsRedirectUri(string client_id, string response_type)
+        {
+            client_id = client_id ?? "";
+            response_type = response_type ?? "";
+
+            if (response_type.ToLower() == "code")
+            {
+                return this.OauthClientsInfo[client_id]["redirect_uri_code"];
+            }
+            else if (response_type.ToLower() == "token")
+            {
+                return this.OauthClientsInfo[client_id]["redirect_uri_token"];
+            }
+
+            return "";
+        }
+
+        /// <summary>TestUserのclientIdを取得</summary>
+        /// <returns>TestUserのclientId</returns>
+        public string GetTestUsersClientId()
+        {
+            foreach (string clientId in this.OauthClientsInfo.Keys)
+            {
+                Dictionary<string, string> client
+                    = this.OauthClientsInfo[clientId];
+
+                string clientName = client["client_name"];
+                if (clientName.ToLower() == "TestUser".ToLower())
+                {
+                    return clientId;
+                }
+            }
+
+            return "";
+        }
+
+        /// <summary>TestUsersのclientIdと指定したindexのindex値を取得</summary>
+        /// <param name="index">index</param>
+        /// <param name="clientId">clientId</param>
+        /// <param name="indexValue">index値</param>
+        /// <returns>bool</returns>
+        public bool GetTestUsersInfo(string index, out string clientId, out string indexValue)
+        {
+            clientId = "";
+            foreach (string _clientId in this.OauthClientsInfo.Keys)
+            {
+                Dictionary<string, string> client
+                    = this.OauthClientsInfo[_clientId];
+
+                string clientName = client["client_name"];
+
+                if (clientName.ToLower() == "TestUser".ToLower())
+                {
+                    // TestUserの
+
+                    // clientIdと
+                    clientId = _clientId;
+
+                    // 指定したindexのindex値を
+                    indexValue = client[index];
+
+                    // 取得
+                    return true;
+                }
+            }
+
+            // 値が存在しない場合。
+            clientId = "";
+            indexValue = "";
+
+            return false;
+        }
+
+        #endregion
+        
+        #endregion
+
+        #region staticメソッド
+
+        #region Claim処理
+
+        /// <summary>
+        /// ClaimsIdentityに所定のClaimを追加する。
+        /// </summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="nonce">nonce</param>
+        /// <param name="scopes">権限情報</param>
+        /// <returns>ClaimsIdentity</returns>
+        public static ClaimsIdentity AddClaim(ClaimsIdentity identity, string client_id, string state, IEnumerable<string> scopes)
+        {
+            // OpenID Connect - マイクロソフト系技術情報 Wiki > IDトークン（クレーム）
+            // - クレームセット
+            //   https://techinfoofmicrosofttech.osscons.jp/index.php?OpenID%20Connect#h586dfab
+            // - 例 > Google
+            //   https://techinfoofmicrosofttech.osscons.jp/index.php?OpenID%20Connect#jaec1c75
+            //{
+            //  ★ "iss":"accounts.google.com",
+            //  ★ "aud":"クライアント識別子.apps.googleusercontent.com",
+            //  ★ "sub":"ユーザーの一意識別子",
+            //  ★ "iat":JWT の発行日時（Unix時間）,
+            //  ★ "exp":JWT の有効期限（Unix時間）
+            //  "email":"・・・・",
+            //  "email_verified":"true",
+            //  "azp":"認可した対象者のID.apps.googleusercontent.com",
+            //  "at_hash":"・・・", ← Hybrid Flowの追加クレーム
+            //}
+
+            // 発行者の情報を含める。
+            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Issuer, ASPNETIdentityConfig.OAuthIssuerId));
+            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Audience, client_id));
+            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, state));
+
+            foreach (string scope in scopes)
+            {
+                // その他のscopeは、Claimの下記urnに組み込む。
+                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Scope, scope));
+            }
+
+            return identity;
+        }
+
+        #endregion
+
+        #endregion
+    }
+}
