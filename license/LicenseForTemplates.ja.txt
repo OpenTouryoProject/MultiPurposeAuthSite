@@ -1,0 +1,23 @@
+Open棟梁 派生テンプレート使用許諾契約書 参考訳
+
+以下は、「OpenTouryo Derivative Template License Agreement」を和訳したものである。英語版との矛盾が生じた場合は、英語版を優先する。
+
+本ソフトウェア中のカスタマイズや追加実装を前提とした「本テンプレート ファイル部分」は、この複製を取得するすべての人に対し、以下の条項、及び The MIT License に従い、使用等許諾します。
+
+第 1 条 「本テンプレート ファイル部分」には、「マイクロソフト社の再頒布可能コード」が含まれているため、当該部分に以下の条件を遵守するものとします。
+(1) 「本テンプレート ファイル部分」を含む「ユーザによって開発されたプログラム」の頒布又は使用に関して、マイクロソフト社に対して何らの請求、要求又は責任追及をしないこと。
+(2) 「本テンプレート ファイル部分」の使用又は頒布に基づき又は関連して発生したあらゆる請求又は訴訟（弁護士費用を含む。） について、マイクロソフト社及びマイクロソフト社のサプライヤーに補償し、マイクロソフト社及びマイクロソフト社のサプライヤーを免責及び防御すること。
+(3) 「本テンプレート ファイル部分」の「マイクロソフト社の再頒布可能コード」における著作権、商標又は特許の表示を改変しないこと。
+(4) 「本テンプレート ファイル部分」が組み込まれた「ユーザによって開発されたプログラム」を販売する際にマイクロソフト社の名称、ロゴ又は商標を使用せず、当該ユーザによって開発されたプログラムに有効な著作表示を含めること。
+(5) マイクロソフト社の商標を、「本テンプレート ファイル部分」を含む「ユーザによって開発されたプログラム」の名称の一部に使用したり、マイクロソフト社から由来している又はマイクロソフト社が推奨していることを示唆するような方法で使用しないこと。
+(6) 悪意のある又は欺瞞的なプログラムに含めもしくはそのようなプログラムと共に、又は違法な手段で、「本テンプレート ファイル部分」を頒布しないこと。
+(7) 「本テンプレート ファイル部分」の一部に除外ライセンスが適用されることになるような方法でソースコードを改変又は再頒布しないこと。
+「除外ライセンス」とは、使用、改変又は頒布の条件として、コードをソース コード形式で公表又は頒布すること又はその他の者がコードを改変することができることを要求するライセンスを意味する。
+
+第 2 条 「本テンプレート ファイル部分」には The MIT License が併せて適用されるものとし、The MIT License に第 1 条と異なる定めがある場合は、第 1 条の定めが優先して適用されるものとする。
+
+The MIT License
+Copyright (c) 2017 Hitachi Solutions,Ltd.
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
