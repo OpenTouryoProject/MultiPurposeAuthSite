@@ -479,6 +479,7 @@
     <Content Include="Views\Manage\AddPaymentInformationStripe.cshtml" />
     <Content Include="Views\Manage\AddPaymentInformationPAYJP.cshtml" />
     <Content Include="Views\Account\VerifyEmailAddress.cshtml" />
+    <Content Include="Views\Manage\VerifyEmailAddress.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

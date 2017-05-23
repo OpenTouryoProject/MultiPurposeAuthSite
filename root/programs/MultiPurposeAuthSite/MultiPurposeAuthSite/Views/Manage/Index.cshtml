@@ -77,7 +77,7 @@
             @* ・ユーザストアが管理者から提供されるエンプラ向き実装。*@
             @* ・このため、管理者から提供されたメアドを使用する。 *@
              
-@*@if (!ASPNETIdentityConfig.RequireUniqueEmail)
+@if (!ASPNETIdentityConfig.RequireUniqueEmail)
 {
             <dt>@ManageViews.IndexEmail :</dt>
             <dd>
@@ -97,7 +97,7 @@
                     }
                 }
             </dd>
-}*@
+}
 
             <dt>@ManageViews.IndexPhoneNumber :</dt>
             <dd>

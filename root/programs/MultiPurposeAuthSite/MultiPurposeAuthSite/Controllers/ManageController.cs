@@ -24,6 +24,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -41,6 +42,7 @@ using Microsoft.AspNet.Identity.Owin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Business.Presentation;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -310,108 +312,155 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region E-mail
-        
+
         #region Create
 
-        ///// <summary>
-        ///// E-mailの追加画面（初期表示）
-        ///// GET: /Manage/AddEmail
-        ///// </summary>
-        ///// <returns>ActionResult</returns>
-        //[HttpGet]
-        //public ActionResult AddEmail()
-        //{
-        //    return View();
-        //}
+        /// <summary>
+        /// E-mailの追加画面（初期表示）
+        /// GET: /Manage/AddEmail
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult AddEmail()
+        {
+            return View();
+        }
 
-        ///// <summary>
-        ///// E-mailの追加画面（E-mailの追加）
-        ///// POST: /Manage/AddEmail
-        ///// </summary>
-        ///// <param name="model">ManageAddEmailViewModel</param>
-        ///// <returns>ActionResultを非同期に返す</returns>
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<ActionResult> AddEmail(ManageAddEmailViewModel model)
-        //{
-        //    // RegisterViewModelの検証
-        //    if (ModelState.IsValid)
-        //    {
-        //        // RegisterViewModelの検証に成功
+        /// <summary>
+        /// E-mailの追加画面（E-mailの追加）
+        /// POST: /Manage/AddEmail
+        /// </summary>
+        /// <param name="model">ManageAddEmailViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddEmail(ManageAddEmailViewModel model)
+        {
+            // RegisterViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // RegisterViewModelの検証に成功
+                // めんどうなのでSessionStoreで。
+                string code = GetPassword.Base64UrlSecret(16);
+                Session["Code"] = code;
+                Session["Email"] = model.Email; // 更新後のメアド
 
-        //        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-        //        user.Email = model.Email;
-        //        user.EmailConfirmed = true; 
-        //        // EmailConfirmationしないのは、
-        //        // サインイン出来ないアカウントが出来てしまうので。
+                this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
 
-        //        IdentityResult result = await UserManager.UpdateAsync(user);
+                // 再表示
+                return View("VerifyEmailAddress");
+            }
+            else
+            {
+                // RegisterViewModelの検証に失敗
+            }
 
-        //        // E-mailの検証結果の確認
-        //        if (result.Succeeded)
-        //        {
-        //            // 成功
+            // 再表示
+            return View(model);
+        }
 
-        //            // 再ログイン
-        //            await this.ReSignInAsync();
+        #endregion
 
-        //            // Index - AddE-mailSuccess
-        //            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
-        //        }
-        //        else
-        //        {
-        //            // 失敗
-        //        }
-        //    }
-        //    else
-        //    {
-        //        // RegisterViewModelの検証に失敗
-        //    }
+        #region メアド検証
 
-        //    // 再表示
-        //    return View(model);
-        //}
+        /// <summary>
+        /// メアド検証画面（メールからのリンクで結果表示）
+        /// GET: /Manage/EmailConfirmation
+        /// </summary>
+        /// <param name="userId">string</param>
+        /// <param name="code">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> EmailConfirmation(string userId, string code)
+        {
+            // 入力の検証1
+            if (userId == null || code == null)
+            {
+                // エラー画面
+                return View("Error");
+            }
+            else
+            {
+                // 入力の検証2
+                //IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
+
+                // 自前の検証
+                if(User.Identity.GetUserId() == userId)
+                {
+                    if (code == (string)Session["Code"])
+                    {
+                        // 更新後のメアド
+                        IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
+                        
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            // メアド検証の成功
+
+                            // 再ログイン
+                            if (await this.ReSignInAsync())
+                            {
+                                // 再ログインに成功
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
+                            }
+                            else
+                            {
+                                // 再ログインに失敗
+                            }
+                        }
+                        else
+                        {
+                            // E-mail削除の失敗
+                        }
+                    }
+                }
+
+                // エラー画面
+                return View("Error");
+            }
+        }
 
         #endregion
 
         #region Delete
 
-        ///// <summary>
-        ///// E-mailの削除
-        ///// POST: /Manage/RemoveEmail
-        ///// </summary>
-        ///// <returns>ActionResultを非同期に返す</returns>
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<ActionResult> RemoveEmail()
-        //{
-        //    // null クリア
-        //    IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), "");
+        /// <summary>
+        /// E-mailの削除
+        /// POST: /Manage/RemoveEmail
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveEmail()
+        {
+            // null クリア
+            IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), "");
 
-        //    // 結果の確認
-        //    if (result.Succeeded)
-        //    {
-        //        // E-mail削除の成功
+            // 結果の確認
+            if (result.Succeeded)
+            {
+                // E-mail削除の成功
 
-        //        // 再ログイン
-        //        if (await this.ReSignInAsync())
-        //        {
-        //            // 再ログインに成功
-        //            return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveEmailSuccess });
-        //        }
-        //        else
-        //        {
-        //            // 再ログインに失敗
-        //        }
-        //    }
-        //    else
-        //    {
-        //        // E-mail削除の失敗
-        //    }
+                // 再ログイン
+                if (await this.ReSignInAsync())
+                {
+                    // 再ログインに成功
+                    return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveEmailSuccess });
+                }
+                else
+                {
+                    // 再ログインに失敗
+                }
+            }
+            else
+            {
+                // E-mail削除の失敗
+            }
 
-        //    // Index - Error
-        //    return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
-        //}
+            // Index - Error
+            return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+        }
 
         #endregion
 
@@ -1202,6 +1251,48 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 ModelState.AddModelError("", error);
             }
+        }
+
+        #endregion
+
+        #region メアド検証、パスワード リセットのメール送信処理
+
+        /// <summary>
+        /// メアド検証、パスワード リセットで使用するメール送信処理。
+        /// </summary>
+        /// <param name="uid">string</param>
+        /// <param name="email">string</param>
+        /// <param name="code">string</param>
+        private async void SendConfirmEmail(string uid, string email, string code)
+        {
+            // For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=320771
+            // アカウント確認とパスワード リセットを有効にする方法の詳細については、http://go.microsoft.com/fwlink/?LinkID=320771 を参照してください
+
+            // Account Confirmation and Password Recovery with ASP.NET Identity (C#) | The ASP.NET Site
+            // http://www.asp.net/identity/overview/features-api/account-confirmation-and-password-recovery-with-aspnet-identity
+
+            string callbackUrl;
+            
+            // URLの生成
+            callbackUrl = this.Url.Action(
+                    "EmailConfirmation", "Manage",
+                    new { userId = uid, code = code }, protocol: Request.Url.Scheme
+                );
+
+            // E-mailの送信
+            //await UserManager.SendEmailAsync(
+            //        user.Id,
+            //        Resources.AccountController.SendEmail_emailconfirm,
+            //        string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl));
+
+            EmailService ems = new EmailService();
+            IdentityMessage idmsg = new IdentityMessage();
+
+            idmsg.Subject = Resources.AccountController.SendEmail_emailconfirm;
+            idmsg.Destination = email;
+            idmsg.Body = string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl);
+            
+            await ems.SendAsync(idmsg);
         }
 
         #endregion
