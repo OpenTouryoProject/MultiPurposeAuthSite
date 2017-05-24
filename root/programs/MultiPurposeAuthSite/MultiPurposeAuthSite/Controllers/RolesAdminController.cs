@@ -140,7 +140,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            Session["CurrentUserId"] = user.Id;
+            Session["CurrentUserId"] = user.Id; // 分割キー
 
             // ロール一覧表示
             return View(RoleManager.Roles.AsEnumerable());
@@ -165,7 +165,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser temp = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            Session["CurrentUserId"] = temp.Id;
+            Session["CurrentUserId"] = temp.Id; // 分割キー
 
             foreach (ApplicationUser user in UserManager.Users.AsEnumerable())
             {

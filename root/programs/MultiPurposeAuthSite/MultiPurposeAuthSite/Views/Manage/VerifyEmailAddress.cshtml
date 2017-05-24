@@ -16,13 +16,13 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2017/04/24  西野 大介         新規
+    //*  2017/05/23  西野 大介         新規
     //**********************************************************************************
 *@
 
 @using MultiPurposeAuthSite.Resources;
 @{
-    ViewBag.Title = AccountViews.VerifyEmailAddressTitle;
+    ViewBag.Title = AccountViews.VerifyEmailAddressTitle; @*流用のため*@
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -32,7 +32,7 @@
 
 <h2>@ViewBag.Title</h2>
 <p class="text-info">
-    @AccountViews.VerifyEmailAddressP
+    @AccountViews.VerifyEmailAddressP @*流用のため*@
 </p>
 @*<p class="text-danger">
     For DEMO only: You can click this link to confirm the email: <a href="@ViewBag.Link">link</a>

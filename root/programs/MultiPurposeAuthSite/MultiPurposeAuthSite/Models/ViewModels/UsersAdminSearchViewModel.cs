@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：EditUserViewModel
-//* クラス日本語名  ：ユーザ管理画面用のVM（テンプレート）
+//* クラス名        ：UsersAdminSearchViewModel
+//* クラス日本語名  ：ユーザ管理画面の検索用のVM（テンプレート）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -15,10 +15,12 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2017/04/24  西野 大介         新規
+//*  2017/05/24  西野 大介         新規
 //**********************************************************************************
 
 using System.Collections.Generic;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+
 using System.ComponentModel.DataAnnotations;
 using System.Web.Mvc;
 
@@ -26,22 +28,13 @@ using System.Web.Mvc;
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
     /// <summary>ユーザ管理画面用のVM（テンプレート）</summary>
-    public class EditUserViewModel : BaseViewModel
+    public class UsersAdminSearchViewModel : BaseViewModel
     {
-        /// <summary>ユーザID</summary>
-        [Required(AllowEmptyStrings = false)]
-        public string Id { get; set; }
+        /// <summary>ユーザ名（検索条件）</summary>
+        [Display(Name = "UserNameforSearch", ResourceType = typeof(Resources.CommonViewModels))]
+        public string UserNameforSearch { get; set; }
 
-        /// <summary>ParentId(UI制御用)</summary>
-        public string ParentId { get; set; }
-        
-        /// <summary>E-mail</summary>
-        [Required(AllowEmptyStrings = false)]
-        [EmailAddress]
-        [Display(Name = "E-mail")]
-        public string Email { get; set; }
-
-        /// <summary>RolesList</summary>
-        public IEnumerable<SelectListItem> RolesList { get; set; }
+        /// <summary>ユーザ一覧</summary>
+        public IEnumerable<ApplicationUser> Users { get; set; }
     }
 }

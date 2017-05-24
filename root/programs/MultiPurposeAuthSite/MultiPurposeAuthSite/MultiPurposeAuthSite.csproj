@@ -312,7 +312,8 @@
     <Compile Include="Models\ViewModels\AccountVerifyCodeViewModel.cs" />
     <Compile Include="Models\ViewModels\BaseViewModel.cs" />
     <Compile Include="Models\ViewModels\EditRoleViewModel.cs" />
-    <Compile Include="Models\ViewModels\EditUserViewModel.cs" />
+    <Compile Include="Models\ViewModels\UsersAdminSearchViewModel.cs" />
+    <Compile Include="Models\ViewModels\UsersAdminEditViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageAddEmailViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageAddPhoneNumberViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageChangePasswordViewModel.cs" />

@@ -142,10 +142,39 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            Session["CurrentUserId"] = user.Id;
+            Session["CurrentUserId"] = user.Id; // 分割キー
 
             // Usersへのアクセスを非同期化出来ず
-            return View(UserManager.Users.AsEnumerable());
+            UsersAdminSearchViewModel model = new UsersAdminSearchViewModel();
+            model.UserNameforSearch = "";
+            model.Users = UserManager.Users.AsEnumerable();
+            
+            return View(model);
+        }
+
+        /// <summary>
+        /// ユーザ一覧表示画面
+        /// GET: /UsersAdmin/List
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> List(UsersAdminSearchViewModel model)
+        {
+            this.Authorize();
+
+            // ユーザ一覧表示
+
+            // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+            Session["CurrentUserId"] = user.Id; // 分割キー
+            Session["SearchConditionOfUsers"] = model.UserNameforSearch; // ユーザ一覧の検索条件
+
+            // Usersへのアクセスを非同期化出来ず
+            //model.UserNameforSearch = "";
+            model.Users = UserManager.Users.AsEnumerable();
+
+            return View("Index", model);
         }
 
         /// <summary>
@@ -289,7 +318,7 @@ namespace MultiPurposeAuthSite.Controllers
             IList<string> roles = await UserManager.GetRolesAsync(user.Id);
 
             // ユーザとロールの情報を表示
-            return View(new EditUserViewModel()
+            return View(new UsersAdminEditViewModel()
             {
                 Id = user.Id,
                 ParentId = user.ParentId,
@@ -309,13 +338,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// ユーザ編集画面（更新処理）
         /// POST: /UsersAdmin/Edit/5
         /// </summary>
-        /// <param name="editUser">EditUserViewModel</param>
+        /// <param name="editUser">UsersAdminEditViewModel</param>
         /// <param name="selectedRole">string[]</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> Edit(
-            [Bind(Include = "Email,Id")] EditUserViewModel editUser, params string[] selectedRole)
+            [Bind(Include = "Email,Id")] UsersAdminEditViewModel editUser, params string[] selectedRole)
         {
             this.Authorize();
 
@@ -324,7 +353,7 @@ namespace MultiPurposeAuthSite.Controllers
             // 選択したユーザを更新
             if (ModelState.IsValid)
             {
-                // EditUserViewModelの検証に成功
+                // UsersAdminEditViewModelの検証に成功
 
                 #region ユーザーの更新
 
@@ -391,7 +420,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // EditUserViewModelの検証に失敗
+                // UsersAdminEditViewModelの検証に失敗
                 ModelState.AddModelError("", "Something failed.");
             }
 

@@ -178,11 +178,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Search に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Search {
+            get {
+                return ResourceManager.GetString("Search", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   User name に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string UserName {
             get {
                 return ResourceManager.GetString("UserName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Search by user name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string UserNameforSearch {
+            get {
+                return ResourceManager.GetString("UserNameforSearch", resourceCulture);
             }
         }
     }

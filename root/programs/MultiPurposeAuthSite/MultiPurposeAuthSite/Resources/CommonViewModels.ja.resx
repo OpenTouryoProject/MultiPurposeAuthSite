@@ -156,7 +156,13 @@
   <data name="RoleName" xml:space="preserve">
     <value>ロール名</value>
   </data>
+  <data name="Search" xml:space="preserve">
+    <value>検索</value>
+  </data>
   <data name="UserName" xml:space="preserve">
     <value>ユーザ名</value>
+  </data>
+  <data name="UserNameforSearch" xml:space="preserve">
+    <value>ユーザ名で検索します。</value>
   </data>
 </root>

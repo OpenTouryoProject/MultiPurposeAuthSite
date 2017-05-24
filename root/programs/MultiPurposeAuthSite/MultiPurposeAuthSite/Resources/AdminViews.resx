@@ -219,6 +219,9 @@
   <data name="UsersAdminEditTitle" xml:space="preserve">
     <value>Edit User</value>
   </data>
+  <data name="UsersAdminIndexCreate" xml:space="preserve">
+    <value>Create New</value>
+  </data>
   <data name="UsersAdminIndexTitle" xml:space="preserve">
     <value>Users list</value>
   </data>

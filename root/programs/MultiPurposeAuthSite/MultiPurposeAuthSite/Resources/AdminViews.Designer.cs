@@ -367,6 +367,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Create New に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string UsersAdminIndexCreate {
+            get {
+                return ResourceManager.GetString("UsersAdminIndexCreate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Users list に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string UsersAdminIndexTitle {

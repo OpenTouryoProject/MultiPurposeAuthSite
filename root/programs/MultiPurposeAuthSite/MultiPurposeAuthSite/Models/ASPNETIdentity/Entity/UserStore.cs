@@ -428,6 +428,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 {
                     // ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
                     string parentId = (string)HttpContext.Current.Session["CurrentUserId"];
+                    string searchConditionOfUsers = (string)HttpContext.Current.Session["SearchConditionOfUsers"];
+                    HttpContext.Current.Session["SearchConditionOfUsers"] = ""; // クリアしないと・・・
 
                     // （マルチテナント化対応されたテナント）ユーザ一覧を返す。
                     switch (ASPNETIdentityConfig.UserStoreType)
@@ -442,9 +444,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
+                                string sql = "SELECT {0} * FROM [Users] WHERE [ParentId] = @parentId";
+
+                                // TOP
+                                if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
+                                    sql = string.Format(sql, "TOP " + ASPNETIdentityConfig.UserListCount);
+
+                                // Like
+                                if (!string.IsNullOrEmpty(searchConditionOfUsers))
+                                    sql += " AND [UserName] Like CONCAT('%', @searchConditionOfUsers, '%')";
+
                                 cnn.Open();
-                                users = cnn.Query<ApplicationUser>(
-                                    "SELECT * FROM [Users] WHERE [ParentId] = @parentId", new { parentId = parentId });
+                                users = cnn.Query<ApplicationUser>(sql, new {
+                                    parentId = parentId,
+                                    searchConditionOfUsers = searchConditionOfUsers });
                             }
 
                             break;

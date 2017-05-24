@@ -16,13 +16,15 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2017/04/24  西野 大介         新規
+    //*  2017/05/24  西野 大介         新規
     //**********************************************************************************
 *@
 
 @using MultiPurposeAuthSite.Resources;
+@using MultiPurposeAuthSite.Models.ViewModels
 @using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-@model IEnumerable<ApplicationUser>
+
+@model UsersAdminSearchViewModel
 
 @{
     ViewBag.Title = AdminViews.UsersAdminIndexTitle;
@@ -35,17 +37,30 @@
 
 <h2>@ViewBag.Title</h2>
 
-<p>
-    @Html.ActionLink(AdminViews.RolesAdminIndexCreate, "Create")
-</p>
+<p>@Html.ActionLink(AdminViews.UsersAdminIndexCreate, "Create")</p>
+
+<section id="SearchForm">
+    @using (Html.BeginForm("List", "UsersAdmin", new { ReturnUrl = ViewBag.ReturnUrl }, FormMethod.Post, new { @class = "form-inline", role = "form" }))
+    {
+        @Html.AntiForgeryToken()
+        @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+
+        <div class="form-group">
+            @Html.LabelFor(m => m.UserNameforSearch, new { @class = "sr-only" })
+            @Html.TextBoxFor(m => m.UserNameforSearch, new { @class = "form-control" })
+            <input type="submit" value="@CommonViewModels.Search" class="btn btn-default" />
+        </div>
+    }
+</section>
+
 <table class="table">
     <tr>
         <th>@AdminViews.UsersAdminUserName</th>
         <th></th>
     </tr>
 
-    @foreach (ApplicationUser item in Model)
-    {
+    @foreach (ApplicationUser item in Model.Users)
+            {
         <tr>
             <td>
                 @Html.DisplayFor(modelItem => item.UserName)

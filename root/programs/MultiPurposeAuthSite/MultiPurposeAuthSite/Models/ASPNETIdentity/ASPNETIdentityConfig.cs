@@ -251,6 +251,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #region UserListCount
+
+        /// <summary>
+        /// ユーザ一覧の件数
+        /// </summary>
+        public static int UserListCount
+        {
+            get
+            {
+                return Convert.ToInt32(ConfigurationManager.AppSettings["UserListCount"]);
+            }
+        }
+
+        #endregion
+
         #region 事前登録ユーザ
 
         #region 管理者ユーザ
@@ -515,6 +530,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 return Convert.ToInt32(ConfigurationManager.AppSettings["MaxFailedAccessAttemptsBeforeLockout"]);
             }
         }
+
         #endregion
 
         #region 2要素認証 (2FA)
