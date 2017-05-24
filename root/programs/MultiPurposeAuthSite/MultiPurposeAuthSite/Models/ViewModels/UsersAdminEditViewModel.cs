@@ -34,9 +34,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>ParentId(UI制御用)</summary>
         public string ParentId { get; set; }
-        
+
+        /// <summary>Name</summary>
+        [Display(Name = "Name")]
+        public string Name { get; set; }
+
         /// <summary>E-mail</summary>
-        [Required(AllowEmptyStrings = false)]
         [EmailAddress]
         [Display(Name = "E-mail")]
         public string Email { get; set; }

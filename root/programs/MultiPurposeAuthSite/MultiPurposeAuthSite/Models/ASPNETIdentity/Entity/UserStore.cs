@@ -436,7 +436,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     {
                         case EnumUserStoreType.Memory:
 
-                            users = UserStore._users.Where(p => p.ParentId == parentId).ToList();
+                            IEnumerable<ApplicationUser> _users = UserStore._users;
+
+                            _users = _users.Where(p => p.ParentId == parentId).ToList();
+
+                            // Like
+                            if (!string.IsNullOrEmpty(searchConditionOfUsers))
+                                _users = _users.Where(p => p.UserName.Contains(searchConditionOfUsers));
+
+                            users = _users.ToList();
 
                             break;
 

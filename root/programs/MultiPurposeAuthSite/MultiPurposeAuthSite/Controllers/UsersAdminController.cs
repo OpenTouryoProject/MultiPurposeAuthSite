@@ -239,8 +239,16 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 認証された（管理者）ユーザを取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
                 // （一般）ユーザを作成
-                user = await ApplicationUser.CreateByRegister(user.Id, userViewModel.Email);
+                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                {
+                    user = await ApplicationUser.CreateByRegister(user.Id, userViewModel.Email);
+                }
+                else
+                {
+                    user = await ApplicationUser.CreateByRegister(user.Id, userViewModel.Name);
+                }
 
                 // ApplicationUserManagerのCreateAsync
                 IdentityResult userResult = await UserManager.CreateAsync(
@@ -323,7 +331,9 @@ namespace MultiPurposeAuthSite.Controllers
                 Id = user.Id,
                 ParentId = user.ParentId,
 
+                Name = user.UserName,
                 Email = user.Email,
+
                 RolesList = RoleManager.Roles.ToList().Select(
                     x => new SelectListItem()
                     {
@@ -344,7 +354,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> Edit(
-            [Bind(Include = "Email,Id")] UsersAdminEditViewModel editUser, params string[] selectedRole)
+            [Bind(Include = "Id,Name,Email")] UsersAdminEditViewModel editUser, params string[] selectedRole)
         {
             this.Authorize();
 
@@ -368,52 +378,70 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // 上記以外のユーザの編集は可能
-                    user.UserName = editUser.Email;
-                    user.Email = editUser.Email;
-
-                    // ユーザーの更新
-                    result = await UserManager.UpdateAsync(user);
-                }
-
-                #endregion
-
-                #region ロールの更新
-
-                IList<string> roles = await UserManager.GetRolesAsync(user.Id);
-
-                //?? : nullだったら右
-                selectedRole = selectedRole ?? new string[] { };
-
-                // ロールの削除
-                // selectedRoleに含まれないroleNameは削除対象。
-                result = await UserManager.RemoveFromRolesAsync(
-                    user.Id, roles.Except(selectedRole).ToArray<string>());
-
-                if (result.Succeeded)
-                {
-                    // ロールの削除の成功
-
-                    // ロールの追加
-                    result = await UserManager.AddToRolesAsync(
-                        user.Id, selectedRole.Except(roles).ToArray<string>());
-
-                    if (result.Succeeded)
+                    if (ASPNETIdentityConfig.RequireUniqueEmail)
                     {
-                        // ロールの追加の成功
-
-                        // リダイレクト（一覧へ）
-                        return RedirectToAction("Index");
+                        user.UserName = editUser.Email;
+                        user.Email = editUser.Email;
                     }
                     else
                     {
-                        // ロールの追加の失敗
-                        ModelState.AddModelError("", result.Errors.First());
+                        user.UserName = editUser.Name;
                     }
-                }
-                else
-                {
-                    // ロールの削除の失敗
-                    ModelState.AddModelError("", result.Errors.First());
+
+                    // ユーザーの更新
+                    if (string.IsNullOrEmpty(user.UserName))
+                    {
+                        // 入力値が無いので更新しない。
+                    }
+                    else
+                    {
+                        // 入力値で更新する。
+                        result = await UserManager.UpdateAsync(user);
+
+                        if (result.Succeeded)
+                        {
+                            #region ロールの更新
+
+                            IList<string> roles = await UserManager.GetRolesAsync(user.Id);
+
+                            //?? : nullだったら右
+                            selectedRole = selectedRole ?? new string[] { };
+
+                            // ロールの削除
+                            // selectedRoleに含まれないroleNameは削除対象。
+                            result = await UserManager.RemoveFromRolesAsync(
+                                user.Id, roles.Except(selectedRole).ToArray<string>());
+
+                            if (result.Succeeded)
+                            {
+                                // ロールの削除の成功
+
+                                // ロールの追加
+                                result = await UserManager.AddToRolesAsync(
+                                    user.Id, selectedRole.Except(roles).ToArray<string>());
+
+                                if (result.Succeeded)
+                                {
+                                    // ロールの追加の成功
+
+                                    // リダイレクト（一覧へ）
+                                    return RedirectToAction("Index");
+                                }
+                                else
+                                {
+                                    // ロールの追加の失敗
+                                    ModelState.AddModelError("", result.Errors.First());
+                                }
+                            }
+                            else
+                            {
+                                // ロールの削除の失敗
+                                ModelState.AddModelError("", result.Errors.First());
+                            }
+
+                            #endregion
+                        }
+                    }
                 }
 
                 #endregion
@@ -425,7 +453,8 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 再表示
-            return View();
+            // リダイレクト（編集へ）
+            return RedirectToAction("Edit", new { id = editUser.Id });
         }
 
         #endregion

@@ -21,7 +21,9 @@
 *@
 
 @using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
+@using MultiPurposeAuthSite.Models.ViewModels;
+@using MultiPurposeAuthSite.Models.ASPNETIdentity;
+
 @model UsersAdminEditViewModel
 
 @{
@@ -44,17 +46,42 @@
         @Html.HiddenFor(model => model.Id)
         
         <div class="form-group">
-            @Html.LabelFor(model => model.Email, new { @class = "control-label col-md-2" })
+            @if (ASPNETIdentityConfig.RequireUniqueEmail)
+            {
+                @Html.LabelFor(model => model.Email, new { @class = "control-label col-md-2" })
+            }
+            else
+            {
+                @Html.LabelFor(model => model.Name, new { @class = "control-label col-md-2" })
+            }
+
             <div class="col-md-10">
-@if (Model.Id == Model.ParentId)
-{
-                @Html.TextBoxFor(m => m.Email, new { @class = "form-control", @readonly = "readonly" })
-}
-else
-{
-                @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
-}
-                @Html.ValidationMessageFor(model => model.Email)
+
+            @if (Model.Id == Model.ParentId)
+            {
+                // 管理者なので readonly（更新不可能）
+                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                {
+                    @Html.TextBoxFor(m => m.Email, new { @class = "form-control", @readonly = "readonly" })
+                }
+                else
+                {
+                    @Html.TextBoxFor(m => m.Name, new { @class = "form-control", @readonly = "readonly" })
+                }
+            }
+            else
+            {
+                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                {
+                    @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+                    @Html.ValidationMessageFor(model => model.Email);
+                }
+                else
+                {
+                    @Html.TextBoxFor(m => m.Name, new { @class = "form-control"})
+                }
+            }
+                
             </div>
         </div>
 
@@ -69,11 +96,18 @@ else
             </span>
         </div>
 
-        <div class="form-group">
-            <div class="col-md-offset-2 col-md-10">
-                <input type="submit" value="@AdminViews.UsersAdminEditSubmit" class="btn btn-default" />
+        if (Model.Id == Model.ParentId)
+        {
+            // 管理者なので readonly（更新不可能）
+        }
+        else
+        {
+            <div class="form-group">
+                <div class="col-md-offset-2 col-md-10">
+                    <input type="submit" value="@AdminViews.UsersAdminEditSubmit" class="btn btn-default" />
+                </div>
             </div>
-        </div>
+        }
     }
 </div>
 

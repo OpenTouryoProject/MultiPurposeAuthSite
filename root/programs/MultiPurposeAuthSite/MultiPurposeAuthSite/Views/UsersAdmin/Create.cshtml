@@ -22,6 +22,8 @@
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
+@using MultiPurposeAuthSite.Models.ASPNETIdentity
+
 @model AccountRegisterViewModel
 @{
     ViewBag.Title = AdminViews.UsersAdminCreateTitle;
@@ -40,12 +42,26 @@
     <h4>@AdminViews.UsersAdminCreateH4</h4>
     <hr />
     @Html.ValidationSummary("", new { @class = "text-error" })
-    <div class="form-group">
-        @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
-        <div class="col-md-10">
-            @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+    
+    if (ASPNETIdentityConfig.RequireUniqueEmail)
+    {
+        <div class="form-group">
+            @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
+            <div class="col-md-10">
+                @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+            </div>
         </div>
-    </div>
+    }
+    else
+    {
+        <div class="form-group">
+            @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
+            <div class="col-md-10">
+                @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+            </div>
+        </div>
+    }
+
     <div class="form-group">
         @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
