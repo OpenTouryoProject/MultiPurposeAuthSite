@@ -39,7 +39,7 @@
    height            : 80px;
 }
 #header-title{
-   padding           : 20px 0 0 0;
+   padding           : 60px 0 0 0;
 }
 #header-button {
     padding-top      : 20px;
@@ -214,12 +214,12 @@
       height: 40px;
   }
   #header-title{
-     padding: 10px;
+     padding: 30px 0 0 0;
   }
   #header-button{
     padding-top: 10px;
   }
-  #header-button > button{
+  #header-button button{
     padding: 1px 5px;
     font-size: 12px;
     line-height: 1.5;

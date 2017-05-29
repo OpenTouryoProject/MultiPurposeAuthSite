@@ -39,21 +39,20 @@
 
 <p>@Html.ActionLink(AdminViews.UsersAdminIndexCreate, "Create")</p>
 
-<section id="SearchForm">
-    @using (Html.BeginForm("List", "UsersAdmin", new { ReturnUrl = ViewBag.ReturnUrl }, FormMethod.Post, new { @class = "form-inline", role = "form" }))
-    {
-        @Html.AntiForgeryToken()
-        @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+@using (Html.BeginForm("List", "UsersAdmin", new { ReturnUrl = ViewBag.ReturnUrl }, FormMethod.Post, new { @class = "form-inline", role = "form" }))
+{
+    @Html.AntiForgeryToken()
+    @Html.ValidationSummary(true, "", new { @class = "text-danger" })
 
-        <div class="form-group">
-            @Html.LabelFor(m => m.UserNameforSearch, new { @class = "sr-only" })
-            @Html.TextBoxFor(m => m.UserNameforSearch, new { @class = "form-control" })
-            <input type="submit" value="@CommonViewModels.Search" class="btn btn-default" />
-        </div>
-    }
-</section>
+    <div class="form-group">
+        @Html.LabelFor(m => m.UserNameforSearch, new { @class = "control-label" })
+        @Html.TextBoxFor(m => m.UserNameforSearch, new { @class = "form-control" })
+    </div>
 
-<table class="table">
+    <input type="submit" value="@CommonViewModels.Search" class="btn btn-default" />
+}
+
+<table class="table" style="margin-top:20px">
     <tr>
         <th>@AdminViews.UsersAdminUserName</th>
         <th></th>

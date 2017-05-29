@@ -43,33 +43,27 @@
 </head>
 <body onload="Fx_Document_OnLoad();Fx_AdjustStyle();">
     <div class="page-header row">
-        <div class="col-xs-10" style="padding: 0">
+        <div class="col-xs-3" style="padding: 0">
             <div id="header-logo"><a href="@Url.Action("Index", "Home")"><img alt="logo" src="~/images/touryo/logo.png" /></a></div>
+        </div>
+        <div class="col-xs-6" style="padding: 0">
             <div id="header-title">
-                <div style="margin:30px;">
 @if (User.Identity.IsAuthenticated)
 {
-                    <ul class="nav navbar-nav navbar-right">
-                        <li>
-                            @Html.ActionLink(string.Format(SharedViews.LoginPartial, User.Identity.GetUserName()), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage" })
-                        </li>
-                    </ul>
+                @Html.ActionLink(string.Format(SharedViews.LoginPartial, User.Identity.GetUserName()), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage", @class = "pull-right"})
 }
-                </div>
             </div>
         </div>
-        <div id="header-button" class="col-xs-2">
+        <div id="header-button" class="col-xs-3">
 @if (User.Identity.IsAuthenticated)
-{
+                {
             @* サインアウトボタンは、ユーザーが認証されている時だけ表示する *@
             <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Logoff", "Account")';">Sign-out</button>
 }
 else
 {
-            <ul class="nav navbar-nav navbar-right">
-                <li><button type="button" class="btn btn-info" onclick="window.location.href = '@Url.Action("Register", "Account")';">Sign-up</button></li>
-                <li><button type="button" class="btn btn-default" onclick="window.location.href = '@Url.Action("Login", "Account")';">Sign-in</button></li>
-            </ul>
+            <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Register", "Account")';">Sign-up</button>
+            <button type="button" class="btn btn-default pull-right" onclick="window.location.href = '@Url.Action("Login", "Account")';">Sign-in</button>
 }
         </div>
     </div>
