@@ -968,11 +968,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         /// <summary>
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
         /// </summary>
-        public static string OAuthGetUserClaimWebAPI
+        public static string OAuthGetUserClaimsWebAPI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthGetUserClaimWebAPI"];
+                return ConfigurationManager.AppSettings["OAuthGetUserClaimsWebAPI"];
             }
         }
 

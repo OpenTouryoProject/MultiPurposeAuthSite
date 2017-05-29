@@ -50,7 +50,7 @@
 <h2>@ViewBag.Title.</h2>
 <div class="row">
     <div class="col-md-8">
-        <p><a class="btn btn-default" href="#" id="OAuthGetUserClaimWebAPI" url="@(ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI + ASPNETIdentityConfig.OAuthGetUserClaimWebAPI)">Get user claim</a></p>
+        <p><a class="btn btn-default" href="#" id="OAuthGetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI)">Get user claims</a></p>
         <br />
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
@@ -108,9 +108,9 @@
                 // ~~~~~~
                 window.location.hash = fragment.state || '';
                 
-                // OAuthGetUserClaimWebAPI
-                $('#OAuthGetUserClaimWebAPI').on('click', function () {
-                    CallOAuthAPI($('#OAuthGetUserClaimWebAPI').attr("url"), 'get', null)
+                // OAuthGetUserClaimsWebAPI
+                $('#OAuthGetUserClaimsWebAPI').on('click', function () {
+                    CallOAuthAPI($('#OAuthGetUserClaimsWebAPI').attr("url"), 'get', null)
                 });
             }
         });

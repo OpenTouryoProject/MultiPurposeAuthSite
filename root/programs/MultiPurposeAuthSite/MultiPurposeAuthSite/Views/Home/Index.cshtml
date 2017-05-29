@@ -67,10 +67,10 @@
         </li>
         <li>Test OAuth Server
             <ul>
-                <li>Resource Access Test(scope=username email telno aaa bbb)
+                <li>Resource Access Test(scope=profile email phone address aaa bbb)
                     <ul>
-                        <li><a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=username%20email%20telno%20aaa%20bbb&state=@state">Authorization Codeグラント(client_id, response_type, scope, state)</a></li>
-                        <li><a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=username%20email%20telno%20aaa%20bbb&state=@state">Implicitグラント(client_id, response_type, scope, state)</a></li>
+                        <li><a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=profile%20email%20phone%20address%20aaa%20bbb&state=@state">Authorization Codeグラント(client_id, response_type, scope, state)</a></li>
+                        <li><a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=profile%20email%20phone%20address%20aaa%20bbb&state=@state">Implicitグラント(client_id, response_type, scope, state)</a></li>
                     </ul>
                 </li>
             </ul>

@@ -35,7 +35,6 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokensClaimSet;
 
 using System;
 using System.Linq;
@@ -94,15 +93,15 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region WebAPI
-        
+
         /// <summary>
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
-        /// POST: /api/OAuthResourceApi/GetUserClaim
+        /// GET: /userinfo
         /// </summary>
         /// <returns>OAuthAuthenticatedUsersClaimViewModel</returns>
         [HttpGet]
-        // [System.Web.Mvc.Route("api/・・・")] // 後で実行したMapHttpRouteが優先になる？
-        public async Task<OAuthMultiPurposeUsersClaimViewModel> GetUserClaim()
+        [Route("userinfo")] // OpenID Connectライクなインターフェイスに変更した。
+        public async Task<Dictionary<string, string>> GetUserClaims()
         {
             // Claim情報を参照する。
             // iss, aud, expのチェックは、AccessTokenFormatJwt.Unprotectで実施済。
@@ -111,73 +110,49 @@ namespace MultiPurposeAuthSite.Controllers
             
             // ユーザ認証を行なう。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
+            
             string subject = "";
-            string email = "";
 
             if (user == null)
             {
                 // Client Credentialsグラント種別
                 subject = OAuthProviderHelper.GetInstance().GetClientName(claim_aud.Value);
-                email = subject;
             }
             else
             {
                 // その他のグラント種別
                 subject = user.UserName;
-                email = user.Email;
             }
 
-            #region ID Token
-
-            IDTokensClaimSet idToken = new IDTokensClaimSet()
-            {
-                Issuer = ASPNETIdentityConfig.OAuthIssuerId,
-                Audience = claim_aud.Value,
-                Subject = subject, //user.UserName,
-                IssuedAt = DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
-                ExpirationTime = DateTimeOffset.Now.Add(ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes).ToUnixTimeSeconds().ToString(),
-                Nonce = id.FindFirst(ASPNETIdentityConst.Claim_Nonce).Value,
-                Email = email //user.Email
-            };
-
-            string json = JsonConvert.SerializeObject(idToken);
-            JWT_RS256 jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword);
-            string idTokenJwt = jwtRS256.Create(json);
-
-            #endregion
+            Dictionary<string, string> userinfoClaimSet = new Dictionary<string, string>();
+            userinfoClaimSet.Add("sub", subject);
 
             // Scope
-            IEnumerable<Claim> claims = id.FindAll(ASPNETIdentityConst.Claim_Scope).AsEnumerable();
+            IEnumerable<Claim> claimScope = id.FindAll(ASPNETIdentityConst.Claim_Scope).AsEnumerable();
 
             // scope値によって、返す値を変更する。
-            Dictionary<string, string> additionalInfo = new Dictionary<string, string>();
-            foreach (Claim scope in claims)
+            foreach (Claim scope in claimScope)
             {
                 switch (scope.Value)
                 {
-                    case "username":
-                        additionalInfo.Add(scope.Value, subject);
+                    case "profile":
+                        // ・・・
                         break;
                     case "email":
-                        additionalInfo.Add(scope.Value, email);
+                        userinfoClaimSet.Add("email", user.Email);
+                        userinfoClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
                         break;
-                    case "telno":
-                        additionalInfo.Add(scope.Value, user.PhoneNumber);
+                    case "phone":
+                        userinfoClaimSet.Add("phone_number", user.PhoneNumber);
+                        userinfoClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
                         break;
-                    default:
-                        additionalInfo.Add(scope.Value, scope.Value.ToUpper());
+                    case "address":
+                        // ・・・
                         break;
                 }
             }
 
-            // OAuthAuthenticatedUsersClaimViewModelを生成して返す。
-            return new OAuthMultiPurposeUsersClaimViewModel()
-            {
-                APIName = "GetAuthorizedUserClaim",
-                JwtToken = idTokenJwt,
-                AdditionalInfo = additionalInfo
-            };
+            return userinfoClaimSet;
         }
         
         #endregion

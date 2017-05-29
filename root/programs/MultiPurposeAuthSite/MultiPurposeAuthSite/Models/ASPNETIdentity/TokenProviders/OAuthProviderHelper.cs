@@ -296,14 +296,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <summary>認可したユーザのClaim情報を取得するWebAPIを呼び出す</summary>
         /// <param name="accessToken">accessToken</param>
         /// <returns>結果のJSON文字列（認可したユーザのClaim情報）</returns>
-        public async Task<string> CallOAuthGetUserClaimWebAPIAsync(string accessToken)
+        public async Task<string> CallOAuthGetUserClaimsWebAPIAsync(string accessToken)
         {
             // 通信用の変数
             
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri webApiEndpointUri = new Uri(
                 ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthGetUserClaimWebAPI);
+                + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI);
 
             HttpRequestMessage httpRequestMessage = null;
             HttpResponseMessage httpResponseMessage = null;

@@ -42,10 +42,10 @@ using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokensClaimSet;
 
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util.JWT;
@@ -72,57 +72,32 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         {
             string json = "";
             string jwt = "";
-
-            // OpenID Connect - マイクロソフト系技術情報 Wiki > IDトークン（クレーム）
-            // - クレームセット
-            //   https://techinfoofmicrosofttech.osscons.jp/index.php?OpenID%20Connect#h586dfab
-            // - 例 > Google
-            //   https://techinfoofmicrosofttech.osscons.jp/index.php?OpenID%20Connect#jaec1c75
-            //{
-            //  ★ "iss":"accounts.google.com",
-            //  ★ "aud":"クライアント識別子.apps.googleusercontent.com",
-            //  ★ "sub":"ユーザーの一意識別子",
-            //  ★ "iat":JWT の発行日時（Unix時間）,
-            //  ★ "exp":JWT の有効期限（Unix時間）
-            //  ☆ "nonce":Implicitで必須
-            //  "email":"・・・・",
-            //  "email_verified":"true",
-            //  "azp":"認可した対象者のID.apps.googleusercontent.com",
-            //  "at_hash":"・・・", ← Hybrid Flowの追加クレーム
-            //}
-
+            
             // チェック
             if (data == null)
             {
                 throw new ArgumentNullException("data");
             }
 
-            AuthenticationTokensClaimSet authToken = new AuthenticationTokensClaimSet();
+            #region ClaimSetの生成
 
-            authToken.Issuer = "";
-            authToken.Audience = "";
-            authToken.Subject = data.Identity.Name;
-            authToken.IssuedAt = data.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString();
-            authToken.ExpirationTime = data.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString();
-            authToken.Nonce = ""; // 拡張した（nonce代替）。
-            authToken.Email = data.Identity.Name;
-
-            List<string> roles = new List<string>();
+            Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
             List<string> scopes = new List<string>();
+            List<string> roles = new List<string>();
 
             foreach (Claim c in data.Identity.Claims)
             {
                 if (c.Type == ASPNETIdentityConst.Claim_Issuer)
                 {
-                    authToken.Issuer = c.Value;
+                    authTokenClaimSet.Add("iss", c.Value);
                 }
                 else if (c.Type == ASPNETIdentityConst.Claim_Audience)
                 {
-                    authToken.Audience = c.Value;
+                    authTokenClaimSet.Add("aud", c.Value);
                 }
                 else if (c.Type == ASPNETIdentityConst.Claim_Nonce)
                 {
-                    authToken.Nonce = c.Value;
+                    authTokenClaimSet.Add("nonce", c.Value);
                 }
                 else if (c.Type == ASPNETIdentityConst.Claim_Scope)
                 {
@@ -134,11 +109,45 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
             }
 
-            authToken.Roles = roles.ToArray();
-            authToken.Scopes = scopes.ToArray();
+            authTokenClaimSet.Add("sub", data.Identity.Name);
+            authTokenClaimSet.Add("iat", data.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("exp", data.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
 
-            json = JsonConvert.SerializeObject(authToken);
+            ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            ApplicationUser user = userManager.FindByName(data.Identity.Name); // 同期版でOK。
+
+            // scope値によって、返す値を変更する。
+            foreach (string scope in scopes)
+            {
+                switch (scope)
+                {
+                    case "profile":
+                        // ・・・
+                        break;
+                    case "email":
+                        authTokenClaimSet.Add("email", user.Email);
+                        authTokenClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
+                        break;
+                    case "phone":
+                        authTokenClaimSet.Add("phone_number", user.PhoneNumber);
+                        authTokenClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
+                        break;
+                    case "address":
+                        // ・・・
+                        break;
+                }
+            }
+
+            authTokenClaimSet.Add("scopes", scopes);
+            authTokenClaimSet.Add("roles", roles);
             
+            json = JsonConvert.SerializeObject(authTokenClaimSet);
+
+            #endregion
+
+            #region JWT化
+
             JWT_RS256 jwtRS256 = null;
 
             // 署名
@@ -155,6 +164,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             {
                 return ""; // 検証できなかった。
             }
+
+            #endregion
         }
 
         /// <summary>Unprotect</summary>
@@ -171,7 +182,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // デシリアライズ、
                 string[] temp = jwt.Split('.');
                 string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
-                AuthenticationTokensClaimSet authToken = JsonConvert.DeserializeObject<AuthenticationTokensClaimSet>(json);
+                Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
 
                 // 以下の検証処理
                 //  ★ "iss":"accounts.google.com",
@@ -181,15 +192,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 //  ☆ "nonce":Implicitで必須
 
                 // authToken.iss, authToken.expの検証
-                if (authToken.Issuer == ASPNETIdentityConfig.OAuthIssuerId
-                    && OAuthProviderHelper.GetInstance().GetClientSecret(authToken.Audience) != null
-                    && long.Parse(authToken.ExpirationTime) >= DateTimeOffset.Now.ToUnixTimeSeconds())
+                if ((string)authTokenClaimSet["iss"] == ASPNETIdentityConfig.OAuthIssuerId
+                    && OAuthProviderHelper.GetInstance().GetClientSecret((string)authTokenClaimSet["aud"]) != null
+                    && long.Parse((string)authTokenClaimSet["exp"]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                 {
                     // authToken.subの検証
                     // ApplicationUser を取得する。
                     ApplicationUserManager userManager
                     = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-                    ApplicationUser user = userManager.FindByName(authToken.Subject); // 同期版でOK。
+                    ApplicationUser user = userManager.FindByName((string)authTokenClaimSet["sub"]); // 同期版でOK。
 
                     if (user != null)
                     {
@@ -199,14 +210,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         ClaimsIdentity identity = userManager.CreateIdentity(user, DefaultAuthenticationTypes.ExternalBearer);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        OAuthProviderHelper.AddClaim(identity, authToken.Audience, authToken.Nonce, authToken.Scopes);
+                        List<string> scopes = new List<string>();
+                        foreach (string s in (JArray)authTokenClaimSet["scopes"])
+                        {
+                            scopes.Add(s);
+                        }
+                        OAuthProviderHelper.AddClaim(identity,
+                            (string)authTokenClaimSet["aud"],
+                            (string)authTokenClaimSet["nonce"], scopes);
 
                         // AuthenticationPropertiesの生成
                         AuthenticationProperties prop = new AuthenticationProperties();
 
                         // 不要
-                        //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse(authToken.iat));
-                        //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse(authToken.exp));
+                        //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
+                        //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
 
                         AuthenticationTicket auth = new AuthenticationTicket(identity, prop);
 
@@ -219,23 +237,31 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                         // ClaimとStoreのAudienceに対応するSubjectが一致するかを確認し、一致する場合のみ、認証する。
                         // でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
-                        if (authToken.Subject == OAuthProviderHelper.GetInstance().GetClientName(authToken.Audience))
+                        if ((string)authTokenClaimSet["sub"] == OAuthProviderHelper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]))
                         {
                             // ClaimsIdentityを生成し、
                             ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
 
                             // ClaimsIdentityに、client_idに対応するclient_nameを設定する。
-                            identity.AddClaim(new Claim(ClaimTypes.Name, authToken.Subject));
+                            identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet["sub"]));
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            OAuthProviderHelper.AddClaim(identity, authToken.Audience, authToken.Nonce, authToken.Scopes);
+                            List<string> scopes = new List<string>();
+                            foreach (string s in (JArray)authTokenClaimSet["scopes"])
+                            {
+                                scopes.Add(s);
+                            }
+
+                            OAuthProviderHelper.AddClaim(identity,
+                                (string)authTokenClaimSet["aud"],
+                                (string)authTokenClaimSet["nonce"], scopes);
 
                             // AuthenticationPropertiesの生成
                             AuthenticationProperties prop = new AuthenticationProperties();
 
                             // 不要
-                            //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse(authToken.iat));
-                            //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse(authToken.exp));
+                            //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
+                            //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
 
                             AuthenticationTicket auth = new AuthenticationTicket(identity, prop);
 

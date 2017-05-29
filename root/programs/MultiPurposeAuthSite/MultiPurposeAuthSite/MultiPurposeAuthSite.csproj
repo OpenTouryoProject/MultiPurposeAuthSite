@@ -290,13 +290,9 @@
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\OAuthProviderHelper.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\RefreshTokenProvider.cs" />
-    <Compile Include="Models\ASPNETIdentity\TokensClaimSet\AuthenticationTokensClaimSet.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AccessTokenFormatJwt.cs" />
-    <Compile Include="Models\ASPNETIdentity\TokensClaimSet\IDTokensClaimSet.cs" />
     <Compile Include="Models\ASPNETIdentity\NotificationProvider\EmailService.cs" />
     <Compile Include="Models\ASPNETIdentity\NotificationProvider\SmsService.cs" />
-    <Compile Include="Models\ASPNETIdentity\WebAPIClamSet\OAuthBaseClaimViewModel.cs" />
-    <Compile Include="Models\ASPNETIdentity\WebAPIClamSet\OAuthMultiPurposeUsersClaimViewModel.cs" />
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>

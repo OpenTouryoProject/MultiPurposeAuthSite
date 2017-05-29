@@ -1350,20 +1350,13 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     #region Access Tokenを使用してResourceServerのWebAPIにアクセス
 
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaim")))
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
                     {
                         // WebAPIのエンドポイントにアクセス
 
                         // Response
                         model.Response = await OAuthProviderHelper.GetInstance()
-                            .CallOAuthGetUserClaimWebAPIAsync(model.AccessTokenJWT);
-                        // Point of view
-                        JObject jobj = JsonConvert.DeserializeObject<JObject>(model.Response);
-                        if (jobj != null)
-                        {
-                            model.PointOfView = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(((string)jobj["jwtToken"]).Split('.')[1]), CustomEncode.UTF_8);
-                        }
+                            .CallOAuthGetUserClaimsWebAPIAsync(model.AccessTokenJWT);
                     }
                     else
                     {
