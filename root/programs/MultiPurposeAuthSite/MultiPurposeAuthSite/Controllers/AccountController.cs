@@ -524,14 +524,27 @@ namespace MultiPurposeAuthSite.Controllers
         /// パスワード・リセット画面（メールからのリンクで初期表示）
         /// GET: /Account/ResetPassword
         /// </summary>
+        /// <param name="userId">string</param>
         /// <param name="code">string</param>
         /// <returns>ActionResult</returns>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult ResetPassword(string code)
+        public async Task<ActionResult> ResetPassword(string userId, string code)
         {
-            // コード・パラメタがない場合はエラー
-            return code == null ? View("Error") : View();
+            if (string.IsNullOrEmpty(userId)
+                || string.IsNullOrEmpty(code))
+            {
+                // パラメタが無い場合はエラー
+                return View("Error");
+            }
+            else
+            {
+                ApplicationUser user = await UserManager.FindByIdAsync(userId);
+
+                // User情報をResetPassword画面に表示することも可能。
+
+                return View();
+            }
         }
 
         /// <summary>
