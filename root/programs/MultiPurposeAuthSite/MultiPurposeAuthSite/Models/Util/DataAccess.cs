@@ -33,6 +33,8 @@
 
 using System.Data;
 using System.Data.SqlClient;
+using Oracle.ManagedDataAccess.Client;
+
 
 //using Npgsql;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
@@ -55,7 +57,7 @@ namespace MultiPurposeAuthSite.Models.Util
                     return new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL"));
 
                 case EnumUserStoreType.OracleMD:
-                    return new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2"));
+                    return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2"));
 
                 //case EnumUserStoreType.PostgreSQL:
                 //    return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));

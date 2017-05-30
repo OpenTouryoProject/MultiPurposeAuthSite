@@ -349,7 +349,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "        :Id, :UserName, :PasswordHash, " +
                                         "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, " +
-                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :PaymentInformation, :UnstructuredData)", user);
+                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :PaymentInformation, :UnstructuredData)",
+                                        new // 拡張メソッドで対策できる。
+                                        {
+                                            Id = user.Id,
+                                            UserName = user.UserName,
+                                            PasswordHash = user.PasswordHash,
+                                            Email = user.Email,
+                                            EmailConfirmed = user.EmailConfirmed ? -1 : 0,
+                                            PhoneNumber = user.PhoneNumber,
+                                            PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
+                                            LockoutEnabled = user.LockoutEnabled ? -1 : 0,
+                                            AccessFailedCount = user.AccessFailedCount,
+                                            LockoutEndDateUtc = user.LockoutEndDateUtc,
+                                            SecurityStamp = user.SecurityStamp,
+                                            TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
+                                            ParentId = user.ParentId,
+                                            PaymentInformation = user.PaymentInformation,
+                                            UnstructuredData = user.UnstructuredData
+                                        });
 
                                     break;
 
@@ -719,7 +737,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
                                             "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
                                             "    \"ParentId\" = :ParentId, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData " +
-                                            "WHERE \"Id\" = :Id", user);
+                                            "WHERE \"Id\" = :Id",
+                                            new // 拡張メソッドで対策できる。
+                                            {
+                                                Id = user.Id,
+                                                UserName = user.UserName,
+                                                PasswordHash = user.PasswordHash,
+                                                Email = user.Email,
+                                                EmailConfirmed = user.EmailConfirmed ? -1 : 0,
+                                                PhoneNumber = user.PhoneNumber,
+                                                PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
+                                                LockoutEnabled = user.LockoutEnabled ? -1 : 0,
+                                                AccessFailedCount = user.AccessFailedCount,
+                                                LockoutEndDateUtc = user.LockoutEndDateUtc,
+                                                SecurityStamp = user.SecurityStamp,
+                                                TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
+                                                ParentId = user.ParentId,
+                                                PaymentInformation = user.PaymentInformation,
+                                                UnstructuredData = user.UnstructuredData
+                                            });
 
                                         break;
 
@@ -2591,8 +2627,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 case EnumUserStoreType.OracleMD:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"UserClaims\" (\"UserId\", \"Issuer\", \"ClaimType\", \"ClaimValue\") " +
-                                        "VALUES (:UserId, :Issuer, :ClaimType, :ClaimValue)",
+                                        "INSERT INTO \"UserClaims\" (\"Id\", \"UserId\", \"Issuer\", \"ClaimType\", \"ClaimValue\") " +
+                                        "VALUES (TS_UserClaimID.NEXTVAL, :UserId, :Issuer, :ClaimType, :ClaimValue)",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
 
                                     break;
