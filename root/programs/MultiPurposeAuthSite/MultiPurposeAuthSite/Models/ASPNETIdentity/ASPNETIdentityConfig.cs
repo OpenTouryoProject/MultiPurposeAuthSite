@@ -44,6 +44,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         Memory,
         /// <summary>DBMS Provider (SqlServer)</summary>
         SqlServer,
+        /// <summary>DBMS Provider (Oracle Manage Driver)</summary>
+        OracleMD,
         /// <summary>DBMS Provider (PostgreSQL)</summary>
         PostgreSQL
     }
@@ -228,6 +230,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                         return EnumUserStoreType.Memory;
                     case "SQL":
                         return EnumUserStoreType.SqlServer;
+                    case "ORA":
+                        return EnumUserStoreType.OracleMD;
                     case "NPG":
                         return EnumUserStoreType.PostgreSQL;
                     default:

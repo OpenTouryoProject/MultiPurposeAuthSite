@@ -117,6 +117,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // 新しいrefreshTokenTicketをConcurrentDictionaryに保存
             // consider storing only the hash of the handle.
 
+            TicketSerializer serializer = new TicketSerializer();
+            byte[] bytes = serializer.Serialize(refreshTokenTicket);
+
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -124,15 +127,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-
-                    TicketSerializer serializer = new TicketSerializer();
-                    byte[] bytes = serializer.Serialize(refreshTokenTicket);
-
                     using (IDbConnection cnn = DataAccess.CreateConnection())
                     {
                         cnn.Open();
                         cnn.Execute(
                             "INSERT INTO [RefreshTokenDictionary] ([Key], [Value]) VALUES (@Key, @Value)",
+                            new { Key = token, Value = bytes });
+                    }
+
+                    break;
+
+                case EnumUserStoreType.OracleMD:
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+                        cnn.Execute(
+                            "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\") VALUES (:Key, :Value)",
                             new { Key = token, Value = bytes });
                     }
 
@@ -174,9 +184,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             //context.DeserializeTicket(context.Token);
 
             // --------------------------------------------------
-            // --------------------------------------------------
 
             AuthenticationTicket ticket;
+            TicketSerializer serializer = new TicketSerializer();
+
+            IEnumerable<byte[]> values = null;
 
             switch (ASPNETIdentityConfig.UserStoreType)
             {
@@ -188,10 +200,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-
-                    TicketSerializer serializer = new TicketSerializer();
-
-                    IEnumerable<byte[]> values = null;
                     using (IDbConnection cnn = DataAccess.CreateConnection())
                     {
                         cnn.Open();
@@ -203,6 +211,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                         cnn.Execute(
                             "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                    }
+                    break;
+
+                case EnumUserStoreType.OracleMD:
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+                        values = cnn.Query<byte[]>(
+                            "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+
+                        ticket = serializer.Deserialize(values.AsList()[0]);
+                        context.SetTicket(ticket);
+
+                        cnn.Execute(
+                            "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
                     }
                     break;
 

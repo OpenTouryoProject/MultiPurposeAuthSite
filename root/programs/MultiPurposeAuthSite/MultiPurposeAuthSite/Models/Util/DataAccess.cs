@@ -31,7 +31,6 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using System;
 using System.Data;
 using System.Data.SqlClient;
 
@@ -54,6 +53,9 @@ namespace MultiPurposeAuthSite.Models.Util
             {
                 case EnumUserStoreType.SqlServer:
                     return new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL"));
+
+                case EnumUserStoreType.OracleMD:
+                    return new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2"));
 
                 //case EnumUserStoreType.PostgreSQL:
                 //    return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));

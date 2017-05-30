@@ -109,6 +109,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     }
                     break;
 
+                case EnumUserStoreType.OracleMD:
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+                        cnn.Execute(
+                            "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\") VALUES (:Key, :Value)",
+                            new { Key = context.Token, Value = context.SerializeTicket() });
+                    }
+                    break;
+
                 case EnumUserStoreType.PostgreSQL:
                     break;
 
@@ -140,6 +150,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <param name="context">AuthenticationTokenReceiveContext</param>
         private void ReceiveAuthenticationCode(AuthenticationTokenReceiveContext context)
         {
+            IEnumerable<string> values = null;
+
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -151,7 +163,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                    IEnumerable<string> values = null;
                     using (IDbConnection cnn = DataAccess.CreateConnection())
                     {
                         cnn.Open();
@@ -162,6 +173,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                         cnn.Execute(
                             "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                    }
+                    break;
+
+                case EnumUserStoreType.OracleMD:
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+                        values = cnn.Query<string>(
+                            "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+
+                        context.DeserializeTicket(values.AsList()[0]);
+
+                        cnn.Execute(
+                            "DELETE FROM [AuthenticationCodeDictionary] WHERE \"Key\" = :Key", new { Key = context.Token });
                     }
                     break;
 
