@@ -100,29 +100,38 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
-                        cnn.Execute(
-                            "INSERT INTO [AuthenticationCodeDictionary] ([Key], [Value]) VALUES (@Key, @Value)",
-                            new { Key = context.Token, Value = context.SerializeTicket() });
-                    }
-                    break;
-
                 case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
                     using (IDbConnection cnn = DataAccess.CreateConnection())
                     {
                         cnn.Open();
-                        cnn.Execute(
-                            "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\") VALUES (:Key, :Value)",
-                            new { Key = context.Token, Value = context.SerializeTicket() });
+
+                        switch (ASPNETIdentityConfig.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "INSERT INTO [AuthenticationCodeDictionary] ([Key], [Value]) VALUES (@Key, @Value)",
+                                    new { Key = context.Token, Value = context.SerializeTicket() });
+
+                                break;
+
+                            case EnumUserStoreType.OracleMD:
+
+                                cnn.Execute(
+                                    "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\") VALUES (:Key, :Value)",
+                                    new { Key = context.Token, Value = context.SerializeTicket() });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                break;
+
+                        }
                     }
-                    break;
 
-                case EnumUserStoreType.PostgreSQL:
-                    break;
-
-                default:
                     break;
             }
         }
@@ -163,37 +172,46 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
-                        values = cnn.Query<string>(
-                            "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token});
-
-                        context.DeserializeTicket(values.AsList()[0]);
-
-                        cnn.Execute(
-                            "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
-                    }
-                    break;
-
                 case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
                     using (IDbConnection cnn = DataAccess.CreateConnection())
                     {
                         cnn.Open();
-                        values = cnn.Query<string>(
-                            "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
 
-                        context.DeserializeTicket(values.AsList()[0]);
+                        switch (ASPNETIdentityConfig.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
 
-                        cnn.Execute(
-                            "DELETE FROM [AuthenticationCodeDictionary] WHERE \"Key\" = :Key", new { Key = context.Token });
+                                values = cnn.Query<string>(
+                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+
+                                context.DeserializeTicket(values.AsList()[0]);
+
+                                cnn.Execute(
+                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+
+                                break;
+
+                            case EnumUserStoreType.OracleMD:
+
+                                values = cnn.Query<string>(
+                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+
+                                context.DeserializeTicket(values.AsList()[0]);
+
+                                cnn.Execute(
+                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE \"Key\" = :Key", new { Key = context.Token });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                break;
+
+                        }
                     }
-                    break;
 
-                case EnumUserStoreType.PostgreSQL:
-                    break;
-
-                default:
                     break;
             }
         }

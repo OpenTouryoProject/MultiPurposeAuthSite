@@ -1563,6 +1563,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                 }
                 else if (ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.SqlServer
+                    || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.OracleMD
                     || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.PostgreSQL)
                 {
                     // DBMS Providerの場合、

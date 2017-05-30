@@ -160,21 +160,33 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             try
             {
-                switch (ASPNETIdentityConfig.UserStoreType)
+                using (IDbConnection cnn = DataAccess.CreateConnection())
                 {
-                    case EnumUserStoreType.SqlServer:
+                    cnn.Open();
+                    int count = 0;
 
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-                            // [Roles] が [Users] に先立って登録されるので。
-                            int count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM [Roles]");
-                            return (0 < count);
-                        }
+                    // [Roles] が [Users] に先立って登録されるので。
+                    switch (ASPNETIdentityConfig.UserStoreType)
+                    {
+                        case EnumUserStoreType.SqlServer:
 
-                    case EnumUserStoreType.PostgreSQL:
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM [Roles]");
 
-                        break;
+                            break;
+
+                        case EnumUserStoreType.OracleMD:
+
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"Roles\"");
+
+                            break;
+
+                        case EnumUserStoreType.PostgreSQL:
+
+                            break;
+
+                    }
+
+                    return (0 < count);
                 }
             }
             catch (Exception ex)
@@ -197,25 +209,66 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             try
             {
-                // Roles
-                IEnumerable<ApplicationRole> roles = cnn.Query<ApplicationRole>(
-                "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
-                "FROM   [UserRoles], [Roles] " +
-                "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
-                "   AND [UserRoles].[UserId] = @userId", new { userId = user.Id });
-                user.Roles = roles.ToList();
+                IEnumerable<ApplicationRole> roles = null;
+                IEnumerable<UserLoginInfo> userLogins = null;
+                IEnumerable<dynamic> claims = null;
 
-                // Logins
-                IEnumerable<UserLoginInfo> userLogins = cnn.Query<UserLoginInfo>(
-                    "SELECT [LoginProvider], [ProviderKey] " +
-                    "FROM   [UserLogins] WHERE [UserId] = @userId", new { userId = user.Id });
-                user.Logins = userLogins.ToList();
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.SqlServer:
 
-                // Claims
-                IEnumerable<dynamic> claims = cnn.Query(
-                    "SELECT [Issuer], [ClaimType], [ClaimValue] " +
-                    "FROM   [UserClaims] WHERE [UserId] = @userId", new { userId = user.Id });
-                user.Claims = new List<Claim>();
+                        // Roles
+                        roles = cnn.Query<ApplicationRole>(
+                        "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
+                        "FROM   [UserRoles], [Roles] " +
+                        "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
+                        "   AND [UserRoles].[UserId] = @userId", new { userId = user.Id });
+                        user.Roles = roles.ToList();
+
+                        // Logins
+                        userLogins = cnn.Query<UserLoginInfo>(
+                            "SELECT [LoginProvider], [ProviderKey] " +
+                            "FROM   [UserLogins] WHERE [UserId] = @userId", new { userId = user.Id });
+                        user.Logins = userLogins.ToList();
+
+                        // Claims
+                        claims = cnn.Query(
+                            "SELECT [Issuer], [ClaimType], [ClaimValue] " +
+                            "FROM   [UserClaims] WHERE [UserId] = @userId", new { userId = user.Id });
+                        user.Claims = new List<Claim>();
+
+                        break;
+
+                    case EnumUserStoreType.OracleMD:
+
+                        // Roles
+                        roles = cnn.Query<ApplicationRole>(
+                        "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
+                        "FROM   \"UserRoles\", \"Roles\" " +
+                        "WHERE  \"UserRoles\".\"RoleId\" = \"Roles\".\"Id\" " +
+                        "   AND \"UserRoles\".\"UserId\" = :userId", new { userId = user.Id });
+                        user.Roles = roles.ToList();
+
+                        // Logins
+                        userLogins = cnn.Query<UserLoginInfo>(
+                            "SELECT \"LoginProvider\", \"ProviderKey\" " +
+                            "FROM   \"UserLogins\" WHERE \"UserId\" = :userId", new { userId = user.Id });
+                        user.Logins = userLogins.ToList();
+
+                        // Claims
+                        claims = cnn.Query(
+                            "SELECT \"Issuer\", \"ClaimType\", \"ClaimValue\" " +
+                            "FROM   \"UserClaims\" WHERE \"UserId\" = :userId", new { userId = user.Id });
+                        user.Claims = new List<Claim>();
+
+                        break;
+
+                    case EnumUserStoreType.PostgreSQL:
+
+                        break;
+
+                }
+
                 foreach (dynamic d in claims)
                 {
                     user.Claims.Add(new Claim(d.ClaimType, d.ClaimValue, null, d.Issuer));
@@ -259,30 +312,58 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            cnn.Execute(
-                                "INSERT INTO [Users] ( " +
-                                "    [Id], [UserName], [PasswordHash], " +
-                                "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
-                                "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], " +
-                                "    [SecurityStamp], [TwoFactorEnabled], [ParentId], [PaymentInformation], [UnstructuredData])" +
-                                "    VALUES ( " +
-                                "        @Id, @UserName, @PasswordHash, " +
-                                "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
-                                "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, " +
-                                "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @PaymentInformation, @UnstructuredData)", user);
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "INSERT INTO [Users] ( " +
+                                        "    [Id], [UserName], [PasswordHash], " +
+                                        "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
+                                        "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], " +
+                                        "    [SecurityStamp], [TwoFactorEnabled], [ParentId], [PaymentInformation], [UnstructuredData])" +
+                                        "    VALUES ( " +
+                                        "        @Id, @UserName, @PasswordHash, " +
+                                        "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
+                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, " +
+                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @PaymentInformation, @UnstructuredData)", user);
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    cnn.Execute(
+                                        "INSERT INTO \"Users\" ( " +
+                                        "    \"Id\", \"UserName\", \"PasswordHash\", " +
+                                        "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
+                                        "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", " +
+                                        "    \"SecurityStamp\", \"TwoFactorEnabled\", \"ParentId\", \"PaymentInformation\", \"UnstructuredData\")" +
+                                        "    VALUES ( " +
+                                        "        :Id, :UserName, :PasswordHash, " +
+                                        "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
+                                        "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, " +
+                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :PaymentInformation, :UnstructuredData)", user);
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
+                            // ユーザの関連情報は、このタイミングで追加しない（Roles, Logins, Claims）
+
                         }
 
-                        // ユーザの関連情報は、このタイミングで追加しない（Roles, Logins, Claims）
-
                         break;
 
-                    case EnumUserStoreType.PostgreSQL:
-
-                        break;
                 }
             }
             catch (Exception ex)
@@ -320,14 +401,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = cnn.Query<ApplicationUser>(
-                                "SELECT * FROM [Users] WHERE [Id] = @userId", new { userId = userId });
+                            IEnumerable<ApplicationUser> users = null;
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * FROM [Users] WHERE [Id] = @userId", new { userId = userId });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * FROM \"Users\" WHERE \"Id\" = :userId", new { userId = userId });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
 
                             if (users.Count() != 0)
                             {
@@ -337,10 +441,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 this.SelectChildTablesOfUser(cnn, user);
                             }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -376,14 +476,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = cnn.Query<ApplicationUser>(
-                                "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
+                            IEnumerable<ApplicationUser> users = null;
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
 
                             if (users.Count() != 0)
                             {
@@ -396,9 +519,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         break;
 
-                    case EnumUserStoreType.PostgreSQL:
-
-                        break;
                 }
             }
             catch (Exception ex)
@@ -449,28 +569,53 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
+                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS
 
+                            string sql = "";
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
-                                string sql = "SELECT {0} * FROM [Users] WHERE [ParentId] = @parentId";
+                                switch (ASPNETIdentityConfig.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
 
-                                // TOP
-                                if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
-                                    sql = string.Format(sql, "TOP " + ASPNETIdentityConfig.UserListCount);
+                                        sql = "SELECT {0} * FROM [Users] WHERE [ParentId] = @parentId";
 
-                                // Like
-                                if (!string.IsNullOrEmpty(searchConditionOfUsers))
-                                    sql += " AND [UserName] Like CONCAT('%', @searchConditionOfUsers, '%')";
+                                        // TOP
+                                        if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
+                                            sql = string.Format(sql, "TOP " + ASPNETIdentityConfig.UserListCount);
+
+                                        // Like
+                                        if (!string.IsNullOrEmpty(searchConditionOfUsers))
+                                            sql += " AND [UserName] Like CONCAT('%', @searchConditionOfUsers, '%')";
+
+                                        break;
+
+                                    case EnumUserStoreType.OracleMD:
+
+                                        sql = "SELECT {0} * FROM \"Users\" WHERE \"ParentId\" = :parentId";
+
+                                        // TOP
+                                        if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
+                                            sql = string.Format(sql, "TOP " + ASPNETIdentityConfig.UserListCount);
+
+                                        // Like
+                                        if (!string.IsNullOrEmpty(searchConditionOfUsers))
+                                            sql += " AND \"UserName\" Like '%' || :searchConditionOfUsers || '%'";
+
+                                        break;
+
+                                    case EnumUserStoreType.PostgreSQL:
+
+                                        break;
+
+                                }
 
                                 cnn.Open();
                                 users = cnn.Query<ApplicationUser>(sql, new {
                                     parentId = parentId,
                                     searchConditionOfUsers = searchConditionOfUsers });
                             }
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
 
                             break;
                     }
@@ -540,21 +685,49 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
+                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
                                 cnn.Open();
 
                                 // ユーザー情報を更新
-                                cnn.Execute(
-                                    "UPDATE [Users] " +
-                                    "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
-                                    "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, " +
-                                    "    [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
-                                    "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
-                                    "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
-                                    "    [ParentId] = @ParentId, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData " +
-                                    "WHERE [Id] = @Id", user);
+                                switch (ASPNETIdentityConfig.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
+
+                                        cnn.Execute(
+                                            "UPDATE [Users] " +
+                                            "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
+                                            "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, " +
+                                            "    [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
+                                            "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
+                                            "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
+                                            "    [ParentId] = @ParentId, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData " +
+                                            "WHERE [Id] = @Id", user);
+
+                                        break;
+
+                                    case EnumUserStoreType.OracleMD:
+
+                                        cnn.Execute(
+                                            "UPDATE \"Users\" " +
+                                            "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
+                                            "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, " +
+                                            "    \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
+                                            "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
+                                            "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
+                                            "    \"ParentId\" = :ParentId, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData " +
+                                            "WHERE \"Id\" = :Id", user);
+
+                                        break;
+
+                                    case EnumUserStoreType.PostgreSQL:
+
+                                        break;
+
+                                }
 
                                 // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
                                 //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
@@ -563,10 +736,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 // await this.UpdateLogins(user, tgtUser);
                                 // await this.UpdateClaims(user, tgtUser);
                             }
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
 
                             break;
                     }
@@ -615,6 +784,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        // ここはSQLが無いので分岐も無い。
 
                         // .Except(が上手く動かないので手組する。
 
@@ -710,10 +883,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         //}
 
                         break;
-
-                    case EnumUserStoreType.PostgreSQL:
-
-                        break;
                 }
             }
             catch (Exception ex)
@@ -760,27 +929,49 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
+                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
                                 cnn.Open();
                                 using (IDbTransaction tr = cnn.BeginTransaction())
                                 {
-                                    // ユーザの情報を削除
-                                    cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
+                                    switch (ASPNETIdentityConfig.UserStoreType)
+                                    {
+                                        case EnumUserStoreType.SqlServer:
 
-                                    // ユーザの関連情報を削除
-                                    cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                    cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                    cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            // ユーザの情報を削除
+                                            cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
+
+                                            // ユーザの関連情報を削除
+                                            cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+
+                                            break;
+
+                                        case EnumUserStoreType.OracleMD:
+
+                                            // ユーザの情報を削除
+                                            cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
+
+                                            // ユーザの関連情報を削除
+                                            cnn.Execute("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+
+                                            break;
+
+                                        case EnumUserStoreType.PostgreSQL:
+
+                                            break;
+
+                                    }
 
                                     tr.Commit();
                                 }
                             }
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
 
                             break;
                     }
@@ -879,14 +1070,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = cnn.Query<ApplicationUser>(
-                                "SELECT * From [Users] WHERE [Email] = @Email", new { Email = email });
+                            IEnumerable<ApplicationUser> users = null;
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From [Users] WHERE [Email] = @Email", new { Email = email });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From \"Users\" WHERE \"Email\" = :Email", new { Email = email });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
 
                             if (users.Count() != 0)
                             {
@@ -896,11 +1110,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 this.SelectChildTablesOfUser(cnn, user);
                             }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
-
+                        
                         break;
                 }
             }
@@ -1102,21 +1312,40 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
 
                             // ロール・マップを追加（ロール情報を取得する。
-                            cnn.Execute(
-                                "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
-                                "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
-                                new { UserId = user.Id, roleName = roleName });
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
+                                        "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
+                                        new { UserId = user.Id, roleName = roleName });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    cnn.Execute(
+                                        "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
+                                        "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
+                                        new { UserId = user.Id, roleName = roleName });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -1182,18 +1411,46 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
+                            IEnumerable<ApplicationRole> roles = null;
 
-                            IEnumerable<ApplicationRole> roles = cnn.Query<ApplicationRole>(
-                                "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
-                                "FROM   [Roles], [UserRoles], [Users] " +
-                                "WHERE  [Roles].[Id] = [UserRoles].[RoleId] " +
-                                "   AND [UserRoles].[UserId] = [Users].[Id] " +
-                                "   AND [Users].[Id] = @UserId",
-                                new { UserId = user.Id });
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
+                                        "FROM   [Roles], [UserRoles], [Users] " +
+                                        "WHERE  [Roles].[Id] = [UserRoles].[RoleId] " +
+                                        "   AND [UserRoles].[UserId] = [Users].[Id] " +
+                                        "   AND [Users].[Id] = @UserId",
+                                        new { UserId = user.Id });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
+                                        "FROM   \"Roles\", \"UserRoles\", \"Users\" " +
+                                        "WHERE  \"Roles\".\"Id\" = \"UserRoles\".\"RoleId\" " +
+                                        "   AND \"UserRoles\".\"UserId\" = \"Users\".\"Id\" " +
+                                        "   AND \"Users\".\"Id\" = :UserId",
+                                        new { UserId = user.Id });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
+                            
                             List<string> temp = new List<string>();
                             foreach (ApplicationRole role in roles)
                             {
@@ -1201,10 +1458,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             }
                             roleNames = temp.ToArray();
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -1266,23 +1519,43 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
+                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
                                 cnn.Open();
 
                                 // ロール・マップを削除（ロール情報を取得する。
-                                cnn.Execute(
-                                "DELETE FROM [UserRoles] " +
-                                "WHERE [UserRoles].[UserId] = @UserId " +
-                                "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
-                                new { UserId = user.Id, roleName = roleName });
+                                switch (ASPNETIdentityConfig.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
+
+                                        cnn.Execute(
+                                            "DELETE FROM [UserRoles] " +
+                                            "WHERE [UserRoles].[UserId] = @UserId " +
+                                            "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
+                                            new { UserId = user.Id, roleName = roleName });
+
+                                        break;
+
+                                    case EnumUserStoreType.OracleMD:
+
+                                        cnn.Execute(
+                                            "DELETE FROM \"UserRoles\" " +
+                                            "WHERE \"UserRoles\".\"UserId\" = :UserId " +
+                                            "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
+                                            new { UserId = user.Id, roleName = roleName });
+
+                                        break;
+
+                                    case EnumUserStoreType.PostgreSQL:
+
+                                        break;
+
+                                }
                             }
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
-
+                            
                             break;
                     }
                 }
@@ -1556,20 +1829,40 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            cnn.Execute(
-                                "INSERT INTO [Roles] ( [Id], [Name], [ParentId] ) VALUES ( @Id, @Name, @ParentId )", role);
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "INSERT INTO [Roles] ( [Id], [Name], [ParentId] ) VALUES ( @Id, @Name, @ParentId )", role);
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    cnn.Execute(
+                                        "INSERT INTO \"Roles\" ( \"Id\", \"Name\", \"ParentId\" ) VALUES ( :Id, :Name, :ParentId )", role);
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
+
                         }
 
                         break;
-
-                    case EnumUserStoreType.PostgreSQL:
-
-                        break;
                 }
+
             }
             catch (Exception ex)
             {
@@ -1606,24 +1899,41 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            IEnumerable<ApplicationRole> roles = cnn.Query<ApplicationRole>(
-                                "SELECT * FROM [Roles] WHERE [Id] = @roleId", new { roleId = roleId });
+                            IEnumerable<ApplicationRole> roles = null;
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM [Roles] WHERE [Id] = @roleId", new { roleId = roleId });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM \"Roles\" WHERE \"Id\" = :roleId", new { roleId = roleId });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
 
                             if (roles.Count() != 0)
                             {
                                 role = roles.First();
                             }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -1659,24 +1969,42 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            IEnumerable<ApplicationRole> roles = cnn.Query<ApplicationRole>(
-                                "SELECT * FROM [Roles] WHERE [Name] = @roleName", new { roleName = roleName });
+                            IEnumerable<ApplicationRole> roles = null;
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM [Roles] WHERE [Name] = @roleName", new { roleName = roleName });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM \"Roles\" WHERE \"Name\" = :roleName", new { roleName = roleName });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
 
                             if (roles.Count() != 0)
                             {
                                 role = roles.First();
                             }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -1730,25 +2058,45 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
+                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
                                 cnn.Open();
 
-                                // システム共通のロール
-                                commonRoles = cnn.Query<ApplicationRole>(
-                                    "SELECT * FROM [Roles] WHERE [ParentId] = @parentId", new { parentId = "" });
-                                // マルチテナント化対応されたテナントロール
-                                tenantRoles = cnn.Query<ApplicationRole>(
-                                    "SELECT * FROM [Roles] WHERE [ParentId] = @parentId", new { parentId = parentId });
+                                switch (ASPNETIdentityConfig.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
+
+                                        // システム共通のロール
+                                        commonRoles = cnn.Query<ApplicationRole>(
+                                            "SELECT * FROM [Roles] WHERE [ParentId] = @parentId", new { parentId = "" });
+                                        // マルチテナント化対応されたテナントロール
+                                        tenantRoles = cnn.Query<ApplicationRole>(
+                                            "SELECT * FROM [Roles] WHERE [ParentId] = @parentId", new { parentId = parentId });
+
+                                        break;
+
+                                    case EnumUserStoreType.OracleMD:
+
+                                        // システム共通のロール
+                                        commonRoles = cnn.Query<ApplicationRole>(
+                                            "SELECT * FROM \"Roles\" WHERE \"ParentId\" = :parentId", new { parentId = "" });
+                                        // マルチテナント化対応されたテナントロール
+                                        tenantRoles = cnn.Query<ApplicationRole>(
+                                            "SELECT * FROM \"Roles\" WHERE \"ParentId\" = :parentId", new { parentId = parentId });
+
+                                        break;
+
+                                    case EnumUserStoreType.PostgreSQL:
+
+                                        break;
+                                }
                             }
 
                             // 統合して返却
                             commonRoles = commonRoles.Union(tenantRoles);
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
 
                             break;
                     }
@@ -1803,20 +2151,39 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
+                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
                                 cnn.Open();
 
                                 // ユーザー情報を更新
-                                cnn.Execute(
-                                    "UPDATE [Roles] SET [Name] = @Name WHERE [Id] = @Id",
-                                    new { Id = role.Id, Name = role.Name });
+                                switch (ASPNETIdentityConfig.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
+
+                                        cnn.Execute(
+                                            "UPDATE [Roles] SET [Name] = @Name WHERE [Id] = @Id",
+                                            new { Id = role.Id, Name = role.Name });
+
+                                        break;
+
+                                    case EnumUserStoreType.OracleMD:
+
+                                        cnn.Execute(
+                                            "UPDATE \"Roles\" SET \"Name\" = :Name WHERE \"Id\" = :Id",
+                                            new { Id = role.Id, Name = role.Name });
+
+                                        break;
+
+                                    case EnumUserStoreType.PostgreSQL:
+
+                                        break;
+
+                                }
+                                
                             }
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
 
                             break;
                     }
@@ -1872,18 +2239,33 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
-
+                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
                                 cnn.Open();
 
                                 // ユーザー情報を更新
-                                cnn.Execute("DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
+                                switch (ASPNETIdentityConfig.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
+
+                                        cnn.Execute("DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
+
+                                        break;
+
+                                    case EnumUserStoreType.OracleMD:
+
+                                        cnn.Execute("DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
+
+                                        break;
+
+                                    case EnumUserStoreType.PostgreSQL:
+
+                                        break;
+
+                                }
                             }
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
 
                             break;
                     }
@@ -1927,19 +2309,39 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            cnn.Execute(
-                                "INSERT INTO [UserLogins] ([UserId], [LoginProvider], [ProviderKey]) " +
-                                "VALUES (@UserId, @LoginProvider, @ProviderKey)",
-                                new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "INSERT INTO [UserLogins] ([UserId], [LoginProvider], [ProviderKey]) " +
+                                        "VALUES (@UserId, @LoginProvider, @ProviderKey)",
+                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    cnn.Execute(
+                                        "INSERT INTO \"UserLogins\" (\"UserId\", \"LoginProvider\", \"ProviderKey\") " +
+                                        "VALUES (:UserId, :LoginProvider, :ProviderKey)",
+                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -1996,18 +2398,44 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = cnn.Query<ApplicationUser>(
-                                "SELECT * From [Users], [UserLogins] " + // * でイケるか？
-                                "WHERE  [Users].[Id] = [UserLogins].[UserId]" +
-                                "    AND [UserLogins].[LoginProvider] = @LoginProvider" +
-                                "    AND [UserLogins].[ProviderKey] = @ProviderKey",
-                                new { LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+                            IEnumerable<ApplicationUser> users = null;
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From [Users], [UserLogins] " + // * でイケるか？
+                                        "WHERE  [Users].[Id] = [UserLogins].[UserId]" +
+                                        "    AND [UserLogins].[LoginProvider] = @LoginProvider" +
+                                        "    AND [UserLogins].[ProviderKey] = @ProviderKey",
+                                        new { LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From \"Users\", \"UserLogins\" " + // * でイケるか？
+                                        "WHERE  \"Users\".\"Id\" = \"UserLogins\".\"UserId\"" +
+                                        "    AND \"UserLogins\".\"LoginProvider\" = :LoginProvider" +
+                                        "    AND \"UserLogins\".\"ProviderKey\" = :ProviderKey",
+                                        new { LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
 
                             if (users.Count() != 0)
                             {
@@ -2017,10 +2445,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 this.SelectChildTablesOfUser(cnn, user);
                             }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -2077,18 +2501,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            cnn.Execute(
-                                "DELETE FROM [UserLogins] WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [ProviderKey] = @ProviderKey ",
-                                new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "DELETE FROM [UserLogins] WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [ProviderKey] = @ProviderKey ",
+                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"ProviderKey\" = :ProviderKey ",
+                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -2127,19 +2570,39 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            cnn.Execute(
-                                "INSERT INTO [UserClaims] ([UserId], [Issuer], [ClaimType], [ClaimValue]) " +
-                                "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
-                                new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "INSERT INTO [UserClaims] ([UserId], [Issuer], [ClaimType], [ClaimValue]) " +
+                                        "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
+                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    cnn.Execute(
+                                        "INSERT INTO \"UserClaims\" (\"UserId\", \"Issuer\", \"ClaimType\", \"ClaimValue\") " +
+                                        "VALUES (:UserId, :Issuer, :ClaimType, :ClaimValue)",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }
@@ -2190,18 +2653,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            cnn.Execute(
-                                "DELETE FROM [UserClaims] WHERE [UserId] = @UserId AND [Issuer] = @Issuer AND [ClaimType] = @ClaimType",
-                                new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "DELETE FROM [UserClaims] WHERE [UserId] = @UserId AND [Issuer] = @Issuer AND [ClaimType] = @ClaimType",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId AND \"Issuer\" = :Issuer AND \"ClaimType\" = :ClaimType",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
                         }
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
 
                         break;
                 }

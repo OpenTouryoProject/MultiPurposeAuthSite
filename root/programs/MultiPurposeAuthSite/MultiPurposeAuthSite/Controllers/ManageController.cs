@@ -334,7 +334,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddEmail(ManageAddEmailViewModel model)
+        public ActionResult AddEmail(ManageAddEmailViewModel model)
         {
             // RegisterViewModelの検証
             if (ModelState.IsValid)
