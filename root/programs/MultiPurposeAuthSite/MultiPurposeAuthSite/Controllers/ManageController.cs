@@ -152,6 +152,8 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
                 : message == EnumManageMessageId.AddPaymentInformationSuccess ? Resources.ManageController.AddPaymentInformationSuccess
                 : message == EnumManageMessageId.RemovePaymentInformationSuccess ? Resources.ManageController.RemovePaymentInformationSuccess
+                : message == EnumManageMessageId.RemoveLoginSuccess ? Resources.ManageController.RemoveLoginSuccess
+                : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
             

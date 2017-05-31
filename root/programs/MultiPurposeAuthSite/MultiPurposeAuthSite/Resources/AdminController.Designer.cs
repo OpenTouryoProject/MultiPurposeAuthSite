@@ -61,6 +61,51 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Add is succeeded. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string AddSuccess {
+            get {
+                return ResourceManager.GetString("AddSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Delete is succeeded. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string DeleteSuccess {
+            get {
+                return ResourceManager.GetString("DeleteSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Do not have ownership of this object. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string DoNotHaveOwnershipOfTheObject {
+            get {
+                return ResourceManager.GetString("DoNotHaveOwnershipOfTheObject", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Edit is succeeded. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string EditSuccess {
+            get {
+                return ResourceManager.GetString("EditSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   An error has occurred. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Error {
+            get {
+                return ResourceManager.GetString("Error", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   This request has not been authenticated. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string UnAuthenticate {

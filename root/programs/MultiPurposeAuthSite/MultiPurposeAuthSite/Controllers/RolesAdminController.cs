@@ -41,9 +41,27 @@ using Touryo.Infrastructure.Business.Presentation;
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
 {
-    //[Authorize(Roles = ASPNETIdentityConst.Role_Admin)] // コンストラクタに移動
+    /// <summary>UsersAdminController</summary>
+    //[Authorize(Roles = ASPNETIdentityConst.Role_Admin)] // 切替可能な実装箇所に移動
     public class RolesAdminController : MyBaseMVController
     {
+        /// <summary>列挙型</summary>
+        public enum EnumAdminMessageId
+        {
+            /// <summary>DoNotHaveOwnershipOfTheObject</summary>
+            DoNotHaveOwnershipOfTheObject,
+            /// <summary>AddSuccess</summary>
+            AddSuccess,
+            /// <summary>EditSuccess</summary>
+            EditSuccess,
+            /// <summary>DeleteSuccess</summary>
+            DeleteSuccess,
+            /// <summary>Error</summary>
+            Error
+        }
+
+        #region 認証・認可系
+
         /// <summary>
         /// [Authorize(Roles = ASPNETIdentityConst.Role_Admin)]の代替
         /// ※ constructorでは動かないので、このように実装することになった。
@@ -76,6 +94,37 @@ namespace MultiPurposeAuthSite.Controllers
                 throw new SecurityException(Resources.AdminController.UnAuthorized);
             }
         }
+
+        /// <summary>マルチテナント時の所有権を確認するユーティリティ・メソッド</summary>
+        /// <param name="objParentId">string</param>
+        /// <returns>所有権の有・無</returns>
+        private async Task<bool> CheckOwnershipInMultitenantMode(string objParentId)
+        {
+            if (ASPNETIdentityConfig.MultiTenant)
+            {
+                // マルチテナントの場合、
+
+                ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                if ((adminUser.UserName == ASPNETIdentityConfig.AdministratorUID))
+                {
+                    // 「既定の管理者ユーザ」の場合。
+                }
+                else
+                {
+                    // 「既定の管理者ユーザ」で無い場合、
+                    // 配下のobjectかどうか、チェックをする。
+                    return (objParentId == adminUser.Id);
+                }
+            }
+            else
+            {
+                // マルチテナントでない場合。
+            }
+
+            return true;
+        }
+
+        #endregion
 
         #region constructor
 
@@ -134,15 +183,24 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public async Task<ActionResult> Index()
+        public async Task<ActionResult> Index(EnumAdminMessageId? message)
         {
+            // 色々な結果メッセージの設定
+            ViewBag.StatusMessage =
+                message == EnumAdminMessageId.DoNotHaveOwnershipOfTheObject ? Resources.AdminController.DoNotHaveOwnershipOfTheObject
+                : message == EnumAdminMessageId.AddSuccess ? Resources.AdminController.AddSuccess
+                : message == EnumAdminMessageId.Error ? Resources.AdminController.Error
+                : message == EnumAdminMessageId.EditSuccess ? Resources.AdminController.EditSuccess
+                : message == EnumAdminMessageId.DeleteSuccess ? Resources.AdminController.DeleteSuccess
+                : "";
+
             this.Authorize();
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsAdmin"] = (user.Id == user.ParentId); // 「既定の管理者ユーザ」か否か。
+            Session["IsSystemAdmin"] = (user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
 
             // ロール一覧表示
             return View(RoleManager.Roles.AsEnumerable());
@@ -162,14 +220,26 @@ namespace MultiPurposeAuthSite.Controllers
             // ロールを取得
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
 
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
+
             // ロールに属するユーザを取得
-           List<string> userNames = new List<string>();
+            List<string> userNames = new List<string>();
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser temp = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             Session["ParentId"] = temp.ParentId; // 分割キー
-            Session["IsAdmin"] = (temp.Id == temp.ParentId); // 「既定の管理者ユーザ」か否か。
+            Session["IsSystemAdmin"] = (temp.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
 
             foreach (ApplicationUser user in UserManager.Users.AsEnumerable())
             {
@@ -234,7 +304,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ロールの追加に成功
 
                     // リダイレクト（一覧へ）
-                    return RedirectToAction("Index");
+                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.AddSuccess });
                 }
                 else
                 {
@@ -269,6 +339,18 @@ namespace MultiPurposeAuthSite.Controllers
             // 選択したロールを表示
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
 
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
+
             EditRoleViewModel roleModel = new EditRoleViewModel
             {
                 Id = role.Id,
@@ -299,6 +381,18 @@ namespace MultiPurposeAuthSite.Controllers
                 // 選択したロールを取得
                 ApplicationRole role = await RoleManager.FindByIdAsync(roleModel.Id);
 
+                // マルチテナントの場合、所有権を確認する。
+                if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
+                {
+                    // 配下のobjectである。
+                }
+                else
+                {
+                    // 配下のobjectでない。
+                    // エラー → リダイレクト（一覧へ）
+                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+                }
+
                 if (string.IsNullOrEmpty(role.ParentId))
                 {
                     // グローバル ロールは更新しない。
@@ -315,7 +409,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 更新の成功
 
                         // リダイレクト（一覧へ）
-                        return RedirectToAction("Index");
+                        return RedirectToAction("Index", new { Message = EnumAdminMessageId.EditSuccess });
                     }
                     else
                     {
@@ -350,6 +444,19 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 選択したロールを表示
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
+
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
+
             return View(role);
         }
 
@@ -370,6 +477,18 @@ namespace MultiPurposeAuthSite.Controllers
             // ロールを取得して削除（少々冗長な気がするが）
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
 
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
+
             if (string.IsNullOrEmpty(role.ParentId))
             {
                 // グローバル ロールは削除しない。
@@ -385,7 +504,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 削除の成功
 
                     // リダイレクト（一覧へ）
-                    return RedirectToAction("Index");
+                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DeleteSuccess });
                 }
                 else
                 {

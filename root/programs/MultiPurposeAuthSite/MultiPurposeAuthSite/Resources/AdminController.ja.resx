@@ -117,6 +117,21 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="AddSuccess" xml:space="preserve">
+    <value>追加に成功しました。</value>
+  </data>
+  <data name="DeleteSuccess" xml:space="preserve">
+    <value>削除に成功しました。</value>
+  </data>
+  <data name="DoNotHaveOwnershipOfTheObject" xml:space="preserve">
+    <value>このオブジェクトの所有権を持っていません。</value>
+  </data>
+  <data name="EditSuccess" xml:space="preserve">
+    <value>編集に成功しました。</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>エラーが発生しました。</value>
+  </data>
   <data name="UnAuthenticate" xml:space="preserve">
     <value>この要求は認証されていません。</value>
   </data>

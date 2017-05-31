@@ -41,9 +41,26 @@ using Touryo.Infrastructure.Business.Presentation;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>UsersAdminController</summary>
-    //[Authorize(Roles = ASPNETIdentityConst.Role_Admin)]
+    //[Authorize(Roles = ASPNETIdentityConst.Role_Admin)] // 切替可能な実装箇所に移動
     public class UsersAdminController : MyBaseMVController
     {
+        /// <summary>列挙型</summary>
+        public enum EnumAdminMessageId
+        {
+            /// <summary>DoNotHaveOwnershipOfTheObject</summary>
+            DoNotHaveOwnershipOfTheObject,
+            /// <summary>AddSuccess</summary>
+            AddSuccess,
+            /// <summary>EditSuccess</summary>
+            EditSuccess,
+            /// <summary>DeleteSuccess</summary>
+            DeleteSuccess,
+            /// <summary>Error</summary>
+            Error
+        }
+
+        #region 認証・認可系
+
         /// <summary>
         /// [Authorize(Roles = ASPNETIdentityConst.Role_Admin)]の代替
         /// ※ constructorでは動かないので、このように実装することになった。
@@ -76,6 +93,37 @@ namespace MultiPurposeAuthSite.Controllers
                 throw new SecurityException(Resources.AdminController.UnAuthorized);
             }
         }
+
+        /// <summary>マルチテナント時の所有権を確認するユーティリティ・メソッド</summary>
+        /// <param name="objParentId">string</param>
+        /// <returns>所有権の有・無</returns>
+        private async Task<bool> CheckOwnershipInMultitenantMode(string objParentId)
+        {   
+            if (ASPNETIdentityConfig.MultiTenant)
+            {
+                // マルチテナントの場合、
+
+                ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                if ((adminUser.UserName == ASPNETIdentityConfig.AdministratorUID))
+                {
+                    // 「既定の管理者ユーザ」の場合。
+                }
+                else
+                {
+                    // 「既定の管理者ユーザ」で無い場合、
+                    // 配下のobjectかどうか、チェックをする。
+                    return (objParentId == adminUser.Id);
+                }                
+            }
+            else
+            {
+                // マルチテナントでない場合。
+            }
+
+            return true;
+        }
+
+        #endregion
 
         #region constructor
 
@@ -134,8 +182,17 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public async Task<ActionResult> Index()
+        public async Task<ActionResult> Index(EnumAdminMessageId? message)
         {
+            // 色々な結果メッセージの設定
+            ViewBag.StatusMessage =
+                message == EnumAdminMessageId.DoNotHaveOwnershipOfTheObject ? Resources.AdminController.DoNotHaveOwnershipOfTheObject
+                : message == EnumAdminMessageId.AddSuccess ? Resources.AdminController.AddSuccess
+                : message == EnumAdminMessageId.Error ? Resources.AdminController.Error
+                : message == EnumAdminMessageId.EditSuccess ? Resources.AdminController.EditSuccess
+                : message == EnumAdminMessageId.DeleteSuccess ? Resources.AdminController.DeleteSuccess
+                : "";
+
             this.Authorize();
 
             // ユーザ一覧表示
@@ -144,7 +201,7 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsAdmin"] = (user.Id == user.ParentId); // 「既定の管理者ユーザ」か否か。
+            Session["IsSystemAdmin"] = (user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
 
             // Usersへのアクセスを非同期化出来ず
             UsersAdminSearchViewModel model = new UsersAdminSearchViewModel();
@@ -171,7 +228,7 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsAdmin"] = (user.Id == user.ParentId); // 「既定の管理者ユーザ」か否か。
+            Session["IsSystemAdmin"] = (user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
             Session["SearchConditionOfUsers"] = model.UserNameforSearch; // ユーザ一覧の検索条件
 
             // Usersへのアクセスを非同期化出来ず
@@ -194,6 +251,18 @@ namespace MultiPurposeAuthSite.Controllers
 
             // ユーザの取得
             ApplicationUser user = await UserManager.FindByIdAsync(id);
+
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
 
             // ユーザ詳細表示
             ViewBag.RoleNames = await UserManager.GetRolesAsync(user.Id);
@@ -277,7 +346,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // ロール登録の成功
 
                             // リダイレクト（一覧へ）
-                            return RedirectToAction("Index");
+                            return RedirectToAction("Index", new { Message = EnumAdminMessageId.AddSuccess });
                         }
                         else
                         {
@@ -327,6 +396,19 @@ namespace MultiPurposeAuthSite.Controllers
 
             // ユーザとロールの情報を取得
             ApplicationUser user = await UserManager.FindByIdAsync(id);
+
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
+
             IList<string> roles = await UserManager.GetRolesAsync(user.Id);
 
             // ユーザとロールの情報を表示
@@ -372,6 +454,18 @@ namespace MultiPurposeAuthSite.Controllers
                 #region ユーザーの更新
 
                 ApplicationUser user = await UserManager.FindByIdAsync(editUser.Id);
+
+                // マルチテナントの場合、所有権を確認する。
+                if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
+                {
+                    // 配下のobjectである。
+                }
+                else
+                {
+                    // 配下のobjectでない。
+                    // エラー → リダイレクト（一覧へ）
+                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+                }
 
                 // 編集結果を反映
                 if (user.Id == user.ParentId)
@@ -429,7 +523,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     // ロールの追加の成功
 
                                     // リダイレクト（一覧へ）
-                                    return RedirectToAction("Index");
+                                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.EditSuccess });
                                 }
                                 else
                                 {
@@ -476,8 +570,21 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.Authorize();
 
-            // 選択したユーザを表示
+            // 選択したユーザを示表
             ApplicationUser user = await UserManager.FindByIdAsync(id);
+
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
+
             return View(user);
         }
 
@@ -499,6 +606,18 @@ namespace MultiPurposeAuthSite.Controllers
             // ユーザを取得して削除（少々冗長な気がするが）
             ApplicationUser user = await UserManager.FindByIdAsync(id);
 
+            // マルチテナントの場合、所有権を確認する。
+            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
+            {
+                // 配下のobjectである。
+            }
+            else
+            {
+                // 配下のobjectでない。
+                // エラー → リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+            }
+
             if (user.Id == user.ParentId)
             {
                 // サインアップした管理者ユーザは、削除不可能。
@@ -516,7 +635,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 削除の成功
 
                     // リダイレクト（一覧へ）
-                    return RedirectToAction("Index");
+                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DeleteSuccess });
                 }
                 else
                 {

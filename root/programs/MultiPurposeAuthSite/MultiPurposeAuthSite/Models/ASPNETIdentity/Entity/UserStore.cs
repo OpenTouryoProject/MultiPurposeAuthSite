@@ -576,14 +576,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             IEnumerable<ApplicationUser> _users = UserStore._users;
 
-                            if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsAdmin"])
+                            if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
                             {
                                 // マルチテナントの場合、テナントで絞り込む。
                                 _users = _users.Where(p => p.ParentId == parentId).ToList();
                             }
                             else
                             {
-                                // マルチテナントでない場合で、「既定の管理者ユーザ」の場合。
+                                // マルチテナントでない場合か、
+                                // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
                             }
 
                             // Like
@@ -605,7 +606,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsAdmin"])
+                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
                                         {
                                             // マルチテナントの場合、テナントで絞り込む。
                                             sql = "SELECT {0} * FROM [Users] WHERE [ParentId] = @parentId";
@@ -615,11 +616,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         }
                                         else
                                         {
-                                            // マルチテナントでない場合で、「既定の管理者ユーザ」の場合。
-                                            sql = "SELECT {0} * FROM [Users] WHERE";
+                                            // マルチテナントでない場合か、
+                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
+                                            sql = "SELECT {0} * FROM [Users]";
                                             // Like
                                             if (!string.IsNullOrEmpty(searchConditionOfUsers))
-                                                sql += " [UserName] Like CONCAT('%', @searchConditionOfUsers, '%')";
+                                                sql += " WHERE [UserName] Like CONCAT('%', @searchConditionOfUsers, '%')";
                                         }
 
                                         // TOP
@@ -630,7 +632,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.OracleMD:
 
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsAdmin"])
+                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
                                         {
                                             // マルチテナントの場合、テナントで絞り込む。
                                             sql = "SELECT * FROM \"Users\" WHERE \"ParentId\" = :parentId";
@@ -640,11 +642,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         }
                                         else
                                         {
-                                            // マルチテナントでない場合で、「既定の管理者ユーザ」の場合。
-                                            sql = "SELECT * FROM \"Users\" WHERE";
+                                            // マルチテナントでない場合か、
+                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
+                                            sql = "SELECT * FROM \"Users\"";
                                             // Like
                                             if (!string.IsNullOrEmpty(searchConditionOfUsers))
-                                                sql += " \"UserName\" Like '%' || :searchConditionOfUsers || '%'";
+                                                sql += " WHERE \"UserName\" Like '%' || :searchConditionOfUsers || '%'";
                                         }
 
                                         // TOP
@@ -993,7 +996,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             // ユーザを削除
                             UserStore._users.Remove(UserStore._users.First(x => x.Id == user.Id));
-
+                            // ユーザの関連情報を削除
+                            UserStore._userRoleMap.RemoveAll(x => x.Item1 == user.Id);
+                            
                             break;
 
                         case EnumUserStoreType.SqlServer:
@@ -2119,14 +2124,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             commonRoles = UserStore._roles.Where(p => p.ParentId == "").ToList();
 
                             // 個別のロール
-                            if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsAdmin"])
+                            if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
                             {
                                 // マルチテナントの場合、テナントで絞り込む。
                                 individualRoles = UserStore._roles.Where(p => p.ParentId == parentId).ToList();
                             }
                             else
                             {
-                                // マルチテナントでない場合で、「既定の管理者ユーザ」の場合。
+                                // マルチテナントでない場合か、
+                                // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
                                 individualRoles = UserStore._roles.Where(p => p.ParentId != "").ToList();
                             }
 
@@ -2152,7 +2158,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             "SELECT * FROM [Roles] WHERE [ParentId] = @parentId", new { parentId = "" });
 
                                         // 個別のロール
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsAdmin"])
+                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
                                         {
                                             // マルチテナントの場合、テナントで絞り込む。
                                             individualRoles = cnn.Query<ApplicationRole>(
@@ -2160,7 +2166,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         }
                                         else
                                         {
-                                            // マルチテナントでない場合で、「既定の管理者ユーザ」の場合。
+                                            // マルチテナントでない場合か、
+                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
                                             individualRoles = cnn.Query<ApplicationRole>("SELECT * FROM [Roles] WHERE [ParentId] != ''");
                                         }
 
@@ -2173,7 +2180,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             "SELECT * FROM \"Roles\" WHERE \"ParentId\" = :parentId", new { parentId = "" });
 
                                         // 個別のロール
-                                        if (ASPNETIdentityConfig.MultiTenant)
+                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
                                         {
                                             // マルチテナントの場合、テナントで絞り込む。
                                             individualRoles = cnn.Query<ApplicationRole>(
@@ -2181,7 +2188,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         }
                                         else
                                         {
-                                            // マルチテナントでない場合で、「既定の管理者ユーザ」の場合。
+                                            // マルチテナントでない場合か、
+                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
                                             individualRoles = cnn.Query<ApplicationRole>("SELECT * FROM \"Roles\" WHERE \"ParentId\" != ''");
                                         }
 
