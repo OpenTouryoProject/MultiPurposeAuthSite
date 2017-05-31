@@ -1601,12 +1601,9 @@ namespace MultiPurposeAuthSite.Controllers
                 result = await this.UserManager.CreateAsync(user, ASPNETIdentityConfig.AdministratorPWD);
                 if (result.Succeeded)
                 {
-                    await this.UserManager.AddToRoleAsync(
-                        (await this.UserManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID)).Id, ASPNETIdentityConst.Role_SystemAdmin);
-                    await this.UserManager.AddToRoleAsync(
-                        (await this.UserManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID)).Id, ASPNETIdentityConst.Role_User);
-                    await this.UserManager.AddToRoleAsync(
-                        (await this.UserManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID)).Id, ASPNETIdentityConst.Role_Admin);
+                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_SystemAdmin);
+                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
+                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
                 }
 
                 #endregion
@@ -1656,7 +1653,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region テナント・ロール
 
                     await this.RoleManager.CreateAsync(
-                        ApplicationRole.CreateForTenant(parentId: parentId, name: "hyper_tanaka"));
+                        ApplicationRole.CreateForIndividual((await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")), "hyper_tanaka"));
 
                     #endregion
 
@@ -1697,7 +1694,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region テナント・ロール
 
                     await this.RoleManager.CreateAsync(
-                        ApplicationRole.CreateForTenant(parentId: parentId, name: "miracle_sato"));
+                        ApplicationRole.CreateForIndividual((await this.UserManager.FindByNameAsync("super_sato@gmail.com")), "miracle_sato"));
 
                     #endregion
 

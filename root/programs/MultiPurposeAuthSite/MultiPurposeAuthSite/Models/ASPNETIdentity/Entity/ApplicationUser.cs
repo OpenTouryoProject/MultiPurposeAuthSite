@@ -119,26 +119,27 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // ParentId（実質的に分割キー）
             if (ASPNETIdentityConfig.MultiTenant)
             {
-                // マルチテナントの場合、サインアップするユーザが管理者ユーザになる。
+                // マルチテナントの場合、サインアップするユーザが「テナントの管理者ユーザ」になる。
                 user.ParentId = user.Id;
             }
             else
             {
-                // マルチテナントでない場合、既定の管理者ユーザを使用する。
+                // マルチテナントでない場合、「既定の管理者ユーザ」を使用する。
 
                 if (userName == ASPNETIdentityConfig.AdministratorUID)
                 {
-                    // 自分が既定の管理者ユーザの場合
+                    // 自分が「既定の管理者ユーザ」の場合、
                     user.ParentId = user.Id;
                 }
                 else
                 {
-                    // 自分が既定の管理者ユーザでない場合、管理者ユーザを取得する。
+                    // 自分が既定の管理者ユーザでない場合、
                     ApplicationUserManager userManager
                         = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
 
                     ApplicationUser parentUser = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
 
+                    // 「既定の管理者ユーザ」が管理者ユーザになる。
                     user.ParentId = parentUser.Id;
                 }
             }
@@ -186,19 +187,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // ParentId（実質的に分割キー）
             if (ASPNETIdentityConfig.MultiTenant)
             {
-                // 一般ユーザの場合は管理者ユーザのIDを指定する。
+                // マルチテナントの場合、「一般ユーザ」は「テナントの管理者ユーザ」が管理者ユーザになる。
                 user.ParentId = parentId;
             }
             else
             {
-                // マルチテナントでない場合、既定の管理者ユーザを使用する。
+                // マルチテナントでない場合、「一般ユーザ」は「既定の管理者ユーザ」が管理者ユーザになる。
 
                 // AdministratorのApplicationUser を取得する。
                 ApplicationUserManager userManager
                     = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
 
                 ApplicationUser parentUser = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
-
+                
                 user.ParentId = parentUser.Id;
             }
 

@@ -142,7 +142,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            Session["CurrentUserId"] = user.Id; // 分割キー
+
+            Session["ParentId"] = user.ParentId; // 分割キー
+            Session["IsAdmin"] = (user.Id == user.ParentId); // 「既定の管理者ユーザ」か否か。
 
             // Usersへのアクセスを非同期化出来ず
             UsersAdminSearchViewModel model = new UsersAdminSearchViewModel();
@@ -167,7 +169,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            Session["CurrentUserId"] = user.Id; // 分割キー
+
+            Session["ParentId"] = user.ParentId; // 分割キー
+            Session["IsAdmin"] = (user.Id == user.ParentId); // 「既定の管理者ユーザ」か否か。
             Session["SearchConditionOfUsers"] = model.UserNameforSearch; // ユーザ一覧の検索条件
 
             // Usersへのアクセスを非同期化出来ず

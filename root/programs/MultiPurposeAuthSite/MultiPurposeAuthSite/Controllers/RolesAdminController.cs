@@ -140,7 +140,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            Session["CurrentUserId"] = user.Id; // 分割キー
+
+            Session["ParentId"] = user.ParentId; // 分割キー
+            Session["IsAdmin"] = (user.Id == user.ParentId); // 「既定の管理者ユーザ」か否か。
 
             // ロール一覧表示
             return View(RoleManager.Roles.AsEnumerable());
@@ -165,7 +167,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser temp = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            Session["CurrentUserId"] = temp.Id; // 分割キー
+
+            Session["ParentId"] = temp.ParentId; // 分割キー
+            Session["IsAdmin"] = (temp.Id == temp.ParentId); // 「既定の管理者ユーザ」か否か。
 
             foreach (ApplicationUser user in UserManager.Users.AsEnumerable())
             {
@@ -222,7 +226,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // テナントのロールを追加
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                ApplicationRole role = ApplicationRole.CreateForTenant(user.Id, roleViewModel.Name);
+                ApplicationRole role = ApplicationRole.CreateForIndividual(user, roleViewModel.Name);
                 IdentityResult result = await RoleManager.CreateAsync(role);
 
                 if (result.Succeeded)

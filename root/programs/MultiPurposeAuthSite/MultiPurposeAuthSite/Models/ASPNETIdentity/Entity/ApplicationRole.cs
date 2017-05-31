@@ -50,11 +50,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             };
         }
 
-        /// <summary>テナントのApplicationRoleを生成</summary>
-        /// <param name="parentId">string</param>
+        /// <summary>個別のApplicationRoleを生成</summary>
+        /// <param name="user">ApplicationUser</param>
         /// <param name="name">string</param>
         /// <returns>ApplicationRole</returns>
-        public static ApplicationRole CreateForTenant(string parentId, string name)
+        public static ApplicationRole CreateForIndividual(ApplicationUser user, string name)
         {
             // ApplicationRole
             ApplicationRole role = new ApplicationRole
@@ -63,17 +63,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             };
 
             // ParentId（実質的に分割キー）
-            if (ASPNETIdentityConfig.MultiTenant)
-            {
-                // マルチテナントの場合、テナントの管理者ユーザが管理者ユーザになる。
-                role.ParentId = parentId;
-            }
-            else
-            {
-                // マルチテナントでない場合、"".
-                role.ParentId = "";
-            }
-
+            // ・マルチテナントの場合、「テナントの管理者ユーザ」が管理者ユーザになる。
+            // ・マルチテナントでない場合、「既定の管理者ユーザ」が管理者ユーザになる。
+            role.ParentId = user.ParentId;
+            
             return role;
         }
 
