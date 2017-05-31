@@ -201,7 +201,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 context.DeserializeTicket(values.AsList()[0]);
 
                                 cnn.Execute(
-                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE \"Key\" = :Key", new { Key = context.Token });
+                                    "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
 
                                 break;
 

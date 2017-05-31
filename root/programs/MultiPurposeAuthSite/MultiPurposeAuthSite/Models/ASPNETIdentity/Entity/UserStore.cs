@@ -652,8 +652,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         // TOP
                                         if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
-                                        { 
-                                            sql = string.Format("SELECT * FROM ({0}) as X WHERE ROWNUM <= {1};", sql, ASPNETIdentityConfig.UserListCount);
+                                        {
+                                            sql += string.Format(" AND ROWNUM <= {0}", ASPNETIdentityConfig.UserListCount);
                                         }
 
                                         break;
@@ -665,9 +665,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 }
 
                                 cnn.Open();
-                                users = cnn.Query<ApplicationUser>(sql, new {
+                                users = cnn.Query<ApplicationUser>(sql, new
+                                {
                                     parentId = parentId,
-                                    searchConditionOfUsers = searchConditionOfUsers });
+                                    searchConditionOfUsers = searchConditionOfUsers
+                                });
                             }
 
                             break;
@@ -2177,7 +2179,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         // システム共通のロール
                                         commonRoles = cnn.Query<ApplicationRole>(
-                                            "SELECT * FROM \"Roles\" WHERE \"ParentId\" = :parentId", new { parentId = "" });
+                                            "SELECT * FROM \"Roles\" WHERE \"ParentId\" IS NULL");
 
                                         // 個別のロール
                                         if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
@@ -2190,7 +2192,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         {
                                             // マルチテナントでない場合か、
                                             // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                            individualRoles = cnn.Query<ApplicationRole>("SELECT * FROM \"Roles\" WHERE \"ParentId\" != ''");
+                                            individualRoles = cnn.Query<ApplicationRole>("SELECT * FROM \"Roles\" WHERE \"ParentId\" IS NOT NULL");
                                         }
 
                                         break;
