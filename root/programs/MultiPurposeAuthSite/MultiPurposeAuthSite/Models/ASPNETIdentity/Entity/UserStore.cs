@@ -2185,7 +2185,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         {
                                             // マルチテナントでない場合か、
                                             // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                            individualRoles = cnn.Query<ApplicationRole>("SELECT * FROM [Roles] WHERE [ParentId] != ''");
+                                            individualRoles = cnn.Query<ApplicationRole>(
+                                                string.Format("SELECT TOP {0} * FROM [Roles] WHERE [ParentId] != ''", ASPNETIdentityConfig.UserListCount));
                                         }
 
                                         break;
@@ -2207,7 +2208,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         {
                                             // マルチテナントでない場合か、
                                             // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                            individualRoles = cnn.Query<ApplicationRole>("SELECT * FROM \"Roles\" WHERE \"ParentId\" IS NOT NULL");
+                                            individualRoles = cnn.Query<ApplicationRole>(
+                                                string.Format("SELECT * FROM \"Roles\" WHERE \"ParentId\" IS NOT NULL AND ROWNUM <= {0}", ASPNETIdentityConfig.UserListCount));
                                         }
 
                                         break;

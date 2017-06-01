@@ -123,6 +123,63 @@ namespace MultiPurposeAuthSite.Controllers
             return true;
         }
 
+        /// <summary>利用可能なロールのみを返す。</summary>
+        /// <returns>利用可能なロールの一覧</returns>
+        private async Task<List<ApplicationRole>> GetSelectableRoles()
+        {
+            List<ApplicationRole> selectableRoles = new List<ApplicationRole>();
+
+            // 認証された（管理者）ユーザを取得
+            ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+            // グローバル・ロールは自分の持つロールだけ。
+            foreach (ApplicationRole role in adminUser.Roles)
+            {
+                if (role.ParentId == "")
+                {
+                    selectableRoles.Add(role);
+                }
+            }
+            // テナント・ロールは全て追加
+            foreach (ApplicationRole role in RoleManager.Roles)
+            {
+                if (role.ParentId == adminUser.ParentId)
+                {
+                    selectableRoles.Add(role);
+                }
+            }
+
+            return selectableRoles;
+        }
+
+        private async Task CheckSelectableRoles(string[] selectedRoles)
+        {
+            // 認証された（管理者）ユーザを取得
+            ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+            foreach (string roleName in selectedRoles)
+            {
+                ApplicationRole role = await RoleManager.FindByNameAsync(roleName);
+
+                if (role.ParentId == "")
+                {
+                    // グローバル・ロールは自分の持つロールだけ。
+                    if (adminUser.Roles.Where(x => x.Name == roleName).Count<ApplicationRole>() == 0)
+                    {
+                        throw new System.Exception(Resources.AdminController.Error);
+                    }
+                }
+                else
+                {
+                    // テナント・ロールは自テナントか確認
+                    if (role.ParentId != adminUser.ParentId)
+                    {
+                        throw new System.Exception(Resources.AdminController.Error);
+                    }
+                }
+            }
+        }
+
         #endregion
 
         #region constructor
@@ -225,10 +282,10 @@ namespace MultiPurposeAuthSite.Controllers
             // ユーザ一覧表示
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+            ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-            Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsSystemAdmin"] = (user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
+            Session["ParentId"] = adminUser.ParentId; // 分割キー
+            Session["IsSystemAdmin"] = (adminUser.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
             Session["SearchConditionOfUsers"] = model.UserNameforSearch; // ユーザ一覧の検索条件
 
             // Usersへのアクセスを非同期化出来ず
@@ -279,15 +336,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult Create()
+        public async Task<ActionResult> Create()
         {
             this.Authorize();
 
-            //Get the list of Roles
-            //ViewBag.RoleId = new SelectList(await RoleManager.Roles.ToListAsync(), "Name", "Name");
-
-            // Rolesへのアクセスを非同期化出来ず ( dataValueField, dataTextField = "Name" )
-            ViewBag.RoleId = new SelectList(RoleManager.Roles, "Name", "Name");
+            ViewBag.RoleId = new SelectList(
+                await this.GetSelectableRoles(), "Name", "Name");
 
             return View();
         }
@@ -311,16 +365,21 @@ namespace MultiPurposeAuthSite.Controllers
                 // RegisterViewModelの検証に成功
 
                 // 認証された（管理者）ユーザを取得
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                // 作成されたユーザ
+                ApplicationUser user = null;
 
                 // （一般）ユーザを作成
                 if (ASPNETIdentityConfig.RequireUniqueEmail)
                 {
-                    user = await ApplicationUser.CreateByRegister(user.Id, userViewModel.Email);
+                    // userViewModel.Emailはチェック済み。
+                    user = await ApplicationUser.CreateByRegister(adminUser.ParentId, userViewModel.Email);
                 }
                 else
                 {
-                    user = await ApplicationUser.CreateByRegister(user.Id, userViewModel.Name);
+                    // userViewModel.Nameのカスタムのチェック処理は必要か？
+                    user = await ApplicationUser.CreateByRegister(adminUser.ParentId, userViewModel.Name);
                 }
 
                 // ApplicationUserManagerのCreateAsync
@@ -337,6 +396,9 @@ namespace MultiPurposeAuthSite.Controllers
                     if (selectedRoles != null)
                     {
                         // ロールがある
+
+                        // チェック
+                        await this.CheckSelectableRoles(selectedRoles);
 
                         // ロールの登録
                         IdentityResult rolesResult = await UserManager.AddToRolesAsync(user.Id, selectedRoles);
@@ -409,7 +471,9 @@ namespace MultiPurposeAuthSite.Controllers
                 return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
             }
 
-            IList<string> roles = await UserManager.GetRolesAsync(user.Id);
+            // 「選択可能なロール」に「現在のロール」のチェックを入れる。
+            List<ApplicationRole> selectableRoles = await this.GetSelectableRoles();
+            IList<string> usersRoles = await UserManager.GetRolesAsync(user.Id);
 
             // ユーザとロールの情報を表示
             return View(new UsersAdminEditViewModel()
@@ -419,11 +483,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                 Name = user.UserName,
                 Email = user.Email,
-
-                RolesList = RoleManager.Roles.ToList().Select(
+                
+                RolesList = selectableRoles.Select(
                     x => new SelectListItem()
                     {
-                        Selected = roles.Contains(x.Name),
+                        Selected = usersRoles.Contains(x.Name),
                         Text = x.Name,
                         Value = x.Name
                     })
@@ -478,11 +542,13 @@ namespace MultiPurposeAuthSite.Controllers
                     // 上記以外のユーザの編集は可能
                     if (ASPNETIdentityConfig.RequireUniqueEmail)
                     {
+                        // userViewModel.Emailはチェック済み。
                         user.UserName = editUser.Email;
                         user.Email = editUser.Email;
                     }
                     else
                     {
+                        // userViewModel.Nameのカスタムのチェック処理は必要か？
                         user.UserName = editUser.Name;
                     }
 
@@ -514,9 +580,12 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // ロールの削除の成功
 
+                                // チェック
+                                string[] selectedRoles = selectedRole.Except(roles).ToArray<string>();
+                                await this.CheckSelectableRoles(selectedRoles);
+
                                 // ロールの追加
-                                result = await UserManager.AddToRolesAsync(
-                                    user.Id, selectedRole.Except(roles).ToArray<string>());
+                                result = await UserManager.AddToRolesAsync(user.Id, selectedRoles);
 
                                 if (result.Succeeded)
                                 {

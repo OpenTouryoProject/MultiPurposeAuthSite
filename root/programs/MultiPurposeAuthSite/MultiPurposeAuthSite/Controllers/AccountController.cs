@@ -290,10 +290,12 @@ namespace MultiPurposeAuthSite.Controllers
                 // サインアップしたユーザを取得
                 if (ASPNETIdentityConfig.RequireUniqueEmail)
                 {
+                    // model.Emailはチェック済み。
                     uid = model.Email;
                 }
                 else
                 {
+                    // model.Nameのカスタムのチェック処理は必要か？
                     uid = model.Name;
                 }
 
