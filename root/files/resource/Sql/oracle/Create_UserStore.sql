@@ -1,13 +1,7 @@
---UserClaimsのIDENTITY
+-- see : Oracle11gXE + ODP.NET Managed Driver - マイクロソフト系技術情報 Wiki
+--       https://techinfoofmicrosofttech.osscons.jp/index.php?Oracle11gXE%20%2B%20ODP.NET%20Managed%20Driver
 
--- TABLE
-DROP TABLE "Users";
-DROP TABLE "Roles";
-DROP TABLE "UserRoles";
-DROP TABLE "UserLogins";
-DROP TABLE "UserClaims";
-DROP TABLE "AuthenticationCodeDictionary";
-DROP TABLE "RefreshTokenDictionary";
+--UserClaimsのIDENTITY
 
 CREATE TABLE "Users"(
     "Id" NVARCHAR2(38) NOT NULL,            -- PK, guid
@@ -49,7 +43,6 @@ CREATE TABLE "UserLogins"(       -- Users ---* UserLogins
     CONSTRAINT "PK.UserLogins" PRIMARY KEY ("UserId", "LoginProvider", "ProviderKey")
 );
 
-DROP SEQUENCE TS_UserClaimID;
 CREATE SEQUENCE TS_UserClaimID;  -- TS_UserClaimID.NEXTVAL
 CREATE TABLE "UserClaims"(       -- Users ---* UserClaims
     "Id" NUMBER(10) NOT NULL,       -- PK (キー長に問題があるため"Id" "NUMBER(10)"を使用)
@@ -73,13 +66,6 @@ CREATE TABLE "RefreshTokenDictionary"(
 );
 
 -- INDEX
-DROP INDEX "UserNameIndex";
-DROP INDEX "RoleNameIndex";
-DROP INDEX "IX_UserRoles.UserId";
-DROP INDEX "IX_UserRoles.RoleId";
-DROP INDEX "IX_UserLogins.UserId";
-DROP INDEX "IX_UserClaims.UserId";
-
 --- UNIQUE INDEX
 ---- Users
 CREATE UNIQUE INDEX "UserNameIndex" ON "Users" ("UserName" ASC);
@@ -97,11 +83,6 @@ CREATE INDEX "IX_UserClaims.UserId" ON "UserClaims" ("UserId" ASC);
 
 
 -- CONSTRAINT
-ALTER TABLE "UserRoles" DROP CONSTRAINT "FK.UserRoles.Users_UserId";
-ALTER TABLE "UserRoles" DROP CONSTRAINT "FK.UserRoles.Roles_RoleId";
-ALTER TABLE "UserLogins" DROP CONSTRAINT "FK.UserLogins.Users_UserId";
-ALTER TABLE "UserClaims" DROP CONSTRAINT "FK.UserClaims.Users_UserId";
-
 ---- UserRoles
 ALTER TABLE "UserRoles" ADD CONSTRAINT "FK.UserRoles.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ALTER TABLE "UserRoles" ADD CONSTRAINT "FK.UserRoles.Roles_RoleId" FOREIGN KEY("RoleId") REFERENCES "Roles" ("Id"); -- 使用中のRoleは削除できない。
