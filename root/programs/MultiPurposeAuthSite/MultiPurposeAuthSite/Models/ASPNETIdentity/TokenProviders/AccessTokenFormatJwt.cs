@@ -120,8 +120,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)
             {
-                switch (scope)
+                switch (scope.ToLower())
                 {
+                    #region OpenID Connect
                     case "profile":
                         // ・・・
                         break;
@@ -136,6 +137,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     case "address":
                         // ・・・
                         break;
+                    #endregion
+
+                    #region Else
+                    case "userid":
+                        authTokenClaimSet.Add("userid", user.Id);
+                        break;
+                    #endregion
+
                 }
             }
 

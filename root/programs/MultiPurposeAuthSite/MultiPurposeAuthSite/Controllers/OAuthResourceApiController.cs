@@ -133,8 +133,9 @@ namespace MultiPurposeAuthSite.Controllers
             // scope値によって、返す値を変更する。
             foreach (Claim scope in claimScope)
             {
-                switch (scope.Value)
+                switch (scope.Value.ToLower())
                 {
+                    #region OpenID Connect
                     case "profile":
                         // ・・・
                         break;
@@ -149,6 +150,13 @@ namespace MultiPurposeAuthSite.Controllers
                     case "address":
                         // ・・・
                         break;
+                    #endregion
+
+                    #region Else
+                    case "userid":
+                        userinfoClaimSet.Add("userid", user.Id);
+                        break;
+                    #endregion
                 }
             }
 
