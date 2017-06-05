@@ -300,6 +300,7 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
+    <Compile Include="Models\ASPNETIdentity\Util\CheckRole.cs" />
     <Compile Include="Models\Util\DataAccess.cs" />
     <Compile Include="Models\Util\CreateProxy.cs" />
     <Compile Include="Models\Util\WebAPIHelper.cs" />

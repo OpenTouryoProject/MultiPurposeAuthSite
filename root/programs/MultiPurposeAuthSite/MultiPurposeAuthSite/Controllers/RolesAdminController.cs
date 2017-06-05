@@ -20,6 +20,7 @@
 
 using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 
@@ -84,10 +85,8 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         if (roleName == ASPNETIdentityConst.Role_Admin) return;
                     }
-                    else
-                    {
-                        if (roleName == ASPNETIdentityConst.Role_SystemAdmin) return;
-                    }
+
+                    if (roleName == ASPNETIdentityConst.Role_SystemAdmin) return;
                 }
 
                 // 認証されない。
@@ -105,7 +104,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // マルチテナントの場合、
 
                 ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                if ((adminUser.UserName == ASPNETIdentityConfig.AdministratorUID))
+                IList<string> roles = await UserManager.GetRolesAsync(adminUser.Id);
+                //if (adminUser.UserName == ASPNETIdentityConfig.AdministratorUID)
+                if (CheckRole.IsSystemAdmin(roles))
                 {
                     // 「既定の管理者ユーザ」の場合。
                 }
@@ -200,7 +201,8 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsSystemAdmin"] = (user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
+            Session["IsSystemAdmin"] = CheckRole.IsSystemAdmin(await UserManager.GetRolesAsync(user.Id)); // 「管理者ユーザ」か否か。
+            //(user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
 
             // ロール一覧表示
             return View(RoleManager.Roles.AsEnumerable());
@@ -239,7 +241,8 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser temp = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             Session["ParentId"] = temp.ParentId; // 分割キー
-            Session["IsSystemAdmin"] = (temp.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
+            Session["IsSystemAdmin"] = CheckRole.IsSystemAdmin(await UserManager.GetRolesAsync(temp.Id)); // 「管理者ユーザ」か否か。
+            //(temp.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
 
             foreach (ApplicationUser user in UserManager.Users.AsEnumerable())
             {
