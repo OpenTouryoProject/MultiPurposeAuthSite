@@ -313,6 +313,7 @@
     <Compile Include="Models\ViewModels\AccountVerifyCodeViewModel.cs" />
     <Compile Include="Models\ViewModels\BaseViewModel.cs" />
     <Compile Include="Models\ViewModels\EditRoleViewModel.cs" />
+    <Compile Include="Models\ViewModels\ManageAddUnstructuredDataViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageChangeUserNameViewModel.cs" />
     <Compile Include="Models\ViewModels\UsersAdminSearchViewModel.cs" />
     <Compile Include="Models\ViewModels\UsersAdminEditViewModel.cs" />
@@ -486,6 +487,7 @@
     <Content Include="Views\Manage\AddEmail.cshtml" />
     <Content Include="Views\Manage\ChangeEmail.cshtml" />
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
+    <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">
@@ -494,10 +496,13 @@
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
-    <EmbeddedResource Include="Resources\AccountController.ja.resx" />
+    <EmbeddedResource Include="Resources\AccountController.ja.resx">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\AccountController.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>AccountController.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\AccountViews.ja.resx" />
     <EmbeddedResource Include="Resources\AccountViews.resx">
@@ -533,6 +538,7 @@
     <EmbeddedResource Include="Resources\ManageController.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>ManageController.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\ManageViews.ja.resx">
       <SubType>Designer</SubType>

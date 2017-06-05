@@ -132,6 +132,9 @@
   <data name="AddPhoneSuccess" xml:space="preserve">
     <value>Your phone number has been added.</value>
   </data>
+  <data name="AddUnstructuredDataSuccess" xml:space="preserve">
+    <value>Your additional attribute data has been added.</value>
+  </data>
   <data name="ChangeEmailFailure" xml:space="preserve">
     <value>Your E-mail has not been changed.</value>
   </data>
@@ -159,7 +162,7 @@
   <data name="RemoveEmailSuccess" xml:space="preserve">
     <value>Your E-mail has been removed.</value>
   </data>
-  <data name="RemoveLoginSuccess" xml:space="preserve">
+  <data name="RemoveExternalLoginSuccess" xml:space="preserve">
     <value>The external login has been removed.</value>
   </data>
   <data name="RemovePaymentInformationSuccess" xml:space="preserve">
@@ -167,6 +170,9 @@
   </data>
   <data name="RemovePhoneSuccess" xml:space="preserve">
     <value>Your phone number has been removed.</value>
+  </data>
+  <data name="RemoveUnstructuredDataSuccess" xml:space="preserve">
+    <value>Your additional attribute data has been removed.</value>
   </data>
   <data name="SetPasswordSuccess" xml:space="preserve">
     <value>Your password has been set.</value>

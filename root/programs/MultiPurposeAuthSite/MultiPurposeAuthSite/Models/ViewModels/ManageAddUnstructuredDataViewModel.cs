@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：ManageChangeUserNameViewModel
-//* クラス日本語名  ：UserNameの編集画面用のVM（テンプレート）
+//* クラス名        ：ManageAddUnstructuredDataViewModel
+//* クラス日本語名  ：非構造化データ設定用のVM（テンプレート）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -18,17 +18,22 @@
 //*  2017/06/05  西野 大介         新規
 //**********************************************************************************
 
+using Newtonsoft.Json;
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
-    /// <summary>UserNameの編集画面用のVM（テンプレート）</summary>
-    public class ManageChangeUserNameViewModel : BaseViewModel
+    /// <summary>非構造化データ設定用のVM</summary>
+    public class ManageAddUnstructuredDataViewModel : BaseViewModel
     {
-        /// <summary>UserName</summary>
-        [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UserName", ResourceType =typeof(Resources.CommonViewModels))]
-        public string UserNameForEdit { get; set; }
+        /// <summary>UnstructuredData1</summary>
+        [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "usd1")]
+        public string UnstructuredData1 { get; set; }
+
+        [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "usd2")]
+        public string UnstructuredData2 { get; set; }
     }
 }

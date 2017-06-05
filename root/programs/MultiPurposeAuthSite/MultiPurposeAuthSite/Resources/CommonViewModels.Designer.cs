@@ -187,6 +187,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   UnstructuredData1 に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string UnstructuredData1 {
+            get {
+                return ResourceManager.GetString("UnstructuredData1", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   UnstructuredData2 に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string UnstructuredData2 {
+            get {
+                return ResourceManager.GetString("UnstructuredData2", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   User name に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string UserName {

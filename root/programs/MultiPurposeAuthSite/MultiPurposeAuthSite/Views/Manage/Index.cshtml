@@ -68,39 +68,17 @@ else
             <dt>Password :</dt>
             <dd>
                 [
-                @if (Model.HasPassword)
-                {
+@if (Model.HasPassword)
+{
                     @Html.ActionLink(ManageViews.IndexChangePasswordActionLink, "ChangePassword")
-                }
-                else
-                {
-                    @Html.ActionLink(ManageViews.IndexSetPasswordActionLink, "SetPassword")                }
+}
+else
+{
+                    @Html.ActionLink(ManageViews.IndexSetPasswordActionLink, "SetPassword")
+}
                 ]
             </dd>
 
-            <dt>@ManageViews.IndexExternalLogins:</dt>
-            <dd>
-                @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
-            </dd>
-
-            @*
-                Phone Numbers can used as a second factor of verification in a two-factor authentication system.
-                 See <a href="http://go.microsoft.com/fwlink/?LinkId=403804">this article</a>
-                    for details on setting up this ASP.NET application to support two-factor authentication using SMS.
-                 Uncomment the following block after you have set up two-factor authentication
-            *@
-            @*
-                電話番号を 2FAシステムの第 2 認証要素としてお使いいただけます。
-                SMS を使用する 2FAをサポートするようにこの ASP.NET アプリケーションを設定する方法の詳細については、
-                <a href="http://go.microsoft.com/fwlink/?LinkId=403804">こちらの記事</a>をご覧ください。
-                2FAの設定が完了したら、次のブロックのコメントを解除してください。
-            *@
-           
-            @* UID ≠ 非メアド の場合、メアドの "Add" or "Remove" は実装しない。*@
-            @* ・ユーザストアが管理者から提供されるエンプラ向き実装。*@
-            @* ・このため、管理者から提供されたメアドを使用する。 *@
-
-  
 @if (ASPNETIdentityConfig.RequireUniqueEmail)
 {
     // UserName＝メアドの場合
@@ -131,67 +109,60 @@ else
             <dt>@ManageViews.IndexPhoneNumber :</dt>
             <dd>
                 @*"Add" or "Remove"*@
-                @if (string.IsNullOrEmpty(Model.PhoneNumber))
-                {
+@if (string.IsNullOrEmpty(Model.PhoneNumber))
+{
                     <text>None</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
-                }
-                else
-                {
+}
+else
+{
                     <text>@Model.PhoneNumber</text><br/>
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
 
-                    
                     using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
                     {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn-link" />]</text>
                     }
-                    
-                }
+}
             </dd>
     
             <dt>@ManageViews.IndexTwoFactorAuth :</dt>
             <dd>
-                @*<p>
-                    There are no two-factor authentication providers configured. See <a href="http://go.microsoft.com/fwlink/?LinkId=403804">this article</a>
-                    for details on setting up this ASP.NET application to support two-factor authentication.
-                </p>*@
-                @*<p>
-                    構成済みの 2FAプロバイダーはありません。2FAをサポートするようにこの ASP.NET アプリケーションを設定する方法の
-                    詳細については、<a href="http://go.microsoft.com/fwlink/?LinkId=403804">こちらの記事</a>をご覧ください。
-                </p>*@
-
-                @if (Model.TwoFactor)
-                {
+@if (Model.TwoFactor)
+{
                     using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
                     {
                         @Html.AntiForgeryToken()
-                        <text>@ManageViews.IndexTwoFactorAuthEnableStatus
-                            <input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabled" class="btn btn-link" />
+                        <text>
+                            @ManageViews.IndexTwoFactorAuthEnableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabledButton" class="btn btn-link" />]
                         </text>
                     }
-                }
-                else
-                {
+}
+else
+{
                     using (Html.BeginForm("EnableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
                     {
                         @Html.AntiForgeryToken()
-                        <text>@ManageViews.IndexTwoFactorAuthDisableStatus
-                            <input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabled" class="btn btn-link" />
+                        <text>
+                            @ManageViews.IndexTwoFactorAuthDisableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabledButton" class="btn btn-link" />]
                         </text>
                     }
-                }
+}
+            </dd>
+
+            <dt>@ManageViews.IndexExternalLogins :</dt>
+            <dd>
+                @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
             </dd>
 
 @if (ASPNETIdentityConfig.EnableStripe || ASPNETIdentityConfig.EnablePAYJP)
 {
             <dt>@ManageViews.IndexPaymentInformation :</dt>
 }
-
             <dd>
 
-@*"Add" or "Remove or Charge"*@
+@*"Add" and "Charge" or "Remove or Change"*@
 @if (!Model.HasPaymentInformation)
 {
     if (ASPNETIdentityConfig.EnableStripe || ASPNETIdentityConfig.EnablePAYJP)
@@ -203,7 +174,7 @@ else
 else
 {
                         <text>XXXXXXXXXX</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationAddActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationChangeActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
 
     using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
     {
@@ -221,6 +192,29 @@ else
     }
 }
             </dd>
+
+            <dt>@ManageViews.IndexUnstructuredData :</dt>
+            <dd>
+
+                @*"Add" and "Remove or Change"*@
+                @if (!Model.HasUnstructuredData)
+                {
+                    <text>None</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataAddActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
+                }
+                else
+                {
+                    <text>XXXXXXXXXX</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataChangeActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
+
+                    using (Html.BeginForm("RemoveUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexUnstructuredDataRemoveButton" class="btn-link" />]</text>
+                    }
+                }
+            </dd>
+
         </dl>
     </div>
 </div>

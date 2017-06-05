@@ -195,10 +195,10 @@
   <data name="IndexTwoFactorAuthEnableStatus" xml:space="preserve">
     <value>有効</value>
   </data>
-  <data name="IndexTwoFactorAuthToDisabled" xml:space="preserve">
+  <data name="IndexTwoFactorAuthToDisabledButton" xml:space="preserve">
     <value>無効にする</value>
   </data>
-  <data name="IndexTwoFactorAuthToEnabled" xml:space="preserve">
+  <data name="IndexTwoFactorAuthToEnabledButton" xml:space="preserve">
     <value>有効にする</value>
   </data>
   <data name="ManageLoginsAddButtonTitle" xml:space="preserve">
@@ -287,5 +287,26 @@
   </data>
   <data name="IndexUserNameChangeActionLink" xml:space="preserve">
     <value>ユーザー名の変更</value>
+  </data>
+  <data name="IndexUnstructuredData" xml:space="preserve">
+    <value>属性データ</value>
+  </data>
+  <data name="IndexUnstructuredDataAddActionLink" xml:space="preserve">
+    <value>属性データの設定</value>
+  </data>
+  <data name="IndexUnstructuredDataChangeActionLink" xml:space="preserve">
+    <value>属性データの変更</value>
+  </data>
+  <data name="IndexUnstructuredDataRemoveButton" xml:space="preserve">
+    <value>属性データの削除</value>
+  </data>
+  <data name="AddUnstructuredDataH4" xml:space="preserve">
+    <value>属性データの追加フォーム</value>
+  </data>
+  <data name="AddUnstructuredDataSubmit" xml:space="preserve">
+    <value>送信</value>
+  </data>
+  <data name="AddUnstructuredDataTitle" xml:space="preserve">
+    <value>属性データの追加</value>
   </data>
 </root>

@@ -47,5 +47,8 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>HasPaymentInformation（支払元情報の有無）</summary>
         public bool HasPaymentInformation { get; set; }
+
+        /// <summary>HasUnstructuredData（非構造化データの有無）</summary>
+        public bool HasUnstructuredData { get; set; }
     }
 }

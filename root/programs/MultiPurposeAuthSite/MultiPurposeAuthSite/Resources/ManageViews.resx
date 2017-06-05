@@ -144,6 +144,15 @@
   <data name="AddPhoneNumberTitle" xml:space="preserve">
     <value>Add phone number</value>
   </data>
+  <data name="AddUnstructuredDataH4" xml:space="preserve">
+    <value>Add attribute data form</value>
+  </data>
+  <data name="AddUnstructuredDataSubmit" xml:space="preserve">
+    <value>Submit</value>
+  </data>
+  <data name="AddUnstructuredDataTitle" xml:space="preserve">
+    <value>Add attribute data</value>
+  </data>
   <data name="ChangeEmailH4" xml:space="preserve">
     <value>Change E-mail form</value>
   </data>
@@ -205,10 +214,10 @@
     <value>Add your payment information</value>
   </data>
   <data name="IndexPaymentInformationChangeActionLink" xml:space="preserve">
-    <value>Change your Payment information</value>
+    <value>Change your payment information</value>
   </data>
   <data name="IndexPaymentInformationRemoveButton" xml:space="preserve">
-    <value>Remove your Payment information</value>
+    <value>Remove your payment information</value>
   </data>
   <data name="IndexPhoneNumber" xml:space="preserve">
     <value>Phone number</value>
@@ -237,11 +246,23 @@
   <data name="IndexTwoFactorAuthEnableStatus" xml:space="preserve">
     <value>Enabled</value>
   </data>
-  <data name="IndexTwoFactorAuthToDisabled" xml:space="preserve">
+  <data name="IndexTwoFactorAuthToDisabledButton" xml:space="preserve">
     <value>Disable</value>
   </data>
-  <data name="IndexTwoFactorAuthToEnabled" xml:space="preserve">
+  <data name="IndexTwoFactorAuthToEnabledButton" xml:space="preserve">
     <value>Enable</value>
+  </data>
+  <data name="IndexUnstructuredData" xml:space="preserve">
+    <value>Attribute data</value>
+  </data>
+  <data name="IndexUnstructuredDataAddActionLink" xml:space="preserve">
+    <value>Add your attribute data</value>
+  </data>
+  <data name="IndexUnstructuredDataChangeActionLink" xml:space="preserve">
+    <value>Change your attribute data</value>
+  </data>
+  <data name="IndexUnstructuredDataRemoveButton" xml:space="preserve">
+    <value>Remove your attribute data</value>
   </data>
   <data name="IndexUserNameChangeActionLink" xml:space="preserve">
     <value>Change your user name</value>

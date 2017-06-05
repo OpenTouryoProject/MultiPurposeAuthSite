@@ -142,6 +142,33 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Add attribute data form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddUnstructuredDataH4 {
+            get {
+                return ResourceManager.GetString("AddUnstructuredDataH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Submit に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddUnstructuredDataSubmit {
+            get {
+                return ResourceManager.GetString("AddUnstructuredDataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add attribute data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddUnstructuredDataTitle {
+            get {
+                return ResourceManager.GetString("AddUnstructuredDataTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Change E-mail form に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ChangeEmailH4 {
@@ -322,7 +349,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Change your Payment information に類似しているローカライズされた文字列を検索します。
+        ///   Change your payment information に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexPaymentInformationChangeActionLink {
             get {
@@ -331,7 +358,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Remove your Payment information に類似しているローカライズされた文字列を検索します。
+        ///   Remove your payment information に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexPaymentInformationRemoveButton {
             get {
@@ -423,18 +450,54 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Disable に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string IndexTwoFactorAuthToDisabled {
+        public static string IndexTwoFactorAuthToDisabledButton {
             get {
-                return ResourceManager.GetString("IndexTwoFactorAuthToDisabled", resourceCulture);
+                return ResourceManager.GetString("IndexTwoFactorAuthToDisabledButton", resourceCulture);
             }
         }
         
         /// <summary>
         ///   Enable に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string IndexTwoFactorAuthToEnabled {
+        public static string IndexTwoFactorAuthToEnabledButton {
             get {
-                return ResourceManager.GetString("IndexTwoFactorAuthToEnabled", resourceCulture);
+                return ResourceManager.GetString("IndexTwoFactorAuthToEnabledButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Attribute data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexUnstructuredData {
+            get {
+                return ResourceManager.GetString("IndexUnstructuredData", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add your attribute data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexUnstructuredDataAddActionLink {
+            get {
+                return ResourceManager.GetString("IndexUnstructuredDataAddActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change your attribute data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexUnstructuredDataChangeActionLink {
+            get {
+                return ResourceManager.GetString("IndexUnstructuredDataChangeActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove your attribute data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexUnstructuredDataRemoveButton {
+            get {
+                return ResourceManager.GetString("IndexUnstructuredDataRemoveButton", resourceCulture);
             }
         }
         

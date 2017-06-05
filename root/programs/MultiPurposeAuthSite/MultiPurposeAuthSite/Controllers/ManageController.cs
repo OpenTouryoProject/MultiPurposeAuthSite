@@ -69,6 +69,10 @@ namespace MultiPurposeAuthSite.Controllers
             SetPasswordSuccess,
             /// <summary>ChangePasswordSuccess</summary>
             ChangePasswordSuccess,
+            /// <summary>RemoveExternalLoginSuccess</summary>
+            RemoveExternalLoginSuccess,
+            /// <summary>AccountConflictInSocialLogin</summary>
+            AccountConflictInSocialLogin,
             /// <summary>SetTwoFactorSuccess</summary>
             SetTwoFactorSuccess,
             /// <summary>AddEmailSuccess</summary>
@@ -85,13 +89,14 @@ namespace MultiPurposeAuthSite.Controllers
             AddPaymentInformationSuccess,
             /// <summary>RemovePaymentInformationSuccess</summary>
             RemovePaymentInformationSuccess,
-            /// <summary>RemoveLoginSuccess</summary>
-            RemoveLoginSuccess,
-            /// <summary>AccountConflictInSocialLogin</summary>
-            AccountConflictInSocialLogin,
+            /// <summary>AddUnstructuredDataSuccess</summary>
+            AddUnstructuredDataSuccess,
+            /// <summary>RemoveUnstructuredDataSuccess</summary>
+            RemoveUnstructuredDataSuccess,
             /// <summary>Error</summary>
             Error
         }
+        
 
         #endregion
 
@@ -163,6 +168,8 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.ChangeEmailSuccess ? Resources.ManageController.ChangeEmailSuccess
                 : message == EnumManageMessageId.ChangeEmailFailure ? Resources.ManageController.ChangeEmailFailure
                 : message == EnumManageMessageId.ChangePasswordSuccess ? Resources.ManageController.ChangePasswordSuccess
+                : message == EnumManageMessageId.RemoveExternalLoginSuccess ? Resources.ManageController.RemoveExternalLoginSuccess
+                : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
                 : message == EnumManageMessageId.AddEmailSuccess ? Resources.ManageController.AddEmailSuccess
                 : message == EnumManageMessageId.AddEmailFailure ? Resources.ManageController.AddEmailFailure
@@ -171,8 +178,8 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
                 : message == EnumManageMessageId.AddPaymentInformationSuccess ? Resources.ManageController.AddPaymentInformationSuccess
                 : message == EnumManageMessageId.RemovePaymentInformationSuccess ? Resources.ManageController.RemovePaymentInformationSuccess
-                : message == EnumManageMessageId.RemoveLoginSuccess ? Resources.ManageController.RemoveLoginSuccess
-                : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
+                : message == EnumManageMessageId.AddUnstructuredDataSuccess ? Resources.ManageController.AddUnstructuredDataSuccess
+                : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
             
@@ -183,15 +190,17 @@ namespace MultiPurposeAuthSite.Controllers
             ManageIndexViewModel model = new ManageIndexViewModel
             {
                 // パスワード
-                HasPassword = await UserManager.HasPasswordAsync(user.Id), //HasPassword(),
+                HasPassword = await UserManager.HasPasswordAsync(user.Id),
                 // ログイン
-                Logins = user.Logins, //await UserManager.GetLoginsAsync(user.Id),
+                Logins = user.Logins,
                 // E-mail
-                Email = user.Email, //await UserManager.GetEmailAsync(user.Id),
+                Email = user.Email,
                 // 電話番号
-                PhoneNumber = user.PhoneNumber, //await UserManager.GetPhoneNumberAsync(user.Id),
+                PhoneNumber = user.PhoneNumber,
                 // 2FA
-                TwoFactor = user.TwoFactorEnabled, //await UserManager.GetTwoFactorEnabledAsync(user.Id),
+                TwoFactor = user.TwoFactorEnabled,
+                // 非構造化データ
+                HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                 // 支払元情報
                 HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation)
             };
@@ -214,7 +223,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             // ユーザの取得
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            return View(new ManageChangeUserNameViewModel { UserName = user.UserName });
+            return View(new ManageChangeUserNameViewModel { UserNameForEdit = user.UserName });
         }
 
         /// <summary>
@@ -239,7 +248,7 @@ namespace MultiPurposeAuthSite.Controllers
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                     // UserNameの更新
-                    user.UserName = model.UserName;
+                    user.UserName = model.UserNameForEdit;
                     IdentityResult result = await UserManager.UpdateAsync(user);
 
                     // 結果の確認
@@ -448,7 +457,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Update (Edit / Change)
+        #region Update (Edit/Change)
 
         /// <summary>
         /// E-mailの編集画面（初期表示）
@@ -900,7 +909,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>
-        /// ログイン削除
+        /// 外部ログイン削除
         /// POST: /Manage/RemoveLogin
         /// </summary>
         /// <param name="loginProvider">loginProvider</param>
@@ -947,7 +956,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (await this.ReSignInAsync())
                 {
                     // 再ログインに成功
-                    message = EnumManageMessageId.RemoveLoginSuccess;
+                    message = EnumManageMessageId.RemoveExternalLoginSuccess;
                 }
                 else
                 {
@@ -1336,6 +1345,141 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 // 支払元情報 削除の失敗
+            }
+
+            // Index - Error
+            return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Unstructured Data
+
+        #region Create
+
+        /// <summary>
+        /// 非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddUnstructuredData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> AddUnstructuredData()
+        {
+            // ユーザの検索
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+            ManageAddUnstructuredDataViewModel model = null;
+
+            if (string.IsNullOrEmpty(user.UnstructuredData))
+            {
+                model = new ManageAddUnstructuredDataViewModel();
+            }
+            else
+            {
+                model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData); 
+            }
+
+            return View(model);
+        }
+
+        /// <summary>
+        /// 非構造化データの追加・編集画面（非構造化データ設定）
+        /// POST: /Manage/AddUnstructuredData
+        /// </summary>
+        /// <param name="model">ManageAddPaymentInformationViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddUnstructuredData(ManageAddUnstructuredDataViewModel model)
+        {
+            // ManageAddUnstructuredDataViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // ManageAddUnstructuredDataViewModelの検証に成功
+
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                if (user != null)
+                {
+                    // ユーザを取得できた。
+                    user.UnstructuredData = JsonConvert.SerializeObject(model);
+
+                    // ユーザーの保存
+                    IdentityResult result = await UserManager.UpdateAsync(user);
+
+                    // 結果の確認
+                    if (result.Succeeded)
+                    {
+                        // 成功
+
+                        // 再ログイン
+                        await this.ReSignInAsync();
+
+                        // Index - SetPasswordSuccess
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                    }
+                    else
+                    {
+                        // 失敗
+                        AddErrors(result);
+                    }
+                }
+                else
+                {
+                    // ユーザを取得できなかった。
+                }
+            }
+            else
+            {
+                // ManageAddUnstructuredDataViewModelの検証に失敗
+            }
+
+            // 再表示
+            return View(model);
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// 非構造化データの削除
+        /// POST: /Manage/RemoveUnstructuredData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveUnstructuredData()
+        {
+            // ユーザの検索
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+            // 非構造化データのクリア
+            user.UnstructuredData = "";
+            // ユーザーの保存
+            IdentityResult result = await UserManager.UpdateAsync(user);
+
+            // 結果の確認
+            if (result.Succeeded)
+            {
+                // 支払元情報 削除の成功
+
+                // 再ログイン
+                if (await this.ReSignInAsync())
+                {
+                    // 再ログインに成功
+                    return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+                }
+                else
+                {
+                    // 再ログインに失敗
+                }
+            }
+            else
+            {
+                // 非構造化データ 削除の失敗
             }
 
             // Index - Error

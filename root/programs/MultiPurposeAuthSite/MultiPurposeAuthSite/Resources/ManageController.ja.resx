@@ -132,6 +132,9 @@
   <data name="AddPhoneSuccess" xml:space="preserve">
     <value>電話番号が追加されました。</value>
   </data>
+  <data name="AddUnstructuredDataSuccess" xml:space="preserve">
+    <value>追加属性データが追加されました。</value>
+  </data>
   <data name="ChangeEmailFailure" xml:space="preserve">
     <value>E-mailは変更されませんでした。</value>
   </data>
@@ -159,7 +162,7 @@
   <data name="RemoveEmailSuccess" xml:space="preserve">
     <value>E-mailが削除されました。</value>
   </data>
-  <data name="RemoveLoginSuccess" xml:space="preserve">
+  <data name="RemoveExternalLoginSuccess" xml:space="preserve">
     <value>外部ログインが削除されました。</value>
   </data>
   <data name="RemovePaymentInformationSuccess" xml:space="preserve">
@@ -167,6 +170,9 @@
   </data>
   <data name="RemovePhoneSuccess" xml:space="preserve">
     <value>電話番号が削除されました。</value>
+  </data>
+  <data name="RemoveUnstructuredDataSuccess" xml:space="preserve">
+    <value>追加属性データが削除されました。</value>
   </data>
   <data name="SetPasswordSuccess" xml:space="preserve">
     <value>パスワードが設定されました。</value>

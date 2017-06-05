@@ -106,6 +106,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Your additional attribute data has been added. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string AddUnstructuredDataSuccess {
+            get {
+                return ResourceManager.GetString("AddUnstructuredDataSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Your E-mail has not been changed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string ChangeEmailFailure {
@@ -189,9 +198,9 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   The external login has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemoveLoginSuccess {
+        internal static string RemoveExternalLoginSuccess {
             get {
-                return ResourceManager.GetString("RemoveLoginSuccess", resourceCulture);
+                return ResourceManager.GetString("RemoveExternalLoginSuccess", resourceCulture);
             }
         }
         
@@ -210,6 +219,15 @@ namespace MultiPurposeAuthSite.Resources {
         internal static string RemovePhoneSuccess {
             get {
                 return ResourceManager.GetString("RemovePhoneSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your additional attribute data has been removed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string RemoveUnstructuredDataSuccess {
+            get {
+                return ResourceManager.GetString("RemoveUnstructuredDataSuccess", resourceCulture);
             }
         }
         
