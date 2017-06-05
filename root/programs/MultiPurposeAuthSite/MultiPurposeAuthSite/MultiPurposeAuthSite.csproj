@@ -312,9 +312,10 @@
     <Compile Include="Models\ViewModels\AccountVerifyCodeViewModel.cs" />
     <Compile Include="Models\ViewModels\BaseViewModel.cs" />
     <Compile Include="Models\ViewModels\EditRoleViewModel.cs" />
+    <Compile Include="Models\ViewModels\ManageChangeUserNameViewModel.cs" />
     <Compile Include="Models\ViewModels\UsersAdminSearchViewModel.cs" />
     <Compile Include="Models\ViewModels\UsersAdminEditViewModel.cs" />
-    <Compile Include="Models\ViewModels\ManageAddEmailViewModel.cs" />
+    <Compile Include="Models\ViewModels\ManageEmailViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageAddPhoneNumberViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageChangePasswordViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageConfigureTwoFactorViewModel.cs" />
@@ -481,6 +482,9 @@
     <Content Include="Views\Manage\AddPaymentInformationPAYJP.cshtml" />
     <Content Include="Views\Account\VerifyEmailAddress.cshtml" />
     <Content Include="Views\Manage\VerifyEmailAddress.cshtml" />
+    <Content Include="Views\Manage\AddEmail.cshtml" />
+    <Content Include="Views\Manage\ChangeEmail.cshtml" />
+    <Content Include="Views\Manage\ChangeUserName.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">
@@ -529,10 +533,13 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>ManageController.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-    <EmbeddedResource Include="Resources\ManageViews.ja.resx" />
+    <EmbeddedResource Include="Resources\ManageViews.ja.resx">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources\ManageViews.resx">
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>ManageViews.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\SharedViews.ja.resx" />
     <EmbeddedResource Include="Resources\SharedViews.resx">

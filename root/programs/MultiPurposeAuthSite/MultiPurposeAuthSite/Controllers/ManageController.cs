@@ -52,9 +52,19 @@ namespace MultiPurposeAuthSite.Controllers
     [Authorize]
     public class ManageController : MyBaseMVController
     {
+        #region Enum
+
         /// <summary>列挙型</summary>
         public enum EnumManageMessageId
         {
+            /// <summary>ChangeUserNameSuccess</summary>
+            ChangeUserNameSuccess,
+            /// <summary>ChangeUserNameFailure</summary>
+            ChangeUserNameFailure,
+            /// <summary>ChangeEmailSuccess</summary>
+            ChangeEmailSuccess,
+            /// <summary>ChangeEmailFailure</summary>
+            ChangeEmailFailure,
             /// <summary>SetPasswordSuccess</summary>
             SetPasswordSuccess,
             /// <summary>ChangePasswordSuccess</summary>
@@ -63,6 +73,8 @@ namespace MultiPurposeAuthSite.Controllers
             SetTwoFactorSuccess,
             /// <summary>AddEmailSuccess</summary>
             AddEmailSuccess,
+            /// <summary>AddEmailFailure</summary>
+            AddEmailFailure,
             /// <summary>RemoveEmailSuccess</summary>
             RemoveEmailSuccess,
             /// <summary>AddPhoneSuccess</summary>
@@ -80,7 +92,9 @@ namespace MultiPurposeAuthSite.Controllers
             /// <summary>Error</summary>
             Error
         }
-        
+
+        #endregion
+
         #region constructor
 
         /// <summary>constructor</summary>
@@ -144,9 +158,14 @@ namespace MultiPurposeAuthSite.Controllers
             // 色々な結果メッセージの設定
             ViewBag.StatusMessage =
                 message == EnumManageMessageId.SetPasswordSuccess ? Resources.ManageController.SetPasswordSuccess
+                : message == EnumManageMessageId.ChangeUserNameSuccess ? Resources.ManageController.ChangeUserNameSuccess
+                : message == EnumManageMessageId.ChangeUserNameFailure ? Resources.ManageController.ChangeUserNameFailure
+                : message == EnumManageMessageId.ChangeEmailSuccess ? Resources.ManageController.ChangeEmailSuccess
+                : message == EnumManageMessageId.ChangeEmailFailure ? Resources.ManageController.ChangeEmailFailure
                 : message == EnumManageMessageId.ChangePasswordSuccess ? Resources.ManageController.ChangePasswordSuccess
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
                 : message == EnumManageMessageId.AddEmailSuccess ? Resources.ManageController.AddEmailSuccess
+                : message == EnumManageMessageId.AddEmailFailure ? Resources.ManageController.AddEmailFailure
                 : message == EnumManageMessageId.RemoveEmailSuccess ? Resources.ManageController.RemoveEmailSuccess
                 : message == EnumManageMessageId.AddPhoneSuccess ? Resources.ManageController.AddPhoneSuccess
                 : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
@@ -157,8 +176,7 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
             
-            // ユーザIDの取得
-            //var userId = User.Identity.GetUserId();
+            // ユーザの取得
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             // モデルの生成
@@ -183,7 +201,80 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
-        
+
+        #region UserName
+
+        /// <summary>
+        /// UserNameの編集画面
+        /// GET: /Manage/ChangeUserName
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> ChangeUserName()
+        {
+            // ユーザの取得
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+            return View(new ManageChangeUserNameViewModel { UserName = user.UserName });
+        }
+
+        /// <summary>
+        /// UserNameの編集画面
+        /// POST: /Manage/ChangeUserName
+        /// </summary>
+        /// <param name="model">ManageChangeUserNameViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ChangeUserName(ManageChangeUserNameViewModel model)
+        {
+            if (!ASPNETIdentityConfig.RequireUniqueEmail
+                && ASPNETIdentityConfig.AllowEditingUserName)
+            {
+                // ManageChangeUserNameViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // ManageChangeUserNameViewModelの検証に成功
+
+                    // ユーザの取得
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                    // UserNameの更新
+                    user.UserName = model.UserName;
+                    IdentityResult result = await UserManager.UpdateAsync(user);
+
+                    // 結果の確認
+                    if (result.Succeeded)
+                    {
+                        // 再ログイン
+                        if (await this.ReSignInAsync())
+                        {
+                            // 再ログインに成功
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeUserNameSuccess });
+                        }
+                        else
+                        {
+                            // 再ログインに失敗
+                        }
+                    }
+                    else
+                    {
+                        // E-mail更新に失敗
+                    }
+
+                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeUserNameFailure });
+                }
+                else
+                {
+                    // ManageChangeUserNameViewModelの検証に失敗
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
         #region Password
 
         #region Create
@@ -203,16 +294,16 @@ namespace MultiPurposeAuthSite.Controllers
         /// パスワード設定画面（パスワード設定）
         /// POST: /Manage/SetPassword
         /// </summary>
-        /// <param name="model"></param>
+        /// <param name="model">ManageSetPasswordViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> SetPassword(ManageSetPasswordViewModel model)
         {
-            // SetPasswordViewModelの検証
+            // ManageSetPasswordViewModelの検証
             if (ModelState.IsValid)
             {
-                // SetPasswordViewModelの検証に成功
+                // ManageSetPasswordViewModelの検証に成功
 
                 // パスワード設定
                 IdentityResult result = await UserManager.AddPasswordAsync(User.Identity.GetUserId(), model.NewPassword);
@@ -236,11 +327,8 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // SetPasswordViewModelの検証に失敗
+                // ManageSetPasswordViewModelの検証に失敗
             }
-
-            // If we got this far, something failed, redisplay form
-            // ここに到達した場合は何らかの問題が発生しているので、フォームを再表示します。
 
             // 再表示
             return View(model);
@@ -265,7 +353,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// パスワード変更画面（パスワード変更）
         /// POST: /Manage/ChangePassword
         /// </summary>
-        /// <param name="model">ChangePasswordViewModel</param>
+        /// <param name="model">ManageChangePasswordViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -301,9 +389,6 @@ namespace MultiPurposeAuthSite.Controllers
                 // ManageChangePasswordViewModelの検証に失敗
             }
 
-            // If we got this far, something failed, redisplay form
-            // ここに到達した場合は何らかの問題が発生しているので、フォームを再表示します。
-
             // 再表示
             return View(model);
 
@@ -332,16 +417,16 @@ namespace MultiPurposeAuthSite.Controllers
         /// E-mailの追加画面（E-mailの追加）
         /// POST: /Manage/AddEmail
         /// </summary>
-        /// <param name="model">ManageAddEmailViewModel</param>
+        /// <param name="model">ManageEmailViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult AddEmail(ManageAddEmailViewModel model)
+        public async Task<ActionResult> AddEmail(ManageEmailViewModel model)
         {
-            // RegisterViewModelの検証
+            // ManageEmailViewModelの検証
             if (ModelState.IsValid)
             {
-                // RegisterViewModelの検証に成功
+                // ManageEmailViewModelの検証に成功
                 // めんどうなのでSessionStoreで。
                 string code = GetPassword.Base64UrlSecret(16);
                 Session["Code"] = code;
@@ -354,7 +439,57 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // RegisterViewModelの検証に失敗
+                // ManageEmailViewModelの検証に失敗
+            }
+
+            // 再表示
+            return View(model);
+        }
+
+        #endregion
+
+        #region Update (Edit / Change)
+
+        /// <summary>
+        /// E-mailの編集画面（初期表示）
+        /// GET: /Manage/ChangeEmail
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> ChangeEmail()
+        {
+            // ユーザの取得
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+            return View(new ManageEmailViewModel { Email = user.Email });
+        }
+
+        /// <summary>
+        /// E-mailの編集画面（E-mailの編集）
+        /// POST: /Manage/ChangeEmail
+        /// </summary>
+        /// <param name="model">ManageEmailViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ChangeEmail(ManageEmailViewModel model)
+        {
+            // ManageEmailViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // ManageEmailViewModelの検証に成功
+                // めんどうなのでSessionStoreで。
+                string code = GetPassword.Base64UrlSecret(16);
+                Session["Code"] = code;
+                Session["Email"] = model.Email; // 更新後のメアド
+
+                this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+
+                // 再表示
+                return View("VerifyEmailAddress");
+            }
+            else
+            {
+                // ManageEmailViewModelの検証に失敗
             }
 
             // 再表示
@@ -376,7 +511,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
-            // 入力の検証1
+            // 入力の検証 1
             if (userId == null || code == null)
             {
                 // エラー画面
@@ -384,17 +519,24 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // 入力の検証2
-                //IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
-
-                // 自前の検証
+                // 入力の検証 2
                 if(User.Identity.GetUserId() == userId)
                 {
                     if (code == (string)Session["Code"])
                     {
-                        // 更新後のメアド
-                        IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
-                        
+                        // ユーザの取得
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                        // 更新（UserName＝メアドの場合は、UserNameも更新）
+                        if (ASPNETIdentityConfig.RequireUniqueEmail)
+                        {
+                            user.UserName = (string)Session["Email"];
+                        }
+                        user.Email = (string)Session["Email"];
+
+                        //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
                         // 結果の確認
                         if (result.Succeeded)
                         {
@@ -404,16 +546,33 @@ namespace MultiPurposeAuthSite.Controllers
                             if (await this.ReSignInAsync())
                             {
                                 // 再ログインに成功
-                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
+                                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                {
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
+                                }
+                                else
+                                {
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
+                                }   
                             }
                             else
                             {
                                 // 再ログインに失敗
+
                             }
                         }
                         else
                         {
-                            // E-mail削除の失敗
+                            // E-mail更新に失敗
+                        }
+
+                        if (ASPNETIdentityConfig.RequireUniqueEmail)
+                        {
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
+                        }
+                        else
+                        {
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
                         }
                     }
                 }
@@ -489,16 +648,16 @@ namespace MultiPurposeAuthSite.Controllers
         /// 電話番号の追加画面（電話番号の追加）
         /// POST: /Manage/AddPhoneNumber
         /// </summary>
-        /// <param name="model">AddPhoneNumberViewModel</param>
+        /// <param name="model">ManageAddPhoneNumberViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model)
         {
-            // RegisterViewModelの検証
+            // ManageAddPhoneNumberViewModelの検証
             if (ModelState.IsValid)
             {
-                // RegisterViewModelの検証に成功
+                // ManageAddPhoneNumberViewModelの検証に成功
 
                 // 検証コード生成
                 string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);
@@ -519,11 +678,11 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // RegisterViewModelの検証に失敗
-
-                // 再表示
-                return View(model);
+                // ManageAddPhoneNumberViewModelの検証に失敗
             }
+
+            // 再表示
+            return View(model);
         }
 
         #endregion
@@ -548,7 +707,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 追加電話番号の検証画面（検証コードの検証）
         /// POST: /Manage/VerifyPhoneNumber
         /// </summary>
-        /// <param name="model">VerifyPhoneNumberViewModel</param>
+        /// <param name="model">ManageVerifyPhoneNumberViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -584,9 +743,6 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ManageVerifyPhoneNumberViewModelの検証に失敗
             }
-
-            // If we got this far, something failed, redisplay form
-            // ここに到達した場合は何らかの問題が発生しているので、フォームを再表示します。
 
             // 再表示
             return View(model);
@@ -1050,7 +1206,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 支払元情報の追加画面（支払元情報設定）
         /// POST: /Manage/AddPaymentInformation
         /// </summary>
-        /// <param name="model"></param>
+        /// <param name="model">ManageAddPaymentInformationViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1103,9 +1259,6 @@ namespace MultiPurposeAuthSite.Controllers
                 // ManageAddPaymentInformationViewModelの検証に失敗
             }
 
-            // If we got this far, something failed, redisplay form
-            // ここに到達した場合は何らかの問題が発生しているので、フォームを再表示します。
-
             // 再表示
             if (ASPNETIdentityConfig.EnableStripe)
             {
@@ -1127,6 +1280,11 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Charge
 
+        /// <summary>
+        /// 課金
+        /// POST: /Manage/ChargeByPaymentInformation
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChargeByPaymentInformation()

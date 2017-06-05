@@ -41,6 +41,30 @@
         <h4>@ManageViews.IndexH4</h4>
         <hr />
         <dl class="dl-horizontal">
+@if (ASPNETIdentityConfig.AllowEditingUserName)
+{
+    // UserNameの変更が許可されている場合。
+    if (ASPNETIdentityConfig.RequireUniqueEmail)
+    {
+        // UserName＝メアドの場合
+            <dt>Email :</dt>
+            <dd>
+                [@Html.ActionLink(ManageViews.IndexEmailChangeActionLink, "ChangeEmail")]
+            </dd>
+    }
+    else
+    {
+        // UserName≠メアドの場合
+            <dt>UserName :</dt>
+            <dd>
+                [@Html.ActionLink(ManageViews.IndexUserNameChangeActionLink, "ChangeUserName")]
+            </dd>
+    }
+}
+else
+{
+    // UserNameの変更が許可されていない場合。
+}
             <dt>Password :</dt>
             <dd>
                 [
@@ -56,8 +80,7 @@
 
             <dt>@ManageViews.IndexExternalLogins:</dt>
             <dd>
-                @Model.Logins.Count [
-                @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
+                @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
             </dd>
 
             @*
@@ -76,9 +99,16 @@
             @* UID ≠ 非メアド の場合、メアドの "Add" or "Remove" は実装しない。*@
             @* ・ユーザストアが管理者から提供されるエンプラ向き実装。*@
             @* ・このため、管理者から提供されたメアドを使用する。 *@
-             
-@if (!ASPNETIdentityConfig.RequireUniqueEmail)
+
+  
+@if (ASPNETIdentityConfig.RequireUniqueEmail)
 {
+    // UserName＝メアドの場合
+}
+else
+{
+    // UserName≠メアドの場合（のメアド追加
+
             <dt>@ManageViews.IndexEmail :</dt>
             <dd>
                 @if (string.IsNullOrEmpty(Model.Email))
@@ -98,7 +128,6 @@
                 }
             </dd>
 }
-
             <dt>@ManageViews.IndexPhoneNumber :</dt>
             <dd>
                 @*"Add" or "Remove"*@

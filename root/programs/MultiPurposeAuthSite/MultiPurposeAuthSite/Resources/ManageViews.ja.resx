@@ -118,25 +118,22 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AddPaymentH4" xml:space="preserve">
-    <value>支払元情報の追加</value>
-  </data>
-  <data name="AddPaymentP" xml:space="preserve">
-    <value>aaaa</value>
+    <value>支払元情報の追加フォーム</value>
   </data>
   <data name="AddPaymentSubmit" xml:space="preserve">
     <value>送信</value>
   </data>
   <data name="AddPaymentTitle" xml:space="preserve">
-    <value>支払元情報</value>
+    <value>支払元情報の追加</value>
   </data>
   <data name="AddPhoneNumberH4" xml:space="preserve">
-    <value>電話番号の追加</value>
+    <value>電話番号の追加フォーム</value>
   </data>
   <data name="AddPhoneNumberSubmit" xml:space="preserve">
     <value>送信</value>
   </data>
   <data name="AddPhoneNumberTitle" xml:space="preserve">
-    <value>電話番号</value>
+    <value>電話番号の追加</value>
   </data>
   <data name="ChangePasswordH4" xml:space="preserve">
     <value>パスワード変更フォーム</value>
@@ -226,7 +223,7 @@
     <value>外部ログインの管理</value>
   </data>
   <data name="SetPasswordH4" xml:space="preserve">
-    <value>ローカル ログインの作成</value>
+    <value>ローカル ログイン作成フォーム</value>
   </data>
   <data name="SetPasswordP" xml:space="preserve">
     <value>このサイトに対するローカルのユーザー名/パスワードがありません。外部ログインを使用しないでログインするには、ローカルのアカウントを追加してください。</value>
@@ -235,7 +232,7 @@
     <value>パスワードの設定</value>
   </data>
   <data name="SetPasswordTitle" xml:space="preserve">
-    <value>パスワードの作成</value>
+    <value>ローカル ログイン作成</value>
   </data>
   <data name="VerifyPhoneNumberH4" xml:space="preserve">
     <value>確認コードを入力してください</value>
@@ -259,15 +256,36 @@
     <value>E-mailの削除</value>
   </data>
   <data name="AddEmailH4" xml:space="preserve">
-    <value>E-mailの追加</value>
+    <value>E-mail追加フォーム</value>
   </data>
   <data name="AddEmailSubmit" xml:space="preserve">
     <value>送信</value>
   </data>
   <data name="AddEmailTitle" xml:space="preserve">
-    <value>E-mail</value>
+    <value>E-mailの追加</value>
   </data>
   <data name="IndexPaymentButton" xml:space="preserve">
     <value>課金する</value>
+  </data>
+  <data name="ChangeEmailH4" xml:space="preserve">
+    <value>E-mail変更フォーム</value>
+  </data>
+  <data name="ChangeEmailSubmit" xml:space="preserve">
+    <value>送信</value>
+  </data>
+  <data name="ChangeEmailTitle" xml:space="preserve">
+    <value>E-mailの変更</value>
+  </data>
+  <data name="ChangeUserNameH4" xml:space="preserve">
+    <value>ユーザー名の変更フォーム</value>
+  </data>
+  <data name="ChangeUserNameSubmit" xml:space="preserve">
+    <value>送信</value>
+  </data>
+  <data name="ChangeUserNameTitle" xml:space="preserve">
+    <value>ユーザー名の変更</value>
+  </data>
+  <data name="IndexUserNameChangeActionLink" xml:space="preserve">
+    <value>ユーザー名の変更</value>
   </data>
 </root>

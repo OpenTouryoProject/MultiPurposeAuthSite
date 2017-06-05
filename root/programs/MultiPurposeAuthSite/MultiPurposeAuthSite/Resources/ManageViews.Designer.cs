@@ -61,7 +61,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add a E-mail に類似しているローカライズされた文字列を検索します。
+        ///   Add E-mail form に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddEmailH4 {
             get {
@@ -79,7 +79,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   E-mail に類似しているローカライズされた文字列を検索します。
+        ///   Add E-mail に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddEmailTitle {
             get {
@@ -88,20 +88,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add a payment information に類似しているローカライズされた文字列を検索します。
+        ///   Add payment information に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentH4 {
             get {
                 return ResourceManager.GetString("AddPaymentH4", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   aaaa に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddPaymentP {
-            get {
-                return ResourceManager.GetString("AddPaymentP", resourceCulture);
             }
         }
         
@@ -115,7 +106,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Payment information に類似しているローカライズされた文字列を検索します。
+        ///   Add payment information に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentTitle {
             get {
@@ -124,7 +115,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add a phone number に類似しているローカライズされた文字列を検索します。
+        ///   Add phone number form に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPhoneNumberH4 {
             get {
@@ -142,11 +133,38 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Phone number に類似しているローカライズされた文字列を検索します。
+        ///   Add phone number に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPhoneNumberTitle {
             get {
                 return ResourceManager.GetString("AddPhoneNumberTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change E-mail form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ChangeEmailH4 {
+            get {
+                return ResourceManager.GetString("ChangeEmailH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Submit に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ChangeEmailSubmit {
+            get {
+                return ResourceManager.GetString("ChangeEmailSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change E-mail に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ChangeEmailTitle {
+            get {
+                return ResourceManager.GetString("ChangeEmailTitle", resourceCulture);
             }
         }
         
@@ -160,7 +178,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Change password に類似しているローカライズされた文字列を検索します。
+        ///   Submit に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ChangePasswordSubmit {
             get {
@@ -174,6 +192,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string ChangePasswordTitle {
             get {
                 return ResourceManager.GetString("ChangePasswordTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change user name form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ChangeUserNameH4 {
+            get {
+                return ResourceManager.GetString("ChangeUserNameH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Submit に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ChangeUserNameSubmit {
+            get {
+                return ResourceManager.GetString("ChangeUserNameSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change user name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ChangeUserNameTitle {
+            get {
+                return ResourceManager.GetString("ChangeUserNameTitle", resourceCulture);
             }
         }
         
@@ -394,6 +439,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Change your user name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexUserNameChangeActionLink {
+            get {
+                return ResourceManager.GetString("IndexUserNameChangeActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Log in using your {0} account. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ManageLoginsAddButtonTitle {
@@ -457,7 +511,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Create local login に類似しているローカライズされた文字列を検索します。
+        ///   Create local login form に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string SetPasswordH4 {
             get {
@@ -484,7 +538,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Create password に類似しているローカライズされた文字列を検索します。
+        ///   Create local login に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string SetPasswordTitle {
             get {

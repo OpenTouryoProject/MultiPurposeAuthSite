@@ -120,17 +120,32 @@
   <data name="AccountConflictInSocialLogin" xml:space="preserve">
     <value>Account do not match in social login.</value>
   </data>
+  <data name="AddEmailFailure" xml:space="preserve">
+    <value>Your E-mail has not been added.</value>
+  </data>
   <data name="AddEmailSuccess" xml:space="preserve">
-    <value>Your E-mail was added.</value>
+    <value>Your E-mail has been added.</value>
   </data>
   <data name="AddPaymentInformationSuccess" xml:space="preserve">
-    <value>Your payment information was added.</value>
+    <value>Your payment information has been added.</value>
   </data>
   <data name="AddPhoneSuccess" xml:space="preserve">
-    <value>Your phone number was added.</value>
+    <value>Your phone number has been added.</value>
+  </data>
+  <data name="ChangeEmailFailure" xml:space="preserve">
+    <value>Your E-mail has not been changed.</value>
+  </data>
+  <data name="ChangeEmailSuccess" xml:space="preserve">
+    <value>Your E-mail has been changed.</value>
   </data>
   <data name="ChangePasswordSuccess" xml:space="preserve">
     <value>Your password has been changed.</value>
+  </data>
+  <data name="ChangeUserNameFailure" xml:space="preserve">
+    <value>Your user name has not been changed.</value>
+  </data>
+  <data name="ChangeUserNameSuccess" xml:space="preserve">
+    <value>Your user name has been changed.</value>
   </data>
   <data name="CodeForAddPhoneNumber" xml:space="preserve">
     <value>Your security code is:</value>
@@ -142,16 +157,16 @@
     <value>Failed to verify your phone number.</value>
   </data>
   <data name="RemoveEmailSuccess" xml:space="preserve">
-    <value>Your E-mail was removed.</value>
+    <value>Your E-mail has been removed.</value>
   </data>
   <data name="RemoveLoginSuccess" xml:space="preserve">
-    <value>The external login was removed.</value>
+    <value>The external login has been removed.</value>
   </data>
   <data name="RemovePaymentInformationSuccess" xml:space="preserve">
-    <value>Your payment information was removed.</value>
+    <value>Your payment information has been removed.</value>
   </data>
   <data name="RemovePhoneSuccess" xml:space="preserve">
-    <value>Your phone number was removed.</value>
+    <value>Your phone number has been removed.</value>
   </data>
   <data name="SetPasswordSuccess" xml:space="preserve">
     <value>Your password has been set.</value>

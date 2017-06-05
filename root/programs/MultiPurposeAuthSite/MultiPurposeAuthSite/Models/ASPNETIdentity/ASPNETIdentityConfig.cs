@@ -418,7 +418,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// ユーザ名検証（E-mailの要求）
+        /// ユーザ名検証（E-mail形式で要求）
         /// </summary>
         public static bool RequireUniqueEmail
         {
@@ -429,13 +429,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// ユーザ名検証（アカウント確認（E-Mail Confirmation））
+        /// ユーザ名の編集許可
         /// </summary>
-        public static bool EmailConfirmed
+        public static bool AllowEditingUserName
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EmailConfirmed"]);
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["AllowEditingUserName"]);
             }
         }
 

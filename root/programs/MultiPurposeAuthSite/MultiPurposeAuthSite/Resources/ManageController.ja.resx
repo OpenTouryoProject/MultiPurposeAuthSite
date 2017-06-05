@@ -120,6 +120,9 @@
   <data name="AccountConflictInSocialLogin" xml:space="preserve">
     <value>ソーシャルログインでアカウントが一致しません。</value>
   </data>
+  <data name="AddEmailFailure" xml:space="preserve">
+    <value>E-mailは追加されませんでした。</value>
+  </data>
   <data name="AddEmailSuccess" xml:space="preserve">
     <value>E-mailが追加されました。</value>
   </data>
@@ -129,8 +132,20 @@
   <data name="AddPhoneSuccess" xml:space="preserve">
     <value>電話番号が追加されました。</value>
   </data>
+  <data name="ChangeEmailFailure" xml:space="preserve">
+    <value>E-mailは変更されませんでした。</value>
+  </data>
+  <data name="ChangeEmailSuccess" xml:space="preserve">
+    <value>E-mailが変更されました。</value>
+  </data>
   <data name="ChangePasswordSuccess" xml:space="preserve">
     <value>パスワードが変更されました。</value>
+  </data>
+  <data name="ChangeUserNameFailure" xml:space="preserve">
+    <value>ユーザー名は変更されませんでした。</value>
+  </data>
+  <data name="ChangeUserNameSuccess" xml:space="preserve">
+    <value>ユーザー名が変更されました。</value>
   </data>
   <data name="CodeForAddPhoneNumber" xml:space="preserve">
     <value>あなたのセキュリティ コード:</value>

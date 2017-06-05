@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：ManageAddEmailViewModel
-//* クラス日本語名  ：E-mailの追加画面用のVM（テンプレート）
+//* クラス名        ：ManageChangeUserNameViewModel
+//* クラス日本語名  ：UserNameの編集画面用のVM（テンプレート）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -23,13 +23,12 @@ using System.ComponentModel.DataAnnotations;
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
-    /// <summary>E-mailの追加画面用のVM（テンプレート）</summary>
-    public class ManageAddEmailViewModel : BaseViewModel
+    /// <summary>UserNameの編集画面用のVM（テンプレート）</summary>
+    public class ManageChangeUserNameViewModel : BaseViewModel
     {
-        /// <summary>E-mail</summary>
+        /// <summary>UserName</summary>
         [Required(AllowEmptyStrings = false)]
-        [EmailAddress]
-        [Display(Name = "Email", ResourceType =typeof(Resources.CommonViewModels))]
-        public string Email { get; set; }
+        [Display(Name = "UserName", ResourceType =typeof(Resources.CommonViewModels))]
+        public string UserName { get; set; }
     }
 }

@@ -70,7 +70,16 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your E-mail was added. に類似しているローカライズされた文字列を検索します。
+        ///   Your E-mail has not been added. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string AddEmailFailure {
+            get {
+                return ResourceManager.GetString("AddEmailFailure", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your E-mail has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string AddEmailSuccess {
             get {
@@ -79,7 +88,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your payment information was added. に類似しているローカライズされた文字列を検索します。
+        ///   Your payment information has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string AddPaymentInformationSuccess {
             get {
@@ -88,11 +97,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your phone number was added. に類似しているローカライズされた文字列を検索します。
+        ///   Your phone number has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string AddPhoneSuccess {
             get {
                 return ResourceManager.GetString("AddPhoneSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your E-mail has not been changed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string ChangeEmailFailure {
+            get {
+                return ResourceManager.GetString("ChangeEmailFailure", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your E-mail has been changed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string ChangeEmailSuccess {
+            get {
+                return ResourceManager.GetString("ChangeEmailSuccess", resourceCulture);
             }
         }
         
@@ -102,6 +129,24 @@ namespace MultiPurposeAuthSite.Resources {
         internal static string ChangePasswordSuccess {
             get {
                 return ResourceManager.GetString("ChangePasswordSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your user name has not been changed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string ChangeUserNameFailure {
+            get {
+                return ResourceManager.GetString("ChangeUserNameFailure", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your user name has been changed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string ChangeUserNameSuccess {
+            get {
+                return ResourceManager.GetString("ChangeUserNameSuccess", resourceCulture);
             }
         }
         
@@ -133,7 +178,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your E-mail was removed. に類似しているローカライズされた文字列を検索します。
+        ///   Your E-mail has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string RemoveEmailSuccess {
             get {
@@ -142,7 +187,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   The external login was removed. に類似しているローカライズされた文字列を検索します。
+        ///   The external login has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string RemoveLoginSuccess {
             get {
@@ -151,7 +196,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your payment information was removed. に類似しているローカライズされた文字列を検索します。
+        ///   Your payment information has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string RemovePaymentInformationSuccess {
             get {
@@ -160,7 +205,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your phone number was removed. に類似しているローカライズされた文字列を検索します。
+        ///   Your phone number has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string RemovePhoneSuccess {
             get {
