@@ -221,9 +221,18 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ChangeUserName()
         {
-            // ユーザの取得
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            return View(new ManageChangeUserNameViewModel { UserNameForEdit = user.UserName });
+            if (!ASPNETIdentityConfig.RequireUniqueEmail
+                && ASPNETIdentityConfig.AllowEditingUserName)
+            {
+                // ユーザの取得
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                return View(new ManageChangeUserNameViewModel { UserNameForEdit = user.UserName });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -419,7 +428,15 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult AddEmail()
         {
-            return View();
+            if (ASPNETIdentityConfig.CanEditEmail)
+            {
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -432,27 +449,35 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddEmail(ManageEmailViewModel model)
         {
-            // ManageEmailViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.CanEditEmail)
             {
-                // ManageEmailViewModelの検証に成功
-                // めんどうなのでSessionStoreで。
-                string code = GetPassword.Base64UrlSecret(16);
-                Session["Code"] = code;
-                Session["Email"] = model.Email; // 更新後のメアド
+                // ManageEmailViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // ManageEmailViewModelの検証に成功
+                    // めんどうなのでSessionStoreで。
+                    string code = GetPassword.Base64UrlSecret(16);
+                    Session["Code"] = code;
+                    Session["Email"] = model.Email; // 更新後のメアド
 
-                this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+                    this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+
+                    // 再表示
+                    return View("VerifyEmailAddress");
+                }
+                else
+                {
+                    // ManageEmailViewModelの検証に失敗
+                }
 
                 // 再表示
-                return View("VerifyEmailAddress");
+                return View(model);
             }
             else
             {
-                // ManageEmailViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
         }
 
         #endregion
@@ -467,9 +492,17 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ChangeEmail()
         {
-            // ユーザの取得
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            return View(new ManageEmailViewModel { Email = user.Email });
+            if (ASPNETIdentityConfig.CanEditEmail)
+            {
+                // ユーザの取得
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                return View(new ManageEmailViewModel { Email = user.Email });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -482,27 +515,35 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChangeEmail(ManageEmailViewModel model)
         {
-            // ManageEmailViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.CanEditEmail)
             {
-                // ManageEmailViewModelの検証に成功
-                // めんどうなのでSessionStoreで。
-                string code = GetPassword.Base64UrlSecret(16);
-                Session["Code"] = code;
-                Session["Email"] = model.Email; // 更新後のメアド
+                // ManageEmailViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // ManageEmailViewModelの検証に成功
+                    // めんどうなのでSessionStoreで。
+                    string code = GetPassword.Base64UrlSecret(16);
+                    Session["Code"] = code;
+                    Session["Email"] = model.Email; // 更新後のメアド
 
-                this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+                    this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+
+                    // 再表示
+                    return View("VerifyEmailAddress");
+                }
+                else
+                {
+                    // ManageEmailViewModelの検証に失敗
+                }
 
                 // 再表示
-                return View("VerifyEmailAddress");
+                return View(model);
             }
             else
             {
-                // ManageEmailViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
         }
 
         #endregion
@@ -520,75 +561,77 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
-            // 入力の検証 1
-            if (userId == null || code == null)
+            if (ASPNETIdentityConfig.CanEditEmail)
             {
-                // エラー画面
-                return View("Error");
-            }
-            else
-            {
-                // 入力の検証 2
-                if(User.Identity.GetUserId() == userId)
+                // 入力の検証 1
+                if (userId == null || code == null)
                 {
-                    if (code == (string)Session["Code"])
+
+                }
+                else
+                {
+                    // 入力の検証 2
+                    if (User.Identity.GetUserId() == userId)
                     {
-                        // ユーザの取得
-                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                        // 更新（UserName＝メアドの場合は、UserNameも更新）
-                        if (ASPNETIdentityConfig.RequireUniqueEmail)
+                        if (code == (string)Session["Code"])
                         {
-                            user.UserName = (string)Session["Email"];
-                        }
-                        user.Email = (string)Session["Email"];
+                            // ユーザの取得
+                            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                        //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
-                        IdentityResult result = await UserManager.UpdateAsync(user);
-
-                        // 結果の確認
-                        if (result.Succeeded)
-                        {
-                            // メアド検証の成功
-
-                            // 再ログイン
-                            if (await this.ReSignInAsync())
+                            // 更新（UserName＝メアドの場合は、UserNameも更新）
+                            if (ASPNETIdentityConfig.RequireUniqueEmail)
                             {
-                                // 再ログインに成功
-                                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                user.UserName = (string)Session["Email"];
+                            }
+                            user.Email = (string)Session["Email"];
+
+                            //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
+                            IdentityResult result = await UserManager.UpdateAsync(user);
+
+                            // 結果の確認
+                            if (result.Succeeded)
+                            {
+                                // メアド検証の成功
+
+                                // 再ログイン
+                                if (await this.ReSignInAsync())
                                 {
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
+                                    // 再ログインに成功
+                                    if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                    {
+                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
+                                    }
+                                    else
+                                    {
+                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
+                                    }
                                 }
                                 else
                                 {
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
-                                }   
+                                    // 再ログインに失敗
+
+                                }
                             }
                             else
                             {
-                                // 再ログインに失敗
-
+                                // E-mail更新に失敗
                             }
-                        }
-                        else
-                        {
-                            // E-mail更新に失敗
-                        }
 
-                        if (ASPNETIdentityConfig.RequireUniqueEmail)
-                        {
-                            return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
-                        }
-                        else
-                        {
-                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
+                            if (ASPNETIdentityConfig.RequireUniqueEmail)
+                            {
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
+                            }
+                            else
+                            {
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
+                            }
                         }
                     }
                 }
-
-                // エラー画面
-                return View("Error");
             }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
@@ -604,32 +647,40 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveEmail()
         {
-            // null クリア
-            IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), "");
-
-            // 結果の確認
-            if (result.Succeeded)
+            if (ASPNETIdentityConfig.CanEditEmail)
             {
-                // E-mail削除の成功
+                // null クリア
+                IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), "");
 
-                // 再ログイン
-                if (await this.ReSignInAsync())
+                // 結果の確認
+                if (result.Succeeded)
                 {
-                    // 再ログインに成功
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveEmailSuccess });
+                    // E-mail削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync())
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveEmailSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
                 }
                 else
                 {
-                    // 再ログインに失敗
+                    // E-mail削除の失敗
                 }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
             }
             else
             {
-                // E-mail削除の失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // Index - Error
-            return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
         }
 
         #endregion
@@ -650,7 +701,15 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult AddPhoneNumber()
         {
-            return View();
+            if (ASPNETIdentityConfig.CanEditPhone)
+            {
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -663,35 +722,43 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model)
         {
-            // ManageAddPhoneNumberViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.CanEditPhone)
             {
-                // ManageAddPhoneNumberViewModelの検証に成功
-
-                // 検証コード生成
-                string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);
-
-                // メッセージをSMSで送信する。
-                if (UserManager.SmsService != null)
+                // ManageAddPhoneNumberViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    IdentityMessage message = new IdentityMessage
+                    // ManageAddPhoneNumberViewModelの検証に成功
+
+                    // 検証コード生成
+                    string code = await UserManager.GenerateChangePhoneNumberTokenAsync(User.Identity.GetUserId(), model.Number);
+
+                    // メッセージをSMSで送信する。
+                    if (UserManager.SmsService != null)
                     {
-                        Destination = model.Number,
-                        Body = Resources.ManageController.CodeForAddPhoneNumber + code
-                    };
-                    await UserManager.SmsService.SendAsync(message);
+                        IdentityMessage message = new IdentityMessage
+                        {
+                            Destination = model.Number,
+                            Body = Resources.ManageController.CodeForAddPhoneNumber + code
+                        };
+                        await UserManager.SmsService.SendAsync(message);
+                    }
+
+                    // 電話番号の検証画面に進む
+                    return RedirectToAction("VerifyPhoneNumber", new { PhoneNumber = model.Number });
+                }
+                else
+                {
+                    // ManageAddPhoneNumberViewModelの検証に失敗
                 }
 
-                // 電話番号の検証画面に進む
-                return RedirectToAction("VerifyPhoneNumber", new { PhoneNumber = model.Number });
+                // 再表示
+                return View(model);
             }
             else
             {
-                // ManageAddPhoneNumberViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
         }
 
         #endregion
@@ -706,10 +773,18 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         public ActionResult VerifyPhoneNumber(string phoneNumber)
-        {   
-            return phoneNumber == null ?
-                View("Error") : 
+        {
+            if (ASPNETIdentityConfig.CanEditPhone)
+            {
+                return phoneNumber == null ?
+                View("Error") :
                 View("VerifyPhoneNumber", new ManageVerifyPhoneNumberViewModel { PhoneNumber = phoneNumber });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -722,39 +797,47 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> VerifyPhoneNumber(ManageVerifyPhoneNumberViewModel model)
         {
-            // ManageVerifyPhoneNumberViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.CanEditPhone)
             {
-                // ManageVerifyPhoneNumberViewModelの検証に成功
-
-                // 電話番号の検証（電話番号の登録の際に、SMSで送信した検証コードを検証）
-                IdentityResult result = await UserManager.ChangePhoneNumberAsync(
-                    User.Identity.GetUserId(), model.PhoneNumber, model.Code);
-
-                // 電話番号の検証結果の確認
-                if (result.Succeeded)
+                // ManageVerifyPhoneNumberViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    // 成功
+                    // ManageVerifyPhoneNumberViewModelの検証に成功
 
-                    // 再ログイン
-                    await this.ReSignInAsync();
+                    // 電話番号の検証（電話番号の登録の際に、SMSで送信した検証コードを検証）
+                    IdentityResult result = await UserManager.ChangePhoneNumberAsync(
+                        User.Identity.GetUserId(), model.PhoneNumber, model.Code);
 
-                    // Index - AddPhoneSuccess
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddPhoneSuccess });
+                    // 電話番号の検証結果の確認
+                    if (result.Succeeded)
+                    {
+                        // 成功
+
+                        // 再ログイン
+                        await this.ReSignInAsync();
+
+                        // Index - AddPhoneSuccess
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddPhoneSuccess });
+                    }
+                    else
+                    {
+                        // 失敗
+                        ModelState.AddModelError("", Resources.ManageController.FailedVerifyPhoneNumber);
+                    }
                 }
                 else
                 {
-                    // 失敗
-                    ModelState.AddModelError("", Resources.ManageController.FailedVerifyPhoneNumber);
+                    // ManageVerifyPhoneNumberViewModelの検証に失敗
                 }
+
+                // 再表示
+                return View(model);
             }
             else
             {
-                // ManageVerifyPhoneNumberViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
         }
 
         #endregion
@@ -772,32 +855,40 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemovePhoneNumber()
         {
-            // null クリア
-            IdentityResult result = await UserManager.SetPhoneNumberAsync(User.Identity.GetUserId(), "");
-
-            // 結果の確認
-            if (result.Succeeded)
+            if (ASPNETIdentityConfig.CanEditPhone)
             {
-                // 電話番号削除の成功
+                // null クリア
+                IdentityResult result = await UserManager.SetPhoneNumberAsync(User.Identity.GetUserId(), "");
 
-                // 再ログイン
-                if (await this.ReSignInAsync())
+                // 結果の確認
+                if (result.Succeeded)
                 {
-                    // 再ログインに成功
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.RemovePhoneSuccess });
+                    // 電話番号削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync())
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemovePhoneSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
                 }
                 else
                 {
-                    // 再ログインに失敗
+                    // 電話番号削除の失敗
                 }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
             }
             else
             {
-                // 電話番号削除の失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // Index - Error
-            return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
         }
 
         #endregion
@@ -815,13 +906,21 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> EnableTwoFactorAuthentication()
         {
-            // 2FAの有効化
-            await UserManager.SetTwoFactorEnabledAsync(User.Identity.GetUserId(), true);
+            if (ASPNETIdentityConfig.CanEdit2FA)
+            {
+                // 2FAの有効化
+                await UserManager.SetTwoFactorEnabledAsync(User.Identity.GetUserId(), true);
 
-            // 再ログイン
-            await this.ReSignInAsync();
+                // 再ログイン
+                await this.ReSignInAsync();
 
-            return RedirectToAction("Index", "Manage");
+                return RedirectToAction("Index", "Manage");
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -833,13 +932,21 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> DisableTwoFactorAuthentication()
         {
-            // 2FAの無効化
-            await UserManager.SetTwoFactorEnabledAsync(User.Identity.GetUserId(), false);
+            if (ASPNETIdentityConfig.CanEdit2FA)
+            {
+                // 2FAの無効化
+                await UserManager.SetTwoFactorEnabledAsync(User.Identity.GetUserId(), false);
 
-            // 再ログイン
-            await this.ReSignInAsync();
+                // 再ログイン
+                await this.ReSignInAsync();
 
-            return RedirectToAction("Index", "Manage");
+                return RedirectToAction("Index", "Manage");
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         #endregion
@@ -855,57 +962,65 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ManageLogins(EnumManageMessageId? message)
         {
-            // 色々な結果メッセージの設定
-            ViewBag.StatusMessage =
+            if (ASPNETIdentityConfig.CanEditExtLogin)
+            {
+                // 色々な結果メッセージの設定
+                ViewBag.StatusMessage =
                message == EnumManageMessageId.Error ? Resources.ManageController.Error
                : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
                : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
                : "";
 
-            // 認証されたユーザを取得
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                // 認証されたユーザを取得
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-            // 現在の認証ユーザが外部ログイン済みの外部ログイン情報を取得
-            IList<UserLoginInfo> userLogins = await UserManager.GetLoginsAsync(User.Identity.GetUserId());
+                // 現在の認証ユーザが外部ログイン済みの外部ログイン情報を取得
+                IList<UserLoginInfo> userLogins = await UserManager.GetLoginsAsync(User.Identity.GetUserId());
 
-            // 現在の認証ユーザが未ログインの外部ログイン情報を取得
-            List<AuthenticationDescription> otherLogins = new List<AuthenticationDescription>();
+                // 現在の認証ユーザが未ログインの外部ログイン情報を取得
+                List<AuthenticationDescription> otherLogins = new List<AuthenticationDescription>();
 
-            #region Collect otherLogins
-            //// auth : AuthenticationDescription
-            //// ul   : UserLoginInfo
-            //otherLogins = AuthenticationManager.GetExternalAuthenticationTypes().
-            //    Where(auth => userLogins.All(ul => auth.AuthenticationType != ul.LoginProvider)).ToList();
+                #region Collect otherLogins
+                //// auth : AuthenticationDescription
+                //// ul   : UserLoginInfo
+                //otherLogins = AuthenticationManager.GetExternalAuthenticationTypes().
+                //    Where(auth => userLogins.All(ul => auth.AuthenticationType != ul.LoginProvider)).ToList();
 
-            // 以下と等価（どっちが楽？）
+                // 以下と等価（どっちが楽？）
 
-            IEnumerable<AuthenticationDescription> allExternalLogins = AuthenticationManager.GetExternalAuthenticationTypes();
-            foreach (AuthenticationDescription auth in allExternalLogins)
-            {
-                bool flg = true;
-                foreach (UserLoginInfo ul in userLogins)
+                IEnumerable<AuthenticationDescription> allExternalLogins = AuthenticationManager.GetExternalAuthenticationTypes();
+                foreach (AuthenticationDescription auth in allExternalLogins)
                 {
-                    if (auth.AuthenticationType == ul.LoginProvider)
+                    bool flg = true;
+                    foreach (UserLoginInfo ul in userLogins)
                     {
-                        flg = false;
+                        if (auth.AuthenticationType == ul.LoginProvider)
+                        {
+                            flg = false;
+                        }
                     }
+
+                    // userLoginsに存在しないものだけ追加
+                    if (flg) otherLogins.Add(auth);
                 }
+                #endregion
 
-                // userLoginsに存在しないものだけ追加
-                if (flg) otherLogins.Add(auth);
+                // 削除ボタンを表示するかしないか。
+                // 通常ログインがあるか、外部ログイン・カウントが１以上ある場合に表示する。
+                ViewBag.ShowRemoveButton = user.PasswordHash != null || userLogins.Count > 1;
+
+                // 表示
+                return View(new ManageLoginsViewModel
+                {
+                    CurrentLogins = userLogins,
+                    OtherLogins = otherLogins
+                });
             }
-            #endregion
-
-            // 削除ボタンを表示するかしないか。
-            // 通常ログインがあるか、外部ログイン・カウントが１以上ある場合に表示する。
-            ViewBag.ShowRemoveButton = user.PasswordHash != null || userLogins.Count > 1;
-
-            // 表示
-            return View(new ManageLoginsViewModel
+            else
             {
-                CurrentLogins = userLogins,
-                OtherLogins = otherLogins
-            });
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -919,59 +1034,67 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey)
         {
-            // メッセージ列挙型
-            EnumManageMessageId? message;
-
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-            IdentityResult result = null;
-
-            // クレームを削除
-            // Memory Provider使用の時
-            // 「コレクションが変更されました。列挙操作は実行されない可能性があります。」
-            // 問題で若干冗長なコードに。
-            List<Claim> lc = new List<Claim>();
-            foreach (Claim c in user.Claims)
+            if (ASPNETIdentityConfig.CanEditExtLogin)
             {
-                if(c.Issuer == loginProvider)
+                // メッセージ列挙型
+                EnumManageMessageId? message;
+
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                IdentityResult result = null;
+
+                // クレームを削除
+                // Memory Provider使用の時
+                // 「コレクションが変更されました。列挙操作は実行されない可能性があります。」
+                // 問題で若干冗長なコードに。
+                List<Claim> lc = new List<Claim>();
+                foreach (Claim c in user.Claims)
                 {
-                    lc.Add(c);
+                    if (c.Issuer == loginProvider)
+                    {
+                        lc.Add(c);
+                    }
                 }
-            }
-            foreach (Claim c in lc)
-            {
-                result = await UserManager.RemoveClaimAsync(user.Id, c);
-            }
-
-            // ログインを削除
-            result = await UserManager.RemoveLoginAsync(
-                User.Identity.GetUserId(), new UserLoginInfo(loginProvider, providerKey));
-
-            // 結果の確認
-            if (result.Succeeded)
-            {
-                // ログイン削除の成功
-
-                // 再ログイン
-                if (await this.ReSignInAsync())
+                foreach (Claim c in lc)
                 {
-                    // 再ログインに成功
-                    message = EnumManageMessageId.RemoveExternalLoginSuccess;
+                    result = await UserManager.RemoveClaimAsync(user.Id, c);
+                }
+
+                // ログインを削除
+                result = await UserManager.RemoveLoginAsync(
+                    User.Identity.GetUserId(), new UserLoginInfo(loginProvider, providerKey));
+
+                // 結果の確認
+                if (result.Succeeded)
+                {
+                    // ログイン削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync())
+                    {
+                        // 再ログインに成功
+                        message = EnumManageMessageId.RemoveExternalLoginSuccess;
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                        message = EnumManageMessageId.Error;
+                    }
                 }
                 else
                 {
-                    // 再ログインに失敗
+                    // ログイン削除の失敗
                     message = EnumManageMessageId.Error;
                 }
+
+                // ログイン管理画面（ログイン削除結果
+                return RedirectToAction("ManageLogins", new { Message = message });
             }
             else
             {
-                // ログイン削除の失敗
-                message = EnumManageMessageId.Error;
+                // エラー画面
+                return View("Error");
             }
-
-            // ログイン管理画面（ログイン削除結果
-            return RedirectToAction("ManageLogins", new { Message = message });
         }
 
         /// <summary>
@@ -984,13 +1107,21 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult ExternalLogin(string provider)
         {
-            // Request a redirect to the external login provider
-            //  to link a login for the current user.
-            // 現在のユーザーのログインをリンクするために
-            // 外部ログイン プロバイダーへのリダイレクトを要求します。
-            return new ExternalLoginStarter(
+            if (ASPNETIdentityConfig.CanEditExtLogin)
+            {
+                // Request a redirect to the external login provider
+                //  to link a login for the current user.
+                // 現在のユーザーのログインをリンクするために
+                // 外部ログイン プロバイダーへのリダイレクトを要求します。
+                return new ExternalLoginStarter(
                 provider,
                 Url.Action("ExternalLoginCallback", "Manage"), User.Identity.GetUserId());
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -1005,180 +1136,188 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ExternalLoginCallback(string returnUrl)
         {
-            // AccountControllerはサインアップかどうかを判定して処理する必要がある。
-            // ManageControllerは判定不要だが、サインイン後なので、uidが一致する必要がある。
-
-            // asp.net mvc - MVC 5 Owin Facebook Auth results in Null Reference Exception - Stack Overflow
-            // http://stackoverflow.com/questions/19564479/mvc-5-owin-facebook-auth-results-in-null-reference-exception
-
-            // ログイン プロバイダーが公開している認証済みユーザーに関する情報を受け取る。
-            AuthenticateResult authenticateResult = await AuthenticationManager.AuthenticateAsync(DefaultAuthenticationTypes.ExternalCookie);
-            // 外部ログイン・プロバイダからユーザに関する情報を取得する。
-            ExternalLoginInfo externalLoginInfo = await AuthenticationManager.GetExternalLoginInfoAsync();
-
-            IdentityResult result = null;
-            //SignInStatus signInStatus = SignInStatus.Failure;
-
-            if (authenticateResult != null
-                && authenticateResult.Identity != null
-                && externalLoginInfo != null)
+            if (ASPNETIdentityConfig.CanEditExtLogin)
             {
-                // ログイン情報を受け取れた場合、クレーム情報を分析
-                ClaimsIdentity claims = authenticateResult.Identity;
+                // AccountControllerはサインアップかどうかを判定して処理する必要がある。
+                // ManageControllerは判定不要だが、サインイン後なので、uidが一致する必要がある。
 
-                // ID情報とe-mail, name情報は必須
-                Claim idClaim = claims.FindFirst(ClaimTypes.NameIdentifier);
-                Claim emailClaim = claims.FindFirst(ClaimTypes.Email);
-                Claim nameClaim = claims.FindFirst(ClaimTypes.Name);
+                // asp.net mvc - MVC 5 Owin Facebook Auth results in Null Reference Exception - Stack Overflow
+                // http://stackoverflow.com/questions/19564479/mvc-5-owin-facebook-auth-results-in-null-reference-exception
 
-                // 外部ログインで取得するクレームを標準化する。
-                // ・・・
-                // ・・・
-                // ・・・
+                // ログイン プロバイダーが公開している認証済みユーザーに関する情報を受け取る。
+                AuthenticateResult authenticateResult = await AuthenticationManager.AuthenticateAsync(DefaultAuthenticationTypes.ExternalCookie);
+                // 外部ログイン・プロバイダからユーザに関する情報を取得する。
+                ExternalLoginInfo externalLoginInfo = await AuthenticationManager.GetExternalLoginInfoAsync();
 
-                if (idClaim != null)
+                IdentityResult result = null;
+                //SignInStatus signInStatus = SignInStatus.Failure;
+
+                if (authenticateResult != null
+                    && authenticateResult.Identity != null
+                    && externalLoginInfo != null)
                 {
-                    // UserLoginInfoの生成
-                    UserLoginInfo login = new UserLoginInfo(idClaim.Issuer, idClaim.Value);
+                    // ログイン情報を受け取れた場合、クレーム情報を分析
+                    ClaimsIdentity claims = authenticateResult.Identity;
 
-                    // クレーム情報（ID情報とe-mail, name情報）を抽出
-                    string id = idClaim.Value;
-                    string name = nameClaim.Value;
-                    string email = "";
+                    // ID情報とe-mail, name情報は必須
+                    Claim idClaim = claims.FindFirst(ClaimTypes.NameIdentifier);
+                    Claim emailClaim = claims.FindFirst(ClaimTypes.Email);
+                    Claim nameClaim = claims.FindFirst(ClaimTypes.Name);
 
-                    #region nameClaim対策 (今の所無し)
-                    //・・・
-                    #endregion
+                    // 外部ログインで取得するクレームを標準化する。
+                    // ・・・
+                    // ・・・
+                    // ・・・
 
-                    #region emailClaim対策 (Facebook)
-                    if (emailClaim == null)
+                    if (idClaim != null)
                     {
-                        // emailClaimが取得できなかった場合、
-                        if (externalLoginInfo.Login.LoginProvider == "Facebook")
+                        // UserLoginInfoの生成
+                        UserLoginInfo login = new UserLoginInfo(idClaim.Issuer, idClaim.Value);
+
+                        // クレーム情報（ID情報とe-mail, name情報）を抽出
+                        string id = idClaim.Value;
+                        string name = nameClaim.Value;
+                        string email = "";
+
+                        #region nameClaim対策 (今の所無し)
+                        //・・・
+                        #endregion
+
+                        #region emailClaim対策 (Facebook)
+                        if (emailClaim == null)
                         {
-                            var identity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
-                            var access_token = identity.FindFirstValue("FacebookAccessToken");
-                            var fb = new Facebook.FacebookClient(access_token);
-                            dynamic myInfo = fb.Get("/me?fields=email"); // specify the email field
-                            email = myInfo.email; // Facebookでは、emailClaimを取得できない。
-                        }
-                    }
-                    else
-                    {
-                        // emailClaimが取得できた場合、
-                        email = emailClaim.Value;
-                    }
-                    #endregion
-
-                    string uid = "";
-                    if (ASPNETIdentityConfig.RequireUniqueEmail)
-                    {
-                        uid = email;
-                    }
-                    else
-                    {
-                        uid = name;
-                    }
-
-                    if (!string.IsNullOrEmpty(email)
-                        && !string.IsNullOrEmpty(name))
-                    {
-                        // クレーム情報（e-mail, name情報）を取得できた。
-
-                        // 既存の外部ログインを確認する。
-                        ApplicationUser user = await UserManager.FindAsync(login);
-
-                        if (user != null)
-                        {
-                            // 既存の外部ログインがある場合。
-
-                            // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
-                            result = await UserManager.RemoveClaimAsync(user.Id, emailClaim); // del-ins
-                            result = await UserManager.AddClaimAsync(user.Id, emailClaim);
-                            result = await UserManager.RemoveClaimAsync(user.Id, nameClaim); // del-ins
-                            result = await UserManager.AddClaimAsync(user.Id, nameClaim);
-
-                            //// SignInAsyncより、ExternalSignInAsyncが適切。
-
-                            ////// 通常のサインイン
-                            ////await SignInManager.SignInAsync(
-
-                            //// 既存の外部ログイン・プロバイダでサインイン
-                            //signInStatus = await SignInManager.ExternalSignInAsync(
-                            //                     loginInfo: externalLoginInfo,
-                            //                     isPersistent: false); // 外部ログインの Cookie 永続化は常に false.
-
-                            // ManageControllerではサインイン済みなので、何もしない。
-                            return RedirectToAction("ManageLogins");
+                            // emailClaimが取得できなかった場合、
+                            if (externalLoginInfo.Login.LoginProvider == "Facebook")
+                            {
+                                var identity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
+                                var access_token = identity.FindFirstValue("FacebookAccessToken");
+                                var fb = new Facebook.FacebookClient(access_token);
+                                dynamic myInfo = fb.Get("/me?fields=email"); // specify the email field
+                                email = myInfo.email; // Facebookでは、emailClaimを取得できない。
+                            }
                         }
                         else
                         {
-                            // 既存の外部ログインがない。
+                            // emailClaimが取得できた場合、
+                            email = emailClaim.Value;
+                        }
+                        #endregion
 
-                            // ManageControllerではサインアップ・サインイン
-                            // 済みなので、外部ログインの追加のみ行なう。
+                        string uid = "";
+                        if (ASPNETIdentityConfig.RequireUniqueEmail)
+                        {
+                            uid = email;
+                        }
+                        else
+                        {
+                            uid = name;
+                        }
 
-                            // サインアップ済みの可能性を探る
-                            user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        if (!string.IsNullOrEmpty(email)
+                            && !string.IsNullOrEmpty(name))
+                        {
+                            // クレーム情報（e-mail, name情報）を取得できた。
 
-                            // uid（e-mail, name情報）が一致している必要がある。
-                            if (user.UserName == uid)
+                            // 既存の外部ログインを確認する。
+                            ApplicationUser user = await UserManager.FindAsync(login);
+
+                            if (user != null)
                             {
-                                // uid（e-mail, name情報）が一致している。
+                                // 既存の外部ログインがある場合。
 
-                                // 外部ログイン（ = UserLoginInfo ）の追加
-                                result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
+                                // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
+                                result = await UserManager.RemoveClaimAsync(user.Id, emailClaim); // del-ins
+                                result = await UserManager.AddClaimAsync(user.Id, emailClaim);
+                                result = await UserManager.RemoveClaimAsync(user.Id, nameClaim); // del-ins
+                                result = await UserManager.AddClaimAsync(user.Id, nameClaim);
 
-                                // クレーム（emailClaim, nameClaim, etc.）の追加
-                                if (result.Succeeded)
-                                {
-                                    result = await UserManager.AddClaimAsync(user.Id, emailClaim);
-                                    result = await UserManager.AddClaimAsync(user.Id, nameClaim);
-                                    // ・・・
-                                    // ・・・
-                                    // ・・・
-                                }
+                                //// SignInAsyncより、ExternalSignInAsyncが適切。
 
-                                // 上記の結果の確認
-                                if (result.Succeeded)
-                                {
-                                    // 外部ログインの追加に成功した場合 → サインイン
+                                ////// 通常のサインイン
+                                ////await SignInManager.SignInAsync(
 
-                                    // SignInAsync、ExternalSignInAsync
-                                    // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
-                                    await SignInManager.SignInAsync(
-                                        user,
-                                        isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
-                                        rememberBrowser: true); // rememberBrowser は true 固定
+                                //// 既存の外部ログイン・プロバイダでサインイン
+                                //signInStatus = await SignInManager.ExternalSignInAsync(
+                                //                     loginInfo: externalLoginInfo,
+                                //                     isPersistent: false); // 外部ログインの Cookie 永続化は常に false.
 
-                                    //// この外部ログイン・プロバイダでサインイン
-                                    //signInStatus = await SignInManager.ExternalSignInAsync(
-
-                                    // リダイレクト
-                                    return RedirectToAction("ManageLogins");
-                                }
-                                else
-                                {
-                                    // 外部ログインの追加に失敗した場合
-
-                                    // 結果のエラー情報を追加
-                                    AddErrors(result);
-                                }
+                                // ManageControllerではサインイン済みなので、何もしない。
+                                return RedirectToAction("ManageLogins");
                             }
                             else
                             {
-                                // uid（e-mail, name情報）が一致していない。
-                                // 外部ログインのアカウントを間違えている。
-                                return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
+                                // 既存の外部ログインがない。
 
+                                // ManageControllerではサインアップ・サインイン
+                                // 済みなので、外部ログインの追加のみ行なう。
+
+                                // サインアップ済みの可能性を探る
+                                user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                                // uid（e-mail, name情報）が一致している必要がある。
+                                if (user.UserName == uid)
+                                {
+                                    // uid（e-mail, name情報）が一致している。
+
+                                    // 外部ログイン（ = UserLoginInfo ）の追加
+                                    result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
+
+                                    // クレーム（emailClaim, nameClaim, etc.）の追加
+                                    if (result.Succeeded)
+                                    {
+                                        result = await UserManager.AddClaimAsync(user.Id, emailClaim);
+                                        result = await UserManager.AddClaimAsync(user.Id, nameClaim);
+                                        // ・・・
+                                        // ・・・
+                                        // ・・・
+                                    }
+
+                                    // 上記の結果の確認
+                                    if (result.Succeeded)
+                                    {
+                                        // 外部ログインの追加に成功した場合 → サインイン
+
+                                        // SignInAsync、ExternalSignInAsync
+                                        // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                                        await SignInManager.SignInAsync(
+                                            user,
+                                            isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
+                                            rememberBrowser: true); // rememberBrowser は true 固定
+
+                                        //// この外部ログイン・プロバイダでサインイン
+                                        //signInStatus = await SignInManager.ExternalSignInAsync(
+
+                                        // リダイレクト
+                                        return RedirectToAction("ManageLogins");
+                                    }
+                                    else
+                                    {
+                                        // 外部ログインの追加に失敗した場合
+
+                                        // 結果のエラー情報を追加
+                                        AddErrors(result);
+                                    }
+                                }
+                                else
+                                {
+                                    // uid（e-mail, name情報）が一致していない。
+                                    // 外部ログインのアカウントを間違えている。
+                                    return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
+
+                                } // else処理済
                             } // else処理済
-                        } // else処理済
-                    } // クレーム情報（e-mail, name情報）を取得できなかった。
-                } // クレーム情報（ID情報）を取得できなかった。
-            } // ログイン情報を取得できなかった。
+                        } // クレーム情報（e-mail, name情報）を取得できなかった。
+                    } // クレーム情報（ID情報）を取得できなかった。
+                } // ログイン情報を取得できなかった。
 
-            // ログイン情報を受け取れなかった場合や、その他の問題が在った場合。
-            return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.Error });
+                // ログイン情報を受け取れなかった場合や、その他の問題が在った場合。
+                return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.Error });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         #endregion
@@ -1195,19 +1334,27 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult AddPaymentInformation()
         {
-            if (ASPNETIdentityConfig.EnableStripe)
+            if (ASPNETIdentityConfig.CanEditPayment)
             {
-                ViewBag.PublishableKey = ASPNETIdentityConfig.Stripe_PK;
-                return View("AddPaymentInformationStripe");
-            }
-            else if (ASPNETIdentityConfig.EnablePAYJP)
-            {
-                ViewBag.PublishableKey = ASPNETIdentityConfig.PAYJP_PK;
-                return View("AddPaymentInformationPAYJP");
+                if (ASPNETIdentityConfig.EnableStripe)
+                {
+                    ViewBag.PublishableKey = ASPNETIdentityConfig.Stripe_PK;
+                    return View("AddPaymentInformationStripe");
+                }
+                else if (ASPNETIdentityConfig.EnablePAYJP)
+                {
+                    ViewBag.PublishableKey = ASPNETIdentityConfig.PAYJP_PK;
+                    return View("AddPaymentInformationPAYJP");
+                }
+                else
+                {
+                    throw new NotSupportedException("Payment service is not enabled.");
+                }
             }
             else
             {
-                throw new NotSupportedException("Payment service is not enabled.");
+                // エラー画面
+                return View("Error");
             }
         }
 
@@ -1221,67 +1368,75 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddPaymentInformation(ManageAddPaymentInformationViewModel model)
         {
-            // ManageAddPaymentInformationViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.CanEditPayment)
             {
-                // ManageAddPaymentInformationViewModelの検証に成功
-
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                if (user != null)
+                // ManageAddPaymentInformationViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    // ユーザを取得できた。
+                    // ManageAddPaymentInformationViewModelの検証に成功
 
-                    // TokenからClientIDに変換する。
-                    JObject jobj = await WebAPIHelper.GetInstance().CreateaCustomerAsync(user.Email, model.PaymentInformation);
-                    
-                    // 支払元情報（ClientID）の設定
-                    user.PaymentInformation = (string)jobj["id"];
-                    // ユーザーの保存
-                    IdentityResult result = await UserManager.UpdateAsync(user);
+                    // ユーザの検索
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                    // 結果の確認
-                    if (result.Succeeded)
+                    if (user != null)
                     {
-                        // 成功
+                        // ユーザを取得できた。
 
-                        // 再ログイン
-                        await this.ReSignInAsync();
+                        // TokenからClientIDに変換する。
+                        JObject jobj = await WebAPIHelper.GetInstance().CreateaCustomerAsync(user.Email, model.PaymentInformation);
 
-                        // Index - SetPasswordSuccess
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddPaymentInformationSuccess });
+                        // 支払元情報（ClientID）の設定
+                        user.PaymentInformation = (string)jobj["id"];
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            // 成功
+
+                            // 再ログイン
+                            await this.ReSignInAsync();
+
+                            // Index - SetPasswordSuccess
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddPaymentInformationSuccess });
+                        }
+                        else
+                        {
+                            // 失敗
+                            AddErrors(result);
+                        }
                     }
                     else
                     {
-                        // 失敗
-                        AddErrors(result);
+                        // ユーザを取得できなかった。
                     }
                 }
                 else
                 {
-                    // ユーザを取得できなかった。
+                    // ManageAddPaymentInformationViewModelの検証に失敗
+                }
+
+                // 再表示
+                if (ASPNETIdentityConfig.EnableStripe)
+                {
+                    ViewBag.PublishableKey = ASPNETIdentityConfig.Stripe_PK;
+                    return View("AddPaymentInformationStripe");
+                }
+                else if (ASPNETIdentityConfig.EnablePAYJP)
+                {
+                    ViewBag.PublishableKey = ASPNETIdentityConfig.PAYJP_PK;
+                    return View("AddPaymentInformationPAYJP");
+                }
+                else
+                {
+                    throw new NotSupportedException("Payment service is not enabled.");
                 }
             }
             else
             {
-                // ManageAddPaymentInformationViewModelの検証に失敗
-            }
-
-            // 再表示
-            if (ASPNETIdentityConfig.EnableStripe)
-            {
-                ViewBag.PublishableKey = ASPNETIdentityConfig.Stripe_PK;
-                return View("AddPaymentInformationStripe");
-            }
-            else if (ASPNETIdentityConfig.EnablePAYJP)
-            {
-                ViewBag.PublishableKey = ASPNETIdentityConfig.PAYJP_PK;
-                return View("AddPaymentInformationPAYJP");
-            }
-            else
-            {
-                throw new NotSupportedException("Payment service is not enabled.");
+                // エラー画面
+                return View("Error");
             }
         }
 
@@ -1298,12 +1453,21 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChargeByPaymentInformation()
         {
-            // ユーザの検索
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            // 課金のテスト処理
-            JObject jobj = await WebAPIHelper.GetInstance().ChargeToCustomers(user.PaymentInformation, "jpy", "1000");
-            // 元の画面に戻る
-            return RedirectToAction("Index");
+            if (ASPNETIdentityConfig.CanEditPayment
+                && ASPNETIdentityConfig.IsDebug)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                // 課金のテスト処理
+                JObject jobj = await WebAPIHelper.GetInstance().ChargeToCustomers(user.PaymentInformation, "jpy", "1000");
+                // 元の画面に戻る
+                return RedirectToAction("Index");
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         #endregion
@@ -1319,36 +1483,44 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemovePaymentInformation()
         {
-            // ユーザの検索
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            // 支払元情報のクリア
-            user.PaymentInformation = "";
-            // ユーザーの保存
-            IdentityResult result = await UserManager.UpdateAsync(user);
-
-            // 結果の確認
-            if (result.Succeeded)
+            if (ASPNETIdentityConfig.CanEditPayment)
             {
-                // 支払元情報 削除の成功
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                // 支払元情報のクリア
+                user.PaymentInformation = "";
+                // ユーザーの保存
+                IdentityResult result = await UserManager.UpdateAsync(user);
 
-                // 再ログイン
-                if (await this.ReSignInAsync())
+                // 結果の確認
+                if (result.Succeeded)
                 {
-                    // 再ログインに成功
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.RemovePaymentInformationSuccess });
+                    // 支払元情報 削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync())
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemovePaymentInformationSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
                 }
                 else
                 {
-                    // 再ログインに失敗
+                    // 支払元情報 削除の失敗
                 }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
             }
             else
             {
-                // 支払元情報 削除の失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // Index - Error
-            return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
         }
 
         #endregion
@@ -1367,21 +1539,29 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> AddUnstructuredData()
         {
-            // ユーザの検索
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-            ManageAddUnstructuredDataViewModel model = null;
-
-            if (string.IsNullOrEmpty(user.UnstructuredData))
+            if (ASPNETIdentityConfig.CanEditUnstructuredData)
             {
-                model = new ManageAddUnstructuredDataViewModel();
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                ManageAddUnstructuredDataViewModel model = null;
+
+                if (string.IsNullOrEmpty(user.UnstructuredData))
+                {
+                    model = new ManageAddUnstructuredDataViewModel();
+                }
+                else
+                {
+                    model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
+                }
+
+                return View(model);
             }
             else
             {
-                model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData); 
+                // エラー画面
+                return View("Error");
             }
-
-            return View(model);
         }
 
         /// <summary>
@@ -1394,51 +1574,59 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddUnstructuredData(ManageAddUnstructuredDataViewModel model)
         {
-            // ManageAddUnstructuredDataViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.CanEditUnstructuredData)
             {
-                // ManageAddUnstructuredDataViewModelの検証に成功
-
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                if (user != null)
+                // ManageAddUnstructuredDataViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    // ユーザを取得できた。
-                    user.UnstructuredData = JsonConvert.SerializeObject(model);
+                    // ManageAddUnstructuredDataViewModelの検証に成功
 
-                    // ユーザーの保存
-                    IdentityResult result = await UserManager.UpdateAsync(user);
+                    // ユーザの検索
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                    // 結果の確認
-                    if (result.Succeeded)
+                    if (user != null)
                     {
-                        // 成功
+                        // ユーザを取得できた。
+                        user.UnstructuredData = JsonConvert.SerializeObject(model);
 
-                        // 再ログイン
-                        await this.ReSignInAsync();
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
 
-                        // Index - SetPasswordSuccess
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            // 成功
+
+                            // 再ログイン
+                            await this.ReSignInAsync();
+
+                            // Index - SetPasswordSuccess
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                        }
+                        else
+                        {
+                            // 失敗
+                            AddErrors(result);
+                        }
                     }
                     else
                     {
-                        // 失敗
-                        AddErrors(result);
+                        // ユーザを取得できなかった。
                     }
                 }
                 else
                 {
-                    // ユーザを取得できなかった。
+                    // ManageAddUnstructuredDataViewModelの検証に失敗
                 }
+
+                // 再表示
+                return View(model);
             }
             else
             {
-                // ManageAddUnstructuredDataViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
         }
 
         #endregion
@@ -1454,36 +1642,44 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveUnstructuredData()
         {
-            // ユーザの検索
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            // 非構造化データのクリア
-            user.UnstructuredData = "";
-            // ユーザーの保存
-            IdentityResult result = await UserManager.UpdateAsync(user);
-
-            // 結果の確認
-            if (result.Succeeded)
+            if (ASPNETIdentityConfig.CanEditUnstructuredData)
             {
-                // 支払元情報 削除の成功
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                // 非構造化データのクリア
+                user.UnstructuredData = "";
+                // ユーザーの保存
+                IdentityResult result = await UserManager.UpdateAsync(user);
 
-                // 再ログイン
-                if (await this.ReSignInAsync())
+                // 結果の確認
+                if (result.Succeeded)
                 {
-                    // 再ログインに成功
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+                    // 支払元情報 削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync())
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
                 }
                 else
                 {
-                    // 再ログインに失敗
+                    // 非構造化データ 削除の失敗
                 }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
             }
             else
             {
-                // 非構造化データ 削除の失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // Index - Error
-            return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
         }
 
         #endregion

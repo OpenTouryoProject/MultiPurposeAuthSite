@@ -690,6 +690,81 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #region 属性編集の可否
+
+        /// <summary>
+        /// CanEditEmail
+        /// </summary>
+        public static bool CanEditEmail
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditEmail"]);
+            }
+        }
+
+        /// <summary>
+        /// CanEditPhone
+        /// </summary>
+        public static bool CanEditPhone
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditPhone"]);
+            }
+        }
+
+        /// <summary>
+        /// CanEdit2FA
+        /// </summary>
+        public static bool CanEdit2FA
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEdit2FA"]);
+            }
+        }
+
+        /// <summary>
+        /// CanEditUnstructuredData
+        /// </summary>
+        public static bool CanEditUnstructuredData
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditUnstructuredData"]);
+            }
+        }
+
+        /// <summary>
+        /// CanEditExtLogin
+        /// </summary>
+        public static bool CanEditExtLogin
+        {
+            get
+            {
+                return
+                    ASPNETIdentityConfig.MicrosoftAccountAuthentication
+                    || ASPNETIdentityConfig.GoogleAuthentication
+                    || ASPNETIdentityConfig.FacebookAuthentication;
+            }
+        }
+
+        /// <summary>
+        /// CanEditPayment
+        /// </summary>
+        public static bool CanEditPayment
+        {
+            get
+            {
+                return
+                    ASPNETIdentityConfig.EnableStripe
+                    || ASPNETIdentityConfig.EnablePAYJP;
+            }
+        }
+
+        #endregion
+
         #region OAuth Client & Server
 
         #region 共通設定

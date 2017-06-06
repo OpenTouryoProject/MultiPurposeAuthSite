@@ -86,6 +86,9 @@ else
 else
 {
     // UserName≠メアドの場合（のメアド追加
+    if (ASPNETIdentityConfig.CanEditEmail)
+    {
+        // メアドの変更が許可されている場合。
 
             <dt>@ManageViews.IndexEmail :</dt>
             <dd>
@@ -105,32 +108,51 @@ else
                     }
                 }
             </dd>
+    }
+    else
+    {
+        // メアドの変更が許可されていない場合。
+    }
 }
+
+@if (ASPNETIdentityConfig.CanEditPhone)
+{
+    // 電話番号の変更が許可されている場合。
+
             <dt>@ManageViews.IndexPhoneNumber :</dt>
             <dd>
-                @*"Add" or "Remove"*@
-@if (string.IsNullOrEmpty(Model.PhoneNumber))
-{
+
+    @*"Add" or "Remove"*@
+    @if (string.IsNullOrEmpty(Model.PhoneNumber))
+    {
                     <text>None</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
-}
-else
-{
+    }
+    else
+    {
                     <text>@Model.PhoneNumber</text><br/>
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
 
-                    using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
-                    {
+        using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+        {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn-link" />]</text>
-                    }
-}
+        }
+    }
             </dd>
-    
+}
+else
+{
+    // 電話番号の変更が許可されていない場合。
+}
+
+@if (ASPNETIdentityConfig.CanEdit2FA)
+{
+    // 2要素認証の変更が許可されている場合。
             <dt>@ManageViews.IndexTwoFactorAuth :</dt>
             <dd>
-@if (Model.TwoFactor)
-{
+    @if (Model.TwoFactor)
+    {
                     using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
                     {
                         @Html.AntiForgeryToken()
@@ -138,9 +160,9 @@ else
                             @ManageViews.IndexTwoFactorAuthEnableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabledButton" class="btn btn-link" />]
                         </text>
                     }
-}
-else
-{
+    }
+    else
+    {
                     using (Html.BeginForm("EnableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
                     {
                         @Html.AntiForgeryToken()
@@ -148,51 +170,71 @@ else
                             @ManageViews.IndexTwoFactorAuthDisableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabledButton" class="btn btn-link" />]
                         </text>
                     }
-}
+    }
             </dd>
+}
+else
+{
+    // 2要素認証の変更が許可されていない場合。
+}
 
+@if (ASPNETIdentityConfig.CanEditExtLogin)
+{
+    // 外部ログインの変更が許可されている場合。
             <dt>@ManageViews.IndexExternalLogins :</dt>
             <dd>
                 @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
             </dd>
-
-@if (ASPNETIdentityConfig.EnableStripe || ASPNETIdentityConfig.EnablePAYJP)
-{
-            <dt>@ManageViews.IndexPaymentInformation :</dt>
 }
+else
+{
+    // 外部ログインの変更が許可されていない場合。
+}
+
+@if (ASPNETIdentityConfig.CanEditPayment)
+{
+    // 支払い元情報の変更が許可されている場合。
+
+            <dt>@ManageViews.IndexPaymentInformation :</dt>
+
             <dd>
 
-@*"Add" and "Charge" or "Remove or Change"*@
-@if (!Model.HasPaymentInformation)
-{
-    if (ASPNETIdentityConfig.EnableStripe || ASPNETIdentityConfig.EnablePAYJP)
+    @*"Add" and "Charge" or "Remove or Change"*@
+    @if (!Model.HasPaymentInformation)
     {
                         <text>None</text><br />
                         <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationAddActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
     }
-}
-else
-{
+    else
+    {
                         <text>XXXXXXXXXX</text><br />
                         <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationChangeActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
 
-    using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
-    {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn-link" />]</text>
-    }
-
-    if (ASPNETIdentityConfig.IsDebug)
-    {
-        using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+        using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
         {
                         @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn-link" />]</text>
+        }
+
+        if (ASPNETIdentityConfig.IsDebug)
+        {
+            using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+            {
+                        @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn-link" />]</text>
+            }
         }
     }
-}
             </dd>
+}
+else
+{
+    // 支払い元情報の変更が許可されていない場合。
+}
 
+@if (ASPNETIdentityConfig.CanEditUnstructuredData)
+{
+    // 非構造化データの変更が許可されていない場合。
             <dt>@ManageViews.IndexUnstructuredData :</dt>
             <dd>
 
@@ -214,7 +256,11 @@ else
                     }
                 }
             </dd>
-
+}
+else
+{
+    // 非構造化データの変更が許可されていない場合。
+}
         </dl>
     </div>
 </div>
