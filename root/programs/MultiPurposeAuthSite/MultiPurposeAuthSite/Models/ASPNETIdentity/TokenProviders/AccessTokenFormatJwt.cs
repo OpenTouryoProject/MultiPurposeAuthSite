@@ -35,6 +35,7 @@ using System;
 using System.Web;
 using System.Security.Claims;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 
 using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.OAuth;
@@ -159,11 +160,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             JWT_RS256 jwtRS256 = null;
 
             // 署名
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword);
+            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+
             jwt = jwtRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword);
+            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+
             if (jwtRS256.Verify(jwt))
             {
                 return jwt; // 検証できた。
