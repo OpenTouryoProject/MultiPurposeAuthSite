@@ -60,9 +60,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         /// <summary>constructor</summary>
         /// <param name="oAuthIssuerId">oAuthIssuerId</param>
-        public AccessTokenFormatJwt(string oAuthIssuerId)
+        public AccessTokenFormatJwt()
         {
-            //this._oAuthIssuerId = oAuthIssuerId;
         }
 
         /// <summary>Protect</summary>

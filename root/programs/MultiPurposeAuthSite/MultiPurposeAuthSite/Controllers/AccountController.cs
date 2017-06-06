@@ -1293,14 +1293,22 @@ namespace MultiPurposeAuthSite.Controllers
                 // 余談：OpenID Connectであれば、ここで id_token 検証。
 
                 // 結果の表示
-                model.AccessTokenJWT = dic["access_token"] ?? "";
-                model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                       CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+                if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                {
+                    model.AccessTokenJWT = dic["access_token"] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                           CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
 
-                model.RefreshToken = dic["refresh_token"] ?? "";
+                    model.RefreshToken = dic["refresh_token"] ?? "";
 
-                model.PointOfView = "";
-
+                    model.PointOfView = "";
+                }
+                else
+                {
+                    model.AccessTokenJWT = dic["access_token"] ?? "";
+                    model.RefreshToken = dic["refresh_token"] ?? "";
+                    model.PointOfView = "";
+                }
             }
             else
             {
@@ -1349,15 +1357,24 @@ namespace MultiPurposeAuthSite.Controllers
                     model.Response = await OAuthProviderHelper.GetInstance()
                         .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-                    
-                    // 結果の表示
-                    model.AccessTokenJWT = dic["access_token"] ?? "";
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                        CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]),CustomEncode.UTF_8);
-                    
-                    model.RefreshToken = dic["refresh_token"] ?? "";
 
-                    model.PointOfView = "";
+                    // 結果の表示
+                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                    {
+                        model.AccessTokenJWT = dic["access_token"] ?? "";
+                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                            CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+
+                        model.RefreshToken = dic["refresh_token"] ?? "";
+
+                        model.PointOfView = "";
+                    }
+                    else
+                    {
+                        model.AccessTokenJWT = dic["access_token"] ?? "";
+                        model.RefreshToken = dic["refresh_token"] ?? "";
+                        model.PointOfView = "";
+                    }
 
                     #endregion
                 }

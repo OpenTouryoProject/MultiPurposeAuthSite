@@ -360,7 +360,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 // ・Implicitグラント種別
                 // ・Resource Owner Password Credentialsグラント種別
                 // ・Client Credentialsグラント種別
-                app.UseOAuthBearerTokens(
+                OAuthAuthorizationServerOptions oAuthAuthorizationServerOptions =
                     new OAuthAuthorizationServerOptions
                     {
                         #region 全てのグラント種別の共通設定
@@ -375,9 +375,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                         //   ・OnGrantClientCredentialsプロパティ設定 or GrantClientCredentialsのオーバーライド
                         Provider = new ApplicationOAuthBearerTokenProvider(),
 
-                        // ・AccessTokenFormat（OAuth Access Token の Format をJWTフォーマットに変更する。
-                        AccessTokenFormat = new AccessTokenFormatJwt(ASPNETIdentityConfig.OAuthIssuerId),
-
+                        //AccessTokenFormat = new AccessTokenFormatJwt(),
+                
                         // ・AccessTokenExpireTimeSpan（OAuth Access Token の 有効期限
                         AccessTokenExpireTimeSpan = ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes, // System.TimeSpan.FromSeconds(10), // Debug時 
 
@@ -437,7 +436,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                         #endregion
 
                         #endregion
-                    });
+                    };
+
+                #region Options可変部分
+                // AccessTokenFormat（OAuth Access Token の Format をJWTフォーマットに変更する。
+                if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                    oAuthAuthorizationServerOptions.AccessTokenFormat = new AccessTokenFormatJwt();
+                #endregion
+
+                // UseOAuthBearerTokensにOAuthAuthorizationServerOptionsを設定
+                app.UseOAuthBearerTokens(oAuthAuthorizationServerOptions);
 
                 #endregion
             }
