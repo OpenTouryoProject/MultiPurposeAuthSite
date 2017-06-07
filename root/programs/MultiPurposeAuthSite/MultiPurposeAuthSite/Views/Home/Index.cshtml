@@ -29,17 +29,6 @@
 @{
     ViewBag.Title = "Menu";
     Layout = "~/Views/Shared/_Layout.cshtml";
-
-    // Url
-    string oAuthAuthorizeEndpoint = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
-
-    // client_id
-    string client_id = OAuthProviderHelper.GetInstance().GetTestUsersClientId();
-    Session["client_id"] = client_id;
-
-    // nonce // 記号は入れない。
-    string state = GetPassword.Generate(10, 0);
-    Session["state"] = state;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -51,34 +40,6 @@
 <div class="col-md-8">
     <h4>@ViewBag.Message</h4>
     <hr />
-    <ul>
-        <li>サンプル
-            <ul>
-                <li>@Html.ActionLink("メニュー", "Index", "Home")</li>
-            </ul>
-        </li>
-    </ul>
-    <ul>
-        <li>Management Controller
-            <ul>
-                <li>@Html.ActionLink("UserAdmin-Index", "Index", "UsersAdmin")</li>
-                <li>@Html.ActionLink("RolesAdmin-Index", "Index", "RolesAdmin")</li>
-            </ul>
-        </li>
-@*@if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
-{*@
-        <li>Test OAuth Server
-            <ul>
-                <li>Resource Access Test(scope=profile email phone address userid aaa bbb)
-                    <ul>
-                        <li><a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=profile%20email%20phone%20address%20userid%20aaa%20bbb&state=@state">Authorization Codeグラント(client_id, response_type, scope, state)</a></li>
-                        <li><a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=profile%20email%20phone%20address%20userid%20aaa%20bbb&state=@state">Implicitグラント(client_id, response_type, scope, state)</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </li>
-@*}*@
-    </ul>
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

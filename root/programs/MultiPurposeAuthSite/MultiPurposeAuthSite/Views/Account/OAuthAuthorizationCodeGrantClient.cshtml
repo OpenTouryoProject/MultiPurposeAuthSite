@@ -54,12 +54,11 @@
 
     @*@Html.AntiForgeryToken()*@ @*テストのため*@
 
-    State:<br />
-    - @Html.Label("QS_State", (string)ViewBag.QS_State)<br />
-    - @Html.Label("SS_State", (string)ViewBag.SS_State)<br />
+    State : @Html.Label("QS_State", (string)ViewBag.QS_State)<br />
+    @*- @Html.Label("SS_State", (string)ViewBag.SS_State)<br />*@
 
-    Code:<br />   
-    @Html.Label("Code", Model.Code)<br />
+    Code: @Html.Label("Code", Model.Code)<br />
+
     Access Token(Jwt):<br />
     @Html.TextBoxFor(model => model.AccessTokenJWT, new { style = "width:100%;" })<br />
     Access Token(Json):<br />

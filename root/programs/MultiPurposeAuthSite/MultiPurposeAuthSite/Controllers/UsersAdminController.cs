@@ -169,7 +169,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (role.ParentId == "")
                 {
                     // グローバル・ロールは自分の持つロールだけ。
-                    if (adminUserRoles.Where(x => x == roleName).Count() == 0)
+                    if (!adminUserRoles.Where(x => x == roleName).Any())
                     {
                         throw new System.Exception(Resources.AdminController.Error);
                     }

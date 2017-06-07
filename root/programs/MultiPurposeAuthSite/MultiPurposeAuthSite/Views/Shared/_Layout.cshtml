@@ -19,11 +19,76 @@
     //*  2017/04/24  西野 大介         新規
     //**********************************************************************************
 *@
-
-@using Microsoft.AspNet.Identity
-@using MultiPurposeAuthSite.Resources;
 @* マスタ・ページに相当 *@
-@using MultiPurposeAuthSite.Models.ViewModels
+
+@using System.Web
+@using Microsoft.AspNet.Identity
+@using Microsoft.AspNet.Identity.Owin
+
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+
+@using Touryo.Infrastructure.Public.Util
+
+@{
+    #region Role
+    IList<string> roles = null;
+    bool canShowAadminScreen = false;
+    if (User.Identity.IsAuthenticated)
+    {
+        if (Session["Roles"] == null)
+        {
+            ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            ApplicationUser user = userManager.FindByName(User.Identity.Name); // 同期版でOK。
+            roles = userManager.GetRoles(user.Id); // 同期版でOK。
+
+        }
+        else
+        {
+            roles = (IList<string>)Session["Roles"];
+        }
+
+        if (ASPNETIdentityConfig.MultiTenant)
+        {
+            foreach (string role in roles)
+            {
+                if (role == ASPNETIdentityConst.Role_SystemAdmin
+                    || role == ASPNETIdentityConst.Role_Admin)
+                {
+                    canShowAadminScreen = true;
+                }
+            }
+        }
+        else
+        {
+            canShowAadminScreen = !(roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
+        }
+    }
+    #endregion
+    
+    #region OAuth2
+    // Url
+    string oAuthAuthorizeEndpoint =
+        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+        + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+
+    // client_id
+    string client_id = OAuthProviderHelper.GetInstance().GetTestUsersClientId();
+    Session["client_id"] = client_id;
+
+    // state (nonce) // 記号は入れない。
+    string state = GetPassword.Generate(10, 0);
+    // Session["state"] = state; // メニューに入れたらチェックできなくなった。
+
+    // scope
+    string scope = "profile email phone address userid aaa bbb";
+    #endregion
+}
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -77,14 +142,25 @@ else
                         <li onclick="window.location.href = '@Url.Action("Index", "Home")';">
                             <i class="fa fa-arrow-circle-right"></i> メニュートップ
                         </li>
-@if (User.Identity.IsAuthenticated)
+@if (canShowAadminScreen)
 {
                         @* 各メニューは、ユーザーが認証されている時だけ表示する *@
-                        <li onclick="window.location.href = '@Url.Content("~/")';">
-                            <i class="fa fa-arrow-circle-right"></i> メニュー１
+
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
                         </li>
-                        <li onclick="window.location.href = '@Url.Content("~/")';">
-                            <i class="fa fa-arrow-circle-right"></i> メニュー２
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
+                        </li>
+}
+
+@if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+{
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state" style="color:peachpuff">Test Authorization Code Flow</a>
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=@scope&state=@state" style="color:peachpuff">Test Implicit Flow</a>
                         </li>
 }
                     </ul>

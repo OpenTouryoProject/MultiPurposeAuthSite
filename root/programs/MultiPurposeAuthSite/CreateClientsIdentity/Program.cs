@@ -52,9 +52,19 @@ namespace CreateClientsIdentity
                 new Dictionary<string, string>()
                 {
                     {"client_secret", GetPassword.Base64UrlSecret(32)},
+                    { "redirect_uri_code", "self_code"},
+                    { "redirect_uri_token", "self_token"},
+                    { "client_name", "SelfClient"}
+                });
+
+            obj.Add(
+                Guid.NewGuid().ToString("N"),
+                new Dictionary<string, string>()
+                {
+                    {"client_secret", GetPassword.Base64UrlSecret(32)},
                     { "redirect_uri_code", "test_self_code"},
                     { "redirect_uri_token", "test_self_token"},
-                    { "client_name", "TestUser"}
+                    { "client_name", "TestClient"}
                 });
 
             for (int i = 0; i < 3; i++)

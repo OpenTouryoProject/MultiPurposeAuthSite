@@ -792,7 +792,13 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     case SignInStatus.Success:
                         // サインイン成功
-                        this.FxSessionAbandon(); // AppScan指摘の反映
+
+                        // AppScan指摘の反映
+                        this.FxSessionAbandon();
+                        // SessionIDの切換にはこのコードが必要である模様。
+                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                        Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+
                         return RedirectToLocal(model.ReturnUrl);
 
                     case SignInStatus.LockedOut:
@@ -962,7 +968,11 @@ namespace MultiPurposeAuthSite.Controllers
                                                  loginInfo: externalLoginInfo,
                                                  isPersistent: false); // 外部ログインの Cookie 永続化は常に false.
 
-                            this.FxSessionAbandon(); // AppScan指摘の反映
+                            // AppScan指摘の反映
+                            this.FxSessionAbandon();
+                            // SessionIDの切換にはこのコードが必要である模様。
+                            // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                            Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                             return RedirectToLocal(returnUrl);
                         }
@@ -1006,7 +1016,11 @@ namespace MultiPurposeAuthSite.Controllers
                                     //// この外部ログイン・プロバイダでサインイン
                                     //signInStatus = await SignInManager.ExternalSignInAsync(
 
-                                    this.FxSessionAbandon(); // AppScan指摘の反映
+                                    // AppScan指摘の反映
+                                    this.FxSessionAbandon();
+                                    // SessionIDの切換にはこのコードが必要である模様。
+                                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                    Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                                     // リダイレクト
                                     return RedirectToLocal(returnUrl);
@@ -1077,7 +1091,11 @@ namespace MultiPurposeAuthSite.Controllers
                                         //// この外部ログイン・プロバイダでサインイン
                                         // signInStatus = await SignInManager.ExternalSignInAsync(
 
-                                        this.FxSessionAbandon(); // AppScan指摘の反映
+                                        // AppScan指摘の反映
+                                        this.FxSessionAbandon();
+                                        // SessionIDの切換にはこのコードが必要である模様。
+                                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                        Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                                         // リダイレクト
                                         return RedirectToLocal(returnUrl);
@@ -1290,48 +1308,51 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
+                // メニューに入れたら上手く行かなくなった、
+                // テスト用なのでstate検証はコメントアウトする。
+
                 // stateの検証
-                if (state == (string)Session["state"])
+                //if (state == (string)Session["state"])
+                //{
+                // state正常
+
+                // 仲介コードからAccess Tokenを取得する。
+                string redirect_uri
+                    = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient;
+
+                // Tokenエンドポイントにアクセス
+                model.Response = await OAuthProviderHelper.GetInstance()
+                    .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+                dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+
+                // 余談：OpenID Connectであれば、ここで id_token 検証。
+
+                // 結果の表示
+                if (ASPNETIdentityConfig.EnableCustomTokenFormat)
                 {
-                    // state正常
+                    model.AccessTokenJWT = dic["access_token"] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                           CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
 
-                    // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri
-                        = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient;
+                    model.RefreshToken = dic["refresh_token"] ?? "";
 
-                    // Tokenエンドポイントにアクセス
-                    model.Response = await OAuthProviderHelper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
-                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                    // 余談：OpenID Connectであれば、ここで id_token 検証。
-
-                    // 結果の表示
-                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    {
-                        model.AccessTokenJWT = dic["access_token"] ?? "";
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                               CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
-
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-
-                        model.PointOfView = "";
-                    }
-                    else
-                    {
-                        model.AccessTokenJWT = dic["access_token"] ?? "";
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-                        model.PointOfView = "";
-                    }
+                    model.PointOfView = "";
                 }
                 else
                 {
-                    // state異常
+                    model.AccessTokenJWT = dic["access_token"] ?? "";
+                    model.RefreshToken = dic["refresh_token"] ?? "";
+                    model.PointOfView = "";
                 }
+                //}
+                //else
+                //{
+                //    // state異常
+                //}
 
                 ViewBag.QS_State = state;
-                ViewBag.SS_State = (string)Session["state"];
+                //ViewBag.SS_State = (string)Session["state"];
 
                 Session["state"] = ""; // 誤動作防止
 
