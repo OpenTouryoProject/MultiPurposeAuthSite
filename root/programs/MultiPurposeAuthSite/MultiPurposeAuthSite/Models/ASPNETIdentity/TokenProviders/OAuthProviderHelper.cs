@@ -335,7 +335,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         public string GetClientSecret(string client_id)
         {
             client_id = client_id ?? "";
-            return this.OauthClientsInfo[client_id]["client_secret"];
+
+            // 例外発生を防止
+            if (this.OauthClientsInfo.ContainsKey(client_id))
+            {
+                return this.OauthClientsInfo[client_id]["client_secret"];
+            }
+            else
+            {
+                return "";
+            }
         }
 
         /// <summary>client_idからclient_nameを取得する。</summary>
@@ -378,7 +387,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     = this.OauthClientsInfo[clientId];
 
                 string clientName = client["client_name"];
-                if (clientName.ToLower() == "TestUser".ToLower())
+                if (clientName.ToLower() == "TestClient".ToLower())
                 {
                     return clientId;
                 }
@@ -402,7 +411,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 string clientName = client["client_name"];
 
-                if (clientName.ToLower() == "TestUser".ToLower())
+                if (clientName.ToLower() == "TestClient".ToLower())
                 {
                     // TestUserの
 

@@ -993,7 +993,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// OAuthAuthorizationCodeGrantClientのEndpoint
+        /// OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
         /// </summary>
         public static string OAuthAuthorizationCodeGrantClient
         {
@@ -1004,7 +1004,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// OAuthImplicitGrantClientのEndpoint
+        /// OAuthImplicitGrantClientのEndpoint (Redirectエンドポイント)
         /// </summary>
         public static string OAuthImplicitGrantClient
         {
@@ -1014,6 +1014,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>
+        /// Redirectエンドポイントがロックダウンされているかどうか。
+        /// </summary>
+        public static bool IsLockedDownRedirectEndpoint
+        {
+            get
+            {
+                return
+                    Convert.ToBoolean(ConfigurationManager.AppSettings["IsLockedDownRedirectEndpoint"])
+                    || !ASPNETIdentityConfig.EquipOAuthServer; // IsLockedDownがfalseでもOAuthServerがfalseならtrueを返す.
+            }
+        }
+        
         #endregion
 
         #endregion

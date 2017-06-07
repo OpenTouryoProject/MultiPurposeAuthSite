@@ -176,7 +176,20 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             case SignInStatus.Success:
                                 // サインイン成功
-                                this.FxSessionAbandon(); // AppScan指摘の反映
+
+                                if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+                                {
+                                    // AppScan指摘の反映
+                                    this.FxSessionAbandon();
+                                    // SessionIDの切換にはこのコードが必要である模様。
+                                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                    Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                                }
+                                else
+                                {
+                                    // テスト段階ではテストに仕様が出るのでSessionクリアしない。
+                                }
+
                                 return RedirectToLocal(returnUrl);
 
                             case SignInStatus.LockedOut:
@@ -1257,73 +1270,80 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
         {
-            // Tokenエンドポイントにアクセス
-            Uri tokenEndpointUri = new Uri(
+            if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+            {
+                // Tokenエンドポイントにアクセス
+                Uri tokenEndpointUri = new Uri(
                 ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
                 + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
-            // 結果を格納する変数。
-            Dictionary<string, string> dic = null;
-            OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
-            {
-                Code = code
-            };
-
-            //  client_Idから、client_secretを取得。
-            string client_id = (string)Session["client_id"];
-            string client_secret = OAuthProviderHelper.GetInstance().GetClientSecret(client_id);
-
-            #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
-
-            // stateの検証
-            if (state == (string)Session["state"])
-            {
-                // state正常
-
-                // 仲介コードからAccess Tokenを取得する。
-                string redirect_uri
-                    = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient;
-
-                // Tokenエンドポイントにアクセス
-                model.Response = await OAuthProviderHelper.GetInstance()
-                    .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
-                dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                // 余談：OpenID Connectであれば、ここで id_token 検証。
-
-                // 結果の表示
-                if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                // 結果を格納する変数。
+                Dictionary<string, string> dic = null;
+                OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
                 {
-                    model.AccessTokenJWT = dic["access_token"] ?? "";
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                           CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+                    Code = code
+                };
 
-                    model.RefreshToken = dic["refresh_token"] ?? "";
+                //  client_Idから、client_secretを取得。
+                string client_id = (string)Session["client_id"];
+                string client_secret = OAuthProviderHelper.GetInstance().GetClientSecret(client_id);
 
-                    model.PointOfView = "";
+                #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
+
+                // stateの検証
+                if (state == (string)Session["state"])
+                {
+                    // state正常
+
+                    // 仲介コードからAccess Tokenを取得する。
+                    string redirect_uri
+                        = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient;
+
+                    // Tokenエンドポイントにアクセス
+                    model.Response = await OAuthProviderHelper.GetInstance()
+                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+
+                    // 余談：OpenID Connectであれば、ここで id_token 検証。
+
+                    // 結果の表示
+                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                    {
+                        model.AccessTokenJWT = dic["access_token"] ?? "";
+                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                               CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+
+                        model.RefreshToken = dic["refresh_token"] ?? "";
+
+                        model.PointOfView = "";
+                    }
+                    else
+                    {
+                        model.AccessTokenJWT = dic["access_token"] ?? "";
+                        model.RefreshToken = dic["refresh_token"] ?? "";
+                        model.PointOfView = "";
+                    }
                 }
                 else
                 {
-                    model.AccessTokenJWT = dic["access_token"] ?? "";
-                    model.RefreshToken = dic["refresh_token"] ?? "";
-                    model.PointOfView = "";
+                    // state異常
                 }
+
+                ViewBag.QS_State = state;
+                ViewBag.SS_State = (string)Session["state"];
+
+                Session["state"] = ""; // 誤動作防止
+
+                #endregion
+
+                // 画面の表示。
+                return View(model);
             }
             else
             {
-                // state異常
+                return View("Error");
             }
-
-            ViewBag.QS_State = state;
-            ViewBag.SS_State = (string)Session["state"];
-
-            Session["state"] = ""; // 誤動作防止
-
-            #endregion
-
-            // 画面の表示。
-            return View(model);
         }
 
         /// <summary>
@@ -1339,69 +1359,76 @@ namespace MultiPurposeAuthSite.Controllers
         // [ValidateAntiForgeryToken] // テストのため
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(OAuthAuthorizationCodeGrantClientViewModel model)
         {
-            // AccountVerifyCodeViewModelの検証
-            if (ModelState.IsValid)
+            if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
             {
-                // 結果を格納する変数。
-                Dictionary<string, string> dic = null;
-                
-                if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
+                // AccountVerifyCodeViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
+                    // 結果を格納する変数。
+                    Dictionary<string, string> dic = null;
 
-                    Uri tokenEndpointUri = new Uri(
-                        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                        + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
-
-                    // Tokenエンドポイントにアクセス
-                    model.Response = await OAuthProviderHelper.GetInstance()
-                        .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
-                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                    // 結果の表示
-                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
                     {
-                        model.AccessTokenJWT = dic["access_token"] ?? "";
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+                        #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
-                        model.RefreshToken = dic["refresh_token"] ?? "";
+                        Uri tokenEndpointUri = new Uri(
+                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
-                        model.PointOfView = "";
-                    }
-                    else
-                    {
-                        model.AccessTokenJWT = dic["access_token"] ?? "";
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-                        model.PointOfView = "";
-                    }
-
-                    #endregion
-                }
-                else
-                {
-                    #region Access Tokenを使用してResourceServerのWebAPIにアクセス
-
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
-                    {
-                        // WebAPIのエンドポイントにアクセス
-
-                        // Response
+                        // Tokenエンドポイントにアクセス
                         model.Response = await OAuthProviderHelper.GetInstance()
-                            .CallOAuthGetUserClaimsWebAPIAsync(model.AccessTokenJWT);
+                            .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
+                        dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+
+                        // 結果の表示
+                        if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                        {
+                            model.AccessTokenJWT = dic["access_token"] ?? "";
+                            model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                                CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+
+                            model.RefreshToken = dic["refresh_token"] ?? "";
+
+                            model.PointOfView = "";
+                        }
+                        else
+                        {
+                            model.AccessTokenJWT = dic["access_token"] ?? "";
+                            model.RefreshToken = dic["refresh_token"] ?? "";
+                            model.PointOfView = "";
+                        }
+
+                        #endregion
                     }
                     else
                     {
-                        // ・・・
+                        #region Access Tokenを使用してResourceServerのWebAPIにアクセス
+
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
+                        {
+                            // WebAPIのエンドポイントにアクセス
+
+                            // Response
+                            model.Response = await OAuthProviderHelper.GetInstance()
+                                .CallOAuthGetUserClaimsWebAPIAsync(model.AccessTokenJWT);
+                        }
+                        else
+                        {
+                            // ・・・
+                        }
+
+                        #endregion
                     }
-
-                    #endregion
                 }
-            }
 
-            // 画面の表示。
-            ModelState.Clear();
-            return View(model);
+                // 画面の表示。
+                ModelState.Clear();
+                return View(model);
+            }
+            else
+            {
+                return View("Error");
+            }
         }
 
         #endregion
@@ -1425,11 +1452,18 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult OAuthImplicitGrantClient()
         {
-            // ココでstateの検証を予定していたが、コメントヘッダに有るように、個々では実装できなかった。
-            // stateは、JWTにnonceClaimとして格納してあるため、必要であれば、UserAgent側で検証すると良い。
+            if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+            {
+                // ココでstateの検証を予定していたが、コメントヘッダに有るように、ココでは実装できなかった。
+                // stateは、JWTにnonce Claimとして格納してあるため、必要であれば、UserAgent側で検証できる。
 
-            // Access Token利用画面を返す。
-            return View();
+                // Access Token利用画面を返す。
+                return View();
+            }
+            else
+            {
+                return View("Error");
+            }
         }
 
         #endregion

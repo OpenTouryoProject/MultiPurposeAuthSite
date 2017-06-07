@@ -65,6 +65,8 @@
                 <li>@Html.ActionLink("RolesAdmin-Index", "Index", "RolesAdmin")</li>
             </ul>
         </li>
+@*@if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+{*@
         <li>Test OAuth Server
             <ul>
                 <li>Resource Access Test(scope=profile email phone address userid aaa bbb)
@@ -75,6 +77,7 @@
                 </li>
             </ul>
         </li>
+@*}*@
     </ul>
 </div>
 

@@ -121,8 +121,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         /// <summary>
         /// Authorization Code、Resource Owner Password Credentialsl、Client Credentialsグラント種別において、
-        /// OAuthBearerTokenEndpointPathを処理する場合に発生する、クライアント認証を行なうメソッド。
-        /// クライアント認証では、以下の両方の要素を検証する。
+        /// OAuthBearerTokenEndpointPathを処理する場合に発生する、" クライアント認証 " を行なうメソッド。
+        /// " クライアント認証 "では、以下の両方の要素を検証する。
         /// ・context.ClientId が、登録された "client_id" であること。
         /// ・その他、資格情報が要求に存在していることを検証する。
         /// </summary>
