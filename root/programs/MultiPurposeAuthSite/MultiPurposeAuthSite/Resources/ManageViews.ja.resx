@@ -309,4 +309,25 @@
   <data name="AddUnstructuredDataTitle" xml:space="preserve">
     <value>属性データの追加</value>
   </data>
+  <data name="AddOAuth2DataH4" xml:space="preserve">
+    <value>OAuth2データの追加フォーム</value>
+  </data>
+  <data name="AddOAuth2DataSubmit" xml:space="preserve">
+    <value>送信</value>
+  </data>
+  <data name="AddOAuth2DataTitle" xml:space="preserve">
+    <value>OAuth2データの追加</value>
+  </data>
+  <data name="IndexOAuth2Data" xml:space="preserve">
+    <value>OAuth2データ</value>
+  </data>
+  <data name="IndexOAuth2DataAddActionLink" xml:space="preserve">
+    <value>OAuth2データの設定</value>
+  </data>
+  <data name="IndexOAuth2DataChangeActionLink" xml:space="preserve">
+    <value>OAuth2データの変更</value>
+  </data>
+  <data name="IndexOAuth2DataRemoveButton" xml:space="preserve">
+    <value>OAuth2データの削除</value>
+  </data>
 </root>

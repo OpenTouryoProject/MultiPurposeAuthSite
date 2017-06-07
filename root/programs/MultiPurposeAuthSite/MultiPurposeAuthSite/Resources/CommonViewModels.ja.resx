@@ -117,6 +117,12 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="ClientID" xml:space="preserve">
+    <value>ClientID</value>
+  </data>
+  <data name="ClientSecret" xml:space="preserve">
+    <value>ClientSecret</value>
+  </data>
   <data name="ConfirmNewPassword" xml:space="preserve">
     <value>新しいパスワードの確認入力</value>
   </data>
@@ -146,6 +152,12 @@
   </data>
   <data name="PhoneNumber" xml:space="preserve">
     <value>電話番号</value>
+  </data>
+  <data name="RedirectUriCode" xml:space="preserve">
+    <value>RedirectUriCode</value>
+  </data>
+  <data name="RedirectUriToken" xml:space="preserve">
+    <value>RedirectUriToken</value>
   </data>
   <data name="RememberBrowser" xml:space="preserve">
     <value>ブラウザを記憶しますか？(2要素認証)</value>

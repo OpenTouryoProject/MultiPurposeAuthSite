@@ -340,6 +340,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public string ParentId { get; set; } = null;
 
         /// <summary>
+        /// ClientID
+        /// </summary>
+        /// <remarks>
+        /// OAuth2関連のClientID
+        /// </remarks>
+        public string ClientID { get; set; } = null;
+        
+        /// <summary>
         /// ユーザの支払元情報
         /// </summary>
         public string PaymentInformation { get; set; } = null;

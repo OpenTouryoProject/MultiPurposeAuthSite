@@ -88,6 +88,33 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Add OAuth2 data form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddOAuth2DataH4 {
+            get {
+                return ResourceManager.GetString("AddOAuth2DataH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Submit に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddOAuth2DataSubmit {
+            get {
+                return ResourceManager.GetString("AddOAuth2DataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddOAuth2DataTitle {
+            get {
+                return ResourceManager.GetString("AddOAuth2DataTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Add payment information に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentH4 {
@@ -318,6 +345,42 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexH4 {
             get {
                 return ResourceManager.GetString("IndexH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexOAuth2Data {
+            get {
+                return ResourceManager.GetString("IndexOAuth2Data", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add your OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexOAuth2DataAddActionLink {
+            get {
+                return ResourceManager.GetString("IndexOAuth2DataAddActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change your OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexOAuth2DataChangeActionLink {
+            get {
+                return ResourceManager.GetString("IndexOAuth2DataChangeActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove your OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexOAuth2DataRemoveButton {
+            get {
+                return ResourceManager.GetString("IndexOAuth2DataRemoveButton", resourceCulture);
             }
         }
         

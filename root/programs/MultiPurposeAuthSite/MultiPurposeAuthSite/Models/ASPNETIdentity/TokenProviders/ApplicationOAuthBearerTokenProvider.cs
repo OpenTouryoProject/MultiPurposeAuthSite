@@ -78,44 +78,49 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn385496.aspx"/>
         public override Task ValidateClientRedirectUri(OAuthValidateClientRedirectUriContext context)
         {
-            //// QueryStringに指定されたredirect_uriパラメタは、サポートしない。
-            //string redirect_uri = context.RedirectUri;
-
             // context.Validatedに事前登録したRedirectエンドポイントを指定して呼び出し、contextを検証完了に設定する。
             // ・ 検証完了にしなければ要求はそれ以上先には進まない。
             // ・ RFC上の記載で、RedirectEndpointのURIは、AbsoluteUriである必要があるとの記載あり。
-            // ・ 部分一致はセキュリティ上の問題があるため、完全一致のみサポートする。
+            //    ASP.NET IdentityのチェックでAbsoluteUriである必要があるとの記載あり形式でないと弾かれる。
 
-            // クライアント識別子に対応する事前登録したredirect_uriを取得する。
+            // response_type
             string response_type = context.Request.Query.Get("response_type");
-            string redirect_uri = OAuthProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
-            // redirect_uri の値をチェックする。
-            if (redirect_uri == "self_code")
+            // redirect_uri
+            string redirect_uri = context.RedirectUri;
+
+            if (string.IsNullOrEmpty(redirect_uri))
             {
-                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                context.Validated(
-                    ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
-            }
-            else if(redirect_uri == "test_self_code")
-            {
-                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                context.Validated(
-                    ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account);
-            }
-            else if (redirect_uri == "test_self_token")
-            {
-                // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
-                context.Validated(
-                    ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
+                // クライアント識別子に対応する事前登録したredirect_uriを取得する。
+                redirect_uri = OAuthProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+
+                if (redirect_uri == "test_self_code")
+                {
+                    // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
+                    context.Validated(
+                        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account);
+                }
+                else if (redirect_uri == "test_self_token")
+                {
+                    // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
+                    context.Validated(
+                        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
+                }
+                else
+                {
+                    // 事前登録した、redirect_uriをそのまま使用する。
+                    context.Validated(redirect_uri);
+                }
             }
             else
             {
-                // 事前登録した、redirect_uriをそのまま使用する。
-                context.Validated(redirect_uri);
+                // 指定されたUriを使用する場合チェックが必要
+                if (redirect_uri == (ASPNETIdentityConfig.OAuthClientEndpointsRootURI + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage))
+                {
+                    context.Validated(redirect_uri);
+                }
             }
 
             // 結果を返す。

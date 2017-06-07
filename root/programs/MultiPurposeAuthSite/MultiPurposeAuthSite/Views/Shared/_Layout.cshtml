@@ -35,6 +35,7 @@
 
 @{
     #region Role
+
     IList<string> roles = null;
     bool canShowAadminScreen = false;
     if (User.Identity.IsAuthenticated)
@@ -68,10 +69,12 @@
             canShowAadminScreen = !(roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
         }
     }
+
     #endregion
-    
+
     #region OAuth2
-    // Url
+
+    // 認可エンドポイント
     string oAuthAuthorizeEndpoint =
         ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
         + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
@@ -82,6 +85,7 @@
     string state = GetPassword.Generate(10, 0);
     // scope
     string scope = "profile email phone address userid aaa bbb";
+    
     #endregion
 }
 

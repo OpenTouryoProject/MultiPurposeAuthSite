@@ -61,6 +61,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   ClientID に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientID {
+            get {
+                return ResourceManager.GetString("ClientID", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   ClientSecret に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientSecret {
+            get {
+                return ResourceManager.GetString("ClientSecret", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Confirm new password に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ConfirmNewPassword {
@@ -147,6 +165,24 @@ namespace MultiPurposeAuthSite.Resources {
         public static string PhoneNumber {
             get {
                 return ResourceManager.GetString("PhoneNumber", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   RedirectUriCode に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RedirectUriCode {
+            get {
+                return ResourceManager.GetString("RedirectUriCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   RedirectUriToken に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RedirectUriToken {
+            get {
+                return ResourceManager.GetString("RedirectUriToken", resourceCulture);
             }
         }
         

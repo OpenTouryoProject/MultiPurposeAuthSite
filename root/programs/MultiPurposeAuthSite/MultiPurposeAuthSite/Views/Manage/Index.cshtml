@@ -21,6 +21,7 @@
 *@
 
 @using Touryo.Infrastructure.Public.Util
+@using Touryo.Infrastructure.Public.Str
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
@@ -32,14 +33,21 @@
     ViewBag.Title = ManageViews.IndexTitle;
 
     #region OAuth2
-    // Url
+
+    // 認可エンドポイント
     string oAuthAuthorizeEndpoint =
         ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
         + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
 
     // client_id
-    string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName("SelfClient");
+    string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName(User.Identity.Name);
     Session["client_id"] = client_id;
+
+    // redirect_uri
+    string redirect_uri = CustomEncode.UrlEncode2(
+        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
+    Session["redirect_uri"] = redirect_uri;
 
     // state (nonce) // 記号は入れない。
     string state = GetPassword.Generate(10, 0);
@@ -47,6 +55,7 @@
 
     // scope
     string scope = "profile email phone address userid aaa bbb";
+    
     #endregion
 }
 
@@ -263,12 +272,12 @@ else
                 @if (!Model.HasUnstructuredData)
                 {
                     <text>None</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataAddActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataAddActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
                 }
                 else
                 {
                     <text>XXXXXXXXXX</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataChangeActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataChangeActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
 
                     using (Html.BeginForm("RemoveUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
                     {
@@ -288,7 +297,25 @@ else
     // OAuth2データの変更が許可されている場合。
             <dt>EditOAuth2Data :</dt>
             <dd>
-                [ <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state" style="color:peachpuff">Get tokens</a> ]
+                @*"Add" and "Remove or Change"*@
+                @if (!Model.HasClientID)
+                {
+                    <text>None</text><br />
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataAddActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text>
+                }
+                else
+                {
+                    <text>XXXXXXXXXX</text><br />
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataChangeActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text><br />
+                    <text>[&nbsp;&nbsp;<a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&redirect_uri=@redirect_uri&scope=@scope&state=@state">Get tokens</a> ]</text><br />
+
+                    using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn-link" />]</text>
+                    }
+                }
+                
             </dd>
 }
 else

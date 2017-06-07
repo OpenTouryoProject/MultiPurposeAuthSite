@@ -31,8 +31,6 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.Util;
-
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -43,6 +41,14 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 
 using System.Web;
+
+using Microsoft.AspNet.Identity;
+using Microsoft.AspNet.Identity.Owin;
+
+using MultiPurposeAuthSite.Models.Util;
+using MultiPurposeAuthSite.Models.ViewModels;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 
 using Newtonsoft.Json;
 
@@ -339,15 +345,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         {
             client_id = client_id ?? "";
 
-            // 例外発生を防止
+            // *.config内を検索
             if (this.OauthClientsInfo.ContainsKey(client_id))
             {
                 return this.OauthClientsInfo[client_id]["client_secret"];
             }
-            else
-            {
-                return "";
-            }
+
+            // OAuth2Dataを検索
+            string OAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(OAuth2Data);
+
+            return model.ClientSecret;
         }
 
         /// <summary>client_idからclient_nameを取得する。</summary>
@@ -356,7 +364,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         public string GetClientName(string client_id)
         {
             client_id = client_id ?? "";
-            return this.OauthClientsInfo[client_id]["client_name"];
+
+            // *.config内を検索
+            if (this.OauthClientsInfo.ContainsKey(client_id))
+            {
+                return this.OauthClientsInfo[client_id]["client_name"];
+            }
+
+            return "";
         }
 
         /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
@@ -368,13 +383,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             client_id = client_id ?? "";
             response_type = response_type ?? "";
 
-            if (response_type.ToLower() == "code")
+            // *.config内を検索
+            if (this.OauthClientsInfo.ContainsKey(client_id))
             {
-                return this.OauthClientsInfo[client_id]["redirect_uri_code"];
-            }
-            else if (response_type.ToLower() == "token")
-            {
-                return this.OauthClientsInfo[client_id]["redirect_uri_token"];
+                if (response_type.ToLower() == "code")
+                {
+                    return this.OauthClientsInfo[client_id]["redirect_uri_code"];
+                }
+                else if (response_type.ToLower() == "token")
+                {
+                    return this.OauthClientsInfo[client_id]["redirect_uri_token"];
+                }
             }
 
             return "";
@@ -384,6 +403,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <returns>指定したclientNameのclientId</returns>
         public string GetClientIdByName(string clientName)
         {
+            // *.config内を検索
             foreach (string clientId in this.OauthClientsInfo.Keys)
             {
                 Dictionary<string, string> client
@@ -396,7 +416,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
             }
 
-            return "";
+            // UserStoreを検索
+            ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            ApplicationUser user = userManager.FindByName(clientName); // 同期版でOK。
+
+            return user.ClientID;
         }
 
         #endregion

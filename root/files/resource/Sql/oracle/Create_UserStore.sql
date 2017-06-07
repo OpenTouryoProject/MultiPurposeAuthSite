@@ -18,6 +18,7 @@ CREATE TABLE "Users"(
     "AccessFailedCount" NUMBER(10) NOT NULL,
     -- 追加の情報
     "ParentId" NVARCHAR2(38) NULL,          -- guid
+    "ClientID" NVARCHAR2(256) NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
     CONSTRAINT "PK.Users" PRIMARY KEY ("Id")
@@ -65,10 +66,17 @@ CREATE TABLE "RefreshTokenDictionary"(
     CONSTRAINT "PK.RefreshTokenDictionary" PRIMARY KEY ("Key")
 );
 
+CREATE TABLE "OAuth2Data"(
+    "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
+    "UnstructuredData" NVARCHAR2(2000) NULL, -- OAuth2 Unstructured Data
+    CONSTRAINT "PK.OAuth2Data" PRIMARY KEY ("ClientID")
+);
+
 -- INDEX
 --- UNIQUE INDEX
 ---- Users
 CREATE UNIQUE INDEX "UserNameIndex" ON "Users" ("UserName" ASC);
+CREATE UNIQUE INDEX "ClientIDIndex" ON "Users" ("ClientID" ASC);
 ---- Roles
 CREATE UNIQUE INDEX "RoleNameIndex" ON "Roles" ("Name" ASC);
 
@@ -90,3 +98,5 @@ ALTER TABLE "UserRoles" ADD CONSTRAINT "FK.UserRoles.Roles_RoleId" FOREIGN KEY("
 ALTER TABLE "UserLogins" ADD CONSTRAINT "FK.UserLogins.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- UserClaims
 ALTER TABLE "UserClaims" ADD CONSTRAINT "FK.UserClaims.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
+---- OAuth2Data
+ALTER TABLE "OAuth2Data" ADD CONSTRAINT "FK.OAuth2Data.Users_ClientID" FOREIGN KEY("ClientID") REFERENCES "Users" ("ClientID") ON DELETE CASCADE;

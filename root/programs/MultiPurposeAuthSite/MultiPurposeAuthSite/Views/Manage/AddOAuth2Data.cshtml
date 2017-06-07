@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：AddUnstructuredData
-    //* クラス日本語名  ：非構造化データの追加・編集用のView
+    //* クラス名        ：AddOAuth2Data
+    //* クラス日本語名  ：OAuth2関連の非構造化データの追加・編集用のView
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -16,16 +16,16 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2017/06/05  西野 大介         新規
+    //*  2017/06/07  西野 大介         新規
     //**********************************************************************************
 *@
 
 @using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.Models.ViewModels
 
-@model ManageAddUnstructuredDataViewModel
+@model ManageAddOAuth2DataViewModel
 @{
-    ViewBag.Title = ManageViews.AddUnstructuredDataTitle;
+    ViewBag.Title = ManageViews.AddOAuth2DataTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -35,27 +35,39 @@
 
 <h2>@ViewBag.Title</h2>
 
-@using (Html.BeginForm("AddUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+@using (Html.BeginForm("AddOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
 {
     @Html.AntiForgeryToken()
-    <h4>@ManageViews.AddUnstructuredDataH4</h4>
+    <h4>@ManageViews.AddOAuth2DataH4</h4>
     <hr />
     @Html.ValidationSummary("", new { @class = "text-danger" })
     <div class="form-group">
-        @Html.LabelFor(m => m.UnstructuredData1, new { @class = "col-md-2 control-label" })
+        @Html.LabelFor(m => m.ClientID, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
-            @Html.TextBoxFor(m => m.UnstructuredData1, new { @class = "form-control" })
+            @Html.TextBoxFor(m => m.ClientID, new { @class = "form-control" })
         </div>
     </div>
     <div class="form-group">
-        @Html.LabelFor(m => m.UnstructuredData2, new { @class = "col-md-2 control-label" })
+        @Html.LabelFor(m => m.ClientSecret, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
-            @Html.TextBoxFor(m => m.UnstructuredData2, new { @class = "form-control" })
+            @Html.TextBoxFor(m => m.ClientSecret, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.RedirectUriCode, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.RedirectUriCode, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.RedirectUriToken, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.RedirectUriToken, new { @class = "form-control" })
         </div>
     </div>
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
-            <input type="submit" class="btn btn-default" value="@ManageViews.AddUnstructuredDataSubmit" />
+            <input type="submit" class="btn btn-default" value="@ManageViews.AddOAuth2DataSubmit" />
         </div>
     </div>
 }

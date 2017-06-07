@@ -50,8 +50,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {
     /// <summary>
     /// RefreshTokenのProvider
-    /// TokenにSerializeTicket一時保存する。
-    /// （Cluster対応する場合、ストアを用意する必要がある）
+    /// SerializeTicket一時保存する。
     /// </summary>
     /// <remarks>c# - OWIN Security - How to Implement OAuth2 Refresh Tokens - Stack Overflow</remarks>
     /// <see cref="http://stackoverflow.com/questions/20637674/owin-security-how-to-implement-oauth2-refresh-tokens"/>
@@ -66,11 +65,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
         private static ConcurrentDictionary<string, AuthenticationTicket>
-            _refreshTokens = new ConcurrentDictionary<string, AuthenticationTicket>();
-
-        /// <summary>TicketSerializer</summary>
-        private TicketSerializer serializer = new TicketSerializer();
-
+            RefreshTokens = new ConcurrentDictionary<string, AuthenticationTicket>();
+        
         /// <summary>GetInstance</summary>
         /// <returns>RefreshTokenProvider</returns>
         public static RefreshTokenProvider GetInstance()
@@ -123,7 +119,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    _refreshTokens.TryAdd(token, refreshTokenTicket);
+                    RefreshTokenProvider.RefreshTokens.TryAdd(token, refreshTokenTicket);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -200,7 +196,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    if (_refreshTokens.TryRemove(context.Token, out ticket))
+                    if (RefreshTokenProvider.RefreshTokens.TryRemove(context.Token, out ticket))
                     {
                         context.SetTicket(ticket);
                     }

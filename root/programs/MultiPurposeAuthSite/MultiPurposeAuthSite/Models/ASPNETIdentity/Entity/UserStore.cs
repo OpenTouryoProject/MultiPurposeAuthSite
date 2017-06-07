@@ -328,12 +328,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    [Id], [UserName], [PasswordHash], " +
                                         "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], " +
-                                        "    [SecurityStamp], [TwoFactorEnabled], [ParentId], [PaymentInformation], [UnstructuredData])" +
+                                        "    [SecurityStamp], [TwoFactorEnabled], [ParentId], [ClientID], [PaymentInformation], [UnstructuredData])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, " +
-                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @PaymentInformation, @UnstructuredData)", user);
+                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @ClientID, @PaymentInformation, @UnstructuredData)", user);
 
                                     break;
 
@@ -344,12 +344,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", " +
-                                        "    \"SecurityStamp\", \"TwoFactorEnabled\", \"ParentId\", \"PaymentInformation\", \"UnstructuredData\")" +
+                                        "    \"SecurityStamp\", \"TwoFactorEnabled\", \"ParentId\", \"ClientID\", \"PaymentInformation\", \"UnstructuredData\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :PasswordHash, " +
                                         "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, " +
-                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :PaymentInformation, :UnstructuredData)",
+                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :ClientID, :PaymentInformation, :UnstructuredData)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -365,6 +365,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             SecurityStamp = user.SecurityStamp,
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
                                             ParentId = user.ParentId,
+                                            ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData
                                         });
@@ -749,6 +750,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             // 追加の属性
                             tgtUser.ParentId = user.ParentId;
+                            tgtUser.ClientID = user.ClientID;
                             tgtUser.PaymentInformation = user.PaymentInformation;
                             tgtUser.UnstructuredData = user.UnstructuredData;
 
@@ -774,7 +776,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             "    [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
                                             "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
                                             "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
-                                            "    [ParentId] = @ParentId, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData " +
+                                            "    [ParentId] = @ParentId, [ClientID] = @ClientID, " + 
+                                            "    [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData " +
                                             "WHERE [Id] = @Id", user);
 
                                         break;
@@ -788,7 +791,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             "    \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
                                             "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
                                             "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
-                                            "    \"ParentId\" = :ParentId, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData " +
+                                            "    \"ParentId\" = :ParentId, \"ClientID\" = :ClientID, " +
+                                            "    \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData " +
                                             "WHERE \"Id\" = :Id",
                                             new // 拡張メソッドで対策できる。
                                             {

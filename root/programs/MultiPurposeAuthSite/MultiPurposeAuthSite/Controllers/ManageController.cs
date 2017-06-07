@@ -202,10 +202,13 @@ namespace MultiPurposeAuthSite.Controllers
                 PhoneNumber = user.PhoneNumber,
                 // 2FA
                 TwoFactor = user.TwoFactorEnabled,
+                // 支払元情報
+                HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
                 // 非構造化データ
                 HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
-                // 支払元情報
-                HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation)
+                // ClientID
+                HasClientID = !string.IsNullOrEmpty(user.ClientID)
+                
             };
 
             // 管理画面の表示
@@ -1571,7 +1574,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 非構造化データの追加・編集画面（非構造化データ設定）
         /// POST: /Manage/AddUnstructuredData
         /// </summary>
-        /// <param name="model">ManageAddPaymentInformationViewModel</param>
+        /// <param name="model">ManageAddUnstructuredDataViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -1689,6 +1692,191 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region OAuth2 Data
+
+        #region Create
+
+        /// <summary>
+        ///  OAuth2関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddOAuth2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> AddOAuth2Data()
+        {
+            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                ManageAddOAuth2DataViewModel model = null;
+
+                if (string.IsNullOrEmpty(user.ClientID))
+                {  
+                    model = new ManageAddOAuth2DataViewModel();
+                    model.ClientID = "";
+                }
+                else
+                {
+                    string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+                    model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                    model.ClientID = user.ClientID;
+                }
+
+                return View(model);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// OAuth2関連の非構造化データの追加・編集画面（OAuth2関連の非構造化データ設定）
+        /// POST: /Manage/AddOAuth2Data
+        /// </summary>
+        /// <param name="model">ManageAddOAuth2DataViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddOAuth2Data(ManageAddOAuth2DataViewModel model)
+        {
+            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            {
+                // ManageAddOAuth2DataViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // ManageAddOAuth2DataViewModelの検証に成功
+
+                    // ユーザの検索
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                    if (user != null)
+                    {
+                        // ユーザを取得できた。
+                        string unstructuredData = JsonConvert.SerializeObject(model);
+
+                        if (user.ClientID == model.ClientID)
+                        {
+                            // ClientIDに変更がない場合、更新操作
+                            OAuth2DataProvider.GetInstance().UpdateOAuth2Data(user.ClientID, unstructuredData);
+
+                            // 再ログイン
+                            await this.ReSignInAsync();
+
+                            // Index - SetPasswordSuccess
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                        }
+                        else
+                        {
+                            // ClientIDに変更がある場合、ユーザーを保存してから、
+                            string temp = user.ClientID;
+                            user.ClientID = model.ClientID;
+                            IdentityResult result = await UserManager.UpdateAsync(user);
+                            
+                            // 結果の確認
+                            if (result.Succeeded)
+                            {
+                                // 成功
+
+                                // 追加操作（Memory Provider があるので del -> ins にする。）
+                                if(!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().DeleteOAuth2Data(temp);
+                                OAuth2DataProvider.GetInstance().CreateOAuth2Data(user.ClientID, unstructuredData);
+
+                                // 再ログイン
+                                await this.ReSignInAsync();
+
+                                // Index - SetPasswordSuccess
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                            }
+                            else
+                            {
+                                // 失敗
+                                AddErrors(result);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // ユーザを取得できなかった。
+                    }
+                }
+                else
+                {
+                    // ManageAddOAuth2DataViewModelの検証に失敗
+                }
+
+                // 再表示
+                return View(model);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// OAuth2関連の非構造化データの削除
+        /// POST: /Manage/RemoveOAuth2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveOAuth2Data()
+        {
+            if (ASPNETIdentityConfig.CanEditUnstructuredData)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                // OAuth2関連の非構造化データのクリア
+                OAuth2DataProvider.GetInstance().DeleteOAuth2Data(user.ClientID);
+
+                // ユーザーの保存
+                user.ClientID = "";
+                IdentityResult result = await UserManager.UpdateAsync(user);
+
+                // 結果の確認
+                if (result.Succeeded)
+                {
+                    // 支払元情報 削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync())
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
+                }
+                else
+                {
+                    // 非構造化データ 削除の失敗
+                }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
         #region Client (Redirectエンドポイント)
 
         #region Authorization Codeグラント種別
@@ -1710,8 +1898,8 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -1733,8 +1921,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 仲介コードからAccess Tokenを取得する。
                     string redirect_uri
-                    = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage;
+                        = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage;
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await OAuthProviderHelper.GetInstance()
