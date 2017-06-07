@@ -1303,7 +1303,7 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = (string)Session["client_id"];
+                string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName("TestClient");
                 string client_secret = OAuthProviderHelper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
@@ -1319,7 +1319,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // 仲介コードからAccess Tokenを取得する。
                 string redirect_uri
                     = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient;
+                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account;
 
                 // Tokenエンドポイントにアクセス
                 model.Response = await OAuthProviderHelper.GetInstance()
@@ -1331,19 +1331,16 @@ namespace MultiPurposeAuthSite.Controllers
                 // 結果の表示
                 if (ASPNETIdentityConfig.EnableCustomTokenFormat)
                 {
-                    model.AccessTokenJWT = dic["access_token"] ?? "";
+                    model.AccessToken = dic["access_token"] ?? "";
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                           CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                     model.RefreshToken = dic["refresh_token"] ?? "";
-
-                    model.PointOfView = "";
                 }
                 else
                 {
-                    model.AccessTokenJWT = dic["access_token"] ?? "";
+                    model.AccessToken = dic["access_token"] ?? "";
                     model.RefreshToken = dic["refresh_token"] ?? "";
-                    model.PointOfView = "";
                 }
                 //}
                 //else
@@ -1354,7 +1351,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ViewBag.QS_State = state;
                 //ViewBag.SS_State = (string)Session["state"];
 
-                Session["state"] = ""; // 誤動作防止
+                //Session["state"] = ""; // 誤動作防止
 
                 #endregion
 
@@ -1377,7 +1374,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [AllowAnonymous]
-        // [ValidateAntiForgeryToken] // テストのため
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(OAuthAuthorizationCodeGrantClientViewModel model)
         {
             if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
@@ -1404,19 +1401,16 @@ namespace MultiPurposeAuthSite.Controllers
                         // 結果の表示
                         if (ASPNETIdentityConfig.EnableCustomTokenFormat)
                         {
-                            model.AccessTokenJWT = dic["access_token"] ?? "";
+                            model.AccessToken = dic["access_token"] ?? "";
                             model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                                CustomEncode.FromBase64UrlString(model.AccessTokenJWT.Split('.')[1]), CustomEncode.UTF_8);
+                                CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                             model.RefreshToken = dic["refresh_token"] ?? "";
-
-                            model.PointOfView = "";
                         }
                         else
                         {
-                            model.AccessTokenJWT = dic["access_token"] ?? "";
+                            model.AccessToken = dic["access_token"] ?? "";
                             model.RefreshToken = dic["refresh_token"] ?? "";
-                            model.PointOfView = "";
                         }
 
                         #endregion
@@ -1431,7 +1425,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // Response
                             model.Response = await OAuthProviderHelper.GetInstance()
-                                .CallOAuthGetUserClaimsWebAPIAsync(model.AccessTokenJWT);
+                                .CallOAuthGetUserClaimsWebAPIAsync(model.AccessToken);
                         }
                         else
                         {

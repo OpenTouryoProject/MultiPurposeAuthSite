@@ -77,13 +77,9 @@
         + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
 
     // client_id
-    string client_id = OAuthProviderHelper.GetInstance().GetTestUsersClientId();
-    Session["client_id"] = client_id;
-
+    string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName("TestClient");
     // state (nonce) // 記号は入れない。
     string state = GetPassword.Generate(10, 0);
-    // Session["state"] = state; // メニューに入れたらチェックできなくなった。
-
     // scope
     string scope = "profile email phone address userid aaa bbb";
     #endregion

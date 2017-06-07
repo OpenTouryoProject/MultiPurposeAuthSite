@@ -324,11 +324,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         }
 
         #endregion
-        
+
         #endregion
 
         #region OAuthClients
-        
+
+        // 以下のOauthClientsInfoを使用しているメソッドは、
+        // OAuthClientsInformationがユーザ毎のDB値にまで拡張された後に修正する必要がある。
+
         /// <summary>client_idからclient_secretを取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_secret</returns>
@@ -377,60 +380,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             return "";
         }
 
-        /// <summary>TestUserのclientIdを取得</summary>
-        /// <returns>TestUserのclientId</returns>
-        public string GetTestUsersClientId()
+        /// <summary>clientNameからclientIdを取得</summary>
+        /// <returns>指定したclientNameのclientId</returns>
+        public string GetClientIdByName(string clientName)
         {
             foreach (string clientId in this.OauthClientsInfo.Keys)
             {
                 Dictionary<string, string> client
                     = this.OauthClientsInfo[clientId];
 
-                string clientName = client["client_name"];
-                if (clientName.ToLower() == "TestClient".ToLower())
+                string temp = client["client_name"];
+                if (temp.ToLower() == clientName.ToLower())
                 {
                     return clientId;
                 }
             }
 
             return "";
-        }
-
-        /// <summary>TestUsersのclientIdと指定したindexのindex値を取得</summary>
-        /// <param name="index">index</param>
-        /// <param name="clientId">clientId</param>
-        /// <param name="indexValue">index値</param>
-        /// <returns>bool</returns>
-        public bool GetTestUsersInfo(string index, out string clientId, out string indexValue)
-        {
-            clientId = "";
-            foreach (string _clientId in this.OauthClientsInfo.Keys)
-            {
-                Dictionary<string, string> client
-                    = this.OauthClientsInfo[_clientId];
-
-                string clientName = client["client_name"];
-
-                if (clientName.ToLower() == "TestClient".ToLower())
-                {
-                    // TestUserの
-
-                    // clientIdと
-                    clientId = _clientId;
-
-                    // 指定したindexのindex値を
-                    indexValue = client[index];
-
-                    // 取得
-                    return true;
-                }
-            }
-
-            // 値が存在しない場合。
-            clientId = "";
-            indexValue = "";
-
-            return false;
         }
 
         #endregion

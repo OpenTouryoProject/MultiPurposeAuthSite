@@ -31,12 +31,14 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using System;
 using Touryo.Infrastructure.Business.Util;
 using Touryo.Infrastructure.Framework.Util;
 
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
     /// <summary>BaseViewModel</summary>
+    [Serializable]
     public class BaseViewModel
     {
 

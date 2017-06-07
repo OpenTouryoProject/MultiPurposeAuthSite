@@ -20,13 +20,34 @@
     //**********************************************************************************
 *@
 
+@using Touryo.Infrastructure.Public.Util
+
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
 @using MultiPurposeAuthSite.Models.ASPNETIdentity;
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
 @model ManageIndexViewModel
 @{
     ViewBag.Title = ManageViews.IndexTitle;
+
+    #region OAuth2
+    // Url
+    string oAuthAuthorizeEndpoint =
+        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+        + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+
+    // client_id
+    string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName("SelfClient");
+    Session["client_id"] = client_id;
+
+    // state (nonce) // 記号は入れない。
+    string state = GetPassword.Generate(10, 0);
+    Session["state"] = state;
+
+    // scope
+    string scope = "profile email phone address userid aaa bbb";
+    #endregion
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -260,6 +281,19 @@ else
 else
 {
     // 非構造化データの変更が許可されていない場合。
+}
+
+@if (ASPNETIdentityConfig.CanEditOAuth2Data)
+{
+    // OAuth2データの変更が許可されている場合。
+            <dt>EditOAuth2Data :</dt>
+            <dd>
+                [ <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state" style="color:peachpuff">Get tokens</a> ]
+            </dd>
+}
+else
+{
+    // OAuth2データの変更が許可されていない場合。
 }
         </dl>
     </div>

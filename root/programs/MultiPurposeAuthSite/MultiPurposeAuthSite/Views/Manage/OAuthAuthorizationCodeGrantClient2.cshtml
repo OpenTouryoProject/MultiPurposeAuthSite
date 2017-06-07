@@ -22,10 +22,8 @@
     #endregion
 
     //**********************************************************************************
-    //* クラス名        ：OAuthAuthorizationCodeGrantClient
-    //* クラス日本語名  ：OAuthAuthorizationCodeGrantClient（テスト用）
-    //* ・この画面は、OAuth2のテスト用画面です。テストのためこの画面はbearer tokenを露見させます。本番環境にこの画面を提供しないで下さい。
-    //* ・This screen is the test screen of OAuth 2. This screen exposes bearer token for testing. Do not provide this screen for production environment.
+    //* クラス名        ：OAuthAuthorizationCodeGrantClient2
+    //* クラス日本語名  ：OAuthAuthorizationCodeGrantClient2
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -33,7 +31,7 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2017/04/24  西野 大介         新規
+    //*  2017/06/07  西野 大介         新規
     //**********************************************************************************
 *@
 
@@ -56,25 +54,11 @@
 
     @Html.AntiForgeryToken()
 
-    State : @Html.Label("QS_State", (string)ViewBag.QS_State)<br />
-    @*- @Html.Label("SS_State", (string)ViewBag.SS_State)<br />*@
-
-    Code: @Html.Label("Code", Model.Code)<br />
-
     Access Token @if (ASPNETIdentityConfig.EnableCustomTokenFormat) { <text>(JWT)</text> }:<br />
     @Html.TextBoxFor(model => model.AccessToken, new { style = "width:100%;" })<br />
-@if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-{
-    <text>Access Token (Json):<br /></text>
-    @Html.TextArea("AccessTokenJwtToJson", Model.AccessTokenJwtToJson, new { style = "resize: both; width:100%; height:200px;" })<br />
-}
     Refresh Token:<br />
     @Html.TextBoxFor(model => model.RefreshToken, new { style = "width:100%;" })<br />
     <input class="btn btn-block" type="submit" name="submit.Refresh" value="Refresh" />
-    <input class="btn btn-block" type="submit" name="submit.GetUserClaims" value="Get user claims" />
-    Response:<br />
-    @Html.TextArea("Response", Model.Response ?? "", new { style = "width:100%; height:200px;" })<br />
-    <br />
 @if (ASPNETIdentityConfig.EnableCustomTokenFormat)
 {
     <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />

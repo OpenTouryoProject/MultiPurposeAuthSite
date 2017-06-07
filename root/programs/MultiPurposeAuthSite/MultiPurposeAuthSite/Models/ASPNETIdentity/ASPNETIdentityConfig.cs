@@ -737,6 +737,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
+        /// CanEditOAuth2Data
+        /// </summary>
+        public static bool CanEditOAuth2Data
+        {
+            get
+            {
+                return 
+                    ASPNETIdentityConfig.EquipOAuthServer
+                    && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditOAuth2Data"]);
+            }
+        }
+
+        /// <summary>
         /// CanEditExtLogin
         /// </summary>
         public static bool CanEditExtLogin
@@ -962,6 +975,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>
+        /// ManageController.OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
+        /// </summary>
+        public static string OAuthAuthorizationCodeGrantClient_Manage
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthAuthorizationCodeGrantClient_Manage"];
+            }
+        }
+
         #endregion
 
         #endregion
@@ -993,24 +1017,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
+        /// AccountController.OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
         /// </summary>
-        public static string OAuthAuthorizationCodeGrantClient
+        public static string OAuthAuthorizationCodeGrantClient_Account
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthAuthorizationCodeGrantClient"];
+                return ConfigurationManager.AppSettings["OAuthAuthorizationCodeGrantClient_Account"];
             }
         }
 
         /// <summary>
-        /// OAuthImplicitGrantClientのEndpoint (Redirectエンドポイント)
+        /// AccountController.OAuthImplicitGrantClientのEndpoint (Redirectエンドポイント)
         /// </summary>
-        public static string OAuthImplicitGrantClient
+        public static string OAuthImplicitGrantClient_Account
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthImplicitGrantClient"];
+                return ConfigurationManager.AppSettings["OAuthImplicitGrantClient_Account"];
             }
         }
 

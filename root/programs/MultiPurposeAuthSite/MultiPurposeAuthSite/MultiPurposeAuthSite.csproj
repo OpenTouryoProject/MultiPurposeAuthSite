@@ -488,6 +488,7 @@
     <Content Include="Views\Manage\ChangeEmail.cshtml" />
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
+    <Content Include="Views\Manage\OAuthAuthorizationCodeGrantClient2.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

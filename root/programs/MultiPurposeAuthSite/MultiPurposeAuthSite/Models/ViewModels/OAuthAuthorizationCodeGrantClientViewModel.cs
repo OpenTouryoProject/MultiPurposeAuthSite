@@ -22,7 +22,7 @@
 
 //**********************************************************************************
 //* クラス名        ：OAuthAuthorizationCodeGrantClientViewModel
-//* クラス日本語名  ：Claimを返すための共通ViewModel（テスト用）
+//* クラス日本語名  ：Claimを返すための共通ViewModel
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -33,19 +33,21 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using System;
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
     /// <summary>OAuthAuthorizationCodeGrantClient画面のViewModel（ライブラリ）</summary>
+    [Serializable]
     public class OAuthAuthorizationCodeGrantClientViewModel : BaseViewModel
     {
         /// <summary>Code</summary>
         public string Code { get; set; }
 
-        /// <summary>AccessTokenJWT</summary>
-        public string AccessTokenJWT { get; set; }
+        /// <summary>AccessToken</summary>
+        public string AccessToken { get; set; }
 
         /// <summary>AccessTokenJwtToJson</summary>
         public string AccessTokenJwtToJson { get; set; }
@@ -55,8 +57,5 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>Response</summary>
         public string Response { get; set; }
-
-        /// <summary>PointOfView</summary>
-        public string PointOfView { get; set; }
     }
 }

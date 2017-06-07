@@ -91,19 +91,26 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             string redirect_uri = OAuthProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
             // redirect_uri の値をチェックする。
-            if (redirect_uri == "test_self_code")
+            if (redirect_uri == "self_code")
             {
                 // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
                 context.Validated(
                     ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient);
+                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
+            }
+            else if(redirect_uri == "test_self_code")
+            {
+                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
+                context.Validated(
+                    ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account);
             }
             else if (redirect_uri == "test_self_token")
             {
                 // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                 context.Validated(
                     ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthImplicitGrantClient);
+                    + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
             }
             else
             {
