@@ -1748,41 +1748,31 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageAddOAuth2DataViewModelの検証に成功
-
-                    // ユーザの検索
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                    if (user != null)
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.ClientID")))
                     {
-                        // ユーザを取得できた。
-                        string unstructuredData = JsonConvert.SerializeObject(model);
+                        ModelState.Clear();
+                        model.ClientID = Guid.NewGuid().ToString("N");
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.ClientSecret")))
+                    {
+                        ModelState.Clear();
+                        model.ClientSecret = GetPassword.Base64UrlSecret(32);
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Add")))
+                    {
+                        // ユーザの検索
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                        if (user.ClientID == model.ClientID)
+                        if (user != null)
                         {
-                            // ClientIDに変更がない場合、更新操作
-                            OAuth2DataProvider.GetInstance().UpdateOAuth2Data(user.ClientID, unstructuredData);
+                            // ユーザを取得できた。
+                            model.ClientName = user.UserName; // ClientNameはUser入力ではない。
+                            string unstructuredData = JsonConvert.SerializeObject(model);
 
-                            // 再ログイン
-                            await this.ReSignInAsync();
-
-                            // Index - SetPasswordSuccess
-                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
-                        }
-                        else
-                        {
-                            // ClientIDに変更がある場合、ユーザーを保存してから、
-                            string temp = user.ClientID;
-                            user.ClientID = model.ClientID;
-                            IdentityResult result = await UserManager.UpdateAsync(user);
-                            
-                            // 結果の確認
-                            if (result.Succeeded)
+                            if (user.ClientID == model.ClientID)
                             {
-                                // 成功
-
-                                // 追加操作（Memory Provider があるので del -> ins にする。）
-                                if(!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().DeleteOAuth2Data(temp);
-                                OAuth2DataProvider.GetInstance().CreateOAuth2Data(user.ClientID, unstructuredData);
+                                // ClientIDに変更がない場合、更新操作
+                                OAuth2DataProvider.GetInstance().UpdateOAuth2Data(user.ClientID, unstructuredData);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -1792,14 +1782,41 @@ namespace MultiPurposeAuthSite.Controllers
                             }
                             else
                             {
-                                // 失敗
-                                AddErrors(result);
+                                // ClientIDに変更がある場合、ユーザーを保存してから、
+                                string temp = user.ClientID;
+                                user.ClientID = model.ClientID;
+                                IdentityResult result = await UserManager.UpdateAsync(user);
+
+                                // 結果の確認
+                                if (result.Succeeded)
+                                {
+                                    // 成功
+
+                                    // 追加操作（Memory Provider があるので del -> ins にする。）
+                                    if (!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().DeleteOAuth2Data(temp);
+                                    OAuth2DataProvider.GetInstance().CreateOAuth2Data(user.ClientID, unstructuredData);
+
+                                    // 再ログイン
+                                    await this.ReSignInAsync();
+
+                                    // Index - SetPasswordSuccess
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                                }
+                                else
+                                {
+                                    // 失敗
+                                    AddErrors(result);
+                                }
                             }
+                        }
+                        else
+                        {
+                            // ユーザを取得できなかった。
                         }
                     }
                     else
                     {
-                        // ユーザを取得できなかった。
+                        // 不明なSubmit
                     }
                 }
                 else
@@ -1838,7 +1855,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // OAuth2関連の非構造化データのクリア
                 OAuth2DataProvider.GetInstance().DeleteOAuth2Data(user.ClientID);
 
-                // ユーザーの保存
+                // ユーザーの保存（ClientIDのクリア）
                 user.ClientID = "";
                 IdentityResult result = await UserManager.UpdateAsync(user);
 

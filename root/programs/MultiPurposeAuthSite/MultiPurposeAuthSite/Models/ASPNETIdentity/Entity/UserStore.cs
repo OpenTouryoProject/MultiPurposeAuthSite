@@ -809,6 +809,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                                 SecurityStamp = user.SecurityStamp,
                                                 TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
                                                 ParentId = user.ParentId,
+                                                ClientID = user.ClientID,
                                                 PaymentInformation = user.PaymentInformation,
                                                 UnstructuredData = user.UnstructuredData
                                             });

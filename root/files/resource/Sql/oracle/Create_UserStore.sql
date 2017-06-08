@@ -76,7 +76,8 @@ CREATE TABLE "OAuth2Data"(
 --- UNIQUE INDEX
 ---- Users
 CREATE UNIQUE INDEX "UserNameIndex" ON "Users" ("UserName" ASC);
-CREATE UNIQUE INDEX "ClientIDIndex" ON "Users" ("ClientID" ASC);
+--CREATE UNIQUE INDEX "ClientIDIndex" ON "Users" ("ClientID" ASC);
+ALTER TABLE "Users" ADD CONSTRAINT "ClientIDIndex" UNIQUE ("ClientID");
 ---- Roles
 CREATE UNIQUE INDEX "RoleNameIndex" ON "Roles" ("Name" ASC);
 

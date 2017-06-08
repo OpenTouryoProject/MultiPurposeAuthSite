@@ -160,7 +160,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    // *.configを参照してクライアント認証を行なう。
+                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
                     if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
                     {
                         // 検証完了
@@ -188,7 +188,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    // *.configを参照してクライアント認証を行なう。
+                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
                     if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
                     {
                         // 検証完了
@@ -209,7 +209,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    // *.configを参照してクライアント認証を行なう。
+                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
                     if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
                     {
                         // 検証完了

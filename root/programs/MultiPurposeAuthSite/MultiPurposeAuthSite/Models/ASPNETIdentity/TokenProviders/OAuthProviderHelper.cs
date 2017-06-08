@@ -338,7 +338,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         // 以下のOauthClientsInfoを使用しているメソッドは、
         // OAuthClientsInformationがユーザ毎のDB値にまで拡張された後に修正する必要がある。
 
-        /// <summary>client_idからclient_secretを取得する。</summary>
+        /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_secret</returns>
         public string GetClientSecret(string client_id)
@@ -361,6 +361,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <summary>client_idからclient_nameを取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_name</returns>
+        /// <remarks>
+        /// Client Credentialsグラント種別の場合に、
+        /// ・AccessTokenFormatJwt
+        /// ・OAuthResourceApiController
+        /// からclient_id（aud）に対応するsubを取得するために利用される。
+        /// </remarks>
         public string GetClientName(string client_id)
         {
             client_id = client_id ?? "";
@@ -371,13 +377,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 return this.OauthClientsInfo[client_id]["client_name"];
             }
 
-            return "";
+            // OAuth2Dataを検索
+            string OAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(OAuth2Data);
+
+            return model.ClientName;
         }
 
         /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
         /// <returns>redirect_uri</returns>
+        /// <remarks>
+        /// ApplicationOAuthBearerTokenProviderで、
+        /// redirect_uriが指定されていない場合、
+        /// client_idの既定のredirect_uriを取得する。
+        /// </remarks>
         public string GetClientsRedirectUri(string client_id, string response_type)
         {
             client_id = client_id ?? "";
@@ -394,6 +409,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 {
                     return this.OauthClientsInfo[client_id]["redirect_uri_token"];
                 }
+            }
+
+            // OAuth2Dataを検索
+            string OAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(OAuth2Data);
+
+            if (response_type.ToLower() == "code")
+            {
+                return model.RedirectUriCode;
+            }
+            else if (response_type.ToLower() == "token")
+            {
+                return model.RedirectUriToken;
             }
 
             return "";

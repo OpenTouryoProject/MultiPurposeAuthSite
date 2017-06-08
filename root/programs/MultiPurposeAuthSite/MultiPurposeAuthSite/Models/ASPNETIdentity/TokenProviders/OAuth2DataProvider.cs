@@ -126,7 +126,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         #endregion
 
         #region Get(Reference)
-
+        
         /// <summary>GetOAuth2Data</summary>
         /// <param name="clientID">string</param>
         public string GetOAuth2Data(string clientID)
@@ -174,7 +174,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             return unstructuredData;
         }
-
+        
         #endregion
 
         #region Update

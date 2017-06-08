@@ -46,5 +46,10 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Display(Name = "RedirectUriToken", ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_token")]
         public string RedirectUriToken { get; set; }
+
+        /// <summary>ClientName</summary>
+        [Display(Name = "ClientName", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "sub")]
+        public string ClientName { get; set; }
     }
 }

@@ -5,3 +5,4 @@ SELECT * FROM "UserLogins";
 SELECT * FROM "UserClaims";
 SELECT * FROM "AuthenticationCodeDictionary";
 SELECT * FROM "RefreshTokenDictionary";
+SELECT * FROM "OAuth2Data";

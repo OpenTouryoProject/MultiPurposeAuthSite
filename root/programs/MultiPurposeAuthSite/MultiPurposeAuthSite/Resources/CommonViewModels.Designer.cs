@@ -61,7 +61,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   ClientID に類似しているローカライズされた文字列を検索します。
+        ///   client_id に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientID {
             get {
@@ -70,7 +70,16 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   ClientSecret に類似しているローカライズされた文字列を検索します。
+        ///   Client name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientName {
+            get {
+                return ResourceManager.GetString("ClientName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   client_secret に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientSecret {
             get {
@@ -169,7 +178,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   RedirectUriCode に類似しているローカライズされた文字列を検索します。
+        ///   redirect_uri_code に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RedirectUriCode {
             get {
@@ -178,7 +187,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   RedirectUriToken に類似しているローカライズされた文字列を検索します。
+        ///   redirect_uri_token に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RedirectUriToken {
             get {
