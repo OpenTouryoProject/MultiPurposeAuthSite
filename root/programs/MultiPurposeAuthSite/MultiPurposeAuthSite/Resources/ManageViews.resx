@@ -192,6 +192,12 @@
   <data name="IndexChangePasswordActionLink" xml:space="preserve">
     <value>Change your password</value>
   </data>
+  <data name="IndexClientIDChangeButton" xml:space="preserve">
+    <value>Change your client_id data</value>
+  </data>
+  <data name="IndexClientSecretChangeButton" xml:space="preserve">
+    <value>Change your client_secret data</value>
+  </data>
   <data name="IndexEmail" xml:space="preserve">
     <value>E-mail</value>
   </data>
@@ -224,6 +230,9 @@
   </data>
   <data name="IndexOAuth2DataRemoveButton" xml:space="preserve">
     <value>Remove your OAuth2 data</value>
+  </data>
+  <data name="IndexOAuth2TokenGetButton" xml:space="preserve">
+    <value>Get your OAuth2 access token</value>
   </data>
   <data name="IndexPaymentButton" xml:space="preserve">
     <value>To charge</value>

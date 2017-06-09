@@ -286,6 +286,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Change your client_id data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexClientIDChangeButton {
+            get {
+                return ResourceManager.GetString("IndexClientIDChangeButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change your client_secret data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexClientSecretChangeButton {
+            get {
+                return ResourceManager.GetString("IndexClientSecretChangeButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   E-mail に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexEmail {
@@ -381,6 +399,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexOAuth2DataRemoveButton {
             get {
                 return ResourceManager.GetString("IndexOAuth2DataRemoveButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Get your OAuth2 access token に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexOAuth2TokenGetButton {
+            get {
+                return ResourceManager.GetString("IndexOAuth2TokenGetButton", resourceCulture);
             }
         }
         

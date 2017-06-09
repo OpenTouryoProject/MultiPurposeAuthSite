@@ -207,8 +207,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // 非構造化データ
                 HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                 // ClientID
-                HasClientID = !string.IsNullOrEmpty(user.ClientID)
-                
+                HasClientID = !string.IsNullOrEmpty(user.ClientID),
+                // Scopes
+                Scopes = ASPNETIdentityConst.StandardScopes
             };
 
             // 管理画面の表示
@@ -1697,7 +1698,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region Create
 
         /// <summary>
-        ///  OAuth2関連の非構造化データの追加・編集画面（初期表示）
+        /// OAuth2関連の非構造化データの追加・編集画面（初期表示）
         /// GET: /Manage/AddOAuth2Data
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
@@ -1836,6 +1837,58 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region Get token
+
+        /// <summary>
+        /// OAuth2アクセストークンの取得
+        /// POST: /Manage/GetOAuth2Token
+        /// </summary>
+        /// <param name="model">ManageIndexViewModel</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult GetOAuth2Token(ManageIndexViewModel model)
+        {
+            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            {
+                // OAuthAuthorizationCodeGrantClientViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // 認可エンドポイント
+                    string oAuthAuthorizeEndpoint =
+                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+
+                    // client_id
+                    string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    Session["client_id"] = client_id;
+
+                    // redirect_uri
+                    string redirect_uri = CustomEncode.UrlEncode2(
+                        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
+                    Session["redirect_uri"] = redirect_uri;
+
+                    // state (nonce) // 記号は入れない。
+                    string state = GetPassword.Generate(10, 0);
+                    Session["state"] = state;
+
+                    return Redirect(
+                        oAuthAuthorizeEndpoint +
+                        "?client_id=" + client_id +
+                        "&response_type=code" +
+                        "&redirect_uri=" + redirect_uri +
+                        "&scope=" + model.Scopes +
+                        "&state=" + state);
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
         #region Delete
 
         /// <summary>
@@ -1847,7 +1900,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveOAuth2Data()
         {
-            if (ASPNETIdentityConfig.CanEditUnstructuredData)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1989,12 +2042,19 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         public ActionResult OAuthAuthorizationCodeGrantClient2()
         {
-            // OAuthAuthorizationCodeGrantClientViewModelを取得。
-            OAuthAuthorizationCodeGrantClientViewModel model = null;
-            model = (OAuthAuthorizationCodeGrantClientViewModel)Session["OAuthAuthorizationCodeGrantClientViewModel"];
-            
-            // 画面の表示。
-            return View(model);
+            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            {
+                // OAuthAuthorizationCodeGrantClientViewModelを取得。
+                OAuthAuthorizationCodeGrantClientViewModel model = null;
+                model = (OAuthAuthorizationCodeGrantClientViewModel)Session["OAuthAuthorizationCodeGrantClientViewModel"];
+
+                // 画面の表示。
+                return View(model);
+            }
+            else
+            {
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -2011,7 +2071,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data)
             {
-                // AccountVerifyCodeViewModelの検証
+                // OAuthAuthorizationCodeGrantClientViewModelの検証
                 if (ModelState.IsValid)
                 {
                     // 結果を格納する変数。

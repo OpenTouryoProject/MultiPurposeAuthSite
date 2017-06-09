@@ -1177,12 +1177,45 @@ namespace MultiPurposeAuthSite.Controllers
             if (response_type.ToLower() == "code")
             {
                 // Authorization Codeグラント種別（仲介コードの発行）
-
+                string[] scopes = (scope ?? "").Split(' ');
                 ViewBag.Name = identity.Name;
-                ViewBag.Scopes = (scope ?? "").Split(' ');
+                ViewBag.Scopes = scopes;
 
-                // アクセス要求の許可/拒否を訪ねるViewを表示
-                return View();
+                if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))
+                {
+                    // 認可画面をスキップ
+
+                    // アクセス要求を保存して、仲介コードを発行する。
+                    identity = new ClaimsIdentity(identity.Claims, "Bearer", identity.NameClaimType, identity.RoleClaimType);
+                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+
+                    // ClaimsIdentityに、その他、所定のClaimを追加する
+                    // ただし、認可画面をスキップする場合は、scopeをフィルタする。
+                    List<string> temp = new List<string>();
+                    temp.Add(ASPNETIdentityConst.Scope_Auth);
+
+                    // フィルタ・コード
+                    foreach (string s in scopes)
+                    {
+                        if (s == ASPNETIdentityConst.Scope_Userid)
+                        {
+                            temp.Add(ASPNETIdentityConst.Scope_Userid);
+                        }
+                    }
+
+                    OAuthProviderHelper.AddClaim(identity, client_id, state, temp.ToArray());
+
+                    // ClaimsIdentityでサインインして、仲介コードを発行
+                    this.AuthenticationManager.SignIn(identity);
+
+                    // RedirectエンドポイントへRedirect
+                    return new EmptyResult();
+                }
+                else
+                {
+                    // アクセス要求の許可/拒否を訪ねるViewを表示
+                    return View();
+                }
             }
             else if (response_type.ToLower() == "token")
             {

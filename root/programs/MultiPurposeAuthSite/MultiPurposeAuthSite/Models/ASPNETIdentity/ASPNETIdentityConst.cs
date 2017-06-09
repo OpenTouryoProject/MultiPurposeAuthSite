@@ -60,10 +60,42 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         public static readonly string Claim_Issuer = "urn:oauth:issuer";
         /// <summary>audienceクレームのurn</summary>
         public static readonly string Claim_Audience = "urn:oauth:audience";
-        /// <summary>scopeクレームのurn</summary>
-        public static readonly string Claim_Scope = "urn:oauth:scope";
         /// <summary>nonceクレームのurn</summary>
         public static readonly string Claim_Nonce = "urn:oauth:nonce";
+
+        #region Scope
+
+        /// <summary>scopeクレームのurn</summary>
+        public static readonly string Claim_Scope = "urn:oauth:scope";
+
+        /// <summary>標準的なscope</summary>
+        public static readonly string StandardScopes =
+            Scope_Profile + " "
+            + Scope_Email + " "
+            + Scope_Phone + " "
+            + Scope_Address + " "
+            + Scope_Userid;
+            // + Scope_Userid; //authは他のscopeをフィルタするので。
+
+        #region id_token用のscope
+        /// <summary>profileを要求するscope</summary>
+        public const string Scope_Profile = "profile";
+        /// <summary>emailを要求するscope</summary>
+        public const string Scope_Email = "email";
+        /// <summary>phoneを要求するscope</summary>
+        public const string Scope_Phone = "phone";
+        /// <summary>addressを要求するscope</summary>
+        public const string Scope_Address = "address";
+        #endregion
+
+        #region カスタムのscope
+        /// <summary>useridを要求するscope</summary>
+        public const string Scope_Userid = "userid";
+        /// <summary>認証を要求するscope</summary>
+        public const string Scope_Auth = "auth";
+        #endregion
+
+        #endregion
         
         #endregion
     }

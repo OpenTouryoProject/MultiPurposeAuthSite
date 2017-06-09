@@ -330,4 +330,13 @@
   <data name="IndexOAuth2DataRemoveButton" xml:space="preserve">
     <value>OAuth2データの削除</value>
   </data>
+  <data name="IndexClientIDChangeButton" xml:space="preserve">
+    <value>client_idの変更</value>
+  </data>
+  <data name="IndexClientSecretChangeButton" xml:space="preserve">
+    <value>client_secretの変更</value>
+  </data>
+  <data name="IndexOAuth2TokenGetButton" xml:space="preserve">
+    <value>OAuth2アクセス トークンの取得</value>
+  </data>
 </root>

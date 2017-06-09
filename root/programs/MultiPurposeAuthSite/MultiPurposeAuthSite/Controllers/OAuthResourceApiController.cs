@@ -136,24 +136,24 @@ namespace MultiPurposeAuthSite.Controllers
                 switch (scope.Value.ToLower())
                 {
                     #region OpenID Connect
-                    case "profile":
+                    case ASPNETIdentityConst.Scope_Profile:
                         // ・・・
                         break;
-                    case "email":
+                    case ASPNETIdentityConst.Scope_Email:
                         userinfoClaimSet.Add("email", user.Email);
                         userinfoClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
                         break;
-                    case "phone":
+                    case ASPNETIdentityConst.Scope_Phone:
                         userinfoClaimSet.Add("phone_number", user.PhoneNumber);
                         userinfoClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
                         break;
-                    case "address":
+                    case ASPNETIdentityConst.Scope_Address:
                         // ・・・
                         break;
                     #endregion
 
                     #region Else
-                    case "userid":
+                    case ASPNETIdentityConst.Scope_Userid:
                         userinfoClaimSet.Add("userid", user.Id);
                         break;
                     #endregion

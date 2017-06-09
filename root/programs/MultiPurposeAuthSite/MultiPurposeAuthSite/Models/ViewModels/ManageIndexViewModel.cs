@@ -53,5 +53,8 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>HasClientID</summary>
         public bool HasClientID { get; set; }
+
+        /// <summary>Scopes</summary>
+        public string Scopes { get; set; }
     }
 }

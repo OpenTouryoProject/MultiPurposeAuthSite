@@ -31,32 +31,6 @@
 @model ManageIndexViewModel
 @{
     ViewBag.Title = ManageViews.IndexTitle;
-
-    #region OAuth2
-
-    // 認可エンドポイント
-    string oAuthAuthorizeEndpoint =
-        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-        + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
-
-    // client_id
-    string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName(User.Identity.Name);
-    Session["client_id"] = client_id;
-
-    // redirect_uri
-    string redirect_uri = CustomEncode.UrlEncode2(
-        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
-    Session["redirect_uri"] = redirect_uri;
-
-    // state (nonce) // 記号は入れない。
-    string state = GetPassword.Generate(10, 0);
-    Session["state"] = state;
-
-    // scope
-    string scope = "profile email phone address userid aaa bbb";
-    
-    #endregion
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -307,16 +281,19 @@ else
                 {
                     <text>XXXXXXXXXX</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataChangeActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text><br />
-                    <text>[&nbsp;&nbsp;<a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&redirect_uri=@redirect_uri&scope=@scope&state=@state">Get tokens</a> ]</text><br />
-
+                    using (Html.BeginForm("GetOAuth2Token", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
+                        <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn-link" />]</text>
+                    }
                     using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
                     {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn-link" />]</text>
                     }
                 }
-                
-            </dd>
+</dd>
 }
 else
 {

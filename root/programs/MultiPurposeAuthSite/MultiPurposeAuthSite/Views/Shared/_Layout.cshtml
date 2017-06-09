@@ -84,7 +84,7 @@
     // state (nonce) // 記号は入れない。
     string state = GetPassword.Generate(10, 0);
     // scope
-    string scope = "profile email phone address userid aaa bbb";
+    string scope = ASPNETIdentityConst.StandardScopes;
     
     #endregion
 }

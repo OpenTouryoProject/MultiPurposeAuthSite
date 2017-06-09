@@ -123,24 +123,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 switch (scope.ToLower())
                 {
                     #region OpenID Connect
-                    case "profile":
+                    case ASPNETIdentityConst.Scope_Profile:
                         // ・・・
                         break;
-                    case "email":
+                    case ASPNETIdentityConst.Scope_Email:
                         authTokenClaimSet.Add("email", user.Email);
                         authTokenClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
                         break;
-                    case "phone":
+                    case ASPNETIdentityConst.Scope_Phone:
                         authTokenClaimSet.Add("phone_number", user.PhoneNumber);
                         authTokenClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
                         break;
-                    case "address":
+                    case ASPNETIdentityConst.Scope_Address:
                         // ・・・
                         break;
                     #endregion
 
                     #region Else
-                    case "userid":
+                    case ASPNETIdentityConst.Scope_Userid:
                         authTokenClaimSet.Add("userid", user.Id);
                         break;
                     #endregion
