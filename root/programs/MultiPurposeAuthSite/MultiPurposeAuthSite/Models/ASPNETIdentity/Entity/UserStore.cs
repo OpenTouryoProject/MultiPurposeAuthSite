@@ -451,7 +451,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return
             return;
         }
 
@@ -533,7 +532,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return (ユーザ)
             return user;
         }
 
@@ -612,7 +610,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return (ユーザ)
             return user;
         }
 
@@ -1212,7 +1209,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            // return
             return;
         }
 
@@ -1239,7 +1235,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // ユーザがパスワードを持っているか
 
-            // return (パスワードの有無)
             return Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
         }
 
@@ -1260,7 +1255,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // ユーザーにハッシュ化されたパスワードを設定
             user.PasswordHash = passwordHash;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -1279,7 +1273,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // ユーザのパスワードのハッシュを取得
 
-            // return (パスワードのハッシュ)
             return Task.FromResult(user.PasswordHash);
         }
 
@@ -1361,7 +1354,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return (user)
             return user;
         }
 
@@ -1382,7 +1374,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // メアドの設定
             user.Email = email;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -1401,7 +1392,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // メアドの取得
 
-            // return (Email)
             return Task.FromResult(user.Email);
         }
 
@@ -1422,7 +1412,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // メアド確認の設定
             user.EmailConfirmed = confirmed;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -1441,7 +1430,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // メアド確認の取得
 
-            // return (EmailConfirmed)
             return Task.FromResult(user.EmailConfirmed);
         }
 
@@ -1466,7 +1454,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // 電話番号の設定
             user.PhoneNumber = phoneNumber;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -1485,7 +1472,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // 電話番号の取得
 
-            // return (PhoneNumber)
             return Task.FromResult(user.PhoneNumber);
         }
 
@@ -1506,7 +1492,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // 電話番号確認の設定
             user.PhoneNumberConfirmed = confirmed;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -1525,7 +1510,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // 電話番号確認の取得
 
-            // return (PhoneNumberConfirmed)
             return Task.FromResult(user.PhoneNumberConfirmed);
         }
 
@@ -1843,7 +1827,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            // return
             return;
         }
 
@@ -1872,7 +1855,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // セキュリティスタンプを設定
             user.SecurityStamp = stamp;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -1891,7 +1873,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // セキュリティスタンプを取得
 
-            // return (SecurityStamp)
             return Task.FromResult(user.SecurityStamp);
         }
 
@@ -1916,7 +1897,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // ユーザがロックアウト可能かどうかを設定
             user.LockoutEnabled = enabled;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -1935,7 +1915,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // ユーザがロックアウト可能かどうかを取得
 
-            // ユーザがロックアウト可能かどうかを返す。
             return Task.FromResult(user.LockoutEnabled);
         }
 
@@ -1955,7 +1934,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // サインインに失敗した試行回数を記録
             user.AccessFailedCount++;
 
-            // return (サインインに失敗した試行回数)
             return Task.FromResult(user.AccessFailedCount);
         }
 
@@ -1975,7 +1953,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // 失敗したサインインの試行回数を取得
 
-            // 失敗したサインインの試行回数を返す。
             return Task.FromResult(user.AccessFailedCount);
         }
 
@@ -1998,7 +1975,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // 失敗したサインインの試行回数をリセット
             user.AccessFailedCount = 0;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -2028,7 +2004,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // https://msdn.microsoft.com/ja-jp/library/bb546101.aspx
             user.LockoutEndDateUtc = lockoutEnd.DateTime;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -2087,7 +2062,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // 2FAの有効・無効を設定
             user.TwoFactorEnabled = enabled;
 
-            // return
             return Task.FromResult(default(object));
         }
 
@@ -2106,7 +2080,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // 2FAの有効・無効を取得
 
-            // return (2FAが有効かどうか)
             return Task.FromResult(user.TwoFactorEnabled);
         }
 
@@ -2183,7 +2156,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return
             return;
         }
 
@@ -2553,7 +2525,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            // return
             return;
         }
 
@@ -2673,7 +2644,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            // return
             return;
         }
 
@@ -2751,7 +2721,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return
             return;
         }
 
@@ -2874,7 +2843,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // ユーザの外部ログイン一覧を取得
 
-            // return (Logins)
             return Task.FromResult(user.Logins);
         }
 
@@ -2949,7 +2917,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return
             return;
         }
 
@@ -3023,7 +2990,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return
             return;
         }
 
@@ -3042,7 +3008,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             // ユーザの（外部ログインの）クレーム一覧を取得
 
-            // return (クレーム一覧)
             return Task.FromResult(user.Claims);
         }
 
@@ -3110,7 +3075,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            // return
             return;
         }
 

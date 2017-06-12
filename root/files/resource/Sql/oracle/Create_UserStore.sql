@@ -18,7 +18,7 @@ CREATE TABLE "Users"(
     "AccessFailedCount" NUMBER(10) NOT NULL,
     -- 追加の情報
     "ParentId" NVARCHAR2(38) NULL,          -- guid
-    "ClientID" NVARCHAR2(256) NULL,
+    "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
     CONSTRAINT "PK.Users" PRIMARY KEY ("Id")

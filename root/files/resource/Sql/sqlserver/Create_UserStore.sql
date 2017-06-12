@@ -26,7 +26,7 @@ CREATE TABLE [Users](
     [AccessFailedCount] [int] NOT NULL,
     -- 追加の情報
     [ParentId] [nvarchar](38) NULL,          -- guid
-    [ClientID] [nvarchar](256) NULL,
+    [ClientID] [nvarchar](256) NOT NULL,
     [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
     CONSTRAINT [PK.Users] PRIMARY KEY CLUSTERED ([Id] ASC)

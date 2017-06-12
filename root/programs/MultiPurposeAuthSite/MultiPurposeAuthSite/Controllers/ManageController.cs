@@ -1712,16 +1712,17 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddOAuth2DataViewModel model = null;
 
-                if (string.IsNullOrEmpty(user.ClientID))
-                {  
-                    model = new ManageAddOAuth2DataViewModel();
-                    model.ClientID = "";
+                string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+
+                if (!string.IsNullOrEmpty(oAuth2Data))
+                {
+                    model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                    model.ClientID = user.ClientID;
                 }
                 else
                 {
-                    string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
-                    model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
-                    model.ClientID = user.ClientID;
+                    model = new ManageAddOAuth2DataViewModel();
+                    model.ClientID = "";
                 }
 
                 return View(model);
