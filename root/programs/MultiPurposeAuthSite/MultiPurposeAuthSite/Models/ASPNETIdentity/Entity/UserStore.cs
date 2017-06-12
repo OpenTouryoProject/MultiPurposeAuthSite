@@ -100,29 +100,81 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #region Utility
 
-        /// <summary>MyDebugWriteLine</summary>
+        /// <summary>MyDebugTrace</summary>
         /// <param name="log">string</param>
-        private static void MyDebugWriteLine(string log)
+        private static void MyDebugTrace(string log)
         {
             // UserStoreのトレース情報をデバッグ時にログ出力
-            if (ASPNETIdentityConfig.IsDebug) Debug.WriteLine(log);
+            if (ASPNETIdentityConfig.IsDebug)
+            {
+                // デバッグ時
+                Debug.WriteLine(log);
+            }
+            else
+            {
+                // 本番時
+            }
         }
 
-        /// <summary>MyDebugWriteLine</summary>
+        /// <summary>MyDebugLogForEx</summary>
         /// <param name="log">string</param>
-        private static void MyDebugWriteLineForEx(Exception ex)
+        private static void MyDebugLogForEx(Exception ex)
         {
             // UserStoreのデータアクセス・エラーは以下に出力。
             if (ASPNETIdentityConfig.IsDebug)
             {
             	// デバッグ時
                 Debug.WriteLine(ex.ToString());
+                LogIF.DebugLog("ACCESS", ex.ToString());
             }
             else
             {
             	// 本番時
-                LogIF.DebugLog("OPERATION", ex.ToString());
+                LogIF.DebugLog("ACCESS", ex.ToString());
             }
+        }
+
+        /// <summary>MyOperationTrace</summary>
+        /// <param name="log">string</param>
+        private static void MyOperationTrace(string log)
+        {
+            // UserStoreのトレース情報をデバッグ時にログ出力
+            if (ASPNETIdentityConfig.IsDebug)
+            {
+                // デバッグ時
+                Debug.WriteLine(log);
+                LogIF.DebugLog("OPERATION", log);
+
+            }
+            else
+            {
+                // 本番時
+                LogIF.DebugLog("OPERATION", log);
+            }
+        }
+
+        /// <summary>GetParametersString</summary>
+        /// <param name="parameters">string[]</param>
+        /// <returns>Parameters string</returns>
+        private static string GetParametersString(ParameterInfo[] parameters)
+        {
+            string s = "";
+
+            if (ASPNETIdentityConfig.IsDebug)
+            {
+                s += "(";
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    s += parameters[i].Name + ", ";
+                }
+                if (s.Length >= 2)
+                {
+                    s = s.Substring(0, s.Length - 2);
+                }
+                s += ")";
+            }
+
+            return s;
         }
 
         #region Memory Provider
@@ -153,10 +205,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         /// <summary>DBMSの初期化確認メソッド</summary>
         /// <returns>bool</returns>
-        public static bool IsDBMSInitialized()
+        public async static Task<bool> IsDBMSInitialized()
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName + 
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -170,13 +225,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     {
                         case EnumUserStoreType.SqlServer:
 
-                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM [Roles]");
+                            count = await cnn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM [Roles]");
 
                             break;
 
                         case EnumUserStoreType.OracleMD:
 
-                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"Roles\"");
+                            count = await cnn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM \"Roles\"");
 
                             break;
 
@@ -191,7 +246,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             return false;
@@ -202,10 +257,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         #region データ アクセス
 
         /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims ）</summary>
-        private void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
+        private async void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -218,7 +276,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     case EnumUserStoreType.SqlServer:
 
                         // Roles
-                        roles = cnn.Query<ApplicationRole>(
+                        roles = await cnn.QueryAsync<ApplicationRole>(
                         "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
                         "FROM   [UserRoles], [Roles] " +
                         "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
@@ -226,13 +284,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         user.Roles = roles.ToList();
 
                         // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
+                        userLogins = await cnn.QueryAsync<UserLoginInfo>(
                             "SELECT [LoginProvider], [ProviderKey] " +
                             "FROM   [UserLogins] WHERE [UserId] = @userId", new { userId = user.Id });
                         user.Logins = userLogins.ToList();
 
                         // Claims
-                        claims = cnn.Query(
+                        claims = await cnn.QueryAsync(
                             "SELECT [Issuer], [ClaimType], [ClaimValue] " +
                             "FROM   [UserClaims] WHERE [UserId] = @userId", new { userId = user.Id });
                         user.Claims = new List<Claim>();
@@ -242,7 +300,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     case EnumUserStoreType.OracleMD:
 
                         // Roles
-                        roles = cnn.Query<ApplicationRole>(
+                        roles = await cnn.QueryAsync<ApplicationRole>(
                         "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
                         "FROM   \"UserRoles\", \"Roles\" " +
                         "WHERE  \"UserRoles\".\"RoleId\" = \"Roles\".\"Id\" " +
@@ -250,13 +308,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         user.Roles = roles.ToList();
 
                         // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
+                        userLogins = await cnn.QueryAsync<UserLoginInfo>(
                             "SELECT \"LoginProvider\", \"ProviderKey\" " +
                             "FROM   \"UserLogins\" WHERE \"UserId\" = :userId", new { userId = user.Id });
                         user.Logins = userLogins.ToList();
 
                         // Claims
-                        claims = cnn.Query(
+                        claims = await cnn.QueryAsync(
                             "SELECT \"Issuer\", \"ClaimType\", \"ClaimValue\" " +
                             "FROM   \"UserClaims\" WHERE \"UserId\" = :userId", new { userId = user.Id });
                         user.Claims = new List<Claim>();
@@ -276,7 +334,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
         }
 
@@ -295,10 +353,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>新規ユーザーの追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>－</returns>
-        public Task CreateAsync(ApplicationUser user)
+        public async Task CreateAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -323,7 +384,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO [Users] ( " +
                                         "    [Id], [UserName], [PasswordHash], " +
                                         "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
@@ -339,7 +400,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
                                     
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO \"Users\" ( " +
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
@@ -387,11 +448,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -401,10 +462,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
         /// <returns>ApplicationUser</returns>
-        public Task<ApplicationUser> FindByIdAsync(string userId)
+        public async Task<ApplicationUser> FindByIdAsync(string userId)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationUser user = null;
 
@@ -434,14 +498,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * FROM [Users] WHERE [Id] = @userId", new { userId = userId });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * FROM \"Users\" WHERE \"Id\" = :userId", new { userId = userId });
 
                                     break;
@@ -466,20 +530,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return (ユーザ)
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public Task<ApplicationUser> FindByNameAsync(string userName)
+        public async Task<ApplicationUser> FindByNameAsync(string userName)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationUser user = null;
 
@@ -509,14 +576,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
 
                                     break;
@@ -542,11 +609,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return (ユーザ)
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
@@ -559,7 +626,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             get
             {
                 // Debug
-                UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+                UserStore.MyDebugTrace("★ : " + 
+                    MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                    "." + MethodBase.GetCurrentMethod().Name +
+                    UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
                 IEnumerable<ApplicationUser> users = null;
 
@@ -693,7 +763,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugWriteLineForEx(ex);
+                    UserStore.MyDebugLogForEx(ex);
                 }
 
                 // IQueryableとして戻す。
@@ -711,7 +781,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public async Task UpdateAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -769,7 +842,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        cnn.Execute(
+                                        await cnn.ExecuteAsync(
                                             "UPDATE [Users] " +
                                             "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
                                             "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, " +
@@ -784,7 +857,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.OracleMD:
 
-                                        cnn.Execute(
+                                        await cnn.ExecuteAsync(
                                             "UPDATE \"Users\" " +
                                             "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
                                             "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, " +
@@ -836,7 +909,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             return;
@@ -850,7 +923,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         private async Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -949,38 +1025,94 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             }
                         }
 
-                        //using (IDbConnection cnn = DataAccess.CreateConnection())
+                        // 原子性に問題があるのでやはり修正する。
+
+                        //foreach (string roleName in toRmvRolesName)
                         //{
-                        //    cnn.Open();
-
-                        foreach (string roleName in toRmvRolesName)
-                        {
-                            //cnn.Execute(
-                            //    "DELETE FROM [UserRoles] WHERE [UserId] = @UserId AND [RoleId] = @RoleId",
-                            //    new { UserId = user.Id, RoleId = roleId });
-
-                            // 効率悪いが品質的に、this.RemoveFromRoleAsyncを使用する。
-                            await this.RemoveFromRoleAsync(user, roleName);
-                        }
-
-                        foreach (string roleName in toAddRolesName)
-                        {
-                            //cnn.Execute(
-                            //    "INSERT INTO [UserRoles] ( [UserId], [RoleId] ) VALUES ( @UserId, @RoleId )",
-                            //    new { UserId = user.Id, RoleId = roleId });
-
-                            // 効率悪いが品質的に、this.AddToRoleAsyncを使用する。
-                            await this.AddToRoleAsync(user, roleName);
-                        }
-
+                        //    // 効率悪いが品質的に、this.RemoveFromRoleAsyncを使用する。
+                        //    await this.RemoveFromRoleAsync(user, roleName);
                         //}
+                        //foreach (string roleName in toAddRolesName)
+                        //{
+                        //    // 効率悪いが品質的に、this.AddToRoleAsyncを使用する。
+                        //    await this.AddToRoleAsync(user, roleName);
+                        //}
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+                            using (IDbTransaction tr = cnn.BeginTransaction())
+                            {
+                                // ロール・マップを削除（ロール情報を取得する。
+                                foreach (string roleName in toRmvRolesName)
+                                {
+                                    switch (ASPNETIdentityConfig.UserStoreType)
+                                    {
+                                        case EnumUserStoreType.SqlServer:
+
+                                            await cnn.ExecuteAsync(
+                                                "DELETE FROM [UserRoles] " +
+                                                "WHERE [UserRoles].[UserId] = @UserId " +
+                                                "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
+                                                new { UserId = user.Id, roleName = roleName });
+
+                                            break;
+
+                                        case EnumUserStoreType.OracleMD:
+
+                                            await cnn.ExecuteAsync(
+                                                "DELETE FROM \"UserRoles\" " +
+                                                "WHERE \"UserRoles\".\"UserId\" = :UserId " +
+                                                "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
+                                                new { UserId = user.Id, roleName = roleName });
+
+                                            break;
+
+                                        case EnumUserStoreType.PostgreSQL:
+
+                                            break;
+
+                                    }
+                                }
+
+                                // ロール・マップを追加（ロール情報を取得する。
+                                foreach (string roleName in toAddRolesName)
+                                {
+                                    switch (ASPNETIdentityConfig.UserStoreType)
+                                    {
+                                        case EnumUserStoreType.SqlServer:
+
+                                            await cnn.ExecuteAsync(
+                                                "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
+                                                "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
+                                                new { UserId = user.Id, roleName = roleName });
+
+                                            break;
+
+                                        case EnumUserStoreType.OracleMD:
+
+                                            await cnn.ExecuteAsync(
+                                                "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
+                                                "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
+                                                new { UserId = user.Id, roleName = roleName });
+
+                                            break;
+
+                                        case EnumUserStoreType.PostgreSQL:
+
+                                            break;
+
+                                    }
+                                }
+                            }
+                        }
 
                         break;
                 }
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
         }
 
@@ -998,10 +1130,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <remarks>
         /// 削除するエンティティにマークを付けます
         /// </remarks>
-        public Task DeleteAsync(ApplicationUser user)
+        public async Task DeleteAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             if (user.Id == user.ParentId)
             {
@@ -1037,24 +1172,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         case EnumUserStoreType.SqlServer:
 
                                             // ユーザの情報を削除
-                                            cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
 
                                             // ユーザの関連情報を削除
-                                            cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
 
                                             break;
 
                                         case EnumUserStoreType.OracleMD:
 
                                             // ユーザの情報を削除
-                                            cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
 
                                             // ユーザの関連情報を削除
-                                            cnn.Execute("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            await cnn.ExecuteAsync("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
 
                                             break;
 
@@ -1073,12 +1208,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugWriteLineForEx(ex);
+                    UserStore.MyDebugLogForEx(ex);
                 }
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -1097,7 +1232,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザがパスワードを持っているか
 
@@ -1114,7 +1252,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザーにハッシュ化されたパスワードを設定
             user.PasswordHash = passwordHash;
@@ -1131,7 +1272,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザのパスワードのハッシュを取得
 
@@ -1146,10 +1290,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザを（email指定で）検索して取得</summary>
         /// <param name="email">string</param>
         /// <returns>ApplicationUser</returns>
-        public Task<ApplicationUser> FindByEmailAsync(string email)
+        public async Task<ApplicationUser> FindByEmailAsync(string email)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationUser user = null;
 
@@ -1179,14 +1326,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * From [Users] WHERE [Email] = @Email", new { Email = email });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * From \"Users\" WHERE \"Email\" = :Email", new { Email = email });
 
                                     break;
@@ -1211,11 +1358,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return (user)
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>メアドの設定</summary>
@@ -1227,7 +1374,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // メアドの設定
             user.Email = email;
@@ -1244,7 +1394,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // メアドの取得
 
@@ -1261,7 +1414,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // メアド確認の設定
             user.EmailConfirmed = confirmed;
@@ -1278,7 +1434,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // メアド確認の取得
 
@@ -1299,7 +1458,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 電話番号の設定
             user.PhoneNumber = phoneNumber;
@@ -1316,7 +1478,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 電話番号の取得
 
@@ -1333,7 +1498,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 電話番号確認の設定
             user.PhoneNumberConfirmed = confirmed;
@@ -1350,7 +1518,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 電話番号確認の取得
 
@@ -1366,10 +1537,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">string</param>
         /// <returns>－</returns>
-        public Task AddToRoleAsync(ApplicationUser user, string roleName)
+        public async Task AddToRoleAsync(ApplicationUser user, string roleName)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -1419,7 +1593,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
                                         "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
                                         new { UserId = user.Id, roleName = roleName });
@@ -1428,7 +1602,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
                                         "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
                                         new { UserId = user.Id, roleName = roleName });
@@ -1447,10 +1621,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>ユーザがロールに所属するか？</summary>
@@ -1462,7 +1636,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザがロールに所属するか？
 
@@ -1476,10 +1653,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザのロール一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ユーザのロール一覧</returns>
-        public Task<IList<string>> GetRolesAsync(ApplicationUser user)
+        public async Task<IList<string>> GetRolesAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             IList<string> roleNames = null;
 
@@ -1518,7 +1698,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    roles = cnn.Query<ApplicationRole>(
+                                    roles = await cnn.QueryAsync<ApplicationRole>(
                                         "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
                                         "FROM   [Roles], [UserRoles], [Users] " +
                                         "WHERE  [Roles].[Id] = [UserRoles].[RoleId] " +
@@ -1530,7 +1710,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    roles = cnn.Query<ApplicationRole>(
+                                    roles = await cnn.QueryAsync<ApplicationRole>(
                                         "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
                                         "FROM   \"Roles\", \"UserRoles\", \"Users\" " +
                                         "WHERE  \"Roles\".\"Id\" = \"UserRoles\".\"RoleId\" " +
@@ -1559,21 +1739,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // ユーザのロール一覧を返す。
-            return Task.FromResult(roleNames);
+            return roleNames;
         }
 
         /// <summary>ユーザをロールから削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">ロール名</param>
         /// <returns>－</returns>
-        public Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
+        public async Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             if ((user.Id == user.ParentId)                     // 管理者ユーザー
                 && roleName == ASPNETIdentityConst.Role_Admin) // global role of Administrator
@@ -1626,7 +1809,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        cnn.Execute(
+                                        await cnn.ExecuteAsync(
                                             "DELETE FROM [UserRoles] " +
                                             "WHERE [UserRoles].[UserId] = @UserId " +
                                             "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
@@ -1636,7 +1819,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.OracleMD:
 
-                                        cnn.Execute(
+                                        await cnn.ExecuteAsync(
                                             "DELETE FROM \"UserRoles\" " +
                                             "WHERE \"UserRoles\".\"UserId\" = :UserId " +
                                             "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
@@ -1656,12 +1839,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugWriteLineForEx(ex);
+                    UserStore.MyDebugLogForEx(ex);
                 }
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -1681,7 +1864,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // セキュリティスタンプを設定
             user.SecurityStamp = stamp;
@@ -1698,7 +1884,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // セキュリティスタンプを取得
 
@@ -1719,7 +1908,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザがロックアウト可能かどうかを設定
             user.LockoutEnabled = enabled;
@@ -1736,7 +1928,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザがロックアウト可能かどうかを取得
 
@@ -1752,7 +1947,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // サインインに失敗した試行回数を記録
             user.AccessFailedCount++;
@@ -1770,7 +1968,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 失敗したサインインの試行回数を取得
 
@@ -1789,7 +1990,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 失敗したサインインの試行回数をリセット
             user.AccessFailedCount = 0;
@@ -1813,7 +2017,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ロックアウト終了日を設定（指定された終了日まで、ユーザをロックアウト）
 
@@ -1838,7 +2045,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ロックアウト終了日を取得（指定された終了日まで、ユーザをロックアウト）
 
@@ -1869,7 +2079,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 2FAの有効・無効を設定
             user.TwoFactorEnabled = enabled;
@@ -1886,7 +2099,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 2FAの有効・無効を取得
 
@@ -1907,10 +2123,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを追加</summary>
         /// <param name="role">ApplicationRole</param>
         /// <returns>－</returns>
-        public Task CreateAsync(ApplicationRole role)
+        public async Task CreateAsync(ApplicationRole role)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -1935,14 +2154,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO [Roles] ( [Id], [Name], [ParentId] ) VALUES ( @Id, @Name, @ParentId )", role);
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO \"Roles\" ( \"Id\", \"Name\", \"ParentId\" ) VALUES ( :Id, :Name, :ParentId )", role);
 
                                     break;
@@ -1961,11 +2180,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -1975,10 +2194,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを ID から検索</summary>
         /// <param name="roleId">string</param>
         /// <returns>ApplicationRole</returns>
-        Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
+        async Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationRole role = null;
 
@@ -2006,14 +2228,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             switch (ASPNETIdentityConfig.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
-                                    roles = cnn.Query<ApplicationRole>(
+                                    roles = await cnn.QueryAsync<ApplicationRole>(
                                         "SELECT * FROM [Roles] WHERE [Id] = @roleId", new { roleId = roleId });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    roles = cnn.Query<ApplicationRole>(
+                                    roles = await cnn.QueryAsync<ApplicationRole>(
                                         "SELECT * FROM \"Roles\" WHERE \"Id\" = :roleId", new { roleId = roleId });
 
                                     break;
@@ -2035,20 +2257,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
-            // return (ApplicationRole)
-            return Task.FromResult(role);
+            return role;
         }
 
         /// <summary>ロールを（ロール名指定で）検索</summary>
         /// <param name="roleName">string</param>
         /// <returns>ApplicationRole</returns>
-        Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
+        async Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationRole role = null;
 
@@ -2077,14 +2301,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    roles = cnn.Query<ApplicationRole>(
+                                    roles = await cnn.QueryAsync<ApplicationRole>(
                                         "SELECT * FROM [Roles] WHERE [Name] = @roleName", new { roleName = roleName });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    roles = cnn.Query<ApplicationRole>(
+                                    roles = await cnn.QueryAsync<ApplicationRole>(
                                         "SELECT * FROM \"Roles\" WHERE \"Name\" = :roleName", new { roleName = roleName });
 
                                     break;
@@ -2106,11 +2330,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
-            // return (ApplicationRole)
-            return Task.FromResult(role);
+            return role;
         }
 
         /// <summary>
@@ -2125,7 +2348,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             get
             {
                 // Debug
-                UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+                UserStore.MyDebugTrace("★ : " + 
+                    MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                    "." + MethodBase.GetCurrentMethod().Name +
+                    UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
                 // システム共通のロール
                 IEnumerable<ApplicationRole> commonRoles = null;
@@ -2233,7 +2459,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugWriteLineForEx(ex);
+                    UserStore.MyDebugLogForEx(ex);
                 }
 
                 return commonRoles.AsQueryable();
@@ -2247,10 +2473,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを更新する</summary>
         /// <param name="role">ApplicationRole</param>
         /// <returns>－</returns>
-        public Task UpdateAsync(ApplicationRole role)
+        public async Task UpdateAsync(ApplicationRole role)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             if (string.IsNullOrEmpty(role.ParentId))
             {
@@ -2293,7 +2522,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        cnn.Execute(
+                                        await cnn.ExecuteAsync(
                                             "UPDATE [Roles] SET [Name] = @Name WHERE [Id] = @Id",
                                             new { Id = role.Id, Name = role.Name });
 
@@ -2301,7 +2530,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.OracleMD:
 
-                                        cnn.Execute(
+                                        await cnn.ExecuteAsync(
                                             "UPDATE \"Roles\" SET \"Name\" = :Name WHERE \"Id\" = :Id",
                                             new { Id = role.Id, Name = role.Name });
 
@@ -2320,12 +2549,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugWriteLineForEx(ex);
+                    UserStore.MyDebugLogForEx(ex);
                 }
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -2335,10 +2564,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを削除する</summary>
         /// <param name="role">ApplicationRole</param>
         /// <returns>－</returns>
-        public Task DeleteAsync(ApplicationRole role)
+        public async Task DeleteAsync(ApplicationRole role)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             if (string.IsNullOrEmpty(role.ParentId))
             {
@@ -2394,12 +2626,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     case EnumUserStoreType.SqlServer:
 
                                         // 外部参照制約に依存しないようにチェック
-                                        cnt = cnn.ExecuteScalar<int>(
+                                        cnt = await cnn.ExecuteScalarAsync<int>(
                                             "SELECT COUNT(*) FROM [UserRoles] WHERE [RoleId] = @RoleId", new { RoleId = role.Id });
 
                                         if (cnt == 0)
                                         {
-                                            cnn.Execute("DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
+                                            await cnn.ExecuteAsync("DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
                                         }
                                         else
                                         {
@@ -2411,12 +2643,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     case EnumUserStoreType.OracleMD:
 
                                         // 外部参照制約に依存しないようにチェック
-                                        cnt = cnn.ExecuteScalar<int>(
+                                        cnt = await cnn.ExecuteScalarAsync<int>(
                                             "SELECT COUNT(*) FROM \"UserRoles\" WHERE \"RoleId\" = :RoleId", new { RoleId = role.Id });
 
                                         if (cnt == 0)
                                         {
-                                            cnn.Execute("DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
+                                            await cnn.ExecuteAsync("DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
                                         }
                                         else
                                         {
@@ -2437,12 +2669,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugWriteLineForEx(ex);
+                    UserStore.MyDebugLogForEx(ex);
                 }
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -2457,10 +2689,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
         /// <returns>－</returns>
-        public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public async Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -2485,7 +2720,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO [UserLogins] ([UserId], [LoginProvider], [ProviderKey]) " +
                                         "VALUES (@UserId, @LoginProvider, @ProviderKey)",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
@@ -2494,7 +2729,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO \"UserLogins\" (\"UserId\", \"LoginProvider\", \"ProviderKey\") " +
                                         "VALUES (:UserId, :LoginProvider, :ProviderKey)",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
@@ -2513,20 +2748,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>外部ログインでユーザーを検索</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ApplicationUser</returns>
-        public Task<ApplicationUser> FindAsync(UserLoginInfo login)
+        public async Task<ApplicationUser> FindAsync(UserLoginInfo login)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationUser user = null;
 
@@ -2553,8 +2791,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     {
                                         user = x;
 
-                                        // return (ApplicationRole)
-                                        return Task.FromResult(user);
+                                        return user;
                                     }
                                 }
                             }
@@ -2576,7 +2813,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * From [Users], [UserLogins] " + // * でイケるか？
                                         "WHERE  [Users].[Id] = [UserLogins].[UserId]" +
                                         "    AND [UserLogins].[LoginProvider] = @LoginProvider" +
@@ -2587,7 +2824,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = cnn.Query<ApplicationUser>(
+                                    users = await cnn.QueryAsync<ApplicationUser>(
                                         "SELECT * From \"Users\", \"UserLogins\" " + // * でイケるか？
                                         "WHERE  \"Users\".\"Id\" = \"UserLogins\".\"UserId\"" +
                                         "    AND \"UserLogins\".\"LoginProvider\" = :LoginProvider" +
@@ -2616,10 +2853,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザの外部ログイン一覧を取得</summary>
@@ -2630,7 +2867,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザの外部ログイン一覧を取得
 
@@ -2642,10 +2882,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
         /// <returns>－</returns>
-        public Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public async Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -2677,7 +2920,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "DELETE FROM [UserLogins] WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [ProviderKey] = @ProviderKey ",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
@@ -2685,7 +2928,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"ProviderKey\" = :ProviderKey ",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
@@ -2703,11 +2946,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -2718,10 +2961,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
         /// <returns>－</returns>
-        public Task AddClaimAsync(ApplicationUser user, Claim claim)
+        public async Task AddClaimAsync(ApplicationUser user, Claim claim)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -2746,7 +2992,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO [UserClaims] ([UserId], [Issuer], [ClaimType], [ClaimValue]) " +
                                         "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
                                          new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
@@ -2755,7 +3001,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "INSERT INTO \"UserClaims\" (\"Id\", \"UserId\", \"Issuer\", \"ClaimType\", \"ClaimValue\") " +
                                         "VALUES (TS_UserClaimID.NEXTVAL, :UserId, :Issuer, :ClaimType, :ClaimValue)",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
@@ -2774,11 +3020,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>ユーザの（外部ログインの）クレーム一覧を取得</summary>
@@ -2789,7 +3035,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザの（外部ログインの）クレーム一覧を取得
 
@@ -2801,10 +3050,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
         /// <returns>－</returns>
-        public Task RemoveClaimAsync(ApplicationUser user, Claim claim)
+        public async Task RemoveClaimAsync(ApplicationUser user, Claim claim)
         {
             // Debug
-            UserStore.MyDebugWriteLine("★ : " + MethodBase.GetCurrentMethod().Name);
+            UserStore.MyDebugTrace("★ : " + 
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
@@ -2829,7 +3081,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "DELETE FROM [UserClaims] WHERE [UserId] = @UserId AND [Issuer] = @Issuer AND [ClaimType] = @ClaimType",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
 
@@ -2837,7 +3089,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    cnn.Execute(
+                                    await cnn.ExecuteAsync(
                                         "DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId AND \"Issuer\" = :Issuer AND \"ClaimType\" = :ClaimType",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
 
@@ -2855,11 +3107,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugWriteLineForEx(ex);
+                UserStore.MyDebugLogForEx(ex);
             }
 
             // return
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -2885,9 +3137,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <remarks>SharedMemory.csを参考に実装</remarks>
         public void Dispose()
         {
-            // Debug
-            //UserStore.MyDebugWriteLine(MethodBase.GetCurrentMethod().Name);
-
             // trueはユーザからの直接・間接的実行を意味する。
             this.Dispose(true);
 

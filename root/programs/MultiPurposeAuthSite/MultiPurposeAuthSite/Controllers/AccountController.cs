@@ -1668,7 +1668,7 @@ namespace MultiPurposeAuthSite.Controllers
                     || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.PostgreSQL)
                 {
                     // DBMS Providerの場合、
-                    if (UserStore.IsDBMSInitialized())
+                    if (await UserStore.IsDBMSInitialized())
                     {
                         // 初期化済み。
                         return; // break;
