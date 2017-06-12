@@ -1910,7 +1910,7 @@ namespace MultiPurposeAuthSite.Controllers
                 OAuth2DataProvider.GetInstance().DeleteOAuth2Data(user.ClientID);
 
                 // ユーザーの保存（ClientIDのクリア）
-                user.ClientID = "";
+                //user.ClientID = ""; 一意制約エラーになるので
                 IdentityResult result = await UserManager.UpdateAsync(user);
 
                 // 結果の確認

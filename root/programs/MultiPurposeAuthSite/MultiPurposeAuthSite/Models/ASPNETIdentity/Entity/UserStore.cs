@@ -205,7 +205,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         /// <summary>DBMSの初期化確認メソッド</summary>
         /// <returns>bool</returns>
-        public async static Task<bool> IsDBMSInitialized()
+        public static Task<bool> IsDBMSInitialized()
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -225,13 +225,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     {
                         case EnumUserStoreType.SqlServer:
 
-                            count = await cnn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM [Roles]");
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM [Roles]");
 
                             break;
 
                         case EnumUserStoreType.OracleMD:
 
-                            count = await cnn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM \"Roles\"");
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"Roles\"");
 
                             break;
 
@@ -241,7 +241,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                     }
 
-                    return (0 < count);
+                    return Task.FromResult((0 < count));
                 }
             }
             catch (Exception ex)
@@ -249,7 +249,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return false;
+            return Task.FromResult(false); ;
         }
 
         #endregion
@@ -257,7 +257,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         #region データ アクセス
 
         /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims ）</summary>
-        private async void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
+        private void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -276,7 +276,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     case EnumUserStoreType.SqlServer:
 
                         // Roles
-                        roles = await cnn.QueryAsync<ApplicationRole>(
+                        roles = cnn.Query<ApplicationRole>(
                         "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
                         "FROM   [UserRoles], [Roles] " +
                         "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
@@ -284,13 +284,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         user.Roles = roles.ToList();
 
                         // Logins
-                        userLogins = await cnn.QueryAsync<UserLoginInfo>(
+                        userLogins = cnn.Query<UserLoginInfo>(
                             "SELECT [LoginProvider], [ProviderKey] " +
                             "FROM   [UserLogins] WHERE [UserId] = @userId", new { userId = user.Id });
                         user.Logins = userLogins.ToList();
 
                         // Claims
-                        claims = await cnn.QueryAsync(
+                        claims = cnn.Query(
                             "SELECT [Issuer], [ClaimType], [ClaimValue] " +
                             "FROM   [UserClaims] WHERE [UserId] = @userId", new { userId = user.Id });
                         user.Claims = new List<Claim>();
@@ -300,7 +300,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     case EnumUserStoreType.OracleMD:
 
                         // Roles
-                        roles = await cnn.QueryAsync<ApplicationRole>(
+                        roles = cnn.Query<ApplicationRole>(
                         "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
                         "FROM   \"UserRoles\", \"Roles\" " +
                         "WHERE  \"UserRoles\".\"RoleId\" = \"Roles\".\"Id\" " +
@@ -308,13 +308,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         user.Roles = roles.ToList();
 
                         // Logins
-                        userLogins = await cnn.QueryAsync<UserLoginInfo>(
+                        userLogins = cnn.Query<UserLoginInfo>(
                             "SELECT \"LoginProvider\", \"ProviderKey\" " +
                             "FROM   \"UserLogins\" WHERE \"UserId\" = :userId", new { userId = user.Id });
                         user.Logins = userLogins.ToList();
 
                         // Claims
-                        claims = await cnn.QueryAsync(
+                        claims = cnn.Query(
                             "SELECT \"Issuer\", \"ClaimType\", \"ClaimValue\" " +
                             "FROM   \"UserClaims\" WHERE \"UserId\" = :userId", new { userId = user.Id });
                         user.Claims = new List<Claim>();
@@ -353,7 +353,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>新規ユーザーの追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>－</returns>
-        public async Task CreateAsync(ApplicationUser user)
+        public Task CreateAsync(ApplicationUser user)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -384,7 +384,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO [Users] ( " +
                                         "    [Id], [UserName], [PasswordHash], " +
                                         "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
@@ -400,7 +400,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
                                     
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO \"Users\" ( " +
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
@@ -451,7 +451,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion
@@ -461,7 +461,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
         /// <returns>ApplicationUser</returns>
-        public async Task<ApplicationUser> FindByIdAsync(string userId)
+        public Task<ApplicationUser> FindByIdAsync(string userId)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -497,14 +497,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * FROM [Users] WHERE [Id] = @userId", new { userId = userId });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * FROM \"Users\" WHERE \"Id\" = :userId", new { userId = userId });
 
                                     break;
@@ -532,13 +532,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return user;
+            return Task.FromResult(user);
         }
 
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public async Task<ApplicationUser> FindByNameAsync(string userName)
+        public Task<ApplicationUser> FindByNameAsync(string userName)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -574,14 +574,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
 
                                     break;
@@ -610,7 +610,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return user;
+            return Task.FromResult(user);
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
@@ -839,7 +839,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        await cnn.ExecuteAsync(
+                                        cnn.Execute(
                                             "UPDATE [Users] " +
                                             "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
                                             "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, " +
@@ -854,7 +854,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.OracleMD:
 
-                                        await cnn.ExecuteAsync(
+                                        cnn.Execute(
                                             "UPDATE \"Users\" " +
                                             "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
                                             "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, " +
@@ -1047,7 +1047,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     {
                                         case EnumUserStoreType.SqlServer:
 
-                                            await cnn.ExecuteAsync(
+                                            cnn.Execute(
                                                 "DELETE FROM [UserRoles] " +
                                                 "WHERE [UserRoles].[UserId] = @UserId " +
                                                 "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
@@ -1057,7 +1057,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         case EnumUserStoreType.OracleMD:
 
-                                            await cnn.ExecuteAsync(
+                                            cnn.Execute(
                                                 "DELETE FROM \"UserRoles\" " +
                                                 "WHERE \"UserRoles\".\"UserId\" = :UserId " +
                                                 "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
@@ -1079,7 +1079,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     {
                                         case EnumUserStoreType.SqlServer:
 
-                                            await cnn.ExecuteAsync(
+                                            cnn.Execute(
                                                 "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
                                                 "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
                                                 new { UserId = user.Id, roleName = roleName });
@@ -1088,7 +1088,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         case EnumUserStoreType.OracleMD:
 
-                                            await cnn.ExecuteAsync(
+                                            cnn.Execute(
                                                 "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
                                                 "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
                                                 new { UserId = user.Id, roleName = roleName });
@@ -1127,7 +1127,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <remarks>
         /// 削除するエンティティにマークを付けます
         /// </remarks>
-        public async Task DeleteAsync(ApplicationUser user)
+        public Task DeleteAsync(ApplicationUser user)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -1169,24 +1169,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         case EnumUserStoreType.SqlServer:
 
                                             // ユーザの情報を削除
-                                            await cnn.ExecuteAsync("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
 
                                             // ユーザの関連情報を削除
-                                            await cnn.ExecuteAsync("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                            await cnn.ExecuteAsync("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                            await cnn.ExecuteAsync("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
 
                                             break;
 
                                         case EnumUserStoreType.OracleMD:
 
                                             // ユーザの情報を削除
-                                            await cnn.ExecuteAsync("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
 
                                             // ユーザの関連情報を削除
-                                            await cnn.ExecuteAsync("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                            await cnn.ExecuteAsync("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                            await cnn.ExecuteAsync("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                            cnn.Execute("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
 
                                             break;
 
@@ -1209,7 +1209,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion
@@ -1283,7 +1283,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザを（email指定で）検索して取得</summary>
         /// <param name="email">string</param>
         /// <returns>ApplicationUser</returns>
-        public async Task<ApplicationUser> FindByEmailAsync(string email)
+        public Task<ApplicationUser> FindByEmailAsync(string email)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -1319,14 +1319,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * From [Users] WHERE [Email] = @Email", new { Email = email });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * From \"Users\" WHERE \"Email\" = :Email", new { Email = email });
 
                                     break;
@@ -1354,7 +1354,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return user;
+            return Task.FromResult(user);
         }
 
         /// <summary>メアドの設定</summary>
@@ -1521,7 +1521,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">string</param>
         /// <returns>－</returns>
-        public async Task AddToRoleAsync(ApplicationUser user, string roleName)
+        public Task AddToRoleAsync(ApplicationUser user, string roleName)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -1577,7 +1577,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
                                         "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
                                         new { UserId = user.Id, roleName = roleName });
@@ -1586,7 +1586,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
                                         "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
                                         new { UserId = user.Id, roleName = roleName });
@@ -1608,7 +1608,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         /// <summary>ユーザがロールに所属するか？</summary>
@@ -1637,7 +1637,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザのロール一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ユーザのロール一覧</returns>
-        public async Task<IList<string>> GetRolesAsync(ApplicationUser user)
+        public Task<IList<string>> GetRolesAsync(ApplicationUser user)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -1682,7 +1682,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    roles = await cnn.QueryAsync<ApplicationRole>(
+                                    roles = cnn.Query<ApplicationRole>(
                                         "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
                                         "FROM   [Roles], [UserRoles], [Users] " +
                                         "WHERE  [Roles].[Id] = [UserRoles].[RoleId] " +
@@ -1694,7 +1694,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    roles = await cnn.QueryAsync<ApplicationRole>(
+                                    roles = cnn.Query<ApplicationRole>(
                                         "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
                                         "FROM   \"Roles\", \"UserRoles\", \"Users\" " +
                                         "WHERE  \"Roles\".\"Id\" = \"UserRoles\".\"RoleId\" " +
@@ -1727,14 +1727,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
 
             // ユーザのロール一覧を返す。
-            return roleNames;
+            return Task.FromResult(roleNames);
         }
 
         /// <summary>ユーザをロールから削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">ロール名</param>
         /// <returns>－</returns>
-        public async Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
+        public Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -1793,7 +1793,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        await cnn.ExecuteAsync(
+                                        cnn.Execute(
                                             "DELETE FROM [UserRoles] " +
                                             "WHERE [UserRoles].[UserId] = @UserId " +
                                             "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
@@ -1803,7 +1803,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.OracleMD:
 
-                                        await cnn.ExecuteAsync(
+                                        cnn.Execute(
                                             "DELETE FROM \"UserRoles\" " +
                                             "WHERE \"UserRoles\".\"UserId\" = :UserId " +
                                             "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
@@ -1827,7 +1827,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion
@@ -2096,7 +2096,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを追加</summary>
         /// <param name="role">ApplicationRole</param>
         /// <returns>－</returns>
-        public async Task CreateAsync(ApplicationRole role)
+        public Task CreateAsync(ApplicationRole role)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2127,14 +2127,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO [Roles] ( [Id], [Name], [ParentId] ) VALUES ( @Id, @Name, @ParentId )", role);
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO \"Roles\" ( \"Id\", \"Name\", \"ParentId\" ) VALUES ( :Id, :Name, :ParentId )", role);
 
                                     break;
@@ -2156,7 +2156,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion
@@ -2166,7 +2166,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを ID から検索</summary>
         /// <param name="roleId">string</param>
         /// <returns>ApplicationRole</returns>
-        async Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
+        Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2200,14 +2200,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             switch (ASPNETIdentityConfig.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
-                                    roles = await cnn.QueryAsync<ApplicationRole>(
+                                    roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM [Roles] WHERE [Id] = @roleId", new { roleId = roleId });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    roles = await cnn.QueryAsync<ApplicationRole>(
+                                    roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM \"Roles\" WHERE \"Id\" = :roleId", new { roleId = roleId });
 
                                     break;
@@ -2232,13 +2232,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return role;
+            return Task.FromResult(role);
         }
 
         /// <summary>ロールを（ロール名指定で）検索</summary>
         /// <param name="roleName">string</param>
         /// <returns>ApplicationRole</returns>
-        async Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
+        Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2273,14 +2273,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    roles = await cnn.QueryAsync<ApplicationRole>(
+                                    roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM [Roles] WHERE [Name] = @roleName", new { roleName = roleName });
 
                                     break;
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    roles = await cnn.QueryAsync<ApplicationRole>(
+                                    roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM \"Roles\" WHERE \"Name\" = :roleName", new { roleName = roleName });
 
                                     break;
@@ -2305,7 +2305,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return role;
+            return Task.FromResult(role);
         }
 
         /// <summary>
@@ -2445,7 +2445,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを更新する</summary>
         /// <param name="role">ApplicationRole</param>
         /// <returns>－</returns>
-        public async Task UpdateAsync(ApplicationRole role)
+        public Task UpdateAsync(ApplicationRole role)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2494,7 +2494,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        await cnn.ExecuteAsync(
+                                        cnn.Execute(
                                             "UPDATE [Roles] SET [Name] = @Name WHERE [Id] = @Id",
                                             new { Id = role.Id, Name = role.Name });
 
@@ -2502,7 +2502,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.OracleMD:
 
-                                        await cnn.ExecuteAsync(
+                                        cnn.Execute(
                                             "UPDATE \"Roles\" SET \"Name\" = :Name WHERE \"Id\" = :Id",
                                             new { Id = role.Id, Name = role.Name });
 
@@ -2525,7 +2525,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion
@@ -2535,7 +2535,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを削除する</summary>
         /// <param name="role">ApplicationRole</param>
         /// <returns>－</returns>
-        public async Task DeleteAsync(ApplicationRole role)
+        public Task DeleteAsync(ApplicationRole role)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2597,12 +2597,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     case EnumUserStoreType.SqlServer:
 
                                         // 外部参照制約に依存しないようにチェック
-                                        cnt = await cnn.ExecuteScalarAsync<int>(
+                                        cnt = cnn.ExecuteScalar<int>(
                                             "SELECT COUNT(*) FROM [UserRoles] WHERE [RoleId] = @RoleId", new { RoleId = role.Id });
 
                                         if (cnt == 0)
                                         {
-                                            await cnn.ExecuteAsync("DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
+                                            cnn.Execute(
+                                            	"DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
                                         }
                                         else
                                         {
@@ -2614,12 +2615,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     case EnumUserStoreType.OracleMD:
 
                                         // 外部参照制約に依存しないようにチェック
-                                        cnt = await cnn.ExecuteScalarAsync<int>(
+                                        cnt = cnn.ExecuteScalar<int>(
                                             "SELECT COUNT(*) FROM \"UserRoles\" WHERE \"RoleId\" = :RoleId", new { RoleId = role.Id });
 
                                         if (cnt == 0)
                                         {
-                                            await cnn.ExecuteAsync("DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
+                                            cnn.Execute(
+                                            	"DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
                                         }
                                         else
                                         {
@@ -2644,7 +2646,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion
@@ -2659,7 +2661,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
         /// <returns>－</returns>
-        public async Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2690,7 +2692,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO [UserLogins] ([UserId], [LoginProvider], [ProviderKey]) " +
                                         "VALUES (@UserId, @LoginProvider, @ProviderKey)",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
@@ -2699,7 +2701,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO \"UserLogins\" (\"UserId\", \"LoginProvider\", \"ProviderKey\") " +
                                         "VALUES (:UserId, :LoginProvider, :ProviderKey)",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
@@ -2721,13 +2723,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         /// <summary>外部ログインでユーザーを検索</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ApplicationUser</returns>
-        public async Task<ApplicationUser> FindAsync(UserLoginInfo login)
+        public Task<ApplicationUser> FindAsync(UserLoginInfo login)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2760,7 +2762,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     {
                                         user = x;
 
-                                        return user;
+                                        return Task.FromResult(user);
                                     }
                                 }
                             }
@@ -2782,7 +2784,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * From [Users], [UserLogins] " + // * でイケるか？
                                         "WHERE  [Users].[Id] = [UserLogins].[UserId]" +
                                         "    AND [UserLogins].[LoginProvider] = @LoginProvider" +
@@ -2793,7 +2795,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    users = await cnn.QueryAsync<ApplicationUser>(
+                                    users = cnn.Query<ApplicationUser>(
                                         "SELECT * From \"Users\", \"UserLogins\" " + // * でイケるか？
                                         "WHERE  \"Users\".\"Id\" = \"UserLogins\".\"UserId\"" +
                                         "    AND \"UserLogins\".\"LoginProvider\" = :LoginProvider" +
@@ -2825,7 +2827,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return user;
+            return Task.FromResult(user);
         }
 
         /// <summary>ユーザの外部ログイン一覧を取得</summary>
@@ -2850,7 +2852,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
         /// <returns>－</returns>
-        public async Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2888,7 +2890,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "DELETE FROM [UserLogins] WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [ProviderKey] = @ProviderKey ",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
@@ -2896,7 +2898,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"ProviderKey\" = :ProviderKey ",
                                         new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
@@ -2917,7 +2919,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion
@@ -2928,7 +2930,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
         /// <returns>－</returns>
-        public async Task AddClaimAsync(ApplicationUser user, Claim claim)
+        public Task AddClaimAsync(ApplicationUser user, Claim claim)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -2959,7 +2961,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO [UserClaims] ([UserId], [Issuer], [ClaimType], [ClaimValue]) " +
                                         "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
                                          new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
@@ -2968,7 +2970,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "INSERT INTO \"UserClaims\" (\"Id\", \"UserId\", \"Issuer\", \"ClaimType\", \"ClaimValue\") " +
                                         "VALUES (TS_UserClaimID.NEXTVAL, :UserId, :Issuer, :ClaimType, :ClaimValue)",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
@@ -2990,7 +2992,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         /// <summary>ユーザの（外部ログインの）クレーム一覧を取得</summary>
@@ -3015,7 +3017,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
         /// <returns>－</returns>
-        public async Task RemoveClaimAsync(ApplicationUser user, Claim claim)
+        public Task RemoveClaimAsync(ApplicationUser user, Claim claim)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -3046,7 +3048,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "DELETE FROM [UserClaims] WHERE [UserId] = @UserId AND [Issuer] = @Issuer AND [ClaimType] = @ClaimType",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
 
@@ -3054,7 +3056,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.OracleMD:
 
-                                    await cnn.ExecuteAsync(
+                                    cnn.Execute(
                                         "DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId AND \"Issuer\" = :Issuer AND \"ClaimType\" = :ClaimType",
                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
 
@@ -3075,7 +3077,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.MyDebugLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(default(object));
         }
 
         #endregion

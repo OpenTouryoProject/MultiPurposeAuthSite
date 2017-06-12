@@ -345,7 +345,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <remarks>
         /// OAuth2関連のClientID
         /// </remarks>
-        public string ClientID { get; set; } = Guid.NewGuid().ToString();
+        public string ClientID { get; set; } = Guid.NewGuid().ToString("N"); //Guid.NewGuid().ToString();
 
         /// <summary>
         /// ユーザの支払元情報
