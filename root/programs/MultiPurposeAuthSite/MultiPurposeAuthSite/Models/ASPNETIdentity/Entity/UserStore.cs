@@ -134,25 +134,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
         }
 
-        /// <summary>MyOperationTrace</summary>
-        /// <param name="log">string</param>
-        private static void MyOperationTrace(string log)
-        {
-            // UserStoreのトレース情報をデバッグ時にログ出力
-            if (ASPNETIdentityConfig.IsDebug)
-            {
-                // デバッグ時
-                Debug.WriteLine(log);
-                LogIF.DebugLog("OPERATION", log);
-
-            }
-            else
-            {
-                // 本番時
-                LogIF.DebugLog("OPERATION", log);
-            }
-        }
-
         /// <summary>GetParametersString</summary>
         /// <param name="parameters">string[]</param>
         /// <returns>Parameters string</returns>
@@ -445,6 +426,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                 }
+
+                Log.MyOperationTrace(string.Format("{0}({1}) was created.", user.Id, user.UserName));
             }
             catch (Exception ex)
             {
@@ -902,6 +885,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             break;
                     }
+
+                    Log.MyOperationTrace(string.Format("{0}({1}) was updated.", user.Id, user.UserName));
                 }
             }
             catch (Exception ex)
@@ -917,7 +902,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>Rolesの更新</summary>
         /// <param name="user">更新</param>
         /// <param name="tgtUser">ターゲット</param>
-        private async Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
+        private Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
         {
             // Debug
             UserStore.MyDebugTrace("★ : " + 
@@ -1111,6 +1096,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 UserStore.MyDebugLogForEx(ex);
             }
+
+            return Task.FromResult(default(object));
         }
 
         //Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
@@ -1202,6 +1189,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             break;
                     }
+
+                    Log.MyOperationTrace(string.Format("{0}({1}) was deleted.", user.Id, user.UserName));
                 }
                 catch (Exception ex)
                 {

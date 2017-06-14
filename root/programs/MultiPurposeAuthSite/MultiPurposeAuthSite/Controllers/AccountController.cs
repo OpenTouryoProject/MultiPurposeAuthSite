@@ -18,6 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
@@ -190,6 +191,9 @@ namespace MultiPurposeAuthSite.Controllers
                                     // テスト段階ではテストに仕様が出るのでSessionクリアしない。
                                 }
 
+                                // イベント・ログ出力
+                                Log.MyOperationTrace(string.Format("{0}({1}) did sign in.", user.Id, user.UserName));
+
                                 return RedirectToLocal(returnUrl);
 
                             case SignInStatus.LockedOut:
@@ -250,10 +254,18 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult(RedirectToAction)</returns>
         [HttpGet]
-        public ActionResult LogOff()
+        [AllowAnonymous] // 空振りできるように。
+        public async Task<ActionResult> LogOff()
         {
-            // サインアウト（Cookieの削除）
-            AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+            if (User.Identity.IsAuthenticated) // 空振りできるように。
+            {
+                // サインアウト（Cookieの削除）
+                AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+
+                // イベント・ログ出力
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                Log.MyOperationTrace(string.Format("{0}({1}) did sign out.", user.Id, user.UserName));
+            }
 
             // リダイレクト "Index", "Home"へ
             return RedirectToAction("Index", "Home");
@@ -328,6 +340,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // 結果の確認
                 if (result.Succeeded)
                 {
+                    // イベント・ログ出力
+                    Log.MyOperationTrace(string.Format("{0}({1}) did sign up.", user.Id, user.UserName));
+
                     #region サインアップ成功
 
                     // ロールに追加。
@@ -451,7 +466,18 @@ namespace MultiPurposeAuthSite.Controllers
                 IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
 
                 // メアド検証結果 ( "EmailConfirmation" or "Error"
-                return View(result.Succeeded ? "EmailConfirmation" : "Error");
+                if (result.Succeeded)
+                {
+                    // イベント・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(userId);
+                    Log.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
+
+                    return View("EmailConfirmation");
+                }
+                else
+                {
+                    return View("Error");
+                }
             }
         }
 
@@ -799,6 +825,10 @@ namespace MultiPurposeAuthSite.Controllers
                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                         Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
+                        // イベント・ログ出力
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        Log.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
+
                         return RedirectToLocal(model.ReturnUrl);
 
                     case SignInStatus.LockedOut:
@@ -974,6 +1004,10 @@ namespace MultiPurposeAuthSite.Controllers
                             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                             Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
+                            // イベント・ログ出力
+                            user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                            Log.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
+
                             return RedirectToLocal(returnUrl);
                         }
                         else
@@ -1021,6 +1055,10 @@ namespace MultiPurposeAuthSite.Controllers
                                     // SessionIDの切換にはこのコードが必要である模様。
                                     // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                     Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                                    
+                                    // イベント・ログ出力
+                                    user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                                    Log.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
 
                                     // リダイレクト
                                     return RedirectToLocal(returnUrl);
@@ -1096,6 +1134,10 @@ namespace MultiPurposeAuthSite.Controllers
                                         // SessionIDの切換にはこのコードが必要である模様。
                                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                         Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+
+                                        // イベント・ログ出力
+                                        user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                                        Log.MyOperationTrace(string.Format("{0}({1}) did ext sign up.", user.Id, user.UserName));
 
                                         // リダイレクト
                                         return RedirectToLocal(returnUrl);
