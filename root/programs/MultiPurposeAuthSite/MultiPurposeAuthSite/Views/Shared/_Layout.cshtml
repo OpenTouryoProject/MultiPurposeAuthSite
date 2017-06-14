@@ -44,7 +44,7 @@
         {
             ApplicationUserManager userManager
                 = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            ApplicationUser user = userManager.FindByName(User.Identity.Name); // 同期版でOK。
+            ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
             roles = userManager.GetRoles(user.Id); // 同期版でOK。
 
         }

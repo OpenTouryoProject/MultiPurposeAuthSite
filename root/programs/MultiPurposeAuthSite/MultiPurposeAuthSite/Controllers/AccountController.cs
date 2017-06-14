@@ -825,9 +825,9 @@ namespace MultiPurposeAuthSite.Controllers
                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                         Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
-                        // イベント・ログ出力
-                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                        Log.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
+                        //// イベント・ログ出力 できない（User.Identity.GetUserId() == null
+                        //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        //Log.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
 
                         return RedirectToLocal(model.ReturnUrl);
 
@@ -1005,7 +1005,6 @@ namespace MultiPurposeAuthSite.Controllers
                             Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                             // イベント・ログ出力
-                            user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                             Log.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
 
                             return RedirectToLocal(returnUrl);
@@ -1057,7 +1056,6 @@ namespace MultiPurposeAuthSite.Controllers
                                     Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
                                     
                                     // イベント・ログ出力
-                                    user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                                     Log.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
 
                                     // リダイレクト
@@ -1136,7 +1134,6 @@ namespace MultiPurposeAuthSite.Controllers
                                         Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                                         // イベント・ログ出力
-                                        user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                                         Log.MyOperationTrace(string.Format("{0}({1}) did ext sign up.", user.Id, user.UserName));
 
                                         // リダイレクト

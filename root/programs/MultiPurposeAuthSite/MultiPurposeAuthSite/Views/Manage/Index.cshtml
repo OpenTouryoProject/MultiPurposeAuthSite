@@ -272,7 +272,7 @@ else
             <dt>EditOAuth2Data :</dt>
             <dd>
                 @*"Add" and "Remove or Change"*@
-                @if (!Model.HasClientID)
+                @if (!Model.HasOAuth2Data)
                 {
                     <text>None</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataAddActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text>

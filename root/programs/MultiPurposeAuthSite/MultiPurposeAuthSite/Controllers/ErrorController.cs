@@ -81,7 +81,12 @@ namespace MultiPurposeAuthSite.Controllers
             // To encode error information and display on Error screen
             ViewBag.label2Data = CustomEncode.HtmlEncode(err_info);
 
-            bool sessionAbandonFlag = (bool)Session[FxHttpContextIndex.SESSION_ABANDON_FLAG];
+            bool sessionAbandonFlag = false;
+            if (Session[FxHttpContextIndex.SESSION_ABANDON_FLAG] != null)
+            {
+                sessionAbandonFlag = (bool)Session[FxHttpContextIndex.SESSION_ABANDON_FLAG];
+            }
+
             Session.Remove(FxHttpContextIndex.SESSION_ABANDON_FLAG);
 
             // ------------------------------------------------------------------------
@@ -135,27 +140,27 @@ namespace MultiPurposeAuthSite.Controllers
             // セッション情報を削除する------------------------------------------------
 
             if (sessionAbandonFlag)
+            {
+                // セッション タイムアウト検出用Cookieを消去
+                // ※ Removeが正常に動作しないため、値を空文字に設定 ＝ 消去とする
+
+                // Set-Cookie HTTPヘッダをレスポンス
+                Response.Cookies.Set(FxCmnFunction.DeleteCookieForSessionTimeoutDetection());
+
+                try
                 {
-                    // セッション タイムアウト検出用Cookieを消去
-                    // ※ Removeが正常に動作しないため、値を空文字に設定 ＝ 消去とする
-
-                    // Set-Cookie HTTPヘッダをレスポンス
-                    Response.Cookies.Set(FxCmnFunction.DeleteCookieForSessionTimeoutDetection());
-
-                    try
-                    {
-                        // セッションを消去                       
-                        Session.Abandon();
-                    }
-                    catch (Exception ex)
-                    {
-                        // エラー発生時
-                        // このカバレージを通過する場合、
-                        // おそらく起動した画面のパスが間違っている。
-                        Console.WriteLine("このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。");
-                        Console.WriteLine(ex.Message);
-                    }
+                    // セッションを消去                       
+                    Session.Abandon();
                 }
+                catch (Exception ex)
+                {
+                    // エラー発生時
+                    // このカバレージを通過する場合、
+                    // おそらく起動した画面のパスが間違っている。
+                    Console.WriteLine("このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。");
+                    Console.WriteLine(ex.Message);
+                }
+            }
 
             return View();
         }

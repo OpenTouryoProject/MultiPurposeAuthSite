@@ -51,8 +51,8 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>HasUnstructuredData（非構造化データの有無）</summary>
         public bool HasUnstructuredData { get; set; }
 
-        /// <summary>HasClientID</summary>
-        public bool HasClientID { get; set; }
+        /// <summary>HasOAuth2Data</summary>
+        public bool HasOAuth2Data { get; set; }
 
         /// <summary>Scopes</summary>
         public string Scopes { get; set; }

@@ -190,6 +190,7 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
             // モデルの生成
+            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
             ManageIndexViewModel model = new ManageIndexViewModel
             {
                 // パスワード
@@ -206,8 +207,8 @@ namespace MultiPurposeAuthSite.Controllers
                 HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
                 // 非構造化データ
                 HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
-                // ClientID
-                HasClientID = !string.IsNullOrEmpty(user.ClientID),
+                // OAuth2Data
+                HasOAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
                 // Scopes
                 Scopes = ASPNETIdentityConst.StandardScopes
             };
