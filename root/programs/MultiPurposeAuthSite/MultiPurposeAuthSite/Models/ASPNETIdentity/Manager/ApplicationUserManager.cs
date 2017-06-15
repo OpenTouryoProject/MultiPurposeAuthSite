@@ -162,11 +162,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
             // DataProtectionProvider取得または設定します。
             // 静的データやデータ ストリームを非同期的に暗号化および復号化できる暗号化プロバイダー
             IDataProtectionProvider dataProtectionProvider = options.DataProtectionProvider;
-
+            
+            // ASP.NET Identityを使ったメール認証でのtokenの有効期限の変更方法 -tonkunの備忘録
+            // http://tonkun-no.hatenablog.com/entry/2016/09/15/212145
             if (dataProtectionProvider != null)
             {
                 manager.UserTokenProvider =
-                    new DataProtectorTokenProvider<ApplicationUser>(dataProtectionProvider.Create("ASP.NET Identity"));
+                    new DataProtectorTokenProvider<ApplicationUser>(dataProtectionProvider.Create("ASP.NET Identity"))
+                    {
+                        TokenLifespan = ASPNETIdentityConfig.EmailConfirmationTokenLifespanFromHours,
+                    };
             }
 
             #endregion

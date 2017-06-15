@@ -404,6 +404,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #region ログイン
+
         #region ユーザ名検証
 
         /// <summary>
@@ -425,6 +427,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return Convert.ToBoolean(ConfigurationManager.AppSettings["RequireUniqueEmail"]);
+            }
+        }
+
+        /// <summary>
+        /// EmailConfirmationリンクの有効期限
+        /// </summary>
+        public static TimeSpan EmailConfirmationTokenLifespanFromHours
+        {
+            get
+            {
+                return TimeSpan.FromHours(Double.Parse(ConfigurationManager.AppSettings["EmailConfirmationTokenLifespanFromHours"]));
             }
         }
 
@@ -532,6 +545,32 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return Convert.ToInt32(ConfigurationManager.AppSettings["MaxFailedAccessAttemptsBeforeLockout"]);
+            }
+        }
+
+        #endregion
+
+        #region Cookie認証チケット
+
+        /// <summary>
+        /// Cookie認証チケットの有効期限
+        /// </summary>
+        public static TimeSpan AuthCookieExpiresFromHours
+        {
+            get
+            {
+                return TimeSpan.FromHours(Double.Parse(ConfigurationManager.AppSettings["AuthCookieExpiresFromHours"]));
+            }
+        }
+
+        /// <summary>
+        /// Cookie認証チケットのSliding（再発行）機能
+        /// </summary>
+        public static bool AuthCookieSlidingExpiration
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["AuthCookieSlidingExpiration"]);
             }
         }
 
@@ -685,6 +724,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 return ConfigurationManager.AppSettings["FacebookAuthenticationClientSecret"];
             }
         }
+
+        #endregion
 
         #endregion
 

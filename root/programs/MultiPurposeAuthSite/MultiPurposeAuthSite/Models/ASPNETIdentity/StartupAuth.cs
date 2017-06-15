@@ -37,6 +37,7 @@ using Microsoft.Owin.Security.Infrastructure;
 using Owin;
 
 using MultiPurposeAuthSite.Models.Util;
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
@@ -119,6 +120,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             {
                 AuthenticationType = DefaultAuthenticationTypes.ApplicationCookie,  // 認証タイプを設定する。
                 LoginPath = new PathString("/Account/Login"),                       // ログイン画面のパスを設定する。
+                
                 Provider = new CookieAuthenticationProvider                         // 認証プロバイダを設定する(ICookieAuthenticationProvider の既定の実装)。
                 {
                     #region SecurityStamp
@@ -141,9 +143,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                         validateInterval: ASPNETIdentityConfig.SecurityStampValidateIntervalFromSeconds,
                         // ClaimsIdentityを返すdelegate
                         regenerateIdentity: (manager, user) => user.GenerateUserIdentityAsync(manager))
-
+                        
                     #endregion
-                }
+                },
+
+                // Cookie認証チケットの有効期限
+                ExpireTimeSpan = ASPNETIdentityConfig.AuthCookieExpiresFromHours,
+                // Cookie認証チケットの有効期限を半分過ぎた祭の要求で再発行(Sliding)される。
+                SlidingExpiration = ASPNETIdentityConfig.AuthCookieSlidingExpiration,
+
             });
 
             #endregion
