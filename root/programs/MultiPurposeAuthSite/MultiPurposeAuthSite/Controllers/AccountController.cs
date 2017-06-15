@@ -626,6 +626,9 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // パスワードのリセットの成功
 
+                        // イベント・ログ出力
+                        Log.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
+
                         // "パスワードのリセットの確認"画面を表示 
                         return View("ResetPasswordConfirmation");
                     }
@@ -1203,10 +1206,10 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="client_id">client_id（必須）</param>
         /// <param name="scope">scope（任意）</param>
         /// <param name="state">state（推奨）</param>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public ActionResult OAuthAuthorize(string response_type, string client_id, string scope, string state)
+        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state)
         {
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -1247,6 +1250,11 @@ namespace MultiPurposeAuthSite.Controllers
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);
 
+                    // イベント・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
+                        user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
+
                     // RedirectエンドポイントへRedirect
                     return new EmptyResult();
                 }
@@ -1273,6 +1281,11 @@ namespace MultiPurposeAuthSite.Controllers
                 // ClaimsIdentityでサインインして、Access Tokenを発行
                 AuthenticationManager.SignIn(identity);
 
+                // イベント・ログ出力
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
+                        user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
+
                 // RedirectエンドポイントへRedirect
                 return new EmptyResult();
             }
@@ -1293,11 +1306,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="client_id">client_id（必須）</param>
         /// <param name="scope">scope（任意）</param>
         /// <param name="state">state（推奨）</param>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult OAuthAuthorize(string client_id, string state, string scope)
+        public async Task<ActionResult> OAuthAuthorize(string client_id, string state, string scope)
         {
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -1327,6 +1340,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // ClaimsIdentityでサインインして、仲介コードを発行
                 this.AuthenticationManager.SignIn(identity);
+
+                // イベント・ログ出力
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
+                        user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
 
                 // RedirectエンドポイントへRedirect
                 return new EmptyResult();

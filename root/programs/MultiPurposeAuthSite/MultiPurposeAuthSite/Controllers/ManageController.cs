@@ -263,6 +263,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // ユーザの取得
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    string oldUserName = user.UserName;
 
                     // UserNameの更新
                     user.UserName = model.UserNameForEdit;
@@ -274,6 +275,10 @@ namespace MultiPurposeAuthSite.Controllers
                         // 再ログイン
                         if (await this.ReSignInAsync())
                         {
+                            // イベント・ログ出力
+                            Log.MyOperationTrace(string.Format(
+                                "{0}({1}) did change own user name to {2}.", user.Id, oldUserName, user.UserName));
+
                             // 再ログインに成功
                             return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeUserNameSuccess });
                         }
@@ -342,6 +347,10 @@ namespace MultiPurposeAuthSite.Controllers
                     // 再ログイン
                     await this.ReSignInAsync();
 
+                    // イベント・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    Log.MyOperationTrace(string.Format("{0}({1}) did set own local password.", user.Id, user.UserName));
+
                     // Index - SetPasswordSuccess
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.SetPasswordSuccess });
                 }
@@ -400,6 +409,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 再ログイン
                     await this.ReSignInAsync();
+
+                    // イベント・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    Log.MyOperationTrace(string.Format("{0}({1}) did change own password.", user.Id, user.UserName));
 
                     // Index - ChangePasswordSuccess
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
@@ -574,7 +587,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // 入力の検証 1
                 if (userId == null || code == null)
                 {
-
+                    // ・・・
                 }
                 else
                 {
@@ -587,12 +600,15 @@ namespace MultiPurposeAuthSite.Controllers
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                             // 更新（UserName＝メアドの場合は、UserNameも更新）
+                            string oldUserName = "";
                             if (ASPNETIdentityConfig.RequireUniqueEmail)
                             {
+                                oldUserName = user.UserName;
                                 user.UserName = (string)Session["Email"];
                             }
                             user.Email = (string)Session["Email"];
 
+                            // 場合によっては、Email & UserName を更新するため。
                             //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
                             IdentityResult result = await UserManager.UpdateAsync(user);
 
@@ -607,6 +623,9 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 再ログインに成功
                                     if (ASPNETIdentityConfig.RequireUniqueEmail)
                                     {
+                                        // イベント・ログ出力
+                                        Log.MyOperationTrace(string.Format(
+                                            "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
                                         return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
                                     }
                                     else
@@ -617,7 +636,6 @@ namespace MultiPurposeAuthSite.Controllers
                                 else
                                 {
                                     // 再ログインに失敗
-
                                 }
                             }
                             else

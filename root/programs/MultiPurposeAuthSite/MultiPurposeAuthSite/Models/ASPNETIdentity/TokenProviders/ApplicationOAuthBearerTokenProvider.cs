@@ -31,6 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 
@@ -291,6 +292,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                         // 検証完了
                         context.Validated(identity);
+
+                        // イベント・ログ出力
+                        Log.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
+                            user.Id, user.UserName, context.ClientId, OAuthProviderHelper.GetInstance().GetClientName(context.ClientId)));
                     }
                     catch
                     {
@@ -354,21 +359,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // WEB API 2 OAuth Client Credentials Authentication, How to add additional parameters? - Stack Overflow
             // http://stackoverflow.com/questions/29132031/web-api-2-oauth-client-credentials-authentication-how-to-add-additional-paramet
-
-            // 将来的には、client_idの自動設定機能を有効にしてclient_idに対応するアカウントで認証する。
-
-            // --------------------------------------------------
-            //// ClaimsIdentityを生成し、
-            //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
-
-            //// ClaimsIdentityに、client_idに対応するclient_nameを設定する。
-            //identity.AddClaim(new Claim(ClaimTypes.Name,
-            //    OAuthProviderHelper.GetInstance().GetClientName(context.ClientId)));
-
-            //// ClaimsIdentityに、その他、所定のClaimを追加する。
-            //OAuthProviderHelper.AddClaim(identity, context.ClientId, "", context.Scope);
-            // --------------------------------------------------
-
+            
             try
             {
                 ApplicationUser user = null;
@@ -378,16 +369,28 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // ParentId（実質的に分割キー）
                 if (ASPNETIdentityConfig.MultiTenant)
                 {
-                    // マルチテナントの場合、サインアップするユーザが管理者ユーザになる。
+                    // マルチテナントの場合、
 
                     // client_idに対応するApplicationUserを取得する。
-                    user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
+                    user = await userManager.FindByNameAsync(
+                        OAuthProviderHelper.GetInstance().GetClientName(context.ClientId));
+
+                    if (user == null)
+                    {
+                        // *.configに定義したclient_idの場合は、アカウントが存在しない。
+                        // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
+                        user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
+                        
+                        // ClaimsIdentityを自前で生成する場合、
+                        //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
+                        //・・・
+                    }
                 }
                 else
                 {
-                    // マルチテナントでない場合、既定の管理者ユーザを使用する。
+                    // マルチテナントでない場合、
 
-                    // AdministratorのApplicationUser を取得する。
+                    // 既定の管理者ユーザを使用する。
                     user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
                 }
 
@@ -400,6 +403,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 // 検証完了
                 context.Validated(identity);
+
+                // イベント・ログ出力
+                Log.MyOperationTrace(string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
+                            user.Id, user.UserName, context.ClientId, OAuthProviderHelper.GetInstance().GetClientName(context.ClientId)));
             }
             catch
             {
