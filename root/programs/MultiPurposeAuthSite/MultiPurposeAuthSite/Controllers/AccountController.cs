@@ -374,50 +374,81 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     #region サインアップ失敗
 
-                    //// サインアップ済みの可能性を探る
-                    //user = await UserManager.FindByNameAsync(uid);
+                    // メアド検証の再送について
+                    if (ASPNETIdentityConfig.RequireUniqueEmail)
+                    {
+                        // サインアップ済みの可能性を探る
+                        ApplicationUser oldUser = await UserManager.FindByNameAsync(uid);
 
-                    //if (user != null)
-                    //{
-                    //    #region サインアップ済み
+                        if (oldUser == null)
+                        {
+                            // サインアップ済みでない。
+                        }
+                        else
+                        {
+                            #region サインアップ済み
 
-                    //    // userを確認する。
-                    //    if (user.EmailConfirmed)
-                    //    {
-                    //        // EmailConfirmed済み。
-                    //    }
-                    //    else if (user.Logins.Count != 0)
-                    //    {
-                    //        // ExternalLogin済み。
-                    //    }
-                    //    else
-                    //    {
-                    //        // userは存在するが
-                    //        // ・EmailConfirmed済みでない。
-                    //        // 若しくは、
-                    //        // ・ExternalLogin済みでない。
+                            // userを確認する。
+                            if (oldUser.EmailConfirmed)
+                            {
+                                // EmailConfirmed済み。
+                                // ・・・
+                            }
+                            else if (oldUser.Logins.Count != 0)
+                            {
+                                // ExternalLogin済み。
+                                // ・・・
+                            }
+                            else
+                            {
+                                // oldUserは存在するが
+                                // ・EmailConfirmed済みでない。
+                                // 若しくは、
+                                // ・ExternalLogin済みでない。
 
-                    //        #region 再度、メアド検証
+                                // 既存レコードを再作成
+                                
+                                // 削除して
+                                result = await UserManager.DeleteAsync(oldUser);
+                                
+                                // 結果の確認
+                                if (result.Succeeded)
+                                {
+                                    // ApplicationUserManagerのCreateAsync
+                                    result = await UserManager.CreateAsync(
+                                            user,
+                                            model.Password // Passwordはハッシュ化される。
+                                        );
 
-                    //        // メアド検証用のメールを送信して、
-                    //        this.SendConfirmEmail(
-                    //            user: user,
-                    //            isConfirmEmail_InsteadOf_PasswordReset: true);
+                                    // 結果の確認
+                                    if (result.Succeeded)
+                                    {
+                                        // 再度、メアド検証
 
-                    //        // VerifyEmailAddress
+                                        // メアド検証用のメールを送信して、
+                                        this.SendConfirmEmail(
+                                            user: user,
+                                            isConfirmEmail_InsteadOf_PasswordReset: true);
 
-                    //        //ViewBag.Link = callbackUrl;
-                    //        return View("VerifyEmailAddress");
+                                        // VerifyEmailAddress
 
-                    //        #endregion
-                    //    }
+                                        //ViewBag.Link = callbackUrl;
+                                        return View("VerifyEmailAddress");
+                                    }
+                                    else
+                                    {
+                                        // 再作成に失敗
+                                    }
+                                }
+                                else
+                                {
+                                    // 削除に失敗
+                                }
+                            }
 
-                    //    #endregion
-                    //}
-                    //else
-                    //{
-                    //    // サインアップ済みでない。
-                    //}
+                            #endregion
+                        }
+                    }
 
                     #endregion
                 }

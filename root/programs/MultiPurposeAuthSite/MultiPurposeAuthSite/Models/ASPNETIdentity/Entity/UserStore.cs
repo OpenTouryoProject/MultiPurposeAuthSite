@@ -370,12 +370,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    [Id], [UserName], [PasswordHash], " +
                                         "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], " +
-                                        "    [SecurityStamp], [TwoFactorEnabled], [ParentId], [ClientID], [PaymentInformation], [UnstructuredData])" +
+                                        "    [SecurityStamp], [TwoFactorEnabled], [ParentId], [ClientID], [PaymentInformation], [UnstructuredData], [CreatedDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, " +
-                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @ClientID, @PaymentInformation, @UnstructuredData)", user);
+                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @CreatedDate)", user);
 
                                     break;
 
@@ -386,12 +386,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", " +
-                                        "    \"SecurityStamp\", \"TwoFactorEnabled\", \"ParentId\", \"ClientID\", \"PaymentInformation\", \"UnstructuredData\")" +
+                                        "    \"SecurityStamp\", \"TwoFactorEnabled\", \"ParentId\", \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"CreatedDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :PasswordHash, " +
                                         "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, " +
-                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :ClientID, :PaymentInformation, :UnstructuredData)",
+                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :ClientID, :PaymentInformation, :UnstructuredData, :CreatedDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -409,7 +409,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             ParentId = user.ParentId,
                                             ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
-                                            UnstructuredData = user.UnstructuredData
+                                            UnstructuredData = user.UnstructuredData,
+                                            CreatedDate = user.CreatedDate
                                         });
 
                                     break;
@@ -1117,86 +1118,91 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task DeleteAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            UserStore.MyDebugTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
-            if (user.Id == user.ParentId)
+            // AccountControllerのメアド検証の再送で利用するため。
+            // UsersAdminControllerではチェックしている。
+
+            // 
+            //if (user.Id == user.ParentId)
+            //{
+            //    // 管理者ユーザは削除しない。
+            //}
+            //else
+            //{
+
+            try
             {
-                // 管理者ユーザは削除しない。
-            }
-            else
-            {
-                try
+                // ユーザの論理削除
+                switch (ASPNETIdentityConfig.UserStoreType)
                 {
-                    // ユーザの論理削除
-                    switch (ASPNETIdentityConfig.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
+                    case EnumUserStoreType.Memory:
 
-                            // ユーザを削除
-                            UserStore._users.Remove(UserStore._users.First(x => x.Id == user.Id));
-                            // ユーザの関連情報を削除
-                            UserStore._userRoleMap.RemoveAll(x => x.Item1 == user.Id);
-                            
-                            break;
+                        // ユーザを削除
+                        UserStore._users.Remove(UserStore._users.First(x => x.Id == user.Id));
+                        // ユーザの関連情報を削除
+                        UserStore._userRoleMap.RemoveAll(x => x.Item1 == user.Id);
 
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.OracleMD:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+                        break;
 
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+                            using (IDbTransaction tr = cnn.BeginTransaction())
                             {
-                                cnn.Open();
-                                using (IDbTransaction tr = cnn.BeginTransaction())
+                                switch (ASPNETIdentityConfig.UserStoreType)
                                 {
-                                    switch (ASPNETIdentityConfig.UserStoreType)
-                                    {
-                                        case EnumUserStoreType.SqlServer:
+                                    case EnumUserStoreType.SqlServer:
 
-                                            // ユーザの情報を削除
-                                            cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
+                                        // ユーザの情報を削除
+                                        cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
 
-                                            // ユーザの関連情報を削除
-                                            cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                        // ユーザの関連情報を削除
+                                        cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
 
-                                            break;
+                                        break;
 
-                                        case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.OracleMD:
 
-                                            // ユーザの情報を削除
-                                            cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
+                                        // ユーザの情報を削除
+                                        cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
 
-                                            // ユーザの関連情報を削除
-                                            cnn.Execute("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                            cnn.Execute("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                        // ユーザの関連情報を削除
+                                        cnn.Execute("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
 
-                                            break;
+                                        break;
 
-                                        case EnumUserStoreType.PostgreSQL:
+                                    case EnumUserStoreType.PostgreSQL:
 
-                                            break;
+                                        break;
 
-                                    }
-
-                                    tr.Commit();
                                 }
+
+                                tr.Commit();
                             }
+                        }
 
-                            break;
-                    }
+                        break;
+                }
 
-                    Log.MyOperationTrace(string.Format("{0}({1}) was deleted.", user.Id, user.UserName));
-                }
-                catch (Exception ex)
-                {
-                    UserStore.MyDebugLogForEx(ex);
-                }
+                Log.MyOperationTrace(string.Format("{0}({1}) was deleted.", user.Id, user.UserName));
             }
+            catch (Exception ex)
+            {
+                UserStore.MyDebugLogForEx(ex);
+            }
+            //}
 
             return Task.FromResult(default(object));
         }

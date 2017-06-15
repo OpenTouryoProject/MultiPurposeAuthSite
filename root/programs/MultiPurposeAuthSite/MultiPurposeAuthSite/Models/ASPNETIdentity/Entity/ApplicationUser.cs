@@ -356,7 +356,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// 非構造化データ
         /// </summary>
         public string UnstructuredData { get; set; } = null;
-        
+
+        /// <summary>
+        /// レコード生成日
+        /// </summary>
+        public DateTime CreatedDate { get; set; } = DateTime.Now ;
+
         #endregion
 
         #endregion

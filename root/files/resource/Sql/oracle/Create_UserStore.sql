@@ -21,6 +21,7 @@ CREATE TABLE "Users"(
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
+    "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.Users" PRIMARY KEY ("Id")
 );
 
@@ -89,7 +90,6 @@ CREATE INDEX "IX_UserRoles.RoleId" ON "UserRoles" ("RoleId" ASC);
 CREATE INDEX "IX_UserLogins.UserId" ON "UserLogins" ("UserId" ASC);
 ---- UserClaims
 CREATE INDEX "IX_UserClaims.UserId" ON "UserClaims" ("UserId" ASC);
-
 
 -- CONSTRAINT
 ---- UserRoles
