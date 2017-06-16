@@ -36,12 +36,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         public string ParentId { get; set; }
 
         /// <summary>Name</summary>
-        [Display(Name = "Name")]
+        [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
         public string Name { get; set; }
 
         /// <summary>E-mail</summary>
         [EmailAddress]
-        [Display(Name = "E-mail")]
+        [Display(Name = "Email", ResourceType = typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
 
         /// <summary>RolesList</summary>

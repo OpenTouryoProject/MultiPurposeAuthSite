@@ -27,18 +27,18 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     public class AccountLoginViewModel : BaseViewModel
     {
         /// <summary>Name</summary>
-        [Display(Name = "Name")]
+        [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
         public string Name { get; set; }
 
         /// <summary>E-mail</summary>
         [EmailAddress]
-        [Display(Name = "E-mail")]
+        [Display(Name = "Email", ResourceType = typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
 
         /// <summary>Password</summary>
         [Required(AllowEmptyStrings = false)]
         [DataType(DataType.Password)]
-        [Display(Name = "Password")]
+        [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
         public string Password { get; set; }
 
         /// <summary>RememberMe（アカウント記憶）</summary>

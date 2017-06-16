@@ -27,18 +27,18 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     public class AccountRegisterViewModel : BaseViewModel
     {
         /// <summary>Name</summary>
-        [Display(Name = "Name")]
+        [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
         public string Name { get; set; }
 
         /// <summary>E-mail</summary>
         [EmailAddress]
-        [Display(Name = "E-mail")]
+        [Display(Name = "Email", ResourceType = typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
 
         /// <summary>Password</summary>
         [Required(AllowEmptyStrings = false)]
         [DataType(DataType.Password)]
-        [Display(Name = "Password")]
+        [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
             100,
             ErrorMessageResourceName = "PasswordLengthErrMsg",
@@ -51,11 +51,11 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [DataType(DataType.Password)]
         [Display(
             Name = "ConfirmPassword",
-            ResourceType =typeof(Resources.CommonViewModels))] // 
+            ResourceType =typeof(Resources.CommonViewModels))]
         [Compare(
             "Password",
             ErrorMessageResourceName = "ConfirmPasswordErrMsg",
-            ErrorMessageResourceType =typeof(Resources.CommonViewModels))] // 
+            ErrorMessageResourceType =typeof(Resources.CommonViewModels))]
         public string ConfirmPassword { get; set; }
     }
 }

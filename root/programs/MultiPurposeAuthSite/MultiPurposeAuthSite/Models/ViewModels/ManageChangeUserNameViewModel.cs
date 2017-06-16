@@ -28,7 +28,13 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     {
         /// <summary>UserName</summary>
         [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UserName", ResourceType =typeof(Resources.CommonViewModels))]
+        [Display(Name = "NewUserName", ResourceType =typeof(Resources.CommonViewModels))]
         public string UserNameForEdit { get; set; }
+
+        /// <summary>Password</summary>
+        [Required(AllowEmptyStrings = true)]
+        [DataType(DataType.Password)]
+        [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
+        public string Password { get; set; }
     }
 }

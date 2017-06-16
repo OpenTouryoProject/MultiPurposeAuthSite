@@ -141,11 +141,20 @@
   <data name="Email" xml:space="preserve">
     <value>E-mail</value>
   </data>
+  <data name="NewEmail" xml:space="preserve">
+    <value>New E-mail address</value>
+  </data>
   <data name="NewPassword" xml:space="preserve">
     <value>New password</value>
   </data>
+  <data name="NewUserName" xml:space="preserve">
+    <value>New user name</value>
+  </data>
   <data name="OldPassword" xml:space="preserve">
     <value>Current password</value>
+  </data>
+  <data name="Password" xml:space="preserve">
+    <value>Password</value>
   </data>
   <data name="PasswordLengthErrMsg" xml:space="preserve">
     <value>The {0} must be at least {2} characters long.</value>

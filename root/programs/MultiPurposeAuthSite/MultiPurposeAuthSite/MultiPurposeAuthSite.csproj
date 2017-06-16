@@ -318,9 +318,9 @@
     <Compile Include="Models\ViewModels\ManageAddOAuth2DataViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageAddUnstructuredDataViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageChangeUserNameViewModel.cs" />
+    <Compile Include="Models\ViewModels\ManageEmailViewModel.cs" />
     <Compile Include="Models\ViewModels\UsersAdminSearchViewModel.cs" />
     <Compile Include="Models\ViewModels\UsersAdminEditViewModel.cs" />
-    <Compile Include="Models\ViewModels\ManageEmailViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageAddPhoneNumberViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageChangePasswordViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageConfigureTwoFactorViewModel.cs" />

@@ -29,7 +29,13 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>E-mail</summary>
         [Required(AllowEmptyStrings = false)]
         [EmailAddress]
-        [Display(Name = "Email", ResourceType =typeof(Resources.CommonViewModels))]
+        [Display(Name = "NewEmail", ResourceType =typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
+
+        /// <summary>Password</summary>
+        [Required(AllowEmptyStrings = true)]
+        [DataType(DataType.Password)]
+        [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
+        public string Password { get; set; }
     }
 }

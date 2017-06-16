@@ -29,7 +29,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>E-mail</summary>
         [Required(AllowEmptyStrings = false)]
         [EmailAddress]
-        [Display(Name = "E-mail")]
+        [Display(Name = "Email", ResourceType = typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
     }
 }

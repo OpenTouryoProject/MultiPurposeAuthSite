@@ -452,6 +452,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>
+        /// パスワード入力を要求（ユーザ名の編集許可時）
+        /// </summary>
+        public static bool RequirePasswordInEditingUserNameAndEmail
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["RequirePasswordInEditingUserNameAndEmail"]);
+            }
+        }
+
         #endregion
 
         #region パスワード検証

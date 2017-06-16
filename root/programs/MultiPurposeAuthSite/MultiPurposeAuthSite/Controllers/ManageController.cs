@@ -253,6 +253,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChangeUserName(ManageChangeUserNameViewModel model)
         {
+            ApplicationUser user = null;
+
             if (!ASPNETIdentityConfig.RequireUniqueEmail
                 && ASPNETIdentityConfig.AllowEditingUserName)
             {
@@ -261,8 +263,37 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageChangeUserNameViewModelの検証に成功
 
+                    // Passwordチェック
+                    if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
+                    {
+                        // パスワードのチェック
+                        user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        SignInStatus signInResult = await SignInManager.PasswordSignInAsync(
+                            userName: user.UserName,                                          // アカウント(UID)
+                            password: model.Password,                                         // アカウント(PWD)
+                            isPersistent: false,                                              // アカウント記憶
+                            shouldLockout: ASPNETIdentityConfig.UserLockoutEnabledByDefault); // ロックアウト
+
+                        if (signInResult == SignInStatus.Success)
+                        {
+                            // Passwordが一致した。
+                            // 処理を継続
+                        }
+                        else
+                        {
+                            // Passwordが一致しない。
+                            // 再表示
+                            return View(model);
+                        }
+                    }
+                    else
+                    {
+                        // ノーチェック
+                        // 処理を継続
+                    }
+
                     // ユーザの取得
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     string oldUserName = user.UserName;
 
                     // UserNameの更新
@@ -298,10 +329,15 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageChangeUserNameViewModelの検証に失敗
                 }
-            }
 
-            // エラー画面
-            return View("Error");
+                // 再表示
+                return View(model);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         #endregion
@@ -449,7 +485,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult AddEmail()
         {
-            if (ASPNETIdentityConfig.CanEditEmail)
+            if (!ASPNETIdentityConfig.RequireUniqueEmail
+                && ASPNETIdentityConfig.CanEditEmail)
             {
                 return View();
             }
@@ -470,12 +507,43 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddEmail(ManageEmailViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditEmail)
+            if (!ASPNETIdentityConfig.RequireUniqueEmail
+                && ASPNETIdentityConfig.CanEditEmail)
             {
                 // ManageEmailViewModelの検証
                 if (ModelState.IsValid)
                 {
                     // ManageEmailViewModelの検証に成功
+                    
+                    // Passwordチェック
+                    if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
+                    {
+                        // パスワードのチェック
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        SignInStatus result = await SignInManager.PasswordSignInAsync(
+                            userName: user.UserName,                                          // アカウント(UID)
+                            password: model.Password,                                         // アカウント(PWD)
+                            isPersistent: false,                                              // アカウント記憶
+                            shouldLockout: ASPNETIdentityConfig.UserLockoutEnabledByDefault); // ロックアウト
+
+                        if (result == SignInStatus.Success)
+                        {
+                            // Passwordが一致した。
+                            // 処理を継続
+                        }
+                        else
+                        {
+                            // Passwordが一致しない。
+                            // 再表示
+                            return View(model);
+                        }
+                    }
+                    else
+                    {
+                        // ノーチェック
+                        // 処理を継続
+                    }
+
                     // めんどうなのでSessionStoreで。
                     string code = GetPassword.Base64UrlSecret(16);
                     Session["Code"] = code;
@@ -513,7 +581,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ChangeEmail()
         {
-            if (ASPNETIdentityConfig.CanEditEmail)
+            if (ASPNETIdentityConfig.RequireUniqueEmail
+                && ASPNETIdentityConfig.AllowEditingUserName)
             {
                 // ユーザの取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -536,12 +605,43 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChangeEmail(ManageEmailViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditEmail)
+            if (ASPNETIdentityConfig.RequireUniqueEmail
+                && ASPNETIdentityConfig.AllowEditingUserName)
             {
                 // ManageEmailViewModelの検証
                 if (ModelState.IsValid)
                 {
                     // ManageEmailViewModelの検証に成功
+
+                    // Passwordチェック
+                    if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
+                    {
+                        // パスワードのチェック
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        SignInStatus result = await SignInManager.PasswordSignInAsync(
+                            userName: user.UserName,                                          // アカウント(UID)
+                            password: model.Password,                                         // アカウント(PWD)
+                            isPersistent: false,                                              // アカウント記憶
+                            shouldLockout: ASPNETIdentityConfig.UserLockoutEnabledByDefault); // ロックアウト
+
+                        if (result == SignInStatus.Success)
+                        {
+                            // Passwordが一致した。
+                            // 処理を継続
+                        }
+                        else
+                        {
+                            // Passwordが一致しない。
+                            // 再表示
+                            return View(model);
+                        }
+                    }
+                    else
+                    {
+                        // ノーチェック
+                        // 処理を継続
+                    }
+
                     // めんどうなのでSessionStoreで。
                     string code = GetPassword.Base64UrlSecret(16);
                     Session["Code"] = code;
@@ -673,7 +773,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveEmail()
         {
-            if (ASPNETIdentityConfig.CanEditEmail)
+            if (!ASPNETIdentityConfig.RequireUniqueEmail
+                && ASPNETIdentityConfig.CanEditEmail)
             {
                 // null クリア
                 IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), "");

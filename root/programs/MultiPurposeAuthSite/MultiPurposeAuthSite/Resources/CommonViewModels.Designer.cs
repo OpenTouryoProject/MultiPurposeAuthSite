@@ -133,6 +133,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   New E-mail address に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string NewEmail {
+            get {
+                return ResourceManager.GetString("NewEmail", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   New password に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string NewPassword {
@@ -142,11 +151,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   New user name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string NewUserName {
+            get {
+                return ResourceManager.GetString("NewUserName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Current password に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string OldPassword {
             get {
                 return ResourceManager.GetString("OldPassword", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Password に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Password {
+            get {
+                return ResourceManager.GetString("Password", resourceCulture);
             }
         }
         

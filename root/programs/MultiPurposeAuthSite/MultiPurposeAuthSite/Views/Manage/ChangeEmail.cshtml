@@ -22,6 +22,8 @@
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
+@using MultiPurposeAuthSite.Models.ASPNETIdentity;
+
 @model ManageEmailViewModel
 @{
     ViewBag.Title = ManageViews.ChangeEmailTitle;
@@ -46,6 +48,19 @@
             @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
         </div>
     </div>
+    if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
+    {
+        <div class="form-group">
+            @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
+            <div class="col-md-10">
+                @Html.PasswordFor(m => m.Password, new { @class = "form-control" })
+            </div>
+        </div>
+    }
+    else
+    {
+        @Html.Hidden("Password", "dummy")
+    }
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
             <input type="submit" class="btn btn-default" value="@ManageViews.ChangeEmailSubmit" />

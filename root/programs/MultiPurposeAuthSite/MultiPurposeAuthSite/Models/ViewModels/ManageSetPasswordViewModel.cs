@@ -29,7 +29,9 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>NewPassword</summary>
         [Required(AllowEmptyStrings = false)]
         [DataType(DataType.Password)]
-        [Display(Name = "NewPassword", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(
+            Name = "NewPassword",
+            ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
             100,
             ErrorMessageResourceName = "PasswordLengthErrMsg",
