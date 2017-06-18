@@ -302,6 +302,7 @@
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
     <Compile Include="Models\ASPNETIdentity\Util\CheckRole.cs" />
+    <Compile Include="Models\Util\GetContentOfLetter.cs" />
     <Compile Include="Models\Util\Log.cs" />
     <Compile Include="Models\Util\DataAccess.cs" />
     <Compile Include="Models\Util\CreateProxy.cs" />
@@ -493,6 +494,7 @@
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
     <Content Include="Views\Manage\OAuthAuthorizationCodeGrantClient2.cshtml" />
     <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
+    <Content Include="Views\Account\Agreement.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

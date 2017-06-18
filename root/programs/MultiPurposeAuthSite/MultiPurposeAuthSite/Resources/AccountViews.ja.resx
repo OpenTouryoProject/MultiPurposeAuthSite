@@ -117,6 +117,18 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="Agreement" xml:space="preserve">
+    <value>約款本文</value>
+  </data>
+  <data name="AgreementCheck" xml:space="preserve">
+    <value>私はこの契約に同意します。</value>
+  </data>
+  <data name="AgreementH4" xml:space="preserve">
+    <value>以下の契約をよくお読みください。</value>
+  </data>
+  <data name="AgreementTitle" xml:space="preserve">
+    <value>約款</value>
+  </data>
   <data name="EmailConfirmationActionLink" xml:space="preserve">
     <value>ログインするにはここをクリックしてください。</value>
   </data>

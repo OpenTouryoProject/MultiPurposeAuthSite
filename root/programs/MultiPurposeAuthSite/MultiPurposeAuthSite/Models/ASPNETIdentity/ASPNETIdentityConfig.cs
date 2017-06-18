@@ -389,21 +389,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region SecurityStamp
-
-        /// <summary>
-        /// SecurityStampの検証間隔
-        /// </summary>
-        public static TimeSpan SecurityStampValidateIntervalFromSeconds
-        {
-            get
-            {
-                return TimeSpan.FromSeconds(Double.Parse(ConfigurationManager.AppSettings["SecurityStampValidateIntervalFromSeconds"]));
-            }
-        }
-
-        #endregion
-
         #region ログイン
 
         #region ユーザ名検証
@@ -427,6 +412,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return Convert.ToBoolean(ConfigurationManager.AppSettings["RequireUniqueEmail"]);
+            }
+        }
+
+        /// <summary>
+        /// 約款画面を表示するかどうか
+        /// </summary>
+        public static bool DisplayAgreementScreen
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["DisplayAgreementScreen"]);
             }
         }
 
@@ -739,6 +735,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #endregion
 
         #endregion
+
+        #endregion
+
+        #region SecurityStamp
+
+        /// <summary>
+        /// SecurityStampの検証間隔
+        /// </summary>
+        public static TimeSpan SecurityStampValidateIntervalFromSeconds
+        {
+            get
+            {
+                return TimeSpan.FromSeconds(Double.Parse(ConfigurationManager.AppSettings["SecurityStampValidateIntervalFromSeconds"]));
+            }
+        }
 
         #endregion
 

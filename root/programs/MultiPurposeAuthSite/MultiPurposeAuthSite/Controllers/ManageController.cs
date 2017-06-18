@@ -865,7 +865,8 @@ namespace MultiPurposeAuthSite.Controllers
                         IdentityMessage message = new IdentityMessage
                         {
                             Destination = model.Number,
-                            Body = Resources.ManageController.CodeForAddPhoneNumber + code
+                            Body = GetContentOfLetter.Get(
+                                "AddPhoneNumber", CustomEncode.UTF_8, Resources.ManageController.CodeForAddPhoneNumber) + code
                         };
                         await UserManager.SmsService.SendAsync(message);
                     }

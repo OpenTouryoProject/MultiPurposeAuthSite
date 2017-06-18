@@ -61,6 +61,42 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Terms of agreement に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Agreement {
+            get {
+                return ResourceManager.GetString("Agreement", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   I accept this term in this agreement. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AgreementCheck {
+            get {
+                return ResourceManager.GetString("AgreementCheck", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Please read the following agreement carefully. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AgreementH4 {
+            get {
+                return ResourceManager.GetString("AgreementH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Agreement に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AgreementTitle {
+            get {
+                return ResourceManager.GetString("AgreementTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Please click here to Log in に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string EmailConfirmationActionLink {

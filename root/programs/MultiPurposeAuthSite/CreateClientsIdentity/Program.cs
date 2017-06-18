@@ -46,18 +46,8 @@ namespace CreateClientsIdentity
         {
             Dictionary<string, Dictionary<string, string>> obj
                 = new Dictionary<string, Dictionary<string, string>>();
-
-            obj.Add(
-                Guid.NewGuid().ToString("N"),
-                new Dictionary<string, string>()
-                {
-                    {"client_secret", GetPassword.Base64UrlSecret(32)},
-                    { "redirect_uri_code", "test_self_code"},
-                    { "redirect_uri_token", "test_self_token"},
-                    { "client_name", "TestClient"}
-                });
-
-            for (int i = 0; i < 3; i++)
+            
+            for (int i = 0; i < 5; i++)
             {
                 obj.Add(
                     Guid.NewGuid().ToString("N"),
