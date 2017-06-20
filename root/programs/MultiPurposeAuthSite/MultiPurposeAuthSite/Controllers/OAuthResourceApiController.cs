@@ -143,7 +143,15 @@ namespace MultiPurposeAuthSite.Controllers
                         if (!string.IsNullOrEmpty(user.UnstructuredData))
                         {
                             model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
-                        };
+                        }
+                        else
+                        {
+                            model = new ManageAddUnstructuredDataViewModel
+                            {
+                                FirstName = "",
+                                LastName = "",
+                            };
+                        }
 
                         userinfoClaimSet.Add("given_name", model.FirstName);
                         userinfoClaimSet.Add("family_name", model.LastName);

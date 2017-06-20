@@ -590,7 +590,15 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!string.IsNullOrEmpty(user.UnstructuredData))
                 {
                     model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
-                };
+                }
+                else
+                {
+                    model = new ManageAddUnstructuredDataViewModel
+                    {
+                        FirstName = "",
+                        LastName = "",
+                    };
+                }
 
                 return View(new ManageEmailViewModel
                 {
@@ -659,7 +667,15 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(user.UnstructuredData))
                     {
                         unstructuredData = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
-                    };
+                    }
+                    else
+                    {
+                        unstructuredData = new ManageAddUnstructuredDataViewModel
+                        {
+                            FirstName = "",
+                            LastName = "",
+                        };
+                    }
 
                     if (user.UserName != model.Email
                         || unstructuredData.FirstName != model.FirstName

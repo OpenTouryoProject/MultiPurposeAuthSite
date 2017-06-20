@@ -130,7 +130,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         if (!string.IsNullOrEmpty(user.UnstructuredData))
                         {
                             model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
-                        };
+                        }
+                        else
+                        {
+                            model = new ManageAddUnstructuredDataViewModel
+                            {
+                                FirstName = "",
+                                LastName = "",
+                            };
+                        }
 
                         authTokenClaimSet.Add("given_name", model.FirstName);
                         authTokenClaimSet.Add("family_name", model.LastName);

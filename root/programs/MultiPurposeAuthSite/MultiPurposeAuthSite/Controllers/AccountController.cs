@@ -1306,6 +1306,10 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             temp.Add(ASPNETIdentityConst.Scope_Userid);
                         }
+                        else if (s == ASPNETIdentityConst.Scope_Profile)
+                        {
+                            temp.Add(ASPNETIdentityConst.Scope_Profile);
+                        }
                     }
 
                     OAuthProviderHelper.AddClaim(identity, client_id, state, temp.ToArray());
