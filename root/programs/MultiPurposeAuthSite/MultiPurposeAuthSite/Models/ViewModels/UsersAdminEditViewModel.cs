@@ -22,6 +22,8 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Web.Mvc;
 
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
+
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
@@ -30,13 +32,20 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     {
         /// <summary>ユーザID</summary>
         [Required(AllowEmptyStrings = false)]
+        // [StringLength( // ユーザ入力でないので不要
         public string Id { get; set; }
 
         /// <summary>ParentId(UI制御用)</summary>
+        [Required(AllowEmptyStrings = false)]
+        // [StringLength( // ユーザ入力でないので不要
         public string ParentId { get; set; }
 
         /// <summary>Name</summary>
         [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            ASPNETIdentityConst.MaxLengthOfUserName,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string Name { get; set; }
 
         /// <summary>E-mail</summary>

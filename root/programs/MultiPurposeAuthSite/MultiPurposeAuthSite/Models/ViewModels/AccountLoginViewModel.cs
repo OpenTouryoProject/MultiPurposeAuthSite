@@ -28,6 +28,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     {
         /// <summary>Name</summary>
         [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
+        // [StringLength( // 検証用なので不要
         public string Name { get; set; }
 
         /// <summary>E-mail</summary>
@@ -39,6 +40,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [DataType(DataType.Password)]
         [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
+        // [StringLength( // 検証用なので不要
         public string Password { get; set; }
 
         /// <summary>RememberMe（アカウント記憶）</summary>

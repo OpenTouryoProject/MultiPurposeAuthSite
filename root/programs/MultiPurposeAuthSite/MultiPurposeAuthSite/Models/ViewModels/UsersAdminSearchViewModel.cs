@@ -19,10 +19,9 @@
 //**********************************************************************************
 
 using System.Collections.Generic;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-
 using System.ComponentModel.DataAnnotations;
-using System.Web.Mvc;
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -32,6 +31,10 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     {
         /// <summary>ユーザ名（検索条件）</summary>
         [Display(Name = "UserNameforSearch", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            ASPNETIdentityConst.MaxLengthOfUserName,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string UserNameforSearch { get; set; }
 
         /// <summary>ユーザ一覧</summary>

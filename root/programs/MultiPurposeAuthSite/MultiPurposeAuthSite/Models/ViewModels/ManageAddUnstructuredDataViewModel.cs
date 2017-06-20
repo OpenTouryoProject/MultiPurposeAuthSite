@@ -29,10 +29,18 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     {
         /// <summary>UnstructuredData1</summary>
         [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            512,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "usd1")]
         public string UnstructuredData1 { get; set; }
 
         [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            512,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "usd2")]
         public string UnstructuredData2 { get; set; }
     }

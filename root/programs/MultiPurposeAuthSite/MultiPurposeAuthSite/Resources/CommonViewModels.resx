@@ -141,6 +141,9 @@
   <data name="Email" xml:space="preserve">
     <value>E-mail</value>
   </data>
+  <data name="MaxLengthErrMsg" xml:space="preserve">
+    <value>The {0} must be at less than or equal to {1} characters long.</value>
+  </data>
   <data name="NewEmail" xml:space="preserve">
     <value>New E-mail address</value>
   </data>
@@ -155,9 +158,6 @@
   </data>
   <data name="Password" xml:space="preserve">
     <value>Password</value>
-  </data>
-  <data name="PasswordLengthErrMsg" xml:space="preserve">
-    <value>The {0} must be at least {2} characters long.</value>
   </data>
   <data name="PaymentInformation" xml:space="preserve">
     <value>Payment Information</value>

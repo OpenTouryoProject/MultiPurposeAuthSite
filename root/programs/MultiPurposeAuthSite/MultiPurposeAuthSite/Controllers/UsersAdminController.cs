@@ -511,7 +511,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> Edit(
-            [Bind(Include = "Id,Name,Email")] UsersAdminEditViewModel editUser, params string[] selectedRole)
+            [Bind(Include = "Id,ParentId,Name,Email")] UsersAdminEditViewModel editUser, params string[] selectedRole)
         {
             this.Authorize();
 
@@ -617,6 +617,28 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                     }
                 }
+
+                // 再表示
+                // 「選択可能なロール」に「現在のロール」のチェックを入れる。
+                List<ApplicationRole> selectableRoles = await this.GetSelectableRoles();
+                IList<string> usersRoles = await UserManager.GetRolesAsync(user.Id);
+
+                return View(new UsersAdminEditViewModel()
+                {
+                    Id = user.Id,
+                    ParentId = user.ParentId,
+
+                    Name = user.UserName,
+                    Email = user.Email,
+
+                    RolesList = selectableRoles.Select(
+                        x => new SelectListItem()
+                        {
+                            Selected = usersRoles.Contains(x.Name),
+                            Text = x.Name,
+                            Value = x.Name
+                        })
+                });
 
                 #endregion
             }

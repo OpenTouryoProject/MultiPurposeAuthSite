@@ -156,8 +156,8 @@
   <data name="Password" xml:space="preserve">
     <value>パスワード</value>
   </data>
-  <data name="PasswordLengthErrMsg" xml:space="preserve">
-    <value>{0} の長さは {2} 文字以上である必要があります。</value>
+  <data name="MaxLengthErrMsg" xml:space="preserve">
+    <value>{0} の長さは {1} 文字以下である必要があります。</value>
   </data>
   <data name="PaymentInformation" xml:space="preserve">
     <value>支払元情報</value>

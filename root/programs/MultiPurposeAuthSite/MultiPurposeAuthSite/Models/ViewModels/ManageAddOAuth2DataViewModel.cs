@@ -20,6 +20,7 @@
 
 using Newtonsoft.Json;
 using System.ComponentModel.DataAnnotations;
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -29,26 +30,40 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     {
         /// <summary>ClientID</summary>
         [Display(Name = "ClientID", ResourceType = typeof(Resources.CommonViewModels))]
+        // [StringLength( // ユーザ入力でないので不要
         [JsonIgnore] // これはJsonConvertしない。
         public string ClientID { get; set; }
 
         /// <summary>ClientSecret</summary>
         [Display(Name = "ClientSecret", ResourceType = typeof(Resources.CommonViewModels))]
+        // [StringLength( // ユーザ入力でないので不要
         [JsonProperty(PropertyName = "client_secret")]
         public string ClientSecret { get; set; }
 
         /// <summary>RedirectUriCode</summary>
         [Display(Name = "RedirectUriCode", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            ASPNETIdentityConst.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_code")]
         public string RedirectUriCode { get; set; }
 
         /// <summary>RedirectUriToken</summary>
         [Display(Name = "RedirectUriToken", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            ASPNETIdentityConst.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_token")]
         public string RedirectUriToken { get; set; }
 
         /// <summary>ClientName</summary>
         [Display(Name = "ClientName", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            ASPNETIdentityConst.MaxLengthOfClientName,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "sub")]
         public string ClientName { get; set; }
     }

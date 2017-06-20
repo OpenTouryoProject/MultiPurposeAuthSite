@@ -37,6 +37,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
     /// <summary>ASPNETIdentityConst</summary>
     public class ASPNETIdentityConst
     {
+        #region Max
+
+        /// <summary>UriのMaxLength</summary>
+        public const int MaxLengthOfUri = 512;
+
+        /// <summary>ClientNameのMaxLength</summary>
+        public const int MaxLengthOfClientName = 64;
+
+        /// <summary>RoleNameのMaxLength</summary>
+        public const int MaxLengthOfRoleName = 64;
+
+        /// <summary>UserNameのMaxLength</summary>
+        public const int MaxLengthOfUserName = 64;
+
+        /// <summary>PasswordのMaxLength</summary>
+        public const int MaxLengthOfPassword = 100;
+
+        #endregion
+
         #region Idp
 
         #region Roles

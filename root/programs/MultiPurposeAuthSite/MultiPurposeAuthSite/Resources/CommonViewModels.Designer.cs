@@ -133,6 +133,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   The {0} must be at less than or equal to {1} characters long. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string MaxLengthErrMsg {
+            get {
+                return ResourceManager.GetString("MaxLengthErrMsg", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   New E-mail address に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string NewEmail {
@@ -174,15 +183,6 @@ namespace MultiPurposeAuthSite.Resources {
         public static string Password {
             get {
                 return ResourceManager.GetString("Password", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   The {0} must be at least {2} characters long. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string PasswordLengthErrMsg {
-            get {
-                return ResourceManager.GetString("PasswordLengthErrMsg", resourceCulture);
             }
         }
         

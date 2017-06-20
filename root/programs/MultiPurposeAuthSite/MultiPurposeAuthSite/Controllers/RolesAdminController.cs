@@ -289,7 +289,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> Create(EditRoleViewModel roleViewModel)
+        public async Task<ActionResult> Create(RolesAdminEditViewModel roleViewModel)
         {
             this.Authorize();
 
@@ -354,7 +354,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
             }
 
-            EditRoleViewModel roleModel = new EditRoleViewModel
+            RolesAdminEditViewModel roleModel = new RolesAdminEditViewModel
             {
                 Id = role.Id,
                 ParentId = role.ParentId,
@@ -372,7 +372,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> Edit([Bind(Include = "Name,Id")] EditRoleViewModel roleModel)
+        public async Task<ActionResult> Edit([Bind(Include = "Id,ParentId,Name")] RolesAdminEditViewModel roleModel)
         {
             this.Authorize();
 
@@ -427,7 +427,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 再表示
-            return View();
+            return View(roleModel);
         }
 
         #endregion

@@ -514,7 +514,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageEmailViewModelの検証に成功
-                    
+
                     // Passwordチェック
                     if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
                     {
@@ -613,11 +613,13 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageEmailViewModelの検証に成功
 
+                    // 先ず、ユーザを取得しておく。
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
                     // Passwordチェック
                     if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
                     {
                         // パスワードのチェック
-                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                         SignInStatus result = await SignInManager.PasswordSignInAsync(
                             userName: user.UserName,                                          // アカウント(UID)
                             password: model.Password,                                         // アカウント(PWD)
@@ -642,15 +644,24 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    // めんどうなのでSessionStoreで。
-                    string code = GetPassword.Base64UrlSecret(16);
-                    Session["Code"] = code;
-                    Session["Email"] = model.Email; // 更新後のメアド
+                    if (user.UserName != model.Email)
+                    {
+                        // メアドが更新された場合。
 
-                    this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+                        // めんどうなのでSessionStoreで。
+                        string code = GetPassword.Base64UrlSecret(16);
+                        Session["Code"] = code;
+                        Session["Email"] = model.Email; // 更新後のメアド
 
-                    // 再表示
-                    return View("VerifyEmailAddress");
+                        this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+
+                        // 表示
+                        return View("VerifyEmailAddress");
+                    }
+                    else
+                    {
+                        // メアドが更新されていない場合。
+                    }
                 }
                 else
                 {
@@ -699,48 +710,59 @@ namespace MultiPurposeAuthSite.Controllers
                             // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                            // 更新（UserName＝メアドの場合は、UserNameも更新）
-                            string oldUserName = "";
-                            if (ASPNETIdentityConfig.RequireUniqueEmail)
+                            string email = (string)Session["Email"];
+
+                            if (!string.IsNullOrEmpty(email))
                             {
-                                oldUserName = user.UserName;
-                                user.UserName = (string)Session["Email"];
-                            }
-                            user.Email = (string)Session["Email"];
+                                // emailが ≠ null（Sessionタイムアウトの懸念）
 
-                            // 場合によっては、Email & UserName を更新するため。
-                            //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
-                            IdentityResult result = await UserManager.UpdateAsync(user);
-
-                            // 結果の確認
-                            if (result.Succeeded)
-                            {
-                                // メアド検証の成功
-
-                                // 再ログイン
-                                if (await this.ReSignInAsync())
+                                // 更新（UserName＝メアドの場合は、UserNameも更新）
+                                string oldUserName = "";
+                                if (ASPNETIdentityConfig.RequireUniqueEmail)
                                 {
-                                    // 再ログインに成功
-                                    if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                    oldUserName = user.UserName;
+                                    user.UserName = email;
+                                }
+                                user.Email = email;
+
+                                // 場合によっては、Email & UserName を更新するため。
+                                //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
+                                IdentityResult result = await UserManager.UpdateAsync(user);
+
+                                // 結果の確認
+                                if (result.Succeeded)
+                                {
+                                    // メアド検証の成功
+
+                                    // 再ログイン
+                                    if (await this.ReSignInAsync())
                                     {
-                                        // イベント・ログ出力
-                                        Log.MyOperationTrace(string.Format(
-                                            "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
-                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
+                                        // 再ログインに成功
+                                        if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                        {
+                                            // イベント・ログ出力
+                                            Log.MyOperationTrace(string.Format(
+                                                "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
+                                            return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
+                                        }
+                                        else
+                                        {
+                                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
+                                        }
                                     }
                                     else
                                     {
-                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
+                                        // 再ログインに失敗
                                     }
                                 }
                                 else
                                 {
-                                    // 再ログインに失敗
+                                    // E-mail更新に失敗
                                 }
                             }
                             else
                             {
-                                // E-mail更新に失敗
+                                // emailが ＝ null（Sessionタイムアウトの懸念）
                             }
 
                             if (ASPNETIdentityConfig.RequireUniqueEmail)

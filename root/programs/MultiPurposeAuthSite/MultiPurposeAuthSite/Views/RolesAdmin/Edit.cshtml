@@ -22,7 +22,7 @@
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
-@model EditRoleViewModel
+@model RolesAdminEditViewModel
 
 @{
     ViewBag.Title = AdminViews.RolesAdminEditTitle;
@@ -37,11 +37,13 @@
 <h4>@AdminViews.RolesAdminEditH4</h4>
 <hr />
 <div class="form-horizontal">
-    @using (Html.BeginForm())
+    @using (Html.BeginForm("Edit", "RolesAdmin", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
     {
         @Html.AntiForgeryToken()
         @Html.ValidationSummary(true)
         @Html.HiddenFor(model => model.Id)
+        @Html.HiddenFor(model => model.ParentId)
+        
         <div class="form-group">
             @Html.LabelFor(model => model.Name, new { @class = "control-label col-md-2" })
             <div class="col-md-10">

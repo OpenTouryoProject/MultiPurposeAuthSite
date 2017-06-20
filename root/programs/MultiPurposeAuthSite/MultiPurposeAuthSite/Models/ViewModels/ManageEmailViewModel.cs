@@ -36,6 +36,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = true)]
         [DataType(DataType.Password)]
         [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
+        // [StringLength( // 検証用なので不要
         public string Password { get; set; }
     }
 }

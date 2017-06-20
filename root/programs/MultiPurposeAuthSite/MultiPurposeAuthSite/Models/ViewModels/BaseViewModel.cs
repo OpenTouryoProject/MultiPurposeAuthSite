@@ -48,6 +48,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
             get
             {
                 MyUserInfo myUserInfo = (MyUserInfo)UserInfoHandle.GetUserInformation();
+
                 if (myUserInfo == null)
                 {
                     return "anonymous";

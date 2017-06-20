@@ -19,6 +19,7 @@
 //**********************************************************************************
 
 using System.ComponentModel.DataAnnotations;
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -28,6 +29,10 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     {
         /// <summary>Name</summary>
         [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            ASPNETIdentityConst.MaxLengthOfUserName,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string Name { get; set; }
 
         /// <summary>E-mail</summary>
@@ -40,10 +45,9 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [DataType(DataType.Password)]
         [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            100,
-            ErrorMessageResourceName = "PasswordLengthErrMsg",
-            ErrorMessageResourceType = typeof(Resources.CommonViewModels),
-            MinimumLength = 8)]
+            ASPNETIdentityConst.MaxLengthOfPassword,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string Password { get; set; }
 
         /// <summary>Confirm password</summary>

@@ -19,6 +19,7 @@
 //**********************************************************************************
 
 using System.ComponentModel.DataAnnotations;
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -30,6 +31,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [DataType(DataType.Password)]
         [Display(Name = "OldPassword", ResourceType =typeof(Resources.CommonViewModels))]
+        // [StringLength( // 検証用なので不要
         public string OldPassword { get; set; }
 
         /// <summary>NewPassword</summary>
@@ -37,10 +39,9 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [DataType(DataType.Password)]
         [Display(Name = "NewPassword", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            100,
-            ErrorMessageResourceName = "PasswordLengthErrMsg",
-            ErrorMessageResourceType = typeof(Resources.CommonViewModels),
-            MinimumLength = 8)]
+            ASPNETIdentityConst.MaxLengthOfPassword,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string NewPassword { get; set; }
 
         /// <summary>

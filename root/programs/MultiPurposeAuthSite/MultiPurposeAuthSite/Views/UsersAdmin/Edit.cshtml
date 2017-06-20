@@ -39,11 +39,12 @@
 <h4>@AdminViews.UsersAdminEditH4</h4>
 <hr />
 <div class="form-horizontal">
-    @using (Html.BeginForm())
+    @using (Html.BeginForm("Edit", "UsersAdmin", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
     {
         @Html.AntiForgeryToken()
         @Html.ValidationSummary(true)
         @Html.HiddenFor(model => model.Id)
+        @Html.HiddenFor(model => model.ParentId)
         
         <div class="form-group">
             @if (ASPNETIdentityConfig.RequireUniqueEmail)

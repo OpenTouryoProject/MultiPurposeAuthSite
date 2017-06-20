@@ -20,6 +20,8 @@
 
 using System.ComponentModel.DataAnnotations;
 
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
+
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
@@ -29,12 +31,17 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>UserName</summary>
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "NewUserName", ResourceType =typeof(Resources.CommonViewModels))]
+        [StringLength(
+            ASPNETIdentityConst.MaxLengthOfUserName,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string UserNameForEdit { get; set; }
 
         /// <summary>Password</summary>
         [Required(AllowEmptyStrings = true)]
         [DataType(DataType.Password)]
         [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
+        // [StringLength( // 検証用なので不要
         public string Password { get; set; }
     }
 }
