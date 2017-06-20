@@ -62,6 +62,24 @@ namespace MultiPurposeAuthSite.Models.ViewModels
             ErrorMessageResourceType =typeof(Resources.CommonViewModels))]
         public string ConfirmPassword { get; set; }
 
+        /// <summary>UnstructuredData1 (FirstName)</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            512,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        public string FirstName { get; set; }
+
+        /// <summary>UnstructuredData2 (LastName)</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            512,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        public string LastName { get; set; }
+
         /// <summary>約款本文</summary>
         [Display(Name = "Agreement", ResourceType = typeof(Resources.AccountViews))]
         public string Agreement { get; set; }

@@ -184,10 +184,10 @@
     <value>Search</value>
   </data>
   <data name="UnstructuredData1" xml:space="preserve">
-    <value>UnstructuredData1</value>
+    <value>First name</value>
   </data>
   <data name="UnstructuredData2" xml:space="preserve">
-    <value>UnstructuredData2</value>
+    <value>Last name</value>
   </data>
   <data name="UserName" xml:space="preserve">
     <value>User name</value>

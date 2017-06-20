@@ -31,6 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
@@ -137,7 +138,16 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     #region OpenID Connect
                     case ASPNETIdentityConst.Scope_Profile:
-                        // ・・・
+
+                        ManageAddUnstructuredDataViewModel model = null;
+                        if (!string.IsNullOrEmpty(user.UnstructuredData))
+                        {
+                            model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
+                        };
+
+                        userinfoClaimSet.Add("given_name", model.FirstName);
+                        userinfoClaimSet.Add("family_name", model.LastName);
+
                         break;
                     case ASPNETIdentityConst.Scope_Email:
                         userinfoClaimSet.Add("email", user.Email);

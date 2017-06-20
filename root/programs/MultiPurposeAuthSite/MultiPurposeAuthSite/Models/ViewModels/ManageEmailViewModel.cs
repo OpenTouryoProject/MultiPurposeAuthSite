@@ -32,6 +32,18 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Display(Name = "NewEmail", ResourceType =typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
 
+        /// <summary>UnstructuredData1 (FirstName)</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
+        //[JsonProperty(PropertyName = "fname ")]
+        public string FirstName { get; set; }
+
+        /// <summary>UnstructuredData2 (LastName)</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
+        //[JsonProperty(PropertyName = "lname")]
+        public string LastName { get; set; }
+
         /// <summary>Password</summary>
         [Required(AllowEmptyStrings = true)]
         [DataType(DataType.Password)]

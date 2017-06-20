@@ -27,21 +27,24 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     /// <summary>非構造化データ設定用のVM</summary>
     public class ManageAddUnstructuredDataViewModel : BaseViewModel
     {
-        /// <summary>UnstructuredData1</summary>
+        /// <summary>UnstructuredData1 (FirstName)</summary>
+        [Required(AllowEmptyStrings = false)]
         [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
             512,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "usd1")]
-        public string UnstructuredData1 { get; set; }
+        [JsonProperty(PropertyName = "fname")]
+        public string FirstName { get; set; }
 
+        /// <summary>UnstructuredData2 (LastName)</summary>
+        [Required(AllowEmptyStrings = false)]
         [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
             512,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "usd2")]
-        public string UnstructuredData2 { get; set; }
+        [JsonProperty(PropertyName = "lname")]
+        public string LastName { get; set; }
     }
 }

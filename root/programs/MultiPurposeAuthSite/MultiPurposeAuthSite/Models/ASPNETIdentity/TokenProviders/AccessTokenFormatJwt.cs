@@ -45,6 +45,7 @@ using Microsoft.AspNet.Identity.Owin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 
@@ -124,7 +125,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 {
                     #region OpenID Connect
                     case ASPNETIdentityConst.Scope_Profile:
-                        // ・・・
+
+                        ManageAddUnstructuredDataViewModel model = null;
+                        if (!string.IsNullOrEmpty(user.UnstructuredData))
+                        {
+                            model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
+                        };
+
+                        authTokenClaimSet.Add("given_name", model.FirstName);
+                        authTokenClaimSet.Add("family_name", model.LastName);
+
                         break;
                     case ASPNETIdentityConst.Scope_Email:
                         authTokenClaimSet.Add("email", user.Email);

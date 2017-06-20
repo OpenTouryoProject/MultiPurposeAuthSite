@@ -184,10 +184,10 @@
     <value>検索</value>
   </data>
   <data name="UnstructuredData1" xml:space="preserve">
-    <value>非構造化データ1</value>
+    <value>名前</value>
   </data>
   <data name="UnstructuredData2" xml:space="preserve">
-    <value>非構造化データ2</value>
+    <value>苗字</value>
   </data>
   <data name="UserName" xml:space="preserve">
     <value>ユーザ名</value>

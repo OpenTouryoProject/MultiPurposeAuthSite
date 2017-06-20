@@ -586,7 +586,18 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ユーザの取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                return View(new ManageEmailViewModel { Email = user.Email });
+                ManageAddUnstructuredDataViewModel model = null;
+                if (!string.IsNullOrEmpty(user.UnstructuredData))
+                {
+                    model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
+                };
+
+                return View(new ManageEmailViewModel
+                {
+                    Email = user.Email,
+                    FirstName = model.FirstName,
+                    LastName = model.LastName,
+                });
             }
             else
             {
@@ -644,14 +655,24 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    if (user.UserName != model.Email)
+                    ManageAddUnstructuredDataViewModel unstructuredData = null;
+                    if (!string.IsNullOrEmpty(user.UnstructuredData))
                     {
-                        // メアドが更新された場合。
+                        unstructuredData = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
+                    };
+
+                    if (user.UserName != model.Email
+                        || unstructuredData.FirstName != model.FirstName
+                        || unstructuredData.LastName != model.LastName)
+                    {
+                        // 何らかが更新された場合。
 
                         // めんどうなのでSessionStoreで。
                         string code = GetPassword.Base64UrlSecret(16);
                         Session["Code"] = code;
-                        Session["Email"] = model.Email; // 更新後のメアド
+                        Session["Email"] = model.Email;
+                        Session["FirstName"] = model.FirstName;
+                        Session["LastName"] = model.LastName;
 
                         this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
 
@@ -660,7 +681,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else
                     {
-                        // メアドが更新されていない場合。
+                        // 何らかが更新されていない場合。
                     }
                 }
                 else
@@ -710,6 +731,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
+                            string firstName = (string)Session["FirstName"];
+                            string lastName = (string)Session["LastName"];
                             string email = (string)Session["Email"];
 
                             if (!string.IsNullOrEmpty(email))
@@ -724,6 +747,13 @@ namespace MultiPurposeAuthSite.Controllers
                                     user.UserName = email;
                                 }
                                 user.Email = email;
+
+                                user.UnstructuredData = JsonConvert.SerializeObject(
+                                    new ManageAddUnstructuredDataViewModel()
+                                    {
+                                        FirstName = firstName,
+                                        LastName = lastName,
+                                    });
 
                                 // 場合によっては、Email & UserName を更新するため。
                                 //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);

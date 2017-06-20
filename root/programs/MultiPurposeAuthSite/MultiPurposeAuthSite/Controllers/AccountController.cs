@@ -346,6 +346,13 @@ namespace MultiPurposeAuthSite.Controllers
                         // ユーザを作成
                         ApplicationUser user = await ApplicationUser.CreateBySignup(uid, false);
 
+                        // 姓名の設定
+                        user.UnstructuredData = JsonConvert.SerializeObject(new ManageAddUnstructuredDataViewModel()
+                        {
+                            FirstName = model.FirstName,
+                            LastName = model.LastName,
+                        });
+
                         // ApplicationUserManagerのCreateAsync
                         IdentityResult result = await UserManager.CreateAsync(
                                 user,

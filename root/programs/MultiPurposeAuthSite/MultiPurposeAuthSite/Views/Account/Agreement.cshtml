@@ -54,6 +54,8 @@
             }
             @Html.HiddenFor(m => m.Password)
             @Html.HiddenFor(m => m.ConfirmPassword)
+            @Html.HiddenFor(m => m.FirstName)
+            @Html.HiddenFor(m => m.LastName)
 
             <div class="form-group">
                 @Html.LabelFor(m => m.Agreement, new { @class = "col-md-2 control-label" })
