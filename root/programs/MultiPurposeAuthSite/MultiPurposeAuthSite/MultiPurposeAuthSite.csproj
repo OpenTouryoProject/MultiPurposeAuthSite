@@ -310,6 +310,7 @@
     <Compile Include="Models\ViewModels\AccountExternalLoginListViewModel.cs" />
     <Compile Include="Models\ViewModels\AccountForgotPasswordViewModel.cs" />
     <Compile Include="Models\ViewModels\AccountLoginViewModel.cs" />
+    <Compile Include="Models\ViewModels\AccountAgreementViewModel.cs" />
     <Compile Include="Models\ViewModels\AccountRegisterViewModel.cs" />
     <Compile Include="Models\ViewModels\AccountResetPasswordViewModel.cs" />
     <Compile Include="Models\ViewModels\AccountSendCodeViewModel.cs" />

@@ -61,13 +61,5 @@ namespace MultiPurposeAuthSite.Models.ViewModels
             ErrorMessageResourceName = "ConfirmPasswordErrMsg",
             ErrorMessageResourceType =typeof(Resources.CommonViewModels))]
         public string ConfirmPassword { get; set; }
-
-        /// <summary>約款本文</summary>
-        [Display(Name = "Agreement", ResourceType = typeof(Resources.AccountViews))]
-        public string Agreement { get; set; }
-
-        /// <summary>約款画面で同意したかどうか</summary>
-        [Display(Name = "AgreementCheck", ResourceType = typeof(Resources.AccountViews))]
-        public bool AcceptedAgreement { get; set; }
     }
 }
