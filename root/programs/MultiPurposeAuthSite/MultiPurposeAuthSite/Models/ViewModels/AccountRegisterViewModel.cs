@@ -62,6 +62,9 @@ namespace MultiPurposeAuthSite.Models.ViewModels
             ErrorMessageResourceType =typeof(Resources.CommonViewModels))]
         public string ConfirmPassword { get; set; }
 
+        /// <summary>確認表示モード</summary>
+        public bool ConfirmationDisplay { get; set; }
+
         /// <summary>UnstructuredData1 (FirstName)</summary>
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
