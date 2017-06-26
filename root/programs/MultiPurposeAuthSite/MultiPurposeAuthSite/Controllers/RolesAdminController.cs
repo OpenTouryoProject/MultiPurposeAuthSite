@@ -285,7 +285,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// ロール登録画面（登録処理）
         /// POST: /RolesAdmin/Create
         /// </summary>
-        /// <param name="roleViewModel">RoleViewModel</param>
+        /// <param name="roleViewModel">RolesAdminEditViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -295,7 +295,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (ModelState.IsValid)
             {
-                // EditRoleViewModelの検証に成功
+                // RolesAdminEditViewModelの検証に成功
 
                 // テナントのロールを追加
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -317,7 +317,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // EditRoleViewModelの検証に失敗
+                // RolesAdminEditViewModelの検証に失敗
             }
 
             // 再表示
@@ -379,7 +379,7 @@ namespace MultiPurposeAuthSite.Controllers
             // 選択したロールを更新
             if (ModelState.IsValid)
             {
-                // EditRoleViewModelの検証に成功
+                // RolesAdminEditViewModelの検証に成功
 
                 // 選択したロールを取得
                 ApplicationRole role = await RoleManager.FindByIdAsync(roleModel.Id);
