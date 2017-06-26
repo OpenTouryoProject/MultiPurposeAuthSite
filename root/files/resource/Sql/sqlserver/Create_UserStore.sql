@@ -73,16 +73,26 @@ CREATE TABLE [UserClaims](       -- Users ---* UserClaims
 ) ON [PRIMARY]
 
 CREATE TABLE [AuthenticationCodeDictionary](
-    [Key] [nvarchar](64) NOT NULL,           -- PK, guid
+    [Key] [nvarchar](64) NOT NULL,           -- PK
     [Value] [nvarchar](1024) NOT NULL,       -- AuthenticationCode
+    [CreatedDate] [smalldatetime] NOT NULL,
     CONSTRAINT [PK.AuthenticationCodeDictionary] PRIMARY KEY CLUSTERED ([Key] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
 CREATE TABLE [RefreshTokenDictionary](
-    [Key] [nvarchar](256) NOT NULL,          -- PK, guid
+    [Key] [nvarchar](256) NOT NULL,          -- PK
     [Value] [binary](1024) NOT NULL,         -- RefreshToken
+    [CreatedDate] [smalldatetime] NOT NULL,
     CONSTRAINT [PK.RefreshTokenDictionary] PRIMARY KEY CLUSTERED ([Key] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+CREATE TABLE [CustomizedConfirmation](
+    [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
+    [Value] [nvarchar](max) NOT NULL,        -- Value
+    [CreatedDate] [smalldatetime] NOT NULL,
+    CONSTRAINT [PK.CustomizedConfirmation] PRIMARY KEY CLUSTERED ([UserId] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 

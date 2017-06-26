@@ -135,16 +135,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "INSERT INTO [RefreshTokenDictionary] ([Key], [Value]) VALUES (@Key, @Value)",
-                                    new { Key = token, Value = bytes });
+                                    "INSERT INTO [RefreshTokenDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
+                                    new { Key = token, Value = bytes, CreatedDate= DateTime.Now });
 
                                 break;
 
                             case EnumUserStoreType.OracleMD:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\") VALUES (:Key, :Value)",
-                                    new { Key = token, Value = bytes });
+                                    "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
+                                    new { Key = token, Value = bytes, CreatedDate = DateTime.Now });
 
                                 break;
 

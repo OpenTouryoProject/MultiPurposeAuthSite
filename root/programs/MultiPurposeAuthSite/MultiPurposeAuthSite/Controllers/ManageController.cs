@@ -99,10 +99,10 @@ namespace MultiPurposeAuthSite.Controllers
             /// <summary>Error</summary>
             Error
         }
-        
+
 
         #endregion
-
+        
         #region constructor
 
         /// <summary>constructor</summary>
@@ -544,12 +544,16 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    // めんどうなのでSessionStoreで。
-                    string code = GetPassword.Base64UrlSecret(16);
-                    Session["Code"] = code;
-                    Session["Email"] = model.Email; // 更新後のメアド
+                    // DB ストアに保存
+                    CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
+                    {
+                        Code = GetPassword.Base64UrlSecret(128),
+                        Email = model.Email // 更新後のメアド
+                    };
+                    CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
-                    this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+                    // 確認メールの送信
+                    this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
 
                     // 再表示
                     return View("VerifyEmailAddress");
@@ -648,12 +652,16 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // メアドが更新された場合。
 
-                        // めんどうなのでSessionStoreで。
-                        string code = GetPassword.Base64UrlSecret(16);
-                        Session["Code"] = code;
-                        Session["Email"] = model.Email; // 更新後のメアド
+                        // DB ストアに保存
+                        CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
+                        {
+                            Code = GetPassword.Base64UrlSecret(128),
+                            Email = model.Email // 更新後のメアド
+                        }; 
+                        CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
-                        this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+                        // 確認メールの送信
+                        this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
 
                         // 表示
                         return View("VerifyEmailAddress");
@@ -705,13 +713,13 @@ namespace MultiPurposeAuthSite.Controllers
                     // 入力の検証 2
                     if (User.Identity.GetUserId() == userId)
                     {
-                        if (code == (string)Session["Code"])
+                        string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code);
+
+                        if (!string .IsNullOrEmpty(email))
                         {
                             // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                            string email = (string)Session["Email"];
-
+                            
                             if (!string.IsNullOrEmpty(email))
                             {
                                 // emailが ≠ null（Sessionタイムアウトの懸念）
