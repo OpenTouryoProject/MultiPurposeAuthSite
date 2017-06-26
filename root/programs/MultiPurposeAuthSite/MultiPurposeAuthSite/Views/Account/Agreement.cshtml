@@ -24,7 +24,7 @@
 @using MultiPurposeAuthSite.Models.ViewModels
 @using MultiPurposeAuthSite.Models.ASPNETIdentity
 
-@model AccountRegisterViewModel
+@model AccountAgreementViewModel
 @{
     ViewBag.Title = AccountViews.AgreementTitle;
 }
@@ -39,23 +39,13 @@
     <div class="col-md-8">
         <h4>@AccountViews.AgreementH4</h4>
         <hr />
-        @using (Html.BeginForm("Register", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+        @using (Html.BeginForm("EmailConfirmation", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
         {
             @Html.AntiForgeryToken()
             @Html.ValidationSummary("", new { @class = "text-danger" })
 
-            if (ASPNETIdentityConfig.RequireUniqueEmail)
-            {
-                @Html.HiddenFor(m => m.Email)
-            }
-            else
-            {
-                @Html.HiddenFor(m => m.Name)
-            }
-            @Html.HiddenFor(m => m.Password)
-            @Html.HiddenFor(m => m.ConfirmPassword)
-            @Html.HiddenFor(m => m.FirstName)
-            @Html.HiddenFor(m => m.LastName)
+            @Html.HiddenFor(m => m.UserId)
+            @Html.HiddenFor(m => m.Code)
 
             <div class="form-group">
                 @Html.LabelFor(m => m.Agreement, new { @class = "col-md-2 control-label" })
@@ -75,12 +65,6 @@
                 </div>
             </div>
         }
-    </div>
-    <div class="col-md-4">
-        @AccountViews.LoginExternalLogins
-        <section id="socialLoginForm">
-            @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
-        </section>
     </div>
 </div>
 

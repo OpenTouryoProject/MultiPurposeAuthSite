@@ -79,13 +79,5 @@ namespace MultiPurposeAuthSite.Models.ViewModels
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string LastName { get; set; }
-
-        /// <summary>約款本文</summary>
-        [Display(Name = "Agreement", ResourceType = typeof(Resources.AccountViews))]
-        public string Agreement { get; set; }
-
-        /// <summary>約款画面で同意したかどうか</summary>
-        [Display(Name = "AgreementCheck", ResourceType = typeof(Resources.AccountViews))]
-        public bool AcceptedAgreement { get; set; }
     }
 }
