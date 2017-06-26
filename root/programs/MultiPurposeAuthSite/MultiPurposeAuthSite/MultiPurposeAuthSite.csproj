@@ -496,6 +496,7 @@
     <Content Include="Views\Manage\OAuthAuthorizationCodeGrantClient2.cshtml" />
     <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
+    <Content Include="Views\Account\_NoticePartial.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">
