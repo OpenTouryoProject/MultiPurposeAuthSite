@@ -112,16 +112,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "INSERT INTO [AuthenticationCodeDictionary] ([Key], [Value]) VALUES (@Key, @Value)",
-                                    new { Key = context.Token, Value = context.SerializeTicket() });
+                                    "INSERT INTO [AuthenticationCodeDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
+                                    new { Key = context.Token, Value = context.SerializeTicket(), CreatedDate = DateTime.Now });
 
                                 break;
 
                             case EnumUserStoreType.OracleMD:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\") VALUES (:Key, :Value)",
-                                    new { Key = context.Token, Value = context.SerializeTicket() });
+                                    "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
+                                    new { Key = context.Token, Value = context.SerializeTicket(), CreatedDate = DateTime.Now });
 
                                 break;
 

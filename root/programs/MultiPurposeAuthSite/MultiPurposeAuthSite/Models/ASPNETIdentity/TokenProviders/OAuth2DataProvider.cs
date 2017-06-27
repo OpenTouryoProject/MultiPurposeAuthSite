@@ -33,18 +33,11 @@
 
 using System;
 using System.Data;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Threading.Tasks;
-
-using Microsoft.Owin.Security;
-using Microsoft.Owin.Security.Infrastructure;
-using Microsoft.Owin.Security.DataHandler.Serializer;
 
 using Dapper;
 
 using MultiPurposeAuthSite.Models.Util;
-using Touryo.Infrastructure.Public.Util;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {
@@ -52,9 +45,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
     /// OAuth2DataProvider
     /// OAuth2DataにUnstructuredDataを保存する。
     /// </summary>
-    /// <remarks>c# - OWIN Security - How to Implement OAuth2 Refresh Tokens - Stack Overflow</remarks>
-    /// <see cref="http://stackoverflow.com/questions/20637674/owin-security-how-to-implement-oauth2-refresh-tokens"/>
-    /// <seealso cref="https://tools.ietf.org/html/rfc6749#section-1.5"/>
     public class OAuth2DataProvider
     {
         /// <summary>シングルトン</summary>

@@ -292,6 +292,7 @@
     <Compile Include="Models\ASPNETIdentity\StartupAuth.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AuthorizationCodeProvider.cs" />
+    <Compile Include="Models\ASPNETIdentity\TokenProviders\CustomizedConfirmationProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\OAuthProviderHelper.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\OAuth2DataProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\RefreshTokenProvider.cs" />

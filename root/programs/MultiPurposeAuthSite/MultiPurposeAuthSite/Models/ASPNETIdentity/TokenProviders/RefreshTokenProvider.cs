@@ -95,70 +95,78 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // context.SetToken(context.SerializeTicket());
 
             // --------------------------------------------------
-            // --------------------------------------------------
 
-            string token = GetPassword.Base64UrlSecret(128); // Guid.NewGuid().ToString();
-
-            // copy properties and set the desired lifetime of refresh token.
-            AuthenticationProperties refreshTokenProperties = new AuthenticationProperties(context.Ticket.Properties.Dictionary)
+            if (ASPNETIdentityConfig.EnableRefreshToken)
             {
-                // IssuedUtcとExpiredUtcという有効期限プロパティをAuthenticationTicketに追加
-                IssuedUtc = context.Ticket.Properties.IssuedUtc,
-                ExpiresUtc = DateTime.UtcNow.Add(ASPNETIdentityConfig.OAuthRefreshTokenExpireTimeSpanFromDays) // System.TimeSpan.FromSeconds(20)) // Debug時  
-            };
+                // EnableRefreshToken == true
 
-            // AuthenticationTicket.IdentityのClaimsIdentity値を含む有効期限付きの新しいAuthenticationTicketを作成する。
-            AuthenticationTicket refreshTokenTicket = new AuthenticationTicket(context.Ticket.Identity, refreshTokenProperties);
+                string token = GetPassword.Base64UrlSecret(128); // Guid.NewGuid().ToString();
 
-            // 新しいrefreshTokenTicketをConcurrentDictionaryに保存
-            // consider storing only the hash of the handle.
+                // copy properties and set the desired lifetime of refresh token.
+                AuthenticationProperties refreshTokenProperties = new AuthenticationProperties(context.Ticket.Properties.Dictionary)
+                {
+                    // IssuedUtcとExpiredUtcという有効期限プロパティをAuthenticationTicketに追加
+                    IssuedUtc = context.Ticket.Properties.IssuedUtc,
+                    ExpiresUtc = DateTime.UtcNow.Add(ASPNETIdentityConfig.OAuthRefreshTokenExpireTimeSpanFromDays) // System.TimeSpan.FromSeconds(20)) // Debug時  
+                };
 
-            TicketSerializer serializer = new TicketSerializer();
-            byte[] bytes = serializer.Serialize(refreshTokenTicket);
+                // AuthenticationTicket.IdentityのClaimsIdentity値を含む有効期限付きの新しいAuthenticationTicketを作成する。
+                AuthenticationTicket refreshTokenTicket = new AuthenticationTicket(context.Ticket.Identity, refreshTokenProperties);
 
-            switch (ASPNETIdentityConfig.UserStoreType)
-            {
-                case EnumUserStoreType.Memory:
-                    RefreshTokenProvider.RefreshTokens.TryAdd(token, refreshTokenTicket);
-                    break;
+                // 新しいrefreshTokenTicketをConcurrentDictionaryに保存
+                // consider storing only the hash of the handle.
 
-                case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
-                case EnumUserStoreType.PostgreSQL: // DMBMS
+                TicketSerializer serializer = new TicketSerializer();
+                byte[] bytes = serializer.Serialize(refreshTokenTicket);
 
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        RefreshTokenProvider.RefreshTokens.TryAdd(token, refreshTokenTicket);
+                        break;
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
-                            case EnumUserStoreType.SqlServer:
+                            cnn.Open();
 
-                                cnn.Execute(
-                                    "INSERT INTO [RefreshTokenDictionary] ([Key], [Value]) VALUES (@Key, @Value)",
-                                    new { Key = token, Value = bytes });
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
 
-                                break;
+                                    cnn.Execute(
+                                        "INSERT INTO [RefreshTokenDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
+                                        new { Key = token, Value = bytes, CreatedDate = DateTime.Now });
 
-                            case EnumUserStoreType.OracleMD:
+                                    break;
 
-                                cnn.Execute(
-                                    "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\") VALUES (:Key, :Value)",
-                                    new { Key = token, Value = bytes });
+                                case EnumUserStoreType.OracleMD:
 
-                                break;
+                                    cnn.Execute(
+                                        "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
+                                        new { Key = token, Value = bytes, CreatedDate = DateTime.Now });
 
-                            case EnumUserStoreType.PostgreSQL:
+                                    break;
 
-                                break;
+                                case EnumUserStoreType.PostgreSQL:
 
+                                    break;
+
+                            }
                         }
-                    }
 
-                    break;
+                        break;
+                }
+
+                context.SetToken(token);
             }
-
-            context.SetToken(token);
+            else
+            {
+                // EnableRefreshToken == false
+            }
         }
 
         #endregion
@@ -188,64 +196,73 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // --------------------------------------------------
 
-            AuthenticationTicket ticket;
-            TicketSerializer serializer = new TicketSerializer();
-
-            IEnumerable<byte[]> values = null;
-
-            switch (ASPNETIdentityConfig.UserStoreType)
+            if (ASPNETIdentityConfig.EnableRefreshToken)
             {
-                case EnumUserStoreType.Memory:
-                    if (RefreshTokenProvider.RefreshTokens.TryRemove(context.Token, out ticket))
-                    {
-                        context.SetTicket(ticket);
-                    }
-                    break;
+                // EnableRefreshToken == true
+                
+                AuthenticationTicket ticket;
+                TicketSerializer serializer = new TicketSerializer();
 
-                case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
-                case EnumUserStoreType.PostgreSQL: // DMBMS
+                IEnumerable<byte[]> values = null;
 
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
-
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        if (RefreshTokenProvider.RefreshTokens.TryRemove(context.Token, out ticket))
                         {
-                            case EnumUserStoreType.SqlServer:
-
-                                values = cnn.Query<byte[]>(
-                                    "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
-
-                                ticket = serializer.Deserialize(values.AsList()[0]);
-                                context.SetTicket(ticket);
-
-                                cnn.Execute(
-                                    "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
-
-                                break;
-
-                            case EnumUserStoreType.OracleMD:
-
-                                values = cnn.Query<byte[]>(
-                                    "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
-
-                                ticket = serializer.Deserialize(values.AsList()[0]);
-                                context.SetTicket(ticket);
-
-                                cnn.Execute(
-                                    "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
-
-                                break;
-
-                            case EnumUserStoreType.PostgreSQL:
-
-                                break;
-
+                            context.SetTicket(ticket);
                         }
-                    }
+                        break;
 
-                    break;
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    values = cnn.Query<byte[]>(
+                                        "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+
+                                    ticket = serializer.Deserialize(values.AsList()[0]);
+                                    context.SetTicket(ticket);
+
+                                    cnn.Execute(
+                                        "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+
+                                    break;
+
+                                case EnumUserStoreType.OracleMD:
+
+                                    values = cnn.Query<byte[]>(
+                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+
+                                    ticket = serializer.Deserialize(values.AsList()[0]);
+                                    context.SetTicket(ticket);
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    break;
+
+                            }
+                        }
+
+                        break;
+                }
+            }
+            else
+            {
+                // EnableRefreshToken == false
             }
         }
 

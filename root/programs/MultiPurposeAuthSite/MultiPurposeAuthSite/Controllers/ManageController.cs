@@ -544,12 +544,16 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    // めんどうなのでSessionStoreで。
-                    string code = GetPassword.Base64UrlSecret(16);
-                    Session["Code"] = code;
-                    Session["Email"] = model.Email; // 更新後のメアド
+                    // DB ストアに保存
+                    CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
+                    {
+                        Code = GetPassword.Base64UrlSecret(128),
+                        Email = model.Email // 更新後のメアド
+                    };
+                    CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
-                    this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+                    // 確認メールの送信
+                    this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
 
                     // 再表示
                     return View("VerifyEmailAddress");
@@ -683,14 +687,18 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 何らかが更新された場合。
 
-                        // めんどうなのでSessionStoreで。
-                        string code = GetPassword.Base64UrlSecret(16);
-                        Session["Code"] = code;
-                        Session["Email"] = model.Email;
-                        Session["FirstName"] = model.FirstName;
-                        Session["LastName"] = model.LastName;
+                        // DB ストアに保存
+                        CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
+                        {
+                            Code = GetPassword.Base64UrlSecret(128),
+                            Email = model.Email, // 更新後のメアド
+                            FirstName = model.FirstName,
+                            LastName = model.LastName
+                        }; 
+                        CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
-                        this.SendConfirmEmail(User.Identity.GetUserId(), model.Email, code);
+                        // 確認メールの送信
+                        this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
 
                         // 表示
                         return View("VerifyEmailAddress");
@@ -742,15 +750,15 @@ namespace MultiPurposeAuthSite.Controllers
                     // 入力の検証 2
                     if (User.Identity.GetUserId() == userId)
                     {
-                        if (code == (string)Session["Code"])
+                        string firstName = "";
+                        string lastName = "";
+                        string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code, out firstName, out lastName);
+
+                        if (!string .IsNullOrEmpty(email))
                         {
                             // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                            string firstName = (string)Session["FirstName"];
-                            string lastName = (string)Session["LastName"];
-                            string email = (string)Session["Email"];
-
+                            
                             if (!string.IsNullOrEmpty(email))
                             {
                                 // emailが ≠ null（Sessionタイムアウトの懸念）
@@ -2198,12 +2206,12 @@ namespace MultiPurposeAuthSite.Controllers
                         model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                                CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                        model.RefreshToken = dic["refresh_token"] ?? "";
+                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
                     }
                     else
                     {
                         model.AccessToken = dic["access_token"] ?? "";
-                        model.RefreshToken = dic["refresh_token"] ?? "";
+                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
                     }
                 }
                 else

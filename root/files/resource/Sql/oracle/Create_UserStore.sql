@@ -56,15 +56,24 @@ CREATE TABLE "UserClaims"(       -- Users ---* UserClaims
 );
 
 CREATE TABLE "AuthenticationCodeDictionary"(
-    "Key" NVARCHAR2(64) NOT NULL,           -- PK, guid
+    "Key" NVARCHAR2(64) NOT NULL,           -- PK
     "Value" NVARCHAR2(1024) NOT NULL,       -- AuthenticationCode
+    "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.AuthCodeDictionary" PRIMARY KEY ("Key")
 );
 
 CREATE TABLE "RefreshTokenDictionary"(
-    "Key" NVARCHAR2(256) NOT NULL,          -- PK, guid
+    "Key" NVARCHAR2(256) NOT NULL,          -- PK
     "Value" RAW(1024) NOT NULL,             -- RefreshToken
+    "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.RefreshTokenDictionary" PRIMARY KEY ("Key")
+);
+
+CREATE TABLE "CustomizedConfirmation"(
+    "UserId" NVARCHAR2(38) NOT NULL,        -- PK, guid
+    "Value" NVARCHAR2(2000) NOT NULL,       -- Value
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.CustomizedConfirmation" PRIMARY KEY ("UserId")
 );
 
 CREATE TABLE "OAuth2Data"(
