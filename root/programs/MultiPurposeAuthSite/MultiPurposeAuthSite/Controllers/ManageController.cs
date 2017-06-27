@@ -2160,12 +2160,12 @@ namespace MultiPurposeAuthSite.Controllers
                         model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                                CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                        model.RefreshToken = dic["refresh_token"] ?? "";
+                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
                     }
                     else
                     {
                         model.AccessToken = dic["access_token"] ?? "";
-                        model.RefreshToken = dic["refresh_token"] ?? "";
+                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
                     }
                 }
                 else
