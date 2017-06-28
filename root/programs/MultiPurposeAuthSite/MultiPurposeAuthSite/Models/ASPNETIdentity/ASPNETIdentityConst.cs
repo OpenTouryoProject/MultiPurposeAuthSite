@@ -54,6 +54,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         /// <summary>PasswordのMaxLength</summary>
         public const int MaxLengthOfPassword = 100;
 
+        /// <summary>FirstNameのMaxLength</summary>
+        public const int MaxLengthOfFirstName = 64;
+
+        /// <summary>LastNameのMaxLength</summary>
+        public const int MaxLengthOfLastName = 64;
+
         #endregion
 
         #region Idp

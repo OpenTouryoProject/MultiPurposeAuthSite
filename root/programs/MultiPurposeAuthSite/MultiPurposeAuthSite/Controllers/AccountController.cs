@@ -392,7 +392,6 @@ namespace MultiPurposeAuthSite.Controllers
                                 await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
                             }
 
-
                             #endregion
                         }
                         else
@@ -408,6 +407,11 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (oldUser == null)
                                 {
                                     // サインアップ済みでない。
+
+                                    // 作成(CreateAsync)に失敗
+                                    AddErrors(result);
+                                    // 再表示
+                                    return View(model);
                                 }
                                 else
                                 {
@@ -417,12 +421,20 @@ namespace MultiPurposeAuthSite.Controllers
                                     if (oldUser.EmailConfirmed)
                                     {
                                         // EmailConfirmed済み。
-                                        // ・・・
+
+                                        // 作成(CreateAsync)に失敗
+                                        AddErrors(result);
+                                        // 再表示
+                                        return View(model);
                                     }
                                     else if (oldUser.Logins.Count != 0)
                                     {
                                         // ExternalLogin済み。
-                                        // ・・・
+
+                                        // 作成(CreateAsync)に失敗
+                                        AddErrors(result);
+                                        // 再表示
+                                        return View(model);
                                     }
                                     else
                                     {
@@ -461,12 +473,18 @@ namespace MultiPurposeAuthSite.Controllers
                                             }
                                             else
                                             {
-                                                // 再作成に失敗
+                                                // 再作成(CreateAsync)に失敗
+                                                AddErrors(result);
+                                                // 再表示
+                                                return View(model);
                                             }
                                         }
                                         else
                                         {
-                                            // 削除に失敗
+                                            // 削除(DeleteAsync)に失敗
+                                            AddErrors(result);
+                                            // 再表示
+                                            return View(model);
                                         }
                                     }
 
@@ -477,16 +495,15 @@ namespace MultiPurposeAuthSite.Controllers
                             #endregion
                         }
 
-                        // UserManager.CreateAsyncの
-                        // resultのエラー情報を追加
-                        AddErrors(result);
-
                         #endregion
 
                     }
                     else
                     {
                         // uidが空文字列の場合。
+                        
+                        // 再表示
+                        return View(model);
                     }
 
                     // 入力未確認

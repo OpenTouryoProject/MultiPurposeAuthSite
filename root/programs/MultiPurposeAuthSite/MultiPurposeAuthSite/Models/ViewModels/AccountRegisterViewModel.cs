@@ -69,7 +69,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            512,
+            ASPNETIdentityConst.MaxLengthOfFirstName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string FirstName { get; set; }
@@ -78,7 +78,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            512,
+            ASPNETIdentityConst.MaxLengthOfLastName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string LastName { get; set; }
