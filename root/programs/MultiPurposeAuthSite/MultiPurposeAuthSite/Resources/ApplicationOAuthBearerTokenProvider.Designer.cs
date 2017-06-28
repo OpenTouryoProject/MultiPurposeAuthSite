@@ -97,6 +97,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Invalid redirect_uri. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Invalid_redirect_uri {
+            get {
+                return ResourceManager.GetString("Invalid_redirect_uri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Could not retrieve the user. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string server_error1 {

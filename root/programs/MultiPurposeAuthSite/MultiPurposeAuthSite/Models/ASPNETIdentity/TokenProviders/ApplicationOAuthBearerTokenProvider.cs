@@ -90,6 +90,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // redirect_uri
             string redirect_uri = context.RedirectUri;
 
+            #region redirect_uriのチェック
             if (string.IsNullOrEmpty(redirect_uri))
             {
                 // クライアント識別子に対応する事前登録したredirect_uriを取得する。
@@ -117,12 +118,35 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
             else
             {
-                // 指定されたUriを使用する場合チェックが必要
-                if (redirect_uri == (ASPNETIdentityConfig.OAuthClientEndpointsRootURI + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage))
+                // 指定されたredirect_uriを使用する場合は、チェックが必要になる。
+                if (
+                    // self_code : Authorization Codeグラント種別
+                    redirect_uri ==  (ASPNETIdentityConfig.OAuthClientEndpointsRootURI + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage)
+                )
                 {
+                    // 不特定多数のクライアント識別子に許可されたredirect_uri
                     context.Validated(redirect_uri);
                 }
+                else
+                {
+                    // クライアント識別子に対応する事前登録したredirect_uriに
+                    string preRegisteredUri = OAuthProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+
+                    if (redirect_uri.StartsWith(preRegisteredUri))
+                    {
+                        // 前方一致する場合。
+                        context.Validated(redirect_uri);
+                    }
+                    else
+                    {
+                        // 前方一致しない場合。
+                        context.SetError(
+                            "server_error",
+                            Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri);
+                    }
+                }
             }
+            #endregion
 
             // 結果を返す。
             return Task.FromResult(0);

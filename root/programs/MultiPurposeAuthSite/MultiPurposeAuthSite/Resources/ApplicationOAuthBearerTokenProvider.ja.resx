@@ -135,4 +135,7 @@
   <data name="server_error2" xml:space="preserve">
     <value>ClaimManagerIdentityは、UserManagerで作成できませんでした。</value>
   </data>
+  <data name="Invalid_redirect_uri" xml:space="preserve">
+    <value>無効なredirect_uriです。</value>
+  </data>
 </root>
