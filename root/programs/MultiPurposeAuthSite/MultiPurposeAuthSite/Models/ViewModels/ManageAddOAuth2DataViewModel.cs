@@ -42,6 +42,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>RedirectUriCode</summary>
         [Display(Name = "RedirectUriCode", ResourceType = typeof(Resources.CommonViewModels))]
+        //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
             ASPNETIdentityConst.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
@@ -51,6 +52,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>RedirectUriToken</summary>
         [Display(Name = "RedirectUriToken", ResourceType = typeof(Resources.CommonViewModels))]
+        //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
             ASPNETIdentityConst.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
