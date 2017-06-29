@@ -498,6 +498,8 @@
     <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Account\_NoticePartial.cshtml" />
+    <Content Include="Views\Manage\ChangePasswordSuccess.cshtml" />
+    <Content Include="Views\Manage\ChangeEmailSuccess.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

@@ -450,8 +450,11 @@ namespace MultiPurposeAuthSite.Controllers
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     Log.MyOperationTrace(string.Format("{0}({1}) did change own password.", user.Id, user.UserName));
 
-                    // Index - ChangePasswordSuccess
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
+                    //// Index - ChangePasswordSuccess
+                    //return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
+
+                    ViewBag.Title = Resources.ManageController.ChangePasswordSuccess;
+                    return View("ChangePasswordSuccess");
                 }
                 else
                 {
@@ -754,78 +757,65 @@ namespace MultiPurposeAuthSite.Controllers
                         string lastName = "";
                         string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code, out firstName, out lastName);
 
-                        if (!string .IsNullOrEmpty(email))
+                        if (!string.IsNullOrEmpty(email))
                         {
                             // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                            
-                            if (!string.IsNullOrEmpty(email))
+
+
+                            // 更新（UserName＝メアドの場合は、UserNameも更新）
+                            string oldUserName = "";
+                            if (ASPNETIdentityConfig.RequireUniqueEmail)
                             {
-                                // emailが ≠ null（Sessionタイムアウトの懸念）
+                                oldUserName = user.UserName;
+                                user.UserName = email;
+                            }
+                            user.Email = email;
 
-                                // 更新（UserName＝メアドの場合は、UserNameも更新）
-                                string oldUserName = "";
-                                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                            user.UnstructuredData = JsonConvert.SerializeObject(
+                                new ManageAddUnstructuredDataViewModel()
                                 {
-                                    oldUserName = user.UserName;
-                                    user.UserName = email;
-                                }
-                                user.Email = email;
+                                    FirstName = firstName,
+                                    LastName = lastName,
+                                });
 
-                                user.UnstructuredData = JsonConvert.SerializeObject(
-                                    new ManageAddUnstructuredDataViewModel()
-                                    {
-                                        FirstName = firstName,
-                                        LastName = lastName,
-                                    });
+                            // 場合によっては、Email & UserName を更新するため。
+                            //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
+                            IdentityResult result = await UserManager.UpdateAsync(user);
 
-                                // 場合によっては、Email & UserName を更新するため。
-                                //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
-                                IdentityResult result = await UserManager.UpdateAsync(user);
+                            // 結果の確認
+                            if (result.Succeeded)
+                            {
+                                // メアド検証の成功
 
-                                // 結果の確認
-                                if (result.Succeeded)
+                                // 再ログイン
+                                if (await this.ReSignInAsync())
                                 {
-                                    // メアド検証の成功
-
-                                    // 再ログイン
-                                    if (await this.ReSignInAsync())
+                                    // 再ログインに成功
+                                    if (ASPNETIdentityConfig.RequireUniqueEmail)
                                     {
-                                        // 再ログインに成功
-                                        if (ASPNETIdentityConfig.RequireUniqueEmail)
-                                        {
-                                            // イベント・ログ出力
-                                            Log.MyOperationTrace(string.Format(
-                                                "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
-                                            return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
-                                        }
-                                        else
-                                        {
-                                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
-                                        }
+                                        // イベント・ログ出力
+                                        Log.MyOperationTrace(string.Format(
+                                            "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
+
+                                        //return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
+
+                                        ViewBag.Title = Resources.ManageController.ChangeEmailSuccess;
+                                        return View("ChangeEmailSuccess");
                                     }
                                     else
                                     {
-                                        // 再ログインに失敗
+                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
                                     }
                                 }
                                 else
                                 {
-                                    // E-mail更新に失敗
+                                    // 再ログインに失敗
                                 }
                             }
                             else
                             {
-                                // emailが ＝ null（Sessionタイムアウトの懸念）
-                            }
-
-                            if (ASPNETIdentityConfig.RequireUniqueEmail)
-                            {
-                                return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
-                            }
-                            else
-                            {
-                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
+                                // E-mail更新に失敗
                             }
                         }
                     }
