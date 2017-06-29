@@ -743,7 +743,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // User情報をResetPassword画面に表示することも可能。
 
-                return View();
+                return View(new AccountResetPasswordViewModel {
+                    UserId = user.Id,
+                    Email = user.Email,
+                    Code = code
+                });
             }
         }
 
@@ -763,42 +767,29 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // AccountResetPasswordViewModelの検証に成功
 
-                // ユーザの取得
-                ApplicationUser user = await UserManager.FindByNameAsync(model.Email);
+                // パスワードのリセット
+                IdentityResult result = await UserManager.ResetPasswordAsync(model.UserId, model.Code, model.Password);
 
-                if (user == null)
+                // 結果の確認
+                if (result.Succeeded)
                 {
-                    // ユーザを取得できなかった場合。
+                    // パスワードのリセットの成功
 
-                    // Security的な意味で
-                    //  - ユーザーが存在しないことや
-                    //  - E -mail未確認であることを
-                    // （UI経由で）公開しない。
+                    // イベント・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+                    Log.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
+
+                    // "パスワードのリセットの確認"画面を表示 
+                    return View("ResetPasswordConfirmation");
                 }
                 else
                 {
-                    // パスワードのリセット
-                    IdentityResult result = await UserManager.ResetPasswordAsync(user.Id, model.Code, model.Password);
+                    // パスワードのリセットの失敗
 
-                    // 結果の確認
-                    if (result.Succeeded)
-                    {
-                        // パスワードのリセットの成功
-
-                        // イベント・ログ出力
-                        Log.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
-
-                        // "パスワードのリセットの確認"画面を表示 
-                        return View("ResetPasswordConfirmation");
-                    }
-                    else
-                    {
-                        // パスワードのリセットの失敗
-
-                        // 結果のエラー情報を追加
-                        AddErrors(result);
-                    }
+                    // 結果のエラー情報を追加
+                    AddErrors(result);
                 }
+
             }
             else
             {

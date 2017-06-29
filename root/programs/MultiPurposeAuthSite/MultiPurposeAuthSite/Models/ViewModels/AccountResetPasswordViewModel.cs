@@ -27,6 +27,10 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     /// <summary>パスワード・リセット用のVM</summary>
     public class AccountResetPasswordViewModel : BaseViewModel
     {
+        /// <summary>ユーザID</summary>
+        [Required(AllowEmptyStrings = false)]
+        public string UserId { get; set; }
+
         /// <summary>E-mail</summary>
         [Required(AllowEmptyStrings = false)]
         [EmailAddress]
