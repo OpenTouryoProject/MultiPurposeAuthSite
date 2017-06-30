@@ -412,16 +412,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             // OAuth2Dataを検索
-            string OAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
-            ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(OAuth2Data);
+            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
 
-            if (response_type.ToLower() == "code")
+            if (!string.IsNullOrEmpty(oAuth2Data))
             {
-                return model.RedirectUriCode;
-            }
-            else if (response_type.ToLower() == "token")
-            {
-                return model.RedirectUriToken;
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+
+                if (response_type.ToLower() == "code")
+                {
+                    return model.RedirectUriCode;
+                }
+                else if (response_type.ToLower() == "token")
+                {
+                    return model.RedirectUriToken;
+                }
             }
 
             return "";
