@@ -500,6 +500,7 @@
     <Content Include="Views\Account\_NoticePartial.cshtml" />
     <Content Include="Views\Manage\ChangePasswordSuccess.cshtml" />
     <Content Include="Views\Manage\ChangeEmailSuccess.cshtml" />
+    <Content Include="Views\Account\LogOff.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

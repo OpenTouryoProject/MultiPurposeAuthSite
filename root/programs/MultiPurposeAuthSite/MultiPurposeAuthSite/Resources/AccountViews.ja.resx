@@ -186,6 +186,15 @@
   <data name="LoginTitle" xml:space="preserve">
     <value>サインイン</value>
   </data>
+  <data name="LogoutActionLink" xml:space="preserve">
+    <value>もう一度使用するには再度サインインしてください。</value>
+  </data>
+  <data name="LogoutH4" xml:space="preserve">
+    <value>サインアウトしました。</value>
+  </data>
+  <data name="LogoutTitle" xml:space="preserve">
+    <value>サインアウト</value>
+  </data>
   <data name="OAuthAuthorizeGrantButton" xml:space="preserve">
     <value>権限を付与</value>
   </data>

@@ -267,8 +267,9 @@ namespace MultiPurposeAuthSite.Controllers
                 Log.MyOperationTrace(string.Format("{0}({1}) did sign out.", user.Id, user.UserName));
             }
 
-            // リダイレクト "Index", "Home"へ
-            return RedirectToAction("Index", "Home");
+            //// リダイレクト "Index", "Home"へ
+            //return RedirectToAction("Index", "Home");
+            return View();
         }
 
         #endregion

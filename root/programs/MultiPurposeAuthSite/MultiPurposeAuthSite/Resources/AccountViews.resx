@@ -186,6 +186,15 @@
   <data name="LoginTitle" xml:space="preserve">
     <value>Sign-in</value>
   </data>
+  <data name="LogoutActionLink" xml:space="preserve">
+    <value>To use again, please sign-in again.</value>
+  </data>
+  <data name="LogoutH4" xml:space="preserve">
+    <value>Signed-out.</value>
+  </data>
+  <data name="LogoutTitle" xml:space="preserve">
+    <value>Sign-out</value>
+  </data>
   <data name="OAuthAuthorizeGrantButton" xml:space="preserve">
     <value>Grant</value>
   </data>

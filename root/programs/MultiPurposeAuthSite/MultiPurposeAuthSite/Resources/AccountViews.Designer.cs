@@ -268,6 +268,33 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   To use again, please sign-in again. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogoutActionLink {
+            get {
+                return ResourceManager.GetString("LogoutActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Signed-out. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogoutH4 {
+            get {
+                return ResourceManager.GetString("LogoutH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Sign-out に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LogoutTitle {
+            get {
+                return ResourceManager.GetString("LogoutTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Grant に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string OAuthAuthorizeGrantButton {
