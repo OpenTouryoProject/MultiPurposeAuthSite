@@ -138,4 +138,10 @@
   <data name="Invalid_redirect_uri" xml:space="preserve">
     <value>Invalid redirect_uri.</value>
   </data>
+  <data name="EnableAuthorizationCodeGrantType" xml:space="preserve">
+    <value>Authorization Code grant type is not enabled.</value>
+  </data>
+  <data name="EnableImplicitGrantType" xml:space="preserve">
+    <value>Implicit grant type is not enabled.</value>
+  </data>
 </root>

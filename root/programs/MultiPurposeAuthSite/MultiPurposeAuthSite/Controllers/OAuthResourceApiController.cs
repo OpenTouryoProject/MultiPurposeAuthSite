@@ -102,7 +102,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>OAuthAuthenticatedUsersClaimViewModel</returns>
         [HttpGet]
         [Route("userinfo")] // OpenID Connectライクなインターフェイスに変更した。
-        public async Task<Dictionary<string, string>> GetUserClaims()
+        public async Task<Dictionary<string, object>> GetUserClaims()
         {
             // Claim情報を参照する。
             // iss, aud, expのチェックは、AccessTokenFormatJwt.Unprotectで実施済。
@@ -125,7 +125,7 @@ namespace MultiPurposeAuthSite.Controllers
                 subject = user.UserName;
             }
 
-            Dictionary<string, string> userinfoClaimSet = new Dictionary<string, string>();
+            Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
             userinfoClaimSet.Add("sub", subject);
 
             // Scope
@@ -172,7 +172,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #region Else
                     case ASPNETIdentityConst.Scope_Userid:
-                        userinfoClaimSet.Add("userid", user.Id);
+                        userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                        break;
+                    case ASPNETIdentityConst.Scope_Roles:
+                        IList<string> roles = await UserManager.GetRolesAsync(user.Id);
+                        userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);
                         break;
                     #endregion
                 }

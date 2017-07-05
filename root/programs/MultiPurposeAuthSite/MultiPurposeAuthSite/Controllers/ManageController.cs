@@ -99,7 +99,7 @@ namespace MultiPurposeAuthSite.Controllers
             /// <summary>Error</summary>
             Error
         }
-        
+
 
         #endregion
 
@@ -185,7 +185,7 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
-            
+
             // ユーザの取得
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
@@ -697,7 +697,7 @@ namespace MultiPurposeAuthSite.Controllers
                             Email = model.Email, // 更新後のメアド
                             FirstName = model.FirstName,
                             LastName = model.LastName
-                        }; 
+                        };
                         CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
                         // 確認メールの送信
@@ -816,6 +816,14 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // E-mail更新に失敗
+                                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                {
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
+                                }
+                                else
+                                {
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
+                                }
                             }
                         }
                     }
@@ -1448,7 +1456,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 // サインアップ済みの可能性を探る
                                 user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                                // uid（e-mail, name情報）が一致している必要がある。
+                                // uid（e-mail or name情報）が一致している必要がある。
+                                //   Manage（サインイン済み）なので、
+                                //   RequireUniqueEmail == false時のname and e-mailまでの一致は不要。
                                 if (user.UserName == uid)
                                 {
                                     // uid（e-mail, name情報）が一致している。
@@ -2396,7 +2406,7 @@ namespace MultiPurposeAuthSite.Controllers
             // http://www.asp.net/identity/overview/features-api/account-confirmation-and-password-recovery-with-aspnet-identity
 
             string callbackUrl;
-            
+
             // URLの生成
             callbackUrl = this.Url.Action(
                     "EmailConfirmation", "Manage",
@@ -2415,7 +2425,7 @@ namespace MultiPurposeAuthSite.Controllers
             idmsg.Subject = Resources.AccountController.SendEmail_emailconfirm;
             idmsg.Destination = email;
             idmsg.Body = string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl);
-            
+
             await ems.SendAsync(idmsg);
         }
 

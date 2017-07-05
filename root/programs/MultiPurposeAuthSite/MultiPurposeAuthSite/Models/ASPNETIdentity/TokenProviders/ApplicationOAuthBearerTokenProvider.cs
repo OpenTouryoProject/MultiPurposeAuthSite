@@ -87,6 +87,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // response_type
             string response_type = context.Request.Query.Get("response_type");
 
+            if (response_type == "code")
+            {
+                if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+                {
+                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                }
+            }
+            else if(response_type == "token")
+            {
+                if (!ASPNETIdentityConfig.EnableImplicitGrantType)
+                {
+                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                }
+            }   
+
             // redirect_uri
             string redirect_uri = context.RedirectUri;
 
@@ -144,14 +159,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     // クライアント識別子に対応する事前登録したredirect_uriに
                     string preRegisteredUri = OAuthProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
-                    if (redirect_uri.StartsWith(preRegisteredUri))
+                    //if (redirect_uri.StartsWith(preRegisteredUri))
+                    if (redirect_uri == preRegisteredUri)
                     {
-                        // 前方一致する場合。
+                        // 完全一致する場合。
                         context.Validated(redirect_uri);
                     }
                     else
                     {
-                        // 前方一致しない場合。
+                        // 完全一致しない場合。
                         context.SetError(
                             "server_error",
                             Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri);
