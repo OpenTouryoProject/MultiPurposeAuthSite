@@ -1847,6 +1847,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
+        [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public async Task<ActionResult> AddOAuth2Data()
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data)
@@ -1886,6 +1887,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public async Task<ActionResult> AddOAuth2Data(ManageAddOAuth2DataViewModel model)
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data)

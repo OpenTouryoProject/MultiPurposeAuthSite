@@ -418,32 +418,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 ApplicationUserManager userManager
                     = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
 
-                // ParentId（実質的に分割キー）
-                if (ASPNETIdentityConfig.MultiTenant)
+                // client_idに対応するApplicationUserを取得する。
+                user = await userManager.FindByNameAsync(
+                    OAuthProviderHelper.GetInstance().GetClientName(context.ClientId));
+
+                if (user == null)
                 {
-                    // マルチテナントの場合、
-
-                    // client_idに対応するApplicationUserを取得する。
-                    user = await userManager.FindByNameAsync(
-                        OAuthProviderHelper.GetInstance().GetClientName(context.ClientId));
-
-                    if (user == null)
-                    {
-                        // *.configに定義したclient_idの場合は、アカウントが存在しない。
-                        // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
-                        user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
-
-                        // ClaimsIdentityを自前で生成する場合、
-                        //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
-                        //・・・
-                    }
-                }
-                else
-                {
-                    // マルチテナントでない場合、
-
-                    // 既定の管理者ユーザを使用する。
+                    // *.configに定義したclient_idの場合は、アカウントが存在しない。
+                    // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
                     user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
+
+                    // ClaimsIdentityを自前で生成する場合、
+                    //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
+                    //・・・
                 }
 
                 // ユーザーに対応するClaimsIdentityを生成する。

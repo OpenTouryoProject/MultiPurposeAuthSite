@@ -60,14 +60,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region Roles
 
+        /// <summary>SystemAdministrator or Administratorのrole</summary>
+        public const string Role_SystemAdminOrAdmin = "SystemAdmin, Admin";
+
         /// <summary>SystemAdministratorのrole</summary>
-        public static readonly string Role_SystemAdmin = "SystemAdmin";
+        public const string Role_SystemAdmin = "SystemAdmin";
 
         /// <summary>Administratorのrole</summary>
-        public static readonly string Role_Admin = "Admin";
+        public const string Role_Admin = "Admin";
 
         /// <summary>Userのrole</summary>
-        public static readonly string Role_User = "User";
+        public const string Role_User = "User";
 
         #endregion
 
