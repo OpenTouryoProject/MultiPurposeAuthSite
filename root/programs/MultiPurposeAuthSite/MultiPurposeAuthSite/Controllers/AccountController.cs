@@ -386,12 +386,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                             #region サインアップ成功
 
-                            // ロールに追加。
-                            if (result.Succeeded)
-                            {
-                                await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
-                                await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
-                            }
+                            //// ロールに追加。
+                            //if (result.Succeeded)
+                            //{
+                            //    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
+                            //    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
+                            //}
 
                             #endregion
                         }
