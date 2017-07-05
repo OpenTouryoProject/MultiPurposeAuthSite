@@ -1157,7 +1157,23 @@ namespace MultiPurposeAuthSite.Controllers
                                 // サインアップ済み → 外部ログイン追加だけで済む
 
                                 // 外部ログイン（ = UserLoginInfo ）の追加
-                                result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
+                                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                {
+                                    result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
+                                }
+                                else
+                                {
+                                    if (email == user.Email)
+                                    {
+                                        // メアドも一致
+                                        result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
+                                    }
+                                    else
+                                    {
+                                        // メアド不一致
+                                        result = new IdentityResult();
+                                    }
+                                } 
 
                                 // クレーム（emailClaim, nameClaim, etc.）の追加
                                 if (result.Succeeded)

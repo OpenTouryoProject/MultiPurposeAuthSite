@@ -1403,7 +1403,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 // サインアップ済みの可能性を探る
                                 user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                                // uid（e-mail, name情報）が一致している必要がある。
+                                // uid（e-mail or name情報）が一致している必要がある。
+                                //   Manage（サインイン済み）なので、
+                                //   RequireUniqueEmail == false時のname and e-mailまでの一致は不要。
                                 if (user.UserName == uid)
                                 {
                                     // uid（e-mail, name情報）が一致している。
