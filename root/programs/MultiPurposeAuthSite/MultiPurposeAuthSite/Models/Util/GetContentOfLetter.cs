@@ -80,14 +80,17 @@ namespace MultiPurposeAuthSite.Models.Util
                     contentOfLetter = ResourceLoader.LoadAsString(path, Encoding.GetEncoding(codePage));
                 }
             }
-            while (currentUICulture.Parent != null && string.IsNullOrEmpty(contentOfLetter));
+            while (
+                !string.IsNullOrEmpty(uICultureName)      // フォールバックが終わった。
+                && string.IsNullOrEmpty(contentOfLetter)  // ファイルを読み取れなかった。
+            );
             
             if(string.IsNullOrEmpty(contentOfLetter)) // 既定（英語）
             {
                 string path = GetConfigParameter.GetConfigValue("ContentOfLetterFilePath") + "\\" + fileName + ".txt";
                 if (ResourceLoader.Exists(path, false))
                 {
-                    contentOfLetter = ResourceLoader.LoadAsString(path, Encoding.GetEncoding(contentOfLetter));
+                    contentOfLetter = ResourceLoader.LoadAsString(path, Encoding.GetEncoding(codePage));
                 }
             }
 

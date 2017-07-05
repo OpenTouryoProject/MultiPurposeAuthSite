@@ -61,7 +61,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         /// <summary>Singleton (instance)</summary>
         private static OAuthProviderHelper _oAuthHelper = new OAuthProviderHelper();
-        
+
         /// <summary>クライアント識別子情報</summary>
         private Dictionary<string, Dictionary<string, string>> _oauthClientsInfo = null;
 
@@ -119,7 +119,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 return this._oAuthHttpClient;
             }
         }
-        
+
         #endregion
 
         #region GetInstance
@@ -167,7 +167,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             {
                 Proxy = proxy,
             };
-            
+
             return new HttpClient(handler);
             //return new HttpClient();
         }
@@ -258,7 +258,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         #endregion
 
         #region OAuthWebAPI
-        
+
         /// <summary>認可したユーザに課金するWebAPIを呼び出す</summary>
         /// <param name="accessToken">accessToken</param>
         /// <param name="currency">通貨</param>
@@ -305,7 +305,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         public async Task<string> CallOAuthGetUserClaimsWebAPIAsync(string accessToken)
         {
             // 通信用の変数
-            
+
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri webApiEndpointUri = new Uri(
                 ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
@@ -412,16 +412,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             // OAuth2Dataを検索
-            string OAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
-            ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(OAuth2Data);
+            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
 
-            if (response_type.ToLower() == "code")
+            if (!string.IsNullOrEmpty(oAuth2Data))
             {
-                return model.RedirectUriCode;
-            }
-            else if (response_type.ToLower() == "token")
-            {
-                return model.RedirectUriToken;
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+
+                if (response_type.ToLower() == "code")
+                {
+                    return model.RedirectUriCode;
+                }
+                else if (response_type.ToLower() == "token")
+                {
+                    return model.RedirectUriToken;
+                }
             }
 
             return "";
@@ -453,7 +457,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         }
 
         #endregion
-        
+
         #endregion
 
         #region staticメソッド

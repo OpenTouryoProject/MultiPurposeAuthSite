@@ -93,35 +93,47 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             #region redirect_uriのチェック
             if (string.IsNullOrEmpty(redirect_uri))
             {
+                // redirect_uriの指定が無い。
+
                 // クライアント識別子に対応する事前登録したredirect_uriを取得する。
                 redirect_uri = OAuthProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
-                if (redirect_uri == "test_self_code")
+                if (!string.IsNullOrEmpty(redirect_uri))
                 {
-                    // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                    context.Validated(
-                        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account);
-                }
-                else if (redirect_uri == "test_self_token")
-                {
-                    // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
-                    context.Validated(
-                        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                        + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
+                    // 事前登録されている。
+                    if (redirect_uri == "test_self_code")
+                    {
+                        // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
+                        context.Validated(
+                            ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account);
+                    }
+                    else if (redirect_uri == "test_self_token")
+                    {
+                        // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
+                        context.Validated(
+                            ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
+                    }
+                    else
+                    {
+                        // 事前登録した、redirect_uriをそのまま使用する。
+                        context.Validated(redirect_uri);
+                    }
                 }
                 else
                 {
-                    // 事前登録した、redirect_uriをそのまま使用する。
-                    context.Validated(redirect_uri);
+                    // 事前登録されていない。
                 }
             }
             else
             {
+                // redirect_uriの指定が有る。
+
                 // 指定されたredirect_uriを使用する場合は、チェックが必要になる。
                 if (
                     // self_code : Authorization Codeグラント種別
-                    redirect_uri ==  (ASPNETIdentityConfig.OAuthClientEndpointsRootURI + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage)
+                    redirect_uri == (ASPNETIdentityConfig.OAuthClientEndpointsRootURI + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage)
                 )
                 {
                     // 不特定多数のクライアント識別子に許可されたredirect_uri
@@ -132,14 +144,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     // クライアント識別子に対応する事前登録したredirect_uriに
                     string preRegisteredUri = OAuthProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
-                    if (redirect_uri.StartsWith(preRegisteredUri))
+                    //if (redirect_uri.StartsWith(preRegisteredUri))
+                    if (redirect_uri == preRegisteredUri)
                     {
-                        // 前方一致する場合。
+                        // 完全一致する場合。
                         context.Validated(redirect_uri);
                     }
                     else
                     {
-                        // 前方一致しない場合。
+                        // 完全一致しない場合。
                         context.SetError(
                             "server_error",
                             Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri);
@@ -383,7 +396,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // WEB API 2 OAuth Client Credentials Authentication, How to add additional parameters? - Stack Overflow
             // http://stackoverflow.com/questions/29132031/web-api-2-oauth-client-credentials-authentication-how-to-add-additional-paramet
-            
+
             try
             {
                 ApplicationUser user = null;
@@ -404,7 +417,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         // *.configに定義したclient_idの場合は、アカウントが存在しない。
                         // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
                         user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
-                        
+
                         // ClaimsIdentityを自前で生成する場合、
                         //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
                         //・・・

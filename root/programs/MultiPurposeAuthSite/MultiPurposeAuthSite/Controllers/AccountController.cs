@@ -115,7 +115,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> Login(string returnUrl)
         {
             // データの生成
-            await this.CreateData();            
+            await this.CreateData();
 
             // ReturnUrl
             ViewBag.ReturnUrl = returnUrl;
@@ -212,7 +212,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     });
 
                             case SignInStatus.Failure:
-                                // サインイン失敗
+                            // サインイン失敗
 
                             default:
                                 // その他
@@ -288,7 +288,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             // データの生成
             await this.CreateData();
-            
+
             // サインアップ画面（初期表示）
             return View(new AccountRegisterViewModel());
         }
@@ -387,6 +387,11 @@ namespace MultiPurposeAuthSite.Controllers
                             if (oldUser == null)
                             {
                                 // サインアップ済みでない。
+
+                                // 作成(CreateAsync)に失敗
+                                AddErrors(result);
+                                // 再表示
+                                return View(model);
                             }
                             else
                             {
@@ -396,12 +401,20 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (oldUser.EmailConfirmed)
                                 {
                                     // EmailConfirmed済み。
-                                    // ・・・
+
+                                    // 作成(CreateAsync)に失敗
+                                    AddErrors(result);
+                                    // 再表示
+                                    return View(model);
                                 }
                                 else if (oldUser.Logins.Count != 0)
                                 {
                                     // ExternalLogin済み。
-                                    // ・・・
+
+                                    // 作成(CreateAsync)に失敗
+                                    AddErrors(result);
+                                    // 再表示
+                                    return View(model);
                                 }
                                 else
                                 {
@@ -441,12 +454,18 @@ namespace MultiPurposeAuthSite.Controllers
                                         }
                                         else
                                         {
-                                            // 再作成に失敗
+                                            // 再作成(CreateAsync)に失敗
+                                            AddErrors(result);
+                                            // 再表示
+                                            return View(model);
                                         }
                                     }
                                     else
                                     {
-                                        // 削除に失敗
+                                        // 削除(DeleteAsync)に失敗
+                                        AddErrors(result);
+                                        // 再表示
+                                        return View(model);
                                     }
                                 }
 
@@ -460,6 +479,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // UserManager.CreateAsyncの
                     // resultのエラー情報を追加
                     AddErrors(result);
+                    // 再表示
+                    return View(model);
 
                     #endregion
 
@@ -701,7 +722,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // User情報をResetPassword画面に表示することも可能。
 
-                return View();
+                return View(new AccountResetPasswordViewModel
+                {
+                    UserId = user.Id,
+                    Email = user.Email,
+                    Code = code
+                });
             }
         }
 
@@ -721,42 +747,29 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // AccountResetPasswordViewModelの検証に成功
 
-                // ユーザの取得
-                ApplicationUser user = await UserManager.FindByNameAsync(model.Email);
+                // パスワードのリセット
+                IdentityResult result = await UserManager.ResetPasswordAsync(model.UserId, model.Code, model.Password);
 
-                if (user == null)
+                // 結果の確認
+                if (result.Succeeded)
                 {
-                    // ユーザを取得できなかった場合。
+                    // パスワードのリセットの成功
 
-                    // Security的な意味で
-                    //  - ユーザーが存在しないことや
-                    //  - E -mail未確認であることを
-                    // （UI経由で）公開しない。
+                    // イベント・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+                    Log.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
+
+                    // "パスワードのリセットの確認"画面を表示 
+                    return View("ResetPasswordConfirmation");
                 }
                 else
                 {
-                    // パスワードのリセット
-                    IdentityResult result = await UserManager.ResetPasswordAsync(user.Id, model.Code, model.Password);
+                    // パスワードのリセットの失敗
 
-                    // 結果の確認
-                    if (result.Succeeded)
-                    {
-                        // パスワードのリセットの成功
-
-                        // イベント・ログ出力
-                        Log.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
-
-                        // "パスワードのリセットの確認"画面を表示 
-                        return View("ResetPasswordConfirmation");
-                    }
-                    else
-                    {
-                        // パスワードのリセットの失敗
-
-                        // 結果のエラー情報を追加
-                        AddErrors(result);
-                    }
+                    // 結果のエラー情報を追加
+                    AddErrors(result);
                 }
+
             }
             else
             {
@@ -956,7 +969,7 @@ namespace MultiPurposeAuthSite.Controllers
                         return View("Lockout");
 
                     case SignInStatus.Failure:
-                        // サインイン失敗
+                    // サインイン失敗
                     default:
                         // その他
                         // "無効なコード。"
@@ -1174,7 +1187,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     // SessionIDの切換にはこのコードが必要である模様。
                                     // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                     Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
-                                    
+
                                     // イベント・ログ出力
                                     Log.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
 
@@ -1433,7 +1446,7 @@ namespace MultiPurposeAuthSite.Controllers
             AuthenticateResult ticket = this.AuthenticationManager
                 .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
             ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
-            
+
             // 次に、アクセス要求を保存して、仲介コードを発行する。
 
             // scopeパラメタ
@@ -1691,7 +1704,7 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #endregion
-        
+
         #endregion
 
         #endregion
@@ -1818,16 +1831,16 @@ namespace MultiPurposeAuthSite.Controllers
         private async Task CreateData()
         {
             // ロックを取得する
-            await _semaphoreSlim.WaitAsync(); 
+            await _semaphoreSlim.WaitAsync();
 
             try
-            {   
+            {
                 if (ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.Memory)
                 {
                     // Memory Providerの場合、
                     if (AccountController.HasCreated)
                     {
-                         // 初期化済み。
+                        // 初期化済み。
                         return; // break;
                     }
                     else
@@ -1879,13 +1892,13 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 #endregion
-                
+
                 #region テスト・ユーザ
 
                 string password = ASPNETIdentityConfig.TestUserPWD;
                 string parentId = "";
 
-                if (ASPNETIdentityConfig.IsDebug 
+                if (ASPNETIdentityConfig.IsDebug
                     && !string.IsNullOrEmpty(password))
                 {
                     #region 田中テナント
