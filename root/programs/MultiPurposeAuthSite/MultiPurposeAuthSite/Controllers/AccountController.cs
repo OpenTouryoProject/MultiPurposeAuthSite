@@ -1362,10 +1362,12 @@ namespace MultiPurposeAuthSite.Controllers
                 .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
             ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
 
+            // scopeパラメタ
+            string[] scopes = (scope ?? "").Split(' ');
+            
             if (response_type.ToLower() == "code")
             {
                 // Authorization Codeグラント種別（仲介コードの発行）
-                string[] scopes = (scope ?? "").Split(' ');
                 ViewBag.Name = identity.Name;
                 ViewBag.Scopes = scopes;
 
@@ -1413,24 +1415,27 @@ namespace MultiPurposeAuthSite.Controllers
             else if (response_type.ToLower() == "token")
             {
                 // Implicitグラント種別（Access Tokenの発行）
+                if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))
+                {
+                    // authの場合、Implicitグラント種別はNGとする。
+                }
+                else
+                {
+                    // アクセス要求の許可
+                    identity = new ClaimsIdentity(identity.Claims, "Bearer", identity.NameClaimType, identity.RoleClaimType);
+                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
-                // scopeパラメタ
-                string[] scopes = (scope ?? "").Split(' ');
+                    // ClaimsIdentityに、その他、所定のClaimを追加する。
+                    OAuthProviderHelper.AddClaim(identity, client_id, state, scopes);
 
-                // アクセス要求の許可
-                identity = new ClaimsIdentity(identity.Claims, "Bearer", identity.NameClaimType, identity.RoleClaimType);
-                //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+                    // ClaimsIdentityでサインインして、Access Tokenを発行
+                    AuthenticationManager.SignIn(identity);
 
-                // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuthProviderHelper.AddClaim(identity, client_id, state, scopes);
-
-                // ClaimsIdentityでサインインして、Access Tokenを発行
-                AuthenticationManager.SignIn(identity);
-
-                // イベント・ログ出力
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
-                        user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
+                    // イベント・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
+                            user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
+                }
 
                 // RedirectエンドポイントへRedirect
                 return new EmptyResult();

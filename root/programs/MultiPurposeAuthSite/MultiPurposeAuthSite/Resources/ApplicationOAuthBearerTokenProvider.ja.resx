@@ -138,4 +138,10 @@
   <data name="Invalid_redirect_uri" xml:space="preserve">
     <value>無効なredirect_uriです。</value>
   </data>
+  <data name="EnableAuthorizationCodeGrantType" xml:space="preserve">
+    <value>Authorization Codeグラント種別は有効化されていません。</value>
+  </data>
+  <data name="EnableImplicitGrantType" xml:space="preserve">
+    <value>Implicitグラント種別は有効化されていません。</value>
+  </data>
 </root>

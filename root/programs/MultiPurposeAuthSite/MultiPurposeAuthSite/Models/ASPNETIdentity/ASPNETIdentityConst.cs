@@ -112,10 +112,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         public const string Scope_Userid = "userid";
         /// <summary>認証を要求するscope</summary>
         public const string Scope_Auth = "auth";
+        /// <summary>rolesを要求するscope</summary>
+        public const string Scope_Roles = "roles";
         #endregion
 
         #endregion
-        
+
         #endregion
     }
 }

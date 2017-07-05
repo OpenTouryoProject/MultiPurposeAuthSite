@@ -974,6 +974,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region Grant Type
 
+        /// <summary>EnableAuthorizationCodeGrantType</summary>
+        public static bool EnableAuthorizationCodeGrantType
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableAuthorizationCodeGrantType"]);
+            }
+        }
+
+        /// <summary>EnableImplicitGrantType</summary>
+        public static bool EnableImplicitGrantType
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableImplicitGrantType"]);
+            }
+        }
+
         /// <summary>EnableResourceOwnerCredentialsGrantType</summary>
         public static bool EnableResourceOwnerCredentialsGrantType
         {

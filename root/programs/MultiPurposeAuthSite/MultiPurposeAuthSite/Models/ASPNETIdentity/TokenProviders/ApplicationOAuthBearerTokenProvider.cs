@@ -87,6 +87,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // response_type
             string response_type = context.Request.Query.Get("response_type");
 
+            if (response_type == "code")
+            {
+                if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+                {
+                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                }
+            }
+            else if(response_type == "token")
+            {
+                if (!ASPNETIdentityConfig.EnableImplicitGrantType)
+                {
+                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                }
+            }   
+
             // redirect_uri
             string redirect_uri = context.RedirectUri;
 

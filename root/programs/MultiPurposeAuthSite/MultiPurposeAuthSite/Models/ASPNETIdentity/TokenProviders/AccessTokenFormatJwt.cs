@@ -140,16 +140,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     #endregion
 
                     #region Else
+
                     case ASPNETIdentityConst.Scope_Userid:
-                        authTokenClaimSet.Add("userid", user.Id);
+                        authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
                         break;
+                    case ASPNETIdentityConst.Scope_Roles:
+                        authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);
+                        break;
+
                     #endregion
 
                 }
             }
 
             authTokenClaimSet.Add("scopes", scopes);
-            authTokenClaimSet.Add("roles", roles);
+            //authTokenClaimSet.Add("roles", roles);
             
             json = JsonConvert.SerializeObject(authTokenClaimSet);
 

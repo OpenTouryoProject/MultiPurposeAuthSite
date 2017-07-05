@@ -70,11 +70,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Authorization Code grant type is not enabled. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string EnableAuthorizationCodeGrantType {
+            get {
+                return ResourceManager.GetString("EnableAuthorizationCodeGrantType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Client Credentials grant type is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string EnableClientCredentialsGrantType {
             get {
                 return ResourceManager.GetString("EnableClientCredentialsGrantType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Implicit grant type is not enabled. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string EnableImplicitGrantType {
+            get {
+                return ResourceManager.GetString("EnableImplicitGrantType", resourceCulture);
             }
         }
         
