@@ -1381,19 +1381,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
-                    List<string> temp = new List<string>();
-                    temp.Add(ASPNETIdentityConst.Scope_Auth);
-
-                    // フィルタ・コード
-                    foreach (string s in scopes)
-                    {
-                        if (s == ASPNETIdentityConst.Scope_Userid)
-                        {
-                            temp.Add(ASPNETIdentityConst.Scope_Userid);
-                        }
-                    }
-
-                    OAuthProviderHelper.AddClaim(identity, client_id, state, temp.ToArray());
+                    OAuthProviderHelper.AddClaim(identity, client_id, state,
+                        OAuthProviderHelper.FilterClaimAtAuth(scopes).ToArray());
 
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);

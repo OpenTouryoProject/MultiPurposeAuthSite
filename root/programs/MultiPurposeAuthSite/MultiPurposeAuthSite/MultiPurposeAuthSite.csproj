@@ -327,7 +327,6 @@
     <Compile Include="Models\ViewModels\ManageAddPhoneNumberViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageChangePasswordViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageConfigureTwoFactorViewModel.cs" />
-    <Compile Include="Models\ViewModels\ManageFactorViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageIndexViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageLoginsViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageAddPaymentInformationViewModel.cs" />

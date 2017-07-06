@@ -206,7 +206,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             #region クライアント認証を行なう。
 
-            if (context.Parameters["grant_type"].ToLower() == "authorization_code")
+            if (string.IsNullOrEmpty(context.Parameters["grant_type"]))
+            {
+                // 指定なし。
+                // 検証未完
+            }
+            else if (context.Parameters["grant_type"].ToLower() == "authorization_code")
             {
                 #region Authorization Codeグラント種別
 
@@ -288,6 +293,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
             else
             {
+                // 不明な値
                 // 検証未完
             }
 
@@ -439,7 +445,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                 OAuthProviderHelper.AddClaim(identity, context.ClientId, "", context.Scope);
-
+                
                 // 検証完了
                 context.Validated(identity);
 

@@ -333,11 +333,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         #endregion
 
-        #region OAuthClients
-
-        // 以下のOauthClientsInfoを使用しているメソッドは、
-        // OAuthClientsInformationがユーザ毎のDB値にまで拡張された後に修正する必要がある。
-
+        #region OAuth
+        
         /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_secret</returns>
@@ -351,11 +348,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 return this.OauthClientsInfo[client_id]["client_secret"];
             }
 
-            // OAuth2Dataを検索
-            string OAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
-            ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(OAuth2Data);
+            // oAuth2Dataを検索
+            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            if (!string.IsNullOrEmpty(oAuth2Data))
+            {
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                return model.ClientSecret;
+            }
 
-            return model.ClientSecret;
+            return "";
+            
         }
 
         /// <summary>client_idからclient_nameを取得する。</summary>
@@ -377,11 +379,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 return this.OauthClientsInfo[client_id]["client_name"];
             }
 
-            // OAuth2Dataを検索
-            string OAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
-            ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(OAuth2Data);
+            // oAuth2Dataを検索
+            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            if (!string.IsNullOrEmpty(oAuth2Data))
+            {
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                return model.ClientName;
+            }
 
-            return model.ClientName;
+            return ""; 
         }
 
         /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
@@ -463,6 +469,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         #region staticメソッド
 
         #region Claim処理
+
+        /// <summary>認証の場合クレームをフィルタリング</summary>
+        public static IEnumerable<string> FilterClaimAtAuth(IEnumerable<string> scopes)
+        {
+            List<string> temp = new List<string>();
+            temp.Add(ASPNETIdentityConst.Scope_Auth);
+
+            // フィルタ・コード
+            foreach (string s in scopes)
+            {
+                if (s == ASPNETIdentityConst.Scope_Userid)
+                {
+                    temp.Add(ASPNETIdentityConst.Scope_Userid);
+                }
+            }
+
+            return temp;
+        }
 
         /// <summary>
         /// ClaimsIdentityに所定のClaimを追加する。

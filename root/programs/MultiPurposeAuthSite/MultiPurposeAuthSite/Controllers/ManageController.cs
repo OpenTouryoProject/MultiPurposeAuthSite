@@ -698,7 +698,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="code">string</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
-        [AllowAnonymous]
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
             if (ASPNETIdentityConfig.CanEditEmail)
@@ -1994,6 +1993,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public ActionResult GetOAuth2Token(ManageIndexViewModel model)
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data)
@@ -2045,6 +2045,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public async Task<ActionResult> RemoveOAuth2Data()
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data)
