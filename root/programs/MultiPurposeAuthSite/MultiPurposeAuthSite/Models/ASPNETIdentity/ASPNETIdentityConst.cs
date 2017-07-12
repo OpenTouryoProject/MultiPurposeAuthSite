@@ -66,14 +66,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region Roles
 
+        /// <summary>SystemAdministrator or Administratorのrole</summary>
+        public const string Role_SystemAdminOrAdmin = "SystemAdmin, Admin";
+
         /// <summary>SystemAdministratorのrole</summary>
-        public static readonly string Role_SystemAdmin = "SystemAdmin";
+        public const string Role_SystemAdmin = "SystemAdmin";
 
         /// <summary>Administratorのrole</summary>
-        public static readonly string Role_Admin = "Admin";
+        public const string Role_Admin = "Admin";
 
         /// <summary>Userのrole</summary>
-        public static readonly string Role_User = "User";
+        public const string Role_User = "User";
 
         #endregion
 
@@ -98,8 +101,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             Scope_Profile + " "
             + Scope_Email + " "
             + Scope_Phone + " "
-            + Scope_Address + " "
-            + Scope_Userid;
+            + Scope_Address; //+ " "
+            //+ Scope_Userid;
             // + Scope_Userid; //authは他のscopeをフィルタするので。
 
         #region id_token用のscope
@@ -114,8 +117,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #endregion
 
         #region カスタムのscope
-        /// <summary>useridを要求するscope</summary>
-        public const string Scope_Userid = "userid";
+        ///// <summary>useridを要求するscope</summary>
+        //public const string Scope_Userid = "userid";
         /// <summary>認証を要求するscope</summary>
         public const string Scope_Auth = "auth";
         /// <summary>rolesを要求するscope</summary>

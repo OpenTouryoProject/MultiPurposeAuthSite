@@ -206,7 +206,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             #region クライアント認証を行なう。
 
-            if (context.Parameters["grant_type"].ToLower() == "authorization_code")
+            if (string.IsNullOrEmpty(context.Parameters["grant_type"]))
+            {
+                // 指定なし。
+                // 検証未完
+            }
+            else if (context.Parameters["grant_type"].ToLower() == "authorization_code")
             {
                 #region Authorization Codeグラント種別
 
@@ -288,6 +293,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
             else
             {
+                // 不明な値
                 // 検証未完
             }
 
@@ -411,39 +417,26 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // WEB API 2 OAuth Client Credentials Authentication, How to add additional parameters? - Stack Overflow
             // http://stackoverflow.com/questions/29132031/web-api-2-oauth-client-credentials-authentication-how-to-add-additional-paramet
-            
+
             try
             {
                 ApplicationUser user = null;
                 ApplicationUserManager userManager
                     = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
 
-                // ParentId（実質的に分割キー）
-                if (ASPNETIdentityConfig.MultiTenant)
+                // client_idに対応するApplicationUserを取得する。
+                user = await userManager.FindByNameAsync(
+                    OAuthProviderHelper.GetInstance().GetClientName(context.ClientId));
+
+                if (user == null)
                 {
-                    // マルチテナントの場合、
-
-                    // client_idに対応するApplicationUserを取得する。
-                    user = await userManager.FindByNameAsync(
-                        OAuthProviderHelper.GetInstance().GetClientName(context.ClientId));
-
-                    if (user == null)
-                    {
-                        // *.configに定義したclient_idの場合は、アカウントが存在しない。
-                        // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
-                        user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
-                        
-                        // ClaimsIdentityを自前で生成する場合、
-                        //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
-                        //・・・
-                    }
-                }
-                else
-                {
-                    // マルチテナントでない場合、
-
-                    // 既定の管理者ユーザを使用する。
+                    // *.configに定義したclient_idの場合は、アカウントが存在しない。
+                    // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
                     user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
+
+                    // ClaimsIdentityを自前で生成する場合、
+                    //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
+                    //・・・
                 }
 
                 // ユーザーに対応するClaimsIdentityを生成する。

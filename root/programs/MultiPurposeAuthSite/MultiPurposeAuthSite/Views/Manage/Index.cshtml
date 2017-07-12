@@ -20,17 +20,50 @@
     //**********************************************************************************
 *@
 
-@using Touryo.Infrastructure.Public.Util
-@using Touryo.Infrastructure.Public.Str
+@using System.Web
+@using Microsoft.AspNet.Identity
+@using Microsoft.AspNet.Identity.Owin
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
 @using MultiPurposeAuthSite.Models.ASPNETIdentity;
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
 @model ManageIndexViewModel
 @{
     ViewBag.Title = ManageViews.IndexTitle;
+
+    #region Role
+
+    IList<string> roles = null;
+    bool canShowOAuthScreen = false;
+    if (User.Identity.IsAuthenticated)
+    {
+        if (Session["Roles"] == null)
+        {
+            ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
+            roles = userManager.GetRoles(user.Id); // 同期版でOK。
+
+        }
+        else
+        {
+            roles = (IList<string>)Session["Roles"];
+        }
+
+        foreach (string role in roles)
+        {
+            if (role == ASPNETIdentityConst.Role_SystemAdmin
+                || role == ASPNETIdentityConst.Role_Admin)
+            {
+                canShowOAuthScreen = true;
+            }
+        }
+    }
+
+    #endregion
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -266,7 +299,7 @@ else
     // 非構造化データの変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditOAuth2Data)
+@if (ASPNETIdentityConfig.CanEditOAuth2Data && canShowOAuthScreen)
 {
     // OAuth2データの変更が許可されている場合。
             <dt>EditOAuth2Data :</dt>
