@@ -122,7 +122,7 @@ namespace MultiPurposeAuthSite.Controllers
             else
             {
                 // その他のグラント種別
-                subject = user.UserName;
+                subject = user.Id;
             }
 
             Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
@@ -171,9 +171,9 @@ namespace MultiPurposeAuthSite.Controllers
                     #endregion
 
                     #region Else
-                    case ASPNETIdentityConst.Scope_Userid:
-                        userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
-                        break;
+                    //case ASPNETIdentityConst.Scope_Userid:
+                    //    userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                    //    break;
                     case ASPNETIdentityConst.Scope_Roles:
                         IList<string> roles = await UserManager.GetRolesAsync(user.Id);
                         userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);

@@ -259,7 +259,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   UnstructuredData1 に類似しているローカライズされた文字列を検索します。
+        ///   First name に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string UnstructuredData1 {
             get {
@@ -268,7 +268,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   UnstructuredData2 に類似しているローカライズされた文字列を検索します。
+        ///   Last name に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string UnstructuredData2 {
             get {

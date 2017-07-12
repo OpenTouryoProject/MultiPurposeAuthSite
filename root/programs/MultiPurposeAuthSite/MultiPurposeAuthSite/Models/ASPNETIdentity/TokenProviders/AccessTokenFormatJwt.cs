@@ -80,6 +80,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 throw new ArgumentNullException("data");
             }
 
+            ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            ApplicationUser user = userManager.FindByName(data.Identity.Name); // 同期版でOK。
+
             #region ClaimSetの生成
 
             Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
@@ -110,14 +114,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
             }
 
-            authTokenClaimSet.Add("sub", data.Identity.Name);
-            authTokenClaimSet.Add("iat", data.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("exp", data.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-
-            ApplicationUserManager userManager
-                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            ApplicationUser user = userManager.FindByName(data.Identity.Name); // 同期版でOK。
-
+            authTokenClaimSet.Add("sub", user.Id);
+            authTokenClaimSet.Add("iat", this.ToUnixTime(data.Properties.IssuedUtc.Value).ToString());//.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("exp", this.ToUnixTime(data.Properties.ExpiresUtc.Value).ToString());//.ToUnixTimeSeconds().ToString());
+            
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)
             {
@@ -159,8 +159,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                     #region Else
                     
-                    case ASPNETIdentityConst.Scope_Userid:
-                        authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                    //case ASPNETIdentityConst.Scope_Userid:
+                    //    authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
                         break;
                     case ASPNETIdentityConst.Scope_Roles:
                         authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);
@@ -230,13 +230,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // authToken.iss, authToken.expの検証
                 if ((string)authTokenClaimSet["iss"] == ASPNETIdentityConfig.OAuthIssuerId
                     && OAuthProviderHelper.GetInstance().GetClientSecret((string)authTokenClaimSet["aud"]) != null
-                    && long.Parse((string)authTokenClaimSet["exp"]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
+                    && long.Parse((string)authTokenClaimSet["exp"]) >= this.ToUnixTime(DateTimeOffset.Now))//.ToUnixTimeSeconds())
                 {
                     // authToken.subの検証
                     // ApplicationUser を取得する。
                     ApplicationUserManager userManager
                     = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-                    ApplicationUser user = userManager.FindByName((string)authTokenClaimSet["sub"]); // 同期版でOK。
+                    ApplicationUser user = userManager.FindById((string)authTokenClaimSet["sub"]); // 同期版でOK。
 
                     if (user != null)
                     {
@@ -310,6 +310,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             
             // 検証、認証ナドナド、できなかった。
             return null;
+        }
+
+        public static DateTime UNIX_EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+
+        public long ToUnixTime(DateTimeOffset targetTime)
+        {
+            // UTC時間に変換
+            targetTime = targetTime.ToUniversalTime();
+            // UNIXエポックからの経過時間を取得
+            TimeSpan elapsedTime = targetTime - UNIX_EPOCH;
+            // 経過秒数に変換
+            return (long)elapsedTime.TotalSeconds;
         }
     }
 }
