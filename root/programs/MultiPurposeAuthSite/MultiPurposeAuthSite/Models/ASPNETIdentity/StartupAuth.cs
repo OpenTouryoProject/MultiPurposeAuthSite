@@ -100,7 +100,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             
             // ApplicationSignInManagerのOwinContextを生成
             app.CreatePerOwinContext<ApplicationSignInManager>(ApplicationSignInManager.Create);
-            
+
             #endregion
 
             #region UseCookieAuthenticationのOwinContextを生成
@@ -120,7 +120,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             {
                 AuthenticationType = DefaultAuthenticationTypes.ApplicationCookie,  // 認証タイプを設定する。
                 LoginPath = new PathString("/Account/Login"),                       // ログイン画面のパスを設定する。
-                
+
                 Provider = new CookieAuthenticationProvider                         // 認証プロバイダを設定する(ICookieAuthenticationProvider の既定の実装)。
                 {
                     #region SecurityStamp
@@ -140,10 +140,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     // --------------------------------------------------
                     OnValidateIdentity = SecurityStampValidator.OnValidateIdentity<ApplicationUserManager, ApplicationUser>(
                         // SecurityStampValidatorによる検証の間隔
-                        validateInterval: ASPNETIdentityConfig.SecurityStampValidateIntervalFromSeconds,
+                        validateInterval: new System.TimeSpan(31, 0, 0, 0, 0),
                         // ClaimsIdentityを返すdelegate
                         regenerateIdentity: (manager, user) => user.GenerateUserIdentityAsync(manager))
-                        
+
                     #endregion
                 },
 

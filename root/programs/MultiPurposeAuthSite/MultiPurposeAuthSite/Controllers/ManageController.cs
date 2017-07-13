@@ -413,10 +413,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// パスワード変更画面（初期表示）
         /// GET: /Manage/ChangePassword
         /// </summary>
-        /// <returns></returns>
+        /// <param name="returnUrl">string</param>
+        /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult ChangePassword()
+        public ActionResult ChangePassword(string returnUrl)
         {
+            Session["returnUrl"] = returnUrl;
             return View();
         }
 
@@ -453,8 +455,15 @@ namespace MultiPurposeAuthSite.Controllers
                     //// Index - ChangePasswordSuccess
                     //return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
 
-                    ViewBag.Title = Resources.ManageController.ChangePasswordSuccess;
-                    return View("ChangePasswordSuccess");
+                    if (string.IsNullOrEmpty((string)Session["returnUrl"]))
+                    {
+                        ViewBag.Title = Resources.ManageController.ChangePasswordSuccess;
+                        return View("ChangePasswordSuccess");
+                    }
+                    else
+                    {
+                        return Redirect((string)Session["returnUrl"]);
+                    }
                 }
                 else
                 {
@@ -1695,10 +1704,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// 非構造化データの追加・編集画面（初期表示）
         /// GET: /Manage/AddUnstructuredData
         /// </summary>
+        /// <param name="returnUrl">string</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
-        public async Task<ActionResult> AddUnstructuredData()
+        public async Task<ActionResult> AddUnstructuredData(string returnUrl)
         {
+            Session["returnUrl"] = returnUrl;
+
             if (ASPNETIdentityConfig.CanEditUnstructuredData)
             {
                 // ユーザの検索
@@ -1768,8 +1780,15 @@ namespace MultiPurposeAuthSite.Controllers
                                 //// Index - SetPasswordSuccess
                                 //return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
 
-                                ViewBag.Title = Resources.ManageController.AddUnstructuredDataSuccess;
-                                return View("AddUnstructuredDataSuccess");
+                                if (string.IsNullOrEmpty((string)Session["returnUrl"]))
+                                {
+                                    ViewBag.Title = Resources.ManageController.AddUnstructuredDataSuccess;
+                                    return View("AddUnstructuredDataSuccess");
+                                }
+                                else
+                                {
+                                    return Redirect((string)Session["returnUrl"]);
+                                }
                             }
                             else
                             {
