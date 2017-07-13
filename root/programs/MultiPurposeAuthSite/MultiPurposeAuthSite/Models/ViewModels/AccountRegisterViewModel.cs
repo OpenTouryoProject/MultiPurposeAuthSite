@@ -64,23 +64,5 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>確認表示モード</summary>
         public bool ConfirmationDisplay { get; set; }
-
-        /// <summary>UnstructuredData1 (FirstName)</summary>
-        [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
-        [StringLength(
-            ASPNETIdentityConst.MaxLengthOfFirstName,
-            ErrorMessageResourceName = "MaxLengthErrMsg",
-            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        public string FirstName { get; set; }
-
-        /// <summary>UnstructuredData2 (LastName)</summary>
-        [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
-        [StringLength(
-            ASPNETIdentityConst.MaxLengthOfLastName,
-            ErrorMessageResourceName = "MaxLengthErrMsg",
-            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        public string LastName { get; set; }
     }
 }

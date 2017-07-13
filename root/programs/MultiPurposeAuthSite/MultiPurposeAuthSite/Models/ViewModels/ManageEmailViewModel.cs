@@ -19,7 +19,6 @@
 //**********************************************************************************
 
 using System.ComponentModel.DataAnnotations;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -39,23 +38,5 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
         // [StringLength( // 検証用なので不要
         public string Password { get; set; }
-
-        /// <summary>UnstructuredData1 (FirstName)</summary>
-        [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
-        [StringLength(
-            ASPNETIdentityConst.MaxLengthOfFirstName,
-            ErrorMessageResourceName = "MaxLengthErrMsg",
-            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        public string FirstName { get; set; }
-
-        /// <summary>UnstructuredData2 (LastName)</summary>
-        [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
-        [StringLength(
-            ASPNETIdentityConst.MaxLengthOfLastName,
-            ErrorMessageResourceName = "MaxLengthErrMsg",
-            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        public string LastName { get; set; }
     }
 }

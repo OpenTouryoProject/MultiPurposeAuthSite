@@ -326,12 +326,10 @@ namespace MultiPurposeAuthSite.Controllers
                     uid = model.Name;
                 }
 
-                ApplicationUser user = null;
-
                 if (model.ConfirmationDisplay)
                 {
                     // 入力確認済み
-                    user = await UserManager.FindByNameAsync(uid);
+                    ApplicationUser user = await UserManager.FindByNameAsync(uid);
 
                     if (ASPNETIdentityConfig.RequireUniqueEmail)
                     {
@@ -359,14 +357,7 @@ namespace MultiPurposeAuthSite.Controllers
                         #region サインアップ
 
                         // ユーザを作成
-                        user = await ApplicationUser.CreateBySignup(uid, false);
-
-                        // 姓名の設定
-                        user.UnstructuredData = JsonConvert.SerializeObject(new ManageAddUnstructuredDataViewModel()
-                        {
-                            FirstName = model.FirstName,
-                            LastName = model.LastName,
-                        });
+                        ApplicationUser user = await ApplicationUser.CreateBySignup(uid, false);
 
                         // ApplicationUserManagerのCreateAsync
                         IdentityResult result = await UserManager.CreateAsync(

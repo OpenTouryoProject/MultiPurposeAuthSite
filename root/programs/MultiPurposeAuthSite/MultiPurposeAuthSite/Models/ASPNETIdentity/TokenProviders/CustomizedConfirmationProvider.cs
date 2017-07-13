@@ -51,12 +51,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         [JsonProperty(PropertyName = "email")]
         public string Email { get; set; }
-
-        [JsonProperty(PropertyName = "fname ")]
-        public string FirstName { get; set; }
-
-        [JsonProperty(PropertyName = "lname")]
-        public string LastName { get; set; }
     }
 
     /// <summary>CustomizedConfirmationRet</summary>
@@ -149,12 +143,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <summary>CheckCustomizedConfirmationData</summary>
         /// <param name="userID">string</param>
         /// <param name="code">string</param>
-        /// <param name="fname">string</param>
-        /// <param name="lname">string</param>
-        public string CheckCustomizedConfirmationData(string userID, string code, out string fname, out string lname)
+        public string CheckCustomizedConfirmationData(string userID, string code)
         {
-            fname = "";
-            lname = "";
             CustomizedConfirmationJson customizedConfirmationJson = null;
 
             switch (ASPNETIdentityConfig.UserStoreType)
@@ -168,8 +158,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     customizedConfirmationJson = (CustomizedConfirmationJson)JsonConvert.DeserializeObject<CustomizedConfirmationJson>(temp);
                     if (code == customizedConfirmationJson.Code)
                     {
-                        fname = customizedConfirmationJson.FirstName;
-                        lname = customizedConfirmationJson.LastName;
                         return customizedConfirmationJson.Email;
                     }
                     else
@@ -216,8 +204,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         customizedConfirmationJson = (CustomizedConfirmationJson)JsonConvert.DeserializeObject<CustomizedConfirmationJson>(customizedConfirmationRet.Value);
                         if (code == customizedConfirmationJson.Code)
                         {
-                            fname = customizedConfirmationJson.FirstName;
-                            lname = customizedConfirmationJson.LastName;
                             return customizedConfirmationJson.Email;
                         }
                         else

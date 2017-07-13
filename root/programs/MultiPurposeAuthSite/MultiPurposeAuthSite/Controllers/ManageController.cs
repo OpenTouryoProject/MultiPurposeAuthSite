@@ -593,26 +593,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ユーザの取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                ManageAddUnstructuredDataViewModel model = null;
-                if (!string.IsNullOrEmpty(user.UnstructuredData))
-                {
-                    model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
-                }
-                else
-                {
-                    model = new ManageAddUnstructuredDataViewModel
-                    {
-                        FirstName = "",
-                        LastName = "",
-                    };
-                }
-
-                return View(new ManageEmailViewModel
-                {
-                    Email = user.Email,
-                    FirstName = model.FirstName,
-                    LastName = model.LastName,
-                });
+                return View(new ManageEmailViewModel { Email = user.Email });
             }
             else
             {
@@ -670,33 +651,15 @@ namespace MultiPurposeAuthSite.Controllers
                         // 処理を継続
                     }
 
-                    ManageAddUnstructuredDataViewModel unstructuredData = null;
-                    if (!string.IsNullOrEmpty(user.UnstructuredData))
+                    if (user.UserName != model.Email)
                     {
-                        unstructuredData = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
-                    }
-                    else
-                    {
-                        unstructuredData = new ManageAddUnstructuredDataViewModel
-                        {
-                            FirstName = "",
-                            LastName = "",
-                        };
-                    }
-
-                    if (user.UserName != model.Email
-                        || unstructuredData.FirstName != model.FirstName
-                        || unstructuredData.LastName != model.LastName)
-                    {
-                        // 何らかが更新された場合。
+                        // メアドが更新された場合。
 
                         // DB ストアに保存
                         CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
                         {
                             Code = GetPassword.Base64UrlSecret(128),
-                            Email = model.Email, // 更新後のメアド
-                            FirstName = model.FirstName,
-                            LastName = model.LastName
+                            Email = model.Email // 更新後のメアド
                         };
                         CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
@@ -708,7 +671,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else
                     {
-                        // 何らかが更新されていない場合。
+                        // メアドが更新されていない場合。
                     }
                 }
                 else
@@ -752,9 +715,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 入力の検証 2
                     if (User.Identity.GetUserId() == userId)
                     {
-                        string firstName = "";
-                        string lastName = "";
-                        string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code, out firstName, out lastName);
+                        string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code);
 
                         if (!string.IsNullOrEmpty(email))
                         {
@@ -770,13 +731,6 @@ namespace MultiPurposeAuthSite.Controllers
                                 user.UserName = email;
                             }
                             user.Email = email;
-
-                            user.UnstructuredData = JsonConvert.SerializeObject(
-                                new ManageAddUnstructuredDataViewModel()
-                                {
-                                    FirstName = firstName,
-                                    LastName = lastName,
-                                });
 
                             // 場合によっては、Email & UserName を更新するため。
                             //IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), (string)Session["Email"]);
