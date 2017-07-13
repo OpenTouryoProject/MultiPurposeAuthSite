@@ -88,6 +88,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Company name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string CompanyName {
+            get {
+                return ResourceManager.GetString("CompanyName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Confirm new password に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ConfirmNewPassword {
@@ -124,6 +133,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Country name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string CountryName {
+            get {
+                return ResourceManager.GetString("CountryName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   E-mail に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string Email {
@@ -133,11 +151,47 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   First name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string FirstName {
+            get {
+                return ResourceManager.GetString("FirstName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Type of industry に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Industry {
+            get {
+                return ResourceManager.GetString("Industry", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Last name に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LastName {
+            get {
+                return ResourceManager.GetString("LastName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   The {0} must be at less than or equal to {1} characters long. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string MaxLengthErrMsg {
             get {
                 return ResourceManager.GetString("MaxLengthErrMsg", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Mei に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Mei {
+            get {
+                return ResourceManager.GetString("Mei", resourceCulture);
             }
         }
         
@@ -259,20 +313,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   First name に類似しているローカライズされた文字列を検索します。
+        ///   Sei に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string UnstructuredData1 {
+        public static string Sei {
             get {
-                return ResourceManager.GetString("UnstructuredData1", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Last name に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string UnstructuredData2 {
-            get {
-                return ResourceManager.GetString("UnstructuredData2", resourceCulture);
+                return ResourceManager.GetString("Sei", resourceCulture);
             }
         }
         

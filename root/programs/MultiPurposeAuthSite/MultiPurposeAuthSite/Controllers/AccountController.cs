@@ -595,22 +595,14 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 同意された。
 
-                        // アクティベーション
-                        IdentityResult result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
-
-                        // メアド検証結果 ( "EmailConfirmation" or "Error"
-                        if (result.Succeeded)
-                        {
-                            // イベント・ログ出力
-                            ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
-                            Log.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
-
-                            return View("EmailConfirmation");
-                        }
-                        else
-                        {
-                            return View("Error");
-                        }
+                        //return View("EmailConfirmation");
+                        return View("AddUnstructuredData",
+                            new ManageAddUnstructuredDataViewModel
+                            {
+                                ConfirmationDisplay = false,
+                                UserId = model.UserId,
+                                Code = model.Code
+                            });
                     }
                     else
                     {
@@ -630,6 +622,85 @@ namespace MultiPurposeAuthSite.Controllers
                 // エラー画面
                 return View("Error");
             }
+        }
+
+        /// <summary>
+        /// 非構造化データの追加・編集画面（非構造化データ設定）
+        /// POST: /Account/AddUnstructuredData
+        /// </summary>
+        /// <param name="model">ManageAddUnstructuredDataViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddUnstructuredData(ManageAddUnstructuredDataViewModel model)
+        {
+            // ManageAddUnstructuredDataViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // ManageAddUnstructuredDataViewModelの検証に成功
+
+                if (model.ConfirmationDisplay)
+                {
+                    // 入力確認済み
+
+                    // ユーザの検索
+                    ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+
+                    if (user != null)
+                    {
+                        // ユーザを取得できた。
+                        user.UnstructuredData = JsonConvert.SerializeObject(model);
+
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            // アクティベーション
+                            result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
+
+                            // メアド検証結果 ( "EmailConfirmation" or "Error"
+                            if (result.Succeeded)
+                            {
+                                // イベント・ログ出力
+                                Log.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
+
+                                ViewBag.Title = Resources.ManageController.AddUnstructuredDataSuccess;
+                                return View("EmailConfirmation");
+                            }
+                            else
+                            {
+                                // 失敗
+                                AddErrors(result);
+                            }
+                        }
+                        else
+                        {
+                            // 失敗
+                            AddErrors(result);
+                        }
+                    }
+                    else
+                    {
+                        // ユーザを取得できなかった。
+                    }
+                }
+                else
+                {
+                    // 入力未確認
+                    ModelState.Clear();
+                    model.ConfirmationDisplay = true;
+                }
+            }
+            else
+            {
+                // ManageAddUnstructuredDataViewModelの検証に失敗
+            }
+
+            // 再表示
+            return View(model);
         }
 
         #endregion

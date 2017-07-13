@@ -1712,6 +1712,7 @@ namespace MultiPurposeAuthSite.Controllers
                     model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
                 }
 
+                model.ConfirmationDisplay = false;
                 return View(model);
             }
             else
@@ -1738,37 +1739,51 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageAddUnstructuredDataViewModelの検証に成功
 
-                    // ユーザの検索
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-                    if (user != null)
+                    if (model.ConfirmationDisplay)
                     {
-                        // ユーザを取得できた。
-                        user.UnstructuredData = JsonConvert.SerializeObject(model);
+                        // 入力確認済み
 
-                        // ユーザーの保存
-                        IdentityResult result = await UserManager.UpdateAsync(user);
+                        // ユーザの検索
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-                        // 結果の確認
-                        if (result.Succeeded)
+                        if (user != null)
                         {
-                            // 成功
+                            // ユーザを取得できた。
+                            user.UnstructuredData = JsonConvert.SerializeObject(model);
 
-                            // 再ログイン
-                            await this.ReSignInAsync();
+                            // ユーザーの保存
+                            IdentityResult result = await UserManager.UpdateAsync(user);
 
-                            // Index - SetPasswordSuccess
-                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                            // 結果の確認
+                            if (result.Succeeded)
+                            {
+                                // 成功
+
+                                // 再ログイン
+                                await this.ReSignInAsync();
+
+                                //// Index - SetPasswordSuccess
+                                //return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+
+                                ViewBag.Title = Resources.ManageController.AddUnstructuredDataSuccess;
+                                return View("AddUnstructuredDataSuccess");
+                            }
+                            else
+                            {
+                                // 失敗
+                                AddErrors(result);
+                            }
                         }
                         else
                         {
-                            // 失敗
-                            AddErrors(result);
+                            // ユーザを取得できなかった。
                         }
                     }
                     else
                     {
-                        // ユーザを取得できなかった。
+                        // 入力未確認
+                        ModelState.Clear();
+                        model.ConfirmationDisplay = true;
                     }
                 }
                 else

@@ -504,6 +504,8 @@
     <Content Include="Views\Manage\ChangePasswordSuccess.cshtml" />
     <Content Include="Views\Manage\ChangeEmailSuccess.cshtml" />
     <Content Include="Views\Account\LogOff.cshtml" />
+    <Content Include="Views\Manage\AddUnstructuredDataSuccess.cshtml" />
+    <Content Include="Views\Account\AddUnstructuredData.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

@@ -126,6 +126,9 @@
   <data name="ClientSecret" xml:space="preserve">
     <value>client_secret</value>
   </data>
+  <data name="CompanyName" xml:space="preserve">
+    <value>Company name</value>
+  </data>
   <data name="ConfirmNewPassword" xml:space="preserve">
     <value>Confirm new password</value>
   </data>
@@ -138,11 +141,26 @@
   <data name="ConfirmPasswordErrMsg" xml:space="preserve">
     <value>The password and confirmation password do not match.</value>
   </data>
+  <data name="CountryName" xml:space="preserve">
+    <value>Country name</value>
+  </data>
   <data name="Email" xml:space="preserve">
     <value>E-mail</value>
   </data>
+  <data name="FirstName" xml:space="preserve">
+    <value>First name</value>
+  </data>
+  <data name="Industry" xml:space="preserve">
+    <value>Type of industry</value>
+  </data>
+  <data name="LastName" xml:space="preserve">
+    <value>Last name</value>
+  </data>
   <data name="MaxLengthErrMsg" xml:space="preserve">
     <value>The {0} must be at less than or equal to {1} characters long.</value>
+  </data>
+  <data name="Mei" xml:space="preserve">
+    <value>Mei</value>
   </data>
   <data name="NewEmail" xml:space="preserve">
     <value>New E-mail address</value>
@@ -183,11 +201,8 @@
   <data name="Search" xml:space="preserve">
     <value>Search</value>
   </data>
-  <data name="UnstructuredData1" xml:space="preserve">
-    <value>First name</value>
-  </data>
-  <data name="UnstructuredData2" xml:space="preserve">
-    <value>Last name</value>
+  <data name="Sei" xml:space="preserve">
+    <value>Sei</value>
   </data>
   <data name="UserName" xml:space="preserve">
     <value>User name</value>

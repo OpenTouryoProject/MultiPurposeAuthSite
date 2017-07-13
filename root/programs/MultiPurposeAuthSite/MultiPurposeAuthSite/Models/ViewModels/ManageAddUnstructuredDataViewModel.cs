@@ -27,24 +27,95 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     /// <summary>非構造化データ設定用のVM</summary>
     public class ManageAddUnstructuredDataViewModel : BaseViewModel
     {
-        /// <summary>UnstructuredData1 (FirstName)</summary>
+        #region 英語名
+        /// <summary>FirstName</summary>
         [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UnstructuredData1", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "FirstName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            512,
+            64,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "fname")]
         public string FirstName { get; set; }
 
-        /// <summary>UnstructuredData2 (LastName)</summary>
+        /// <summary>LastName</summary>
         [Required(AllowEmptyStrings = false)]
-        [Display(Name = "UnstructuredData2", ResourceType = typeof(Resources.CommonViewModels))]
+        [Display(Name = "LastName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
             512,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "lname")]
         public string LastName { get; set; }
+        #endregion
+
+        #region 日本語名
+        /// <summary>Sei</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "Sei", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            64,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "sei")]
+        public string Sei { get; set; }
+
+        /// <summary>Mei</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "Mei", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            512,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "mei")]
+        public string Mei { get; set; }
+        #endregion
+
+        #region その他
+        /// <summary>CompanyName</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "CompanyName", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            64,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "company")]
+        public string CompanyName { get; set; }
+
+        /// <summary>Industry</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "Industry", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            8,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "industry")]
+        public string Industry { get; set; }
+
+        /// <summary>CountryName</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "CountryName", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            8,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "country")]
+        public string CountryName { get; set; }
+        #endregion
+
+        #region 制御用
+        /// <summary>確認表示モード</summary>
+        public bool ConfirmationDisplay { get; set; }
+
+        /// <summary>ユーザID</summary>
+        [Required(AllowEmptyStrings = true)]
+        // [StringLength( // ユーザ入力でないので不要
+        public string UserId { get; set; }
+
+        /// <summary>Code</summary>
+        [Required(AllowEmptyStrings = true)]
+        // [StringLength( // ユーザ入力でないので不要
+        public string Code { get; set; }
+        #endregion
     }
 }

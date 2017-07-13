@@ -183,16 +183,31 @@
   <data name="Search" xml:space="preserve">
     <value>検索</value>
   </data>
-  <data name="UnstructuredData1" xml:space="preserve">
-    <value>名前</value>
+  <data name="FirstName" xml:space="preserve">
+    <value>First name</value>
   </data>
-  <data name="UnstructuredData2" xml:space="preserve">
-    <value>苗字</value>
+  <data name="LastName" xml:space="preserve">
+    <value>Last name</value>
   </data>
   <data name="UserName" xml:space="preserve">
     <value>ユーザ名</value>
   </data>
   <data name="UserNameforSearch" xml:space="preserve">
     <value>ユーザ名で検索します。</value>
+  </data>
+  <data name="CompanyName" xml:space="preserve">
+    <value>会社名</value>
+  </data>
+  <data name="CountryName" xml:space="preserve">
+    <value>国名</value>
+  </data>
+  <data name="Industry" xml:space="preserve">
+    <value>業種</value>
+  </data>
+  <data name="Mei" xml:space="preserve">
+    <value>名</value>
+  </data>
+  <data name="Sei" xml:space="preserve">
+    <value>姓</value>
   </data>
 </root>
