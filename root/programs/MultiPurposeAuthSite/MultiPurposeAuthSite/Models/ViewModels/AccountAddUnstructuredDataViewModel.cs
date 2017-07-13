@@ -6,7 +6,7 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：ManageAddUnstructuredDataViewModel
+//* クラス名        ：AccountAddUnstructuredDataViewModel
 //* クラス日本語名  ：非構造化データ設定用のVM（テンプレート）
 //*
 //* 作成日時        ：－
@@ -25,7 +25,7 @@ using System.ComponentModel.DataAnnotations;
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
     /// <summary>非構造化データ設定用のVM</summary>
-    public class ManageAddUnstructuredDataViewModel : BaseViewModel
+    public class AccountAddUnstructuredDataViewModel : BaseViewModel
     {
         #region 英語名
         /// <summary>FirstName</summary>
@@ -104,10 +104,18 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         #endregion
 
         #region 制御用
-        
         /// <summary>確認表示モード</summary>
         public bool ConfirmationDisplay { get; set; }
 
+        /// <summary>ユーザID</summary>
+        [Required(AllowEmptyStrings = false)]
+        // [StringLength( // ユーザ入力でないので不要
+        public string UserId { get; set; }
+
+        /// <summary>Code</summary>
+        [Required(AllowEmptyStrings = false)]
+        // [StringLength( // ユーザ入力でないので不要
+        public string Code { get; set; }
         #endregion
     }
 }

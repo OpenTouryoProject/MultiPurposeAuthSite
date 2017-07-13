@@ -747,6 +747,9 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 再ログインに成功
                                     if (ASPNETIdentityConfig.RequireUniqueEmail)
                                     {
+                                        // メールの送信
+                                        this.SendChangeCompletedEmail(user);
+
                                         // イベント・ログ出力
                                         Log.MyOperationTrace(string.Format(
                                             "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
@@ -2361,22 +2364,16 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region メアド検証、パスワード リセットのメール送信処理
+        #region メール送信処理
 
         /// <summary>
-        /// メアド検証、パスワード リセットで使用するメール送信処理。
+        /// メアド検証で使用するメール送信処理。
         /// </summary>
         /// <param name="uid">string</param>
         /// <param name="email">string</param>
         /// <param name="code">string</param>
         private async void SendConfirmEmail(string uid, string email, string code)
         {
-            // For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=320771
-            // アカウント確認とパスワード リセットを有効にする方法の詳細については、http://go.microsoft.com/fwlink/?LinkID=320771 を参照してください
-
-            // Account Confirmation and Password Recovery with ASP.NET Identity (C#) | The ASP.NET Site
-            // http://www.asp.net/identity/overview/features-api/account-confirmation-and-password-recovery-with-aspnet-identity
-
             string callbackUrl;
 
             // URLの生成
@@ -2385,18 +2382,29 @@ namespace MultiPurposeAuthSite.Controllers
                     new { userId = uid, code = code }, protocol: Request.Url.Scheme
                 );
 
-            // E-mailの送信
-            //await UserManager.SendEmailAsync(
-            //        user.Id,
-            //        Resources.AccountController.SendEmail_emailconfirm,
-            //        string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl));
-
             EmailService ems = new EmailService();
             IdentityMessage idmsg = new IdentityMessage();
 
             idmsg.Subject = Resources.AccountController.SendEmail_emailconfirm;
             idmsg.Destination = email;
             idmsg.Body = string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl);
+
+            await ems.SendAsync(idmsg);
+        }
+
+        /// <summary>
+        /// アカウント変更の完了メール送信処理。
+        /// </summary>
+        /// <param name="user">ApplicationUser</param>
+        private async void SendChangeCompletedEmail(ApplicationUser user)
+        {
+            // アカウント登録の完了メールを送信
+            EmailService ems = new EmailService();
+            IdentityMessage idmsg = new IdentityMessage();
+
+            idmsg.Subject = GetContentOfLetter.Get("AccountChangeWasCompletedEmailTitle", CustomEncode.UTF_8, "");
+            idmsg.Destination = user.Email;
+            idmsg.Body = string.Format(GetContentOfLetter.Get("AccountChangeWasCompletedEmailMsg", CustomEncode.UTF_8, ""), user.UserName);
 
             await ems.SendAsync(idmsg);
         }

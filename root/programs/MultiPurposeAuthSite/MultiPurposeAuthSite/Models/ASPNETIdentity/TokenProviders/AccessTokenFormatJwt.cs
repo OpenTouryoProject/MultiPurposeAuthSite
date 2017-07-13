@@ -161,7 +161,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     
                     //case ASPNETIdentityConst.Scope_Userid:
                     //    authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
-                        break;
+                    //    break;
                     case ASPNETIdentityConst.Scope_Roles:
                         authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);
                         break;
