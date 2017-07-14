@@ -33,18 +33,15 @@
 
 using System;
 using System.Web;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
+using System.Text.RegularExpressions;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
 {
     /// <summary>
-    /// モジュールを使用するには、Web の Web.config ファイルでこの
-    /// モジュールを設定し、IIS に登録する必要があります。詳細については、
-    /// 次のリンクを参照してください: http://go.microsoft.com/?linkid=8101007
+    /// OpenIDConnect対応用のHttpModule
     /// </summary>
     public class OpenIDConnectModule : IHttpModule
     {
-
         #region IHttpModule Members
 
         /// <summary>Constructor</summary>
@@ -60,9 +57,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
         /// <param name="context">HttpApplication</param>
         public void Init(HttpApplication context)
         {
+            // ASP.NET MVC の イベント 発生順序 - galife
+            // https://garafu.blogspot.jp/2014/01/aspnet-mvc.html
+
             //context.LogRequest += new EventHandler(OnLogRequest);
             context.BeginRequest += new EventHandler(OnBeginRequest);
             //context.EndRequest += new EventHandler(OnEndRequest);
+            context.PreSendRequestHeaders += new EventHandler(OnPreSendRequestHeaders);
         }
 
         #endregion
@@ -84,11 +85,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
 
             HttpApplication application = (HttpApplication)sender;
             HttpContext context = application.Context;
+
             if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) != -1)
             {
+                // OpenIDConnectCodeFilter
+                // OpenID Connect : response_type=codeに対応
+
                 //レスポンス内容を参照して書き換え
                 HttpResponse response = context.Response;
-                response.Filter = new OpenIDConnectFilter(context);
+                response.Filter = new OpenIDConnectCodeFilter(context);
             }
         }
 
@@ -98,6 +103,42 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
         private void OnEndRequest(object sender, EventArgs e)
         {
             // EndRequestのロジックはここに挿入
+        }
+
+        /// <summary>OnPreSendRequestHeaders</summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void OnPreSendRequestHeaders(object sender, EventArgs e)
+        {
+            // PreSendRequestHeadersのロジックはここに挿入
+
+            HttpApplication application = (HttpApplication)sender;
+            HttpContext context = application.Context;
+
+            if (
+                context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1
+                && context.Request.QueryString["response_type"].ToLower() == "token")
+            {
+                // OpenIDConnectTokenFilter
+                // OpenID Connect : response_type=tokenに対応
+
+                //レスポンス内容を参照して書き換え
+                HttpResponse response = context.Response;
+                string location = response.Headers["Location"];
+
+                if (location.IndexOf("#access_token=") != -1)
+                {
+                    // ・正規表現でaccess_tokenを抜き出す。
+                    string pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
+                    string accessToken = Regex.Match(location, pattern).Groups["accessToken"].Value;
+
+                    // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
+                    // ・OpenID Connect : response_type=codeに対応する。
+                    //   ・payloadからscopeを削除する。
+                    //   ・編集したpayloadを再度JWTとして署名する。
+                    //   ・responseにid_tokenとして、このJWTを追加する。
+                }
+            }
         }
     }
 }
