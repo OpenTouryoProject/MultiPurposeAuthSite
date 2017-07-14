@@ -24,6 +24,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
 
 using System;
@@ -226,9 +227,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // EmailConfirmed == false の場合、
 
                         // メアド検証用のメールを送信して、
-                        this.SendConfirmEmail(
-                            user: user,
-                            isConfirmEmail_InsteadOf_PasswordReset: true);
+                        this.SendConfirmEmail(user);
 
                         // メッセージを設定
                         ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
@@ -359,9 +358,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (ASPNETIdentityConfig.RequireUniqueEmail)
                         {
                             // サインインの前にメアド検証用のメールを送信して、
-                            this.SendConfirmEmail(
-                                user: user,
-                                isConfirmEmail_InsteadOf_PasswordReset: true);
+                            this.SendConfirmEmail(user);
 
                             // VerifyEmailAddress画面へ遷移
                             return View("VerifyEmailAddress");
@@ -443,12 +440,9 @@ namespace MultiPurposeAuthSite.Controllers
                                             // 再度、メアド検証
 
                                             // メアド検証用のメールを送信して、
-                                            this.SendConfirmEmail(
-                                                user: user,
-                                                isConfirmEmail_InsteadOf_PasswordReset: true);
+                                            this.SendConfirmEmail(user);
 
                                             // VerifyEmailAddress
-
                                             //ViewBag.Link = callbackUrl;
                                             return View("VerifyEmailAddress");
                                         }
@@ -483,7 +477,6 @@ namespace MultiPurposeAuthSite.Controllers
                     return View(model);
 
                     #endregion
-
                 }
                 else
                 {
@@ -588,15 +581,21 @@ namespace MultiPurposeAuthSite.Controllers
                         // メアド検証結果 ( "EmailConfirmation" or "Error"
                         if (result.Succeeded)
                         {
-                            // イベント・ログ出力
                             ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
-                            Log.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
+                            
+                            // メールの送信
+                            this.SendRegisterCompletedEmail(user);
 
+                            // イベント・ログ出力
+                            Log.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
+
+                            // 完了画面
                             return View("EmailConfirmation");
                         }
                         else
                         {
-                            return View("Error");
+                            // 失敗
+                            AddErrors(result);
                         }
                     }
                     else
@@ -675,10 +674,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ユーザが取得できた場合。
 
                     // パスワード リセット用のメールを送信
-                    this.SendConfirmEmail(
-                            user: user,
-                            isConfirmEmail_InsteadOf_PasswordReset: false
-                        );
+                    this.SendConfirmEmailForPasswordReset(user);
 
                     // "パスワードの失念の確認"画面を表示 
                     return View("ForgotPasswordConfirmation");
@@ -754,9 +750,12 @@ namespace MultiPurposeAuthSite.Controllers
                 if (result.Succeeded)
                 {
                     // パスワードのリセットの成功
+                    ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+
+                    // メールの送信
+                    this.SendPasswordResetCompletedEmail(user);
 
                     // イベント・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
                     Log.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
 
                     // "パスワードのリセットの確認"画面を表示 
@@ -1173,7 +1172,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         // メアド不一致
                                         result = new IdentityResult();
                                     }
-                                } 
+                                }
 
                                 // クレーム（emailClaim, nameClaim, etc.）の追加
                                 if (result.Succeeded)
@@ -1364,7 +1363,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // scopeパラメタ
             string[] scopes = (scope ?? "").Split(' ');
-            
+
             if (response_type.ToLower() == "code")
             {
                 // Authorization Codeグラント種別（仲介コードの発行）
@@ -1769,59 +1768,99 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region メアド検証、パスワード リセットのメール送信処理
+        #region メール送信処理
+
+        #region メアド検証、パスワード リセット
 
         /// <summary>
-        /// メアド検証、パスワード リセットで使用するメール送信処理。
+        /// メアド検証で使用するメール送信処理。
         /// </summary>
         /// <param name="user">ApplicationUser</param>
-        /// <param name="isConfirmEmail_InsteadOf_PasswordReset">bool</param>
-        private async void SendConfirmEmail(ApplicationUser user, bool isConfirmEmail_InsteadOf_PasswordReset)
+        private async void SendConfirmEmail(ApplicationUser user)
         {
-            // For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=320771
-            // アカウント確認とパスワード リセットを有効にする方法の詳細については、http://go.microsoft.com/fwlink/?LinkID=320771 を参照してください
-
-            // Account Confirmation and Password Recovery with ASP.NET Identity (C#) | The ASP.NET Site
-            // http://www.asp.net/identity/overview/features-api/account-confirmation-and-password-recovery-with-aspnet-identity
-
             string code;
             string callbackUrl;
 
-            if (isConfirmEmail_InsteadOf_PasswordReset)
-            {
-                // メアド検証用のメールを送信
-                code = await UserManager.GenerateEmailConfirmationTokenAsync(user.Id);
+            // メアド検証用のメールを送信
+            code = await UserManager.GenerateEmailConfirmationTokenAsync(user.Id);
 
-                // URLの生成
-                callbackUrl = this.Url.Action(
-                        "EmailConfirmation", "Account",
-                        new { userId = user.Id, code = code }, protocol: Request.Url.Scheme
-                    );
+            // URLの生成
+            callbackUrl = this.Url.Action(
+                    "EmailConfirmation", "Account",
+                    new { userId = user.Id, code = code }, protocol: Request.Url.Scheme
+                );
 
-                // E-mailの送信
-                await UserManager.SendEmailAsync(
-                        user.Id,
-                        GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm),
-                        string.Format(GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg), callbackUrl));
-            }
-            else
-            {
-                // パスワード リセット用のメールを送信
-                code = await UserManager.GeneratePasswordResetTokenAsync(user.Id);
-
-                // URLの生成
-                callbackUrl = Url.Action(
-                        "ResetPassword", "Account",
-                        new { userId = user.Id, code = code }, protocol: Request.Url.Scheme
-                    );
-
-                // E-mailの送信
-                await UserManager.SendEmailAsync(
-                        user.Id,
-                        GetContentOfLetter.Get("PasswordResetTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset),
-                        string.Format(GetContentOfLetter.Get("PasswordResetMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset_msg), callbackUrl));
-            }
+            // E-mailの送信
+            await UserManager.SendEmailAsync(
+                    user.Id,
+                    GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm),
+                    string.Format(GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg), callbackUrl));
         }
+
+        /// <summary>
+        /// パスワード リセットで使用するメール送信処理。
+        /// </summary>
+        /// <param name="user">ApplicationUser</param>
+        private async void SendConfirmEmailForPasswordReset(ApplicationUser user)
+        {
+            string code;
+            string callbackUrl;
+
+            // パスワード リセット用のメールを送信
+            code = await UserManager.GeneratePasswordResetTokenAsync(user.Id);
+
+            // URLの生成
+            callbackUrl = Url.Action(
+                    "ResetPassword", "Account",
+                    new { userId = user.Id, code = code }, protocol: Request.Url.Scheme
+                );
+
+            // E-mailの送信
+            await UserManager.SendEmailAsync(
+                    user.Id,
+                    GetContentOfLetter.Get("PasswordResetTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset),
+                    string.Format(GetContentOfLetter.Get("PasswordResetMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset_msg), callbackUrl));
+        }
+
+        #endregion
+
+        #region 完了メール送信処理
+
+        /// <summary>
+        /// アカウント登録の完了メール送信処理。
+        /// </summary>
+        /// <param name="user">ApplicationUser</param>
+        private async void SendRegisterCompletedEmail(ApplicationUser user)
+        {
+            // アカウント登録の完了メールを送信
+            EmailService ems = new EmailService();
+            IdentityMessage idmsg = new IdentityMessage();
+
+            idmsg.Subject = GetContentOfLetter.Get("RegistationWasCompletedEmailTitle", CustomEncode.UTF_8, "");
+            idmsg.Destination = user.Email;
+            idmsg.Body = string.Format(GetContentOfLetter.Get("RegistationWasCompletedEmailMsg", CustomEncode.UTF_8, ""), user.UserName);
+
+            await ems.SendAsync(idmsg);
+        }
+
+        /// <summary>
+        /// パスワード リセットの完了メール送信処理。
+        /// </summary>
+        /// <param name="user">ApplicationUser</param>
+        private async void SendPasswordResetCompletedEmail(ApplicationUser user)
+        {
+            // パスワード リセット用のメールを送信
+            EmailService ems = new EmailService();
+            IdentityMessage idmsg = new IdentityMessage();
+
+            idmsg.Subject = GetContentOfLetter.Get("PasswordResetWasCompletedEmailTitle", CustomEncode.UTF_8, "");
+            idmsg.Destination = user.Email;
+            idmsg.Body = string.Format(GetContentOfLetter.Get("PasswordResetWasCompletedEmailMsg", CustomEncode.UTF_8, ""), user.UserName);
+
+            await ems.SendAsync(idmsg);
+        }
+
+        #endregion
 
         #endregion
 

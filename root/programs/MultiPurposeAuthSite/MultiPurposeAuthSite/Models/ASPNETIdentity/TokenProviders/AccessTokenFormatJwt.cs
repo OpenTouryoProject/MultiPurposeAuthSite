@@ -79,6 +79,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 throw new ArgumentNullException("data");
             }
 
+            ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            ApplicationUser user = userManager.FindByName(data.Identity.Name); // 同期版でOK。
+
             #region ClaimSetの生成
 
             Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
@@ -112,10 +116,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             authTokenClaimSet.Add("sub", data.Identity.Name);
             authTokenClaimSet.Add("iat", data.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("exp", data.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-
-            ApplicationUserManager userManager
-                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            ApplicationUser user = userManager.FindByName(data.Identity.Name); // 同期版でOK。
 
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)
