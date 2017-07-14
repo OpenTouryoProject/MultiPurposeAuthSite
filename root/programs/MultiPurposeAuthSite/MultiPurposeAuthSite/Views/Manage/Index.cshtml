@@ -83,7 +83,7 @@
     // UserNameの変更が許可されている場合。
     if (ASPNETIdentityConfig.RequireUniqueEmail)
     {
-        // UserName＝メアドの場合
+            // UserName＝メアドの場合
             <dt>Email :</dt>
             <dd>
                 [@Html.ActionLink(ManageViews.IndexEmailChangeActionLink, "ChangeEmail")]
@@ -91,7 +91,7 @@
     }
     else
     {
-        // UserName≠メアドの場合
+            // UserName≠メアドの場合
             <dt>UserName :</dt>
             <dd>
                 [@Html.ActionLink(ManageViews.IndexUserNameChangeActionLink, "ChangeUserName")]
@@ -138,7 +138,7 @@ else
                 {
                     <text>@Model.Email</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
-                    using (Html.BeginForm("RemoveEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    using (Html.BeginForm("RemoveEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                     {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexEmailRemoveButton" class="btn-link" />]</text>
@@ -159,23 +159,23 @@ else
             <dt>@ManageViews.IndexPhoneNumber :</dt>
             <dd>
 
-    @*"Add" or "Remove"*@
-    @if (string.IsNullOrEmpty(Model.PhoneNumber))
-    {
+            @*"Add" or "Remove"*@
+            @if (string.IsNullOrEmpty(Model.PhoneNumber))
+            {
                     <text>None</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
-    }
-    else
-    {
+            }
+            else
+            {
                     <text>@Model.PhoneNumber</text><br/>
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
 
-        using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
-        {
+                using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn-link" />]</text>
-        }
-    }
+                }
+            }
             </dd>
 }
 else
@@ -188,26 +188,26 @@ else
     // 2要素認証の変更が許可されている場合。
             <dt>@ManageViews.IndexTwoFactorAuth :</dt>
             <dd>
-    @if (Model.TwoFactor)
-    {
-                    using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
-                    {
+            @if (Model.TwoFactor)
+            {
+                using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                {
                         @Html.AntiForgeryToken()
                         <text>
                             @ManageViews.IndexTwoFactorAuthEnableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabledButton" class="btn btn-link" />]
                         </text>
-                    }
-    }
-    else
-    {
-                    using (Html.BeginForm("EnableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
-                    {
+                }
+            }
+            else
+            {
+                using (Html.BeginForm("EnableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                {
                         @Html.AntiForgeryToken()
                         <text>
                             @ManageViews.IndexTwoFactorAuthDisableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabledButton" class="btn btn-link" />]
                         </text>
-                    }
-    }
+                }
+            }
             </dd>
 }
 else
@@ -236,32 +236,32 @@ else
 
             <dd>
 
-    @*"Add" and "Charge" or "Remove or Change"*@
-    @if (!Model.HasPaymentInformation)
-    {
+            @*"Add" and "Charge" or "Remove or Change"*@
+            @if (!Model.HasPaymentInformation)
+            {
                         <text>None</text><br />
                         <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationAddActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
-    }
-    else
-    {
+            }
+            else
+            {
                         <text>XXXXXXXXXX</text><br />
                         <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationChangeActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
 
-        using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
-        {
+                using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn-link" />]</text>
-        }
+                }
 
-        if (ASPNETIdentityConfig.IsDebug)
-        {
-            using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
-            {
+                if (ASPNETIdentityConfig.IsDebug)
+                {
+                    using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                    {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn-link" />]</text>
+                    }
+                }
             }
-        }
-    }
             </dd>
 }
 else
@@ -286,7 +286,7 @@ else
                     <text>XXXXXXXXXX</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataChangeActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
 
-                    using (Html.BeginForm("RemoveUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    using (Html.BeginForm("RemoveUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                     {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexUnstructuredDataRemoveButton" class="btn-link" />]</text>
@@ -314,13 +314,13 @@ else
                 {
                     <text>XXXXXXXXXX</text><br />
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataChangeActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text><br />
-                    using (Html.BeginForm("GetOAuth2Token", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    using (Html.BeginForm("GetOAuth2Token", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                     {
                         @Html.AntiForgeryToken()
                         <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
                         <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn-link" />]</text>
                     }
-                    using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+                    using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                     {
                         @Html.AntiForgeryToken()
                         <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn-link" />]</text>

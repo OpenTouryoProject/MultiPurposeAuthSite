@@ -35,7 +35,7 @@
 
 <h2>@ViewBag.Title</h2>
 
-@using (Html.BeginForm("AddUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+@using (Html.BeginForm("AddUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
 {
     @Html.AntiForgeryToken()
     <h4>@ManageViews.AddUnstructuredDataH4</h4>

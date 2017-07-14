@@ -37,7 +37,7 @@
 <h4>@AdminViews.RolesAdminEditH4</h4>
 <hr />
 <div class="form-horizontal">
-    @using (Html.BeginForm("Edit", "RolesAdmin", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+    @using (Html.BeginForm("Edit", "RolesAdmin", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
     {
         @Html.AntiForgeryToken()
         @Html.ValidationSummary(true)

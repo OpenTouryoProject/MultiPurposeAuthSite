@@ -43,7 +43,7 @@
 
     <div class="form-group">
         <div class="col-md-10">
-            @using (Html.BeginForm())
+            @using (Html.BeginForm("Delete", "RolesAdmin", FormMethod.Post, new { onsubmit = "Fx_OnSubmit();" }))
             {
                 @Html.AntiForgeryToken()
                 <b>@AdminViews.RolesAdminRoleName</b> <text>&#058;</text> <span>@Html.DisplayFor(model => model.Name)</span>

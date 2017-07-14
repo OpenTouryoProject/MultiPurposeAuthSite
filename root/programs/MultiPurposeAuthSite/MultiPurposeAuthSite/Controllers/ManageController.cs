@@ -1727,6 +1727,9 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddUnstructuredData(ManageAddUnstructuredDataViewModel model)
         {
+            // 二重送信防止機能のテスト
+            // System.Threading.Thread.Sleep(5000);
+
             if (ASPNETIdentityConfig.CanEditUnstructuredData)
             {
                 // ManageAddUnstructuredDataViewModelの検証
