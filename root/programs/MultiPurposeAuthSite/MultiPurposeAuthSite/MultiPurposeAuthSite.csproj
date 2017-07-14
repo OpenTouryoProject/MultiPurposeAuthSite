@@ -285,6 +285,8 @@
     <Compile Include="Models\ASPNETIdentity\Entity\ApplicationUser.cs" />
     <Compile Include="Models\ASPNETIdentity\Entity\UserStore.cs" />
     <Compile Include="Models\ASPNETIdentity\ExternalLoginHelper\ExternalLoginStarter.cs" />
+    <Compile Include="Models\ASPNETIdentity\Filter\OpenIDConnectFilter.cs" />
+    <Compile Include="Models\ASPNETIdentity\Filter\OpenIDConnectModule.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationRoleManager.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationSignInManager.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationUserManager.cs" />
