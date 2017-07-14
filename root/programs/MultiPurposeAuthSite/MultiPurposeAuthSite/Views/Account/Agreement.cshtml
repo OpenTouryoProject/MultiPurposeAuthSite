@@ -39,7 +39,7 @@
     <div class="col-md-8">
         <h4>@AccountViews.AgreementH4</h4>
         <hr />
-        @using (Html.BeginForm("EmailConfirmation", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+        @using (Html.BeginForm("EmailConfirmation", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
         {
             @Html.AntiForgeryToken()
             @Html.ValidationSummary("", new { @class = "text-danger" })

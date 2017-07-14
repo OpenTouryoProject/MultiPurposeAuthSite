@@ -38,10 +38,12 @@
     <h4>@AdminViews.RolesAdminCreateH4</h4>
     <hr />
 
-    @using (Html.BeginForm())
+    @using (Html.BeginForm("Create", "RolesAdmin", FormMethod.Post, new { onsubmit = "Fx_OnSubmit();" }))
     {
         @Html.AntiForgeryToken()
         @Html.ValidationSummary(true)
+        @Html.HiddenFor(model => model.Id)
+        @Html.HiddenFor(model => model.ParentId)
 
         <div class="form-group">
             @Html.LabelFor(model => model.Name, new { @class = "control-label col-md-2" })

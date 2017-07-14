@@ -22,4 +22,15 @@
 
 @{
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    //部分的にマスタページを変更するロジック（/Account/Login/）。
+    //if ((HttpContext.Current.Request.RequestContext.RouteData.Values["Controller"].ToString() == "Account")
+    // && (HttpContext.Current.Request.RequestContext.RouteData.Values["Action"].ToString() == "Login"))
+    //{
+    //    Layout = "~/Views/Shared/_Layout2.cshtml";
+    //}
+    //else
+    //{
+    //    Layout = "~/Views/Shared/_Layout.cshtml";
+    //}
 }

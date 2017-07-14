@@ -28,7 +28,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     public class RolesAdminEditViewModel : BaseViewModel
     {
         /// <summary>ロールID</summary>
-        [Required(AllowEmptyStrings = false)]
+        //[Required(AllowEmptyStrings = false)] // Create時は存在しない。
         // [StringLength( // ユーザ入力でないので不要
         public string Id { get; set; }
 

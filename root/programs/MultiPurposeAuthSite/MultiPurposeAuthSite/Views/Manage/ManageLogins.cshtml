@@ -68,7 +68,7 @@
                             <td>
                                 @if (ViewBag.ShowRemoveButton)
                                 {
-                                    using (Html.BeginForm("RemoveLogin", "Manage"))
+                                    using (Html.BeginForm("RemoveLogin", "Manage", FormMethod.Post, new { onsubmit = "Fx_OnSubmit();" }))
                                     {
                                         @Html.AntiForgeryToken()
                                         <div>
@@ -91,7 +91,7 @@
 
         if (Model.OtherLogins.Count > 0)
         {
-            using (Html.BeginForm("ExternalLogin", "Manage"))
+            using (Html.BeginForm("ExternalLogin", "Manage", FormMethod.Post, new { onsubmit = "Fx_OnSubmit();" }))
             {
                 @Html.AntiForgeryToken()
                 <hr />

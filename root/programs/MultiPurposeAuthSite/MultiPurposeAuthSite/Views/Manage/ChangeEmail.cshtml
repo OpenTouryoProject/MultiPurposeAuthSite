@@ -36,7 +36,7 @@
 
 <h2>@ViewBag.Title</h2>
 
-@using (Html.BeginForm("ChangeEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+@using (Html.BeginForm("ChangeEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
 {
     @Html.AntiForgeryToken()
     <h4>@ManageViews.ChangeEmailH4</h4>

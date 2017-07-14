@@ -51,7 +51,7 @@
 
 <h2>@ViewBag.Title</h2>
 
-@using (Html.BeginForm("AddPaymentInformation", "Manage", FormMethod.Post, new { id = "payment-form", @class = "form-horizontal", role = "form" }))
+@using (Html.BeginForm("AddPaymentInformation", "Manage", FormMethod.Post, new { id = "payment-form", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
 {
     @Html.AntiForgeryToken();
 
