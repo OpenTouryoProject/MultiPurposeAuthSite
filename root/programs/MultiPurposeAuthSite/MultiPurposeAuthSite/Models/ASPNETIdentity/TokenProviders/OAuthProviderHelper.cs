@@ -479,7 +479,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // フィルタ・コード
             foreach (string s in scopes)
             {
-                if (s == ASPNETIdentityConst.Scope_Userid)
+                if (s == ASPNETIdentityConst.Scope_Openid)
+                {
+                    temp.Add(ASPNETIdentityConst.Scope_Openid);
+                }
+                else if (s == ASPNETIdentityConst.Scope_Userid)
                 {
                     temp.Add(ASPNETIdentityConst.Scope_Userid);
                 }
@@ -493,10 +497,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// </summary>
         /// <param name="identity">ClaimsIdentity</param>
         /// <param name="client_id">client_id</param>
-        /// <param name="nonce">nonce</param>
+        /// <param name="state">string</param>
+        /// <param name="nonce">string</param>
         /// <param name="scopes">権限情報</param>
         /// <returns>ClaimsIdentity</returns>
-        public static ClaimsIdentity AddClaim(ClaimsIdentity identity, string client_id, string state, IEnumerable<string> scopes)
+        public static ClaimsIdentity AddClaim(ClaimsIdentity identity, string client_id, string state, string nonce, IEnumerable<string> scopes)
         {
             // OpenID Connect - マイクロソフト系技術情報 Wiki > IDトークン（クレーム）
             // - クレームセット
@@ -518,7 +523,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // 発行者の情報を含める。
             identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Issuer, ASPNETIdentityConfig.OAuthIssuerId));
             identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Audience, client_id));
-            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, state));
+            if (string.IsNullOrEmpty(nonce))
+            {
+                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, state));
+            }
+            else
+            {
+                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, nonce));
+            }
 
             foreach (string scope in scopes)
             {

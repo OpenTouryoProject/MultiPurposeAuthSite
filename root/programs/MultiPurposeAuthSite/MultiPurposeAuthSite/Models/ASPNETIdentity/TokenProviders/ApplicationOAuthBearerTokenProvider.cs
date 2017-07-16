@@ -87,14 +87,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // response_type
             string response_type = context.Request.Query.Get("response_type");
 
-            if (response_type == "code")
+            // OpneID ConnectのImplicit Flow対応（試行）
+            if (response_type.ToLower() == "id_token"
+                || response_type.ToLower() == "id_token token")
+            {
+                response_type = "token";
+            }
+
+            if (response_type.ToLower() == "code")
             {
                 if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
                 {
                     throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
                 }
             }
-            else if(response_type == "token")
+            else if(response_type.ToLower() == "token")
             {
                 if (!ASPNETIdentityConfig.EnableImplicitGrantType)
                 {
@@ -116,14 +123,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 if (!string.IsNullOrEmpty(redirect_uri))
                 {
                     // 事前登録されている。
-                    if (redirect_uri == "test_self_code")
+                    if (redirect_uri.ToLower() == "test_self_code")
                     {
                         // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
                         context.Validated(
                             ASPNETIdentityConfig.OAuthClientEndpointsRootURI
                             + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account);
                     }
-                    else if (redirect_uri == "test_self_token")
+                    else if (redirect_uri.ToLower() == "test_self_token")
                     {
                         // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                         context.Validated(
@@ -346,7 +353,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             user, DefaultAuthenticationTypes.ExternalBearer);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        OAuthProviderHelper.AddClaim(identity, context.ClientId, "", context.Scope);
+                        OAuthProviderHelper.AddClaim(identity, context.ClientId, "", "", context.Scope);
 
                         // 検証完了
                         context.Validated(identity);
@@ -444,7 +451,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     user, DefaultAuthenticationTypes.ExternalBearer);
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuthProviderHelper.AddClaim(identity, context.ClientId, "", context.Scope);
+                OAuthProviderHelper.AddClaim(identity, context.ClientId, "", "", context.Scope);
                 
                 // 検証完了
                 context.Validated(identity);

@@ -61,9 +61,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
             // https://garafu.blogspot.jp/2014/01/aspnet-mvc.html
 
             //context.LogRequest += new EventHandler(OnLogRequest);
+
+            //　OpneID ConnectのAuthorization Code Flow対応
             context.BeginRequest += new EventHandler(OnBeginRequest);
+
             //context.EndRequest += new EventHandler(OnEndRequest);
-            context.PreSendRequestHeaders += new EventHandler(OnPreSendRequestHeaders);
+
+            // OpneID ConnectのImplicit Flow対応（試行）
+            //context.PreSendRequestHeaders += new EventHandler(OnPreSendRequestHeaders);
         }
 
         #endregion
@@ -115,28 +120,41 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
             HttpApplication application = (HttpApplication)sender;
             HttpContext context = application.Context;
 
-            if (
-                context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1
-                && context.Request.QueryString["response_type"].ToLower() == "token")
+            if (string.IsNullOrEmpty(context.Request.QueryString["response_type"]))
             {
-                // OpenIDConnectTokenFilter
-                // OpenID Connect : response_type=tokenに対応
-
-                //レスポンス内容を参照して書き換え
-                HttpResponse response = context.Response;
-                string location = response.Headers["Location"];
-
-                if (location.IndexOf("#access_token=") != -1)
+                // response_typeが無い。
+            }
+            else
+            {
+                // response_typeが有る。
+                if ((context.Request.QueryString["response_type"].ToLower() == "id_token"
+                    || context.Request.QueryString["response_type"].ToLower() == "id_token token"))
                 {
-                    // ・正規表現でaccess_tokenを抜き出す。
-                    string pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
-                    string accessToken = Regex.Match(location, pattern).Groups["accessToken"].Value;
 
-                    // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
-                    // ・OpenID Connect : response_type=codeに対応する。
-                    //   ・payloadからscopeを削除する。
-                    //   ・編集したpayloadを再度JWTとして署名する。
-                    //   ・responseにid_tokenとして、このJWTを追加する。
+                }
+
+                if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1
+                && context.Request.QueryString["response_type"].ToLower() == "token")
+                {
+                    // OpenIDConnectTokenFilter
+                    // OpenID Connect : response_type=tokenに対応
+
+                    //レスポンス内容を参照して書き換え
+                    HttpResponse response = context.Response;
+                    string location = response.Headers["Location"];
+
+                    if (location.IndexOf("#access_token=") != -1)
+                    {
+                        // ・正規表現でaccess_tokenを抜き出す。
+                        string pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
+                        string accessToken = Regex.Match(location, pattern).Groups["accessToken"].Value;
+
+                        // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
+                        // ・OpenID Connect : response_type=codeに対応する。
+                        //   ・payloadからscopeを削除する。
+                        //   ・編集したpayloadを再度JWTとして署名する。
+                        //   ・responseにid_tokenとして、このJWTを追加する。
+                    }
                 }
             }
         }

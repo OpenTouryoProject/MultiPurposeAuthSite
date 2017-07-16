@@ -235,7 +235,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         }
                         OAuthProviderHelper.AddClaim(identity,
                             (string)authTokenClaimSet["aud"],
-                            (string)authTokenClaimSet["nonce"], scopes);
+                            "", (string)authTokenClaimSet["nonce"], scopes);
 
                         // AuthenticationPropertiesの生成
                         AuthenticationProperties prop = new AuthenticationProperties();
@@ -272,7 +272,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             OAuthProviderHelper.AddClaim(identity,
                                 (string)authTokenClaimSet["aud"],
-                                (string)authTokenClaimSet["nonce"], scopes);
+                                "", (string)authTokenClaimSet["nonce"], scopes);
 
                             // AuthenticationPropertiesの生成
                             AuthenticationProperties prop = new AuthenticationProperties();

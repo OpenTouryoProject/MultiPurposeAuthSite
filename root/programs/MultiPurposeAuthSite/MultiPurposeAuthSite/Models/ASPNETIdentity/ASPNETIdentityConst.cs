@@ -97,9 +97,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + Scope_Phone + " "
             + Scope_Address + " "
             + Scope_Userid;
-            // + Scope_Userid; //authは他のscopeをフィルタするので。
+        // + Scope_Userid; //authは他のscopeをフィルタするので。
 
         #region id_token用のscope
+        /// <summary>id_tokenを要求するscope</summary>
+        public const string Scope_Openid = "openid";
         /// <summary>profileを要求するscope</summary>
         public const string Scope_Profile = "profile";
         /// <summary>emailを要求するscope</summary>

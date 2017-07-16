@@ -83,9 +83,11 @@
     string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName("TestClient");
     // state (nonce) // 記号は入れない。
     string state = GetPassword.Generate(10, 0);
+    // nonce // 記号は入れない。
+    string nonce = GetPassword.Generate(20, 0);
     // scope
     string scope = ASPNETIdentityConst.StandardScopes;
-    
+
     #endregion
 }
 
@@ -159,6 +161,9 @@ else
 {
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state" style="color:peachpuff">Test Authorization Code Flow</a>
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope%20openid&state=@state&nonce=@nonce" style="color:peachpuff">Test Auth Code Flow(OIDC)</a>
                         </li>
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=@scope&state=@state" style="color:peachpuff">Test Implicit Flow</a>
