@@ -45,8 +45,14 @@
             ApplicationUserManager userManager
                 = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
             ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
-            roles = userManager.GetRoles(user.Id); // 同期版でOK。
-
+            if (user == null)
+            {
+                roles = new List<string>();
+            }
+            else
+            {
+                roles = userManager.GetRoles(user.Id); // 同期版でOK。
+            }
         }
         else
         {

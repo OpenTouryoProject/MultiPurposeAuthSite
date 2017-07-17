@@ -413,7 +413,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// パスワード変更画面（初期表示）
         /// GET: /Manage/ChangePassword
         /// </summary>
-        /// <returns></returns>
+        /// <returns>ActionResult</returns>
         [HttpGet]
         public ActionResult ChangePassword()
         {
