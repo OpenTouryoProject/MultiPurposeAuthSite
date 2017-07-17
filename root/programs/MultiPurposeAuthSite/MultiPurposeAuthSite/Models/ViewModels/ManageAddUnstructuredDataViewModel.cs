@@ -28,6 +28,11 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     /// <summary>非構造化データ設定用のVM</summary>
     public class ManageAddUnstructuredDataViewModel : BaseViewModel
     {
+        /// <summary>表示用</summary>
+        [Required(AllowEmptyStrings = false)]
+        [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
+        public string Name { get; set; }
+
         #region 英語名
         /// <summary>FirstName</summary>
         [Required(AllowEmptyStrings = false)]

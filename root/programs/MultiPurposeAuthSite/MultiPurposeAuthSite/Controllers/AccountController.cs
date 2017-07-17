@@ -573,11 +573,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <param name="userId">string</param>
         /// <param name="code">string</param>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
-        public ActionResult EmailConfirmation(AccountAgreementViewModel model)
+        public async Task<ActionResult> EmailConfirmation(AccountAgreementViewModel model)
         {
             if (ASPNETIdentityConfig.DisplayAgreementScreen)
             {
@@ -590,13 +590,15 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 同意された。
 
+                        ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
                         //return View("EmailConfirmation");
                         return View("AddUnstructuredData",
                             new AccountAddUnstructuredDataViewModel
                             {
                                 ConfirmationDisplay = false,
                                 UserId = model.UserId,
-                                Code = model.Code
+                                Code = model.Code,
+                                Name = user.UserName
                             });
                     }
                     else

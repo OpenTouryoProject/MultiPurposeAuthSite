@@ -1722,6 +1722,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 model.ConfirmationDisplay = false;
+                model.Name = user.UserName;
                 return View(model);
             }
             else
