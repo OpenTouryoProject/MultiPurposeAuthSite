@@ -1434,10 +1434,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="client_id">client_id（必須）</param>
         /// <param name="scope">scope（任意）</param>
         /// <param name="state">state（推奨）</param>
+        /// <param name="nonce">nonce（OIDC）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state)
+        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state, string nonce)
         {
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -1463,7 +1464,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
-                    OAuthProviderHelper.AddClaim(identity, client_id, state,
+                    OAuthProviderHelper.AddClaim(identity, client_id, state, nonce,
                         OAuthProviderHelper.FilterClaimAtAuth(scopes).ToArray());
 
                     // ClaimsIdentityでサインインして、仲介コードを発行
@@ -1484,6 +1485,11 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
             else if (response_type.ToLower() == "token")
+            // OpneID ConnectのImplicit Flow対応（試行）
+            // response_type == "id_token" or "id_token token"の場合、
+            // 残念ながら、error=unsupported_response_typeとなってココに到達しない。
+            //|| response_type.ToLower() == "id_token"
+            //|| response_type.ToLower() == "id_token token")
             {
                 // Implicitグラント種別（Access Tokenの発行）
                 if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))
@@ -1497,7 +1503,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    OAuthProviderHelper.AddClaim(identity, client_id, state, scopes);
+                    OAuthProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
 
                     // ClaimsIdentityでサインインして、Access Tokenを発行
                     AuthenticationManager.SignIn(identity);
@@ -1528,11 +1534,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="client_id">client_id（必須）</param>
         /// <param name="scope">scope（任意）</param>
         /// <param name="state">state（推奨）</param>
+        /// <param name="nonce">nonce（OIDC）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuthAuthorize(string client_id, string state, string scope)
+        public async Task<ActionResult> OAuthAuthorize(string client_id, string scope, string state, string nonce)
         {
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -1558,7 +1565,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuthProviderHelper.AddClaim(identity, client_id, state, scopes);
+                OAuthProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
 
                 // ClaimsIdentityでサインインして、仲介コードを発行
                 this.AuthenticationManager.SignIn(identity);

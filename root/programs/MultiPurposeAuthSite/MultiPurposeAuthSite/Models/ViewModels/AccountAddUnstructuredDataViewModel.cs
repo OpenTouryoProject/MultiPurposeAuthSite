@@ -20,6 +20,7 @@
 
 using Newtonsoft.Json;
 using System.ComponentModel.DataAnnotations;
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -32,8 +33,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "FirstName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            64,
+            ASPNETIdentityConst.MaxLengthOfFirstName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [RegularExpression(
+            @"[a-zA-Z]+",
+            ErrorMessageResourceName = "HalfWidthAlphabetLettersOnlyErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "fname")]
         public string FirstName { get; set; }
@@ -42,8 +47,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "LastName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            512,
+            ASPNETIdentityConst.MaxLengthOfLastName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [RegularExpression(
+            @"[a-zA-Z]+",
+            ErrorMessageResourceName = "HalfWidthAlphabetLettersOnlyErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "lname")]
         public string LastName { get; set; }
@@ -54,8 +63,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "Sei", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            64,
+            ASPNETIdentityConst.MaxLengthOfSei,
             ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [RegularExpression(
+            @"[^ -~｡-ﾟ]+",
+            ErrorMessageResourceName = "FullWidthLettersOnlyErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "sei")]
         public string Sei { get; set; }
@@ -64,8 +77,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "Mei", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            512,
+            ASPNETIdentityConst.MaxLengthOfMei,
             ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [RegularExpression(
+            @"[^ -~｡-ﾟ]+",
+            ErrorMessageResourceName = "FullWidthLettersOnlyErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "mei")]
         public string Mei { get; set; }
@@ -76,7 +93,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "CompanyName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            64,
+            ASPNETIdentityConst.MaxLengthOfCompanyName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "company")]

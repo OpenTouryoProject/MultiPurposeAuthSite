@@ -455,15 +455,9 @@ namespace MultiPurposeAuthSite.Controllers
                     //// Index - ChangePasswordSuccess
                     //return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
 
-                    if (string.IsNullOrEmpty((string)Session["returnUrl"]))
-                    {
-                        ViewBag.Title = Resources.ManageController.ChangePasswordSuccess;
-                        return View("ChangePasswordSuccess");
-                    }
-                    else
-                    {
-                        return Redirect((string)Session["returnUrl"]);
-                    }
+                    ViewBag.Title = Resources.ManageController.ChangePasswordSuccess;
+                    ViewBag.ReturnUrl = (string)Session["returnUrl"];
+                    return View("ChangePasswordSuccess");
                 }
                 else
                 {
@@ -1747,6 +1741,9 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddUnstructuredData(ManageAddUnstructuredDataViewModel model)
         {
+            // 二重送信防止機能のテスト
+            // System.Threading.Thread.Sleep(5000);
+
             if (ASPNETIdentityConfig.CanEditUnstructuredData)
             {
                 // ManageAddUnstructuredDataViewModelの検証
@@ -1780,15 +1777,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 //// Index - SetPasswordSuccess
                                 //return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
 
-                                if (string.IsNullOrEmpty((string)Session["returnUrl"]))
-                                {
-                                    ViewBag.Title = Resources.ManageController.AddUnstructuredDataSuccess;
-                                    return View("AddUnstructuredDataSuccess");
-                                }
-                                else
-                                {
-                                    return Redirect((string)Session["returnUrl"]);
-                                }
+                                ViewBag.Title = Resources.ManageController.AddUnstructuredDataSuccess;
+                                ViewBag.ReturnUrl = (string)Session["returnUrl"];
+                                return View("AddUnstructuredDataSuccess");
                             }
                             else
                             {
@@ -1827,54 +1818,54 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Delete
 
-        /// <summary>
-        /// 非構造化データの削除
-        /// POST: /Manage/RemoveUnstructuredData
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveUnstructuredData()
-        {
-            if (ASPNETIdentityConfig.CanEditUnstructuredData)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                // 非構造化データのクリア
-                user.UnstructuredData = "";
-                // ユーザーの保存
-                IdentityResult result = await UserManager.UpdateAsync(user);
+        ///// <summary>
+        ///// 非構造化データの削除
+        ///// POST: /Manage/RemoveUnstructuredData
+        ///// </summary>
+        ///// <returns>ActionResultを非同期に返す</returns>
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<ActionResult> RemoveUnstructuredData()
+        //{
+        //    if (ASPNETIdentityConfig.CanEditUnstructuredData)
+        //    {
+        //        // ユーザの検索
+        //        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+        //        // 非構造化データのクリア
+        //        user.UnstructuredData = "";
+        //        // ユーザーの保存
+        //        IdentityResult result = await UserManager.UpdateAsync(user);
 
-                // 結果の確認
-                if (result.Succeeded)
-                {
-                    // 支払元情報 削除の成功
+        //        // 結果の確認
+        //        if (result.Succeeded)
+        //        {
+        //            // 支払元情報 削除の成功
 
-                    // 再ログイン
-                    if (await this.ReSignInAsync())
-                    {
-                        // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
-                    }
-                    else
-                    {
-                        // 再ログインに失敗
-                    }
-                }
-                else
-                {
-                    // 非構造化データ 削除の失敗
-                }
+        //            // 再ログイン
+        //            if (await this.ReSignInAsync())
+        //            {
+        //                // 再ログインに成功
+        //                return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+        //            }
+        //            else
+        //            {
+        //                // 再ログインに失敗
+        //            }
+        //        }
+        //        else
+        //        {
+        //            // 非構造化データ 削除の失敗
+        //        }
 
-                // Index - Error
-                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
+        //        // Index - Error
+        //        return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+        //    }
+        //    else
+        //    {
+        //        // エラー画面
+        //        return View("Error");
+        //    }
+        //}
 
         #endregion
 

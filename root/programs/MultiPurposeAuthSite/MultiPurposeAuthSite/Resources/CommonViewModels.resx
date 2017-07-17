@@ -150,6 +150,12 @@
   <data name="FirstName" xml:space="preserve">
     <value>First name</value>
   </data>
+  <data name="FullWidthLettersOnlyErrMsg" xml:space="preserve">
+    <value>{0} can be entered only full-width characters.</value>
+  </data>
+  <data name="HalfWidthAlphabetLettersOnlyErrMsg" xml:space="preserve">
+    <value>{0} can be entered only half-width alphabetic characters.</value>
+  </data>
   <data name="Industry" xml:space="preserve">
     <value>Type of industry</value>
   </data>

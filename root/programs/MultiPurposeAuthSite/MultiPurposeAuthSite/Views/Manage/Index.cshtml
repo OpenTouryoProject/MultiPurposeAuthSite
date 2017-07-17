@@ -45,8 +45,14 @@
             ApplicationUserManager userManager
                 = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
             ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
-            roles = userManager.GetRoles(user.Id); // 同期版でOK。
-
+            if (user == null)
+            {
+                roles = new List<string>();
+            }
+            else
+            {
+                roles = userManager.GetRoles(user.Id); // 同期版でOK。
+            }
         }
         else
         {
@@ -333,7 +339,11 @@ else
     // OAuth2データの変更が許可されていない場合。
 }
         </dl>
-    </div>
+        <dl class="dl-horizontal">
+            <dd><a href="http://localhost:63359/MultiPurposeAuthSite/Manage/ChangePassword?returnUrl=https%3A%2F%2Fwww.google.co.jp%2F">ReturnUrlのテスト（パスワード変更）</a></dd>
+            <dd><a href="http://localhost:63359/MultiPurposeAuthSite/Manage/AddUnstructuredData?returnUrl=https%3A%2F%2Fwww.google.co.jp%2F">ReturnUrlのテスト（ユーザ情報変更）</a></dd>
+        </dl>
+</div>
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

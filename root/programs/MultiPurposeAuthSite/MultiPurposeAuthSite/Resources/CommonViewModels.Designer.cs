@@ -160,6 +160,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   {0} can be entered only full-width characters. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string FullWidthLettersOnlyErrMsg {
+            get {
+                return ResourceManager.GetString("FullWidthLettersOnlyErrMsg", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   {0} can be entered only half-width alphabetic characters. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string HalfWidthAlphabetLettersOnlyErrMsg {
+            get {
+                return ResourceManager.GetString("HalfWidthAlphabetLettersOnlyErrMsg", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Type of industry に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string Industry {

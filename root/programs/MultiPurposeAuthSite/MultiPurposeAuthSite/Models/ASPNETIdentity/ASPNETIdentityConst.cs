@@ -60,6 +60,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         /// <summary>LastNameのMaxLength</summary>
         public const int MaxLengthOfLastName = 64;
 
+        /// <summary>SeiのMaxLength</summary>
+        public const int MaxLengthOfSei = 64;
+
+        /// <summary>MeiのMaxLength</summary>
+        public const int MaxLengthOfMei = 64;
+
+        /// <summary>CompanyNameのMaxLength</summary>
+        public const int MaxLengthOfCompanyName = 64;
+
         #endregion
 
         #region Idp
@@ -106,6 +115,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             // + Scope_Userid; //authは他のscopeをフィルタするので。
 
         #region id_token用のscope
+        /// <summary>id_tokenを要求するscope</summary>
+        public const string Scope_Openid = "openid";
         /// <summary>profileを要求するscope</summary>
         public const string Scope_Profile = "profile";
         /// <summary>emailを要求するscope</summary>

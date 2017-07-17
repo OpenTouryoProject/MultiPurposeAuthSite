@@ -210,4 +210,10 @@
   <data name="Sei" xml:space="preserve">
     <value>姓</value>
   </data>
+  <data name="FullWidthLettersOnlyErrMsg" xml:space="preserve">
+    <value>{0}は全角文字のみ入力できます。</value>
+  </data>
+  <data name="HalfWidthAlphabetLettersOnlyErrMsg" xml:space="preserve">
+    <value>{0}は半角英字のみ入力できます。</value>
+  </data>
 </root>
