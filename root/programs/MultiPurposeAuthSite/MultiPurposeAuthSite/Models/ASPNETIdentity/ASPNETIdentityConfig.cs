@@ -518,6 +518,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>
+        /// パスワード・ハッシュ生成に利用されるストレッチ回数
+        /// </summary>
+        public static int StretchCount
+        {
+            get
+            {
+                return Convert.ToInt32(ConfigurationManager.AppSettings["StretchCount"]);
+            }
+        }
+
         #endregion
 
         #region ユーザ ロックアウト
