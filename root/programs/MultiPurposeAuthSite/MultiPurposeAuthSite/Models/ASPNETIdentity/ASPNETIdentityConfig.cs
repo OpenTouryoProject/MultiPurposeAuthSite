@@ -219,6 +219,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>DebugTraceLogを有効にする</summary>
+        public static bool EnabeDebugTraceLog
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnabeDebugTraceLog"]);
+            }
+        }
+
+        #endregion
+
+        #region UserStore
+
         /// <summary>UserStoreのTypeを返す。</summary>
         public static EnumUserStoreType UserStoreType
         {

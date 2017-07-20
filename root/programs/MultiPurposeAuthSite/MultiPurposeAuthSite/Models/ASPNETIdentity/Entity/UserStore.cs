@@ -100,19 +100,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #region Utility
 
+        #region Log
+
         /// <summary>MyDebugTrace</summary>
         /// <param name="log">string</param>
         private static void MyDebugTrace(string log)
         {
-            // UserStoreのトレース情報をデバッグ時にログ出力
+            // UserStoreのトレース情報
+
+            // デバッグ時にログ出力
             if (ASPNETIdentityConfig.IsDebug)
             {
                 // デバッグ時
                 Debug.WriteLine(log);
             }
-            else
+
+            // プロビジョニング、プロダクト環境でログファイルに出力
+            if (ASPNETIdentityConfig.EnabeDebugTraceLog)
             {
-                // 本番時
+                LogIF.DebugLog("SQLTRACE", log);
             }
         }
 
@@ -125,12 +131,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
             	// デバッグ時
                 Debug.WriteLine(ex.ToString());
-                LogIF.DebugLog("ACCESS", ex.ToString());
+                LogIF.DebugLog("SQLTRACE", ex.ToString());
             }
             else
             {
             	// 本番時
-                LogIF.DebugLog("ACCESS", ex.ToString());
+                LogIF.DebugLog("SQLTRACE", ex.ToString());
             }
         }
 
@@ -157,6 +163,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             return s;
         }
+
+        #endregion
 
         #region Memory Provider
 
