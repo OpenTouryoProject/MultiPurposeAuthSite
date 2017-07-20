@@ -31,6 +31,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.ASPNETIdentity;
+    
 using Microsoft.AspNet.Identity;
 using Touryo.Infrastructure.Public.Util;
 
@@ -64,7 +66,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
         /// <returns>hashPassword</returns>
         private string V0HashAlgorithm(string password)
         {
-            // $0$ バージョン
+            // $0$ バージョンの実装
             return "$0$" + "." + password;
         }
 
@@ -73,13 +75,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
         /// <returns>hashPassword</returns>
         private string V1HashAlgorithm(string password)
         {
-            // $1$ バージョン
+            // $1$ バージョンの実装
             return "$1$" + "." +
                 GetKeyedHash.GetSaltedPassword(
                     password,                            // password
                     EnumKeyedHashAlgorithm.MACTripleDES, // algorithm
                     GetPassword.Generate(10, 3),         // key(pwd)
-                    10                                   // salt length
+                    10,                                  // salt length
+                    ASPNETIdentityConfig.StretchCount    // stretch count
                 );
         }
 
