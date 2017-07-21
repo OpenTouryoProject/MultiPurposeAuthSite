@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using System;
+using System.Text;
 using System.Data;
 using System.Data.Common;
 using System.Collections.Generic;
@@ -39,8 +40,6 @@ using System.Diagnostics;
 
 using Newtonsoft.Json;
 using StackExchange.Profiling.Data;
-
-using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Models.Log
 {
@@ -95,7 +94,7 @@ namespace MultiPurposeAuthSite.Models.Log
                     {
                         date = DateTime.Now,
                         command = executeType,
-                        text = this._commandText,
+                        text = this.ClearText(this._commandText),
                         param = this._commandParameters,
                         ms = this._stopwatch.ElapsedMilliseconds
                     }, Formatting.None));
@@ -112,10 +111,109 @@ namespace MultiPurposeAuthSite.Models.Log
                    {
                        date = DateTime.Now,
                        command = SqlExecuteType.Reader,
-                       text = this._commandText,
+                       text = this.ClearText(this._commandText),
                        param = this._commandParameters,
                        ms = this._stopwatch.ElapsedMilliseconds
                    }, Formatting.None));
+        }
+
+        /// <summary>
+        /// ClearText
+        /// https://github.com/OpenTouryoProject/OpenTouryo/blob/develop/root/programs/C%23/Frameworks/Infrastructure/Public/Db/BaseDam.cs#L3067
+        /// </summary>
+        /// <param name="text">string</param>
+        /// <returns>string</returns>
+        private string ClearText(string text)
+        {
+            // StringBuilderを使用して
+            // インナーテキストをキレイにする。
+            StringBuilder sb = new StringBuilder();
+
+            // キャリッジリターン文字とラインフィード文字
+            // '\r\n'
+            // キャリッジリターン文字
+            // '\r'
+            // ラインフィード文字
+            // '\n'
+            //// タブ文字
+            //// '\t'
+            // を取り除く
+            text = text.Replace("\r\n", " ");
+            text = text.Replace('\r', ' ');
+            text = text.Replace('\n', ' ');
+            //text = text.Replace('\t', ' ');
+
+            // & → &amp;置換
+            text = text.Replace("&", "&amp;");
+            // エスケープされているシングルクォートを置換
+            text = text.Replace("''", "&SingleQuote2;");
+
+            // 連続した空白は、詰める
+            bool isConsecutive = false;
+
+            // 文字列中は、詰めない
+            bool isString = false;
+
+            foreach (char ch in text)
+            {
+                if (ch == '\'')
+                {
+                    // 出たり入ったり（文字列）。
+                    isString = !isString;
+                }
+
+                if (ch == ' ')
+                {
+                    if (isConsecutive && !isString)
+                    {
+                        // 空白（半角スペース）が連続＆文字列外。
+                        // → アペンドしない。
+                    }
+                    else
+                    {
+                        // 空白（半角スペース）が初回 or 文字列中。
+                        // → アペンドする。
+                        sb.Append(ch);
+
+                        // 空白（半角スペース）が連続しているフラグを立てる。
+                        isConsecutive = true;
+                    }
+                }
+                else if (ch == '\t')
+                {
+                    if (isConsecutive && !isString)
+                    {
+                        // 空白（タブ文字）が連続＆文字列外。
+                        // → アペンドしない。
+                    }
+                    else
+                    {
+                        // 空白（タブ文字）が初回 or 文字列中。
+                        // → アペンドする。
+                        sb.Append(ch);
+
+                        // 空白（タブ文字）が連続しているフラグを立てる。
+                        isConsecutive = true;
+                    }
+                }
+                else
+                {
+                    // アペンドする。
+                    sb.Append(ch);
+
+                    // 連続した空白が途切れたので、フラグを倒す。
+                    isConsecutive = false;
+                }
+            }
+
+            // 戻し（エスケープされているシングルクォートを置換）。
+            text = sb.ToString().Replace("&SingleQuote2;", "''");
+
+            // 戻し（& → &amp;置換）
+            text = text.Replace("&amp;", "&");
+
+            // 結果を返す
+            return text;
         }
     }
 }
