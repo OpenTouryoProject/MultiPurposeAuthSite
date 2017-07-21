@@ -34,10 +34,13 @@
 using System.Data;
 using System.Data.SqlClient;
 using Oracle.ManagedDataAccess.Client;
-
-
 //using Npgsql;
+
+using StackExchange.Profiling.Data;
+
+using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
+
 using Touryo.Infrastructure.Public.Util;
 
 namespace MultiPurposeAuthSite.Models.Util
@@ -54,10 +57,16 @@ namespace MultiPurposeAuthSite.Models.Util
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.SqlServer:
-                    return new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL"));
+                    //return new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL"));
+                    return new ProfiledDbConnection(
+                        new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL")),
+                        new TraceDbProfiler());
 
                 case EnumUserStoreType.OracleMD:
-                    return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2"));
+                    //return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2"));
+                    return new ProfiledDbConnection(
+                        new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2")),
+                        new TraceDbProfiler());
 
                 //case EnumUserStoreType.PostgreSQL:
                 //    return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));

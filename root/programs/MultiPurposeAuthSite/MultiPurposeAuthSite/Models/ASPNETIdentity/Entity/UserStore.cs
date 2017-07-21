@@ -46,6 +46,7 @@ using System.Web;
 using Dapper;
 using Microsoft.AspNet.Identity;
 
+using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.Util;
 using Touryo.Infrastructure.Public.Log;
 
@@ -101,44 +102,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         #region Utility
 
         #region Log
-
-        /// <summary>MyDebugTrace</summary>
-        /// <param name="log">string</param>
-        private static void MyDebugTrace(string log)
-        {
-            // UserStoreのトレース情報
-
-            // デバッグ時にログ出力
-            if (ASPNETIdentityConfig.IsDebug)
-            {
-                // デバッグ時
-                Debug.WriteLine(log);
-            }
-
-            // プロビジョニング、プロダクト環境でログファイルに出力
-            if (ASPNETIdentityConfig.EnabeDebugTraceLog)
-            {
-                LogIF.DebugLog("SQLTRACE", log);
-            }
-        }
-
-        /// <summary>MyDebugLogForEx</summary>
-        /// <param name="log">string</param>
-        private static void MyDebugLogForEx(Exception ex)
-        {
-            // UserStoreのデータアクセス・エラーは以下に出力。
-            if (ASPNETIdentityConfig.IsDebug)
-            {
-            	// デバッグ時
-                Debug.WriteLine(ex.ToString());
-                LogIF.DebugLog("SQLTRACE", ex.ToString());
-            }
-            else
-            {
-            	// 本番時
-                LogIF.DebugLog("SQLTRACE", ex.ToString());
-            }
-        }
 
         /// <summary>GetParametersString</summary>
         /// <param name="parameters">string[]</param>
@@ -197,7 +160,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public static Task<bool> IsDBMSInitialized()
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName + 
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -235,7 +198,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(false); ;
@@ -249,7 +212,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         private void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -323,7 +286,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
         }
 
@@ -345,7 +308,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task CreateAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -436,11 +399,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                 }
 
-                Log.MyOperationTrace(string.Format("{0}({1}) was created.", user.Id, user.UserName));
+                Logging.MyOperationTrace(string.Format("{0}({1}) was created.", user.Id, user.UserName));
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -456,7 +419,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task<ApplicationUser> FindByIdAsync(string userId)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -521,7 +484,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(user);
@@ -533,7 +496,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task<ApplicationUser> FindByNameAsync(string userName)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -599,7 +562,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(user);
@@ -615,7 +578,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             get
             {
                 // Debug
-                UserStore.MyDebugTrace("★ : " + 
+                Logging.MyDebugSQLTrace("★ : " + 
                     MethodBase.GetCurrentMethod().DeclaringType.FullName +
                     "." + MethodBase.GetCurrentMethod().Name +
                     UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -752,7 +715,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugLogForEx(ex);
+                    Logging.MySQLLogForEx(ex);
                 }
 
                 // IQueryableとして戻す。
@@ -770,7 +733,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public async Task UpdateAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -895,12 +858,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
                     }
 
-                    Log.MyOperationTrace(string.Format("{0}({1}) was updated.", user.Id, user.UserName));
+                    Logging.MyOperationTrace(string.Format("{0}({1}) was updated.", user.Id, user.UserName));
                 }
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return;
@@ -914,7 +877,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         private Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1103,7 +1066,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -1126,7 +1089,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task DeleteAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " +
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1204,11 +1167,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
                 }
 
-                Log.MyOperationTrace(string.Format("{0}({1}) was deleted.", user.Id, user.UserName));
+                Logging.MyOperationTrace(string.Format("{0}({1}) was deleted.", user.Id, user.UserName));
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
             //}
 
@@ -1231,7 +1194,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1250,7 +1213,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1269,7 +1232,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1289,7 +1252,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task<ApplicationUser> FindByEmailAsync(string email)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1354,7 +1317,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(user);
@@ -1369,7 +1332,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1388,7 +1351,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1407,7 +1370,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1426,7 +1389,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1449,7 +1412,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1468,7 +1431,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1487,7 +1450,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1506,7 +1469,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1527,7 +1490,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task AddToRoleAsync(ApplicationUser user, string roleName)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1608,7 +1571,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -1623,7 +1586,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1643,7 +1606,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task<IList<string>> GetRolesAsync(ApplicationUser user)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1726,7 +1689,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             // ユーザのロール一覧を返す。
@@ -1740,7 +1703,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1826,7 +1789,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugLogForEx(ex);
+                    Logging.MySQLLogForEx(ex);
                 }
             }
 
@@ -1850,7 +1813,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1869,7 +1832,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1892,7 +1855,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1911,7 +1874,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1929,7 +1892,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1949,7 +1912,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1970,7 +1933,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1996,7 +1959,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2023,7 +1986,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2057,7 +2020,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2076,7 +2039,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2102,7 +2065,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task CreateAsync(ApplicationRole role)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2156,7 +2119,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -2172,7 +2135,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2232,7 +2195,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(role);
@@ -2244,7 +2207,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2305,7 +2268,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(role);
@@ -2323,7 +2286,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             get
             {
                 // Debug
-                UserStore.MyDebugTrace("★ : " + 
+                Logging.MyDebugSQLTrace("★ : " + 
                     MethodBase.GetCurrentMethod().DeclaringType.FullName +
                     "." + MethodBase.GetCurrentMethod().Name +
                     UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2434,7 +2397,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugLogForEx(ex);
+                    Logging.MySQLLogForEx(ex);
                 }
 
                 return commonRoles.AsQueryable();
@@ -2451,7 +2414,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task UpdateAsync(ApplicationRole role)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2524,7 +2487,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugLogForEx(ex);
+                    Logging.MySQLLogForEx(ex);
                 }
             }
 
@@ -2541,7 +2504,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task DeleteAsync(ApplicationRole role)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2645,7 +2608,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
                 catch (Exception ex)
                 {
-                    UserStore.MyDebugLogForEx(ex);
+                    Logging.MySQLLogForEx(ex);
                 }
             }
 
@@ -2667,7 +2630,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2723,7 +2686,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -2735,7 +2698,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task<ApplicationUser> FindAsync(UserLoginInfo login)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2827,7 +2790,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(user);
@@ -2841,7 +2804,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2858,7 +2821,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2919,7 +2882,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -2936,7 +2899,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task AddClaimAsync(ApplicationUser user, Claim claim)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2992,7 +2955,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -3006,7 +2969,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // UserStoreを直接、触らない。
 
             // Debug
-            UserStore.MyDebugTrace(
+            Logging.MyDebugSQLTrace(
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -3023,7 +2986,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public Task RemoveClaimAsync(ApplicationUser user, Claim claim)
         {
             // Debug
-            UserStore.MyDebugTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -3077,7 +3040,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             }
             catch (Exception ex)
             {
-                UserStore.MyDebugLogForEx(ex);
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));

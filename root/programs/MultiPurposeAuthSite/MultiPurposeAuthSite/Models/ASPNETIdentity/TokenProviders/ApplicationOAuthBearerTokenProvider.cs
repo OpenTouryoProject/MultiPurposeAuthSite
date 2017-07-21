@@ -31,6 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
@@ -359,7 +360,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         context.Validated(identity);
 
                         // イベント・ログ出力
-                        Log.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
+                        Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
                             user.Id, user.UserName, context.ClientId, OAuthProviderHelper.GetInstance().GetClientName(context.ClientId)));
                     }
                     catch
@@ -457,7 +458,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 context.Validated(identity);
 
                 // イベント・ログ出力
-                Log.MyOperationTrace(string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
+                Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
                             user.Id, user.UserName, context.ClientId, OAuthProviderHelper.GetInstance().GetClientName(context.ClientId)));
             }
             catch
