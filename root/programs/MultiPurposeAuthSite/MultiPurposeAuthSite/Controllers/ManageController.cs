@@ -18,6 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
@@ -307,7 +308,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (await this.ReSignInAsync())
                         {
                             // イベント・ログ出力
-                            Log.MyOperationTrace(string.Format(
+                            Logging.MyOperationTrace(string.Format(
                                 "{0}({1}) did change own user name to {2}.", user.Id, oldUserName, user.UserName));
 
                             // 再ログインに成功
@@ -385,7 +386,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // イベント・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Log.MyOperationTrace(string.Format("{0}({1}) did set own local password.", user.Id, user.UserName));
+                    Logging.MyOperationTrace(string.Format("{0}({1}) did set own local password.", user.Id, user.UserName));
 
                     // Index - SetPasswordSuccess
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.SetPasswordSuccess });
@@ -448,7 +449,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // イベント・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Log.MyOperationTrace(string.Format("{0}({1}) did change own password.", user.Id, user.UserName));
+                    Logging.MyOperationTrace(string.Format("{0}({1}) did change own password.", user.Id, user.UserName));
 
                     // Index - ChangePasswordSuccess
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
@@ -748,7 +749,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         this.SendChangeCompletedEmail(user);
 
                                         // イベント・ログ出力
-                                        Log.MyOperationTrace(string.Format(
+                                        Logging.MyOperationTrace(string.Format(
                                             "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
                                         return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
                                     }

@@ -18,6 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
@@ -193,7 +194,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 }
 
                                 // イベント・ログ出力
-                                Log.MyOperationTrace(string.Format("{0}({1}) did sign in.", user.Id, user.UserName));
+                                Logging.MyOperationTrace(string.Format("{0}({1}) did sign in.", user.Id, user.UserName));
 
                                 return RedirectToLocal(returnUrl);
 
@@ -263,7 +264,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // イベント・ログ出力
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                Log.MyOperationTrace(string.Format("{0}({1}) did sign out.", user.Id, user.UserName));
+                Logging.MyOperationTrace(string.Format("{0}({1}) did sign out.", user.Id, user.UserName));
             }
 
             // リダイレクト "Index", "Home"へ
@@ -344,7 +345,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (result.Succeeded)
                     {
                         // イベント・ログ出力
-                        Log.MyOperationTrace(string.Format("{0}({1}) did sign up.", user.Id, user.UserName));
+                        Logging.MyOperationTrace(string.Format("{0}({1}) did sign up.", user.Id, user.UserName));
 
                         #region サインアップ成功
 
@@ -540,7 +541,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // イベント・ログ出力
                         ApplicationUser user = await UserManager.FindByIdAsync(userId);
-                        Log.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
+                        Logging.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
 
                         return View("EmailConfirmation");
                     }
@@ -587,7 +588,7 @@ namespace MultiPurposeAuthSite.Controllers
                             this.SendRegisterCompletedEmail(user);
 
                             // イベント・ログ出力
-                            Log.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
+                            Logging.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
 
                             // 完了画面
                             return View("EmailConfirmation");
@@ -756,7 +757,7 @@ namespace MultiPurposeAuthSite.Controllers
                     this.SendPasswordResetCompletedEmail(user);
 
                     // イベント・ログ出力
-                    Log.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
+                    Logging.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
 
                     // "パスワードのリセットの確認"画面を表示 
                     return View("ResetPasswordConfirmation");
@@ -1137,7 +1138,7 @@ namespace MultiPurposeAuthSite.Controllers
                             Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                             // イベント・ログ出力
-                            Log.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
+                            Logging.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
 
                             return RedirectToLocal(returnUrl);
                         }
@@ -1204,7 +1205,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                                     // イベント・ログ出力
-                                    Log.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
+                                    Logging.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
 
                                     // リダイレクト
                                     return RedirectToLocal(returnUrl);
@@ -1282,7 +1283,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
                                         // イベント・ログ出力
-                                        Log.MyOperationTrace(string.Format("{0}({1}) did ext sign up.", user.Id, user.UserName));
+                                        Logging.MyOperationTrace(string.Format("{0}({1}) did ext sign up.", user.Id, user.UserName));
 
                                         // リダイレクト
                                         return RedirectToLocal(returnUrl);
@@ -1389,7 +1390,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // イベント・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
+                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
                         user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
 
                     // RedirectエンドポイントへRedirect
@@ -1427,7 +1428,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // イベント・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
+                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
                             user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
                 }
 
@@ -1489,7 +1490,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // イベント・ログ出力
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                Log.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
+                Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
                         user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
 
                 // RedirectエンドポイントへRedirect
