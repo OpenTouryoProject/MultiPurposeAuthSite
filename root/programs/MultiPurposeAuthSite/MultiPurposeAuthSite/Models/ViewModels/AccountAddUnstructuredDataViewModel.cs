@@ -138,6 +138,9 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Required(AllowEmptyStrings = false)]
         // [StringLength( // ユーザ入力でないので不要
         public string Code { get; set; }
+
+        /// <summary>招待機能</summary>
+        public string ReturnUrl { get; set; }
         #endregion
     }
 }

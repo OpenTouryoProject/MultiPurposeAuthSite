@@ -44,5 +44,8 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>約款画面で同意したかどうか</summary>
         [Display(Name = "AgreementCheck", ResourceType = typeof(Resources.AccountViews))]
         public bool AcceptedAgreement { get; set; }
+
+        /// <summary>招待機能</summary>
+        public string ReturnUrl { get; set; }
     }
 }

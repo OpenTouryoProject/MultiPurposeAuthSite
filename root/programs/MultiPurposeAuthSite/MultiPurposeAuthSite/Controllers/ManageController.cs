@@ -659,19 +659,31 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // メアドが更新された場合。
 
-                        // DB ストアに保存
-                        CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
+                        // 既存のメアドかどうかのチェック
+                        ApplicationUser anotherUser = await UserManager.FindByEmailAsync(model.Email);
+
+                        if (anotherUser == null)
                         {
-                            Code = GetPassword.Base64UrlSecret(128),
-                            Email = model.Email // 更新後のメアド
-                        };
-                        CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
+                            // 既存のメアドでない場合。
 
-                        // 確認メールの送信
-                        this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
+                            // DB ストアに保存
+                            CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
+                            {
+                                Code = GetPassword.Base64UrlSecret(128),
+                                Email = model.Email // 更新後のメアド
+                            };
+                            CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
-                        // 表示
-                        return View("VerifyEmailAddress");
+                            // 確認メールの送信
+                            this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
+
+                            // 表示
+                            return View("VerifyEmailAddress");
+                        }
+                        else
+                        {
+                            // 既存のメアドの場合。
+                        }
                     }
                     else
                     {
@@ -2261,8 +2273,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 結果を格納する変数。
                     Dictionary<string, string> dic = null;
-
-
+                    
                     #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                     Uri tokenEndpointUri = new Uri(
@@ -2290,7 +2301,6 @@ namespace MultiPurposeAuthSite.Controllers
                     }
 
                     #endregion
-
                 }
 
                 // 画面の表示。

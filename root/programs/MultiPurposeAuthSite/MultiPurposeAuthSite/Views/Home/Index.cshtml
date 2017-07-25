@@ -40,6 +40,9 @@
 <div class="col-md-8">
     <h4>@ViewBag.Message</h4>
     <hr />
+    <dl class="dl-horizontal">
+        <dd><a href="@HttpContext.Current.Request.ApplicationPath/Account/Register?returnUrl=https%3A%2F%2Fwww.google.co.jp%2F">ReturnUrlのテスト（サインアップ）</a></dd>
+    </dl>
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

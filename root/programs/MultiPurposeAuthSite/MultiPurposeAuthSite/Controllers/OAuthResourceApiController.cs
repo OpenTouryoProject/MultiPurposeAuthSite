@@ -129,6 +129,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
             userinfoClaimSet.Add("sub", subject);
+            userinfoClaimSet.Add("uuid", subject);
 
             // Scope
             IEnumerable<Claim> claimScope = id.FindAll(ASPNETIdentityConst.Claim_Scope).AsEnumerable();

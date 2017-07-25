@@ -228,7 +228,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // EmailConfirmed == false の場合、
 
                         // メアド検証用のメールを送信して、
-                        this.SendConfirmEmail(user);
+                        this.SendConfirmEmail(user, "");
 
                         // メッセージを設定
                         ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
@@ -282,18 +282,22 @@ namespace MultiPurposeAuthSite.Controllers
         /// サインアップ画面（初期表示）
         /// GET: /Account/Register
         /// </summary>
-        /// <returns>ActionResult</returns>
+        /// <param name="returnUrl">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         [AllowAnonymous]
-        public async Task<ActionResult> Register()
+        public async Task<ActionResult> Register(string returnUrl)
         {
             // データの生成
             await this.CreateData();
 
+            //Session["returnUrl"] = returnUrl;
+
             // サインアップ画面（初期表示）
             return View(new AccountRegisterViewModel
             {
-                ConfirmationDisplay = false
+                ConfirmationDisplay = false,
+                ReturnUrl = returnUrl
             });
         }
 
@@ -334,7 +338,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (ASPNETIdentityConfig.RequireUniqueEmail)
                     {
                         // サインインの前にメアド検証用のメールを送信して、
-                        this.SendConfirmEmail(user);
+                        this.SendConfirmEmail(user, model.ReturnUrl);
 
                         // VerifyEmailAddress画面へ遷移
                         return View("VerifyEmailAddress");
@@ -413,7 +417,14 @@ namespace MultiPurposeAuthSite.Controllers
                                         // EmailConfirmed済み。
 
                                         // 作成(CreateAsync)に失敗
-                                        AddErrors(result);
+
+                                        // フィルタ
+                                        IEnumerable<string> errors = result.Errors;
+                                        errors = errors.Where(err => !err.StartsWith("Name"));
+                                        errors = errors.Where(err => !err.StartsWith("名前"));
+
+                                        AddErrors(errors);
+
                                         // 再表示
                                         return View(model);
                                     }
@@ -453,7 +464,7 @@ namespace MultiPurposeAuthSite.Controllers
                                                 // 再度、メアド検証
 
                                                 // メアド検証用のメールを送信して、
-                                                this.SendConfirmEmail(user);
+                                                this.SendConfirmEmail(user, model.ReturnUrl);
 
                                                 //// VerifyEmailAddress
                                                 ////ViewBag.Link = callbackUrl;
@@ -523,7 +534,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         [AllowAnonymous]
-        public async Task<ActionResult> EmailConfirmation(string userId, string code)
+        public async Task<ActionResult> EmailConfirmation(string userId, string code, string returnUrl)
         {
             // 入力の検証
             if (userId == null || code == null)
@@ -543,7 +554,8 @@ namespace MultiPurposeAuthSite.Controllers
                              UserId = userId,
                              Code = code,
                              Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
-                             AcceptedAgreement = false
+                             AcceptedAgreement = false,
+                             ReturnUrl= returnUrl
                          });
                 }
                 else
@@ -599,6 +611,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 ConfirmationDisplay = false,
                                 UserId = model.UserId,
                                 Code = model.Code,
+                                ReturnUrl = model.ReturnUrl,
                                 Name = user.UserName
                             });
                     }
@@ -667,9 +680,16 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 // イベント・ログ出力
                                 Logging.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
-                                
+
                                 // 完了画面
-                                return View("EmailConfirmation");
+                                if (string.IsNullOrEmpty(model.ReturnUrl))
+                                {
+                                    return View("EmailConfirmation");
+                                }
+                                else
+                                {
+                                    return Redirect(model.ReturnUrl);
+                                }
                             }
                             else
                             {
@@ -1844,6 +1864,19 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
+        /// <summary>
+        /// ModelStateDictionaryに
+        /// IEnumerable<string>の情報を移送
+        /// </summary>
+        /// <param name="errors">IEnumerable<string></param>
+        private void AddErrors(IEnumerable<string> errors)
+        {
+            foreach (string error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+        }
+
         /// <summary>RedirectToActionする。</summary>
         /// <param name="returnUrl">returnUrl</param>
         /// <returns>ActionResult</returns>
@@ -1869,7 +1902,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// メアド検証で使用するメール送信処理。
         /// </summary>
         /// <param name="user">ApplicationUser</param>
-        private async void SendConfirmEmail(ApplicationUser user)
+        /// <param name="returnUrl">string</param>
+        private async void SendConfirmEmail(ApplicationUser user, string returnUrl)
         {
             string code;
             string callbackUrl;
@@ -1882,6 +1916,12 @@ namespace MultiPurposeAuthSite.Controllers
                     "EmailConfirmation", "Account",
                     new { userId = user.Id, code = code }, protocol: Request.Url.Scheme
                 );
+
+            // 招待機能
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                callbackUrl += "&returnUrl=" + CustomEncode.UrlEncode(returnUrl);
+            }
 
             // E-mailの送信
             await UserManager.SendEmailAsync(

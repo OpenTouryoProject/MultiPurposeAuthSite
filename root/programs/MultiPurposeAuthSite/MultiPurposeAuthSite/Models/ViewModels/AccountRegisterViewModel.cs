@@ -64,5 +64,8 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>確認表示モード</summary>
         public bool ConfirmationDisplay { get; set; }
+
+        /// <summary>招待機能</summary>
+        public string ReturnUrl { get; set; }
     }
 }

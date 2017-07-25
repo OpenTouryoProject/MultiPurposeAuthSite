@@ -115,6 +115,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             authTokenClaimSet.Add("sub", user.Id);
+            authTokenClaimSet.Add("uuid", user.Id);
             authTokenClaimSet.Add("iat", this.ToUnixTime(data.Properties.IssuedUtc.Value).ToString());//.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("exp", this.ToUnixTime(data.Properties.ExpiresUtc.Value).ToString());//.ToUnixTimeSeconds().ToString());
             
