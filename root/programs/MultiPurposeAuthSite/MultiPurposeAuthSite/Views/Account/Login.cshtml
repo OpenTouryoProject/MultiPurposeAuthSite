@@ -33,6 +33,18 @@
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
 @section HeaderScriptsSection{
     <!-- Head 部の section -->
+    <script type="text/javascript">
+        $(function () {
+            $(":submit").prop('disabled', true);
+            $('#Email,#Password').on('keydown keyup keypress change', function () {
+                if ($(this).val().length > 0) {
+                    $(":submit").prop('disabled', false);
+                } else {
+                    $(":submit").prop('disabled', true);
+                }
+            });
+        });
+    </script>
 }
 
 <h2>@ViewBag.Title</h2>
@@ -51,7 +63,7 @@
                     <div class="form-group">
                         @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
                         <div class="col-md-10">
-                            @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+                            @Html.TextBoxFor(m => m.Email, new { @class = "form-control"  })
                             @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
                         </div>
                     </div>
