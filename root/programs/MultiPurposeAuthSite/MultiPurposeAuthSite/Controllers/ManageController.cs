@@ -683,6 +683,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 既存のメアドの場合。
+                            ModelState.AddModelError("", Resources.ManageController.EnteredIdIsAlreadyExists); 
                         }
                     }
                     else

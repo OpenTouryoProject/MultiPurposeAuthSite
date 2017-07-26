@@ -423,6 +423,18 @@ namespace MultiPurposeAuthSite.Controllers
                                         errors = errors.Where(err => !err.StartsWith("Name"));
                                         errors = errors.Where(err => !err.StartsWith("名前"));
 
+                                        // 差し替え
+                                        if (errors.Any(err => err.StartsWith("Email")))
+                                        {
+                                            errors = errors.Where(err => !err.StartsWith("Email"));
+                                            errors = errors.Concat(new[] { Resources.AccountController.EnteredIdIsAlreadyExists });
+                                        }
+                                        else if (errors.Any(err => err.StartsWith("電子メール")))
+                                        {
+                                            errors = errors.Where(err => !err.StartsWith("電子メール"));
+                                            errors = errors.Concat(new[] { Resources.AccountController.EnteredIdIsAlreadyExists });
+                                        }
+
                                         AddErrors(errors);
 
                                         // 再表示

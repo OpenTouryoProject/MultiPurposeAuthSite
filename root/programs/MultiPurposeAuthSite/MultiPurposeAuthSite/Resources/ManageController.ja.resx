@@ -153,6 +153,9 @@
   <data name="CodeForAddPhoneNumber" xml:space="preserve">
     <value>あなたのセキュリティ コード:</value>
   </data>
+  <data name="EnteredIdIsAlreadyExists" xml:space="preserve">
+    <value>入力されたID（メールアドレス）は既に使用されています。</value>
+  </data>
   <data name="Error" xml:space="preserve">
     <value>エラーが発生しました。</value>
   </data>

@@ -117,6 +117,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="EnteredIdIsAlreadyExists" xml:space="preserve">
+    <value>入力されたID（メールアドレス）は既に使用されています。</value>
+  </data>
   <data name="InvalidCode" xml:space="preserve">
     <value>無効なコード。</value>
   </data>

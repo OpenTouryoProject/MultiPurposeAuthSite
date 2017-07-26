@@ -61,6 +61,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   The entered ID (mail address) is already in use. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string EnteredIdIsAlreadyExists {
+            get {
+                return ResourceManager.GetString("EnteredIdIsAlreadyExists", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Invalid code. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string InvalidCode {
