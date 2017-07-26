@@ -44,10 +44,9 @@ using Microsoft.AspNet.Identity.Owin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Business.Presentation;
-
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Util;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -419,7 +418,13 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult ChangePassword(string returnUrl)
         {
-            Session["returnUrl"] = returnUrl;
+            // Open-Redirect対策（前方一致を確認する）
+            if (!string.IsNullOrEmpty(returnUrl)
+                && returnUrl.StartsWith(GetConfigParameter.GetConfigValue("ReturnUrlOfApplicationList")))
+            {
+                Session["returnUrl"] = returnUrl;
+            }
+
             return View();
         }
 
@@ -1560,7 +1565,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // ユーザを取得できた。
 
                         // TokenからClientIDに変換する。
-                        JObject jobj = await WebAPIHelper.GetInstance().CreateaCustomerAsync(user.Email, model.PaymentInformation);
+                        JObject jobj = await WebAPIHelper.GetInstance().CreateaOnlinePaymentCustomerAsync(user.Email, model.PaymentInformation);
 
                         // 支払元情報（ClientID）の設定
                         user.PaymentInformation = (string)jobj["id"];
@@ -1636,7 +1641,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 // 課金のテスト処理
-                JObject jobj = await WebAPIHelper.GetInstance().ChargeToCustomers(user.PaymentInformation, "jpy", "1000");
+                JObject jobj = await WebAPIHelper.GetInstance().ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, "jpy", "1000");
                 // 元の画面に戻る
                 return RedirectToAction("Index");
             }
@@ -1717,7 +1722,12 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> AddUnstructuredData(string returnUrl)
         {
-            Session["returnUrl"] = returnUrl;
+            // Open-Redirect対策（前方一致を確認する）
+            if (!string.IsNullOrEmpty(returnUrl)
+                && returnUrl.StartsWith(GetConfigParameter.GetConfigValue("ReturnUrlOfApplicationList")))
+            {
+                Session["returnUrl"] = returnUrl;
+            }
 
             if (ASPNETIdentityConfig.CanEditUnstructuredData)
             {
@@ -1737,6 +1747,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 model.ConfirmationDisplay = false;
                 model.Name = user.UserName;
+
+                ViewBag.IndustryTypeItems = await WebAPIHelper.GetInstance().GetIndustryTypeFromServerService();
+                ViewBag.CountryItems = await WebAPIHelper.GetInstance().GetCountryFromServerService();
+
                 return View(model);
             }
             else
@@ -1818,6 +1832,9 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageAddUnstructuredDataViewModelの検証に失敗
                 }
+
+                ViewBag.IndustryTypeItems = await WebAPIHelper.GetInstance().GetIndustryTypeFromServerService();
+                ViewBag.CountryItems = await WebAPIHelper.GetInstance().GetCountryFromServerService();
 
                 // 再表示
                 return View(model);

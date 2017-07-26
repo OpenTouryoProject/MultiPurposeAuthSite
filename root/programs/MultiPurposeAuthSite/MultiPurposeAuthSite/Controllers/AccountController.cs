@@ -47,6 +47,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Util;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -119,8 +120,13 @@ namespace MultiPurposeAuthSite.Controllers
             // データの生成
             await this.CreateData();
 
-            // ReturnUrl
-            ViewBag.ReturnUrl = returnUrl;
+            // Open-Redirect対策（前方一致を確認する）
+            if (!string.IsNullOrEmpty(returnUrl)
+                && returnUrl.StartsWith(GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI")))
+            {
+                // ReturnUrl
+                ViewBag.ReturnUrl = returnUrl;
+            }
 
             // サインイン画面（初期表示）
             return View();
@@ -291,14 +297,27 @@ namespace MultiPurposeAuthSite.Controllers
             // データの生成
             await this.CreateData();
 
-            //Session["returnUrl"] = returnUrl;
-
-            // サインアップ画面（初期表示）
-            return View(new AccountRegisterViewModel
+            // Open-Redirect対策（前方一致を確認する）
+            if (!string.IsNullOrEmpty(returnUrl)
+                && returnUrl.StartsWith(GetConfigParameter.GetConfigValue("ReturnUrlOfInvitationFeature")))
             {
-                ConfirmationDisplay = false,
-                ReturnUrl = returnUrl
-            });
+                // サインアップ画面（初期表示）
+                return View(new AccountRegisterViewModel
+                {
+                    ConfirmationDisplay = false,
+                    ReturnUrl = returnUrl
+                });
+            }
+            else
+            {
+                // サインアップ画面（初期表示）
+                return View(new AccountRegisterViewModel
+                {
+                    ConfirmationDisplay = false,
+                    ReturnUrl = ""
+                });
+            }
+
         }
 
         /// <summary>
@@ -616,7 +635,10 @@ namespace MultiPurposeAuthSite.Controllers
                         // 同意された。
 
                         ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
-                        //return View("EmailConfirmation");
+
+                        ViewBag.IndustryTypeItems = await WebAPIHelper.GetInstance().GetIndustryTypeFromServerService();
+                        ViewBag.CountryItems = await WebAPIHelper.GetInstance().GetCountryFromServerService();
+
                         return View("AddUnstructuredData",
                             new AccountAddUnstructuredDataViewModel
                             {
@@ -731,6 +753,9 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ManageAddUnstructuredDataViewModelの検証に失敗
             }
+
+            ViewBag.IndustryTypeItems = await WebAPIHelper.GetInstance().GetIndustryTypeFromServerService();
+            ViewBag.CountryItems = await WebAPIHelper.GetInstance().GetCountryFromServerService();
 
             // 再表示
             return View(model);

@@ -34,6 +34,8 @@
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 using System;
+using System.Text;
+using System.Web.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -45,6 +47,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Util;
 
 namespace MultiPurposeAuthSite.Models.Util
 {
@@ -142,13 +145,13 @@ namespace MultiPurposeAuthSite.Models.Util
 
         #endregion
 
-        #region StripeWebAPI
+        #region OnlinePaymentWebAPI
 
-        /// <summary>CreateaCustomerAsync</summary>
+        /// <summary>CreateaOnlinePaymentCustomerAsync</summary>
         /// <param name="email">email</param>
         /// <param name="token">token</param>
         /// <returns></returns>
-        public async Task<JObject> CreateaCustomerAsync(string email, string token)
+        public async Task<JObject> CreateaOnlinePaymentCustomerAsync(string email, string token)
         {
             // URL
             string secretKey = "";
@@ -214,12 +217,12 @@ namespace MultiPurposeAuthSite.Models.Util
             return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
         }
 
-        /// <summary>ChargeToCustomers</summary>
+        /// <summary>ChargeToOnlinePaymentCustomersAsync</summary>
         /// <param name="customerId">customerId</param>
         /// <param name="currency">currency(jpy, etc.)</param>
         /// <param name="amount">amount</param>
         /// <returns>JObject</returns>
-        public async Task<JObject> ChargeToCustomers(string customerId, string currency, string amount)
+        public async Task<JObject> ChargeToOnlinePaymentCustomersAsync(string customerId, string currency, string amount)
         {
             // URL
             string secretKey = "";
@@ -267,6 +270,94 @@ namespace MultiPurposeAuthSite.Models.Util
             // HttpResponseMessage
             httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
             return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
+        }
+
+        #endregion
+
+        #region ServerServiceWebAPI
+
+        /// <summary>GetIndustryTypeFromServerService</summary>
+        /// <returns>IndustryType</returns>
+        public async Task<List<SelectListItem>> GetIndustryTypeFromServerService()
+        {
+            // URL
+            Uri webApiEndpointUri = new Uri(GetConfigParameter.GetConfigValue("ServerServiceOfIndustryTypeURI")); 
+
+            // 通信用の変数
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = webApiEndpointUri
+            };
+            
+            httpRequestMessage.Content = new StringContent(
+                JsonConvert.SerializeObject(new
+                {
+                    language = "ja"
+                }),
+                Encoding.UTF8, "application/json");
+
+            //httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            // HttpResponseMessage
+            httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
+            Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(await httpResponseMessage.Content.ReadAsStringAsync());
+            List<SelectListItem> items = new List<SelectListItem>();
+            foreach (string key in dic.Keys)
+            {
+                SelectListItem item = new SelectListItem();
+                item.Value = key;
+                item.Text = dic[key];
+                items.Add(item);
+            }
+
+            return items;
+        }
+
+        /// <summary>GetCountryFromServerService</summary>
+        /// <returns>Country</returns>
+        public async Task<List<SelectListItem>> GetCountryFromServerService()
+        {
+            // URL
+            Uri webApiEndpointUri = new Uri(GetConfigParameter.GetConfigValue("ServerServiceOfCountryURI"));
+
+            // 通信用の変数
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = webApiEndpointUri
+            };
+
+            httpRequestMessage.Content = new StringContent(
+                 JsonConvert.SerializeObject(new
+                 {
+                     language = "ja"
+                 }),
+                 Encoding.UTF8, "application/json");
+
+            //httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            // HttpResponseMessage
+            httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
+            Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(await httpResponseMessage.Content.ReadAsStringAsync());
+            List<SelectListItem> items = new List<SelectListItem>();
+            foreach (string key in dic.Keys)
+            {
+                SelectListItem item = new SelectListItem();
+                item.Value = key;
+                item.Text = dic[key];
+                items.Add(item);
+            }
+
+            return items;
         }
 
         #endregion

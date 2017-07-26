@@ -39,6 +39,9 @@
     {
         htmlAttributes = new { @class = "form-control" };
     }
+
+    List<SelectListItem> industryTypeItems = ViewBag.IndustryTypeItems;
+    List<SelectListItem> countryItems = ViewBag.CountryItems;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -100,12 +103,12 @@
         <div class="col-md-10">
             @if (Model.ConfirmationDisplay)
             {
-                @Html.TextBox("txtCountryName", items.Where(x => x.Value == Model.Industry).First().Text, htmlAttributes)
+                @Html.TextBox("txtCountryName", industryTypeItems.Where(x => x.Value == Model.Industry).First().Text, htmlAttributes)
                 @Html.HiddenFor(m => m.Industry, htmlAttributes)
             }
             else
             {
-                @Html.DropDownListFor(m => m.Industry, items, htmlAttributes)
+                @Html.DropDownListFor(m => m.Industry, industryTypeItems, htmlAttributes)
             }
         </div>
     </div>
@@ -114,12 +117,12 @@
         <div class="col-md-10">
             @if (Model.ConfirmationDisplay)
             {
-                @Html.TextBox("txtCountryName", items.Where(x => x.Value == Model.CountryName).First().Text, htmlAttributes)
+                @Html.TextBox("txtCountryName", countryItems.Where(x => x.Value == Model.CountryName).First().Text, htmlAttributes)
                 @Html.HiddenFor(m => m.CountryName, htmlAttributes)
             }
             else
             {
-                @Html.DropDownListFor(m => m.CountryName, items, htmlAttributes)
+                @Html.DropDownListFor(m => m.CountryName, countryItems, htmlAttributes)
             }
         </div>
     </div>
