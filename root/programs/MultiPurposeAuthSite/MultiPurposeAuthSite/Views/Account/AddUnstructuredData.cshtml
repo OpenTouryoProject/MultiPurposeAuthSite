@@ -98,13 +98,29 @@
     <div class="form-group">
         @Html.LabelFor(m => m.Industry, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
-            @Html.DropDownListFor(m => m.Industry, items, htmlAttributes)
+            @if (Model.ConfirmationDisplay)
+            {
+                @Html.TextBox("txtCountryName", items.Where(x => x.Value == Model.Industry).First().Text, htmlAttributes)
+                @Html.HiddenFor(m => m.Industry, htmlAttributes)
+            }
+            else
+            {
+                @Html.DropDownListFor(m => m.Industry, items, htmlAttributes)
+            }
         </div>
     </div>
     <div class="form-group">
         @Html.LabelFor(m => m.CountryName, new { @class = "col-md-2 control-label" })
         <div class="col-md-10">
-            @Html.DropDownListFor(m => m.CountryName, items, htmlAttributes)
+            @if (Model.ConfirmationDisplay)
+            {
+                @Html.TextBox("txtCountryName", items.Where(x => x.Value == Model.CountryName).First().Text, htmlAttributes)
+                @Html.HiddenFor(m => m.CountryName, htmlAttributes)
+            }
+            else
+            {
+                @Html.DropDownListFor(m => m.CountryName, items, htmlAttributes)
+            }
         </div>
     </div>
 
