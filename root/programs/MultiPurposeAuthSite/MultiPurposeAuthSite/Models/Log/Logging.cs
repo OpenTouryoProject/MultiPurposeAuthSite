@@ -38,7 +38,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 namespace MultiPurposeAuthSite.Models.Log
 {
-    /// <summary>Log</summary>
+    /// <summary>Logging</summary>
     /// <remarks>
     /// DebugTraceは、別フラグ（EnabeDebugTraceLog）で制御
     /// </remarks>

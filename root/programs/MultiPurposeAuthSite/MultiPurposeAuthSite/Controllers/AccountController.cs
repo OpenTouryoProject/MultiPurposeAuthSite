@@ -281,7 +281,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// サインアップ画面（初期表示）
         /// GET: /Account/Register
         /// </summary>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         [AllowAnonymous]
         public async Task<ActionResult> Register()
@@ -960,7 +960,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //// イベント・ログ出力 できない（User.Identity.GetUserId() == null
                         //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                        //Log.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
+                        //Logging.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
 
                         return RedirectToLocal(model.ReturnUrl);
 
