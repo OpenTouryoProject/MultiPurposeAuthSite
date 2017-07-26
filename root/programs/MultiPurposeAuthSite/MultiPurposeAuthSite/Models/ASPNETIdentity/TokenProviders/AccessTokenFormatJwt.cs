@@ -141,8 +141,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             };
                         }
 
-                        authTokenClaimSet.Add("given_name", model.FirstName);
-                        authTokenClaimSet.Add("family_name", model.LastName);
+                        authTokenClaimSet.Add("given_name", model.Mei);
+                        authTokenClaimSet.Add("family_name", model.Sei);
 
                         break;
                     case ASPNETIdentityConst.Scope_Email:
@@ -168,7 +168,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         break;
                     
                     #endregion
-
                 }
             }
 

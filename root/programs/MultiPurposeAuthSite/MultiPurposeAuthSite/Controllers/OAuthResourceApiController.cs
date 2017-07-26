@@ -156,8 +156,8 @@ namespace MultiPurposeAuthSite.Controllers
                             };
                         }
 
-                        userinfoClaimSet.Add("given_name", model.FirstName);
-                        userinfoClaimSet.Add("family_name", model.LastName);
+                        userinfoClaimSet.Add("given_name", model.Mei);
+                        userinfoClaimSet.Add("family_name", model.Sei);
 
                         break;
                     case ASPNETIdentityConst.Scope_Email:
