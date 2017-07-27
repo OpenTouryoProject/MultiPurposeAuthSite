@@ -88,6 +88,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Confirm new E-mail address に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConfirmNewEmail {
+            get {
+                return ResourceManager.GetString("ConfirmNewEmail", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   The new E-mail address and confirmation E-mail address do not match. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConfirmNewEmailErrMsg {
+            get {
+                return ResourceManager.GetString("ConfirmNewEmailErrMsg", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Confirm new password に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ConfirmNewPassword {

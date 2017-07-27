@@ -195,4 +195,10 @@
   <data name="UserNameforSearch" xml:space="preserve">
     <value>ユーザ名で検索します。</value>
   </data>
+  <data name="ConfirmNewEmail" xml:space="preserve">
+    <value>新しいE-mailアドレスの確認入力</value>
+  </data>
+  <data name="ConfirmNewEmailErrMsg" xml:space="preserve">
+    <value>新しいE-mailアドレスと確認のE-mailアドレスが一致しません。</value>
+  </data>
 </root>

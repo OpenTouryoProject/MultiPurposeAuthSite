@@ -47,6 +47,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Util;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -119,8 +120,13 @@ namespace MultiPurposeAuthSite.Controllers
             // データの生成
             await this.CreateData();
 
-            // ReturnUrl
-            ViewBag.ReturnUrl = returnUrl;
+            // Open-Redirect対策（前方一致を確認する）
+            if (!string.IsNullOrEmpty(returnUrl)
+                && returnUrl.StartsWith(GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI")))
+            {
+                // ReturnUrl
+                ViewBag.ReturnUrl = returnUrl;
+            }
 
             // サインイン画面（初期表示）
             return View();
@@ -281,7 +287,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// サインアップ画面（初期表示）
         /// GET: /Account/Register
         /// </summary>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         [AllowAnonymous]
         public async Task<ActionResult> Register()
@@ -583,7 +589,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result.Succeeded)
                         {
                             ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
-                            
+
                             // メールの送信
                             this.SendRegisterCompletedEmail(user);
 
@@ -960,7 +966,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //// イベント・ログ出力 できない（User.Identity.GetUserId() == null
                         //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                        //Log.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
+                        //Logging.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
 
                         return RedirectToLocal(model.ReturnUrl);
 
@@ -1754,6 +1760,19 @@ namespace MultiPurposeAuthSite.Controllers
         private void AddErrors(IdentityResult result)
         {
             foreach (string error in result.Errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+        }
+
+        /// <summary>
+        /// ModelStateDictionaryに
+        /// IEnumerable<string>の情報を移送
+        /// </summary>
+        /// <param name="errors">IEnumerable<string></param>
+        private void AddErrors(IEnumerable<string> errors)
+        {
+            foreach (string error in errors)
             {
                 ModelState.AddModelError("", error);
             }

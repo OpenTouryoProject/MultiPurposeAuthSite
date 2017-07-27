@@ -126,6 +126,12 @@
   <data name="ClientSecret" xml:space="preserve">
     <value>client_secret</value>
   </data>
+  <data name="ConfirmNewEmail" xml:space="preserve">
+    <value>Confirm new E-mail address</value>
+  </data>
+  <data name="ConfirmNewEmailErrMsg" xml:space="preserve">
+    <value>The new E-mail address and confirmation E-mail address do not match.</value>
+  </data>
   <data name="ConfirmNewPassword" xml:space="preserve">
     <value>Confirm new password</value>
   </data>

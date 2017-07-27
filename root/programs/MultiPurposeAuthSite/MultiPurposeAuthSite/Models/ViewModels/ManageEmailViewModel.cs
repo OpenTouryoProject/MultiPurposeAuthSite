@@ -32,6 +32,18 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Display(Name = "NewEmail", ResourceType =typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
 
+        /// <summary>Confirm password</summary>
+        [Required(AllowEmptyStrings = false)]
+        [EmailAddress]
+        [Display(
+            Name = "ConfirmNewEmail",
+            ResourceType = typeof(Resources.CommonViewModels))]
+        [Compare(
+            "Email",
+            ErrorMessageResourceName = "ConfirmNewEmailErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        public string ConfirmEmail { get; set; }
+
         /// <summary>Password</summary>
         [Required(AllowEmptyStrings = true)]
         [DataType(DataType.Password)]

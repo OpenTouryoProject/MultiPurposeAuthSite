@@ -48,6 +48,12 @@
             @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
         </div>
     </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ConfirmEmail, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            @Html.TextBoxFor(m => m.ConfirmEmail, new { @class = "form-control" })
+        </div>
+    </div>
     if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
     {
         <div class="form-group">
