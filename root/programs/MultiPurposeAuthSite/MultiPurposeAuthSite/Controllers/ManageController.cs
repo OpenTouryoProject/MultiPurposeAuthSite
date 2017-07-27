@@ -45,8 +45,8 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
-using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -2243,7 +2243,6 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果を格納する変数。
                     Dictionary<string, string> dic = null;
 
-
                     #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                     Uri tokenEndpointUri = new Uri(
@@ -2271,7 +2270,6 @@ namespace MultiPurposeAuthSite.Controllers
                     }
 
                     #endregion
-
                 }
 
                 // 画面の表示。
