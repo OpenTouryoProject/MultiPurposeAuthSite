@@ -34,6 +34,8 @@ using System.Linq;
 using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
@@ -120,16 +122,32 @@ namespace MultiPurposeAuthSite.Controllers
             // データの生成
             await this.CreateData();
 
-            // Open-Redirect対策（前方一致を確認する）
-            if (!string.IsNullOrEmpty(returnUrl)
-                && returnUrl.StartsWith(GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI")))
+            string cmnPattern = "ReturnUrl=";
+
+            if (string.IsNullOrEmpty(returnUrl)
+                && Request.RawUrl.IndexOf(cmnPattern) != -1)
             {
-                // ReturnUrl
-                ViewBag.ReturnUrl = returnUrl;
+                if (Request.RawUrl.Contains('&'))
+                {
+                    // 正規表現でreturnUrlを抜き出す。
+                    string regexPattern = "(" + cmnPattern + ")(?<returnUrl>.+?)(\\&)";
+                    returnUrl = CustomEncode.UrlDecode(Regex.Match(Request.RawUrl, regexPattern).Groups["returnUrl"].Value);
+                }
+                else
+                {
+                    // IndexOf & SubstringでreturnUrlを抜き出す。
+                    returnUrl = CustomEncode.UrlDecode(Request.RawUrl.Substring(Request.RawUrl.IndexOf(cmnPattern) + cmnPattern.Length));
+                }
             }
 
+            // ReturnUrl
+            ViewBag.ReturnUrl = returnUrl;
+
             // サインイン画面（初期表示）
-            return View();
+            return View(new AccountLoginViewModel
+            {
+                ReturnUrl= returnUrl
+            });
         }
 
         /// <summary>
@@ -137,12 +155,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /Account/Login
         /// </summary>
         /// <param name="model">LoginViewModel</param>
-        /// <param name="returnUrl">returnUrl</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> Login(AccountLoginViewModel model, string returnUrl)
+        public async Task<ActionResult> Login(AccountLoginViewModel model)
         {
             // AccountLoginViewModelの検証
             if (ModelState.IsValid)
@@ -196,13 +213,22 @@ namespace MultiPurposeAuthSite.Controllers
                                 }
                                 else
                                 {
-                                    // テスト段階ではテストに仕様が出るのでSessionクリアしない。
+                                    // テスト段階ではテストに支障が出るのでSessionクリアしない。
                                 }
 
                                 // イベント・ログ出力
                                 Logging.MyOperationTrace(string.Format("{0}({1}) did sign in.", user.Id, user.UserName));
 
-                                return RedirectToLocal(returnUrl);
+                                // Open-Redirect対策
+                                if (!string.IsNullOrEmpty(model.ReturnUrl)
+                                    && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                {   
+                                    return RedirectToLocal(model.ReturnUrl); 
+                                }
+                                else
+                                {
+                                    return RedirectToAction("Index", "Home");
+                                }
 
                             case SignInStatus.LockedOut:
                                 // ロックアウト
@@ -215,7 +241,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 return this.RedirectToAction(
                                     "SendCode", new
                                     {
-                                        ReturnUrl = returnUrl,        // 戻り先のURL
+                                        ReturnUrl = model.ReturnUrl,  // 戻り先のURL
                                         RememberMe = model.RememberMe // アカウント記憶
                                     });
 
@@ -1408,12 +1434,9 @@ namespace MultiPurposeAuthSite.Controllers
                     return View();
                 }
             }
-            else if (response_type.ToLower() == "token")
-            // OpneID ConnectのImplicit Flow対応（試行）
-            // response_type == "id_token" or "id_token token"の場合、
-            // 残念ながら、error=unsupported_response_typeとなってココに到達しない。
-            //|| response_type.ToLower() == "id_token"
-            //|| response_type.ToLower() == "id_token token")
+            else if ((response_type.ToLower() == "token")
+                || (response_type.ToLower() == "id_token token")
+                || (response_type.ToLower() == "id_token"))
             {
                 // Implicitグラント種別（Access Tokenの発行）
                 if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))

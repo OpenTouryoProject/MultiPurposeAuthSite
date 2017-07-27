@@ -88,27 +88,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // response_type
             string response_type = context.Request.Query.Get("response_type");
 
-            // OpneID ConnectのImplicit Flow対応（試行）
-            if (response_type.ToLower() == "id_token"
-                || response_type.ToLower() == "id_token token")
+            if (!string.IsNullOrEmpty(response_type))
             {
-                response_type = "token";
-            }
-
-            if (response_type.ToLower() == "code")
-            {
-                if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+                if (response_type.ToLower() == "code")
                 {
-                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                    if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+                    {
+                        throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                    }
+                }
+                else if (response_type.ToLower() == "token")
+                {
+                    if (!ASPNETIdentityConfig.EnableImplicitGrantType)
+                    {
+                        throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                    }
                 }
             }
-            else if(response_type.ToLower() == "token")
-            {
-                if (!ASPNETIdentityConfig.EnableImplicitGrantType)
-                {
-                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
-                }
-            }   
 
             // redirect_uri
             string redirect_uri = context.RedirectUri;
