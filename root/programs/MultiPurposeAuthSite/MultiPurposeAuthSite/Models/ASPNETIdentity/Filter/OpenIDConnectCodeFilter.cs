@@ -35,17 +35,9 @@ using System;
 using System.Text;
 using System.IO;
 using System.Web;
-using System.Linq;
-//using System.Text.RegularExpressions;
-
 using System.Collections.Generic;
-using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util.JWT;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
 {
@@ -133,79 +125,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                 // 書き換え処理
                 Encoding enc = Response.ContentEncoding;
                 string content = enc.GetString(bb);
-
-                //content = content.Replace("書き換え前", "書き換え後");
-
-                //// ・正規表現でaccess_tokenを抜き出す。
-                //string pattern = "(\\\"access_token\":\")(?<accessToken>.+?)(\\\")";
-                //string accessToken = Regex.Match(content, pattern).Groups["accessToken"].Value;
-
-                // そもそもJSON形式なので、JsonConvertでaccess_tokenを抜き出す。
+                
+                // JSON形式なので、JsonConvertでaccess_tokenを抜き出す。
                 Dictionary<string, object> accessTokenResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
 
+                // access_tokenを
                 if (accessTokenResponse.ContainsKey("access_token"))
                 {
                     string access_token = (string)accessTokenResponse["access_token"];
-                    if (access_token.Contains("."))
+                    string id_token = OpenIDConnectModule.ChangeToIdTokenFromJwt(access_token);
+                    if (!string.IsNullOrEmpty(id_token))
                     {
-                        string[] temp = access_token.Split('.');
-                        string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
-                        Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-
-                        // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
-                        if (authTokenClaimSet.ContainsKey("nonce")
-                            && authTokenClaimSet.ContainsKey("scopes"))
-                        {
-                            JArray scopes = (JArray)authTokenClaimSet["scopes"];
-                            
-                            // ・OpenID Connect : response_type=codeに対応する。
-                            if (scopes.Any(x => x.ToString() == ASPNETIdentityConst.Scope_Openid))
-                            {
-                                //・payloadからscopeを削除する。
-                                authTokenClaimSet.Remove("scopes");
-                                //・編集したpayloadを再度JWTとして署名する。
-                                string newPayload = JsonConvert.SerializeObject(authTokenClaimSet);
-                                JWT_RS256 jwtRS256 = null;
-
-                                // 署名
-                                jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword,
-                                    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-                                string id_token = jwtRS256.Create(newPayload);
-
-                                // 検証
-                                jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword,
-                                    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-                                if (jwtRS256.Verify(id_token))
-                                {
-                                    // 検証できた。
-
-                                    //・responseにid_tokenとして、このJWTを追加する。
-                                    accessTokenResponse.Add("id_token", id_token);
-                                    string newContent = JsonConvert.SerializeObject(accessTokenResponse);
-
-                                    bb = enc.GetBytes(newContent);
-                                }
-                                else
-                                {
-                                    // 検証できなかった。
-                                }
-                            }
-                            else
-                            {
-                                // OIDCでない。
-                            }
-                        }
-                        else
-                        {
-                            // OIDCでない。
-                        }
-                    }
-                    else
-                    {
-                        // JWTでない。
-                    }
+                        // responseにid_tokenとして、このJWTを追加する。
+                        accessTokenResponse.Add("id_token", id_token);
+                        bb = enc.GetBytes(JsonConvert.SerializeObject(accessTokenResponse));
+                    }           
                 }
             }
 
