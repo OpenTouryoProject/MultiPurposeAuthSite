@@ -203,18 +203,23 @@ namespace MultiPurposeAuthSite.Controllers
                             case SignInStatus.Success:
                                 // サインイン成功
 
-                                if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
-                                {
-                                    // AppScan指摘の反映
-                                    this.FxSessionAbandon();
-                                    // SessionIDの切換にはこのコードが必要である模様。
-                                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                    Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
-                                }
-                                else
-                                {
-                                    // テスト段階ではテストに支障が出るのでSessionクリアしない。
-                                }
+                                // テスト機能でSession["state"]のチェックを止めたので不要になった。
+                                // また、ManageControllerの方はログイン済みアクセスになるので。
+
+                                //if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+                                //{
+
+                                // AppScan指摘の反映
+                                this.FxSessionAbandon();
+                                // SessionIDの切換にはこのコードが必要である模様。
+                                // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                                
+                                //}
+                                //else
+                                //{
+                                //    // テスト段階ではOAuth2のテスト機能に支障が出るのでSessionをクリアしない。
+                                //}
 
                                 // イベント・ログ出力
                                 Logging.MyOperationTrace(string.Format("{0}({1}) did sign in.", user.Id, user.UserName));
