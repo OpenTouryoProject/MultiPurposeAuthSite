@@ -2425,9 +2425,9 @@ namespace MultiPurposeAuthSite.Controllers
             EmailService ems = new EmailService();
             IdentityMessage idmsg = new IdentityMessage();
 
-            idmsg.Subject = Resources.AccountController.SendEmail_emailconfirm;
             idmsg.Destination = email;
-            idmsg.Body = string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl);
+            idmsg.Subject = GetContentOfLetter.Get("AccountChangeTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm);
+            idmsg.Body = string.Format(GetContentOfLetter.Get("AccountChangeMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg), callbackUrl);
 
             await ems.SendAsync(idmsg);
         }

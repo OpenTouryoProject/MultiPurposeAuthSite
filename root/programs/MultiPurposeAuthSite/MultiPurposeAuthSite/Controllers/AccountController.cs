@@ -1989,7 +1989,7 @@ namespace MultiPurposeAuthSite.Controllers
             await UserManager.SendEmailAsync(
                     user.Id,
                     GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm),
-                    string.Format(GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg), callbackUrl));
+                    string.Format(GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg), callbackUrl, user.Email));
         }
 
         /// <summary>

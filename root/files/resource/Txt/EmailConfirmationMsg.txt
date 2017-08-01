@@ -1,1 +1,1 @@
-[txt] Please confirm your e-mail account by clicking <a href="{0}">here</a>.
+[txt] {1}, please confirm your e-mail account by clicking <a href="{0}">here</a>.
