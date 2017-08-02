@@ -1825,6 +1825,14 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 入力未確認
                         ModelState.Clear();
+
+                        // Trim
+                        model.FirstName = model.FirstName.Trim();
+                        model.LastName = model.LastName.Trim();
+                        model.Sei = model.Sei.Trim();
+                        model.Mei = model.Mei.Trim();
+                        model.CompanyName = model.CompanyName.Trim();
+
                         model.ConfirmationDisplay = true;
                     }
                 }

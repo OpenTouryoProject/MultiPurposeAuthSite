@@ -1,1 +1,1 @@
-[txt] hogehoge
+[txt] <p style="font:bold; font-style:oblique; text-decoration:underline;">hogehoge</p>

@@ -307,6 +307,8 @@ namespace MultiPurposeAuthSite.Models.Util
             httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
             Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(await httpResponseMessage.Content.ReadAsStringAsync());
             List<SelectListItem> items = new List<SelectListItem>();
+            items.Add(new SelectListItem { Value = null, Text = "" });
+
             foreach (string key in dic.Keys)
             {
                 SelectListItem item = new SelectListItem();
@@ -349,6 +351,8 @@ namespace MultiPurposeAuthSite.Models.Util
             httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
             Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(await httpResponseMessage.Content.ReadAsStringAsync());
             List<SelectListItem> items = new List<SelectListItem>();
+            items.Add(new SelectListItem { Value = null, Text = "" });
+
             foreach (string key in dic.Keys)
             {
                 SelectListItem item = new SelectListItem();
