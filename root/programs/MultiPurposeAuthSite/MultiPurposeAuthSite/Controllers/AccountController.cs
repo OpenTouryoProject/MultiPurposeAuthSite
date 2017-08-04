@@ -603,7 +603,14 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                ApplicationUser user = await UserManager.FindByIdAsync(userId);
+
+                if (user.EmailConfirmed)
+                {
+                    // エラー画面
+                    return View("Error");
+                }
+                else
                 {
                     // 約款画面を表示
                     return View(
@@ -616,25 +623,6 @@ namespace MultiPurposeAuthSite.Controllers
                              AcceptedAgreement = false,
                              ReturnUrl = returnUrl
                          });
-                }
-                else
-                {
-                    // アクティベーション
-                    IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
-
-                    // メアド検証結果 ( "EmailConfirmation" or "Error"
-                    if (result.Succeeded)
-                    {
-                        // イベント・ログ出力
-                        ApplicationUser user = await UserManager.FindByIdAsync(userId);
-                        Logging.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
-
-                        return View("EmailConfirmation");
-                    }
-                    else
-                    {
-                        return View("Error");
-                    }
                 }
             }
         }
