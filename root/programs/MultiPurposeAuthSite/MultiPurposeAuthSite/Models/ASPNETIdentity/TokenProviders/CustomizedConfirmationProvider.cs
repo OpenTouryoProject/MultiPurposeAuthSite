@@ -110,6 +110,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         switch (ASPNETIdentityConfig.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
+
                                 cnn.Execute("DELETE FROM [CustomizedConfirmation] WHERE [UserId] = @UserId", new { UserId = userID });
                                 cnn.Execute(
                                     "INSERT INTO [CustomizedConfirmation] ([UserId], [Value], [CreatedDate]) VALUES (@UserId, @Value, @CreatedDate)",
@@ -118,6 +119,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 break;
 
                             case EnumUserStoreType.OracleMD:
+
                                 cnn.Execute("DELETE FROM \"CustomizedConfirmation\" WHERE \"UserId\" = :UserId", new { UserId = userID });
                                 cnn.Execute(
                                     "INSERT INTO \"CustomizedConfirmation\" (\"UserId\", \"Value\", \"CreatedDate\") VALUES (:UserId, :Value, :CreatedDate)",
@@ -127,8 +129,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                break;
+                                cnn.Execute("DELETE FROM \"customizedconfirmation\" WHERE \"userid\" = @UserId", new { UserId = userID });
+                                cnn.Execute(
+                                    "INSERT INTO \"customizedconfirmation\" (\"userid\", \"value\", \"createddate\") VALUES (@UserId, @Value, @CreatedDate)",
+                                    new { UserId = userID, Value = json, CreatedDate = DateTime.Now });
 
+                                break;
                         }
                     }
 
@@ -180,18 +186,26 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         switch (ASPNETIdentityConfig.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
+
                                 customizedConfirmationRets = cnn.Query<CustomizedConfirmationRet>(
                                     "SELECT [Value], [CreatedDate] FROM [CustomizedConfirmation] WHERE [UserId] = @UserId", new { UserId = userID });
                                 cnn.Execute("DELETE FROM [CustomizedConfirmation] WHERE [UserId] = @UserId", new { UserId = userID });
+
                                 break;
 
                             case EnumUserStoreType.OracleMD:
+
                                 customizedConfirmationRets = cnn.Query<CustomizedConfirmationRet>(
                                     "SELECT \"Value\", \"CreatedDate\" FROM \"CustomizedConfirmation\" WHERE \"UserId\" = :UserId", new { UserId = userID });
                                 cnn.Execute("DELETE FROM \"CustomizedConfirmation\" WHERE \"UserId\" = :UserId", new { UserId = userID });
+
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
+
+                                customizedConfirmationRets = cnn.Query<CustomizedConfirmationRet>(
+                                   "SELECT \"value\", \"createddate\" FROM \"customizedconfirmation\" WHERE \"userid\" = @UserId", new { UserId = userID });
+                                cnn.Execute("DELETE FROM \"customizedconfirmation\" WHERE \"userid\" = @UserId", new { UserId = userID });
 
                                 break;
                         }
