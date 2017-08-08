@@ -557,19 +557,33 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 if (ASPNETIdentityConfig.DisplayAgreementScreen)
                 {
-                    // 約款画面を表示
-                    return View(
-                        "Agreement",
-                         new AccountAgreementViewModel
-                         {
-                             UserId = userId,
-                             Code = code,
-                             Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
-                             AcceptedAgreement = false
-                         });
+                    //　約款あり
+
+                    ApplicationUser user = await UserManager.FindByIdAsync(userId);
+
+                    if (user.EmailConfirmed)
+                    {
+                        // エラー画面
+                        return View("Error");
+                    }
+                    else
+                    {
+                        // 約款画面を表示
+                        return View(
+                            "Agreement",
+                             new AccountAgreementViewModel
+                             {
+                                 UserId = userId,
+                                 Code = code,
+                                 Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
+                                 AcceptedAgreement = false
+                             });
+                    }
                 }
                 else
                 {
+                    //　約款ナシ
+
                     // アクティベーション
                     IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
 
@@ -584,6 +598,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else
                     {
+                        // エラー画面
                         return View("Error");
                     }
                 }

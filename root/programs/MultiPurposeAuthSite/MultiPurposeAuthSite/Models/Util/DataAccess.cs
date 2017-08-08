@@ -34,7 +34,7 @@
 using System.Data;
 using System.Data.SqlClient;
 using Oracle.ManagedDataAccess.Client;
-//using Npgsql;
+using Npgsql;
 
 using StackExchange.Profiling.Data;
 
@@ -68,8 +68,11 @@ namespace MultiPurposeAuthSite.Models.Util
                         new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2")),
                         new TraceDbProfiler());
 
-                //case EnumUserStoreType.PostgreSQL:
-                //    return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));
+                case EnumUserStoreType.PostgreSQL:
+                    //return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));
+                    return new ProfiledDbConnection(
+                        new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS")),
+                        new TraceDbProfiler());
 
                 default:
                     return null;

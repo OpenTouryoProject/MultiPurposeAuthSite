@@ -104,8 +104,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                break;
+                                cnn.Execute(
+                                    "INSERT INTO \"oauth2data\" (\"clientid\", \"unstructureddata\") VALUES (@ClientID, @UnstructuredData)",
+                                    new { ClientID = clientID, UnstructuredData = unstructuredData });
 
+                                break;
                         }
                     }
 
@@ -141,12 +144,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         switch (ASPNETIdentityConfig.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
+
                                 unstructuredData = cnn.ExecuteScalar<string>(
                                     "SELECT [UnstructuredData] FROM [OAuth2Data] WHERE [ClientID] = @ClientID", new { ClientID = clientID });
 
                                 break;
 
                             case EnumUserStoreType.OracleMD:
+
                                 unstructuredData = cnn.ExecuteScalar<string>(
                                     "SELECT \"UnstructuredData\" FROM \"OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });
 
@@ -154,8 +159,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                break;
+                                unstructuredData = cnn.ExecuteScalar<string>(
+                                    "SELECT \"unstructureddata\" FROM \"oauth2data\" WHERE \"clientid\" = @ClientID", new { ClientID = clientID });
 
+                                break;
                         }
                     }
 
@@ -212,8 +219,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                break;
+                                cnn.Execute(
+                                    "UPDATE \"oauth2data\" SET \"unstructureddata\" = @UnstructuredData WHERE \"clientid\" = @ClientID",
+                                    new { ClientID = clientID, UnstructuredData = unstructuredData });
 
+                                break;
                         }
                     }
 
@@ -248,12 +258,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         switch (ASPNETIdentityConfig.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
+
                                 cnn.Execute(
                                     "DELETE FROM [OAuth2Data] WHERE [ClientID] = @ClientID", new { ClientID = clientID });
 
                                 break;
 
                             case EnumUserStoreType.OracleMD:
+
                                 cnn.Execute(
                                     "DELETE FROM \"OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });
 
@@ -261,8 +273,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                break;
+                                cnn.Execute(
+                                    "DELETE FROM \"oauth2data\" WHERE \"clientid\" = @ClientID", new { ClientID = clientID });
 
+                                break;
                         }
                     }
 

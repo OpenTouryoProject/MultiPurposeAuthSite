@@ -189,8 +189,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         case EnumUserStoreType.PostgreSQL:
 
-                            break;
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"roles\"");
 
+                            break;
                     }
 
                     return Task.FromResult((0 < count));
@@ -275,8 +276,27 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                     case EnumUserStoreType.PostgreSQL:
 
-                        break;
+                        // Roles
+                        roles = cnn.Query<ApplicationRole>(
+                        "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name, \"roles\".\"parentid\" as parentid " +
+                        "FROM   \"userroles\", \"roles\" " +
+                        "WHERE  \"userroles\".\"roleid\" = \"roles\".\"id\" " +
+                        "   AND \"userroles\".\"userid\" = @userId", new { userId = user.Id });
+                        user.Roles = roles.ToList();
 
+                        // Logins
+                        userLogins = cnn.Query<UserLoginInfo>(
+                            "SELECT \"loginprovider\", \"providerkey\" " +
+                            "FROM   \"userlogins\" WHERE \"userid\" = @userId", new { userId = user.Id });
+                        user.Logins = userLogins.ToList();
+
+                        // Claims
+                        claims = cnn.Query(
+                            "SELECT \"issuer\", \"claimtype\", \"claimvalue\" " +
+                            "FROM   \"userclaims\" WHERE \"userid\" = @userId", new { userId = user.Id });
+                        user.Claims = new List<Claim>();
+
+                        break;
                 }
 
                 foreach (dynamic d in claims)
@@ -388,11 +408,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
+                                    cnn.Execute(
+                                        "INSERT INTO \"users\" ( " +
+                                        "    \"id\", \"username\", \"passwordhash\", " +
+                                        "    \"email\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
+                                        "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", " +
+                                        "    \"securitystamp\", \"twofactorenabled\", \"parentid\", \"clientid\", \"paymentinformation\", \"unstructureddata\", \"createddate\")" +
+                                        "    VALUES ( " +
+                                        "        @Id, @UserName, @PasswordHash, " +
+                                        "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
+                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, " +
+                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @CreatedDate)", user);
+
                                     break;
-
                             }
-                            // ユーザの関連情報は、このタイミングで追加しない（Roles, Logins, Claims）
 
+                            // ユーザの関連情報は、このタイミングで追加しない（Roles, Logins, Claims）
                         }
 
                         break;
@@ -466,8 +497,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * FROM \"users\" WHERE \"id\" = @userId", new { userId = userId });
 
+                                    break;
                             }
 
                             if (users.Count() != 0)
@@ -543,8 +576,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * FROM \"users\" WHERE \"username\" = :userName", new { userName = userName });
 
+                                    break;
                             }
 
                             if (users.Count() != 0)
@@ -698,8 +733,42 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        break;
+                                        sql = "SELECT * FROM \"users\"";
 
+                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
+                                        {
+                                            // マルチテナントの場合、テナントで絞り込む。
+                                            sql += " WHERE \"parentid\" = @parentId";
+                                        }
+                                        else
+                                        {
+                                            // マルチテナントでない場合か、
+                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
+                                        }
+
+                                        // Like
+                                        if (!string.IsNullOrEmpty(searchConditionOfUsers))
+                                        {
+                                            if (sql.IndexOf(" WHERE ") == -1)
+                                                sql += " WHERE";
+                                            else
+                                                sql += " AND";
+
+                                            sql += " \"username\" Like CONCAT('%', @searchConditionOfUsers, '%')";
+                                        }
+
+                                        // TOP
+                                        sql += " LIMIT {0}";
+                                        if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
+                                        {
+                                            sql = string.Format(sql, ASPNETIdentityConfig.UserListCount);
+                                        }
+                                        else
+                                        {
+                                            sql = string.Format(sql, 100);
+                                        }
+
+                                        break;
                                 }
 
                                 cnn.Open();
@@ -843,8 +912,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        break;
+                                        cnn.Execute(
+                                           "UPDATE \"users\" " +
+                                           "SET \"username\" = @UserName, \"passwordhash\" = @PasswordHash, " +
+                                           "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, " +
+                                           "    \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
+                                           "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
+                                           "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
+                                           "    \"parentid\" = @ParentId, \"clientid\" = @ClientID, " +
+                                           "    \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData " +
+                                           "WHERE \"id\" = @Id", user);
 
+                                        break;
                                 }
 
                                 // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
@@ -1024,8 +1103,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         case EnumUserStoreType.PostgreSQL:
 
-                                            break;
+                                            cnn.Execute(
+                                                "DELETE FROM \"userroles\" " +
+                                                "WHERE \"userroles\".\"userid\" = @UserId " +
+                                                "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
+                                                new { UserId = user.Id, roleName = roleName });
 
+                                            break;
                                     }
                                 }
 
@@ -1054,8 +1138,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         case EnumUserStoreType.PostgreSQL:
 
-                                            break;
+                                            cnn.Execute(
+                                                "INSERT INTO \"userroles\" (\"userid\", \"roleid\") " +
+                                                "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE \"name\" = @roleName))",
+                                                new { UserId = user.Id, roleName = roleName });
 
+                                            break;
                                     }
                                 }
                             }
@@ -1156,8 +1244,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        break;
+                                        // ユーザの情報を削除
+                                        cnn.Execute("DELETE FROM \"users\" WHERE \"id\" = @UserId", new { UserId = user.Id }, tr);
 
+                                        // ユーザの関連情報を削除
+                                        cnn.Execute("DELETE FROM \"userroles\"  WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM \"userlogins\" WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
+                                        cnn.Execute("DELETE FROM \"userclaims\" WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
+
+                                        break;
                                 }
 
                                 tr.Commit();
@@ -1299,8 +1394,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From \"users\" WHERE \"email\" = @Email", new { Email = email });
 
+                                    break;
                             }
 
                             if (users.Count() != 0)
@@ -1561,8 +1658,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    cnn.Execute(
+                                        "INSERT INTO \"userroles\" (\"userid\", \"roleid\") " +
+                                        "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE \"name\" = @roleName))",
+                                        new { UserId = user.Id, roleName = roleName });
 
+                                    break;
                             }
                         }
 
@@ -1672,8 +1773,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name, \"roles\".\"parentid\" as parentid " +
+                                        "FROM   \"roles\", \"userroles\", \"users\" " +
+                                        "WHERE  \"roles\".\"id\" = \"userroles\".\"roleid\" " +
+                                        "   AND \"userroles\".\"userid\" = \"users\".\"id\" " +
+                                        "   AND \"users\".\"id\" = @userid",
+                                        new { UserId = user.Id });
 
+                                    break;
                             }
                             
                             List<string> temp = new List<string>();
@@ -1779,8 +1887,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        break;
+                                        cnn.Execute(
+                                            "DELETE FROM \"userroles\" " +
+                                            "WHERE \"userroles\".\"userid\" = @UserId " +
+                                            "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
+                                            new { UserId = user.Id, roleName = roleName });
 
+                                        break;
                                 }
                             }
                             
@@ -2107,8 +2220,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    cnn.Execute(
+                                        "INSERT INTO \"roles\" ( \"id\", \"name\", \"parentid\" ) VALUES ( @Id, @Name, @ParentId )", role);
 
+                                    break;
                             }
 
                         }
@@ -2180,8 +2295,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM \"roles\" WHERE \"id\" = @roleId", new { roleId = roleId });
 
+                                    break;
                             }
 
                             if (roles.Count() != 0)
@@ -2253,8 +2370,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM \"roles\" WHERE \"name\" = @roleName", new { roleName = roleName });
 
+                                    break;
                             }
 
                             if (roles.Count() != 0)
@@ -2385,6 +2504,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.PostgreSQL:
 
+                                        // システム共通のロール
+                                        commonRoles = cnn.Query<ApplicationRole>(
+                                            "SELECT * FROM \"roles\" WHERE \"parentid\" IS NULL");
+
+                                        // 個別のロール
+                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
+                                        {
+                                            // マルチテナントの場合、テナントで絞り込む。
+                                            individualRoles = cnn.Query<ApplicationRole>(
+                                                "SELECT * FROM \"roles\" WHERE \"parentid\" = @parentId", new { parentId = parentId });
+                                        }
+                                        else
+                                        {
+                                            // マルチテナントでない場合か、
+                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
+                                            individualRoles = cnn.Query<ApplicationRole>(
+                                                string.Format("SELECT * FROM \"roles\" WHERE \"parentid\" IS NOT NULL LIMIT {0}", ASPNETIdentityConfig.UserListCount));
+                                        }
+
                                         break;
                                 }
                             }
@@ -2476,8 +2614,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        break;
+                                        cnn.Execute(
+                                            "UPDATE \"roles\" SET \"name\" = @Name WHERE \"id\" = @Id",
+                                            new { Id = role.Id, Name = role.Name });
 
+                                        break;
                                 }
                                 
                             }
@@ -2598,8 +2739,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        break;
+                                        // 外部参照制約に依存しないようにチェック
+                                        cnt = cnn.ExecuteScalar<int>(
+                                            "SELECT COUNT(*) FROM \"userroles\" WHERE \"roleid\" = @RoleId", new { RoleId = role.Id });
 
+                                        if (cnt == 0)
+                                        {
+                                            cnn.Execute(
+                                                "DELETE FROM \"roles\" WHERE \"id\" = @Id", new { Id = role.Id });
+                                        }
+                                        else
+                                        {
+                                            // 使用されているロールは削除しない。
+                                        }
+
+                                        break;
                                 }
                             }
 
@@ -2676,8 +2830,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    cnn.Execute(
+                                        "INSERT INTO \"userlogins\" (\"userid\", \"loginprovider\", \"providerkey\") " +
+                                        "VALUES (@UserId, @LoginProvider, @ProviderKey)",
+                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
+                                    break;
                             }
                         }
 
@@ -2772,8 +2930,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From \"users\", \"userlogins\" " + // * でイケるか？
+                                        "WHERE  \"users\".\"id\" = \"userlogins\".\"userid\"" +
+                                        "    AND \"userlogins\".\"loginprovider\" = @LoginProvider" +
+                                        "    AND \"userlogins\".\"providerkey\" = @ProviderKey",
+                                        new { LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
+                                    break;
                             }
 
                             if (users.Count() != 0)
@@ -2872,8 +3036,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    cnn.Execute(
+                                        "DELETE FROM \"userlogins\" WHERE \"userid\" = @UserId AND \"loginprovider\" = @LoginProvider AND \"providerkey\" = @ProviderKey ",
+                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
 
+                                    break;
                             }
                         }
 
@@ -2945,8 +3112,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    cnn.Execute(
+                                        "INSERT INTO \"userclaims\" (\"id\", \"userid\", \"issuer\", \"claimtype\", \"claimvalue\") " +
+                                        "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
 
+                                    break;
                             }
                         }
 
@@ -3030,8 +3201,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    cnn.Execute(
+                                        "DELETE FROM \"userclaims\" WHERE \"userid\" = @UserId AND \"issuer\" = @Issuer AND \"claimtype\" = @ClaimType",
+                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
 
+                                    break;
                             }
                         }
 

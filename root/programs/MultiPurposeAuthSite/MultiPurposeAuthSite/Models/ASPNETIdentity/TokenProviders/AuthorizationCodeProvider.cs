@@ -127,8 +127,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                break;
+                                cnn.Execute(
+                                    "INSERT INTO \"authenticationcodedictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
+                                    new { Key = context.Token, Value = context.SerializeTicket(), CreatedDate = DateTime.Now });
 
+                                break;
                         }
                     }
 
@@ -207,8 +210,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                break;
+                                values = cnn.Query<string>(
+                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
 
+                                context.DeserializeTicket(values.AsList()[0]);
+
+                                cnn.Execute(
+                                    "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+
+                                break;
                         }
                     }
 
