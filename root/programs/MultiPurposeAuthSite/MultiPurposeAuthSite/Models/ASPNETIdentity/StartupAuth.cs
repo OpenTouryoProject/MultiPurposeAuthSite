@@ -24,17 +24,17 @@ using System.Threading.Tasks;
 
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
+
+using Owin;
+using Microsoft.Owin;
+using Microsoft.Owin.Security;
+using Microsoft.Owin.Security.Cookies;
+using Microsoft.Owin.Security.OAuth;
+using Microsoft.Owin.Security.Infrastructure;
 using Microsoft.Owin.Security.MicrosoftAccount;
 using Microsoft.Owin.Security.Google;
 using Microsoft.Owin.Security.Facebook;
 using Microsoft.Owin.Security.Twitter;
-
-using Microsoft.Owin;
-using Microsoft.Owin.Security.Cookies;
-using Microsoft.Owin.Security.OAuth;
-using Microsoft.Owin.Security.Infrastructure;
-
-using Owin;
 
 using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
@@ -248,7 +248,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             #endregion
 
             #region FacebookAuthentication
-            
+
             if (ASPNETIdentityConfig.FacebookAuthentication)
             {
                 FacebookAuthenticationOptions options = new FacebookAuthenticationOptions
@@ -278,9 +278,49 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
             #endregion
 
-            //app.UseTwitterAuthentication(
-            //   consumerKey: "",
-            //   consumerSecret: "");
+            #region TwitterAuthentication
+
+            if (ASPNETIdentityConfig.TwitterAuthentication)
+            {
+                TwitterAuthenticationOptions options = new TwitterAuthenticationOptions
+                {
+                    BackchannelHttpHandler = new WebRequestHandler()
+                    {
+                        Proxy = CreateProxy.GetInternetProxy(),
+                        UseProxy = ASPNETIdentityConfig.UseInternetProxy
+                    },
+                    ConsumerKey = ASPNETIdentityConfig.TwitterAuthenticationClientId,
+                    ConsumerSecret = ASPNETIdentityConfig.TwitterAuthenticationClientSecret,
+
+                    Provider = new TwitterAuthenticationProvider
+                    {
+                        OnAuthenticated = (context) =>
+                        {
+                            context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_token", context.AccessToken));
+                            context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_secret", context.AccessTokenSecret));
+                            return Task.FromResult(0);
+                        }
+                    },
+
+                    BackchannelCertificateValidator = new CertificateSubjectKeyIdentifierValidator(
+                        new string[] {
+                            "A5EF0B11CEC04103A34A659048B21CE0572D7D47",  // VeriSign Class 3 Secure Server CA - G2
+                            "0D445C165344C1827E1D20AB25F40163D8BE79A5",  // VeriSign Class 3 Secure Server CA - G3
+                            "7FD365A7C2DDECBBF03009F34339FA02AF333133",  // VeriSign Class 3 Public Primary Certification Authority - G5
+                            "39A55D933676616E73A761DFA16A7E59CDE66FAD",  // Symantec Class 3 Secure Server CA - G4
+                            "5168FF90AF0207753CCCD9656462A212B859723B",  // DigiCert SHA2 High Assurance Server C‎A 
+                            "B13EC36903F8BF4701D498261A0802EF63642BC3" } // DigiCert High Assurance EV Root CA
+                            ),
+                };
+
+                // スコープを追加する。
+                // ・・・
+
+                // TwitterAuthenticationの有効化
+                app.UseTwitterAuthentication(options);
+            }
+
+            #endregion
 
             #endregion
 

@@ -28,14 +28,14 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
 
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Security.Claims;
-
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
+using System.Threading.Tasks;
+using System.Security.Claims;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -1346,7 +1346,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //・・・
                         #endregion
 
-                        #region emailClaim対策 (Facebook)
+                        #region emailClaim対策 (Facebook & Twitter)
                         if (emailClaim == null)
                         {
                             // emailClaimが取得できなかった場合、
@@ -1355,8 +1355,29 @@ namespace MultiPurposeAuthSite.Controllers
                                 var identity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
                                 var access_token = identity.FindFirstValue("FacebookAccessToken");
                                 var fb = new Facebook.FacebookClient(access_token);
-                                dynamic myInfo = fb.Get("/me?fields=email"); // specify the email field
-                                email = myInfo.email; // Facebookでは、emailClaimを取得できない。
+
+                                // e.g. :
+                                // "/me?fields=id,email,gender,link,locale,name,timezone,updated_time,verified,last_name,first_name,middle_name"
+                                dynamic myInfo = fb.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
+
+                                email = myInfo.email; // Microsoft.Owin.Security.Facebookでは、emailClaimとして取得できない。
+                                emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
+                            }
+                            else if (externalLoginInfo.Login.LoginProvider == "Twitter")
+                            {
+                                string access_token = externalLoginInfo.ExternalIdentity.Claims.Where(
+                                    x => x.Type == "urn:twitter:access_token").Select(x => x.Value).FirstOrDefault();
+                                string access_secret = externalLoginInfo.ExternalIdentity.Claims.Where(
+                                    x => x.Type == "urn:twitter:access_secret").Select(x => x.Value).FirstOrDefault();
+
+                                JObject myInfo = await WebAPIHelper.GetInstance().GetTwitterAccountInfo(
+                                    "include_email=true",
+                                    access_token, access_secret,
+                                    ASPNETIdentityConfig.TwitterAuthenticationClientId,
+                                    ASPNETIdentityConfig.TwitterAuthenticationClientSecret);
+
+                                email = (string)myInfo["email"]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
+                                emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
                             }
                         }
                         else
