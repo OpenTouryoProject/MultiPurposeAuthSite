@@ -403,8 +403,25 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else
                         {
-                            // Login画面へ遷移
-                            return View("Login");
+                            if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                            {
+                                // 約款あり
+                                // 約款画面を表示
+                                return View(
+                                    "Agreement",
+                                     new AccountAgreementViewModel
+                                     {
+                                         UserId = user.Id,
+                                         Code = "dummy",
+                                         Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
+                                         AcceptedAgreement = false
+                                     });
+                            }
+                            else
+                            {
+                                // Login画面へ遷移
+                                return View("Login");
+                            }
                         }
 
                         #endregion
@@ -413,15 +430,35 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         #region サインアップ失敗
 
-                        // メアド検証の再送について
-                        if (ASPNETIdentityConfig.RequireUniqueEmail)
-                        {
-                            // サインアップ済みの可能性を探る
-                            ApplicationUser oldUser = await UserManager.FindByNameAsync(uid);
+                        // サインアップ済みの可能性を探る
+                        ApplicationUser oldUser = await UserManager.FindByNameAsync(uid);
 
-                            if (oldUser == null)
+                        if (oldUser == null)
+                        {
+                            // サインアップ済みでない。
+
+                            // 作成(CreateAsync)に失敗
+                            AddErrors(result);
+                            // 再表示
+                            return View(model);
+                        }
+                        else
+                        {
+                            #region サインアップ済み
+
+                            // userを確認する。
+                            if (oldUser.EmailConfirmed)
                             {
-                                // サインアップ済みでない。
+                                // EmailConfirmed済み。
+
+                                // 作成(CreateAsync)に失敗
+                                AddErrors(result);
+                                // 再表示
+                                return View(model);
+                            }
+                            else if (oldUser.Logins.Count != 0)
+                            {
+                                // ExternalLogin済み。
 
                                 // 作成(CreateAsync)に失敗
                                 AddErrors(result);
@@ -430,50 +467,30 @@ namespace MultiPurposeAuthSite.Controllers
                             }
                             else
                             {
-                                #region サインアップ済み
+                                // oldUserは存在するが
+                                // ・EmailConfirmed済みでない。
+                                // 若しくは、
+                                // ・ExternalLogin済みでない。
 
-                                // userを確認する。
-                                if (oldUser.EmailConfirmed)
+                                // 既存レコードを再作成
+
+                                // 削除して
+                                result = await UserManager.DeleteAsync(oldUser);
+
+                                // 結果の確認
+                                if (result.Succeeded)
                                 {
-                                    // EmailConfirmed済み。
-
-                                    // 作成(CreateAsync)に失敗
-                                    AddErrors(result);
-                                    // 再表示
-                                    return View(model);
-                                }
-                                else if (oldUser.Logins.Count != 0)
-                                {
-                                    // ExternalLogin済み。
-
-                                    // 作成(CreateAsync)に失敗
-                                    AddErrors(result);
-                                    // 再表示
-                                    return View(model);
-                                }
-                                else
-                                {
-                                    // oldUserは存在するが
-                                    // ・EmailConfirmed済みでない。
-                                    // 若しくは、
-                                    // ・ExternalLogin済みでない。
-
-                                    // 既存レコードを再作成
-
-                                    // 削除して
-                                    result = await UserManager.DeleteAsync(oldUser);
+                                    // ApplicationUserManagerのCreateAsync
+                                    result = await UserManager.CreateAsync(
+                                            user,
+                                            model.Password // Passwordはハッシュ化される。
+                                        );
 
                                     // 結果の確認
                                     if (result.Succeeded)
                                     {
-                                        // ApplicationUserManagerのCreateAsync
-                                        result = await UserManager.CreateAsync(
-                                                user,
-                                                model.Password // Passwordはハッシュ化される。
-                                            );
-
-                                        // 結果の確認
-                                        if (result.Succeeded)
+                                        // メアド検証の再送について
+                                        if (ASPNETIdentityConfig.RequireUniqueEmail)
                                         {
                                             // 再度、メアド検証
 
@@ -486,24 +503,47 @@ namespace MultiPurposeAuthSite.Controllers
                                         }
                                         else
                                         {
-                                            // 再作成(CreateAsync)に失敗
-                                            AddErrors(result);
-                                            // 再表示
-                                            return View(model);
+                                            if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                                            {
+                                                // 約款あり
+                                                // 約款画面を表示
+                                                return View(
+                                                    "Agreement",
+                                                     new AccountAgreementViewModel
+                                                     {
+                                                         UserId = user.Id,
+                                                         Code = "dummy",
+                                                         Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
+                                                         AcceptedAgreement = false
+                                                     });
+                                            }
+                                            else
+                                            {
+                                                // Login画面へ遷移
+                                                return View("Login");
+                                            }
                                         }
                                     }
                                     else
                                     {
-                                        // 削除(DeleteAsync)に失敗
+                                        // 再作成(CreateAsync)に失敗
                                         AddErrors(result);
                                         // 再表示
                                         return View(model);
                                     }
                                 }
-
-                                #endregion
+                                else
+                                {
+                                    // 削除(DeleteAsync)に失敗
+                                    AddErrors(result);
+                                    // 再表示
+                                    return View(model);
+                                }
                             }
+
+                            #endregion
                         }
+
 
                         #endregion
                     }
@@ -582,7 +622,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    //　約款ナシ
+                    //　約款なし
 
                     // アクティベーション
                     IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
@@ -624,36 +664,69 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // AccountAgreementViewModelの検証に成功
 
-                    if (model.AcceptedAgreement)
+                    if (ASPNETIdentityConfig.RequireUniqueEmail)
                     {
-                        // 同意された。
-
-                        // アクティベーション
-                        IdentityResult result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
-
-                        // メアド検証結果 ( "EmailConfirmation" or "Error"
-                        if (result.Succeeded)
+                        if (model.AcceptedAgreement)
                         {
-                            ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+                            // 同意された。
 
-                            // メールの送信
-                            this.SendRegisterCompletedEmail(user);
+                            // アクティベーション
+                            IdentityResult result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
 
-                            // イベント・ログ出力
-                            Logging.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
+                            // メアド検証結果 ( "EmailConfirmation" or "Error"
+                            if (result.Succeeded)
+                            {
+                                ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
 
-                            // 完了画面
-                            return View("EmailConfirmation");
+                                // メールの送信
+                                this.SendRegisterCompletedEmail(user);
+
+                                // イベント・ログ出力
+                                Logging.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
+
+                                // 完了画面
+                                return View("EmailConfirmation");
+                            }
+                            else
+                            {
+                                // 失敗
+                                AddErrors(result);
+                            }
                         }
                         else
                         {
-                            // 失敗
-                            AddErrors(result);
+                            // 同意されていない。
                         }
                     }
                     else
                     {
-                        // 同意されていない。
+                        if (model.AcceptedAgreement)
+                        {
+                            // 同意された。
+
+                            // アクティベーション
+                            ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+                            user.EmailConfirmed = true;
+                            IdentityResult result = await UserManager.UpdateAsync(user);
+
+                            if (result.Succeeded)
+                            {
+                                // イベント・ログ出力
+                                Logging.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
+
+                                // Login画面へ遷移
+                                return View("Login");
+                            }
+                            else
+                            {
+                                // 失敗
+                                AddErrors(result);
+                            }
+                        }
+                        else
+                        {
+                            // 同意されていない。
+                        }
                     }
                 }
                 else

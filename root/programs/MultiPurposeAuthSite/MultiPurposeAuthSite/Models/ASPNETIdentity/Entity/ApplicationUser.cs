@@ -113,7 +113,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             else
             {
                 user.Email = "";                                                    // 固定値
-                user.EmailConfirmed = true;                                         // 固定値
+                user.EmailConfirmed = !ASPNETIdentityConfig.DisplayAgreementScreen; // 固定値
             }
 
             // ParentId（実質的に分割キー）
