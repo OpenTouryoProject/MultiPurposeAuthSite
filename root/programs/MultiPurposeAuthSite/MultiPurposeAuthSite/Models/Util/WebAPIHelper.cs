@@ -424,15 +424,15 @@ namespace MultiPurposeAuthSite.Models.Util
 
             // HttpResponseMessage
             httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
-            Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(await httpResponseMessage.Content.ReadAsStringAsync());
+            List<List<string>> lists = JsonConvert.DeserializeObject<List<List<string>>>(await httpResponseMessage.Content.ReadAsStringAsync());
             List<SelectListItem> items = new List<SelectListItem>();
             items.Add(new SelectListItem { Value = null, Text = "" });
 
-            foreach (string key in dic.Keys)
+            foreach (List<string> list in lists)
             {
                 SelectListItem item = new SelectListItem();
-                item.Value = key;
-                item.Text = dic[key];
+                item.Value = list[0];
+                item.Text = list[1];
                 items.Add(item);
             }
 
@@ -468,15 +468,15 @@ namespace MultiPurposeAuthSite.Models.Util
 
             // HttpResponseMessage
             httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
-            Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(await httpResponseMessage.Content.ReadAsStringAsync());
+            List<List<string>> lists = JsonConvert.DeserializeObject<List<List<string>>>(await httpResponseMessage.Content.ReadAsStringAsync());
             List<SelectListItem> items = new List<SelectListItem>();
             items.Add(new SelectListItem { Value = null, Text = "" });
 
-            foreach (string key in dic.Keys)
+            foreach (List<string> list in lists)
             {
                 SelectListItem item = new SelectListItem();
-                item.Value = key;
-                item.Text = dic[key];
+                item.Value = list[0];
+                item.Text = list[1];
                 items.Add(item);
             }
 

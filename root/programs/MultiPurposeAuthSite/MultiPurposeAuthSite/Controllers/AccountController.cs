@@ -607,28 +607,28 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     //　約款あり
 
-                ApplicationUser user = await UserManager.FindByIdAsync(userId);
+                    ApplicationUser user = await UserManager.FindByIdAsync(userId);
 
-                if (user.EmailConfirmed)
-                {
-                    // エラー画面
-                    return View("Error");
+                    if (user.EmailConfirmed)
+                    {
+                        // エラー画面
+                        return View("Error");
+                    }
+                    else
+                    {
+                        // 約款画面を表示
+                        return View(
+                            "Agreement",
+                             new AccountAgreementViewModel
+                             {
+                                 UserId = userId,
+                                 Code = code,
+                                 Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
+                                 AcceptedAgreement = false,
+                                 ReturnUrl = returnUrl
+                             });
+                    }
                 }
-                else
-                {
-                    // 約款画面を表示
-                    return View(
-                        "Agreement",
-                         new AccountAgreementViewModel
-                         {
-                             UserId = userId,
-                             Code = code,
-                             Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
-                             AcceptedAgreement = false,
-                             ReturnUrl = returnUrl
-                         });
-                }
-            }
                 else
                 {
                     //　約款なし
