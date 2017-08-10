@@ -145,6 +145,10 @@
       <HintPath>..\packages\Newtonsoft.Json.9.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="Npgsql, Version=3.2.5.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
+      <HintPath>..\packages\Npgsql.3.2.5\lib\net451\Npgsql.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Oracle.ManagedDataAccess, Version=4.121.2.0, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=MSIL">
       <HintPath>..\packages\Oracle.ManagedDataAccess.12.1.24160719\lib\net40\Oracle.ManagedDataAccess.dll</HintPath>
       <Private>True</Private>
@@ -184,6 +188,10 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Net.Http.WebRequest" />
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.1.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Threading.Tasks.Extensions.4.3.0\lib\portable-net45+win8+wp8+wpa81\System.Threading.Tasks.Extensions.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System.Web.ApplicationServices" />
     <Reference Include="System.Web.Cors, Version=5.2.3.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.AspNet.Cors.5.2.3\lib\net45\System.Web.Cors.dll</HintPath>

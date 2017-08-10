@@ -153,8 +153,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    cnn.Execute(
+                                        "INSERT INTO \"refreshtokendictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
+                                        new { Key = token, Value = bytes, CreatedDate = DateTime.Now });
 
+                                    break;
                             }
                         }
 
@@ -252,8 +255,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                    values = cnn.Query<byte[]>(
+                                       "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
 
+                                    ticket = serializer.Deserialize(values.AsList()[0]);
+                                    context.SetTicket(ticket);
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+
+                                    break;
                             }
                         }
 

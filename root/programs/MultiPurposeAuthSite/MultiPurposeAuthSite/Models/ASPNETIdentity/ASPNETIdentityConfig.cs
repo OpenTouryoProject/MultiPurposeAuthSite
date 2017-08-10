@@ -758,6 +758,43 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #region TwitterAuthentication
+
+        /// <summary>
+        /// TwitterAuthentication
+        /// </summary>
+        public static bool TwitterAuthentication
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["TwitterAuthentication"]);
+            }
+        }
+
+        /// <summary>
+        /// TwitterAuthenticationのClientId
+        /// </summary>
+        public static string TwitterAuthenticationClientId
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["TwitterAuthenticationClientId"];
+            }
+        }
+
+        /// <summary>
+        /// TwitterAuthenticationのClientSecret
+        /// </summary>
+        public static string TwitterAuthenticationClientSecret
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["TwitterAuthenticationClientSecret"];
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #endregion

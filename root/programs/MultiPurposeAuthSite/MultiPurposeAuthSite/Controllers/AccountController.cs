@@ -603,6 +603,10 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
+                if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                {
+                    //　約款あり
+
                 ApplicationUser user = await UserManager.FindByIdAsync(userId);
 
                 if (user.EmailConfirmed)
@@ -623,6 +627,29 @@ namespace MultiPurposeAuthSite.Controllers
                              AcceptedAgreement = false,
                              ReturnUrl = returnUrl
                          });
+                }
+            }
+                else
+                {
+                    //　約款なし
+
+                    // アクティベーション
+                    IdentityResult result = await UserManager.ConfirmEmailAsync(userId, code);
+
+                    // メアド検証結果 ( "EmailConfirmation" or "Error"
+                    if (result.Succeeded)
+                    {
+                        // イベント・ログ出力
+                        ApplicationUser user = await UserManager.FindByIdAsync(userId);
+                        Logging.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
+
+                        return View("EmailConfirmation");
+                    }
+                    else
+                    {
+                        // エラー画面
+                        return View("Error");
+                    }
                 }
             }
         }
@@ -1240,7 +1267,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //・・・
                     #endregion
 
-                    #region emailClaim対策 (Facebook)
+                    #region emailClaim対策 (Facebook & Twitter)
                     if (emailClaim == null)
                     {
                         // emailClaimが取得できなかった場合、
@@ -1249,8 +1276,29 @@ namespace MultiPurposeAuthSite.Controllers
                             var identity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
                             var access_token = identity.FindFirstValue("FacebookAccessToken");
                             var fb = new Facebook.FacebookClient(access_token);
-                            dynamic myInfo = fb.Get("/me?fields=email"); // specify the email field
-                            email = myInfo.email; // Facebookでは、emailClaimを取得できない。
+
+                            // e.g. :
+                            // "/me?fields=id,email,gender,link,locale,name,timezone,updated_time,verified,last_name,first_name,middle_name"
+                            dynamic myInfo = fb.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
+
+                            email = myInfo.email; // Microsoft.Owin.Security.Facebookでは、emailClaimとして取得できない。
+                            emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
+                        }
+                        else if (externalLoginInfo.Login.LoginProvider == "Twitter")
+                        {
+                            string access_token = externalLoginInfo.ExternalIdentity.Claims.Where(
+                                x => x.Type == "urn:twitter:access_token").Select(x => x.Value).FirstOrDefault();
+                            string access_secret = externalLoginInfo.ExternalIdentity.Claims.Where(
+                                x => x.Type == "urn:twitter:access_secret").Select(x => x.Value).FirstOrDefault();
+
+                            JObject myInfo = await WebAPIHelper.GetInstance().GetTwitterAccountInfo(
+                                "include_email=true",
+                                access_token, access_secret,
+                                ASPNETIdentityConfig.TwitterAuthenticationClientId,
+                                ASPNETIdentityConfig.TwitterAuthenticationClientSecret);
+
+                            email = (string)myInfo["email"]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
+                            emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
                         }
                     }
                     else
