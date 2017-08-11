@@ -522,8 +522,8 @@ namespace MultiPurposeAuthSite.Controllers
                                             {
                                                 // 再度、メアド検証
 
-                                                // メアド検証用のメールを送信して、
-                                                this.SendConfirmEmail(user, model.ReturnUrl);
+                                                //// メアド検証用のメールを送信して、
+                                                //this.SendConfirmEmail(user, model.ReturnUrl);
 
                                                 //// VerifyEmailAddress
                                                 ////ViewBag.Link = callbackUrl;
