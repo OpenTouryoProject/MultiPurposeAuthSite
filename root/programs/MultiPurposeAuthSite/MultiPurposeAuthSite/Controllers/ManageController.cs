@@ -1801,7 +1801,13 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ManageAddUnstructuredDataViewModelの検証に成功
 
-                    if (model.ConfirmationDisplay)
+                    if (Request.Form["IsReturn"] == "true")
+                    {
+                        // 戻る処理
+                        ModelState.Clear();
+                        model.ConfirmationDisplay = false;
+                    }
+                    else if (model.ConfirmationDisplay)
                     {
                         // 入力確認済み
 

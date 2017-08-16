@@ -313,6 +313,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Return に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Return {
+            get {
+                return ResourceManager.GetString("Return", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Role name に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RoleName {

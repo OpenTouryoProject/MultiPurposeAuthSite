@@ -201,6 +201,9 @@
   <data name="RememberMe" xml:space="preserve">
     <value>Remember me ?</value>
   </data>
+  <data name="Return" xml:space="preserve">
+    <value>Return</value>
+  </data>
   <data name="RoleName" xml:space="preserve">
     <value>Role name</value>
   </data>

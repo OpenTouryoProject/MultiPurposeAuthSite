@@ -216,4 +216,7 @@
   <data name="HalfWidthAlphabetLettersOnlyErrMsg" xml:space="preserve">
     <value>{0}は半角英字のみ入力できます。</value>
   </data>
+  <data name="Return" xml:space="preserve">
+    <value>戻る</value>
+  </data>
 </root>
