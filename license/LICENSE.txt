@@ -202,35 +202,19 @@
 
 ====================================================================
 
-Open Touryo SubComponent: 
-
-- For the log4net component:
-
-  - License:http://www.apache.org/licenses/
-  - See the following path.
-   ./log4net/LICENSE
-
-- For the Json.NET component:
-
-  - License:https://json.codeplex.com/license
-  - See the following path.
-   ./Json.NET/LICENSE
-   
-- For the Dotnetzip component:
-
-  - License:http://opensource.org/licenses/MS-PL
-  - See the following path.
-    - ./DotNetZip/License.txt
-    - ./DotNetZip/License.Combined.rtf
-
-    - Dotnetzip SubComponent:
-
-      - BZip2
-        - License:http://www.apache.org/licenses/LICENSE-2.0
-        - See the following path.
-          ./DotNetZip/License.BZip2.txt
-
-      - zlib
-        - License:http://www.zlib.net/zlib_license.html
-        - See the following path.
-          ./DotNetZip/License.zlib.txt
+   - OpenTouryo SubComponent : 
+     The OSS included in the source code such as JavaScript / CSS
+     
+     - jQuery
+     - jQuery.Validation
+     - bootstrap
+     - FontAwesome
+     - Respond
+     - Modernizr
+ 
+   - Notes : 
+     There is possibility that the library of OSS that not include
+     source code automatically acquired from the Internet by the
+     package manager like the NuGet. If so, must follow these licenses of the
+     oss when using / distributing this OSS. Incidentally, the OSS that will
+     be obtained by NuGet can be checked by referring to each package.cponfig.
