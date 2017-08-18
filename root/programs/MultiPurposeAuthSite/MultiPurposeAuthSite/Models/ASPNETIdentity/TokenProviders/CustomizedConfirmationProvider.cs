@@ -149,8 +149,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <summary>CheckCustomizedConfirmationData</summary>
         /// <param name="userID">string</param>
         /// <param name="code">string</param>
-        public string CheckCustomizedConfirmationData(string userID, string code)
+        /// <param name="isExpired">string</param>
+        public string CheckCustomizedConfirmationData(string userID, string code, out bool isExpired)
         {
+            isExpired = false;
             CustomizedConfirmationJson customizedConfirmationJson = null;
 
             switch (ASPNETIdentityConfig.UserStoreType)
@@ -159,6 +161,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                     string temp = "";
                     CustomizedConfirmationProvider.CustomizedConfirmationData.TryRemove(userID, out temp);
+                    if (string.IsNullOrEmpty(temp))
+                    {
+                        return "";
+                    }
 
                     // Memoryでは、有効期限のチェックはしない。
                     customizedConfirmationJson = (CustomizedConfirmationJson)JsonConvert.DeserializeObject<CustomizedConfirmationJson>(temp);
@@ -211,6 +217,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         }
                     }
 
+                    // 件数チェック
+                    if (customizedConfirmationRets.AsList().Count == 0)
+                    {
+                        return "";
+                    }
+
                     // 有効期限のチェック
                     customizedConfirmationRet = customizedConfirmationRets.AsList()[0];
                     if (DateTime.Now <= customizedConfirmationRet.CreatedDate.Add(ASPNETIdentityConfig.EmailConfirmationTokenLifespanFromHours))
@@ -227,6 +239,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     }
                     else
                     {
+                        isExpired = true;
                         return "";
                     }
 

@@ -601,10 +601,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                     ApplicationUser user = await UserManager.FindByIdAsync(userId);
 
-                    if (user.EmailConfirmed)
+                    if (user == null)
                     {
-                        // エラー画面
-                        return View("Error");
+                        // 削除済み
+                    }
+                    else if (user.EmailConfirmed)
+                    {
+                        // 確認済み
                     }
                     else
                     {
@@ -619,6 +622,9 @@ namespace MultiPurposeAuthSite.Controllers
                                  AcceptedAgreement = false
                              });
                     }
+
+                    // エラー画面
+                    return View("Error");
                 }
                 else
                 {
