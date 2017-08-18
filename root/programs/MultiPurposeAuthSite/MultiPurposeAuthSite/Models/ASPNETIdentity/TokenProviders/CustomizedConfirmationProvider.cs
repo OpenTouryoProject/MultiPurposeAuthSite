@@ -218,6 +218,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         }
                     }
 
+                    // 件数チェック
+                    if (customizedConfirmationRets.AsList().Count == 0)
+                    {
+                        return "";
+                    }
+
                     // 有効期限のチェック
                     customizedConfirmationRet = customizedConfirmationRets.AsList()[0];
                     if (DateTime.Now <= customizedConfirmationRet.CreatedDate.Add(ASPNETIdentityConfig.EmailConfirmationTokenLifespanFromHours))
