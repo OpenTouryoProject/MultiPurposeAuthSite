@@ -737,7 +737,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 入力の検証 2
                     if (User.Identity.GetUserId() == userId)
                     {
-                        string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code);
+                        bool isExpired = false;
+                        string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code, out isExpired);
 
                         if (!string.IsNullOrEmpty(email))
                         {
@@ -802,6 +803,17 @@ namespace MultiPurposeAuthSite.Controllers
                                 {
                                     return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
                                 }
+                            }
+                        }
+                        else
+                        {
+                            if (isExpired)
+                            {
+                                // ★119
+                            }
+                            else
+                            {
+                                // ★118
                             }
                         }
                     }

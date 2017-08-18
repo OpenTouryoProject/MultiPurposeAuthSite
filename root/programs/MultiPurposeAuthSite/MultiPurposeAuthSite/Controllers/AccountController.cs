@@ -614,11 +614,13 @@ namespace MultiPurposeAuthSite.Controllers
                     //　約款あり
 
                     ApplicationUser user = await UserManager.FindByIdAsync(userId);
-
-                    if (user.EmailConfirmed)
+                    if (user == null)
                     {
-                        // エラー画面
-                        return View("Error");
+                        // ★143
+                    }
+                    else if(user.EmailConfirmed)
+                    {
+                        // ★121
                     }
                     else
                     {
@@ -634,6 +636,9 @@ namespace MultiPurposeAuthSite.Controllers
                                  ReturnUrl = returnUrl
                              });
                     }
+
+                    // エラー画面
+                    return View("Error");
                 }
                 else
                 {
