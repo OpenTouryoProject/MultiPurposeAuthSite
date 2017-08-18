@@ -119,6 +119,12 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> Login(string returnUrl)
         {
+            // returnUrlが無い場合（URL直打ちを想定）、処理を中断する。
+            if (string.IsNullOrEmpty(returnUrl))
+            {
+                return View("Error");
+            }
+
             // データの生成
             await this.CreateData();
 
