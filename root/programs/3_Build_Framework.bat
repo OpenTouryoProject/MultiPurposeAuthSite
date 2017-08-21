@@ -38,7 +38,6 @@ rem --------------------------------------------------
 rem Build the batch Infrastructure(AllDam)
 rem --------------------------------------------------
 nuget.exe restore "Frameworks\Infrastructure\Public\Db\AllDam.sln"
-%BUILDFILEPATH% %COMMANDLINE% "Frameworks\Infrastructure\Public\Db\AllDam.sln"
 
 pause
 
