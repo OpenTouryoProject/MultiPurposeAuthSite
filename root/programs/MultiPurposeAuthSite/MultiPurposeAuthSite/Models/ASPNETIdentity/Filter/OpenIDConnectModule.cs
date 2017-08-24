@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -131,7 +131,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
             // - Implicit Flow           : response_type=id_token token or response_type=id_token
             if (path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) != -1)
             {
-                // OpenID Connect : response_type=codeに対応
+                // OpenID Connect :
+                // - Authorization Code Flow
+                // - response_type =codeに対応
 
                 // OpenIDConnectCodeFilter
 
@@ -141,8 +143,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
             }
             else if (path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
             {
-                // OpenID Connect : [response_type=id_token token] or [response_type=id_token]に対応
-                
+                // OpenID Connect :
+                // - Implicit Flow
+                // - [response_type=id_token token] or [response_type=id_token]に対応
+
                 string pattern = "response_type=";
                 string cookie = context.Request.Headers.Get("Cookie");
                 
@@ -150,6 +154,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                 {
                     string responseType = query.Substring(query.IndexOf(pattern) + pattern.Length);
 
+                    // a = [response_type=id_token token]に対応
+                    // b = [response_type=id_token]に対応
                     bool a = false;
                     bool b = false;
 

@@ -24,15 +24,15 @@
 
 －－－
 
-Log4Netのちょっと良い設定
-http://www.ailight.jp/blog/koido/archive/2005/03/09/4871.aspx
+以下、koido Blog「Log4Netのちょっと良い設定」から引用
 
-いつも参考にさせてもらっています。
+  Log4Netのちょっと良い設定
+  http://www.ailight.jp/Blog/koido/archive/2005/3/9/Log4Net%E3%81%AE%E3%81%A1%E3%82%87%E3%81%A3%E3%81%A8%E8%89%AF%E3%81%84%E8%A8%AD%E5%AE%9A
 
-色々試してみたら、
-<param name="RollingStyle" value="composite" />
-<param name="DatePattern" value='"."yyyy"-"MM"-"dd".log"' />
-という設定で、日付と容量のローテートが実現出来ました。
+    色々試してみたら、
+    <param name="RollingStyle" value="composite" />
+    <param name="DatePattern" value='"."yyyy"-"MM"-"dd".log"' />
+    という設定で、日付と容量のローテートが実現出来ました。
 
-yyyy、MM、ddに""を囲むのか、-や.に""を囲むのか分かりませんが、
-どうもDatePatternの指定の仕方がミソのようです。 
+    yyyy、MM、ddに""を囲むのか、-や.に""を囲むのか分かりませんが、
+    どうもDatePatternの指定の仕方がミソのようです。 

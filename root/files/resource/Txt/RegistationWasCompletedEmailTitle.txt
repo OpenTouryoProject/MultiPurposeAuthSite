@@ -1,1 +1,1 @@
-[txt] Account registration was completed.
+[txt] Account has been registered.

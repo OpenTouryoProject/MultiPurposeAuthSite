@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -100,7 +100,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -117,7 +117,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
                                     "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
@@ -175,7 +175,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -196,7 +196,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 values = cnn.Query<string>(
                                     "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });

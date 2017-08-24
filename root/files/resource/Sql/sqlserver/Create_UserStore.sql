@@ -1,8 +1,12 @@
-USE [master]
+﻿USE [master]
 GO
 
-ALTER DATABASE [UserStore] SET SINGLE_USER
-DROP  DATABASE [UserStore]
+IF EXISTS (select * from sysdatabases where name='UserStore')
+BEGIN
+	ALTER DATABASE [UserStore] SET SINGLE_USER
+	DROP  DATABASE [UserStore]
+END
+GO
 
 CREATE DATABASE [UserStore]
 GO

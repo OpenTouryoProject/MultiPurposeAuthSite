@@ -306,9 +306,9 @@ namespace MultiPurposeAuthSite.Controllers
                         // 再ログイン
                         if (await this.ReSignInAsync())
                         {
-                            // イベント・ログ出力
+                            // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format(
-                                "{0}({1}) did change own user name to {2}.", user.Id, oldUserName, user.UserName));
+                                "{0}({1}) has changed own user name to {2}.", user.Id, oldUserName, user.UserName));
 
                             // 再ログインに成功
                             return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeUserNameSuccess });
@@ -383,9 +383,9 @@ namespace MultiPurposeAuthSite.Controllers
                     // 再ログイン
                     await this.ReSignInAsync();
 
-                    // イベント・ログ出力
+                    // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) did set own local password.", user.Id, user.UserName));
+                    Logging.MyOperationTrace(string.Format("{0}({1}) has set own local password.", user.Id, user.UserName));
 
                     // Index - SetPasswordSuccess
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.SetPasswordSuccess });
@@ -446,9 +446,9 @@ namespace MultiPurposeAuthSite.Controllers
                     // 再ログイン
                     await this.ReSignInAsync();
 
-                    // イベント・ログ出力
+                    // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) did change own password.", user.Id, user.UserName));
+                    Logging.MyOperationTrace(string.Format("{0}({1}) has changed own password.", user.Id, user.UserName));
 
                     // Index - ChangePasswordSuccess
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
@@ -715,7 +715,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (ASPNETIdentityConfig.CanEditEmail)
             {
                 // 入力の検証 1
-                if (userId == null || code == null)
+                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
                 {
                     // ・・・
                 }
@@ -760,9 +760,9 @@ namespace MultiPurposeAuthSite.Controllers
                                         // メールの送信
                                         this.SendChangeCompletedEmail(user);
 
-                                        // イベント・ログ出力
+                                        // オペレーション・トレース・ログ出力
                                         Logging.MyOperationTrace(string.Format(
-                                            "{0}({1}) did change own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
+                                            "{0}({1}) has changed own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
                                         return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
                                     }
                                     else

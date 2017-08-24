@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -66,22 +66,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         }
 
         /// <summary>Protect</summary>
-        /// <param name="data">AuthenticationTicket</param>
+        /// <param name="ticket">AuthenticationTicket</param>
         /// <returns>JWT文字列</returns>
-        public string Protect(AuthenticationTicket data)
+        public string Protect(AuthenticationTicket ticket)
         {
             string json = "";
             string jwt = "";
             
             // チェック
-            if (data == null)
+            if (ticket == null)
             {
-                throw new ArgumentNullException("data");
+                throw new ArgumentNullException("ticket");
             }
 
             ApplicationUserManager userManager
                 = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            ApplicationUser user = userManager.FindByName(data.Identity.Name); // 同期版でOK。
+            ApplicationUser user = userManager.FindByName(ticket.Identity.Name); // 同期版でOK。
 
             #region ClaimSetの生成
 
@@ -89,7 +89,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             List<string> scopes = new List<string>();
             List<string> roles = new List<string>();
 
-            foreach (Claim c in data.Identity.Claims)
+            foreach (Claim c in ticket.Identity.Claims)
             {
                 if (c.Type == ASPNETIdentityConst.Claim_Issuer)
                 {
@@ -113,9 +113,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
             }
 
-            authTokenClaimSet.Add("sub", data.Identity.Name);
-            authTokenClaimSet.Add("iat", data.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("exp", data.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("sub", ticket.Identity.Name);
+            authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
 
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)

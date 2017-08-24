@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -38,6 +38,7 @@ using System;
 using System.Web.Mvc;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
 
 using Touryo.Infrastructure.Framework.Util;
 using Touryo.Infrastructure.Public.Str;
@@ -65,101 +66,112 @@ namespace MultiPurposeAuthSite.Controllers
         {
             //画面にエラーメッセージ・エラー情報を表示する-----------------------------
 
-            // To get an error message from Session
-            string err_msg = (string)Session[FxHttpContextIndex.SYSTEM_EXCEPTION_MESSAGE];
-
-            // To get an error information from Session
-            string err_info = (string)Session[FxHttpContextIndex.SYSTEM_EXCEPTION_INFORMATION];
-
-            // Remove exception information from Session
-            Session.Remove(FxHttpContextIndex.SYSTEM_EXCEPTION_MESSAGE);
-            Session.Remove(FxHttpContextIndex.SYSTEM_EXCEPTION_INFORMATION);
-
-            // To encode error message and display on Error screen
-            ViewBag.label1Data = CustomEncode.HtmlEncode(err_msg);
-
-            // To encode error information and display on Error screen
-            ViewBag.label2Data = CustomEncode.HtmlEncode(err_info);
-
-            bool sessionAbandonFlag = false;
-            if (Session[FxHttpContextIndex.SESSION_ABANDON_FLAG] != null)
+            try
             {
-                sessionAbandonFlag = (bool)Session[FxHttpContextIndex.SESSION_ABANDON_FLAG];
+                // To get an error message from Session
+                string err_msg = (string)Session[FxHttpContextIndex.SYSTEM_EXCEPTION_MESSAGE];
+
+                // To get an error information from Session
+                string err_info = (string)Session[FxHttpContextIndex.SYSTEM_EXCEPTION_INFORMATION];
+
+                // Remove exception information from Session
+                Session.Remove(FxHttpContextIndex.SYSTEM_EXCEPTION_MESSAGE);
+                Session.Remove(FxHttpContextIndex.SYSTEM_EXCEPTION_INFORMATION);
+
+                // To encode error message and display on Error screen
+                ViewBag.label1Data = CustomEncode.HtmlEncode(err_msg);
+
+                // To encode error information and display on Error screen
+                ViewBag.label2Data = CustomEncode.HtmlEncode(err_info);
+
+                bool sessionAbandonFlag = false;
+                if (Session[FxHttpContextIndex.SESSION_ABANDON_FLAG] != null)
+                {
+                    sessionAbandonFlag = (bool)Session[FxHttpContextIndex.SESSION_ABANDON_FLAG];
+                }
+
+                Session.Remove(FxHttpContextIndex.SESSION_ABANDON_FLAG);
+
+                // ------------------------------------------------------------------------
+
+                //画面にフォーム情報を表示する---------------------------------------------
+                NameValueCollection form = (NameValueCollection)Session[FxHttpContextIndex.FORMS_INFORMATION];
+                Session.Remove(FxHttpContextIndex.FORMS_INFORMATION);
+
+                if (form != null)
+                {
+                    //foreach
+                    foreach (string strKey in form)
+                    {
+                        if (form[strKey] == null)
+                        {
+                            //Add key and value to PositionData
+                            list_form.Add(new PositionData(strKey, "null"));
+                        }
+                        else
+                        {
+                            //Add key and value to PositionData
+                            list_form.Add(new PositionData(strKey, CustomEncode.HtmlEncode(form[strKey].ToString())));
+                        }
+                    }
+                    //データバインド
+                    ViewBag.list_form = list_form;
+                }
+
+                // 画面にセッション情報を表示する------------------------------------------
+
+                if (Session != null)
+                {
+                    //foreach
+                    foreach (string strKey in Session)
+                    {
+                        if (Session[strKey] == null)
+                        {
+                            //Add key and value to PositionData
+                            list_session.Add(new PositionData(strKey, "null"));
+                        }
+                        else
+                        {
+                            //Add key and value to PositionData
+                            list_session.Add(new PositionData(strKey, CustomEncode.HtmlEncode(Session[strKey].ToString())));
+                        }
+                    }
+                    //データバインド
+                    ViewBag.list_session = list_session;
+                }
+
+                // セッション情報を削除する------------------------------------------------
+
+                if (sessionAbandonFlag)
+                {
+                    // セッション タイムアウト検出用Cookieを消去
+                    // ※ Removeが正常に動作しないため、値を空文字に設定 ＝ 消去とする
+
+                    // Set-Cookie HTTPヘッダをレスポンス
+                    Response.Cookies.Set(FxCmnFunction.DeleteCookieForSessionTimeoutDetection());
+
+                    try
+                    {
+                        // セッションを消去                       
+                        Session.Abandon();
+                    }
+                    catch (Exception ex)
+                    {
+                        // このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。
+#if DEBUG
+                        Debug.WriteLine("このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。");
+                        Debug.WriteLine(ex.Message);
+#endif
+                    }
+                }
             }
-
-            Session.Remove(FxHttpContextIndex.SESSION_ABANDON_FLAG);
-
-            // ------------------------------------------------------------------------
-
-            //画面にフォーム情報を表示する---------------------------------------------
-            NameValueCollection form = (NameValueCollection)Session[FxHttpContextIndex.FORMS_INFORMATION];
-            Session.Remove(FxHttpContextIndex.FORMS_INFORMATION);
-
-            if (form != null)
+            catch (Exception ex)
             {
-                //foreach
-                foreach (string strKey in form)
-                {
-                    if (form[strKey] == null)
-                    {
-                        //Add key and value to PositionData
-                        list_form.Add(new PositionData(strKey, "null"));
-                    }
-                    else
-                    {
-                        //Add key and value to PositionData
-                        list_form.Add(new PositionData(strKey, CustomEncode.HtmlEncode(form[strKey].ToString())));
-                    }
-                }
-                //データバインド
-                ViewBag.list_form = list_form;
-            }
-
-            // 画面にセッション情報を表示する------------------------------------------
-
-            if (Session != null)
-            {
-                //foreach
-                foreach (string strKey in Session)
-                {
-                    if (Session[strKey] == null)
-                    {
-                        //Add key and value to PositionData
-                        list_session.Add(new PositionData(strKey, "null"));
-                    }
-                    else
-                    {
-                        //Add key and value to PositionData
-                        list_session.Add(new PositionData(strKey, CustomEncode.HtmlEncode(Session[strKey].ToString())));
-                    }
-                }
-                //データバインド
-                ViewBag.list_session = list_session;
-            }
-
-            // セッション情報を削除する------------------------------------------------
-
-            if (sessionAbandonFlag)
-            {
-                // セッション タイムアウト検出用Cookieを消去
-                // ※ Removeが正常に動作しないため、値を空文字に設定 ＝ 消去とする
-
-                // Set-Cookie HTTPヘッダをレスポンス
-                Response.Cookies.Set(FxCmnFunction.DeleteCookieForSessionTimeoutDetection());
-
-                try
-                {
-                    // セッションを消去                       
-                    Session.Abandon();
-                }
-                catch (Exception ex)
-                {
-                    // エラー発生時
-                    // このカバレージを通過する場合、
-                    // おそらく起動した画面のパスが間違っている。
-                    Console.WriteLine("このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。");
-                    Console.WriteLine(ex.Message);
-                }
+                // 開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。
+#if DEBUG
+                Debug.WriteLine("開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。");
+                Debug.WriteLine(ex.Message);
+#endif
             }
 
             return View();

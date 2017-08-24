@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -62,7 +62,7 @@ namespace MultiPurposeAuthSite.Models.Util
                         new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL")),
                         new TraceDbProfiler());
 
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                     //return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2"));
                     return new ProfiledDbConnection(
                         new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2")),

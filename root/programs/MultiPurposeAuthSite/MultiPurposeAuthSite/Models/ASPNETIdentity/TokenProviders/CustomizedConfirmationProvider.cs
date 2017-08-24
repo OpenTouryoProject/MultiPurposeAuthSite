@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -100,7 +100,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -118,7 +118,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute("DELETE FROM \"CustomizedConfirmation\" WHERE \"UserId\" = :UserId", new { UserId = userID });
                                 cnn.Execute(
@@ -179,7 +179,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     //break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     CustomizedConfirmationRet customizedConfirmationRet = null;
@@ -199,7 +199,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 customizedConfirmationRets = cnn.Query<CustomizedConfirmationRet>(
                                     "SELECT \"Value\", \"CreatedDate\" FROM \"CustomizedConfirmation\" WHERE \"UserId\" = :UserId", new { UserId = userID });

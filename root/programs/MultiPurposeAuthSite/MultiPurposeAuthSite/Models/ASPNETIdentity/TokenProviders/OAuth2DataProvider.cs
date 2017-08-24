@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -77,7 +77,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -94,7 +94,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
                                     "INSERT INTO \"OAuth2Data\" (\"ClientID\", \"UnstructuredData\") VALUES (:ClientID, :UnstructuredData)",
@@ -134,7 +134,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -150,7 +150,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 unstructuredData = cnn.ExecuteScalar<string>(
                                     "SELECT \"UnstructuredData\" FROM \"OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });
@@ -192,7 +192,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -209,7 +209,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
                                     "UPDATE \"OAuth2Data\" SET \"UnstructuredData\" = :UnstructuredData WHERE \"ClientID\" = :ClientID",
@@ -248,7 +248,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     break;
 
                 case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.OracleMD:
+                case EnumUserStoreType.ODPManagedDriver:
                 case EnumUserStoreType.PostgreSQL: // DMBMS
 
                     using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -264,7 +264,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 break;
 
-                            case EnumUserStoreType.OracleMD:
+                            case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
                                     "DELETE FROM \"OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });

@@ -37,7 +37,7 @@
     #region Role
 
     IList<string> roles = null;
-    bool canShowAadminScreen = false;
+    bool canShowAdminScreen = false;
     if (User.Identity.IsAuthenticated)
     {
         if (Session["Roles"] == null)
@@ -66,13 +66,13 @@
                 if (role == ASPNETIdentityConst.Role_SystemAdmin
                     || role == ASPNETIdentityConst.Role_Admin)
                 {
-                    canShowAadminScreen = true;
+                    canShowAdminScreen = true;
                 }
             }
         }
         else
         {
-            canShowAadminScreen = (roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
+            canShowAdminScreen = (roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
         }
     }
 
@@ -151,7 +151,7 @@ else
                         <li onclick="window.location.href = '@Url.Action("Index", "Home")';">
                             <i class="fa fa-arrow-circle-right"></i> メニュートップ
                         </li>
-@if (canShowAadminScreen)
+@if (canShowAdminScreen)
 {
                         @* 各メニューは、ユーザーが認証されている時だけ表示する *@
 

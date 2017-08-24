@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -181,7 +181,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             break;
 
-                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.ODPManagedDriver:
 
                             count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"Roles\"");
 
@@ -250,7 +250,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         break;
 
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
 
                         // Roles
                         roles = cnn.Query<ApplicationRole>(
@@ -320,7 +320,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #region CRUD(共通)
 
-        #region C
+        #region C (Create)
 
         /// <summary>新規ユーザーの追加</summary>
         /// <param name="user">ApplicationUser</param>
@@ -345,7 +345,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -370,7 +370,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
                                     
                                     cnn.Execute(
                                         "INSERT INTO \"Users\" ( " +
@@ -442,7 +442,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #endregion
 
-        #region R
+        #region R (Read)
 
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
@@ -469,7 +469,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -488,7 +488,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     users = cnn.Query<ApplicationUser>(
                                         "SELECT * FROM \"Users\" WHERE \"Id\" = :userId", new { userId = userId });
@@ -548,7 +548,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -567,7 +567,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     users = cnn.Query<ApplicationUser>(
                                         "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
@@ -654,7 +654,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.ODPManagedDriver:
                         case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                             string sql = "";
@@ -700,7 +700,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         break;
 
-                                    case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.ODPManagedDriver:
 
                                         sql = "SELECT * FROM \"Users\" WHERE ROWNUM <= {0}";
 
@@ -794,7 +794,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #endregion
 
-        #region U
+        #region U (Update)
 
         /// <summary>ユーザー情報を更新</summary>
         /// <param name="user">ApplicationUser</param>
@@ -851,7 +851,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.ODPManagedDriver:
                         case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -876,7 +876,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         break;
 
-                                    case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.ODPManagedDriver:
 
                                         cnn.Execute(
                                             "UPDATE \"Users\" " +
@@ -986,7 +986,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         // ここはSQLが無いので分岐も無い。
@@ -1091,7 +1091,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                             break;
 
-                                        case EnumUserStoreType.OracleMD:
+                                        case EnumUserStoreType.ODPManagedDriver:
 
                                             cnn.Execute(
                                                 "DELETE FROM \"UserRoles\" " +
@@ -1127,7 +1127,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                             break;
 
-                                        case EnumUserStoreType.OracleMD:
+                                        case EnumUserStoreType.ODPManagedDriver:
 
                                             cnn.Execute(
                                                 "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
@@ -1166,7 +1166,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #endregion
 
-        #region D
+        #region D (Delete)
 
         /// <summary>ユーザの論理削除</summary>
         /// <param name="user">ApplicationUser</param>
@@ -1208,7 +1208,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -1230,7 +1230,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         break;
 
-                                    case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.ODPManagedDriver:
 
                                         // ユーザの情報を削除
                                         cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
@@ -1366,7 +1366,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -1385,7 +1385,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     users = cnn.Query<ApplicationUser>(
                                         "SELECT * From \"Users\" WHERE \"Email\" = :Email", new { Email = email });
@@ -1628,7 +1628,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -1647,7 +1647,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
                                         "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
@@ -1737,7 +1737,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -1759,7 +1759,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     roles = cnn.Query<ApplicationRole>(
                                         "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
@@ -1855,7 +1855,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.ODPManagedDriver:
                         case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -1875,7 +1875,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         break;
 
-                                    case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.ODPManagedDriver:
 
                                         cnn.Execute(
                                             "DELETE FROM \"UserRoles\" " +
@@ -2195,7 +2195,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2211,7 +2211,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
                                         "INSERT INTO \"Roles\" ( \"Id\", \"Name\", \"ParentId\" ) VALUES ( :Id, :Name, :ParentId )", role);
@@ -2269,7 +2269,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2286,7 +2286,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM \"Roles\" WHERE \"Id\" = :roleId", new { roleId = roleId });
@@ -2343,7 +2343,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2361,7 +2361,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM \"Roles\" WHERE \"Name\" = :roleName", new { roleName = roleName });
@@ -2447,7 +2447,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.ODPManagedDriver:
                         case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2479,7 +2479,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         break;
 
-                                    case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.ODPManagedDriver:
 
                                         // システム共通のロール
                                         commonRoles = cnn.Query<ApplicationRole>(
@@ -2586,7 +2586,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.ODPManagedDriver:
                         case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2604,7 +2604,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         break;
 
-                                    case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.ODPManagedDriver:
 
                                         cnn.Execute(
                                             "UPDATE \"Roles\" SET \"Name\" = :Name WHERE \"Id\" = :Id",
@@ -2690,7 +2690,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             break;
 
                         case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.OracleMD:
+                        case EnumUserStoreType.ODPManagedDriver:
                         case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                             using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2719,7 +2719,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         break;
 
-                                    case EnumUserStoreType.OracleMD:
+                                    case EnumUserStoreType.ODPManagedDriver:
 
                                         // 外部参照制約に依存しないようにチェック
                                         cnt = cnn.ExecuteScalar<int>(
@@ -2801,7 +2801,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2819,7 +2819,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
                                         "INSERT INTO \"UserLogins\" (\"UserId\", \"LoginProvider\", \"ProviderKey\") " +
@@ -2895,7 +2895,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -2917,7 +2917,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     users = cnn.Query<ApplicationUser>(
                                         "SELECT * From \"Users\", \"UserLogins\" " + // * でイケるか？
@@ -3009,7 +3009,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -3026,7 +3026,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
                                         "DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"ProviderKey\" = :ProviderKey ",
@@ -3083,7 +3083,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -3101,7 +3101,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
                                         "INSERT INTO \"UserClaims\" (\"Id\", \"UserId\", \"Issuer\", \"ClaimType\", \"ClaimValue\") " +
@@ -3174,7 +3174,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         break;
 
                     case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.OracleMD:
+                    case EnumUserStoreType.ODPManagedDriver:
                     case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -3191,7 +3191,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                     break;
 
-                                case EnumUserStoreType.OracleMD:
+                                case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
                                         "DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId AND \"Issuer\" = :Issuer AND \"ClaimType\" = :ClaimType",

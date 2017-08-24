@@ -1,5 +1,7 @@
 -- see : Oracle11gXE + ODP.NET Managed Driver - マイクロソフト系技術情報 Wiki
 --       https://techinfoofmicrosofttech.osscons.jp/index.php?Oracle11gXE%20%2B%20ODP.NET%20Managed%20Driver
+--         For the information of using Oracle database and ODP.NET managed driver
+--          for the user store of multi-purpose authentication site, see the following site.
 
 --UserClaimsのIDENTITY
 

@@ -1,1 +1,1 @@
-[txt] Account change was completed.
+[txt] Account has been changed.

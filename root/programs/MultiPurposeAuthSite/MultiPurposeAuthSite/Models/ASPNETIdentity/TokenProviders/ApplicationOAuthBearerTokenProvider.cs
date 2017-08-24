@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -355,7 +355,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         // 検証完了
                         context.Validated(identity);
 
-                        // イベント・ログ出力
+                        // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
                             user.Id, user.UserName, context.ClientId, OAuthProviderHelper.GetInstance().GetClientName(context.ClientId)));
                     }
@@ -453,7 +453,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // 検証完了
                 context.Validated(identity);
 
-                // イベント・ログ出力
+                // オペレーション・トレース・ログ出力
                 Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
                             user.Id, user.UserName, context.ClientId, OAuthProviderHelper.GetInstance().GetClientName(context.ClientId)));
             }

@@ -221,8 +221,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 //    // テスト段階ではOAuth2のテスト機能に支障が出るのでSessionをクリアしない。
                                 //}
 
-                                // イベント・ログ出力
-                                Logging.MyOperationTrace(string.Format("{0}({1}) did sign in.", user.Id, user.UserName));
+                                // オペレーション・トレース・ログ出力
+                                Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
 
                                 // Open-Redirect対策
                                 if (!string.IsNullOrEmpty(model.ReturnUrl)
@@ -299,9 +299,9 @@ namespace MultiPurposeAuthSite.Controllers
                 // サインアウト（Cookieの削除）
                 AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
 
-                // イベント・ログ出力
+                // オペレーション・トレース・ログ出力
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                Logging.MyOperationTrace(string.Format("{0}({1}) did sign out.", user.Id, user.UserName));
+                Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
             }
 
             // リダイレクト "Index", "Home"へ
@@ -381,8 +381,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果の確認
                     if (result.Succeeded)
                     {
-                        // イベント・ログ出力
-                        Logging.MyOperationTrace(string.Format("{0}({1}) did sign up.", user.Id, user.UserName));
+                        // オペレーション・トレース・ログ出力
+                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed up.", user.Id, user.UserName));
 
                         #region サインアップ成功
 
@@ -559,6 +559,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // uidが空文字列の場合。
+                    // 必要であればエラーメッセージを設定。
                 }
             }
             else
@@ -588,7 +589,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
             // 入力の検証
-            if (userId == null || code == null)
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
             {
                 // エラー画面
                 return View("Error");
@@ -604,10 +605,12 @@ namespace MultiPurposeAuthSite.Controllers
                     if (user == null)
                     {
                         // 削除済み
+                        // 必要であればエラーメッセージを設定。
                     }
                     else if (user.EmailConfirmed)
                     {
                         // 確認済み
+                        // 必要であればエラーメッセージを設定。
                     }
                     else
                     {
@@ -636,9 +639,9 @@ namespace MultiPurposeAuthSite.Controllers
                     // メアド検証結果 ( "EmailConfirmation" or "Error"
                     if (result.Succeeded)
                     {
-                        // イベント・ログ出力
+                        // オペレーション・トレース・ログ出力
                         ApplicationUser user = await UserManager.FindByIdAsync(userId);
-                        Logging.MyOperationTrace(string.Format("{0}({1}) did confirmed.", user.Id, user.UserName));
+                        Logging.MyOperationTrace(string.Format("{0}({1}) has confirmed.", user.Id, user.UserName));
 
                         return View("EmailConfirmation");
                     }
@@ -687,8 +690,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 // メールの送信
                                 this.SendRegisterCompletedEmail(user);
 
-                                // イベント・ログ出力
-                                Logging.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
+                                // オペレーション・トレース・ログ出力
+                                Logging.MyOperationTrace(string.Format("{0}({1}) has been activated.", user.Id, user.UserName));
 
                                 // 完了画面
                                 return View("EmailConfirmation");
@@ -702,6 +705,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 同意されていない。
+                            // 必要であればエラーメッセージを設定。
                         }
                     }
                     else
@@ -717,8 +721,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                             if (result.Succeeded)
                             {
-                                // イベント・ログ出力
-                                Logging.MyOperationTrace(string.Format("{0}({1}) did activated.", user.Id, user.UserName));
+                                // オペレーション・トレース・ログ出力
+                                Logging.MyOperationTrace(string.Format("{0}({1}) has been activated.", user.Id, user.UserName));
 
                                 // Login画面へ遷移
                                 return View("Login");
@@ -732,6 +736,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 同意されていない。
+                            // 必要であればエラーメッセージを設定。
                         }
                     }
                 }
@@ -887,8 +892,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // メールの送信
                     this.SendPasswordResetCompletedEmail(user);
 
-                    // イベント・ログ出力
-                    Logging.MyOperationTrace(string.Format("{0}({1}) did reset own password.", user.Id, user.UserName));
+                    // オペレーション・トレース・ログ出力
+                    Logging.MyOperationTrace(string.Format("{0}({1}) has reset own password.", user.Id, user.UserName));
 
                     // "パスワードのリセットの確認"画面を表示 
                     return View("ResetPasswordConfirmation");
@@ -1089,7 +1094,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                         Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
-                        //// イベント・ログ出力 できない（User.Identity.GetUserId() == null
+                        //// オペレーション・トレース・ログ出力 できない（User.Identity.GetUserId() == null
                         //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                         //Logging.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
 
@@ -1289,8 +1294,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                             Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
-                            // イベント・ログ出力
-                            Logging.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
+                            // オペレーション・トレース・ログ出力
+                            Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
 
                             return RedirectToLocal(returnUrl);
                         }
@@ -1356,8 +1361,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                     Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
-                                    // イベント・ログ出力
-                                    Logging.MyOperationTrace(string.Format("{0}({1}) did ext sign in.", user.Id, user.UserName));
+                                    // オペレーション・トレース・ログ出力
+                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
 
                                     // リダイレクト
                                     return RedirectToLocal(returnUrl);
@@ -1434,8 +1439,8 @@ namespace MultiPurposeAuthSite.Controllers
                                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                         Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
 
-                                        // イベント・ログ出力
-                                        Logging.MyOperationTrace(string.Format("{0}({1}) did ext sign up.", user.Id, user.UserName));
+                                        // オペレーション・トレース・ログ出力
+                                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
 
                                         // リダイレクト
                                         return RedirectToLocal(returnUrl);
@@ -1540,7 +1545,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);
 
-                    // イベント・ログ出力
+                    // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
                         user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
@@ -1575,7 +1580,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ClaimsIdentityでサインインして、Access Tokenを発行
                     AuthenticationManager.SignIn(identity);
 
-                    // イベント・ログ出力
+                    // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
                             user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
@@ -1637,7 +1642,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // ClaimsIdentityでサインインして、仲介コードを発行
                 this.AuthenticationManager.SignIn(identity);
 
-                // イベント・ログ出力
+                // オペレーション・トレース・ログ出力
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
                         user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
@@ -2070,7 +2075,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                 }
                 else if (ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.SqlServer
-                    || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.OracleMD
+                    || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.ODPManagedDriver
                     || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.PostgreSQL)
                 {
                     // DBMS Providerの場合、

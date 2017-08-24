@@ -1,5 +1,5 @@
 ﻿//**********************************************************************************
-//* Copyright (C) 2007,2016 Hitachi Solutions,Ltd.
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
 #region Apache License
@@ -44,8 +44,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         Memory,
         /// <summary>DBMS Provider (SqlServer)</summary>
         SqlServer,
-        /// <summary>DBMS Provider (Oracle Manage Driver)</summary>
-        OracleMD,
+        /// <summary>DBMS Provider (ODP.NET Managed Driver)</summary>
+        ODPManagedDriver,
         /// <summary>DBMS Provider (PostgreSQL)</summary>
         PostgreSQL
     }
@@ -244,7 +244,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     case "SQL":
                         return EnumUserStoreType.SqlServer;
                     case "ORA":
-                        return EnumUserStoreType.OracleMD;
+                        return EnumUserStoreType.ODPManagedDriver;
                     case "NPG":
                         return EnumUserStoreType.PostgreSQL;
                     default:
