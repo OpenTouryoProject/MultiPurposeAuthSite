@@ -35,13 +35,6 @@ xcopy /E /Y "Frameworks\Infrastructure\Temp\%BUILD_CONFIG%" "Frameworks\Infrastr
 pause
 
 rem --------------------------------------------------
-rem Build the batch Infrastructure(AllDam)
-rem --------------------------------------------------
-nuget.exe restore "Frameworks\Infrastructure\Public\Db\AllDam.sln"
-
-pause
-
-rem --------------------------------------------------
 rem Delete the System.Web.MVC.dll after the bulk copy
 rem --------------------------------------------------
 del "Frameworks\Infrastructure\Build\System.Web.MVC.*"
