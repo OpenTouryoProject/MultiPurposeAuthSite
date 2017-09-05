@@ -80,16 +80,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
             // - IIS 7/7.5 で不要なHTTPレスポンスヘッダーを削除 « Fukui Labs
             //   http://blog.progfast.jp/labs/index.php/arts/iis-7-httpresponseheader/
 
-            //context.LogRequest += new EventHandler(OnLogRequest);
+            // ------------------------------------------------------------------------------------------
+            // - ASP.NET のイベント発生順序 – MiYABiS note.
+            //   http://note.miyabis.jp/2009/11/33503965.html
+            // - ASP.NETのライフサイクルの仕組み
+            //   http://article.higlabo.com/ja/asp_net_life_cycle.html
+            // ------------------------------------------------------------------------------------------
+            // - BeginRequest              : リクエストを受信して最初に発生するイベントです。
+            // - AuthenticateRequest       : ASP.NETがユーザーの認証処理の準備が完了したときに発生します。
+            // - AuthorizeRequest          : 権限の承認処理の準備が完了したときに発生します。
+            // - ResolveRequestCache       : リクエストに対してキャッシュからレスポンスを
+            //                               生成するのかレスポンスを１から生成するのかを決定します。
+            // - AcquireRequestState       : セッション変数の準備処理を行います。
+            // - PreRequestHandlerExecute  : 各ハンドラーへ処理を委譲する直前に発生します。
+            // - PostRequestHandlerExecute : 各ハンドラーへ処理の実行直後に発生します。
+            // - ReleaserequestState       : セッション変数などの値を更新・保存するためのイベントです。
+            // - UpdateRequestCache        : リクエストキャッシュの更新処理を行うためのイベントです。
+            // - EndRequest                : クライアントのブラウザへデータを送信する直前に発生します。
+            // - PreSendRequestHeaders     : 
+            // - PreSendRequestContent     : 
+            // ------------------------------------------------------------------------------------------
+
+            //context.LogRequest += new EventHandler(this.OnLogRequest);
 
             //　OpneID ConnectのAuthorization Code Flow対応
             //  OpneID ConnectのImplicit Flow対応（試行）
-            context.BeginRequest += new EventHandler(OnBeginRequest);
-            //context.EndRequest += new EventHandler(OnEndRequest);
+            context.BeginRequest += new EventHandler(this.OnBeginRequest);
+            //context.EndRequest += new EventHandler(this.OnEndRequest);
 
             // OpneID ConnectのImplicit Flow対応（試行）
-            context.PreRequestHandlerExecute += new EventHandler(OnPreRequestHandlerExecute);
-            context.PreSendRequestHeaders += new EventHandler(OnPreSendRequestHeaders);
+            context.PreRequestHandlerExecute += new EventHandler(this.OnPreRequestHandlerExecute);
+            context.PreSendRequestHeaders += new EventHandler(this.OnPreSendRequestHeaders);
         }
 
         #endregion
@@ -102,15 +123,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
             // LogRequestのロジックはここに挿入
         }
 
+        // 恐らく、Global.asaxと同じ。
+        // http:// support.microsoft.com/kb/312607/ja
+
         /// <summary>書き換え</summary>
         private bool Rewrited = false;
         /// <summary>書き換え</summary>
         private string OriginalVirtualPath = "";
-         
+
         /// <summary>OnBeginRequest</summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void OnBeginRequest(Object sender, EventArgs e)
+        /// <param name="sender">object</param>
+        /// <param name="e">EventArgs</param>
+        private void OnBeginRequest(object sender, EventArgs e)
         {
             // EndRequestのロジックはここに挿入
 
@@ -192,7 +216,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                 }
             }
         }
-
+        
         /// <summary>OnEndRequest</summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -201,6 +225,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
             // EndRequestのロジックはここに挿入
         }
 
+        /// <summary>OnPreRequestHandlerExecute</summary>
+        /// <param name="sender">object</param>
+        /// <param name="e">EventArgs</param>
         private void OnPreRequestHandlerExecute(object sender, EventArgs e)
         {
             // OnPreRequestHandlerExecuteのロジックはここに挿入
@@ -210,18 +237,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                 HttpApplication application = (HttpApplication)sender;
                 HttpContext context = application.Context;
                 context.RewritePath(this.OriginalVirtualPath);
+
+                // 忘れずに！！
+                this.OriginalVirtualPath = "";
+                this.Rewrited = false;
             }
         }
 
         /// <summary>OnPreSendRequestHeaders</summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
+        /// <param name="sender">object</param>
+        /// <param name="e">EventArgs</param>
         private void OnPreSendRequestHeaders(object sender, EventArgs e)
         {
             // PreSendRequestHeadersのロジックはここに挿入
 
             HttpApplication application = (HttpApplication)sender;
             HttpContext context = application.Context;
+            HttpResponse response = context.Response;
 
             if (context.Request.Url.AbsolutePath.IndexOf(
                 ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
@@ -234,7 +266,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                     // OpenID Connect : [response_type=id_token token] or [response_type=id_token]に対応
 
                     //レスポンス内容を参照して書き換え
-                    HttpResponse response = context.Response;
                     string location = response.Headers["Location"];
 
                     if (!string.IsNullOrEmpty(location)
