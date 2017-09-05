@@ -213,7 +213,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 this.FxSessionAbandon();
                                 // SessionIDの切換にはこのコードが必要である模様。
                                 // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                                Response.Cookies.Add(new HttpCookie("mas_session", ""));
                                 
                                 //}
                                 //else
@@ -1086,7 +1086,7 @@ namespace MultiPurposeAuthSite.Controllers
                         this.FxSessionAbandon();
                         // SessionIDの切換にはこのコードが必要である模様。
                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                        Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                        Response.Cookies.Add(new HttpCookie("mas_session", ""));
 
                         //// オペレーション・トレース・ログ出力 できない（User.Identity.GetUserId() == null
                         //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1286,7 +1286,7 @@ namespace MultiPurposeAuthSite.Controllers
                             this.FxSessionAbandon();
                             // SessionIDの切換にはこのコードが必要である模様。
                             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                            Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                            Response.Cookies.Add(new HttpCookie("mas_session", ""));
 
                             // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
@@ -1353,7 +1353,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     this.FxSessionAbandon();
                                     // SessionIDの切換にはこのコードが必要である模様。
                                     // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                    Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                                    Response.Cookies.Add(new HttpCookie("mas_session", ""));
 
                                     // オペレーション・トレース・ログ出力
                                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
@@ -1431,7 +1431,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         this.FxSessionAbandon();
                                         // SessionIDの切換にはこのコードが必要である模様。
                                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                        Response.Cookies.Add(new HttpCookie("ASP.NET_SessionId", ""));
+                                        Response.Cookies.Add(new HttpCookie("mas_session", ""));
 
                                         // オペレーション・トレース・ログ出力
                                         Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
