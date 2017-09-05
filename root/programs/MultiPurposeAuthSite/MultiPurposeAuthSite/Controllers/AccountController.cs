@@ -438,7 +438,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // サインアップ済みでない。
 
                             // 作成(CreateAsync)に失敗
-                            AddErrors(result);
+                            this.AddErrors(result);
                             // 再表示
                             return View(model);
                         }
@@ -452,7 +452,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // EmailConfirmed済み。
 
                                 // 作成(CreateAsync)に失敗
-                                AddErrors(result);
+                                this.AddErrors(result);
                                 // 再表示
                                 return View(model);
                             }
@@ -461,7 +461,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // ExternalLogin済み。
 
                                 // 作成(CreateAsync)に失敗
-                                AddErrors(result);
+                                this.AddErrors(result);
                                 // 再表示
                                 return View(model);
                             }
@@ -527,7 +527,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     else
                                     {
                                         // 再作成(CreateAsync)に失敗
-                                        AddErrors(result);
+                                        this.AddErrors(result);
                                         // 再表示
                                         return View(model);
                                     }
@@ -535,7 +535,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 else
                                 {
                                     // 削除(DeleteAsync)に失敗
-                                    AddErrors(result);
+                                    this.AddErrors(result);
                                     // 再表示
                                     return View(model);
                                 }
@@ -547,12 +547,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                         #endregion
                     }
-
-                    // UserManager.CreateAsyncの
-                    // resultのエラー情報を追加
-                    AddErrors(result);
-                    // 再表示
-                    return View(model);
 
                     #endregion
                 }
@@ -699,7 +693,7 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // 失敗
-                                AddErrors(result);
+                                this.AddErrors(result);
                             }
                         }
                         else
@@ -730,7 +724,7 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // 失敗
-                                AddErrors(result);
+                                this.AddErrors(result);
                             }
                         }
                         else
@@ -903,7 +897,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // パスワードのリセットの失敗
 
                     // 結果のエラー情報を追加
-                    AddErrors(result);
+                    this.AddErrors(result);
                 }
 
             }
@@ -1372,7 +1366,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 外部ログインの追加に失敗した場合
 
                                     // 結果のエラー情報を追加
-                                    AddErrors(result);
+                                    this.AddErrors(result);
                                 }
                             }
                             else
@@ -1450,7 +1444,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         // 外部ログインの追加に失敗した場合
 
                                         // 結果のエラー情報を追加
-                                        AddErrors(result);
+                                        this.AddErrors(result);
                                     }
                                 }
                                 else
@@ -1458,7 +1452,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     // ユーザの新規作成が失敗した場合
 
                                     // 結果のエラー情報を追加
-                                    AddErrors(result);
+                                    this.AddErrors(result);
                                 } // else処理済
                             } // else処理済
                         } // else処理済

@@ -393,7 +393,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // 失敗
-                    AddErrors(result);
+                    this.AddErrors(result);
                 }
             }
             else
@@ -456,7 +456,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // 失敗
-                    AddErrors(result);
+                    this.AddErrors(result);
                 }
             }
             else
@@ -1493,7 +1493,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         // 外部ログインの追加に失敗した場合
 
                                         // 結果のエラー情報を追加
-                                        AddErrors(result);
+                                        this.AddErrors(result);
                                     }
                                 }
                                 else
@@ -1602,7 +1602,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 失敗
-                            AddErrors(result);
+                            this.AddErrors(result);
                         }
                     }
                     else
@@ -1807,7 +1807,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 失敗
-                            AddErrors(result);
+                            this.AddErrors(result);
                         }
                     }
                     else
@@ -2003,7 +2003,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 else
                                 {
                                     // 失敗
-                                    AddErrors(result);
+                                    this.AddErrors(result);
                                 }
                             }
                         }
