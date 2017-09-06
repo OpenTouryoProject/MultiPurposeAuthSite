@@ -66,49 +66,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
         /// <param name="context">HttpApplication</param>
         public void Init(HttpApplication context)
         {
-            // - Visual C# .NET を使用して ASP.NET HTTP モジュールを作成する方法
-            //   https://support.microsoft.com/ja-jp/help/307996/how-to-create-an-asp-net-http-module-using-visual-c--net
-            // - URL書き換え(Rewriting)を行う - Netplanetes
-            //   http://www.pine4.net/Memo/Article/Archives/11
-            // - ブログ表示（３） -クラスライブラリ | ++C++; // 未確認飛行 C
-            //   http://ufcpp.net/study/dotnet/aspx/blog3/
-            // - HttpRequestのパラメータに小細工をしたい時にどうするか(・ω・)？ -うさ☆うさ日記
-            //   http://d.hatena.ne.jp/machi_pon/20091203/1259842545
-
-            // - IIS7 の機能を拡張してみる-レスポンスヘッダー内のサーバー名の改ざん – monoe's blog
-            //   https://blogs.msdn.microsoft.com/osamum/2010/04/05/iis7-2/
-            // - IIS 7/7.5 で不要なHTTPレスポンスヘッダーを削除 « Fukui Labs
-            //   http://blog.progfast.jp/labs/index.php/arts/iis-7-httpresponseheader/
-
-            // ------------------------------------------------------------------------------------------
-            // - ASP.NET のイベント発生順序 – MiYABiS note.
-            //   http://note.miyabis.jp/2009/11/33503965.html
-            // - ASP.NETのライフサイクルの仕組み
-            //   http://article.higlabo.com/ja/asp_net_life_cycle.html
-            // ------------------------------------------------------------------------------------------
-            // - BeginRequest              : リクエストを受信して最初に発生するイベントです。
-            // - AuthenticateRequest       : ASP.NETがユーザーの認証処理の準備が完了したときに発生します。
-            // - AuthorizeRequest          : 権限の承認処理の準備が完了したときに発生します。
-            // - ResolveRequestCache       : リクエストに対してキャッシュからレスポンスを
-            //                               生成するのかレスポンスを１から生成するのかを決定します。
-            // - AcquireRequestState       : セッション変数の準備処理を行います。
-            // - PreRequestHandlerExecute  : 各ハンドラーへ処理を委譲する直前に発生します。
-            // - PostRequestHandlerExecute : 各ハンドラーへ処理の実行直後に発生します。
-            // - ReleaserequestState       : セッション変数などの値を更新・保存するためのイベントです。
-            // - UpdateRequestCache        : リクエストキャッシュの更新処理を行うためのイベントです。
-            // - EndRequest                : クライアントのブラウザへデータを送信する直前に発生します。
-            // - PreSendRequestHeaders     : 
-            // - PreSendRequestContent     : 
-            // ------------------------------------------------------------------------------------------
+            // HttpApplication（Global.asax）、HttpModule、HttpHandler - マイクロソフト系技術情報 Wiki
+            // https://techinfoofmicrosofttech.osscons.jp/index.php?HttpApplication%EF%BC%88Global.asax%EF%BC%89%E3%80%81HttpModule%E3%80%81HttpHandler
 
             //context.LogRequest += new EventHandler(this.OnLogRequest);
-
-            //　OpneID ConnectのAuthorization Code Flow対応
-            //  OpneID ConnectのImplicit Flow対応（試行）
-            context.BeginRequest += new EventHandler(this.OnBeginRequest);
             //context.EndRequest += new EventHandler(this.OnEndRequest);
 
-            // OpneID ConnectのImplicit Flow対応（試行）
+            //　OpneID ConnectのAuthorization Code Flow対応
+            //  OpneID ConnectのImplicit Flow対応
+            context.BeginRequest += new EventHandler(this.OnBeginRequest);
+
+            // OpneID ConnectのImplicit Flow対応
             context.PreRequestHandlerExecute += new EventHandler(this.OnPreRequestHandlerExecute);
             context.PreSendRequestHeaders += new EventHandler(this.OnPreSendRequestHeaders);
         }
