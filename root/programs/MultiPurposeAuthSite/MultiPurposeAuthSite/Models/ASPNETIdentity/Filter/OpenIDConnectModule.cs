@@ -84,9 +84,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
         #endregion
 
         /// <summary>OnLogRequest</summary>
-        /// <param name="source"></param>
-        /// <param name="e"></param>
-        private void OnLogRequest(Object source, EventArgs e)
+        /// <param name="source">object</param>
+        /// <param name="e">EventArgs</param>
+        private void OnLogRequest(object source, EventArgs e)
         {
             // LogRequestのロジックはここに挿入
         }
@@ -184,10 +184,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                 }
             }
         }
-        
+
         /// <summary>OnEndRequest</summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
+        /// <param name="sender">object</param>
+        /// <param name="e">EventArgs</param>
         private void OnEndRequest(object sender, EventArgs e)
         {
             // EndRequestのロジックはここに挿入
