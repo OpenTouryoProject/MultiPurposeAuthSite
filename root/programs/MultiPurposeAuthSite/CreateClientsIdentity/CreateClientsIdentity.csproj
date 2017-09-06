@@ -66,8 +66,6 @@
     <None Include="App.config">
       <SubType>Designer</SubType>
     </None>
-    <None Include="CreateClientsIdentity_RS256.cer" />
-    <None Include="CreateClientsIdentity_RS256.pfx" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
