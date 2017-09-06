@@ -63,9 +63,9 @@ namespace MultiPurposeAuthSite.Models.Util
                         new TraceDbProfiler());
 
                 case EnumUserStoreType.ODPManagedDriver:
-                    //return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2"));
+                    //return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP"));
                     return new ProfiledDbConnection(
-                        new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP2")),
+                        new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP")),
                         new TraceDbProfiler());
 
                 case EnumUserStoreType.PostgreSQL:

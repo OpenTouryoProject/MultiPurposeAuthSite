@@ -242,8 +242,8 @@ namespace Touryo.Infrastructure.Business.Business
                 //    damABT = new DamOraOdp();
                 //    damAMT = new DamOraOdp();
 
-                //    // 接続文字列をロード（ODP2：Instant Client）
-                //    connstring = GetConfigParameter.GetConnectionString("ConnectionString_ODP2");
+                //    // 接続文字列をロード
+                //    connstring = GetConfigParameter.GetConnectionString("ConnectionString_ODP");
                 //}
                 //else if (parameterValue.ActionType.Split('%')[0] == "DB2")
                 //{
