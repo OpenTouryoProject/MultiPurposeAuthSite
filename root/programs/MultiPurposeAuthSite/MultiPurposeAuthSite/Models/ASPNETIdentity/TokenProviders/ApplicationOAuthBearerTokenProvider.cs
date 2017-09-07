@@ -222,15 +222,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                    if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
                     {
-                        // 検証完了
-                        context.Validated(clientId);
-                    }
-                    else
-                    {
-                        // 検証未完
+                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                        if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        {
+                            // 検証完了
+                            context.Validated(clientId);
+                        }
+                        else
+                        {
+                            // 検証未完
+                        }
                     }
                 }
 
@@ -250,15 +253,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                    if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
                     {
-                        // 検証完了
-                        context.Validated(clientId);
-                    }
-                    else
-                    {
-                        // 検証未完
+                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                        if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        {
+                            // 検証完了
+                            context.Validated(clientId);
+                        }
+                        else
+                        {
+                            // 検証未完
+                        }
                     }
                 }
 
@@ -271,15 +277,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                    if (string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret) == false)
                     {
-                        // 検証完了
-                        context.Validated(clientId);
-                    }
-                    else
-                    {
-                        // 検証未完
+                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                        if (clientSecret == OAuthProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        {
+                            // 検証完了
+                            context.Validated(clientId);
+                        }
+                        else
+                        {
+                            // 検証未完
+                        }
                     }
                 }
 
@@ -287,6 +296,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
             else if (context.Parameters["grant_type"].ToLower() == "refresh_token")
             {
+                // refresh_tokenでは、不要。
+                //if (context.TryGetBasicCredentials(out clientId, out clientSecret))
+                //{
+                //}
+
                 if (!ASPNETIdentityConfig.EnableRefreshToken)
                 {
                     throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
