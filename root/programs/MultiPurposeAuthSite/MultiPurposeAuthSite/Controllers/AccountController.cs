@@ -27,6 +27,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 using System;
 using System.Collections.Generic;
@@ -2108,9 +2109,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region システム共通ロール
 
-                await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_SystemAdmin));
-                await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_Admin));
-                await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_User));
+                if (!OnlySts.STSOnly_P)
+                {
+                    await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_SystemAdmin));
+                    await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_Admin));
+                    await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_User));
+                }
 
                 #endregion
 
@@ -2120,9 +2124,12 @@ namespace MultiPurposeAuthSite.Controllers
                 result = await this.UserManager.CreateAsync(user, ASPNETIdentityConfig.AdministratorPWD);
                 if (result.Succeeded)
                 {
-                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_SystemAdmin);
-                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
-                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
+                    if (!OnlySts.STSOnly_P)
+                    {
+                        await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_SystemAdmin);
+                        await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
+                        await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
+                    }
                 }
 
                 #endregion
@@ -2144,10 +2151,13 @@ namespace MultiPurposeAuthSite.Controllers
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
-                        await this.UserManager.AddToRoleAsync(
+                        if (!OnlySts.STSOnly_P)
+                        {
+                            await this.UserManager.AddToRoleAsync(
                             (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_User);
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_Admin);
+                            await this.UserManager.AddToRoleAsync(
+                                (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_Admin);
+                        }
                     }
 
                     parentId = user.Id;
@@ -2161,16 +2171,22 @@ namespace MultiPurposeAuthSite.Controllers
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
-                        await this.UserManager.AddToRoleAsync(
+                        if (!OnlySts.STSOnly_P)
+                        {
+                            await this.UserManager.AddToRoleAsync(
                             (await this.UserManager.FindByNameAsync("tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_User);
+                        }
                     }
 
                     #endregion
 
                     #region テナント・ロール
 
-                    await this.RoleManager.CreateAsync(
-                        ApplicationRole.CreateForIndividual((await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")), "hyper_tanaka"));
+                    if (!OnlySts.STSOnly_P)
+                    {
+                        await this.RoleManager.CreateAsync(
+                            ApplicationRole.CreateForIndividual((await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")), "hyper_tanaka"));
+                    }
 
                     #endregion
 
@@ -2185,10 +2201,13 @@ namespace MultiPurposeAuthSite.Controllers
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
-                        await this.UserManager.AddToRoleAsync(
+                        if (!OnlySts.STSOnly_P)
+                        {
+                            await this.UserManager.AddToRoleAsync(
                             (await this.UserManager.FindByNameAsync("super_sato@gmail.com")).Id, ASPNETIdentityConst.Role_User);
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_sato@gmail.com")).Id, ASPNETIdentityConst.Role_Admin);
+                            await this.UserManager.AddToRoleAsync(
+                                (await this.UserManager.FindByNameAsync("super_sato@gmail.com")).Id, ASPNETIdentityConst.Role_Admin);
+                        }
                     }
 
                     parentId = user.Id;
@@ -2202,16 +2221,22 @@ namespace MultiPurposeAuthSite.Controllers
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
-                        await this.UserManager.AddToRoleAsync(
+                        if (!OnlySts.STSOnly_P)
+                        {
+                            await this.UserManager.AddToRoleAsync(
                             (await this.UserManager.FindByNameAsync("sato@gmail.com")).Id, ASPNETIdentityConst.Role_User);
+                        }
                     }
 
                     #endregion
 
                     #region テナント・ロール
 
-                    await this.RoleManager.CreateAsync(
+                    if (!OnlySts.STSOnly_P)
+                    {
+                        await this.RoleManager.CreateAsync(
                         ApplicationRole.CreateForIndividual((await this.UserManager.FindByNameAsync("super_sato@gmail.com")), "miracle_sato"));
+                    }
 
                     #endregion
 

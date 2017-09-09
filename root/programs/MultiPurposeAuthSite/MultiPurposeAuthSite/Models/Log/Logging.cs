@@ -33,8 +33,12 @@
 
 using System;
 using System.Diagnostics;
-using Touryo.Infrastructure.Public.Log;
+using System.Runtime.ExceptionServices;
+
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
+
+using Touryo.Infrastructure.Public.Log;
 
 namespace MultiPurposeAuthSite.Models.Log
 {
@@ -112,6 +116,15 @@ namespace MultiPurposeAuthSite.Models.Log
             {
                 // プロビジョニング、プロダクト環境
                 LogIF.DebugLog("SQLTRACE", ex.ToString());
+            }
+
+            if (ex is StopUserStoreException)
+            {
+                // ユーザストアを停止させる例外
+
+                // スタックトレースを保って ex を throw
+                //string trace = Environment.StackTrace;
+                ExceptionDispatchInfo.Capture(ex).Throw();
             }
         }
         #endregion

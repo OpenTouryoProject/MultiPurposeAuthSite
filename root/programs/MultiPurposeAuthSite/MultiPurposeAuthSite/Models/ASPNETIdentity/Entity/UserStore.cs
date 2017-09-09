@@ -36,7 +36,6 @@ using System.Data;
 using System.Linq;
 using System.Collections.Generic;
 
-using System.Diagnostics;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Security.Claims;
@@ -48,7 +47,7 @@ using Microsoft.AspNet.Identity;
 
 using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.Util;
-using Touryo.Infrastructure.Public.Log;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 // --------------------------------------------------
 // UserStoreのTransaction管理について。
@@ -159,6 +158,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>bool</returns>
         public static Task<bool> IsDBMSInitialized()
         {
+            // テスト時の機能のため、
+            //OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName + 
@@ -212,6 +214,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims ）</summary>
         private void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
         {
+            // 他テーブルのため、
+            //OnlySts.STSOnly_M();
+            if (OnlySts.STSOnly_P)
+            {
+                // 何もロードしない。
+                return;
+            }
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -230,10 +240,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         // Roles
                         roles = cnn.Query<ApplicationRole>(
-                        "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
-                        "FROM   [UserRoles], [Roles] " +
-                        "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
-                        "   AND [UserRoles].[UserId] = @userId", new { userId = user.Id });
+                            "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
+                            "FROM   [UserRoles], [Roles] " +
+                            "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
+                            "   AND [UserRoles].[UserId] = @userId", new { userId = user.Id });
                         user.Roles = roles.ToList();
 
                         // Logins
@@ -254,10 +264,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         // Roles
                         roles = cnn.Query<ApplicationRole>(
-                        "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
-                        "FROM   \"UserRoles\", \"Roles\" " +
-                        "WHERE  \"UserRoles\".\"RoleId\" = \"Roles\".\"Id\" " +
-                        "   AND \"UserRoles\".\"UserId\" = :userId", new { userId = user.Id });
+                            "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
+                            "FROM   \"UserRoles\", \"Roles\" " +
+                            "WHERE  \"UserRoles\".\"RoleId\" = \"Roles\".\"Id\" " +
+                            "   AND \"UserRoles\".\"UserId\" = :userId", new { userId = user.Id });
                         user.Roles = roles.ToList();
 
                         // Logins
@@ -278,10 +288,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         // Roles
                         roles = cnn.Query<ApplicationRole>(
-                        "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name, \"roles\".\"parentid\" as parentid " +
-                        "FROM   \"userroles\", \"roles\" " +
-                        "WHERE  \"userroles\".\"roleid\" = \"roles\".\"id\" " +
-                        "   AND \"userroles\".\"userid\" = @userId", new { userId = user.Id });
+                            "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name, \"roles\".\"parentid\" as parentid " +
+                            "FROM   \"userroles\", \"roles\" " +
+                            "WHERE  \"userroles\".\"roleid\" = \"roles\".\"id\" " +
+                            "   AND \"userroles\".\"userid\" = @userId", new { userId = user.Id });
                         user.Roles = roles.ToList();
 
                         // Logins
@@ -327,6 +337,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task CreateAsync(ApplicationUser user)
         {
+            // テスト用のユーザが必要
+            // また、Signupは止めてあるので。
+            //OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -449,6 +463,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByIdAsync(string userId)
         {
+            // 参照系の機能のため、
+            //OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -528,6 +545,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByNameAsync(string userName)
         {
+            // 参照系の機能のため、
+            //OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -612,6 +632,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         {
             get
             {
+                // 管理系の機能のため、
+                OnlySts.STSOnly_M();
+
                 // Debug
                 Logging.MyDebugSQLTrace("★ : " + 
                     MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -801,6 +824,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public async Task UpdateAsync(ApplicationUser user)
         {
+            // 更新系の機能のため、
+            //OnlySts.STSOnly_M();
+            if (OnlySts.STSOnly_P)
+            {
+                // 何も更新しない。
+                // IUserLockoutStore機能などで使用するため。
+                return;
+            }
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -955,6 +986,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <param name="tgtUser">ターゲット</param>
         private Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
         {
+            // 更新系の機能のため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -1176,6 +1210,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// </remarks>
         public Task DeleteAsync(ApplicationUser user)
         {
+            // 更新系の機能のため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -1286,7 +1323,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>真・偽：ユーザがパスワードを持っているか</returns>
         public Task<bool> HasPasswordAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1305,7 +1343,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetPasswordHashAsync(ApplicationUser user, string passwordHash)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1324,7 +1363,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>パスワードのハッシュ</returns>
         public Task<string> GetPasswordHashAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1346,6 +1386,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByEmailAsync(string email)
         {
+            // 参照系の機能のため、
+            //OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -1426,7 +1469,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetEmailAsync(ApplicationUser user, string email)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1445,7 +1489,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>Email</returns>
         public Task<string> GetEmailAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1464,7 +1509,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetEmailConfirmedAsync(ApplicationUser user, bool confirmed)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1483,7 +1529,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>EmailConfirmed</returns>
         public Task<bool> GetEmailConfirmedAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1506,7 +1553,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetPhoneNumberAsync(ApplicationUser user, string phoneNumber)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1525,7 +1573,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>phone number</returns>
         public Task<string> GetPhoneNumberAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1544,7 +1593,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetPhoneNumberConfirmedAsync(ApplicationUser user, bool confirmed)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1563,7 +1613,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>phone number is confirmed</returns>
         public Task<bool> GetPhoneNumberConfirmedAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1586,6 +1637,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task AddToRoleAsync(ApplicationUser user, string roleName)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -1684,7 +1738,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>真・偽：ユーザがロールに所属するか</returns>
         public async Task<bool> IsInRoleAsync(ApplicationUser user, string roleName)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1706,6 +1761,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>ユーザのロール一覧</returns>
         public Task<IList<string>> GetRolesAsync(ApplicationUser user)
         {
+            // 他テーブルのため、
+            //OnlySts.STSOnly_M();
+            if (OnlySts.STSOnly_P)
+            {
+                // 空の一覧を返す。
+                return Task.FromResult((IList<string>)new List<string>());
+            }
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -1810,6 +1873,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -1923,7 +1989,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetSecurityStampAsync(ApplicationUser user, string stamp)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1942,7 +2009,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>SecurityStamp</returns>
         public Task<string> GetSecurityStampAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1951,7 +2019,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // セキュリティスタンプを取得
-
             return Task.FromResult(user.SecurityStamp);
         }
 
@@ -1965,7 +2032,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetLockoutEnabledAsync(ApplicationUser user, bool enabled)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1984,7 +2052,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>真・偽：ユーザがロックアウト可能かどうか</returns>
         public Task<bool> GetLockoutEnabledAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -1993,7 +2062,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザがロックアウト可能かどうかを取得
-
             return Task.FromResult(user.LockoutEnabled);
         }
 
@@ -2002,7 +2070,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>サインインに失敗した試行回数</returns>
         public Task<int> IncrementAccessFailedCountAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2022,7 +2091,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <remarks>パスワードが確認されるか、アカウントがロックアウトされるたびに、この数は、リセットされる。</remarks>
         public Task<int> GetAccessFailedCountAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2031,7 +2101,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 失敗したサインインの試行回数を取得
-
             return Task.FromResult(user.AccessFailedCount);
         }
 
@@ -2043,7 +2112,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// </remarks>
         public Task ResetAccessFailedCountAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2069,7 +2139,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// </remarks>
         public Task SetLockoutEndDateAsync(ApplicationUser user, DateTimeOffset lockoutEnd)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2096,7 +2167,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// </remarks>
         public Task<DateTimeOffset> GetLockoutEndDateAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2130,7 +2202,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2149,7 +2222,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>真・偽：2FAが有効かどうか</returns>
         public Task<bool> GetTwoFactorEnabledAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2177,6 +2251,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task CreateAsync(ApplicationRole role)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2249,6 +2326,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>ApplicationRole</returns>
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2323,6 +2403,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>ApplicationRole</returns>
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2404,6 +2487,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         {
             get
             {
+                // 他テーブルのため、
+                // 管理系の機能のため、
+                OnlySts.STSOnly_M();
+
                 // Debug
                 Logging.MyDebugSQLTrace("★ : " + 
                     MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2538,6 +2625,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     Logging.MySQLLogForEx(ex);
                 }
 
+                // IQueryableとして戻す。
                 return commonRoles.AsQueryable();
             }
         }
@@ -2551,6 +2639,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task UpdateAsync(ApplicationRole role)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2644,6 +2735,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task DeleteAsync(ApplicationRole role)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2783,6 +2877,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2855,6 +2952,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindAsync(UserLoginInfo login)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -2965,7 +3065,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>IList<UserLoginInfo></returns>>
         public Task<IList<UserLoginInfo>> GetLoginsAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // 他テーブルのため、
+            //OnlySts.STSOnly_M();
+            if (OnlySts.STSOnly_P)
+            {
+                return Task.FromResult((IList<UserLoginInfo>)new List<UserLoginInfo>());
+            }
+
+            // ストレージを直接、触らない。
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -2984,6 +3091,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -3065,6 +3175,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task AddClaimAsync(ApplicationUser user, Claim claim)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
@@ -3137,7 +3250,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>IList<Claim></returns>
         public Task<IList<Claim>> GetClaimsAsync(ApplicationUser user)
         {
-            // UserStoreを直接、触らない。
+            // 他テーブルのため、
+            //OnlySts.STSOnly_M();
+            if (OnlySts.STSOnly_P)
+            {
+                return Task.FromResult((IList<Claim>)new List<Claim>());
+            }
+
+            // ストレージを直接、触らない。
 
             // Debug
             Logging.MyDebugSQLTrace(
@@ -3156,6 +3276,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task RemoveClaimAsync(ApplicationUser user, Claim claim)
         {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
