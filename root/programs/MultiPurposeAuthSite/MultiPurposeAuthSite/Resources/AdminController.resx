@@ -132,6 +132,9 @@
   <data name="Error" xml:space="preserve">
     <value>An error has occurred.</value>
   </data>
+  <data name="LockedDown" xml:space="preserve">
+    <value>This feature is locked down.</value>
+  </data>
   <data name="UnAuthenticate" xml:space="preserve">
     <value>This request has not been authenticated.</value>
   </data>

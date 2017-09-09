@@ -867,7 +867,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return 
+                return
                     ASPNETIdentityConfig.EquipOAuthServer
                     && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditOAuth2Data"]);
             }
@@ -1192,7 +1192,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     || !ASPNETIdentityConfig.EquipOAuthServer; // IsLockedDownがfalseでもOAuthServerがfalseならtrueを返す.
             }
         }
-        
+
         #endregion
 
         #endregion
@@ -1318,6 +1318,43 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #endregion
 
         #endregion
+
+        #endregion
+
+        #region ロックダウン
+
+        /// <summary>
+        /// EnableSignupProcess
+        /// </summary>
+        public static bool EnableSignupProcess
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableSignupProcess"]);
+            }
+        }
+
+        /// <summary>
+        /// EnableEditingOfUserAttribute
+        /// </summary>
+        public static bool EnableEditingOfUserAttribute
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableEditingOfUserAttribute"]);
+            }
+        }
+
+        /// <summary>
+        /// EnableAdministrationOfUsersAndRoles
+        /// </summary>
+        public static bool EnableAdministrationOfUsersAndRoles
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableAdministrationOfUsersAndRoles"]);
+            }
+        }
 
         #endregion
     }

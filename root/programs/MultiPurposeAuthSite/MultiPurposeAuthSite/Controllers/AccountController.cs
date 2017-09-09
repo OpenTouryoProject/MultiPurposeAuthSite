@@ -146,7 +146,7 @@ namespace MultiPurposeAuthSite.Controllers
             // サインイン画面（初期表示）
             return View(new AccountLoginViewModel
             {
-                ReturnUrl= returnUrl
+                ReturnUrl = returnUrl
             });
         }
 
@@ -214,7 +214,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // SessionIDの切換にはこのコードが必要である模様。
                                 // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                 Response.Cookies.Add(new HttpCookie("mas_session", ""));
-                                
+
                                 //}
                                 //else
                                 //{
@@ -227,8 +227,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 // Open-Redirect対策
                                 if (!string.IsNullOrEmpty(model.ReturnUrl)
                                     && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
-                                {   
-                                    return RedirectToLocal(model.ReturnUrl); 
+                                {
+                                    return RedirectToLocal(model.ReturnUrl);
                                 }
                                 else
                                 {
@@ -323,11 +323,19 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> Register()
         {
-            // データの生成
-            await this.CreateData();
+            if (ASPNETIdentityConfig.EnableSignupProcess)
+            {
+                // データの生成
+                await this.CreateData();
 
-            // サインアップ画面（初期表示）
-            return View(new AccountRegisterViewModel());
+                // サインアップ画面（初期表示）
+                return View(new AccountRegisterViewModel());
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -341,228 +349,236 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> Register(AccountRegisterViewModel model)
         {
-            // AccountRegisterViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.EnableSignupProcess)
             {
-                // AccountRegisterViewModelの検証に成功
-
-                string uid = "";
-                // サインアップしたユーザを取得
-                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                // AccountRegisterViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    // model.Emailはチェック済み。
-                    uid = model.Email;
-                }
-                else
-                {
-                    // model.Nameのカスタムのチェック処理は必要か？
-                    uid = model.Name;
-                }
+                    // AccountRegisterViewModelの検証に成功
 
-                if (!string.IsNullOrEmpty(uid))
-                {
-                    // uidが空文字列でない場合。
-
-                    #region サインアップ
-
-                    // ユーザを作成
-                    ApplicationUser user = await ApplicationUser.CreateBySignup(uid, false);
-
-                    // ApplicationUserManagerのCreateAsync
-                    IdentityResult result = await UserManager.CreateAsync(
-                            user,
-                            model.Password // Passwordはハッシュ化される。
-                        );
-
-                    #endregion
-
-                    #region サインイン or メアド検証
-
-                    // 結果の確認
-                    if (result.Succeeded)
+                    string uid = "";
+                    // サインアップしたユーザを取得
+                    if (ASPNETIdentityConfig.RequireUniqueEmail)
                     {
-                        // オペレーション・トレース・ログ出力
-                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed up.", user.Id, user.UserName));
+                        // model.Emailはチェック済み。
+                        uid = model.Email;
+                    }
+                    else
+                    {
+                        // model.Nameのカスタムのチェック処理は必要か？
+                        uid = model.Name;
+                    }
 
-                        #region サインアップ成功
+                    if (!string.IsNullOrEmpty(uid))
+                    {
+                        // uidが空文字列でない場合。
 
-                        // ロールに追加。
+                        #region サインアップ
+
+                        // ユーザを作成
+                        ApplicationUser user = await ApplicationUser.CreateBySignup(uid, false);
+
+                        // ApplicationUserManagerのCreateAsync
+                        IdentityResult result = await UserManager.CreateAsync(
+                                user,
+                                model.Password // Passwordはハッシュ化される。
+                            );
+
+                        #endregion
+
+                        #region サインイン or メアド検証
+
+                        // 結果の確認
                         if (result.Succeeded)
                         {
-                            await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
-                            await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
-                        }
+                            // オペレーション・トレース・ログ出力
+                            Logging.MyOperationTrace(string.Format("{0}({1}) has signed up.", user.Id, user.UserName));
 
-                        if (ASPNETIdentityConfig.RequireUniqueEmail)
-                        {
-                            // サインインの前にメアド検証用のメールを送信して、
-                            this.SendConfirmEmail(user);
+                            #region サインアップ成功
 
-                            // VerifyEmailAddress画面へ遷移
-                            return View("VerifyEmailAddress");
-                        }
-                        else
-                        {
-                            if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                            // ロールに追加。
+                            if (result.Succeeded)
                             {
-                                // 約款あり
-                                // 約款画面を表示
-                                return View(
-                                    "Agreement",
-                                     new AccountAgreementViewModel
-                                     {
-                                         UserId = user.Id,
-                                         Code = "dummy",
-                                         Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
-                                         AcceptedAgreement = false
-                                     });
+                                await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
+                                await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
+                            }
+
+                            if (ASPNETIdentityConfig.RequireUniqueEmail)
+                            {
+                                // サインインの前にメアド検証用のメールを送信して、
+                                this.SendConfirmEmail(user);
+
+                                // VerifyEmailAddress画面へ遷移
+                                return View("VerifyEmailAddress");
                             }
                             else
                             {
-                                // Login画面へ遷移
-                                return View("Login");
+                                if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                                {
+                                    // 約款あり
+                                    // 約款画面を表示
+                                    return View(
+                                        "Agreement",
+                                         new AccountAgreementViewModel
+                                         {
+                                             UserId = user.Id,
+                                             Code = "dummy",
+                                             Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
+                                             AcceptedAgreement = false
+                                         });
+                                }
+                                else
+                                {
+                                    // Login画面へ遷移
+                                    return View("Login");
+                                }
                             }
+
+                            #endregion
+                        }
+                        else
+                        {
+                            #region サインアップ失敗
+
+                            // サインアップ済みの可能性を探る
+                            ApplicationUser oldUser = await UserManager.FindByNameAsync(uid);
+
+                            if (oldUser == null)
+                            {
+                                // サインアップ済みでない。
+
+                                // 作成(CreateAsync)に失敗
+                                this.AddErrors(result);
+                                // 再表示
+                                return View(model);
+                            }
+                            else
+                            {
+                                #region サインアップ済み
+
+                                // userを確認する。
+                                if (oldUser.EmailConfirmed)
+                                {
+                                    // EmailConfirmed済み。
+
+                                    // 作成(CreateAsync)に失敗
+                                    this.AddErrors(result);
+                                    // 再表示
+                                    return View(model);
+                                }
+                                else if (oldUser.Logins.Count != 0)
+                                {
+                                    // ExternalLogin済み。
+
+                                    // 作成(CreateAsync)に失敗
+                                    this.AddErrors(result);
+                                    // 再表示
+                                    return View(model);
+                                }
+                                else
+                                {
+                                    // oldUserは存在するが
+                                    // ・EmailConfirmed済みでない。
+                                    // 若しくは、
+                                    // ・ExternalLogin済みでない。
+
+                                    // 既存レコードを再作成
+
+                                    // 削除して
+                                    result = await UserManager.DeleteAsync(oldUser);
+
+                                    // 結果の確認
+                                    if (result.Succeeded)
+                                    {
+                                        // ApplicationUserManagerのCreateAsync
+                                        result = await UserManager.CreateAsync(
+                                                user,
+                                                model.Password // Passwordはハッシュ化される。
+                                            );
+
+                                        // 結果の確認
+                                        if (result.Succeeded)
+                                        {
+                                            // メアド検証の再送について
+                                            if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                            {
+                                                // 再度、メアド検証
+
+                                                // メアド検証用のメールを送信して、
+                                                this.SendConfirmEmail(user);
+
+                                                // VerifyEmailAddress
+                                                //ViewBag.Link = callbackUrl;
+                                                return View("VerifyEmailAddress");
+                                            }
+                                            else
+                                            {
+                                                if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                                                {
+                                                    // 約款あり
+                                                    // 約款画面を表示
+                                                    return View(
+                                                        "Agreement",
+                                                         new AccountAgreementViewModel
+                                                         {
+                                                             UserId = user.Id,
+                                                             Code = "dummy",
+                                                             Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
+                                                             AcceptedAgreement = false
+                                                         });
+                                                }
+                                                else
+                                                {
+                                                    // Login画面へ遷移
+                                                    return View("Login");
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // 再作成(CreateAsync)に失敗
+                                            this.AddErrors(result);
+                                            // 再表示
+                                            return View(model);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // 削除(DeleteAsync)に失敗
+                                        this.AddErrors(result);
+                                        // 再表示
+                                        return View(model);
+                                    }
+                                }
+
+                                #endregion
+                            }
+
+
+                            #endregion
                         }
 
                         #endregion
                     }
                     else
                     {
-                        #region サインアップ失敗
-
-                        // サインアップ済みの可能性を探る
-                        ApplicationUser oldUser = await UserManager.FindByNameAsync(uid);
-
-                        if (oldUser == null)
-                        {
-                            // サインアップ済みでない。
-
-                            // 作成(CreateAsync)に失敗
-                            this.AddErrors(result);
-                            // 再表示
-                            return View(model);
-                        }
-                        else
-                        {
-                            #region サインアップ済み
-
-                            // userを確認する。
-                            if (oldUser.EmailConfirmed)
-                            {
-                                // EmailConfirmed済み。
-
-                                // 作成(CreateAsync)に失敗
-                                this.AddErrors(result);
-                                // 再表示
-                                return View(model);
-                            }
-                            else if (oldUser.Logins.Count != 0)
-                            {
-                                // ExternalLogin済み。
-
-                                // 作成(CreateAsync)に失敗
-                                this.AddErrors(result);
-                                // 再表示
-                                return View(model);
-                            }
-                            else
-                            {
-                                // oldUserは存在するが
-                                // ・EmailConfirmed済みでない。
-                                // 若しくは、
-                                // ・ExternalLogin済みでない。
-
-                                // 既存レコードを再作成
-
-                                // 削除して
-                                result = await UserManager.DeleteAsync(oldUser);
-
-                                // 結果の確認
-                                if (result.Succeeded)
-                                {
-                                    // ApplicationUserManagerのCreateAsync
-                                    result = await UserManager.CreateAsync(
-                                            user,
-                                            model.Password // Passwordはハッシュ化される。
-                                        );
-
-                                    // 結果の確認
-                                    if (result.Succeeded)
-                                    {
-                                        // メアド検証の再送について
-                                        if (ASPNETIdentityConfig.RequireUniqueEmail)
-                                        {
-                                            // 再度、メアド検証
-
-                                            // メアド検証用のメールを送信して、
-                                            this.SendConfirmEmail(user);
-
-                                            // VerifyEmailAddress
-                                            //ViewBag.Link = callbackUrl;
-                                            return View("VerifyEmailAddress");
-                                        }
-                                        else
-                                        {
-                                            if (ASPNETIdentityConfig.DisplayAgreementScreen)
-                                            {
-                                                // 約款あり
-                                                // 約款画面を表示
-                                                return View(
-                                                    "Agreement",
-                                                     new AccountAgreementViewModel
-                                                     {
-                                                         UserId = user.Id,
-                                                         Code = "dummy",
-                                                         Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
-                                                         AcceptedAgreement = false
-                                                     });
-                                            }
-                                            else
-                                            {
-                                                // Login画面へ遷移
-                                                return View("Login");
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // 再作成(CreateAsync)に失敗
-                                        this.AddErrors(result);
-                                        // 再表示
-                                        return View(model);
-                                    }
-                                }
-                                else
-                                {
-                                    // 削除(DeleteAsync)に失敗
-                                    this.AddErrors(result);
-                                    // 再表示
-                                    return View(model);
-                                }
-                            }
-
-                            #endregion
-                        }
-
-
-                        #endregion
+                        // uidが空文字列の場合。
+                        // 必要であればエラーメッセージを設定。
                     }
-
-                    #endregion
                 }
                 else
                 {
-                    // uidが空文字列の場合。
-                    // 必要であればエラーメッセージを設定。
+                    // AccountRegisterViewModelの検証に失敗
                 }
+
+                // 再表示
+                return View(model);
             }
             else
             {
-                // AccountRegisterViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
         }
 
         #endregion

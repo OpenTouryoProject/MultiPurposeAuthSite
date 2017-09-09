@@ -163,8 +163,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> Index(EnumManageMessageId? message)
         {
-            // 色々な結果メッセージの設定
-            ViewBag.StatusMessage =
+            if (ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // 色々な結果メッセージの設定
+                ViewBag.StatusMessage =
                 message == EnumManageMessageId.SetPasswordSuccess ? Resources.ManageController.SetPasswordSuccess
                 : message == EnumManageMessageId.ChangeUserNameSuccess ? Resources.ManageController.ChangeUserNameSuccess
                 : message == EnumManageMessageId.ChangeUserNameFailure ? Resources.ManageController.ChangeUserNameFailure
@@ -186,35 +188,41 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
 
-            // ユーザの取得
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                // ユーザの取得
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
-            // モデルの生成
-            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
-            ManageIndexViewModel model = new ManageIndexViewModel
+                // モデルの生成
+                string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+                ManageIndexViewModel model = new ManageIndexViewModel
+                {
+                    // パスワード
+                    HasPassword = await UserManager.HasPasswordAsync(user.Id),
+                    // ログイン
+                    Logins = user.Logins,
+                    // E-mail
+                    Email = user.Email,
+                    // 電話番号
+                    PhoneNumber = user.PhoneNumber,
+                    // 2FA
+                    TwoFactor = user.TwoFactorEnabled,
+                    // 支払元情報
+                    HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
+                    // 非構造化データ
+                    HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
+                    // OAuth2Data
+                    HasOAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
+                    // Scopes
+                    Scopes = ASPNETIdentityConst.StandardScopes
+                };
+
+                // 管理画面の表示
+                return View(model);
+            }
+            else
             {
-                // パスワード
-                HasPassword = await UserManager.HasPasswordAsync(user.Id),
-                // ログイン
-                Logins = user.Logins,
-                // E-mail
-                Email = user.Email,
-                // 電話番号
-                PhoneNumber = user.PhoneNumber,
-                // 2FA
-                TwoFactor = user.TwoFactorEnabled,
-                // 支払元情報
-                HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
-                // 非構造化データ
-                HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
-                // OAuth2Data
-                HasOAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
-                // Scopes
-                Scopes = ASPNETIdentityConst.StandardScopes
-            };
-
-            // 管理画面の表示
-            return View(model);
+                // エラー画面
+                return View("Error");
+            }
         }
 
         #endregion
@@ -230,7 +238,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> ChangeUserName()
         {
             if (!ASPNETIdentityConfig.RequireUniqueEmail
-                && ASPNETIdentityConfig.AllowEditingUserName)
+                && ASPNETIdentityConfig.AllowEditingUserName
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -256,7 +265,8 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = null;
 
             if (!ASPNETIdentityConfig.RequireUniqueEmail
-                && ASPNETIdentityConfig.AllowEditingUserName)
+                && ASPNETIdentityConfig.AllowEditingUserName
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageChangeUserNameViewModelの検証
                 if (ModelState.IsValid)
@@ -354,7 +364,15 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult SetPassword()
         {
-            return View();
+            if (ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -367,42 +385,50 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> SetPassword(ManageSetPasswordViewModel model)
         {
-            // ManageSetPasswordViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
-                // ManageSetPasswordViewModelの検証に成功
-
-                // パスワード設定
-                IdentityResult result = await UserManager.AddPasswordAsync(User.Identity.GetUserId(), model.NewPassword);
-
-                // 結果の確認
-                if (result.Succeeded)
+                // ManageSetPasswordViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    // 成功
+                    // ManageSetPasswordViewModelの検証に成功
 
-                    // 再ログイン
-                    await this.ReSignInAsync();
+                    // パスワード設定
+                    IdentityResult result = await UserManager.AddPasswordAsync(User.Identity.GetUserId(), model.NewPassword);
 
-                    // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) has set own local password.", user.Id, user.UserName));
+                    // 結果の確認
+                    if (result.Succeeded)
+                    {
+                        // 成功
 
-                    // Index - SetPasswordSuccess
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.SetPasswordSuccess });
+                        // 再ログイン
+                        await this.ReSignInAsync();
+
+                        // オペレーション・トレース・ログ出力
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        Logging.MyOperationTrace(string.Format("{0}({1}) has set own local password.", user.Id, user.UserName));
+
+                        // Index - SetPasswordSuccess
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.SetPasswordSuccess });
+                    }
+                    else
+                    {
+                        // 失敗
+                        this.AddErrors(result);
+                    }
                 }
                 else
                 {
-                    // 失敗
-                    this.AddErrors(result);
+                    // ManageSetPasswordViewModelの検証に失敗
                 }
+
+                // 再表示
+                return View(model);
             }
             else
             {
-                // ManageSetPasswordViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
         }
 
         #endregion
@@ -417,7 +443,15 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult ChangePassword()
         {
-            return View();
+            if (ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -430,43 +464,50 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChangePassword(ManageChangePasswordViewModel model)
         {
-            // ManageChangePasswordViewModelの検証
-            if (ModelState.IsValid)
+            if (ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
-                // ManageChangePasswordViewModelの検証に成功
-
-                // パスワード変更
-                IdentityResult result = await UserManager.ChangePasswordAsync(User.Identity.GetUserId(), model.OldPassword, model.NewPassword);
-
-                // パスワードの変更結果の確認
-                if (result.Succeeded)
+                // ManageChangePasswordViewModelの検証
+                if (ModelState.IsValid)
                 {
-                    // 成功
+                    // ManageChangePasswordViewModelの検証に成功
 
-                    // 再ログイン
-                    await this.ReSignInAsync();
+                    // パスワード変更
+                    IdentityResult result = await UserManager.ChangePasswordAsync(User.Identity.GetUserId(), model.OldPassword, model.NewPassword);
 
-                    // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) has changed own password.", user.Id, user.UserName));
+                    // パスワードの変更結果の確認
+                    if (result.Succeeded)
+                    {
+                        // 成功
 
-                    // Index - ChangePasswordSuccess
-                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
+                        // 再ログイン
+                        await this.ReSignInAsync();
+
+                        // オペレーション・トレース・ログ出力
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        Logging.MyOperationTrace(string.Format("{0}({1}) has changed own password.", user.Id, user.UserName));
+
+                        // Index - ChangePasswordSuccess
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangePasswordSuccess });
+                    }
+                    else
+                    {
+                        // 失敗
+                        this.AddErrors(result);
+                    }
                 }
                 else
                 {
-                    // 失敗
-                    this.AddErrors(result);
+                    // ManageChangePasswordViewModelの検証に失敗
                 }
+
+                // 再表示
+                return View(model);
             }
             else
             {
-                // ManageChangePasswordViewModelの検証に失敗
+                // エラー画面
+                return View("Error");
             }
-
-            // 再表示
-            return View(model);
-
         }
 
         #endregion
@@ -486,7 +527,8 @@ namespace MultiPurposeAuthSite.Controllers
         public ActionResult AddEmail()
         {
             if (!ASPNETIdentityConfig.RequireUniqueEmail
-                && ASPNETIdentityConfig.CanEditEmail)
+                && ASPNETIdentityConfig.CanEditEmail
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 return View();
             }
@@ -508,7 +550,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> AddEmail(ManageEmailViewModel model)
         {
             if (!ASPNETIdentityConfig.RequireUniqueEmail
-                && ASPNETIdentityConfig.CanEditEmail)
+                && ASPNETIdentityConfig.CanEditEmail
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageEmailViewModelの検証
                 if (ModelState.IsValid)
@@ -586,7 +629,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> ChangeEmail()
         {
             if (ASPNETIdentityConfig.RequireUniqueEmail
-                && ASPNETIdentityConfig.AllowEditingUserName)
+                && ASPNETIdentityConfig.AllowEditingUserName
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -610,7 +654,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> ChangeEmail(ManageEmailViewModel model)
         {
             if (ASPNETIdentityConfig.RequireUniqueEmail
-                && ASPNETIdentityConfig.AllowEditingUserName)
+                && ASPNETIdentityConfig.AllowEditingUserName
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageEmailViewModelの検証
                 if (ModelState.IsValid)
@@ -712,7 +757,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
-            if (ASPNETIdentityConfig.CanEditEmail)
+            if (ASPNETIdentityConfig.CanEditEmail
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // 入力の検証 1
                 if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
@@ -821,7 +867,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> RemoveEmail()
         {
             if (!ASPNETIdentityConfig.RequireUniqueEmail
-                && ASPNETIdentityConfig.CanEditEmail)
+                && ASPNETIdentityConfig.CanEditEmail
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // null クリア
                 IdentityResult result = await UserManager.SetEmailAsync(User.Identity.GetUserId(), "");
@@ -875,7 +922,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult AddPhoneNumber()
         {
-            if (ASPNETIdentityConfig.CanEditPhone)
+            if (ASPNETIdentityConfig.CanEditPhone
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 return View();
             }
@@ -896,7 +944,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditPhone)
+            if (ASPNETIdentityConfig.CanEditPhone
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageAddPhoneNumberViewModelの検証
                 if (ModelState.IsValid)
@@ -949,7 +998,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult VerifyPhoneNumber(string phoneNumber)
         {
-            if (ASPNETIdentityConfig.CanEditPhone)
+            if (ASPNETIdentityConfig.CanEditPhone
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 return phoneNumber == null ?
                 View("Error") :
@@ -972,7 +1022,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> VerifyPhoneNumber(ManageVerifyPhoneNumberViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditPhone)
+            if (ASPNETIdentityConfig.CanEditPhone
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageVerifyPhoneNumberViewModelの検証
                 if (ModelState.IsValid)
@@ -1030,7 +1081,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemovePhoneNumber()
         {
-            if (ASPNETIdentityConfig.CanEditPhone)
+            if (ASPNETIdentityConfig.CanEditPhone
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // null クリア
                 IdentityResult result = await UserManager.SetPhoneNumberAsync(User.Identity.GetUserId(), "");
@@ -1081,7 +1133,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> EnableTwoFactorAuthentication()
         {
-            if (ASPNETIdentityConfig.CanEdit2FA)
+            if (ASPNETIdentityConfig.CanEdit2FA
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // 2FAの有効化
                 await UserManager.SetTwoFactorEnabledAsync(User.Identity.GetUserId(), true);
@@ -1107,7 +1160,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> DisableTwoFactorAuthentication()
         {
-            if (ASPNETIdentityConfig.CanEdit2FA)
+            if (ASPNETIdentityConfig.CanEdit2FA
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // 2FAの無効化
                 await UserManager.SetTwoFactorEnabledAsync(User.Identity.GetUserId(), false);
@@ -1137,7 +1191,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ManageLogins(EnumManageMessageId? message)
         {
-            if (ASPNETIdentityConfig.CanEditExtLogin)
+            if (ASPNETIdentityConfig.CanEditExtLogin
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // 色々な結果メッセージの設定
                 ViewBag.StatusMessage =
@@ -1209,7 +1264,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey)
         {
-            if (ASPNETIdentityConfig.CanEditExtLogin)
+            if (ASPNETIdentityConfig.CanEditExtLogin
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // メッセージ列挙型
                 EnumManageMessageId? message;
@@ -1282,7 +1338,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult ExternalLogin(string provider)
         {
-            if (ASPNETIdentityConfig.CanEditExtLogin)
+            if (ASPNETIdentityConfig.CanEditExtLogin
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // Request a redirect to the external login provider
                 //  to link a login for the current user.
@@ -1311,7 +1368,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ExternalLoginCallback(string returnUrl)
         {
-            if (ASPNETIdentityConfig.CanEditExtLogin)
+            if (ASPNETIdentityConfig.CanEditExtLogin
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // AccountControllerはサインアップかどうかを判定して処理する必要がある。
                 // ManageControllerは判定不要だが、サインイン後なので、uidが一致する必要がある。
@@ -1532,7 +1590,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult AddPaymentInformation()
         {
-            if (ASPNETIdentityConfig.CanEditPayment)
+            if (ASPNETIdentityConfig.CanEditPayment
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 if (ASPNETIdentityConfig.EnableStripe)
                 {
@@ -1566,7 +1625,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddPaymentInformation(ManageAddPaymentInformationViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditPayment)
+            if (ASPNETIdentityConfig.CanEditPayment
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageAddPaymentInformationViewModelの検証
                 if (ModelState.IsValid)
@@ -1652,6 +1712,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> ChargeByPaymentInformation()
         {
             if (ASPNETIdentityConfig.CanEditPayment
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute
                 && ASPNETIdentityConfig.IsDebug)
             {
                 // ユーザの検索
@@ -1681,7 +1742,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemovePaymentInformation()
         {
-            if (ASPNETIdentityConfig.CanEditPayment)
+            if (ASPNETIdentityConfig.CanEditPayment
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1737,7 +1799,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> AddUnstructuredData()
         {
-            if (ASPNETIdentityConfig.CanEditUnstructuredData)
+            if (ASPNETIdentityConfig.CanEditUnstructuredData
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1775,7 +1838,8 @@ namespace MultiPurposeAuthSite.Controllers
             // 二重送信防止機能のテスト
             // System.Threading.Thread.Sleep(5000);
 
-            if (ASPNETIdentityConfig.CanEditUnstructuredData)
+            if (ASPNETIdentityConfig.CanEditUnstructuredData
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageAddUnstructuredDataViewModelの検証
                 if (ModelState.IsValid)
@@ -1843,7 +1907,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveUnstructuredData()
         {
-            if (ASPNETIdentityConfig.CanEditUnstructuredData)
+            if (ASPNETIdentityConfig.CanEditUnstructuredData
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1900,7 +1965,8 @@ namespace MultiPurposeAuthSite.Controllers
         [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public async Task<ActionResult> AddOAuth2Data()
         {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1940,7 +2006,8 @@ namespace MultiPurposeAuthSite.Controllers
         [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public async Task<ActionResult> AddOAuth2Data(ManageAddOAuth2DataViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ManageAddOAuth2DataViewModelの検証
                 if (ModelState.IsValid)
@@ -2047,7 +2114,8 @@ namespace MultiPurposeAuthSite.Controllers
         [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public ActionResult GetOAuth2Token(ManageIndexViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // OAuthAuthorizationCodeGrantClientViewModelの検証
                 if (ModelState.IsValid)
@@ -2099,7 +2167,8 @@ namespace MultiPurposeAuthSite.Controllers
         [Authorize(Roles = ASPNETIdentityConst.Role_SystemAdminOrAdmin)]
         public async Task<ActionResult> RemoveOAuth2Data()
         {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -2163,7 +2232,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
         {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
@@ -2241,7 +2311,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         public ActionResult OAuthAuthorizationCodeGrantClient2()
         {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // OAuthAuthorizationCodeGrantClientViewModelを取得。
                 OAuthAuthorizationCodeGrantClientViewModel model = null;
@@ -2268,7 +2339,8 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient2(OAuthAuthorizationCodeGrantClientViewModel model)
         {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data)
+            if (ASPNETIdentityConfig.CanEditOAuth2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // OAuthAuthorizationCodeGrantClientViewModelの検証
                 if (ModelState.IsValid)

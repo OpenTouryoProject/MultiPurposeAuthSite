@@ -106,6 +106,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   This feature is locked down. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string LockedDown {
+            get {
+                return ResourceManager.GetString("LockedDown", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   This request has not been authenticated. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string UnAuthenticate {

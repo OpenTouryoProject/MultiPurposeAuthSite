@@ -69,28 +69,36 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         private void Authorize()
         {
-            string uid = User.Identity.GetUserId();
-
-            if (string.IsNullOrEmpty(uid))
+            if (ASPNETIdentityConfig.EnableAdministrationOfUsersAndRoles)
             {
-                // 未認証
-                throw new SecurityException(Resources.AdminController.UnAuthenticate);
+                string uid = User.Identity.GetUserId();
+
+                if (string.IsNullOrEmpty(uid))
+                {
+                    // 未認証
+                    throw new SecurityException(Resources.AdminController.UnAuthenticate);
+                }
+                else
+                {
+                    IList<string> roles = UserManager.GetRoles(User.Identity.GetUserId());
+                    foreach (string roleName in roles)
+                    {
+                        if (ASPNETIdentityConfig.MultiTenant)
+                        {
+                            if (roleName == ASPNETIdentityConst.Role_Admin) return;
+                        }
+
+                        if (roleName == ASPNETIdentityConst.Role_SystemAdmin) return;
+                    }
+
+                    // 認証されない。
+                    throw new SecurityException(Resources.AdminController.UnAuthorized);
+                }
             }
             else
             {
-                IList<string> roles = UserManager.GetRoles(User.Identity.GetUserId());
-                foreach (string roleName in roles)
-                {
-                    if (ASPNETIdentityConfig.MultiTenant)
-                    {
-                        if (roleName == ASPNETIdentityConst.Role_Admin) return;
-                    }
-
-                    if (roleName == ASPNETIdentityConst.Role_SystemAdmin) return;
-                }
-
-                // 認証されない。
-                throw new SecurityException(Resources.AdminController.UnAuthorized);
+                // ロックダウンされている。
+                throw new SecurityException(Resources.AdminController.LockedDown);
             }
         }
 
@@ -186,6 +194,8 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> Index(EnumAdminMessageId? message)
         {
+            this.Authorize();
+
             // 色々な結果メッセージの設定
             ViewBag.StatusMessage =
                 message == EnumAdminMessageId.DoNotHaveOwnershipOfTheObject ? Resources.AdminController.DoNotHaveOwnershipOfTheObject
@@ -194,8 +204,6 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumAdminMessageId.EditSuccess ? Resources.AdminController.EditSuccess
                 : message == EnumAdminMessageId.DeleteSuccess ? Resources.AdminController.DeleteSuccess
                 : "";
-
-            this.Authorize();
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
