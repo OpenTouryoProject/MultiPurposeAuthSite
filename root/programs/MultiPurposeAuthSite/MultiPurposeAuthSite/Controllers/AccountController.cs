@@ -1827,7 +1827,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // Response
                             model.Response = await OAuth2ProviderHelper.GetInstance()
-                                .CallOAuthGetUserClaimsWebAPIAsync(model.AccessToken);
+                                .CallUserInfoEndpointAsync(model.AccessToken);
                         }
                         else
                         {
