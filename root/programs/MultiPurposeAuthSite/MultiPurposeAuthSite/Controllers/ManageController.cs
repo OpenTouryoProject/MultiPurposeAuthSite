@@ -2126,7 +2126,7 @@ namespace MultiPurposeAuthSite.Controllers
                     + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
 
                     // client_id
-                    string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_id = OAuth2ProviderHelper.GetInstance().GetClientIdByName(User.Identity.Name);
                     Session["client_id"] = client_id;
 
                     // redirect_uri
@@ -2249,7 +2249,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 //  client_Idから、client_secretを取得。
                 string client_id = (string)Session["client_id"];
-                string client_secret = OAuthProviderHelper.GetInstance().GetClientSecret(client_id);
+                string client_secret = OAuth2ProviderHelper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
@@ -2264,7 +2264,7 @@ namespace MultiPurposeAuthSite.Controllers
                         + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuthProviderHelper.GetInstance()
+                    model.Response = await OAuth2ProviderHelper.GetInstance()
                         .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -2355,7 +2355,7 @@ namespace MultiPurposeAuthSite.Controllers
                         + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuthProviderHelper.GetInstance()
+                    model.Response = await OAuth2ProviderHelper.GetInstance()
                         .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 

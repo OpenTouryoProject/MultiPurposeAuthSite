@@ -207,7 +207,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 // authToken.iss, authToken.expの検証
                 if ((string)authTokenClaimSet["iss"] == ASPNETIdentityConfig.OAuthIssuerId
-                    && OAuthProviderHelper.GetInstance().GetClientSecret((string)authTokenClaimSet["aud"]) != null
+                    && OAuth2ProviderHelper.GetInstance().GetClientSecret((string)authTokenClaimSet["aud"]) != null
                     && long.Parse((string)authTokenClaimSet["exp"]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                 {
                     // authToken.subの検証
@@ -229,7 +229,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             scopes.Add(s);
                         }
-                        OAuthProviderHelper.AddClaim(identity,
+                        OAuth2ProviderHelper.AddClaim(identity,
                             (string)authTokenClaimSet["aud"],
                             "", (string)authTokenClaimSet["nonce"], scopes);
 
@@ -251,7 +251,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                         // ClaimとStoreのAudienceに対応するSubjectが一致するかを確認し、一致する場合のみ、認証する。
                         // でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
-                        if ((string)authTokenClaimSet["sub"] == OAuthProviderHelper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]))
+                        if ((string)authTokenClaimSet["sub"] == OAuth2ProviderHelper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]))
                         {
                             // ClaimsIdentityを生成し、
                             ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
@@ -266,7 +266,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 scopes.Add(s);
                             }
 
-                            OAuthProviderHelper.AddClaim(identity,
+                            OAuth2ProviderHelper.AddClaim(identity,
                                 (string)authTokenClaimSet["aud"],
                                 "", (string)authTokenClaimSet["nonce"], scopes);
 

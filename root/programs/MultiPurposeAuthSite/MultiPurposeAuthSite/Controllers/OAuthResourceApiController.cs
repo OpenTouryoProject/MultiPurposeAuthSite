@@ -118,7 +118,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // ここは、現在の実装では通らない。
                 // Client Credentialsグラント種別で、*.configに定義したclient_id（ClientName）
                 // を使用して、UserStoreに存在しないClaimsIdentityを偽装する場合にココを通る。
-                subject = OAuthProviderHelper.GetInstance().GetClientName(claim_aud.Value);
+                subject = OAuth2ProviderHelper.GetInstance().GetClientName(claim_aud.Value);
             }
             else
             {

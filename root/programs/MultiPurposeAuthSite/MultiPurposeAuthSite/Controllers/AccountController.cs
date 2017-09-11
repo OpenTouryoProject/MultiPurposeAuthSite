@@ -1550,8 +1550,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
-                    OAuthProviderHelper.AddClaim(identity, client_id, state, nonce,
-                        OAuthProviderHelper.FilterClaimAtAuth(scopes).ToArray());
+                    OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce,
+                        OAuth2ProviderHelper.FilterClaimAtAuth(scopes).ToArray());
 
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);
@@ -1559,7 +1559,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
-                        user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
+                        user.Id, user.UserName, client_id, OAuth2ProviderHelper.GetInstance().GetClientName(client_id)));
 
                     // RedirectエンドポイントへRedirect
                     return new EmptyResult();
@@ -1586,7 +1586,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    OAuthProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
+                    OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
 
                     // ClaimsIdentityでサインインして、Access Tokenを発行
                     AuthenticationManager.SignIn(identity);
@@ -1594,7 +1594,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
-                            user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
+                            user.Id, user.UserName, client_id, OAuth2ProviderHelper.GetInstance().GetClientName(client_id)));
                 }
 
                 // RedirectエンドポイントへRedirect
@@ -1648,7 +1648,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuthProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
+                OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
 
                 // ClaimsIdentityでサインインして、仲介コードを発行
                 this.AuthenticationManager.SignIn(identity);
@@ -1656,7 +1656,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // オペレーション・トレース・ログ出力
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
-                        user.Id, user.UserName, client_id, OAuthProviderHelper.GetInstance().GetClientName(client_id)));
+                        user.Id, user.UserName, client_id, OAuth2ProviderHelper.GetInstance().GetClientName(client_id)));
 
                 // RedirectエンドポイントへRedirect
                 return new EmptyResult();
@@ -1705,8 +1705,8 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = OAuthProviderHelper.GetInstance().GetClientIdByName("TestClient");
-                string client_secret = OAuthProviderHelper.GetInstance().GetClientSecret(client_id);
+                string client_id = OAuth2ProviderHelper.GetInstance().GetClientIdByName("TestClient");
+                string client_secret = OAuth2ProviderHelper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
@@ -1724,7 +1724,7 @@ namespace MultiPurposeAuthSite.Controllers
                     + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account;
 
                 // Tokenエンドポイントにアクセス
-                model.Response = await OAuthProviderHelper.GetInstance()
+                model.Response = await OAuth2ProviderHelper.GetInstance()
                     .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
                 dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -1796,7 +1796,7 @@ namespace MultiPurposeAuthSite.Controllers
                             + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
                         // Tokenエンドポイントにアクセス
-                        model.Response = await OAuthProviderHelper.GetInstance()
+                        model.Response = await OAuth2ProviderHelper.GetInstance()
                             .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -1826,7 +1826,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // WebAPIのエンドポイントにアクセス
 
                             // Response
-                            model.Response = await OAuthProviderHelper.GetInstance()
+                            model.Response = await OAuth2ProviderHelper.GetInstance()
                                 .CallOAuthGetUserClaimsWebAPIAsync(model.AccessToken);
                         }
                         else
