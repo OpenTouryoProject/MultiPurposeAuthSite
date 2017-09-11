@@ -174,7 +174,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         #endregion
 
-        #region Access Token
+        #region Access Token And UserInfo
 
         /// <summary>仲介コードからAccess Tokenを取得する。</summary>
         /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
@@ -255,9 +255,39 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
+        /// <summary>認可したユーザのClaim情報を取得するWebAPIを呼び出す</summary>
+        /// <param name="accessToken">accessToken</param>
+        /// <returns>結果のJSON文字列（認可したユーザのClaim情報）</returns>
+        public async Task<string> CallOAuthGetUserClaimsWebAPIAsync(string accessToken)
+        {
+            // 通信用の変数
+
+            // 認可したユーザのClaim情報を取得するWebAPI
+            Uri webApiEndpointUri = new Uri(
+                ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI);
+
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Get,
+                RequestUri = webApiEndpointUri,
+            };
+
+            // HttpRequestMessage (Headers)
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+
         #endregion
 
-        #region OAuthWebAPI
+        #region OAuth2（ResourcesServer）WebAPI
 
         /// <summary>認可したユーザに課金するWebAPIを呼び出す</summary>
         /// <param name="accessToken">accessToken</param>
@@ -299,41 +329,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
-        /// <summary>認可したユーザのClaim情報を取得するWebAPIを呼び出す</summary>
-        /// <param name="accessToken">accessToken</param>
-        /// <returns>結果のJSON文字列（認可したユーザのClaim情報）</returns>
-        public async Task<string> CallOAuthGetUserClaimsWebAPIAsync(string accessToken)
-        {
-            // 通信用の変数
-
-            // 認可したユーザのClaim情報を取得するWebAPI
-            Uri webApiEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI);
-
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Get,
-                RequestUri = webApiEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers)
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
-        }
-
         #endregion
 
         #endregion
 
-        #region OAuth
+        #region OAuth2関連ヘルパ
         
         /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
@@ -468,7 +468,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         #region staticメソッド
 
-        #region Claim処理
+        #region Claim関連ヘルパ
 
         /// <summary>認証の場合クレームをフィルタリング</summary>
         public static IEnumerable<string> FilterClaimAtAuth(IEnumerable<string> scopes)

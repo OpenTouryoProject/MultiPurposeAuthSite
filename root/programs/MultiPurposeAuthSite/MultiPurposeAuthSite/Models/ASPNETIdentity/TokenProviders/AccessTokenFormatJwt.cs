@@ -56,9 +56,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
     /// <summary>AccessTokenFormatJwt</summary>
     public class AccessTokenFormatJwt: ISecureDataFormat<AuthenticationTicket>
     {
-        ///// <summary>IssuerId</summary>
-        //private readonly string _oAuthIssuerId = string.Empty;
-
         /// <summary>constructor</summary>
         /// <param name="oAuthIssuerId">oAuthIssuerId</param>
         public AccessTokenFormatJwt()
@@ -154,7 +151,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             authTokenClaimSet.Add("scopes", scopes);
-            //authTokenClaimSet.Add("roles", roles);
             
             json = JsonConvert.SerializeObject(authTokenClaimSet);
 
@@ -240,7 +236,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         // AuthenticationPropertiesの生成
                         AuthenticationProperties prop = new AuthenticationProperties();
 
-                        // 不要
+                        // AuthenticationTicketに格納不要
                         //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
                         //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
 
@@ -277,7 +273,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             // AuthenticationPropertiesの生成
                             AuthenticationProperties prop = new AuthenticationProperties();
 
-                            // 不要
+                            // AuthenticationTicketに格納不要
                             //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
                             //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
 
