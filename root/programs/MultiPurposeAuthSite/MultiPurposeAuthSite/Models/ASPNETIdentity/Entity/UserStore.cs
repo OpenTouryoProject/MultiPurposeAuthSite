@@ -47,6 +47,7 @@ using Microsoft.AspNet.Identity;
 
 using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.Util;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 // --------------------------------------------------
@@ -337,9 +338,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <returns>－</returns>
         public Task CreateAsync(ApplicationUser user)
         {
-            // テスト用のユーザが必要
-            // また、Signupは止めてあるので。
-            //OnlySts.STSOnly_M();
+            // 更新系の機能のため、
+            OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace("★ : " + 
@@ -461,7 +461,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
         /// <returns>ApplicationUser</returns>
-        public Task<ApplicationUser> FindByIdAsync(string userId)
+        public async Task<ApplicationUser> FindByIdAsync(string userId)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -477,6 +477,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザを（Id指定で）検索
+
+                // テスト：管理者ユーザを返す。
+                if (OnlySts.STSOnly_P)
+                {
+                    #region STS専用モードのテストコード
+
+                    // ユーザを返す。
+
+                    // 管理者ユーザを返す。
+                    user = await ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                    user.Id = userId;
+                    CustomPasswordHasher ph = new CustomPasswordHasher();
+                    user.PasswordHash = ph.HashPassword(ASPNETIdentityConfig.AdministratorPWD);
+                    return user;
+
+                    #endregion
+                }
+
+                // 通常のモード
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -537,13 +556,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public Task<ApplicationUser> FindByNameAsync(string userName)
+        public async Task<ApplicationUser> FindByNameAsync(string userName)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -559,6 +578,26 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザを（ユーザ名指定で）検索
+
+                // ここに、STS専用モードでの実装を行う。
+                if (OnlySts.STSOnly_P)
+                {
+                    #region STS専用モードの
+
+                    // ユーザを返す。
+
+                    // テスト：管理者ユーザを返す。
+                    if (userName == ASPNETIdentityConfig.AdministratorUID)
+                    {
+                        user = await ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                        user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
+                        return user;
+                    }
+
+                    #endregion
+                }
+
+                // 通常のモード
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -620,7 +659,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
