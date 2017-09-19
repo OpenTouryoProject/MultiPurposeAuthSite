@@ -478,24 +478,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 // ユーザを（Id指定で）検索
 
-                // テスト：管理者ユーザを返す。
+                // ここに、STS専用モードでの実装を行う。
                 if (OnlySts.STSOnly_P)
                 {
                     #region STS専用モードのテストコード
 
-                    // ユーザを返す。
+                    // 既存のユーザストアに接続して、ユーザを返す。
 
-                    // 管理者ユーザを返す。
+                    // テスト：管理者ユーザを返す。
                     user = await ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
                     user.Id = userId;
-                    CustomPasswordHasher ph = new CustomPasswordHasher();
-                    user.PasswordHash = ph.HashPassword(ASPNETIdentityConfig.AdministratorPWD);
+                    user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
                     return user;
 
                     #endregion
                 }
 
-                // 通常のモード
+                // 通常のモードでの実装を行う。
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
@@ -582,14 +581,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 // ここに、STS専用モードでの実装を行う。
                 if (OnlySts.STSOnly_P)
                 {
-                    #region STS専用モードの
+                    #region STS専用モードのテストコード
 
-                    // ユーザを返す。
+                    // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
                     if (userName == ASPNETIdentityConfig.AdministratorUID)
                     {
                         user = await ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                        // user.Id = userId; // ??
                         user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
                         return user;
                     }
@@ -597,7 +597,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     #endregion
                 }
 
-                // 通常のモード
+                // 通常のモードでの実装を行う。
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
