@@ -44,7 +44,7 @@ using Microsoft.Owin.Security.DataHandler.Serializer;
 using Dapper;
 
 using MultiPurposeAuthSite.Models.Util;
-using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Security;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {

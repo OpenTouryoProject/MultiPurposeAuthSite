@@ -49,11 +49,6 @@ using System.Web.Http.Cors;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Touryo.Infrastructure.Public.Util.JWT;
-
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
 {

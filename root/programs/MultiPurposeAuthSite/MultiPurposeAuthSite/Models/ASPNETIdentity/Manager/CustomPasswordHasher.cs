@@ -31,10 +31,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-    
 using Microsoft.AspNet.Identity;
-using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Security;
 
 /// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.Manager</summary>
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager

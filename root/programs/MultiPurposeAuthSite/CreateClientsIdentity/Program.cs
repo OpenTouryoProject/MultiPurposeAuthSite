@@ -33,10 +33,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 
 using Newtonsoft.Json;
-using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Security;
 
 namespace CreateClientsIdentity
 {

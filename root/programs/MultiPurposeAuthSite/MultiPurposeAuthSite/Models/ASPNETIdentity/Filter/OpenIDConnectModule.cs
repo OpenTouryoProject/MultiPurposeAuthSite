@@ -42,7 +42,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util.JWT;
+using Touryo.Infrastructure.Public.Security;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
 {
