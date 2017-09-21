@@ -159,8 +159,11 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。
 #if DEBUG
-                        Debug.WriteLine("このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。");
+                        string err_str = "このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。";
+                        Debug.WriteLine(err_str);
                         Debug.WriteLine(ex.Message);
+                        ViewBag.label1Data = CustomEncode.HtmlEncode(err_str);
+                        ViewBag.label2Data = CustomEncode.HtmlEncode(ex.Message);
 #endif
                     }
                 }
@@ -169,8 +172,11 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。
 #if DEBUG
-                Debug.WriteLine("開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。");
+                string err_str = "開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。";
+                Debug.WriteLine(err_str);
                 Debug.WriteLine(ex.Message);
+                ViewBag.label1Data = CustomEncode.HtmlEncode(err_str);
+                ViewBag.label2Data = CustomEncode.HtmlEncode(ex.Message);
 #endif
             }
 

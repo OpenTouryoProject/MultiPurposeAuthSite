@@ -564,7 +564,7 @@ namespace MultiPurposeAuthSite.Controllers
                     else
                     {
                         // uidが空文字列の場合。
-                        // 必要であればエラーメッセージを設定。
+                        // todo: 必要に応じて、エラーメッセージの表示を検討してください。
                     }
                 }
                 else
@@ -616,12 +616,12 @@ namespace MultiPurposeAuthSite.Controllers
                     if (user == null)
                     {
                         // 削除済み
-                        // 必要であればエラーメッセージを設定。
+                        // todo: 必要に応じて、エラーメッセージの表示を検討してください。
                     }
                     else if (user.EmailConfirmed)
                     {
                         // 確認済み
-                        // 必要であればエラーメッセージを設定。
+                        // todo: 必要に応じて、エラーメッセージの表示を検討してください。
                     }
                     else
                     {
@@ -716,7 +716,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 同意されていない。
-                            // 必要であればエラーメッセージを設定。
+                            // todo: 必要に応じて、エラーメッセージの表示を検討してください。
                         }
                     }
                     else
@@ -747,7 +747,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 同意されていない。
-                            // 必要であればエラーメッセージを設定。
+                            // todo: 必要に応じて、エラーメッセージの表示を検討してください。
                         }
                     }
                 }
@@ -1521,10 +1521,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="scope">scope（任意）</param>
         /// <param name="state">state（推奨）</param>
         /// <param name="nonce">nonce（OIDC）</param>
+        /// <param name="prompt">認可画面の扱い</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state, string nonce)
+        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state, string nonce, string prompt)
         {
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -1540,7 +1541,12 @@ namespace MultiPurposeAuthSite.Controllers
                 ViewBag.Name = identity.Name;
                 ViewBag.Scopes = scopes;
 
-                if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))
+                // 認証の場合、余計なscopeをfilterする。
+                bool isAuth = scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth);
+
+                if (string.IsNullOrEmpty(prompt)) prompt = "";
+                if (isAuth                           // OAuth2 拡張仕様
+                    || prompt.ToLower() == "none")   // OIDC   RFC仕様
                 {
                     // 認可画面をスキップ
 
@@ -1550,8 +1556,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
-                    OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce,
-                        OAuth2ProviderHelper.FilterClaimAtAuth(scopes).ToArray());
+                    if (isAuth)
+                    {
+                        scopes = OAuth2ProviderHelper.FilterClaimAtAuth(scopes).ToArray();
+                    }
+
+                    OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
 
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);

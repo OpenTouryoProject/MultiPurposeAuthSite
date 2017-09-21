@@ -478,7 +478,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 // ユーザを（Id指定で）検索
 
-                // ここに、STS専用モードでの実装を行う。
+                // todo: 必要に応じて、ここに、STS専用モードでの実装を行う。
                 if (OnlySts.STSOnly_P)
                 {
                     #region STS専用モードのテストコード
@@ -578,7 +578,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 // ユーザを（ユーザ名指定で）検索
 
-                // ここに、STS専用モードでの実装を行う。
+                // todo: 必要に応じて、ここに、STS専用モードでの実装を行う。
                 if (OnlySts.STSOnly_P)
                 {
                     #region STS専用モードのテストコード
@@ -2283,7 +2283,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #region CRUD(共通)
 
-        #region C
+        #region C (Create)
 
         /// <summary>ロールを追加</summary>
         /// <param name="role">ApplicationRole</param>
@@ -2358,7 +2358,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #endregion
 
-        #region R
+        #region R (Read)
 
         /// <summary>ロールを ID から検索</summary>
         /// <param name="roleId">string</param>
@@ -2671,7 +2671,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #endregion
 
-        #region U
+        #region U (Update)
 
         /// <summary>ロールを更新する</summary>
         /// <param name="role">ApplicationRole</param>
@@ -2767,7 +2767,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #endregion
 
-        #region D
+        #region D (Delete)
 
         /// <summary>ロールを削除する</summary>
         /// <param name="role">ApplicationRole</param>

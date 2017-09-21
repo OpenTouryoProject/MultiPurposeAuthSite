@@ -1,4 +1,4 @@
-# MultiPurposeAuthSite
+# 汎用認証サイト
 汎用認証サイトは、ASP.NET Identity およびJSON Web Token（JWT）によるOAuth 2.0およびOpenID ConnectのIDプロバイダ（Idp）およびセキュリティトークンサービス（STS）です。
 
 汎用認証サイトの詳細については、以下のサイトを参照してください。（日本語のみ）
