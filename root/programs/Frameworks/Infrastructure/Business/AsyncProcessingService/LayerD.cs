@@ -128,8 +128,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void UpdateTaskStart(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "UpdateTaskStart.sql";
+            string filename = "UpdateTaskStart.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -155,8 +154,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void UpdateTaskRetry(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "UpdateTaskRetry.sql";
+            string filename = "UpdateTaskRetry.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -183,8 +181,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void UpdateTaskFail(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "UpdateTaskFail.sql";
+            string filename = "UpdateTaskFail.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -210,8 +207,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void UpdateTaskSuccess(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "UpdateTaskSuccess.sql";
+            string filename = "UpdateTaskSuccess.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -237,8 +233,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void UpdateTaskProgress(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "UpdateTaskProgress.sql";
+            string filename = "UpdateTaskProgress.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -262,8 +257,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void UpdateTaskCommand(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "UpdateTaskCommand.sql";
+            string filename = "UpdateTaskCommand.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -287,8 +281,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void StopAllTask(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "StopAllTask.sql";
+            string filename = "StopAllTask.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -316,8 +309,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void SelectCommand(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "SelectCommand.sql";
+            string filename = "SelectCommand.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
@@ -340,8 +332,7 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <param name="asyncReturnValue"></param>
         public void SelectTask(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "SelectTask.sql";
+            string filename = "SelectTask.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
