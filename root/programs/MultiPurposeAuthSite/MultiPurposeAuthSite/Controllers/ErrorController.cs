@@ -158,26 +158,26 @@ namespace MultiPurposeAuthSite.Controllers
                     catch (Exception ex)
                     {
                         // このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。
-#if DEBUG
                         string err_str = "このカバレージを通過する場合、おそらく起動した画面のパスが間違っている。";
+#if DEBUG
                         Debug.WriteLine(err_str);
                         Debug.WriteLine(ex.Message);
+#endif
                         ViewBag.label1Data = CustomEncode.HtmlEncode(err_str);
                         ViewBag.label2Data = CustomEncode.HtmlEncode(ex.Message);
-#endif
                     }
                 }
             }
             catch (Exception ex)
             {
                 // 開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。
-#if DEBUG
                 string err_str = "開発用エラー画面でエラー（無限ループになるのでエラーを潰している）。";
+#if DEBUG
                 Debug.WriteLine(err_str);
                 Debug.WriteLine(ex.Message);
+#endif
                 ViewBag.label1Data = CustomEncode.HtmlEncode(err_str);
                 ViewBag.label2Data = CustomEncode.HtmlEncode(ex.Message);
-#endif
             }
 
             return View();
