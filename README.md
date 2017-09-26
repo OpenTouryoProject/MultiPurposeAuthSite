@@ -1,5 +1,5 @@
 # Multi-purpose Authentication Site
-Multi-purpose Authentication Site is Identity Provider (Idp) and Security Token Service (STS) of OAuth 2.0 and OpenID Connect powered by ASP.NET Identity and JSON Web Token (JWT).
+*Multi-purpose Authentication Site* is Identity Provider (Idp) and Security Token Service (STS) of OAuth 2.0 and OpenID Connect powered by ASP.NET Identity and JSON Web Token (JWT).
 
 For more information of Multi-purpose Authentication Site, refer the following site. (The following site is only displayed in Japanese.)
 
