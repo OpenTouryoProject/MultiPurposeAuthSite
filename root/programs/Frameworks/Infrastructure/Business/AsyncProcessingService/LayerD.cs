@@ -89,12 +89,11 @@ namespace Touryo.Infrastructure.Business.AsyncProcessingService
         /// <summary>
         /// Inserts async parameter values to database
         /// </summary>
-        /// <param name="asyncParameterValue"></param>
-        /// <param name="asyncReturnValue"></param>
+        /// <param name="asyncParameterValue">Asynchronous Parameter Values</param>
+        /// <param name="asyncReturnValue">Asynchronous Return Values</param>
         public void InsertTask(AsyncProcessingServiceParameterValue asyncParameterValue, AsyncProcessingServiceReturnValue asyncReturnValue)
         {
-            string filename = string.Empty;
-            filename = "AsyncProcessingServiceInsert.sql";
+            string filename = "AsyncProcessingServiceInsert.sql";
 
             // Get SQL query from file.
             this.SetSqlByFile3(filename);
