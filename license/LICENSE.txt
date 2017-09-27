@@ -203,15 +203,18 @@
 ====================================================================
 
    - OpenTouryo SubComponent : 
-     The OSS included in the source code such as JavaScript / CSS
-     
-     - jQuery
-     - jQuery.Validation
-     - bootstrap
-     - FontAwesome
-     - Respond
-     - Modernizr
- 
+     - The OSS included in the source code such as JavaScript / CSS
+       - jQuery
+       - jQuery.Validation
+       - bootstrap
+       - FontAwesome
+       - Respond
+       - Modernizr
+
+     - The following *.exe is bundled in order to run the build system.
+       - nuget.exe
+         https://github.com/NuGet/NuGet.Client/blob/dev/LICENSE.txt
+
    - Notes : 
      There is possibility that the library of OSS that not include
      source code automatically acquired from the Internet by the
