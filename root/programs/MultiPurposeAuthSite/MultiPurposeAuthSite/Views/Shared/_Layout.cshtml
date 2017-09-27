@@ -1,0 +1,205 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：_Layout
+    //* クラス日本語名  ：マスタ・ページ相当
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+@* マスタ・ページに相当 *@
+
+@using System.Web
+@using Microsoft.AspNet.Identity
+@using Microsoft.AspNet.Identity.Owin
+
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+
+@using Touryo.Infrastructure.Public.Security
+
+@{
+    #region Role
+
+    IList<string> roles = null;
+    bool canShowAdminScreen = false;
+    if (User.Identity.IsAuthenticated)
+    {
+        if (Session["Roles"] == null)
+        {
+            ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
+            if (user == null)
+            {
+                roles = new List<string>();
+            }
+            else
+            {
+                roles = userManager.GetRoles(user.Id); // 同期版でOK。
+            }
+        }
+        else
+        {
+            roles = (IList<string>)Session["Roles"];
+        }
+
+        if (ASPNETIdentityConfig.MultiTenant)
+        {
+            foreach (string role in roles)
+            {
+                if (role == ASPNETIdentityConst.Role_SystemAdmin
+                    || role == ASPNETIdentityConst.Role_Admin)
+                {
+                    canShowAdminScreen = true;
+                }
+            }
+        }
+        else
+        {
+            canShowAdminScreen = (roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
+        }
+    }
+
+    #endregion
+
+    #region OAuth2
+
+    // 認可エンドポイント
+    string oAuthAuthorizeEndpoint =
+        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+        + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+
+    // client_id
+    string client_id = OAuth2ProviderHelper.GetInstance().GetClientIdByName("TestClient");
+    // state (nonce) // 記号は入れない。
+    string state = GetPassword.Generate(10, 0);
+    // nonce // 記号は入れない。
+    string nonce = GetPassword.Generate(20, 0);
+    // scope
+    string scope = ASPNETIdentityConst.StandardScopes;
+
+    #endregion
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>@ViewBag.Title</title>
+    @Styles.Render("~/bundles/css")
+    @Scripts.Render("~/bundles/modernizr")
+    @Scripts.Render("~/bundles/jquery")
+
+    @RenderSection("HeaderScriptsSection", required: true)
+
+    <script type="text/javascript">
+        // Resolve URL in the javascript
+        var baseUrl = '@Url.Content("~/")'
+    </script>
+
+</head>
+<body onload="Fx_Document_OnLoad();Fx_AdjustStyle();">
+    <div class="page-header row">
+        <div class="col-xs-3" style="padding: 0">
+            <div id="header-logo"><a href="@Url.Action("Index", "Home")"><img alt="logo" src="~/images/touryo/logo.png" /></a></div>
+        </div>
+        <div class="col-xs-6" style="padding: 0">
+            <div id="header-title">
+@if (User.Identity.IsAuthenticated)
+{
+                @Html.ActionLink(string.Format(SharedViews.LoginPartial, User.Identity.GetUserName()), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage", @class = "pull-right"})
+}
+            </div>
+        </div>
+        <div id="header-button" class="col-xs-3">
+@if (User.Identity.IsAuthenticated)
+                {
+            @* サインアウトボタンは、ユーザーが認証されている時だけ表示する *@
+            <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Logoff", "Account")';">Sign-out</button>
+}
+else
+{
+            <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Register", "Account")';">Sign-up</button>
+            <button type="button" class="btn btn-default pull-right" onclick="window.location.href = '@Url.Action("Login", "Account")';">Sign-in</button>
+}
+        </div>
+    </div>
+    <div id="body-bk">
+        <div id="body" class="row">
+            <div class="nav-side-menu  col-sm-4 col-md-3">
+                <div class="brand">メニュー</div>
+                <i class="fa fa-bars fa-2x toggle-btn" data-toggle="collapse" data-target="#menu-content"></i>
+                <div class="menu-list">
+                    <ul id="menu-content" class="menu-content collapse out">
+                        <li onclick="window.location.href = '@Url.Action("Index", "Home")';">
+                            <i class="fa fa-arrow-circle-right"></i> メニュートップ
+                        </li>
+@if (canShowAdminScreen)
+{
+                        @* 各メニューは、ユーザーが認証されている時だけ表示する *@
+
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
+                        </li>
+}
+
+@if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+{
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state" style="color:peachpuff">Test Authorization Code Flow</a>
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=@scope&state=@state" style="color:peachpuff">Test Implicit Flow</a>
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope%20openid&prompt=none&state=@state&nonce=@nonce" style="color:peachpuff">Test Auth Code Flow(OIDC)</a>
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=id_token token&scope=@scope%20openid&state=@state&nonce=@nonce" style="color:peachpuff">Test Implicit Flow *2(OIDC)</a>
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=id_token&scope=@scope%20openid&state=@state&nonce=@nonce" style="color:peachpuff">Test Implicit Flow *1(OIDC)</a>
+                        </li>
+}
+                    </ul>
+                </div>
+            </div>
+            <div id="contents" class="col-sm-8 col-md-9">
+                @RenderBody()
+            </div>
+        </div>
+    </div>
+    <footer class="footer">
+        <div class="container">
+            <p class="text-muted">Powered by <a target="_blank" href="https://github.com/OpenTouryoProject">OpenTouryo</a></p>
+    </div>
+    </footer>
+
+    @Scripts.Render("~/bundles/bootstrap")
+    @Scripts.Render("~/bundles/touryo")
+    @Scripts.Render("~/bundles/app")
+
+    @RenderSection("FooterScriptsSection", required: true)
+
+</body>
+</html>

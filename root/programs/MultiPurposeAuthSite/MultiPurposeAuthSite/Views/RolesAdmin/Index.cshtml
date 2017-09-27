@@ -1,0 +1,65 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Index
+    //* クラス日本語名  ：RolesAdminのスキャフォ（RolesのList）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Resources;
+@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+@model IEnumerable<ApplicationRole>
+
+@{
+    ViewBag.Title = AdminViews.RolesAdminIndexTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<p class="text-success">@ViewBag.StatusMessage</p>
+
+<p>
+    @Html.ActionLink(AdminViews.RolesAdminIndexCreate, "Create")
+</p>
+<table class="table">
+    <tr>
+        <th>@AdminViews.RolesAdminRoleName</th>
+        <th></th>
+    </tr>
+
+    @foreach (ApplicationRole item in Model)
+    {
+        <tr>
+            <td>@Html.DisplayFor(modelItem => item.Name)</td>
+            <td>
+                @Html.ActionLink(AdminViews.RolesAdminEditTitle, "Edit", new { id = item.Id }) |
+                @Html.ActionLink(AdminViews.RolesAdminDetailsTitle, "Details", new { id = item.Id }) |
+                @Html.ActionLink(AdminViews.RolesAdminDeleteTitle, "Delete", new { id = item.Id })
+            </td>
+        </tr>
+    }
+
+</table>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}
