@@ -874,6 +874,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
+        /// CanEditFIDO2Data
+        /// </summary>
+        public static bool CanEditFIDO2Data
+        {
+            get
+            {
+                return
+                    ASPNETIdentityConfig.EquipOAuthServer
+                    && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditFIDO2Data"]);
+            }
+        }
+
+        #region 複合
+
+        /// <summary>
         /// CanEditExtLogin
         /// </summary>
         public static bool CanEditExtLogin
@@ -899,6 +914,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     || ASPNETIdentityConfig.EnablePAYJP;
             }
         }
+
+        #endregion
 
         #endregion
 

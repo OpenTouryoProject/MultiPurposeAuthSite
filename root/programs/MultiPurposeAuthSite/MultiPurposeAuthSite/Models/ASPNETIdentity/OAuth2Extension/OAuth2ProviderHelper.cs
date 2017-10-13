@@ -52,7 +52,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 
 using Newtonsoft.Json;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 {
     /// <summary>OAuth2ProviderHelper（ライブラリ）</summary>
     public class OAuth2ProviderHelper

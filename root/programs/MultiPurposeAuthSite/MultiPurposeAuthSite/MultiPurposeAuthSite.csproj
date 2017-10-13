@@ -33,6 +33,7 @@
     <RestorePackages>true</RestorePackages>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
+    <Use64BitIISExpress />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -306,9 +307,9 @@
     <Compile Include="Models\ASPNETIdentity\StartupAuth.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AuthorizationCodeProvider.cs" />
-    <Compile Include="Models\ASPNETIdentity\TokenProviders\CustomizedConfirmationProvider.cs" />
-    <Compile Include="Models\ASPNETIdentity\TokenProviders\OAuth2ProviderHelper.cs" />
-    <Compile Include="Models\ASPNETIdentity\TokenProviders\OAuth2DataProvider.cs" />
+    <Compile Include="Models\ASPNETIdentity\Util\CustomizedConfirmationProvider.cs" />
+    <Compile Include="Models\ASPNETIdentity\OAuth2Extension\OAuth2ProviderHelper.cs" />
+    <Compile Include="Models\ASPNETIdentity\OAuth2Extension\OAuth2DataProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\RefreshTokenProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AccessTokenFormatJwt.cs" />
     <Compile Include="Models\ASPNETIdentity\NotificationProvider\EmailService.cs" />
@@ -412,6 +413,7 @@
     <Content Include="Content\font-awesome.css" />
     <Content Include="Content\font-awesome.min.css" />
     <Content Include="Content\touryo\Style.css" />
+    <Content Include="Scripts\touryo\webauthn.js" />
     <Content Include="fonts\fontawesome-webfont.svg" />
     <Content Include="fonts\glyphicons-halflings-regular.svg" />
     <Content Include="Global.asax" />
@@ -513,13 +515,16 @@
     <Content Include="Views\Manage\OAuthAuthorizationCodeGrantClient2.cshtml" />
     <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
+    <Content Include="Views\Manage\AddFIDO2Data.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">
       <SubType>Designer</SubType>
     </Content>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Models\ASPNETIdentity\FIDO2Extension\" />
+  </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\AccountController.ja.resx">
       <SubType>Designer</SubType>

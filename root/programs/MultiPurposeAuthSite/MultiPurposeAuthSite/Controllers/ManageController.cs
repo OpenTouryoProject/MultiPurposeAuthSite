@@ -26,7 +26,8 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 using System;
 using System.Collections.Generic;
@@ -96,6 +97,14 @@ namespace MultiPurposeAuthSite.Controllers
             AddUnstructuredDataSuccess,
             /// <summary>RemoveUnstructuredDataSuccess</summary>
             RemoveUnstructuredDataSuccess,
+            /// <summary>AddOAuth2DataSuccess</summary>
+            AddOAuth2DataSuccess,
+            /// <summary>RemoveOAuth2DataSuccess</summary>
+            RemoveOAuth2DataSuccess,
+            /// <summary>AddFIDO2DataSuccess</summary>
+            AddFIDO2DataSuccess,
+            /// <summary>RemoveFIDO2DataSuccess</summary>
+            RemoveFIDO2DataSuccess,
             /// <summary>Error</summary>
             Error
         }
@@ -185,6 +194,10 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemovePaymentInformationSuccess ? Resources.ManageController.RemovePaymentInformationSuccess
                 : message == EnumManageMessageId.AddUnstructuredDataSuccess ? Resources.ManageController.AddUnstructuredDataSuccess
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
+                : message == EnumManageMessageId.AddOAuth2DataSuccess ? Resources.ManageController.AddOAuth2DataSuccess
+                : message == EnumManageMessageId.RemoveOAuth2DataSuccess ? Resources.ManageController.RemoveOAuth2DataSuccess
+                : message == EnumManageMessageId.AddFIDO2DataSuccess ? Resources.ManageController.AddFIDO2DataSuccess
+                : message == EnumManageMessageId.RemoveFIDO2DataSuccess ? Resources.ManageController.RemoveFIDO2DataSuccess
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
 
@@ -193,6 +206,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // モデルの生成
                 string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
                     // パスワード
@@ -211,6 +225,8 @@ namespace MultiPurposeAuthSite.Controllers
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // OAuth2Data
                     HasOAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
+                    // FIDO2PublicKey
+                    HasFIDO2Data = !string.IsNullOrEmpty(user.FIDO2PublicKey),
                     // Scopes
                     Scopes = ASPNETIdentityConst.StandardScopes
                 };
@@ -1864,8 +1880,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // 再ログイン
                             await this.ReSignInAsync();
-
-                            // Index - SetPasswordSuccess
                             return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
                         }
                         else
@@ -2041,9 +2055,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
-
-                                // Index - SetPasswordSuccess
-                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
                             }
                             else
                             {
@@ -2063,9 +2075,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // 再ログイン
                                     await this.ReSignInAsync();
-
-                                    // Index - SetPasswordSuccess
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
                                 }
                                 else
                                 {
@@ -2183,13 +2193,13 @@ namespace MultiPurposeAuthSite.Controllers
                 // 結果の確認
                 if (result.Succeeded)
                 {
-                    // 支払元情報 削除の成功
+                    // 削除の成功
 
                     // 再ログイン
                     if (await this.ReSignInAsync())
                     {
                         // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveOAuth2DataSuccess });
                     }
                     else
                     {
@@ -2198,7 +2208,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // 非構造化データ 削除の失敗
+                    // 削除の失敗
                 }
 
                 // Index - Error
@@ -2209,6 +2219,126 @@ namespace MultiPurposeAuthSite.Controllers
                 // エラー画面
                 return View("Error");
             }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region FIDO2 Data
+
+        #region Create
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddFIDO2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> AddFIDO2Data()
+        {
+            if (ASPNETIdentityConfig.CanEditFIDO2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                ViewBag.UserId = user.Id;
+                ViewBag.UserName = user.UserName;
+
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの追加・編集画面（FIDO2関連の非構造化データ設定）
+        /// POST: /Manage/AddFIDO2Data
+        /// </summary>
+        /// <param name="credentialType">string</param>
+        /// <param name="credentialId">string</param>
+        /// <param name="algorithm">string</param>
+        /// <param name="publickey">string</param>
+        /// <param name="attestation">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddFIDO2Data(
+            string credentialType, string credentialId,
+            string algorithm, string publickey, string attestation)
+        {
+            if (ASPNETIdentityConfig.CanEditFIDO2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                if (user != null)
+                {
+                    // ユーザを取得できた。
+                    if (user.Id == credentialId)
+                    {
+                        // 公開鍵を保存
+                        user.FIDO2PublicKey = publickey;
+
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddFIDO2DataSuccess });
+                        }
+                    }
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの削除
+        /// POST: /Manage/RemoveFIDO2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveFIDO2Data()
+        {
+            if (ASPNETIdentityConfig.CanEditFIDO2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                if (user != null)
+                {
+                    // ユーザを取得できた
+
+                    // 公開鍵をクリア
+                    user.FIDO2PublicKey = null;
+
+                    // ユーザーの保存
+                    IdentityResult result = await UserManager.UpdateAsync(user);
+
+                    // 結果の確認
+                    if (result.Succeeded)
+                    {
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveFIDO2DataSuccess });
+                    }
+                }
+            }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion

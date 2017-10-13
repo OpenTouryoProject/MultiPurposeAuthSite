@@ -374,13 +374,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "INSERT INTO [Users] ( " +
                                         "    [Id], [UserName], [PasswordHash], " +
                                         "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
-                                        "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], " +
-                                        "    [SecurityStamp], [TwoFactorEnabled], [ParentId], [ClientID], [PaymentInformation], [UnstructuredData], [CreatedDate])" +
+                                        "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], " +
+                                        "    [ParentId], [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
-                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, " +
-                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @CreatedDate)", user);
+                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
+                                        "        @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
 
                                     break;
 
@@ -390,13 +390,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "INSERT INTO \"Users\" ( " +
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
-                                        "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", " +
-                                        "    \"SecurityStamp\", \"TwoFactorEnabled\", \"ParentId\", \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"CreatedDate\")" +
+                                        "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", " +
+                                        "    \"ParentId\", \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :PasswordHash, " +
                                         "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
-                                        "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, " +
-                                        "        :SecurityStamp, :TwoFactorEnabled, :ParentId, :ClientID, :PaymentInformation, :UnstructuredData, :CreatedDate)",
+                                        "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, " +
+                                        "        :ParentId, :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -415,6 +415,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
+                                            FIDO2PublicKey = user.FIDO2PublicKey,
                                             CreatedDate = user.CreatedDate
                                         });
 
@@ -426,13 +427,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "INSERT INTO \"users\" ( " +
                                         "    \"id\", \"username\", \"passwordhash\", " +
                                         "    \"email\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
-                                        "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", " +
-                                        "    \"securitystamp\", \"twofactorenabled\", \"parentid\", \"clientid\", \"paymentinformation\", \"unstructureddata\", \"createddate\")" +
+                                        "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", " +
+                                        "    \"parentid\", \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
-                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, " +
-                                        "        @SecurityStamp, @TwoFactorEnabled, @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @CreatedDate)", user);
+                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
+                                        "        @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
 
                                     break;
                             }
@@ -917,6 +918,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             tgtUser.ClientID = user.ClientID;
                             tgtUser.PaymentInformation = user.PaymentInformation;
                             tgtUser.UnstructuredData = user.UnstructuredData;
+                            tgtUser.FIDO2PublicKey = user.FIDO2PublicKey;
 
                             break;
 
@@ -936,12 +938,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         cnn.Execute(
                                             "UPDATE [Users] " +
                                             "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
-                                            "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, " +
-                                            "    [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
-                                            "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
-                                            "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
-                                            "    [ParentId] = @ParentId, [ClientID] = @ClientID, " + 
-                                            "    [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData " +
+                                            "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
+                                            "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
+                                            "    [ParentId] = @ParentId, [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey " +
                                             "WHERE [Id] = @Id", user);
 
                                         break;
@@ -951,12 +950,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         cnn.Execute(
                                             "UPDATE \"Users\" " +
                                             "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
-                                            "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, " +
-                                            "    \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
-                                            "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
-                                            "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
-                                            "    \"ParentId\" = :ParentId, \"ClientID\" = :ClientID, " +
-                                            "    \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData " +
+                                            "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
+                                            "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
+                                            "    \"ParentId\" = :ParentId, \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey " +
                                             "WHERE \"Id\" = :Id",
                                             new // 拡張メソッドで対策できる。
                                             {
@@ -975,7 +971,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                                 ParentId = user.ParentId,
                                                 ClientID = user.ClientID,
                                                 PaymentInformation = user.PaymentInformation,
-                                                UnstructuredData = user.UnstructuredData
+                                                UnstructuredData = user.UnstructuredData,
+                                                FIDO2PublicKey = user.FIDO2PublicKey
                                             });
 
                                         break;
@@ -985,12 +982,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         cnn.Execute(
                                            "UPDATE \"users\" " +
                                            "SET \"username\" = @UserName, \"passwordhash\" = @PasswordHash, " +
-                                           "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, " +
-                                           "    \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
-                                           "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
-                                           "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
-                                           "    \"parentid\" = @ParentId, \"clientid\" = @ClientID, " +
-                                           "    \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData " +
+                                           "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
+                                           "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
+                                           "    \"parentid\" = @ParentId, \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey " +
                                            "WHERE \"id\" = @Id", user);
 
                                         break;

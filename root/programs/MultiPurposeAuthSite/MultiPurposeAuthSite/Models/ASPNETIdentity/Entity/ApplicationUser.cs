@@ -358,6 +358,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         public string UnstructuredData { get; set; } = null;
 
         /// <summary>
+        /// FIDO2PublicKey
+        /// </summary>
+        public string FIDO2PublicKey { get; set; } = null;
+
+        /// <summary>
         /// レコード生成日
         /// </summary>
         public DateTime CreatedDate { get; set; } = DateTime.Now ;

@@ -39,7 +39,7 @@ using Dapper;
 
 using MultiPurposeAuthSite.Models.Util;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 {
     /// <summary>
     /// OAuth2DataProvider

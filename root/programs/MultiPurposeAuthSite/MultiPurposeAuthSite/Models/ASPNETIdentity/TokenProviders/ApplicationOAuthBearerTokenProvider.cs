@@ -32,9 +32,9 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Models.Log;
-using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using System;
 using System.Web;

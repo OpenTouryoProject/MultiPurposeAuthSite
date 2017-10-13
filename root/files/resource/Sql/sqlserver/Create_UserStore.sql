@@ -15,7 +15,7 @@ USE [UserStore]
 GO
 
 -- TABLE
-CREATE TABLE [Users](
+CREATE TABLE [Users](              -- Users
     [Id] [nvarchar](38) NOT NULL,            -- PK, guid
     [UserName] [nvarchar](256) NOT NULL,
     [Email] [nvarchar](256) NULL,
@@ -33,12 +33,13 @@ CREATE TABLE [Users](
     [ClientID] [nvarchar](256) NOT NULL,
     [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
+    [FIDO2PublicKey] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
     CONSTRAINT [PK.Users] PRIMARY KEY CLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 
-CREATE TABLE [Roles](
+CREATE TABLE [Roles](              -- Roles
     [Id] [nvarchar](38) NOT NULL,            -- PK, guid
     [Name] [nvarchar](256) NOT NULL,
     [ParentId] [nvarchar](38) NULL,          -- guid
@@ -46,7 +47,7 @@ CREATE TABLE [Roles](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [UserRoles](        -- 関連エンティティ
+CREATE TABLE [UserRoles](          -- 関連エンティティ (Users *--- UserRoles ---* Roles)
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [RoleId] [nvarchar](38) NOT NULL,        -- PK, guid
     CONSTRAINT [PK.UserRoles] PRIMARY KEY CLUSTERED (
@@ -66,11 +67,11 @@ CREATE TABLE [UserLogins](       -- Users ---* UserLogins
     WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [UserClaims](       -- Users ---* UserClaims
+CREATE TABLE [UserClaims](         -- Users ---* UserClaims
     [Id] [int] IDENTITY(1,1) NOT NULL,       -- PK (キー長に問題があるため[Id] [int]を使用)
-    [UserId] [nvarchar](38) NOT NULL,        -- *PK, guid
-    [Issuer] [nvarchar](128) NOT NULL,       -- *PK[LoginProvider)
-    [ClaimType] [nvarchar](1024) NULL,       -- *PK(実質的に*PKが複合主キー)
+    [UserId] [nvarchar](38) NOT NULL,           -- *PK, guid
+    [Issuer] [nvarchar](128) NOT NULL,          -- *PK(LoginProvider) *PK(実質的に複合主キー)
+    [ClaimType] [nvarchar](1024) NULL,
     [ClaimValue] [nvarchar](1024) NULL,
     CONSTRAINT [PK.UserClaims] PRIMARY KEY CLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
@@ -100,7 +101,7 @@ CREATE TABLE [CustomizedConfirmation](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [OAuth2Data](
+CREATE TABLE [OAuth2Data](         -- OAuth2Data
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
     [UnstructuredData] [nvarchar](max) NULL, -- OAuth2 Unstructured Data
     CONSTRAINT [PK.OAuth2Data] PRIMARY KEY CLUSTERED ([ClientID] ASC)

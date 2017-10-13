@@ -26,7 +26,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 using System;

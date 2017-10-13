@@ -19,7 +19,7 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class ManageViews {
@@ -84,6 +84,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string AddEmailTitle {
             get {
                 return ResourceManager.GetString("AddEmailTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add FIDO2 data form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddFIDO2DataH4 {
+            get {
+                return ResourceManager.GetString("AddFIDO2DataH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Submit に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddFIDO2DataSubmit {
+            get {
+                return ResourceManager.GetString("AddFIDO2DataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add FIDO2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddFIDO2DataTitle {
+            get {
+                return ResourceManager.GetString("AddFIDO2DataTitle", resourceCulture);
             }
         }
         
@@ -354,6 +381,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexExternalLoginsActionLink {
             get {
                 return ResourceManager.GetString("IndexExternalLoginsActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   FIDO2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexFIDO2Data {
+            get {
+                return ResourceManager.GetString("IndexFIDO2Data", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add your FIDO2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexFIDO2DataAddActionLink {
+            get {
+                return ResourceManager.GetString("IndexFIDO2DataAddActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove your OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexFIDO2DataRemoveButton {
+            get {
+                return ResourceManager.GetString("IndexFIDO2DataRemoveButton", resourceCulture);
             }
         }
         
@@ -673,7 +727,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   You do not have a local username/password for this site. Add a local account so you can log in without an external login. に類似しているローカライズされた文字列を検索します。
+        ///   You do not have a local password for this site. Add a local password so you can log in without an external login. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string SetPasswordP {
             get {

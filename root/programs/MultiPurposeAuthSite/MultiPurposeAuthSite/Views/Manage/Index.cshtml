@@ -64,6 +64,7 @@
             if (role == ASPNETIdentityConst.Role_SystemAdmin
                 || role == ASPNETIdentityConst.Role_Admin)
             {
+                // サインアップしていないユーザは使用不可
                 canShowOAuthScreen = true;
             }
         }
@@ -337,6 +338,33 @@ else
 else
 {
     // OAuth2データの変更が許可されていない場合。
+}
+
+@if (ASPNETIdentityConfig.CanEditFIDO2Data)
+{
+    // FIDO2データの変更が許可されている場合。
+    <dt>EditFIDO2Data :</dt>
+            <dd>
+                @*"Add" and "Remove or Change"*@
+                @if (!Model.HasFIDO2Data)
+                {
+                    <text>None</text><br />
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexFIDO2DataAddActionLink, "AddFIDO2Data")&nbsp;&nbsp;]</text>
+                }
+                else
+                {
+                    <text>XXXXXXXXXX</text><br />
+                    using (Html.BeginForm("RemoveFIDO2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <text>[<input type="submit" value="@ManageViews.IndexFIDO2DataRemoveButton" class="btn-link" />]</text>
+                    }
+                }
+            </dd>
+}
+else
+{
+    // FIDO2データの変更が許可されていない場合。
 }
         </dl>
     </div>

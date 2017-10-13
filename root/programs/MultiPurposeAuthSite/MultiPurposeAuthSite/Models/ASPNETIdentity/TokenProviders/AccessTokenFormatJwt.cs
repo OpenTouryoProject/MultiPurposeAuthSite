@@ -47,6 +47,7 @@ using Newtonsoft.Json.Linq;
 
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
