@@ -2244,6 +2244,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 ViewBag.UserId = user.Id;
                 ViewBag.UserName = user.UserName;
+                ViewBag.AttestationChallenge = GetPassword.Generate(128, 0);
 
                 return View();
             }
@@ -2258,7 +2259,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// FIDO2関連の非構造化データの追加・編集画面（FIDO2関連の非構造化データ設定）
         /// POST: /Manage/AddFIDO2Data
         /// </summary>
-        /// <param name="resultId">string</param>
         /// <param name="credentialType">string</param>
         /// <param name="credentialId">string</param>
         /// <param name="algorithm">string</param>
@@ -2268,7 +2268,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddFIDO2Data(
-            string resultId, string credentialType, string credentialId,
+            string credentialType, string credentialId,
             string algorithm, string publickey, string attestation)
         {
             if (ASPNETIdentityConfig.CanEditFIDO2Data

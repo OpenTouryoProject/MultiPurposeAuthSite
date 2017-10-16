@@ -154,14 +154,48 @@
         })
 
         $(function () {
+
+            //$("#fido2_signin").on("click", function () {
+            //    var filters = {
+            //        accept:
+            //          [
+            //            {
+            //                type: 'FIDO_2_0',
+            //                id: localStorage["credentialId"]
+            //            }
+            //          ]
+            //    };
+
+            //    window.msCrendentials.getAssertion(challenge, filters)
+            //     .then(function (result) {
+            //         // properties
+
+            //         //$("#Fido2UserId").val(result.credential.id);
+            //         $("#Fido2UserId").val(localStorage["credentialId"]);
+
+            //         $("#Fido2Signature").val(result.signature);
+            //         $("#Fido2AuthenticatorData").val(result.authenticatorData);
+            //         $("#Fido2ClientData").val(result.clientData);
+
+            //         // submit
+            //         $("#LoginForm").submit();
+            //     });   
+            //});
+
             $("#fido2_signin").on("click", function () {
-                var options = {
-                    timeoutSeconds: 60
-                };
 
-                //var allowList = [{ type: "ScopedCred", id: localStorage["credentialId" }];
+                var challenge = '@Model.Fido2Challenge';
+                var allowList =
+                      [
+                        {
+                            type: 'ScopedCred',
+                            id: localStorage["credentialId"]
+                        }
+                      ];
+                var timeout = {};
+                var ext = {};
 
-                navigator.authentication.getAssertion("@Model.Fido2Challenge", options)
+                navigator.authentication.getAssertion(challenge, timeout, allowList, ext)
                     .then(function (result) {
                         // properties
 
