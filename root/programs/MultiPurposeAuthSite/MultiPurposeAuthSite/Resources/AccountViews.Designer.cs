@@ -142,6 +142,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Social login に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ExternalLogins {
+            get {
+                return ResourceManager.GetString("ExternalLogins", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Use another service to log in. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ExternalLoginsListPartialH4 {
@@ -165,6 +174,24 @@ namespace MultiPurposeAuthSite.Resources {
         public static string ExternalLoginsListPartialSubmit {
             get {
                 return ResourceManager.GetString("ExternalLoginsListPartialSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   FIDO2 login に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string FIDO2Login {
+            get {
+                return ResourceManager.GetString("FIDO2Login", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Log in with FIDO2 authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string FIDO2LoginSubmit {
+            get {
+                return ResourceManager.GetString("FIDO2LoginSubmit", resourceCulture);
             }
         }
         
@@ -210,15 +237,6 @@ namespace MultiPurposeAuthSite.Resources {
         public static string ForgotPasswordTitle {
             get {
                 return ResourceManager.GetString("ForgotPasswordTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Social login に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string LoginExternalLogins {
-            get {
-                return ResourceManager.GetString("LoginExternalLogins", resourceCulture);
             }
         }
         

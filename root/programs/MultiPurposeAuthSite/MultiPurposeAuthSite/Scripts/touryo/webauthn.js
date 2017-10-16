@@ -107,8 +107,7 @@ navigator.authentication = navigator.authentication || (function () {
                     publicKey: JSON.parse(cred.publicKey),
                     attestation: cred.attestation
                 });
-                return webauthnDB.store(result.credential.id, accountInfo)
-                    .then(function () { return result; });
+                return webauthnDB.store(result.credential.id, accountInfo).then(function () { return result; });
             } else {
                 return cred;
             }
@@ -141,8 +140,7 @@ navigator.authentication = navigator.authentication || (function () {
         return getCredList(allowlist).then(function (credList) {
             var filter = { accept: credList };
             var sigParams = undefined;
-            if (options && options.extensions && options.extensions["webauthn_txAuthSimple"])
-            { sigParams = { userPrompt: options.extensions["webauthn_txAuthSimple"] }; }
+            if (options && options.extensions && options.extensions["webauthn_txAuthSimple"]) { sigParams = { userPrompt: options.extensions["webauthn_txAuthSimple"] }; }
 
             return msCredentials.getAssertion(challenge, filter, sigParams).then(function (sig) {
                 if (sig.type === "FIDO_2_0") {

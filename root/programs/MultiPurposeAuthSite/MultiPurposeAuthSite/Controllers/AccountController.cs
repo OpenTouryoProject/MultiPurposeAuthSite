@@ -27,6 +27,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 using System;
@@ -35,7 +36,6 @@ using System.Linq;
 using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,6 +50,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Util;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -145,9 +146,13 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.ReturnUrl = returnUrl;
 
             // サインイン画面（初期表示）
+            string fido2Challenge = GetPassword.Generate(128, 0);
+            Session["fido2Challenge"] = fido2Challenge;
+
             return View(new AccountLoginViewModel
             {
-                ReturnUrl = returnUrl
+                ReturnUrl = returnUrl,
+                Fido2Challenge = fido2Challenge
             });
         }
 
@@ -167,109 +172,239 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // AccountLoginViewModelの検証に成功
 
-                string uid = "";
-                // サインアップしたユーザを取得
-                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                if (string.IsNullOrEmpty(model.Fido2UserId))
                 {
-                    uid = model.Email;
-                }
-                else
-                {
-                    uid = model.Name;
-                }
+                    // 通常のサインイン
 
-                ApplicationUser user = await UserManager.FindByNameAsync(uid);
-
-                if (user == null)
-                {
-                    // メッセージを設定
-                    ModelState.AddModelError("", Resources.AccountController.Login);
-                }
-                else
-                {
-                    // EmailConfirmedになっているか確認する。
-                    if (await UserManager.IsEmailConfirmedAsync(user.Id))
+                    if (!string.IsNullOrEmpty(model.Password))
                     {
-                        // EmailConfirmed == true の場合、
-                        // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
-                        SignInStatus result = await SignInManager.PasswordSignInAsync(
-                                                userName: uid,                                                    // アカウント(UID)
-                                                password: model.Password,                                         // アカウント(PWD)
-                                                isPersistent: model.RememberMe,                                   // アカウント記憶
-                                                shouldLockout: ASPNETIdentityConfig.UserLockoutEnabledByDefault); // ロックアウト
-
-                        // SignInStatus
-                        switch (result)
+                        string uid = "";
+                        // サインアップしたユーザを取得
+                        if (ASPNETIdentityConfig.RequireUniqueEmail)
                         {
-                            case SignInStatus.Success:
-                                // サインイン成功
+                            uid = model.Email;
+                        }
+                        else
+                        {
+                            uid = model.Name;
+                        }
 
-                                // テスト機能でSession["state"]のチェックを止めたので不要になった。
-                                // また、ManageControllerの方はログイン済みアクセスになるので。
+                        ApplicationUser user = await UserManager.FindByNameAsync(uid);
 
-                                //if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
-                                //{
+                        if (user == null)
+                        {
+                            // メッセージを設定
+                            ModelState.AddModelError("", Resources.AccountController.Login);
+                        }
+                        else
+                        {
+                            // EmailConfirmedになっているか確認する。
+                            if (await UserManager.IsEmailConfirmedAsync(user.Id))
+                            {
+                                // EmailConfirmed == true の場合、
+                                // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
+                                SignInStatus result = await SignInManager.PasswordSignInAsync(
+                                                        userName: uid,                                                    // アカウント(UID)
+                                                        password: model.Password,                                         // アカウント(PWD)
+                                                        isPersistent: model.RememberMe,                                   // アカウント記憶
+                                                        shouldLockout: ASPNETIdentityConfig.UserLockoutEnabledByDefault); // ロックアウト
 
-                                // AppScan指摘の反映
-                                this.FxSessionAbandon();
-                                // SessionIDの切換にはこのコードが必要である模様。
-                                // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                Response.Cookies.Add(new HttpCookie("mas_session", ""));
-
-                                //}
-                                //else
-                                //{
-                                //    // テスト段階ではOAuth2のテスト機能に支障が出るのでSessionをクリアしない。
-                                //}
-
-                                // オペレーション・トレース・ログ出力
-                                Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
-
-                                // Open-Redirect対策
-                                if (!string.IsNullOrEmpty(model.ReturnUrl)
-                                    && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                // SignInStatus
+                                switch (result)
                                 {
-                                    return RedirectToLocal(model.ReturnUrl);
+                                    case SignInStatus.Success:
+                                        // サインイン成功
+
+                                        // テスト機能でSession["state"]のチェックを止めたので不要になった。
+                                        // また、ManageControllerの方はログイン済みアクセスになるので。
+
+                                        //if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+                                        //{
+
+                                        // AppScan指摘の反映
+                                        this.FxSessionAbandon();
+                                        // SessionIDの切換にはこのコードが必要である模様。
+                                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                        Response.Cookies.Add(new HttpCookie("mas_session", ""));
+
+                                        //}
+                                        //else
+                                        //{
+                                        //    // テスト段階ではOAuth2のテスト機能に支障が出るのでSessionをクリアしない。
+                                        //}
+
+                                        // オペレーション・トレース・ログ出力
+                                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
+
+                                        // Open-Redirect対策
+                                        if (!string.IsNullOrEmpty(model.ReturnUrl)
+                                            && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                        {
+                                            return RedirectToLocal(model.ReturnUrl);
+                                        }
+                                        else
+                                        {
+                                            return RedirectToAction("Index", "Home");
+                                        }
+
+                                    case SignInStatus.LockedOut:
+                                        // ロックアウト
+                                        return View("Lockout");
+
+                                    case SignInStatus.RequiresVerification:
+                                        // EmailConfirmedとは別の2FAが必要。
+
+                                        // 検証を求める（2FAなど）。
+                                        return this.RedirectToAction(
+                                            "SendCode", new
+                                            {
+                                                ReturnUrl = model.ReturnUrl,  // 戻り先のURL
+                                                RememberMe = model.RememberMe // アカウント記憶
+                                            });
+
+                                    case SignInStatus.Failure:
+                                    // サインイン失敗
+
+                                    default:
+                                        // その他
+                                        // "無効なログイン試行です。"
+                                        ModelState.AddModelError("", Resources.AccountController.Login);
+                                        break;
                                 }
-                                else
-                                {
-                                    return RedirectToAction("Index", "Home");
-                                }
+                            }
+                            else
+                            {
+                                // EmailConfirmed == false の場合、
 
-                            case SignInStatus.LockedOut:
-                                // ロックアウト
-                                return View("Lockout");
+                                // メアド検証用のメールを送信して、
+                                this.SendConfirmEmail(user);
 
-                            case SignInStatus.RequiresVerification:
-                                // EmailConfirmedとは別の2FAが必要。
-
-                                // 検証を求める（2FAなど）。
-                                return this.RedirectToAction(
-                                    "SendCode", new
-                                    {
-                                        ReturnUrl = model.ReturnUrl,  // 戻り先のURL
-                                        RememberMe = model.RememberMe // アカウント記憶
-                                    });
-
-                            case SignInStatus.Failure:
-                            // サインイン失敗
-
-                            default:
-                                // その他
-                                // "無効なログイン試行です。"
-                                ModelState.AddModelError("", Resources.AccountController.Login);
-                                break;
+                                // メッセージを設定
+                                ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
+                            }
                         }
                     }
                     else
                     {
-                        // EmailConfirmed == false の場合、
+                        // パスワード入力が無い
+                    }
+                }
+                else
+                {
+                    // FIDO2のサインイン
+                    //ApplicationUser user = await UserManager.FindByIdAsync(model.Fido2UserId);
+                    ApplicationUser user = await UserManager.FindByNameAsync(model.Fido2UserId);
 
-                        // メアド検証用のメールを送信して、
-                        this.SendConfirmEmail(user);
-
+                    if (user == null)
+                    {
                         // メッセージを設定
-                        ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
+                        ModelState.AddModelError("", Resources.AccountController.Login);
+                    }
+                    //else
+                    {
+                        // EmailConfirmedだけでなく、ロックアウト、2FAについて検討が必要
+                        if (await UserManager.IsEmailConfirmedAsync(user.Id))
+                        {
+                            SignInStatus result = 0;
+
+                            // ロックアウト
+                            if (user.LockoutEndDateUtc != null
+                                && DateTime.Now <= user.LockoutEndDateUtc)
+                            {
+                                result = SignInStatus.LockedOut;
+                            }
+                            // 2FAは不要（デバイス特定されているため）
+                            //else if (true) { }
+                            else
+                            {
+                                string fido2Challenge = (string)Session["fido2Challenge"];
+
+                                // FIDO2Helper, FidoAuthenticatorS, FidoAuthenticatorMどれを使用しても動作せず。
+
+                                //FIDO2Helper fido2Helper  = new FIDO2Helper(user.FIDO2PublicKey, fido2Challenge);
+                                //if (fido2Helper.ValidateSignature(model.Fido2ClientData, model.Fido2AuthenticatorData, model.Fido2Signature))
+                                //{ }
+
+                                //FidoAuthenticatorS fidoAuthenticatorS = new FidoAuthenticatorS(user.FIDO2PublicKey, fido2Challenge);
+                                //if (fidoAuthenticatorS.ValidateSignature(model.Fido2Signature, model.Fido2AuthenticatorData, model.Fido2ClientData))
+                                //{ }
+
+                                if (FidoAuthenticatorM.validateSignature(
+                                    user.FIDO2PublicKey, 
+                                    model.Fido2ClientData, model.Fido2AuthenticatorData, model.Fido2Signature,
+                                    fido2Challenge))
+                                {
+                                    await SignInManager.SignInAsync(user, false, false);
+                                    result = SignInStatus.Success;
+                                }
+                                else
+                                {
+                                    result = SignInStatus.Failure;
+                                }
+                            }
+
+                            // SignInStatus
+                            switch (result)
+                            {
+                                case SignInStatus.Success:
+                                    // サインイン成功
+
+                                    // テスト機能でSession["state"]のチェックを止めたので不要になった。
+                                    // また、ManageControllerの方はログイン済みアクセスになるので。
+
+                                    //if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+                                    //{
+
+                                    // AppScan指摘の反映
+                                    this.FxSessionAbandon();
+                                    // SessionIDの切換にはこのコードが必要である模様。
+                                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                    Response.Cookies.Add(new HttpCookie("mas_session", ""));
+
+                                    //}
+                                    //else
+                                    //{
+                                    //    // テスト段階ではOAuth2のテスト機能に支障が出るのでSessionをクリアしない。
+                                    //}
+
+                                    // オペレーション・トレース・ログ出力
+                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
+
+                                    // Open-Redirect対策
+                                    if (!string.IsNullOrEmpty(model.ReturnUrl)
+                                        && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                    {
+                                        return RedirectToLocal(model.ReturnUrl);
+                                    }
+                                    else
+                                    {
+                                        return RedirectToAction("Index", "Home");
+                                    }
+
+                                case SignInStatus.LockedOut:
+                                    // ロックアウト
+                                    return View("Lockout");
+
+                                case SignInStatus.Failure:
+                                // サインイン失敗
+
+                                default:
+                                    // その他
+                                    // "無効なログイン試行です。"
+                                    ModelState.AddModelError("", Resources.AccountController.Login);
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            // EmailConfirmed == false の場合、
+
+                            // メアド検証用のメールを送信して、
+                            this.SendConfirmEmail(user);
+
+                            // メッセージを設定
+                            ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
+                        }
                     }
                 }
             }
@@ -1558,10 +1693,10 @@ namespace MultiPurposeAuthSite.Controllers
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
                     if (isAuth)
                     {
-                        scopes = OAuth2ProviderHelper.FilterClaimAtAuth(scopes).ToArray();
+                        scopes = OAuth2Helper.FilterClaimAtAuth(scopes).ToArray();
                     }
 
-                    OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
+                    OAuth2Helper.AddClaim(identity, client_id, state, nonce, scopes);
 
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);
@@ -1569,7 +1704,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
-                        user.Id, user.UserName, client_id, OAuth2ProviderHelper.GetInstance().GetClientName(client_id)));
+                        user.Id, user.UserName, client_id, OAuth2Helper.GetInstance().GetClientName(client_id)));
 
                     // RedirectエンドポイントへRedirect
                     return new EmptyResult();
@@ -1596,7 +1731,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
+                    OAuth2Helper.AddClaim(identity, client_id, state, nonce, scopes);
 
                     // ClaimsIdentityでサインインして、Access Tokenを発行
                     AuthenticationManager.SignIn(identity);
@@ -1604,7 +1739,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
-                            user.Id, user.UserName, client_id, OAuth2ProviderHelper.GetInstance().GetClientName(client_id)));
+                            user.Id, user.UserName, client_id, OAuth2Helper.GetInstance().GetClientName(client_id)));
                 }
 
                 // RedirectエンドポイントへRedirect
@@ -1658,7 +1793,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2ProviderHelper.AddClaim(identity, client_id, state, nonce, scopes);
+                OAuth2Helper.AddClaim(identity, client_id, state, nonce, scopes);
 
                 // ClaimsIdentityでサインインして、仲介コードを発行
                 this.AuthenticationManager.SignIn(identity);
@@ -1666,7 +1801,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // オペレーション・トレース・ログ出力
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
-                        user.Id, user.UserName, client_id, OAuth2ProviderHelper.GetInstance().GetClientName(client_id)));
+                        user.Id, user.UserName, client_id, OAuth2Helper.GetInstance().GetClientName(client_id)));
 
                 // RedirectエンドポイントへRedirect
                 return new EmptyResult();
@@ -1715,8 +1850,8 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = OAuth2ProviderHelper.GetInstance().GetClientIdByName("TestClient");
-                string client_secret = OAuth2ProviderHelper.GetInstance().GetClientSecret(client_id);
+                string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+                string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
@@ -1734,7 +1869,7 @@ namespace MultiPurposeAuthSite.Controllers
                     + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account;
 
                 // Tokenエンドポイントにアクセス
-                model.Response = await OAuth2ProviderHelper.GetInstance()
+                model.Response = await OAuth2Helper.GetInstance()
                     .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
                 dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -1806,7 +1941,7 @@ namespace MultiPurposeAuthSite.Controllers
                             + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
                         // Tokenエンドポイントにアクセス
-                        model.Response = await OAuth2ProviderHelper.GetInstance()
+                        model.Response = await OAuth2Helper.GetInstance()
                             .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -1836,7 +1971,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // WebAPIのエンドポイントにアクセス
 
                             // Response
-                            model.Response = await OAuth2ProviderHelper.GetInstance()
+                            model.Response = await OAuth2Helper.GetInstance()
                                 .CallUserInfoEndpointAsync(model.AccessToken);
                         }
                         else

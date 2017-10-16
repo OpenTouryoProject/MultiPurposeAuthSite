@@ -115,7 +115,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // redirect_uriの指定が無い。
 
                 // クライアント識別子に対応する事前登録したredirect_uriを取得する。
-                redirect_uri = OAuth2ProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+                redirect_uri = OAuth2Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
                 if (!string.IsNullOrEmpty(redirect_uri))
                 {
@@ -161,7 +161,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 else
                 {
                     // クライアント識別子に対応する事前登録したredirect_uriに
-                    string preRegisteredUri = OAuth2ProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+                    string preRegisteredUri = OAuth2Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
                     //if (redirect_uri.StartsWith(preRegisteredUri))
                     if (redirect_uri == preRegisteredUri)
@@ -225,7 +225,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2ProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
@@ -256,7 +256,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2ProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
@@ -280,7 +280,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     if (string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret) == false)
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2ProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
@@ -364,14 +364,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             user, DefaultAuthenticationTypes.ExternalBearer);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        OAuth2ProviderHelper.AddClaim(identity, context.ClientId, "", "", context.Scope);
+                        OAuth2Helper.AddClaim(identity, context.ClientId, "", "", context.Scope);
 
                         // 検証完了
                         context.Validated(identity);
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
-                            user.Id, user.UserName, context.ClientId, OAuth2ProviderHelper.GetInstance().GetClientName(context.ClientId)));
+                            user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
                     }
                     catch
                     {
@@ -444,7 +444,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 // client_idに対応するApplicationUserを取得する。
                 user = await userManager.FindByNameAsync(
-                    OAuth2ProviderHelper.GetInstance().GetClientName(context.ClientId));
+                    OAuth2Helper.GetInstance().GetClientName(context.ClientId));
 
                 if (user == null)
                 {
@@ -462,14 +462,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     user, DefaultAuthenticationTypes.ExternalBearer);
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2ProviderHelper.AddClaim(identity, context.ClientId, "", "", context.Scope);
+                OAuth2Helper.AddClaim(identity, context.ClientId, "", "", context.Scope);
                 
                 // 検証完了
                 context.Validated(identity);
 
                 // オペレーション・トレース・ログ出力
                 Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
-                            user.Id, user.UserName, context.ClientId, OAuth2ProviderHelper.GetInstance().GetClientName(context.ClientId)));
+                            user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
             }
             catch
             {

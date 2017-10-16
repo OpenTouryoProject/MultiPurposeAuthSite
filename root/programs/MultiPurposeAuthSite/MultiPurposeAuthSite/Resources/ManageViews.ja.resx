@@ -343,7 +343,7 @@
     <value>FIDO2データの追加フォーム</value>
   </data>
   <data name="AddFIDO2DataSubmit" xml:space="preserve">
-    <value>送信</value>
+    <value>FIDO2 認証器を登録する</value>
   </data>
   <data name="AddFIDO2DataTitle" xml:space="preserve">
     <value>FIDO2データの追加</value>

@@ -130,7 +130,7 @@
     <value>Add FIDO2 data form</value>
   </data>
   <data name="AddFIDO2DataSubmit" xml:space="preserve">
-    <value>Submit</value>
+    <value>Register FIDO 2 authenticator</value>
   </data>
   <data name="AddFIDO2DataTitle" xml:space="preserve">
     <value>Add FIDO2 data</value>

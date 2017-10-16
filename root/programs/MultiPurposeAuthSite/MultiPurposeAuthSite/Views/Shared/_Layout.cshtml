@@ -86,7 +86,7 @@
         + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
 
     // client_id
-    string client_id = OAuth2ProviderHelper.GetInstance().GetClientIdByName("TestClient");
+    string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
     // state (nonce) // 記号は入れない。
     string state = GetPassword.Generate(10, 0);
     // nonce // 記号は入れない。

@@ -144,6 +144,9 @@
   <data name="ExternalLoginFailureTitle" xml:space="preserve">
     <value>ログインに失敗しました。</value>
   </data>
+  <data name="ExternalLogins" xml:space="preserve">
+    <value>ソーシャルログイン</value>
+  </data>
   <data name="ExternalLoginsListPartialH4" xml:space="preserve">
     <value>別のサービスを使用してログインしてください。</value>
   </data>
@@ -152,6 +155,12 @@
   </data>
   <data name="ExternalLoginsListPartialSubmit" xml:space="preserve">
     <value>{0} アカウントを使用してログイン</value>
+  </data>
+  <data name="FIDO2Login" xml:space="preserve">
+    <value>FIDO2ログイン</value>
+  </data>
+  <data name="FIDO2LoginSubmit" xml:space="preserve">
+    <value>FIDO2 認証器でログインする。</value>
   </data>
   <data name="ForgotPasswordConfirmationP" xml:space="preserve">
     <value>電子メールを確認してパスワードをリセットしてください。</value>
@@ -167,9 +176,6 @@
   </data>
   <data name="ForgotPasswordTitle" xml:space="preserve">
     <value>パスワードを忘れましたか？</value>
-  </data>
-  <data name="LoginExternalLogins" xml:space="preserve">
-    <value>ソーシャルログイン</value>
   </data>
   <data name="LoginForgotPasswordActionLink" xml:space="preserve">
     <value>パスワードを忘れた場合。</value>

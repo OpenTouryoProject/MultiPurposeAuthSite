@@ -37,7 +37,6 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         public string Email { get; set; }
 
         /// <summary>Password</summary>
-        [Required(AllowEmptyStrings = false)]
         [DataType(DataType.Password)]
         [Display(Name = "Password", ResourceType = typeof(Resources.CommonViewModels))]
         // [StringLength( // 検証用なので不要
@@ -49,5 +48,24 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>RememberMe（アカウント記憶）</summary>
         [Display(Name = "RememberMe", ResourceType = typeof(Resources.CommonViewModels))]
         public bool RememberMe { get; set; }
+
+        #region FIDO2
+
+        /// <summary>Fido2Challenge</summary>
+        public string Fido2Challenge { get; set; }
+
+        /// <summary>Fido2UserId</summary>
+        public string Fido2UserId { get; set; }
+
+        /// <summary>Fido2Signature</summary>
+        public string Fido2Signature { get; set; }
+
+        /// <summary>Fido2AuthenticatorData</summary>
+        public string Fido2AuthenticatorData { get; set; }
+
+        /// <summary>Fido2ClientData</summary>
+        public string Fido2ClientData { get; set; }
+
+        #endregion
     }
 }

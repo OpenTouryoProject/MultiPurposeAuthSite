@@ -84,10 +84,22 @@
         }
     </div>
     <div class="col-md-4">
-        @AccountViews.LoginExternalLogins
-        <section id="socialLoginForm">
-            @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
-        </section>
+
+@if (ASPNETIdentityConfig.CanEditExtLogin)
+{
+        <div class="sample-box-1">
+            @*ここに外部ログインを実装*@
+            @AccountViews.ExternalLogins
+            <section id="socialLoginForm">
+                @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
+            </section>
+        </div>
+}
+
+        <div class="sample-box-1">
+            @*ここにIDフェデレーションを実装*@
+            ここにIDフェデレーションを実装
+        </div>
     </div>
 </div>
 

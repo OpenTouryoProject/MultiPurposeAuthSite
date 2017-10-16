@@ -144,6 +144,9 @@
   <data name="ExternalLoginFailureTitle" xml:space="preserve">
     <value>External login was failed.</value>
   </data>
+  <data name="ExternalLogins" xml:space="preserve">
+    <value>Social login</value>
+  </data>
   <data name="ExternalLoginsListPartialH4" xml:space="preserve">
     <value>Use another service to log in.</value>
   </data>
@@ -152,6 +155,12 @@
   </data>
   <data name="ExternalLoginsListPartialSubmit" xml:space="preserve">
     <value>Log in using your {0} account</value>
+  </data>
+  <data name="FIDO2Login" xml:space="preserve">
+    <value>FIDO2 login</value>
+  </data>
+  <data name="FIDO2LoginSubmit" xml:space="preserve">
+    <value>Log in with FIDO2 authenticator</value>
   </data>
   <data name="ForgotPasswordConfirmationP" xml:space="preserve">
     <value>Please check your email to reset your password.</value>
@@ -167,9 +176,6 @@
   </data>
   <data name="ForgotPasswordTitle" xml:space="preserve">
     <value>Forgot your password ?</value>
-  </data>
-  <data name="LoginExternalLogins" xml:space="preserve">
-    <value>Social login</value>
   </data>
   <data name="LoginForgotPasswordActionLink" xml:space="preserve">
     <value>Forgot your password ?</value>

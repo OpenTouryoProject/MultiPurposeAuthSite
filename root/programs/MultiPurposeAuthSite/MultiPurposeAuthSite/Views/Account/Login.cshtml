@@ -30,6 +30,8 @@
     ViewBag.Title = AccountViews.LoginTitle;
 }
 
+@Scripts.Render("~/bundles/multiauthsite")
+
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
 @section HeaderScriptsSection{
     <!-- Head 部の section -->
@@ -41,7 +43,7 @@
         <h4>@AccountViews.LoginH4</h4>
         <hr />
         <section id="loginForm">
-            @using (Html.BeginForm("Login", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            @using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
             {
                 @Html.AntiForgeryToken()
                 @Html.ValidationSummary(true, "", new { @class = "text-danger" })
@@ -85,7 +87,7 @@
                 </div>
                 <div class="form-group">
                     <div class="col-md-offset-2 col-md-10">
-                        <input type="submit" value="@AccountViews.LoginSubmit" class="btn btn-default" />
+                        <button id="normal_signin" type="button" class="btn btn-default">@AccountViews.LoginSubmit</button>
                     </div>
                 </div>
                 <p>@Html.ActionLink(AccountViews.LoginRegisterActionLink, "Register")</p>
@@ -94,18 +96,86 @@
                     @*これを有効にする前に、パスワード リセット機能に対するアカウント確認を有効にしてください。*@
                     @Html.ActionLink(AccountViews.LoginForgotPasswordActionLink, "ForgotPassword")
                 </p>
+
+                @Html.HiddenFor(m => m.Fido2UserId)
+                @Html.HiddenFor(m => m.Fido2Signature)
+                @Html.HiddenFor(m => m.Fido2AuthenticatorData)
+                @Html.HiddenFor(m => m.Fido2ClientData)
             }
         </section>
-        </div>
+    </div>
     <div class="col-md-4">
-            @AccountViews.LoginExternalLogins
-        <section id="socialLoginForm">
-            @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
-        </section>
+
+@if (ASPNETIdentityConfig.CanEditExtLogin)
+{
+        <div class="sample-box-1">
+            @*ここに外部ログインを実装*@
+            @AccountViews.ExternalLogins
+            <section id="socialLoginForm">
+                @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
+            </section>
+        </div>
+}
+
+        <div class="sample-box-1">
+            @*ここにIDフェデレーションを実装*@
+            ここにIDフェデレーションを実装
+        </div>
+
+@if (ASPNETIdentityConfig.CanEditFIDO2Data)
+{
+        <div class="sample-box-1">
+            @*ここにFIDO2を実装*@
+            @AccountViews.FIDO2Login
+            <section>
+                <button id="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
+            </section>
+        </div>
+}
     </div>
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
+    <script>
+        $(function () {
+            $("#normal_signin").on("click", function () {
+
+                // properties
+                $("#Fido2UserId").val("");
+                $("#Fido2Signature").val("");
+                $("#Fido2AuthenticatorData").val("");
+                $("#Fido2ClientData").val("");
+
+                // submit
+                $("#LoginForm").submit();
+            });
+        })
+
+        $(function () {
+            $("#fido2_signin").on("click", function () {
+                var options = {
+                    timeoutSeconds: 60
+                };
+
+                //var allowList = [{ type: "ScopedCred", id: localStorage["credentialId" }];
+
+                navigator.authentication.getAssertion("@Model.Fido2Challenge", options)
+                    .then(function (result) {
+                        // properties
+
+                        //$("#Fido2UserId").val(result.credential.id);
+                        $("#Fido2UserId").val(localStorage["credentialId"]);
+
+                        $("#Fido2Signature").val(result.signature);
+                        $("#Fido2AuthenticatorData").val(result.authenticatorData);
+                        $("#Fido2ClientData").val(result.clientData);
+
+                        // submit
+                        $("#LoginForm").submit();
+                    });
+            });
+        })
+    </script>
 }

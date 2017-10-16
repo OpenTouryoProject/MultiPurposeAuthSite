@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuth2ProviderHelper
-//* クラス日本語名  ：OAuth2ProviderHelper（ライブラリ）
+//* クラス名        ：OAuth2Helper
+//* クラス日本語名  ：OAuth2Helper（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -54,13 +54,13 @@ using Newtonsoft.Json;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 {
-    /// <summary>OAuth2ProviderHelper（ライブラリ）</summary>
-    public class OAuth2ProviderHelper
+    /// <summary>OAuth2Helper（ライブラリ）</summary>
+    public class OAuth2Helper
     {
         #region member variable
 
         /// <summary>Singleton (instance)</summary>
-        private static OAuth2ProviderHelper _oAuthHelper = new OAuth2ProviderHelper();
+        private static OAuth2Helper _oAuthHelper = new OAuth2Helper();
 
         /// <summary>クライアント識別子情報</summary>
         private Dictionary<string, Dictionary<string, string>> _oauthClientsInfo = null;
@@ -85,7 +85,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #region constructor
 
         /// <summary>constructor</summary>
-        private OAuth2ProviderHelper()
+        private OAuth2Helper()
         {
             // クライアント識別子情報
             this._oauthClientsInfo =
@@ -126,9 +126,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         /// <summary>GetInstance</summary>
         /// <returns>OAuthHelper</returns>
-        public static OAuth2ProviderHelper GetInstance()
+        public static OAuth2Helper GetInstance()
         {
-            return OAuth2ProviderHelper._oAuthHelper;
+            return OAuth2Helper._oAuthHelper;
         }
 
         #endregion

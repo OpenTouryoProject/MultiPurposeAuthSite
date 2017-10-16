@@ -42,10 +42,11 @@
     <hr />
     @Html.ValidationSummary("", new { @class = "text-danger" })
     <div class="form-group">
-        <div class="col-md-3">
-            <button id="make" type="button" class="btn btn-default">Make Credential</button>
+        <div class="col-md-6">
+            <button id="fido2_make" type="button" class="btn btn-default">@ManageViews.AddFIDO2DataSubmit</button>
         </div>
     </div>
+    <input type="hidden" id="resultId" name="resultId" />
     <input type="hidden" id="credentialType" name="credentialType" />
     <input type="hidden" id="credentialId" name="credentialId" />
     <input type="hidden" id="algorithm" name="algorithm" />
@@ -61,7 +62,7 @@
             var accountInfo = {
                 rpDisplayName: 'MultiPurposeAuthSite',
                 displayName: '@ViewBag.UserName',
-                id: '@ViewBag.UserId'
+                id: '@ViewBag.UserName' // ...credentialId
             };
 
             var cryptoParameters = [
@@ -71,14 +72,26 @@
                 }
             ];
 
-            $("#make").on("click", function () {
+            $("#fido2_make").on("click", function () {
                 navigator.authentication.makeCredential(accountInfo, cryptoParameters)
                     .then(function (result) {
+                        // properties
                         $("#credentialType").val(result.credential.type);
+
+                        //$("#resultId").val(result.id);
+                        //localStorage["resultId"] = result.id;
+
+                        // ここで、accountInfo.idと同じ値が取得できるが、
+                        // getAssertionの時、result.credential.idと一致しないので、
+                        // localStorage["credentialId"]に保存する。
                         $("#credentialId").val(result.credential.id);
+                        localStorage["credentialId"] = result.credential.id;
+
                         $("#algorithm").val(result.algorithm); // 現時点では動作しない
                         $("#publickey").val(JSON.stringify(result.publicKey));
                         $("#attestation").val(result.attestation); // 現時点では動作しない
+
+                        // submit
                         $("form").submit();
                     });
             });

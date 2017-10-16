@@ -213,6 +213,7 @@
       <HintPath>..\packages\Microsoft.AspNet.Cors.5.2.3\lib\net45\System.Web.Cors.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Web.Helpers, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.AspNet.WebPages.3.2.3\lib\net45\System.Web.Helpers.dll</HintPath>
       <Private>True</Private>
@@ -298,6 +299,9 @@
     <Compile Include="Models\ASPNETIdentity\Entity\ApplicationUser.cs" />
     <Compile Include="Models\ASPNETIdentity\Entity\UserStore.cs" />
     <Compile Include="Models\ASPNETIdentity\ExternalLoginHelper\ExternalLoginStarter.cs" />
+    <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FIDO2Helper.cs" />
+    <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FidoAuthenticatorM.cs" />
+    <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FidoAuthenticatorS.cs" />
     <Compile Include="Models\ASPNETIdentity\Filter\OpenIDConnectCodeFilter.cs" />
     <Compile Include="Models\ASPNETIdentity\Filter\OpenIDConnectModule.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationRoleManager.cs" />
@@ -308,7 +312,7 @@
     <Compile Include="Models\ASPNETIdentity\TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\Util\CustomizedConfirmationProvider.cs" />
-    <Compile Include="Models\ASPNETIdentity\OAuth2Extension\OAuth2ProviderHelper.cs" />
+    <Compile Include="Models\ASPNETIdentity\OAuth2Extension\OAuth2Helper.cs" />
     <Compile Include="Models\ASPNETIdentity\OAuth2Extension\OAuth2DataProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\RefreshTokenProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AccessTokenFormatJwt.cs" />
@@ -522,9 +526,7 @@
       <SubType>Designer</SubType>
     </Content>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Models\ASPNETIdentity\FIDO2Extension\" />
-  </ItemGroup>
+  <ItemGroup />
   <ItemGroup>
     <EmbeddedResource Include="Resources\AccountController.ja.resx">
       <SubType>Designer</SubType>

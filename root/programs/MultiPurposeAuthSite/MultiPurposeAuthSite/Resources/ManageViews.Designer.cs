@@ -97,7 +97,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Submit に類似しているローカライズされた文字列を検索します。
+        ///   Register FIDO 2 authenticator に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddFIDO2DataSubmit {
             get {
