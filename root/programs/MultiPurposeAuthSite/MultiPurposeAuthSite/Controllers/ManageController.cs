@@ -2259,17 +2259,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// FIDO2関連の非構造化データの追加・編集画面（FIDO2関連の非構造化データ設定）
         /// POST: /Manage/AddFIDO2Data
         /// </summary>
-        /// <param name="credentialType">string</param>
-        /// <param name="credentialId">string</param>
-        /// <param name="algorithm">string</param>
-        /// <param name="publickey">string</param>
-        /// <param name="attestation">string</param>
+        /// <param name="fido2UserId">string</param>
+        /// <param name="fido2Publickey">string</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddFIDO2Data(
-            string credentialType, string credentialId,
-            string algorithm, string publickey, string attestation)
+            string fido2UserId, string fido2Publickey)
         {
             if (ASPNETIdentityConfig.CanEditFIDO2Data
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
@@ -2281,10 +2277,10 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ユーザを取得できた。
                     //if (user.Id == credentialId)
-                    if (user.UserName == credentialId)
+                    if (user.UserName == fido2UserId)
                     {
                         // 公開鍵を保存
-                        user.FIDO2PublicKey = publickey;
+                        user.FIDO2PublicKey = fido2Publickey;
 
                         // ユーザーの保存
                         IdentityResult result = await UserManager.UpdateAsync(user);

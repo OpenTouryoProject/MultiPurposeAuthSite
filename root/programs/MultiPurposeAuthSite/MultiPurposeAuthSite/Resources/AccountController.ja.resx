@@ -120,11 +120,11 @@
   <data name="InvalidCode" xml:space="preserve">
     <value>無効なコード。</value>
   </data>
-  <data name="Login" xml:space="preserve">
-    <value>サインイン試行に失敗しました。</value>
-  </data>
   <data name="Login_emailconfirm" xml:space="preserve">
     <value>電子メールの確認が必要です！</value>
+  </data>
+  <data name="Login_Error" xml:space="preserve">
+    <value>サインイン試行に失敗しました。</value>
   </data>
   <data name="SendEmail_emailconfirm" xml:space="preserve">
     <value>e-mail アカウントの確認</value>

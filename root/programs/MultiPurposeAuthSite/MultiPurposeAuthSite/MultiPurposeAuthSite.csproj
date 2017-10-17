@@ -300,8 +300,6 @@
     <Compile Include="Models\ASPNETIdentity\Entity\UserStore.cs" />
     <Compile Include="Models\ASPNETIdentity\ExternalLoginHelper\ExternalLoginStarter.cs" />
     <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FIDO2Helper.cs" />
-    <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FidoAuthenticatorM.cs" />
-    <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FidoAuthenticatorS.cs" />
     <Compile Include="Models\ASPNETIdentity\Filter\OpenIDConnectCodeFilter.cs" />
     <Compile Include="Models\ASPNETIdentity\Filter\OpenIDConnectModule.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationRoleManager.cs" />

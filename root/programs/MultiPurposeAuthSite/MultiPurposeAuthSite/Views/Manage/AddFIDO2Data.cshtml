@@ -46,96 +46,54 @@
             <button id="fido2_make" type="button" class="btn btn-default">@ManageViews.AddFIDO2DataSubmit</button>
         </div>
     </div>
-    <input type="hidden" id="credentialType" name="credentialType" />
-    <input type="hidden" id="credentialId" name="credentialId" />
-    <input type="hidden" id="algorithm" name="algorithm" />
-    <input type="hidden" id="publickey" name="publickey" />
-    <input type="hidden" id="attestation" name="attestation" />
+    <input type="hidden" id="fido2UserId" name="fido2UserId" />
+    <input type="hidden" id="fido2Publickey" name="fido2Publickey" />
 }
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
     <script>
+        const credAlgorithm = "RSASSA-PKCS1-v1_5";
 
         $(function () {
-
-            @*// window.msCredentialの仕様が変わっている？
-            var accountInfo = {
-                rpDisplayName: 'MultiPurposeAuthSite',    // Name of relying party
-                userDisplayName: '@ViewBag.UserName'      // Name of user account in relying partying
-            };
-
-            var cryptoParameters = [
-              {
-                  type: 'FIDO_2_0',
-                  algorithm: 'RSASSA-PKCS1-v1_5'
-              }
-            ];
-
-            $("#fido2_make").on("click", function () {
-                window.msCredential.makeCredential(accountInfo, cryptoParameters)
-                    .then(function (result) {
-                        // properties
-                        $("#credentialType").val(result.credential.type);
-
-                        // ここで、accountInfo.idと同じ値が取得できるが、
-                        // getAssertionの時、result.credential.idと一致しないので、
-                        // localStorage["credentialId"]に保存する。
-                        $("#credentialId").val(result.credential.id);
-                        localStorage["credentialId"] = result.credential.id;
-
-                        $("#algorithm").val(result.algorithm); // 現時点では動作しない
-                        $("#publickey").val(JSON.stringify(result.publicKey));
-                        $("#attestation").val(result.attestation); // 現時点では動作しない
-
-                        // submit
-                        $("form").submit();
-                    });
-            });*@
 
             var accountInfo = {
                 rpDisplayName: 'MultiPurposeAuthSite', // Name of relying party
                 displayName: '@ViewBag.UserName',      // Name of user account in relying partying
-                name: '@ViewBag.UserName',             // Detailed name of account
+
+                @*name: '@ViewBag.UserName',             // Detailed name of account
                 id: '@ViewBag.UserName',               // Account identifier ... credentialId
-                imageUri: '',                          // user’s account image
+                imageUri: '',                          // user’s account image*@
             };
 
             var cryptoParameters = [
                 {
                     type: 'ScopedCred',
-                    algorithm: 'RSASSA-PKCS1-v1_5'
+                    algorithm: credAlgorithm
                 }
             ];
 
-            var attestationChallenge = '@ViewBag.AttestationChallenge';
+            @*var attestationChallenge = '@ViewBag.AttestationChallenge';
 
             var timeout = {};
             var denyList = {};
-            var ext = {};
+            var ext = {};*@
 
             $("#fido2_make").on("click", function () {
-                navigator.authentication.makeCredential(
-                    accountInfo,
-                    cryptoParameters,
-                    attestationChallenge,
-                    timeout,
-                    denyList,
-                    ext)
+                navigator.authentication.makeCredential(accountInfo, cryptoParameters)
                     .then(function (result) {
                         // properties
-                        $("#credentialType").val(result.credential.type);
 
-                        // ここで、accountInfo.idと同じ値が取得できるが、
-                        // getAssertionの時、result.credential.idと一致しないので、
-                        // localStorage["credentialId"]に保存する。
-                        $("#credentialId").val(result.credential.id);
+                        localStorage["userId"] = "@ViewBag.UserName";
+                        localStorage["credentialType"] = result.credential.type;
                         localStorage["credentialId"] = result.credential.id;
+                        localStorage["algorithm"] = result.algorithm; // 現時点では動作しない
+                        localStorage["publicKey"] = JSON.stringify(result.publicKey);
+                        localStorage["attestation"] = result.attestation; // 現時点では動作しない
 
-                        $("#algorithm").val(result.algorithm); // 現時点では動作しない
-                        $("#publickey").val(JSON.stringify(result.publicKey));
-                        $("#attestation").val(result.attestation); // 現時点では動作しない
+                        $("#fido2UserId").val("@ViewBag.UserName");
+                        $("#fido2Publickey").val(JSON.stringify(result.publicKey));
 
                         // submit
                         $("form").submit();
