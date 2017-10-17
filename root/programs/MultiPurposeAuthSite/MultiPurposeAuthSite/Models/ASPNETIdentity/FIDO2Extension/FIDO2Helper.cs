@@ -36,7 +36,7 @@ using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography;
-using System.Diagnostics;
+//using System.Diagnostics;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -75,15 +75,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
         {
             bool ret = false;
 
-            Debug.WriteLine("publicKey: " + this.PublicKey);
-            Debug.WriteLine("challenge: " + this.Challenge);
-            Debug.WriteLine("clientData: " + clientData);
-            Debug.WriteLine("authenticatorData: " + authenticatorData);
-            Debug.WriteLine("signature: " + signature);
-
-            byte[] clientDataBytes = this.FromBase64Url(clientData);
-            byte[] authenticatorDataBytes = this.FromBase64Url(authenticatorData);
-            byte[] signatureBytes = this.FromBase64Url(signature);
+            byte[] clientDataBytes = CustomEncode.FromBase64UrlString(clientData);
+            byte[] authenticatorDataBytes = CustomEncode.FromBase64UrlString(authenticatorData);
+            byte[] signatureBytes = CustomEncode.FromBase64UrlString(signature);
 
             // Challengeの一致を確認する。
             JObject clientJson = JObject.Parse(//Encoding.ASCII.GetString(clientDataBytes));
@@ -102,8 +96,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
                     RSAParameters rsaParameters = new RSAParameters();
                     string modulus = (string)jwk["n"]; // JWK - ...
                     string exponent = (string)jwk["e"]; // JWK - Key
-                    Debug.WriteLine("modulus: " + modulus);
-                    Debug.WriteLine("exponent: " + exponent);
+                    //Debug.WriteLine("modulus: " + modulus);
+                    //Debug.WriteLine("exponent: " + exponent);
 
                     // VerifyData
                     byte[] hashBytes = null;
@@ -112,30 +106,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
                     // ----------
 
                     // FromBase64Stringだとエラーになる。
-
-                    //// ModulusとExponentを指定してRSAで暗号化/復号する（.NET） - misc.log
-                    //// http://backyard.hatenablog.com/entry/20161219/1482146423
-                    //// java - How to get public RSA key from unformatted String - Stack Overflow
-                    //// https://stackoverflow.com/questions/28204659/how-to-get-public-rsa-key-from-unformatted-string
-
-                    // RSAParameters
-                    // FromBase64Stringだとエラーになる。
-                    //rsaParameters = new RSAParameters
-                    //{
-                    //    Modulus = CustomEncode.FromBase64String(modulus),
-                    //    Exponent = CustomEncode.FromBase64String(exponent),
-                    //};
+                    
                     rsaParameters = new RSAParameters
                     {
-                        Modulus = this.FromBase64Url(modulus), //CustomEncode.FromBase64UrlString(modulus),
-                        Exponent = this.FromBase64Url(exponent), //CustomEncode.FromBase64UrlString(exponent),
+                        Modulus = CustomEncode.FromBase64UrlString(modulus),
+                        Exponent = CustomEncode.FromBase64UrlString(exponent),
                     };
 
                     hashBytes = GetHash.GetHashBytes(clientDataBytes, EnumHashAlgorithm.SHA256Managed, 0);
                     data = authenticatorDataBytes.Concat(hashBytes).ToArray();
 
-                    Debug.WriteLine("hashBytes : " + CustomEncode.ToHexString(hashBytes));
-                    Debug.WriteLine("data : " + CustomEncode.ToHexString(data));
+                    //Debug.WriteLine("hashBytes : " + CustomEncode.ToHexString(hashBytes));
+                    //Debug.WriteLine("data : " + CustomEncode.ToHexString(data));
 
                     RSACryptoServiceProvider rsaCryptoServiceProvider = new RSACryptoServiceProvider();
                     rsaCryptoServiceProvider.ImportParameters(rsaParameters);
@@ -143,53 +125,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
                         data, signatureBytes,
                         HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 
-                    Debug.WriteLine("ret : " + ret);
-                    
-                    #region ゴミ
-
-                    // Hash data with sha-256
-                    SHA256Managed sha256Managed = new SHA256Managed();
-                    hashBytes = sha256Managed.ComputeHash(clientDataBytes);
-
-                    // Create "authnrData + hash" data buffer to verify signature over
-                    data = new byte[authenticatorDataBytes.Length + hashBytes.Length];
-                    authenticatorDataBytes.CopyTo(data, 0);
-                    hashBytes.CopyTo(data, authenticatorDataBytes.Length);
-
-                    Debug.WriteLine("hashBytes1: " + CustomEncode.ToHexString(hashBytes));
-                    Debug.WriteLine("data1: " + CustomEncode.ToHexString(data));
-
-                    // Verify signature is correct for authnrData + hash by RSACng.
-                    RSACng rsaCng = new RSACng();
-                    rsaCng.ImportParameters(rsaParameters);
-                    ret = rsaCng.VerifyData(
-                        data, signatureBytes,
-                        HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-                    
-                    Debug.WriteLine("ret1: " + ret);
-
-                    // ----------
-
-                    // Hash data with sha-256
-                    SHA256 sha256 = SHA256.Create();
-                    hashBytes = sha256.ComputeHash(clientDataBytes);
-
-                    // Create "authnrData + hash" data buffer to verify signature over
-                    data = authenticatorDataBytes.Concat(hashBytes).ToArray();
-
-                    Debug.WriteLine("hashBytes2: " + CustomEncode.ToHexString(hashBytes));
-                    Debug.WriteLine("data2: " + CustomEncode.ToHexString(data));
-                    
-                    // Verify signature is correct for authnrData + hash by RSACng.
-                    RSA rsa = RSA.Create();
-                    rsa.ImportParameters(rsaParameters);
-                    ret = rsa.VerifyData(
-                        data, signatureBytes,
-                        HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-
-                    Debug.WriteLine("ret2: " + ret);
-
-                    #endregion
+                    //Debug.WriteLine("ret : " + ret);
                 }
 
                 return ret;
@@ -199,35 +135,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
                 // Challengeの不一致
                 return false;
             }
-        }
-
-        /// <summary>rfc4648_base64_url_decode</summary>
-        /// <param name="url">url</param>
-        /// <returns>decoded</returns>
-        private byte[] FromBase64Url(string url)
-        {
-            url = url.Replace('-', '+');
-            url = url.Replace('_', '/');
-
-            switch (url.Length % 4)
-            {
-
-                case 0:
-                    break;
-
-                case 2:
-                    url += "==";
-                    break;
-
-                case 3:
-                    url += "=";
-                    break;
-
-                default:
-                    throw new ArgumentException();
-            }
-
-            return Convert.FromBase64String(url);
         }
     }
 }

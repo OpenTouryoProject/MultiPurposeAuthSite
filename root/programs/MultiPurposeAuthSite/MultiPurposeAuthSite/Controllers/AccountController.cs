@@ -40,6 +40,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using System.Diagnostics;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -146,7 +147,7 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.ReturnUrl = returnUrl;
 
             // サインイン画面（初期表示）
-            string fido2Challenge = GetPassword.Generate(128, 0);
+            string fido2Challenge = GetPassword.Generate(22, 0);
             Session["fido2Challenge"] = fido2Challenge;
 
             return View(new AccountLoginViewModel
@@ -321,13 +322,74 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 // FIDO2Helper, FidoAuthenticatorS, FidoAuthenticatorMどれを使用しても動作せず。
 
-                                //FIDO2Helper fido2Helper  = new FIDO2Helper(user.FIDO2PublicKey, fido2Challenge);
-                                //if (fido2Helper.ValidateSignature(model.Fido2ClientData, model.Fido2AuthenticatorData, model.Fido2Signature))
-                                //{ }
+                                FIDO2Helper fido2Helper = null;
+                                FidoAuthenticatorS fidoAuthenticatorS = null;
 
-                                //FidoAuthenticatorS fidoAuthenticatorS = new FidoAuthenticatorS(user.FIDO2PublicKey, fido2Challenge);
-                                //if (fidoAuthenticatorS.ValidateSignature(model.Fido2Signature, model.Fido2AuthenticatorData, model.Fido2ClientData))
-                                //{ }
+                                #region FidoAuthenticatorMのパラメタでテストしたら全て成功
+
+                                Debug.WriteLine("FidoAuthenticatorM: ");
+                                Debug.WriteLine("publicKey: " + FidoAuthenticatorM.PublicKey);
+                                Debug.WriteLine("challenge: " + FidoAuthenticatorM.Challenge);
+                                Debug.WriteLine("clientData: " + FidoAuthenticatorM.ClientData);
+                                Debug.WriteLine("authenticatorData: " + FidoAuthenticatorM.AuthnrData);
+                                Debug.WriteLine("signature: " + FidoAuthenticatorM.Signature);
+
+                                fido2Helper = new FIDO2Helper(
+                                    FidoAuthenticatorM.PublicKey, FidoAuthenticatorM.Challenge);
+                                if (fido2Helper.ValidateSignature(
+                                    FidoAuthenticatorM.ClientData, FidoAuthenticatorM.AuthnrData, FidoAuthenticatorM.Signature))
+                                {
+                                    Debug.WriteLine("FIDO2Helper: 成功");
+                                }
+
+                                fidoAuthenticatorS = new FidoAuthenticatorS(
+                                    FidoAuthenticatorM.PublicKey, FidoAuthenticatorM.Challenge);
+                                if (fidoAuthenticatorS.ValidateSignature(
+                                    FidoAuthenticatorM.Signature, FidoAuthenticatorM.AuthnrData, FidoAuthenticatorM.ClientData))
+                                {
+                                    Debug.WriteLine("FidoAuthenticatorS: 成功");
+                                }
+
+                                if (FidoAuthenticatorM.validateSignature(
+                                    FidoAuthenticatorM.PublicKey,
+                                    FidoAuthenticatorM.ClientData, FidoAuthenticatorM.AuthnrData, FidoAuthenticatorM.Signature,
+                                    FidoAuthenticatorM.Challenge))
+                                {
+                                    Debug.WriteLine("FidoAuthenticatorM: 成功");
+                                }
+
+                                #endregion
+
+                                Debug.WriteLine("Windows Hello: ");
+                                Debug.WriteLine("publicKey: " + user.FIDO2PublicKey);
+                                Debug.WriteLine("challenge: " + fido2Challenge);
+                                Debug.WriteLine("clientData: " + model.Fido2ClientData);
+                                Debug.WriteLine("authenticatorData: " + model.Fido2AuthenticatorData);
+                                Debug.WriteLine("signature: " + model.Fido2Signature);
+
+                                fido2Helper = new FIDO2Helper(user.FIDO2PublicKey, fido2Challenge);
+                                if (fido2Helper.ValidateSignature(
+                                    model.Fido2ClientData, model.Fido2AuthenticatorData, model.Fido2Signature))
+                                {
+                                    await SignInManager.SignInAsync(user, false, false);
+                                    result = SignInStatus.Success;
+                                }
+                                else
+                                {
+                                    result = SignInStatus.Failure;
+                                }
+
+                                fidoAuthenticatorS = new FidoAuthenticatorS(user.FIDO2PublicKey, fido2Challenge);
+                                if (fidoAuthenticatorS.ValidateSignature(
+                                    model.Fido2Signature, model.Fido2AuthenticatorData, model.Fido2ClientData))
+                                {
+                                    await SignInManager.SignInAsync(user, false, false);
+                                    result = SignInStatus.Success;
+                                }
+                                else
+                                {
+                                    result = SignInStatus.Failure;
+                                }
 
                                 if (FidoAuthenticatorM.validateSignature(
                                     user.FIDO2PublicKey, 

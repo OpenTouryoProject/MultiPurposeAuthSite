@@ -2244,7 +2244,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 ViewBag.UserId = user.Id;
                 ViewBag.UserName = user.UserName;
-                ViewBag.AttestationChallenge = GetPassword.Generate(128, 0);
+                ViewBag.AttestationChallenge = GetPassword.Generate(22, 0);
 
                 return View();
             }
