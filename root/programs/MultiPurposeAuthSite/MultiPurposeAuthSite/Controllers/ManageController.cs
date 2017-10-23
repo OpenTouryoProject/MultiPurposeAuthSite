@@ -2155,7 +2155,8 @@ namespace MultiPurposeAuthSite.Controllers
                         "&response_type=code" +
                         "&redirect_uri=" + redirect_uri +
                         "&scope=" + model.Scopes +
-                        "&state=" + state);
+                        "&state=" + state +
+                        "&response_mode=form_post");
                 }
             }
 
@@ -2357,7 +2358,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
-        [HttpGet]
+        [HttpPost]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data
@@ -2422,32 +2423,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #endregion
 
-                //// 画面の表示。
-                //return View(model);
-
-                // 情報消去のためのRedirect用アクション・メソッドを経由
-                Session["OAuthAuthorizationCodeGrantClientViewModel"] = model;
-                return RedirectToAction("OAuthAuthorizationCodeGrantClient2");
-            }
-            else
-            {
-                return View("Error");
-            }
-        }
-
-        /// <summary>情報消去のためのRedirect用アクション・メソッド</summary>
-        /// <returns>ActionResult</returns>
-        public ActionResult OAuthAuthorizationCodeGrantClient2()
-        {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data
-                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
-            {
-                // OAuthAuthorizationCodeGrantClientViewModelを取得。
-                OAuthAuthorizationCodeGrantClientViewModel model = null;
-                model = (OAuthAuthorizationCodeGrantClientViewModel)Session["OAuthAuthorizationCodeGrantClientViewModel"];
-
                 // 画面の表示。
                 return View(model);
+
+                //// 情報消去のためのRedirect用アクション・メソッドを経由
+                //Session["OAuthAuthorizationCodeGrantClientViewModel"] = model;
+                //return RedirectToAction("OAuthAuthorizationCodeGrantClient2");
             }
             else
             {
@@ -2507,7 +2488,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 画面の表示。
                 ModelState.Clear();
-                return View(model);
+                return View("OAuthAuthorizationCodeGrantClient", model);
             }
             else
             {

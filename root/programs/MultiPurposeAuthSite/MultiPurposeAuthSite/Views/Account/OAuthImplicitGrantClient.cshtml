@@ -96,6 +96,8 @@
         $(function () {
             // フラグメントを取得し、
             fragment = getFragment();
+            alert(JSON.stringify(fragment));
+
             // フラグメントに access_token (Bearer Token) がある場合、
             if (fragment.access_token) {
 

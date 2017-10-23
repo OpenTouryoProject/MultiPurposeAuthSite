@@ -125,7 +125,11 @@ namespace MultiPurposeAuthSite.Controllers
             // データの生成
             await this.CreateData();
 
-            string cmnPattern = "ReturnUrl=";
+            string cmnPattern = "";
+
+            #region ReturnUrl
+
+            cmnPattern = "ReturnUrl=";
 
             if (string.IsNullOrEmpty(returnUrl)
                 && Request.RawUrl.IndexOf(cmnPattern) != -1)
@@ -146,15 +150,50 @@ namespace MultiPurposeAuthSite.Controllers
             // ReturnUrl
             ViewBag.ReturnUrl = returnUrl;
 
+            #endregion
+
+            #region LoginHint
+
+            string loginHint = "";
+            cmnPattern = "login_hint=";
+
+            if (!string.IsNullOrEmpty(returnUrl))
+            {
+                if (returnUrl.IndexOf(cmnPattern) != -1)
+                {
+                    // IndexOf & SubstringでloginHintを抜き出す。
+                    loginHint = returnUrl.Substring(returnUrl.IndexOf(cmnPattern) + cmnPattern.Length);
+                }
+
+                // ReturnUrl
+                ViewBag.LoginHint = loginHint;
+            }
+
+            #endregion
+
             // サインイン画面（初期表示）
             string fido2Challenge = GetPassword.Generate(22, 0);
             Session["fido2Challenge"] = fido2Challenge;
 
-            return View(new AccountLoginViewModel
+            // サインアップしたユーザを取得
+            if (ASPNETIdentityConfig.RequireUniqueEmail)
             {
-                ReturnUrl = returnUrl,
-                Fido2Challenge = fido2Challenge
-            });
+                return View(new AccountLoginViewModel
+                {
+                    ReturnUrl = returnUrl,
+                    Email = loginHint,
+                    Fido2Challenge = fido2Challenge
+                });
+            }
+            else
+            {
+                return View(new AccountLoginViewModel
+                {
+                    ReturnUrl = returnUrl,
+                    Name = loginHint,
+                    Fido2Challenge = fido2Challenge
+                });
+            }
         }
 
         /// <summary>
@@ -1718,8 +1757,8 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
             else if ((response_type.ToLower() == "token")
-                || (response_type.ToLower() == "id_token token")
-                || (response_type.ToLower() == "id_token"))
+                || (response_type.ToLower() == "id_token")
+                || (response_type.ToLower() == "id_token token"))
             {
                 // Implicitグラント種別（Access Tokenの発行）
                 if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))
@@ -1833,7 +1872,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
-        [HttpGet]
         [AllowAnonymous]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
         {
@@ -1848,6 +1886,7 @@ namespace MultiPurposeAuthSite.Controllers
                 Dictionary<string, string> dic = null;
                 OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
                 {
+                    State = state,
                     Code = code
                 };
 
@@ -1897,7 +1936,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //    // state異常
                 //}
 
-                ViewBag.QS_State = state;
+                //ViewBag.QS_State = state;
                 //ViewBag.SS_State = (string)Session["state"];
 
                 //Session["state"] = ""; // 誤動作防止
@@ -1924,7 +1963,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(OAuthAuthorizationCodeGrantClientViewModel model)
+        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient2(OAuthAuthorizationCodeGrantClientViewModel model)
         {
             if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
             {
@@ -1987,7 +2026,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 画面の表示。
                 ModelState.Clear();
-                return View(model);
+                return View("OAuthAuthorizationCodeGrantClient", model);
             }
             else
             {

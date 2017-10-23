@@ -43,7 +43,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     [Serializable]
     public class OAuthAuthorizationCodeGrantClientViewModel : BaseViewModel
     {
+        /// <summary>State</summary>
+        [Display(Name = "State")]
+        public string State { get; set; }
+
         /// <summary>Code</summary>
+        [Display(Name = "Code")]
         public string Code { get; set; }
 
         /// <summary>AccessToken</summary>

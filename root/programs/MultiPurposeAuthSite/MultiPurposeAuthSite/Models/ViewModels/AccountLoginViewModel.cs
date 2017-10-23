@@ -42,12 +42,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         // [StringLength( // 検証用なので不要
         public string Password { get; set; }
 
-        /// <summary>ReturnUrl</summary>
-        public string ReturnUrl { get; set; }
-
         /// <summary>RememberMe（アカウント記憶）</summary>
         [Display(Name = "RememberMe", ResourceType = typeof(Resources.CommonViewModels))]
         public bool RememberMe { get; set; }
+
+        /// <summary>ReturnUrl</summary>
+        public string ReturnUrl { get; set; }
 
         #region FIDO2
 

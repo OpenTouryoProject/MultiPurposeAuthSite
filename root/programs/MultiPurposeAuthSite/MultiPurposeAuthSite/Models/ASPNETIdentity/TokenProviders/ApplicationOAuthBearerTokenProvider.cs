@@ -88,6 +88,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // response_type
             string response_type = context.Request.Query.Get("response_type");
 
+            // 書き換え
+            if (response_type.ToLower() == "id_token"
+                || response_type.ToLower() == "id_token token")
+            {
+                response_type = "token";
+            }
+
             if (!string.IsNullOrEmpty(response_type))
             {
                 if (response_type.ToLower() == "code")

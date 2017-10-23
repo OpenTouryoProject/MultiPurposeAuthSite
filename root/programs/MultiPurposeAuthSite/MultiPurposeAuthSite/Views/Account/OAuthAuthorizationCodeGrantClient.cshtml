@@ -52,35 +52,42 @@
 
 <h2>@ViewBag.Title.</h2>
 <hr />
-<form id="form1" method="POST">
-
+@using (Html.BeginForm("OAuthAuthorizationCodeGrantClient2", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
     @Html.AntiForgeryToken()
 
-    State : @Html.Label("QS_State", (string)ViewBag.QS_State)<br />
-    @*- @Html.Label("SS_State", (string)ViewBag.SS_State)<br />*@
+    <text>State:</text> @Html.TextBoxFor(model => model.State, new { @readonly = "readonly" })<br />
+    <text>Code:</text>  @Html.TextBoxFor(model => model.Code, new { @readonly = "readonly" })<br />
 
-    Code: @Html.Label("Code", Model.Code)<br />
+    <text>Access Token</text>
+    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+    {
+        <text>(JWT)</text>
+    }
+    <text>:</text><br />
+    
+    @Html.TextBoxFor(model => model.AccessToken, new { style = "width:100%;", @readonly = "readonly" })<br />
+    
+    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+    {
+        <text>Access Token (Json):<br /></text>
+        @Html.TextArea("AccessTokenJwtToJson", Model.AccessTokenJwtToJson, new { style = "resize: both; width:100%; height:200px;", @readonly = "readonly" })<br />
+    }
 
-    Access Token @if (ASPNETIdentityConfig.EnableCustomTokenFormat) { <text>(JWT)</text> }:<br />
-    @Html.TextBoxFor(model => model.AccessToken, new { style = "width:100%;" })<br />
-@if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-{
-    <text>Access Token (Json):<br /></text>
-    @Html.TextArea("AccessTokenJwtToJson", Model.AccessTokenJwtToJson, new { style = "resize: both; width:100%; height:200px;" })<br />
-}
-    Refresh Token:<br />
-    @Html.TextBoxFor(model => model.RefreshToken, new { style = "width:100%;" })<br />
+    <text>Refresh Token:</text><br />
+    @Html.TextBoxFor(model => model.RefreshToken, new { style = "width:100%;", @readonly = "readonly" })<br />
     <input class="btn btn-block" type="submit" name="submit.Refresh" value="Refresh" />
     <input class="btn btn-block" type="submit" name="submit.GetUserClaims" value="Get user claims" />
-    Response:<br />
-    @Html.TextArea("Response", Model.Response ?? "", new { style = "width:100%; height:200px;" })<br />
+
+    <text>Response:</text><br />
+    @Html.TextArea("Response", Model.Response ?? "", new { style = "width:100%; height:200px;", @readonly = "readonly" })<br />
     <br />
-@if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-{
-    <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
-    <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
+    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+    {
+        <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
+        <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
+    }
 }
-</form>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
