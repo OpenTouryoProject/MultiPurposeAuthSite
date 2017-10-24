@@ -122,7 +122,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region property (GetOwinContext)
 
         /// <summary>ApplicationUserManager</summary>
-        public ApplicationUserManager UserManager
+        private ApplicationUserManager UserManager
         {
             get
             {
@@ -131,7 +131,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>ApplicationRoleManager</summary>
-        public ApplicationRoleManager RoleManager
+        private ApplicationRoleManager RoleManager
         {
             get
             {
@@ -140,7 +140,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>ApplicationSignInManager</summary>
-        public ApplicationSignInManager SignInManager
+        private ApplicationSignInManager SignInManager
         {
             get
             {
@@ -2137,17 +2137,15 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // client_id
                     string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                    Session["client_id"] = client_id;
 
                     // redirect_uri
                     string redirect_uri = CustomEncode.UrlEncode2(
                         ASPNETIdentityConfig.OAuthClientEndpointsRootURI
                         + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
-                    Session["redirect_uri"] = redirect_uri;
 
                     // state (nonce) // 記号は入れない。
                     string state = GetPassword.Generate(10, 0);
-                    Session["state"] = state;
+                    Session["get_oauth2_token_state"] = state;
 
                     return Redirect(
                         oAuthAuthorizeEndpoint +
@@ -2377,15 +2375,16 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = (string)Session["client_id"];
+                string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
                 string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
-                #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
-
                 // stateの検証
-                if (state == (string)Session["state"])
+                if (state == (string)Session["get_oauth2_token_state"])
                 {
                     // state正常
+                    Session["get_oauth2_token_state"] = ""; // 誤動作防止
+
+                    #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                     // 仲介コードからAccess Tokenを取得する。
                     string redirect_uri
@@ -2396,6 +2395,8 @@ namespace MultiPurposeAuthSite.Controllers
                     model.Response = await OAuth2Helper.GetInstance()
                         .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+
+                    #endregion
 
                     // 余談：OpenID Connectであれば、ここで id_token 検証。
 
@@ -2419,16 +2420,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // state異常
                 }
 
-                Session["state"] = ""; // 誤動作防止
-
-                #endregion
-
                 // 画面の表示。
                 return View(model);
-
-                //// 情報消去のためのRedirect用アクション・メソッドを経由
-                //Session["OAuthAuthorizationCodeGrantClientViewModel"] = model;
-                //return RedirectToAction("OAuthAuthorizationCodeGrantClient2");
             }
             else
             {

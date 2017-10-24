@@ -177,6 +177,12 @@
   <data name="ForgotPasswordTitle" xml:space="preserve">
     <value>パスワードを忘れましたか？</value>
   </data>
+  <data name="IdFederationLogin" xml:space="preserve">
+    <value>ID連携ログイン</value>
+  </data>
+  <data name="IdFederationLoginSubmit" xml:space="preserve">
+    <value>ID連携でログインする。</value>
+  </data>
   <data name="LoginForgotPasswordActionLink" xml:space="preserve">
     <value>パスワードを忘れた場合。</value>
   </data>

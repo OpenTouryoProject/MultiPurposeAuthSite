@@ -77,7 +77,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region property (GetOwinContext)
 
         /// <summary>ApplicationUserManager</summary>
-        public ApplicationUserManager UserManager
+        private ApplicationUserManager UserManager
         {
             get
             {
@@ -132,6 +132,7 @@ namespace MultiPurposeAuthSite.Controllers
                 switch (scope.Value.ToLower())
                 {
                     #region OpenID Connect
+
                     case ASPNETIdentityConst.Scope_Profile:
                         // ・・・
                         break;
@@ -146,17 +147,23 @@ namespace MultiPurposeAuthSite.Controllers
                     case ASPNETIdentityConst.Scope_Address:
                         // ・・・
                         break;
+
                     #endregion
 
                     #region Else
+
                     case ASPNETIdentityConst.Scope_Userid:
                         userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                        break;
+                    case ASPNETIdentityConst.Scope_Parentid:
+                        userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Parentid, user.ParentId);
                         break;
                     case ASPNETIdentityConst.Scope_Roles:
                         IList<string> roles = await UserManager.GetRolesAsync(user.Id);
                         userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);
                         break;
-                        #endregion
+
+                    #endregion
                 }
             }
 
