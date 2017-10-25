@@ -35,11 +35,6 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         // [StringLength( // ユーザ入力でないので不要
         public string Id { get; set; }
 
-        /// <summary>ParentId(UI制御用)</summary>
-        [Required(AllowEmptyStrings = false)]
-        // [StringLength( // ユーザ入力でないので不要
-        public string ParentId { get; set; }
-
         /// <summary>Name</summary>
         [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(

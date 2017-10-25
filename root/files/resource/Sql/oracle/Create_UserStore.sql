@@ -19,7 +19,6 @@ CREATE TABLE "Users"(              -- Users
     "LockoutEnabled" NUMBER(3) NOT NULL,
     "AccessFailedCount" NUMBER(10) NOT NULL,
     -- 追加の情報
-    "ParentId" NVARCHAR2(38) NULL,           -- guid
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
@@ -31,7 +30,6 @@ CREATE TABLE "Users"(              -- Users
 CREATE TABLE "Roles"(              -- Roles
     "Id" NVARCHAR2(38) NOT NULL,             -- PK, guid
     "Name" NVARCHAR2(256) NOT NULL,
-    "ParentId" NVARCHAR2(38) NULL,           -- guid
     CONSTRAINT "PK.Roles" PRIMARY KEY ("Id")
 );
 

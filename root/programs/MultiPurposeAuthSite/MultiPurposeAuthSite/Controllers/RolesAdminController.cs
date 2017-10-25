@@ -83,10 +83,10 @@ namespace MultiPurposeAuthSite.Controllers
                     IList<string> roles = UserManager.GetRoles(User.Identity.GetUserId());
                     foreach (string roleName in roles)
                     {
-                        if (ASPNETIdentityConfig.MultiTenant)
-                        {
-                            if (roleName == ASPNETIdentityConst.Role_Admin) return;
-                        }
+                        //if (ASPNETIdentityConfig.MultiTenant)
+                        //{
+                        //    if (roleName == ASPNETIdentityConst.Role_Admin) return;
+                        //}
 
                         if (roleName == ASPNETIdentityConst.Role_SystemAdmin) return;
                     }
@@ -100,37 +100,6 @@ namespace MultiPurposeAuthSite.Controllers
                 // ロックダウンされている。
                 throw new SecurityException(Resources.AdminController.LockedDown);
             }
-        }
-
-        /// <summary>マルチテナント時の所有権を確認するユーティリティ・メソッド</summary>
-        /// <param name="objParentId">string</param>
-        /// <returns>所有権の有・無</returns>
-        private async Task<bool> CheckOwnershipInMultitenantMode(string objParentId)
-        {
-            if (ASPNETIdentityConfig.MultiTenant)
-            {
-                // マルチテナントの場合、
-
-                ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                IList<string> roles = await UserManager.GetRolesAsync(adminUser.Id);
-                //if (adminUser.UserName == ASPNETIdentityConfig.AdministratorUID)
-                if (CheckRole.IsSystemAdmin(roles))
-                {
-                    // 「既定の管理者ユーザ」の場合。
-                }
-                else
-                {
-                    // 「既定の管理者ユーザ」で無い場合、
-                    // 配下のobjectかどうか、チェックをする。
-                    return (objParentId == adminUser.Id);
-                }
-            }
-            else
-            {
-                // マルチテナントでない場合。
-            }
-
-            return true;
         }
 
         #endregion
@@ -207,11 +176,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-            Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsSystemAdmin"] = CheckRole.IsSystemAdmin(await UserManager.GetRolesAsync(user.Id)); // 「管理者ユーザ」か否か。
-            //(user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
-
+            
             // ロール一覧表示
             return View(RoleManager.Roles.AsEnumerable());
         }
@@ -229,29 +194,13 @@ namespace MultiPurposeAuthSite.Controllers
 
             // ロールを取得
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
-
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
-            {
-                // 配下のobjectである。
-            }
-            else
-            {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-            }
-
+            
             // ロールに属するユーザを取得
             List<string> userNames = new List<string>();
 
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser temp = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-            Session["ParentId"] = temp.ParentId; // 分割キー
-            Session["IsSystemAdmin"] = CheckRole.IsSystemAdmin(await UserManager.GetRolesAsync(temp.Id)); // 「管理者ユーザ」か否か。
-            //(temp.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
-
+            
             foreach (ApplicationUser user in UserManager.Users.AsEnumerable())
             {
                 //　ユーザがロールに属するかどうか。
@@ -305,9 +254,9 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // RolesAdminEditViewModelの検証に成功
 
-                // テナントのロールを追加
+                // ロールを追加
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                ApplicationRole role = ApplicationRole.CreateForIndividual(user, roleViewModel.Name);
+                ApplicationRole role = new ApplicationRole() { Name = roleViewModel.Name };
                 IdentityResult result = await RoleManager.CreateAsync(role);
 
                 if (result.Succeeded)
@@ -350,22 +299,9 @@ namespace MultiPurposeAuthSite.Controllers
             // 選択したロールを表示
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
 
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
-            {
-                // 配下のobjectである。
-            }
-            else
-            {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-            }
-
             RolesAdminEditViewModel roleModel = new RolesAdminEditViewModel
             {
                 Id = role.Id,
-                ParentId = role.ParentId,
                 Name = role.Name
             };
 
@@ -380,7 +316,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> Edit([Bind(Include = "Id,ParentId,Name")] RolesAdminEditViewModel roleModel)
+        public async Task<ActionResult> Edit([Bind(Include = "Id,Name")] RolesAdminEditViewModel roleModel)
         {
             this.Authorize();
 
@@ -392,41 +328,22 @@ namespace MultiPurposeAuthSite.Controllers
                 // 選択したロールを取得
                 ApplicationRole role = await RoleManager.FindByIdAsync(roleModel.Id);
 
-                // マルチテナントの場合、所有権を確認する。
-                if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
+
+                // 選択したロールを更新
+                role.Name = roleModel.Name;
+                IdentityResult result = await RoleManager.UpdateAsync(role);
+
+                if (result.Succeeded)
                 {
-                    // 配下のobjectである。
+                    // 更新の成功
+
+                    // リダイレクト（一覧へ）
+                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.EditSuccess });
                 }
                 else
                 {
-                    // 配下のobjectでない。
-                    // エラー → リダイレクト（一覧へ）
-                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-                }
-
-                if (string.IsNullOrEmpty(role.ParentId))
-                {
-                    // グローバル ロールは更新しない。
-                    // （ボタンを表示しないのでココには来ない）
-                }
-                else
-                {
-                    // 選択したテナント ロールを更新
-                    role.Name = roleModel.Name;
-                    IdentityResult result = await RoleManager.UpdateAsync(role);
-
-                    if (result.Succeeded)
-                    {
-                        // 更新の成功
-
-                        // リダイレクト（一覧へ）
-                        return RedirectToAction("Index", new { Message = EnumAdminMessageId.EditSuccess });
-                    }
-                    else
-                    {
-                        // 更新の失敗
-                        ModelState.AddModelError("", result.Errors.First());
-                    }
+                    // 更新の失敗
+                    ModelState.AddModelError("", result.Errors.First());
                 }
             }
             else
@@ -455,19 +372,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 選択したロールを表示
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
-
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
-            {
-                // 配下のobjectである。
-            }
-            else
-            {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-            }
-
+            
             return View(role);
         }
 
@@ -487,42 +392,21 @@ namespace MultiPurposeAuthSite.Controllers
             // 選択したロールを削除
             // ロールを取得して削除（少々冗長な気がするが）
             ApplicationRole role = await RoleManager.FindByIdAsync(id);
+            IdentityResult result = await RoleManager.DeleteAsync(role);
 
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(role.ParentId))
+            if (result.Succeeded)
             {
-                // 配下のobjectである。
+                // 削除の成功
+
+                // リダイレクト（一覧へ）
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DeleteSuccess });
             }
             else
             {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
+                // 削除の失敗
+                ModelState.AddModelError("", result.Errors.First());
             }
 
-            if (string.IsNullOrEmpty(role.ParentId))
-            {
-                // グローバル ロールは削除しない。
-                // （ボタンを表示しないのでココには来ない）
-            }
-            else
-            {
-                // 選択したテナント ロールを削除
-                IdentityResult result = await RoleManager.DeleteAsync(role);
-
-                if (result.Succeeded)
-                {
-                    // 削除の成功
-
-                    // リダイレクト（一覧へ）
-                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DeleteSuccess });
-                }
-                else
-                {
-                    // 削除の失敗
-                    ModelState.AddModelError("", result.Errors.First());
-                }
-            }
 
             // 再表示
             return View();

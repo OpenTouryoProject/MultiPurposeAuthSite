@@ -29,7 +29,6 @@ CREATE TABLE [Users](              -- Users
     [LockoutEnabled] [bit] NOT NULL,
     [AccessFailedCount] [int] NOT NULL,
     -- 追加の情報
-    [ParentId] [nvarchar](38) NULL,          -- guid
     [ClientID] [nvarchar](256) NOT NULL,
     [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
@@ -42,7 +41,6 @@ CREATE TABLE [Users](              -- Users
 CREATE TABLE [Roles](              -- Roles
     [Id] [nvarchar](38) NOT NULL,            -- PK, guid
     [Name] [nvarchar](256) NOT NULL,
-    [ParentId] [nvarchar](38) NULL,          -- guid
     CONSTRAINT [PK.Roles] PRIMARY KEY CLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

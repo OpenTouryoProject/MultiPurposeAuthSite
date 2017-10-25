@@ -14,7 +14,6 @@ CREATE TABLE Users(                -- Users
     LockoutEnabled boolean NOT NULL,
     AccessFailedCount integer NOT NULL,
     -- 追加の情報
-    ParentId varchar(38) NULL,               -- guid
     ClientID varchar(256) NOT NULL,
     PaymentInformation varchar(256) NULL,
     UnstructuredData varchar(2000) NULL,
@@ -26,7 +25,6 @@ CREATE TABLE Users(                -- Users
 CREATE TABLE Roles(                -- Roles
     Id varchar(38) NOT NULL,                 -- PK, guid
     Name varchar(256) NOT NULL,
-    ParentId varchar(38) NULL,               -- guid
     CONSTRAINT PK_Roles PRIMARY KEY (Id)
 );
 

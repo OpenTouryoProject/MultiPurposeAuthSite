@@ -46,14 +46,7 @@
             {
                 @Html.AntiForgeryToken()
                 <b>@AdminViews.UsersAdminUserName</b> <text>&#058;</text> <span>@Html.DisplayFor(model => model.UserName)</span>
-                if (Model.Id == Model.ParentId)
-                {
-                    // submitボタンを表示しない。
-                }
-                else
-                { 
-                    <input type="submit" value="@AdminViews.UsersAdminDeleteSubmit" class="btn btn-default" />
-                }
+                <input type="submit" value="@AdminViews.UsersAdminDeleteSubmit" class="btn btn-default" />
             }
         </div>
     </div>

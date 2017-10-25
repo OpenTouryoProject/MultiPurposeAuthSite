@@ -241,7 +241,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         // Roles
                         roles = cnn.Query<ApplicationRole>(
-                            "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
+                            "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name " +
                             "FROM   [UserRoles], [Roles] " +
                             "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
                             "   AND [UserRoles].[UserId] = @userId", new { userId = user.Id });
@@ -265,7 +265,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         // Roles
                         roles = cnn.Query<ApplicationRole>(
-                            "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
+                            "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name " +
                             "FROM   \"UserRoles\", \"Roles\" " +
                             "WHERE  \"UserRoles\".\"RoleId\" = \"Roles\".\"Id\" " +
                             "   AND \"UserRoles\".\"UserId\" = :userId", new { userId = user.Id });
@@ -289,7 +289,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                         // Roles
                         roles = cnn.Query<ApplicationRole>(
-                            "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name, \"roles\".\"parentid\" as parentid " +
+                            "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name " +
                             "FROM   \"userroles\", \"roles\" " +
                             "WHERE  \"userroles\".\"roleid\" = \"roles\".\"id\" " +
                             "   AND \"userroles\".\"userid\" = @userId", new { userId = user.Id });
@@ -375,12 +375,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    [Id], [UserName], [PasswordHash], " +
                                         "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], " +
-                                        "    [ParentId], [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate])" +
+                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
-                                        "        @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
 
                                     break;
 
@@ -391,12 +391,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", " +
-                                        "    \"ParentId\", \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\")" +
+                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :PasswordHash, " +
                                         "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, " +
-                                        "        :ParentId, :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate)",
+                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -411,7 +411,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             LockoutEndDateUtc = user.LockoutEndDateUtc,
                                             SecurityStamp = user.SecurityStamp,
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
-                                            ParentId = user.ParentId,
                                             ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
@@ -428,12 +427,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    \"id\", \"username\", \"passwordhash\", " +
                                         "    \"email\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
                                         "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", " +
-                                        "    \"parentid\", \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\")" +
+                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
-                                        "        @ParentId, @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
 
                                     break;
                             }
@@ -462,7 +461,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
         /// <returns>ApplicationUser</returns>
-        public async Task<ApplicationUser> FindByIdAsync(string userId)
+        public Task<ApplicationUser> FindByIdAsync(string userId)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -487,10 +486,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
-                    user = await ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                    user = ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
                     user.Id = userId;
                     user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
-                    return user;
+                    return Task.FromResult(user);
 
                     #endregion
                 }
@@ -556,13 +555,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 Logging.MySQLLogForEx(ex);
             }
 
-            return user;
+            return Task.FromResult(user);
         }
 
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public async Task<ApplicationUser> FindByNameAsync(string userName)
+        public Task<ApplicationUser> FindByNameAsync(string userName)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -574,6 +573,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationUser user = null;
+            IEnumerable<ApplicationUser> users = null;
 
             try
             {
@@ -589,70 +589,67 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     // テスト：管理者ユーザを返す。
                     if (userName == ASPNETIdentityConfig.AdministratorUID)
                     {
-                        user = await ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
-                        // user.Id = userId; // ??
+                        user = ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
                         user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
-                        return user;
                     }
 
                     #endregion
                 }
-
-                // 通常のモードでの実装を行う。
-                switch (ASPNETIdentityConfig.UserStoreType)
+                else
                 {
-                    case EnumUserStoreType.Memory:
+                    // 通常のモードでの実装を行う。
+                    switch (ASPNETIdentityConfig.UserStoreType)
+                    {
+                        case EnumUserStoreType.Memory:
 
-                        user = UserStore._users.FirstOrDefault(x => x.UserName == userName);
+                            user = UserStore._users.FirstOrDefault(x => x.UserName == userName);
 
-                        break;
+                            break;
 
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+                        case EnumUserStoreType.SqlServer:
+                        case EnumUserStoreType.ODPManagedDriver:
+                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = null;
-
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
-                                case EnumUserStoreType.SqlServer:
+                                cnn.Open();
 
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
+                                // ユーザの情報の取得
+                                switch (ASPNETIdentityConfig.UserStoreType)
+                                {
+                                    case EnumUserStoreType.SqlServer:
 
-                                    break;
+                                        users = cnn.Query<ApplicationUser>(
+                                            "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
 
-                                case EnumUserStoreType.ODPManagedDriver:
+                                        break;
 
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
+                                    case EnumUserStoreType.ODPManagedDriver:
 
-                                    break;
+                                        users = cnn.Query<ApplicationUser>(
+                                            "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
 
-                                case EnumUserStoreType.PostgreSQL:
+                                        break;
 
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * FROM \"users\" WHERE \"username\" = :userName", new { userName = userName });
+                                    case EnumUserStoreType.PostgreSQL:
 
-                                    break;
+                                        users = cnn.Query<ApplicationUser>(
+                                            "SELECT * FROM \"users\" WHERE \"username\" = :userName", new { userName = userName });
+
+                                        break;
+                                }
+
+                                if (users.Count() != 0)
+                                {
+                                    user = users.First();
+
+                                    // ユーザの関連情報の取得（ Roles, Logins, Claims ）
+                                    this.SelectChildTablesOfUser(cnn, user);
+                                }
                             }
 
-                            if (users.Count() != 0)
-                            {
-                                user = users.First();
-
-                                // ユーザの関連情報の取得（ Roles, Logins, Claims ）
-                                this.SelectChildTablesOfUser(cnn, user);
-                            }
-                        }
-
-                        break;
-
+                            break;
+                    }
                 }
             }
             catch (Exception ex)
@@ -660,7 +657,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 Logging.MySQLLogForEx(ex);
             }
 
-            return user;
+            return Task.FromResult(user);
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
@@ -686,7 +683,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 try
                 {
                     // ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
-                    string parentId = (string)HttpContext.Current.Session["ParentId"];
                     string searchConditionOfUsers = (string)HttpContext.Current.Session["SearchConditionOfUsers"];
                     HttpContext.Current.Session["SearchConditionOfUsers"] = ""; // クリアしないと・・・
 
@@ -696,18 +692,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         case EnumUserStoreType.Memory:
 
                             IEnumerable<ApplicationUser> _users = UserStore._users;
-
-                            if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                            {
-                                // マルチテナントの場合、テナントで絞り込む。
-                                _users = _users.Where(p => p.ParentId == parentId).ToList();
-                            }
-                            else
-                            {
-                                // マルチテナントでない場合か、
-                                // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                            }
-
+                            
                             // Like
                             if (!string.IsNullOrEmpty(searchConditionOfUsers))
                                 _users = _users.Where(p => p.UserName.Contains(searchConditionOfUsers));
@@ -727,18 +712,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        sql = "SELECT TOP {0} * FROM [Users]";
-
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                                        {
-                                            // マルチテナントの場合、テナントで絞り込む。
-                                            sql += " WHERE [ParentId] = @parentId";
-                                        }
-                                        else
-                                        {
-                                            // マルチテナントでない場合か、
-                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                        }
+                                        sql = "SELECT TOP {0} * FROM [Users] ";
 
                                         // Like
                                         if (!string.IsNullOrEmpty(searchConditionOfUsers))
@@ -766,18 +740,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     case EnumUserStoreType.ODPManagedDriver:
 
                                         sql = "SELECT * FROM \"Users\" WHERE ROWNUM <= {0}";
-
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                                        {
-                                            // マルチテナントの場合、テナントで絞り込む。
-                                            sql += " AND \"ParentId\" = :parentId";
-                                        }
-                                        else
-                                        {
-                                            // マルチテナントでない場合か、
-                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                        }
-
+                                        
                                         // Like
                                         if (!string.IsNullOrEmpty(searchConditionOfUsers))
                                             sql += " AND \"UserName\" Like '%' || :searchConditionOfUsers || '%'";
@@ -797,17 +760,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                     case EnumUserStoreType.PostgreSQL:
 
                                         sql = "SELECT * FROM \"users\"";
-
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                                        {
-                                            // マルチテナントの場合、テナントで絞り込む。
-                                            sql += " WHERE \"parentid\" = @parentId";
-                                        }
-                                        else
-                                        {
-                                            // マルチテナントでない場合か、
-                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                        }
 
                                         // Like
                                         if (!string.IsNullOrEmpty(searchConditionOfUsers))
@@ -837,7 +789,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 cnn.Open();
                                 users = cnn.Query<ApplicationUser>(sql, new
                                 {
-                                    parentId = parentId,
                                     searchConditionOfUsers = searchConditionOfUsers
                                 });
                             }
@@ -914,7 +865,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             tgtUser.Claims = user.Claims;
 
                             // 追加の属性
-                            tgtUser.ParentId = user.ParentId;
                             tgtUser.ClientID = user.ClientID;
                             tgtUser.PaymentInformation = user.PaymentInformation;
                             tgtUser.UnstructuredData = user.UnstructuredData;
@@ -940,7 +890,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
                                             "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
                                             "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
-                                            "    [ParentId] = @ParentId, [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey " +
+                                            "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey " +
                                             "WHERE [Id] = @Id", user);
 
                                         break;
@@ -952,7 +902,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
                                             "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
                                             "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
-                                            "    \"ParentId\" = :ParentId, \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey " +
+                                            "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey " +
                                             "WHERE \"Id\" = :Id",
                                             new // 拡張メソッドで対策できる。
                                             {
@@ -968,7 +918,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                                 LockoutEndDateUtc = user.LockoutEndDateUtc,
                                                 SecurityStamp = user.SecurityStamp,
                                                 TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
-                                                ParentId = user.ParentId,
                                                 ClientID = user.ClientID,
                                                 PaymentInformation = user.PaymentInformation,
                                                 UnstructuredData = user.UnstructuredData,
@@ -984,7 +933,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                            "SET \"username\" = @UserName, \"passwordhash\" = @PasswordHash, " +
                                            "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
                                            "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
-                                           "    \"parentid\" = @ParentId, \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey " +
+                                           "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey " +
                                            "WHERE \"id\" = @Id", user);
 
                                         break;
@@ -1255,14 +1204,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             // AccountControllerのメアド検証の再送で利用するため。
             // UsersAdminControllerではチェックしている。
 
-            // 
-            //if (user.Id == user.ParentId)
-            //{
-            //    // 管理者ユーザは削除しない。
-            //}
-            //else
-            //{
-
             try
             {
                 // ユーザの論理削除
@@ -1338,7 +1279,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 Logging.MySQLLogForEx(ex);
             }
-            //}
 
             return Task.FromResult(default(object));
         }
@@ -1846,7 +1786,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 case EnumUserStoreType.SqlServer:
 
                                     roles = cnn.Query<ApplicationRole>(
-                                        "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name, [Roles].[ParentId] as ParentId " +
+                                        "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name " +
                                         "FROM   [Roles], [UserRoles], [Users] " +
                                         "WHERE  [Roles].[Id] = [UserRoles].[RoleId] " +
                                         "   AND [UserRoles].[UserId] = [Users].[Id] " +
@@ -1858,7 +1798,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     roles = cnn.Query<ApplicationRole>(
-                                        "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name, \"Roles\".\"ParentId\" as ParentId " +
+                                        "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name " +
                                         "FROM   \"Roles\", \"UserRoles\", \"Users\" " +
                                         "WHERE  \"Roles\".\"Id\" = \"UserRoles\".\"RoleId\" " +
                                         "   AND \"UserRoles\".\"UserId\" = \"Users\".\"Id\" " +
@@ -1870,7 +1810,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 case EnumUserStoreType.PostgreSQL:
 
                                     roles = cnn.Query<ApplicationRole>(
-                                        "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name, \"roles\".\"parentid\" as parentid " +
+                                        "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name " +
                                         "FROM   \"roles\", \"userroles\", \"users\" " +
                                         "WHERE  \"roles\".\"id\" = \"userroles\".\"roleid\" " +
                                         "   AND \"userroles\".\"userid\" = \"users\".\"id\" " +
@@ -1910,99 +1850,91 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            if ((user.Id == user.ParentId)                     // 管理者ユーザー
-                && roleName == ASPNETIdentityConst.Role_Admin) // global role of Administrator
+            
+            try
             {
-                // 管理者ユーザーをAdministratorsグループ（ロール）から削除しない。
+                // ユーザーをロールから削除
+                ApplicationRole role = null;
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+
+                        // 名称の一致するロールを取得
+                        role = UserStore._roles.FirstOrDefault(x => x.Name == roleName);
+
+                        if (role == null)
+                        {
+                            // なにもしない（というか何もできない）
+                        }
+                        else
+                        {
+                            // UserRoleMapに含まれるTuple.Item1 == user.Id && Tuple.Item2 == role.IdのTupleを返す。
+                            Tuple<string, string> userRoleMap = UserStore._userRoleMap
+                                .FirstOrDefault(x => x.Item1 == user.Id && x.Item2 == role.Id);
+
+                            // ユーザをロールから削除
+                            if (userRoleMap != null)
+                            {
+                                // 取得できたら、Tupleを削除。
+                                UserStore._userRoleMap.Remove(userRoleMap);
+                            }
+                        }
+
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            // ロール・マップを削除（ロール情報を取得する。
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "DELETE FROM [UserRoles] " +
+                                        "WHERE [UserRoles].[UserId] = @UserId " +
+                                        "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
+                                        new { UserId = user.Id, roleName = roleName });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"UserRoles\" " +
+                                        "WHERE \"UserRoles\".\"UserId\" = :UserId " +
+                                        "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
+                                        new { UserId = user.Id, roleName = roleName });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"userroles\" " +
+                                        "WHERE \"userroles\".\"userid\" = @UserId " +
+                                        "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
+                                        new { UserId = user.Id, roleName = roleName });
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                try
-                {
-                    // ユーザーをロールから削除
-                    ApplicationRole role = null;
-                    switch (ASPNETIdentityConfig.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
-
-                            // 名称の一致するロールを取得
-                            role = UserStore._roles.FirstOrDefault(x => x.Name == roleName);
-
-                            if (role == null)
-                            {
-                                // なにもしない（というか何もできない）
-                            }
-                            else
-                            {
-                                // UserRoleMapに含まれるTuple.Item1 == user.Id && Tuple.Item2 == role.IdのTupleを返す。
-                                Tuple<string, string> userRoleMap = UserStore._userRoleMap
-                                    .FirstOrDefault(x => x.Item1 == user.Id && x.Item2 == role.Id);
-
-                                // ユーザをロールから削除
-                                if (userRoleMap != null)
-                                {
-                                    // 取得できたら、Tupleを削除。
-                                    UserStore._userRoleMap.Remove(userRoleMap);
-                                }
-                            }
-
-                            break;
-
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.ODPManagedDriver:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
-                            {
-                                cnn.Open();
-
-                                // ロール・マップを削除（ロール情報を取得する。
-                                switch (ASPNETIdentityConfig.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
-
-                                        cnn.Execute(
-                                            "DELETE FROM [UserRoles] " +
-                                            "WHERE [UserRoles].[UserId] = @UserId " +
-                                            "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
-                                            new { UserId = user.Id, roleName = roleName });
-
-                                        break;
-
-                                    case EnumUserStoreType.ODPManagedDriver:
-
-                                        cnn.Execute(
-                                            "DELETE FROM \"UserRoles\" " +
-                                            "WHERE \"UserRoles\".\"UserId\" = :UserId " +
-                                            "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
-                                            new { UserId = user.Id, roleName = roleName });
-
-                                        break;
-
-                                    case EnumUserStoreType.PostgreSQL:
-
-                                        cnn.Execute(
-                                            "DELETE FROM \"userroles\" " +
-                                            "WHERE \"userroles\".\"userid\" = @UserId " +
-                                            "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
-                                            new { UserId = user.Id, roleName = roleName });
-
-                                        break;
-                                }
-                            }
-                            
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logging.MySQLLogForEx(ex);
-                }
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -2317,21 +2249,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 case EnumUserStoreType.SqlServer:
 
                                     cnn.Execute(
-                                        "INSERT INTO [Roles] ( [Id], [Name], [ParentId] ) VALUES ( @Id, @Name, @ParentId )", role);
+                                        "INSERT INTO [Roles] ( [Id], [Name] ) VALUES ( @Id, @Name )", role);
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"Roles\" ( \"Id\", \"Name\", \"ParentId\" ) VALUES ( :Id, :Name, :ParentId )", role);
+                                        "INSERT INTO \"Roles\" ( \"Id\", \"Name\" ) VALUES ( :Id, :Name )", role);
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"roles\" ( \"id\", \"name\", \"parentid\" ) VALUES ( @Id, @Name, @ParentId )", role);
+                                        "INSERT INTO \"roles\" ( \"id\", \"name\" ) VALUES ( @Id, @Name )", role);
 
                                     break;
                             }
@@ -2434,6 +2366,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ロールを（ロール名指定で）検索</summary>
         /// <param name="roleName">string</param>
         /// <returns>ApplicationRole</returns>
+        /// <remarks>
+        /// （マルチテナント化のため）一意ではないので、
+        /// ・グローバル ロールを優先して返す。
+        /// ・無ければ自テナントを検索して返す。
+        /// </remarks>
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
         {
             // 他テーブルのため、
@@ -2446,7 +2383,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             ApplicationRole role = null;
-
+            IEnumerable<ApplicationRole> roles = null;
+            
             try
             {
                 switch (ASPNETIdentityConfig.UserStoreType)
@@ -2467,7 +2405,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            IEnumerable<ApplicationRole> roles = null;
                             switch (ASPNETIdentityConfig.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
@@ -2530,39 +2467,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     "." + MethodBase.GetCurrentMethod().Name +
                     UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
-                // システム共通のロール
-                IEnumerable<ApplicationRole> commonRoles = null;
-                // 個別のロール
-                IEnumerable<ApplicationRole> individualRoles = null;
+                // ロール
+                IEnumerable<ApplicationRole> roles = null;
 
                 try
                 {
-                    // ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
-                    string parentId = (string)HttpContext.Current.Session["ParentId"];
-
                     // ロール一覧を返す。
                     switch (ASPNETIdentityConfig.UserStoreType)
                     {
                         case EnumUserStoreType.Memory:
 
-                            // システム共通のロール
-                            commonRoles = UserStore._roles.Where(p => p.ParentId == "").ToList();
-
-                            // 個別のロール
-                            if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                            {
-                                // マルチテナントの場合、テナントで絞り込む。
-                                individualRoles = UserStore._roles.Where(p => p.ParentId == parentId).ToList();
-                            }
-                            else
-                            {
-                                // マルチテナントでない場合か、
-                                // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                individualRoles = UserStore._roles.Where(p => p.ParentId != "").ToList();
-                            }
-
-                            // 統合して返却
-                            commonRoles = commonRoles.Union(individualRoles);
+                            roles = UserStore._roles.ToList();
 
                             break;
 
@@ -2578,77 +2493,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 {
                                     case EnumUserStoreType.SqlServer:
 
-                                        // システム共通のロール
-                                        commonRoles = cnn.Query<ApplicationRole>(
-                                            "SELECT * FROM [Roles] WHERE [ParentId] = @parentId", new { parentId = "" });
-
-                                        // 個別のロール
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                                        {
-                                            // マルチテナントの場合、テナントで絞り込む。
-                                            individualRoles = cnn.Query<ApplicationRole>(
-                                                "SELECT * FROM [Roles] WHERE [ParentId] = @parentId", new { parentId = parentId });
-                                        }
-                                        else
-                                        {
-                                            // マルチテナントでない場合か、
-                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                            individualRoles = cnn.Query<ApplicationRole>(
-                                                string.Format("SELECT TOP {0} * FROM [Roles] WHERE [ParentId] != ''", ASPNETIdentityConfig.UserListCount));
-                                        }
-
+                                        roles = cnn.Query<ApplicationRole>("SELECT * FROM [Roles]");
                                         break;
 
                                     case EnumUserStoreType.ODPManagedDriver:
 
-                                        // システム共通のロール
-                                        commonRoles = cnn.Query<ApplicationRole>(
-                                            "SELECT * FROM \"Roles\" WHERE \"ParentId\" IS NULL");
-
-                                        // 個別のロール
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                                        {
-                                            // マルチテナントの場合、テナントで絞り込む。
-                                            individualRoles = cnn.Query<ApplicationRole>(
-                                                "SELECT * FROM \"Roles\" WHERE \"ParentId\" = :parentId", new { parentId = parentId });
-                                        }
-                                        else
-                                        {
-                                            // マルチテナントでない場合か、
-                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                            individualRoles = cnn.Query<ApplicationRole>(
-                                                string.Format("SELECT * FROM \"Roles\" WHERE \"ParentId\" IS NOT NULL AND ROWNUM <= {0}", ASPNETIdentityConfig.UserListCount));
-                                        }
-
+                                        roles = cnn.Query<ApplicationRole>("SELECT * FROM \"Roles\"");
                                         break;
 
                                     case EnumUserStoreType.PostgreSQL:
 
-                                        // システム共通のロール
-                                        commonRoles = cnn.Query<ApplicationRole>(
-                                            "SELECT * FROM \"roles\" WHERE \"parentid\" IS NULL");
-
-                                        // 個別のロール
-                                        if (ASPNETIdentityConfig.MultiTenant && !(bool)HttpContext.Current.Session["IsSystemAdmin"])
-                                        {
-                                            // マルチテナントの場合、テナントで絞り込む。
-                                            individualRoles = cnn.Query<ApplicationRole>(
-                                                "SELECT * FROM \"roles\" WHERE \"parentid\" = @parentId", new { parentId = parentId });
-                                        }
-                                        else
-                                        {
-                                            // マルチテナントでない場合か、
-                                            // マルチテナントでも「既定の管理者ユーザ」の場合。絞り込まない。
-                                            individualRoles = cnn.Query<ApplicationRole>(
-                                                string.Format("SELECT * FROM \"roles\" WHERE \"parentid\" IS NOT NULL LIMIT {0}", ASPNETIdentityConfig.UserListCount));
-                                        }
-
+                                        roles = cnn.Query<ApplicationRole>("SELECT * FROM \"roles\"");
                                         break;
                                 }
                             }
-
-                            // 統合して返却
-                            commonRoles = commonRoles.Union(individualRoles);
 
                             break;
                     }
@@ -2659,7 +2517,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 }
 
                 // IQueryableとして戻す。
-                return commonRoles.AsQueryable();
+                return roles.AsQueryable();
             }
         }
 
@@ -2676,84 +2534,78 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
-            if (string.IsNullOrEmpty(role.ParentId))
+
+            try
             {
-                // グローバル ロールは更新しない。
+                // ロールを更新する
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+
+                        // RolesからIdが同じApplicationRoleを取得する。
+                        ApplicationRole r = UserStore._roles.FirstOrDefault(x => x.Id == role.Id);
+
+                        if (r == null)
+                        {
+                            // ・・・
+                        }
+                        else
+                        {
+                            // ロールを更新（ApplicationRole.Nameを更新
+                            r.Name = role.Name;
+                        }
+
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            // ユーザー情報を更新
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "UPDATE [Roles] SET [Name] = @Name WHERE [Id] = @Id",
+                                        new { Id = role.Id, Name = role.Name });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    cnn.Execute(
+                                        "UPDATE \"Roles\" SET \"Name\" = :Name WHERE \"Id\" = :Id",
+                                        new { Id = role.Id, Name = role.Name });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    cnn.Execute(
+                                        "UPDATE \"roles\" SET \"name\" = @Name WHERE \"id\" = @Id",
+                                        new { Id = role.Id, Name = role.Name });
+
+                                    break;
+                            }
+
+                        }
+
+                        break;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                try
-                {
-                    // テナント ロールを更新する
-                    switch (ASPNETIdentityConfig.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
-
-                            // RolesからIdが同じApplicationRoleを取得する。
-                            ApplicationRole r = UserStore._roles.FirstOrDefault(x => x.Id == role.Id);
-
-                            if (r == null)
-                            {
-                                // ・・・
-                            }
-                            else
-                            {
-                                // ロールを更新（ApplicationRole.Nameを更新
-                                r.Name = role.Name;
-                            }
-
-                            break;
-
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.ODPManagedDriver:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
-                            {
-                                cnn.Open();
-
-                                // ユーザー情報を更新
-                                switch (ASPNETIdentityConfig.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
-
-                                        cnn.Execute(
-                                            "UPDATE [Roles] SET [Name] = @Name WHERE [Id] = @Id",
-                                            new { Id = role.Id, Name = role.Name });
-
-                                        break;
-
-                                    case EnumUserStoreType.ODPManagedDriver:
-
-                                        cnn.Execute(
-                                            "UPDATE \"Roles\" SET \"Name\" = :Name WHERE \"Id\" = :Id",
-                                            new { Id = role.Id, Name = role.Name });
-
-                                        break;
-
-                                    case EnumUserStoreType.PostgreSQL:
-
-                                        cnn.Execute(
-                                            "UPDATE \"roles\" SET \"name\" = @Name WHERE \"id\" = @Id",
-                                            new { Id = role.Id, Name = role.Name });
-
-                                        break;
-                                }
-                                
-                            }
-
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logging.MySQLLogForEx(ex);
-                }
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));
@@ -2772,125 +2624,118 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
-            if (string.IsNullOrEmpty(role.ParentId))
+            try
             {
-                // グローバル ロールは削除しない。
-            }
-            else
-            {
-                try
+                // ロールを削除する
+                switch (ASPNETIdentityConfig.UserStoreType)
                 {
-                    // テナント ロールを削除する
-                    switch (ASPNETIdentityConfig.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
+                    case EnumUserStoreType.Memory:
 
-                            // Memory Providerには外部参照制約が無いので自らチェック
-                            Tuple<string, string> userRoleMap = 
-                                UserStore._userRoleMap.FirstOrDefault(x => x.Item2 == role.Id);
+                        // Memory Providerには外部参照制約が無いので自らチェック
+                        Tuple<string, string> userRoleMap =
+                            UserStore._userRoleMap.FirstOrDefault(x => x.Item2 == role.Id);
 
-                            if (userRoleMap == null)
+                        if (userRoleMap == null)
+                        {
+                            // RolesからIdが同じApplicationRoleを取得する。
+                            ApplicationRole r = UserStore._roles.FirstOrDefault(x => x.Id == role.Id);
+
+                            if (r == null)
                             {
-                                // RolesからIdが同じApplicationRoleを取得する。
-                                ApplicationRole r = UserStore._roles.FirstOrDefault(x => x.Id == role.Id);
-
-                                if (r == null)
-                                {
-                                    // ・・・
-                                }
-                                else
-                                {
-                                    // ロールを削除
-                                    UserStore._roles.Remove(r);
-                                }
+                                // ・・・
                             }
                             else
                             {
-                                // 使用されているロールは削除しない。
+                                // ロールを削除
+                                UserStore._roles.Remove(r);
                             }
+                        }
+                        else
+                        {
+                            // 使用されているロールは削除しない。
+                        }
 
-                            break;
+                        break;
 
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.ODPManagedDriver:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
 
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            // ユーザー情報を更新
+                            int cnt = 0;
+                            switch (ASPNETIdentityConfig.UserStoreType)
                             {
-                                cnn.Open();
+                                case EnumUserStoreType.SqlServer:
 
-                                // ユーザー情報を更新
-                                int cnt = 0;
-                                switch (ASPNETIdentityConfig.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
+                                    // 外部参照制約に依存しないようにチェック
+                                    cnt = cnn.ExecuteScalar<int>(
+                                        "SELECT COUNT(*) FROM [UserRoles] WHERE [RoleId] = @RoleId", new { RoleId = role.Id });
 
-                                        // 外部参照制約に依存しないようにチェック
-                                        cnt = cnn.ExecuteScalar<int>(
-                                            "SELECT COUNT(*) FROM [UserRoles] WHERE [RoleId] = @RoleId", new { RoleId = role.Id });
+                                    if (cnt == 0)
+                                    {
+                                        cnn.Execute(
+                                            "DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
+                                    }
+                                    else
+                                    {
+                                        // 使用されているロールは削除しない。
+                                    }
 
-                                        if (cnt == 0)
-                                        {
-                                            cnn.Execute(
-                                            	"DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
-                                        }
-                                        else
-                                        {
-                                            // 使用されているロールは削除しない。
-                                        }
+                                    break;
 
-                                        break;
+                                case EnumUserStoreType.ODPManagedDriver:
 
-                                    case EnumUserStoreType.ODPManagedDriver:
+                                    // 外部参照制約に依存しないようにチェック
+                                    cnt = cnn.ExecuteScalar<int>(
+                                        "SELECT COUNT(*) FROM \"UserRoles\" WHERE \"RoleId\" = :RoleId", new { RoleId = role.Id });
 
-                                        // 外部参照制約に依存しないようにチェック
-                                        cnt = cnn.ExecuteScalar<int>(
-                                            "SELECT COUNT(*) FROM \"UserRoles\" WHERE \"RoleId\" = :RoleId", new { RoleId = role.Id });
+                                    if (cnt == 0)
+                                    {
+                                        cnn.Execute(
+                                            "DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
+                                    }
+                                    else
+                                    {
+                                        // 使用されているロールは削除しない。
+                                    }
 
-                                        if (cnt == 0)
-                                        {
-                                            cnn.Execute(
-                                            	"DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
-                                        }
-                                        else
-                                        {
-                                            // 使用されているロールは削除しない。
-                                        }
+                                    break;
 
-                                        break;
+                                case EnumUserStoreType.PostgreSQL:
 
-                                    case EnumUserStoreType.PostgreSQL:
+                                    // 外部参照制約に依存しないようにチェック
+                                    cnt = cnn.ExecuteScalar<int>(
+                                        "SELECT COUNT(*) FROM \"userroles\" WHERE \"roleid\" = @RoleId", new { RoleId = role.Id });
 
-                                        // 外部参照制約に依存しないようにチェック
-                                        cnt = cnn.ExecuteScalar<int>(
-                                            "SELECT COUNT(*) FROM \"userroles\" WHERE \"roleid\" = @RoleId", new { RoleId = role.Id });
+                                    if (cnt == 0)
+                                    {
+                                        cnn.Execute(
+                                            "DELETE FROM \"roles\" WHERE \"id\" = @Id", new { Id = role.Id });
+                                    }
+                                    else
+                                    {
+                                        // 使用されているロールは削除しない。
+                                    }
 
-                                        if (cnt == 0)
-                                        {
-                                            cnn.Execute(
-                                                "DELETE FROM \"roles\" WHERE \"id\" = @Id", new { Id = role.Id });
-                                        }
-                                        else
-                                        {
-                                            // 使用されているロールは削除しない。
-                                        }
-
-                                        break;
-                                }
+                                    break;
                             }
+                        }
 
-                            break;
-                    }
+                        break;
                 }
-                catch (Exception ex)
-                {
-                    Logging.MySQLLogForEx(ex);
-                }
+            }
+            catch (Exception ex)
+            {
+                Logging.MySQLLogForEx(ex);
             }
 
             return Task.FromResult(default(object));

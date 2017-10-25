@@ -553,7 +553,7 @@ namespace MultiPurposeAuthSite.Controllers
                         #region サインアップ
 
                         // ユーザを作成
-                        ApplicationUser user = await ApplicationUser.CreateBySignup(uid, false);
+                        ApplicationUser user = ApplicationUser.CreateBySignup(uid, false);
 
                         // ApplicationUserManagerのCreateAsync
                         IdentityResult result = await UserManager.CreateAsync(
@@ -1577,7 +1577,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 // 外部ログイン プロバイダのユーザー情報でユーザを作成
                                 // uid = 連携先メアドの場合、E-mail confirmationはしない（true）。
-                                user = await ApplicationUser.CreateBySignup(uid, true);
+                                user = ApplicationUser.CreateBySignup(uid, true);
 
                                 // サインアップ時のみ、メアドも追加
                                 //（RequireUniqueEmail = false時を想定）
@@ -2292,17 +2292,17 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = null;
                 IdentityResult result = null;
 
-                #region システム共通ロール
+                #region ロール
 
-                await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_SystemAdmin));
-                await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_Admin));
-                await this.RoleManager.CreateAsync(ApplicationRole.CreateForCommon(name: ASPNETIdentityConst.Role_User));
-                
+                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = ASPNETIdentityConst.Role_SystemAdmin });
+                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = ASPNETIdentityConst.Role_Admin });
+                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = ASPNETIdentityConst.Role_User });
+
                 #endregion
 
-                #region システム管理者ユーザ
+                #region 管理者ユーザ
 
-                user = await ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                user =  ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
                 result = await this.UserManager.CreateAsync(user, ASPNETIdentityConfig.AdministratorPWD);
                 if (result.Succeeded)
                 {
@@ -2316,17 +2316,13 @@ namespace MultiPurposeAuthSite.Controllers
                 #region テスト・ユーザ
 
                 string password = ASPNETIdentityConfig.TestUserPWD;
-                string parentId = "";
 
                 if (ASPNETIdentityConfig.IsDebug
                     && !string.IsNullOrEmpty(password))
                 {
-                    #region 田中テナント
-
-                    #region 管理者ユーザ
-
                     // 管理者ユーザを作成
-                    user = await ApplicationUser.CreateBySignup("super_tanaka@gmail.com", true);
+                    user = ApplicationUser.CreateBySignup("super_tanaka@gmail.com", true);
+
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
@@ -2336,73 +2332,15 @@ namespace MultiPurposeAuthSite.Controllers
                             (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_Admin);
                     }
 
-                    parentId = user.Id;
-
-                    #endregion
-
-                    #region 一般ユーザ
-
                     // 一般ユーザを作成
-                    user = await ApplicationUser.CreateByRegister(parentId, "tanaka@gmail.com");
+                    user = ApplicationUser.CreateByRegister("tanaka@gmail.com");
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
                         await this.UserManager.AddToRoleAsync(
                             (await this.UserManager.FindByNameAsync("tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_User);
                     }
-
-                    #endregion
-
-                    #region テナント・ロール
                     
-                    await this.RoleManager.CreateAsync(
-                        ApplicationRole.CreateForIndividual((await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")), "hyper_tanaka"));
-                    
-
-                    #endregion
-
-                    #endregion
-
-                    #region 佐藤テナント
-
-                    #region 管理者ユーザ
-
-                    // 管理者ユーザを作成
-                    user = await ApplicationUser.CreateBySignup("super_sato@gmail.com", true);
-                    result = await this.UserManager.CreateAsync(user, password);
-                    if (result.Succeeded)
-                    {
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_sato@gmail.com")).Id, ASPNETIdentityConst.Role_User);
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_sato@gmail.com")).Id, ASPNETIdentityConst.Role_Admin);
-                    }
-
-                    parentId = user.Id;
-
-                    #endregion
-
-                    #region 一般ユーザ
-
-                    // 一般ユーザを作成
-                    user = await ApplicationUser.CreateByRegister(parentId, "sato@gmail.com");
-                    result = await this.UserManager.CreateAsync(user, password);
-                    if (result.Succeeded)
-                    {
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("sato@gmail.com")).Id, ASPNETIdentityConst.Role_User);
-                    }
-
-                    #endregion
-
-                    #region テナント・ロール
-
-                    await this.RoleManager.CreateAsync(
-                        ApplicationRole.CreateForIndividual((await this.UserManager.FindByNameAsync("super_sato@gmail.com")), "miracle_sato"));
-                    
-                    #endregion
-
-                    #endregion
                 }
 
                 #endregion

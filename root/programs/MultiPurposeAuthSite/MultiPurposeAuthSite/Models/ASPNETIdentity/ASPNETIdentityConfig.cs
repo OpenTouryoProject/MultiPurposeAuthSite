@@ -254,20 +254,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         #endregion
-
-        #region マルチテナント
-
-        /// <summary>マルチテナント</summary>
-        public static bool MultiTenant
-        {
-            get
-            {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["Multi-tenant"]);
-            }
-        }
-
-        #endregion
-
+        
         #region UserListCount
 
         /// <summary>

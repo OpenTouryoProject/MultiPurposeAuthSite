@@ -300,6 +300,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                     //レスポンス内容を参照して書き換え
                     if (response.StatusCode == 302)
                     {
+                        // ・Rewriteした為か、
+                        //   何故か、以下が、
+                        //     "?code=code値&state=state値&redirect_uri=Urlエンコードされたredirect_uri値"
+                        //   となっている。
+                        //   ※ redirect_uriがlocationのQueryStringに混じる。
+                        //
+                        // ・本来は、
+                        //     "http(s)://redirect_uri値?code=code値&state=state値"
+                        //   を期待していた。
                         string location = response.Headers["Location"];
 
                         string paramStrCode = "?code=";
@@ -310,9 +319,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                             || location.IndexOf(paramStrState) != -1
                             || location.IndexOf(paramStrRedirectUri) != -1)
                         {
+                            // 302 Found ---> 200 OK
                             response.StatusCode = 200;
                             response.Headers.Remove("Location");
 
+                            // form_postに必要な、HTTP response message body
                             string body =
                                 "<html>" +
                                 "  <body onload=\"javascript: document.forms[0].submit()\">" +
@@ -327,20 +338,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                             int startIndexOfState = location.IndexOf(paramStrState);
                             int startIndexOfRedirectUri = location.IndexOf(paramStrRedirectUri);
 
+                            // code
                             string code = location.Substring(
                                     startIndexOfCode + paramStrCode.Length,
                                     startIndexOfState - (startIndexOfCode + paramStrCode.Length));
 
+                            // state
                             string state = location.Substring(
                                     startIndexOfState + paramStrState.Length,
                                     startIndexOfRedirectUri - (startIndexOfState + paramStrState.Length));
 
-                            // 何故か混じる。
+                            // redirect_uri
                             string redirectUrl = CustomEncode.UrlDecode(
                                 location.Substring(startIndexOfRedirectUri + paramStrRedirectUri.Length));
 
+                            // 組み込んで
                             body = string.Format(body, redirectUrl, code, state);
 
+                            // 書き出し
                             byte[] buffer = response.ContentEncoding.GetBytes(body);
                             response.OutputStream.Write(buffer, 0, buffer.Length);
                         }

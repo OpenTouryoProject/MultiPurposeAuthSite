@@ -38,6 +38,7 @@
 
     IList<string> roles = null;
     bool canShowAdminScreen = false;
+
     if (User.Identity.IsAuthenticated)
     {
         if (Session["Roles"] == null)
@@ -59,21 +60,8 @@
             roles = (IList<string>)Session["Roles"];
         }
 
-        if (ASPNETIdentityConfig.MultiTenant)
-        {
-            foreach (string role in roles)
-            {
-                if (role == ASPNETIdentityConst.Role_SystemAdmin
-                    || role == ASPNETIdentityConst.Role_Admin)
-                {
-                    canShowAdminScreen = true;
-                }
-            }
-        }
-        else
-        {
-            canShowAdminScreen = (roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
-        }
+        
+        canShowAdminScreen = (roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
     }
 
     #endregion

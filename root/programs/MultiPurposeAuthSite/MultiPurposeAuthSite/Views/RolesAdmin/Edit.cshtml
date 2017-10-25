@@ -42,33 +42,18 @@
         @Html.AntiForgeryToken()
         @Html.ValidationSummary(true)
         @Html.HiddenFor(model => model.Id)
-        @Html.HiddenFor(model => model.ParentId)
         
         <div class="form-group">
             @Html.LabelFor(model => model.Name, new { @class = "control-label col-md-2" })
             <div class="col-md-10">
-@if (string.IsNullOrEmpty(Model.ParentId))
-{
-                @Html.TextBoxFor(model => model.Name, new { @class = "form-control", @readonly = "readonly" })
-}
-else
-{
                 @Html.TextBoxFor(model => model.Name, new { @class = "form-control" })
-}
                 @Html.ValidationMessageFor(model => model.Name)
             </div>
         </div>
 
         <div class="form-group">
             <div class="col-md-offset-2 col-md-10">
-@if (string.IsNullOrEmpty(Model.ParentId))
-{
-                // submitボタンを表示しない。
-}
-else
-{
                 <input type="submit" value="@AdminViews.RolesAdminEditSubmit" class="btn btn-default" />
-}
             </div>
         </div>
     }
