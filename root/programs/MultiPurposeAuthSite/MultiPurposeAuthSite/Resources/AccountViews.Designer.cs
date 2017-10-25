@@ -169,7 +169,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Log in using your {0} account に類似しているローカライズされた文字列を検索します。
+        ///   Login using your {0} account に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ExternalLoginsListPartialSubmit {
             get {
@@ -187,7 +187,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Log in with FIDO2 authenticator に類似しているローカライズされた文字列を検索します。
+        ///   Login with FIDO2 authenticator に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string FIDO2LoginSubmit {
             get {
@@ -237,6 +237,24 @@ namespace MultiPurposeAuthSite.Resources {
         public static string ForgotPasswordTitle {
             get {
                 return ResourceManager.GetString("ForgotPasswordTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Id federation login に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdFederationLogin {
+            get {
+                return ResourceManager.GetString("IdFederationLogin", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Login with id federation に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdFederationLoginSubmit {
+            get {
+                return ResourceManager.GetString("IdFederationLoginSubmit", resourceCulture);
             }
         }
         

@@ -121,6 +121,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 switch (scope.ToLower())
                 {
                     #region OpenID Connect
+
                     case ASPNETIdentityConst.Scope_Profile:
                         // ・・・
                         break;
@@ -135,12 +136,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     case ASPNETIdentityConst.Scope_Address:
                         // ・・・
                         break;
+
                     #endregion
 
                     #region Else
 
                     case ASPNETIdentityConst.Scope_Userid:
                         authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                        break;
+                    case ASPNETIdentityConst.Scope_Parentid:
+                        authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Parentid, user.ParentId);
                         break;
                     case ASPNETIdentityConst.Scope_Roles:
                         authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);

@@ -78,17 +78,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region STS
 
+        #region Claim(のurn
+
         /// <summary>issuerクレームのurn</summary>
         public static readonly string Claim_Issuer = "urn:oauth:issuer";
+
         /// <summary>audienceクレームのurn</summary>
         public static readonly string Claim_Audience = "urn:oauth:audience";
+
         /// <summary>nonceクレームのurn</summary>
         public static readonly string Claim_Nonce = "urn:oauth:nonce";
 
-        #region Scope
-
         /// <summary>scopeクレームのurn</summary>
         public static readonly string Claim_Scope = "urn:oauth:scope";
+
+        #endregion
+
+        #region Scope
+
+        #region Scopes
 
         /// <summary>標準的なscope</summary>
         public static readonly string StandardScopes =
@@ -97,28 +105,56 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + Scope_Phone + " "
             + Scope_Address + " "
             + Scope_Userid;
-        // + Scope_Userid; //authは他のscopeをフィルタするので。
+        // authは他のscopeをフィルタするので。
+
+        /// <summary>ID連携 scope</summary>
+        public static readonly string IdFederationScopes =
+            Scope_Openid + " "
+            + Scope_Profile + " "
+            + Scope_Email + " "
+            + Scope_Phone + " "
+            + Scope_Address + " "
+            + Scope_Userid + " "
+            + Scope_Parentid + " "
+            + Scope_Roles;
+        // authは他のscopeをフィルタするので。
+
+        #endregion
 
         #region id_token用のscope
+
         /// <summary>id_tokenを要求するscope</summary>
         public const string Scope_Openid = "openid";
+
         /// <summary>profileを要求するscope</summary>
         public const string Scope_Profile = "profile";
+
         /// <summary>emailを要求するscope</summary>
         public const string Scope_Email = "email";
+
         /// <summary>phoneを要求するscope</summary>
         public const string Scope_Phone = "phone";
+
         /// <summary>addressを要求するscope</summary>
         public const string Scope_Address = "address";
+        
         #endregion
 
         #region カスタムのscope
+
         /// <summary>useridを要求するscope</summary>
         public const string Scope_Userid = "userid";
+
+        /// <summary>parentidを要求するscope</summary>
+        public const string Scope_Parentid = "parentid";
+
         /// <summary>認証を要求するscope</summary>
+        /// <remarks>OAuth2用のprompt=none的な</remarks>
         public const string Scope_Auth = "auth";
+        
         /// <summary>rolesを要求するscope</summary>
         public const string Scope_Roles = "roles";
+        
         #endregion
 
         #endregion

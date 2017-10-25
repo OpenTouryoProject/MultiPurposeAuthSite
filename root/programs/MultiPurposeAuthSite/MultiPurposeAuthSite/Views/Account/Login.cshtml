@@ -87,7 +87,7 @@
                 </div>
                 <div class="form-group">
                     <div class="col-md-offset-2 col-md-10">
-                        <button id="normal_signin" type="button" class="btn btn-default">@AccountViews.LoginSubmit</button>
+                        <button id="normal_signin" name="submitButton" value="normal_signin" type="button" class="btn btn-default">@AccountViews.LoginSubmit</button>
                     </div>
                 </div>
                 <p>@Html.ActionLink(AccountViews.LoginRegisterActionLink, "Register")</p>
@@ -101,6 +101,8 @@
                 @Html.HiddenFor(m => m.Fido2Signature)
                 @Html.HiddenFor(m => m.Fido2AuthenticatorData)
                 @Html.HiddenFor(m => m.Fido2ClientData)
+
+                <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
             }
         </section>
     </div>
@@ -119,7 +121,10 @@
 
         <div class="sample-box-1">
             @*ここにIDフェデレーションを実装*@
-            ここにIDフェデレーションを実装
+            @AccountViews.IdFederationLogin
+            <section>
+                <button id="id_federation_signin" name="submitButton" value="id_federation_signin" type="button" class="btn btn-default">@AccountViews.IdFederationLoginSubmit</button>
+            </section>
         </div>
 
 @if (ASPNETIdentityConfig.CanEditFIDO2Data)
@@ -128,7 +133,7 @@
             @*ここにFIDO2を実装*@
             @AccountViews.FIDO2Login
             <section>
-                <button id="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
+                <button id="fido2_signin" name="submitButton" value="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
             </section>
         </div>
 }
@@ -139,26 +144,40 @@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
     <script>
-        const credAlgorithm = "RSASSA-PKCS1-v1_5";
-
         $(function () {
             $("#normal_signin").on("click", function () {
-
-                // properties
-                $("#Fido2UserId").val("");
-                $("#Fido2Signature").val("");
-                $("#Fido2AuthenticatorData").val("");
-                $("#Fido2ClientData").val("");
-
+                // button name
+                $("#submitButtonName").val(this.value);
                 // submit
                 $("#LoginForm").submit();
             });
         })
+    </script>
+
+    <script>
+        // Id federationLogin
+        $(function () {
+            $("#id_federation_signin").on("click", function () {
+                // button name
+                $("#submitButtonName").val(this.value);
+                // submit
+                $("#LoginForm").submit();
+            });
+        })
+    </script>
+
+    <script>
+        // FIDO2
+        const credAlgorithm = "RSASSA-PKCS1-v1_5";
+
+        
 
         $(function () {
 
             $("#fido2_signin").on("click", function () {
-
+                // button name
+                $("#submitButtonName").val(this.value);
+                
                 var challenge = '@Model.Fido2Challenge';
                 var id = localStorage["credentialId"];
                 var allowList =

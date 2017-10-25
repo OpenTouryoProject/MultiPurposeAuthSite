@@ -1361,5 +1361,53 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         #endregion
+
+        #region ID連携
+
+        /// <summary>
+        /// ID連携時の認可エンドポイント
+        /// </summary>
+        public static string IdFederationAuthorizeEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationAuthorizeEndPoint"];
+            }
+        }
+
+        /// <summary>
+        /// ID連携時のRedirectエンドポイント
+        /// </summary>
+        public static string IdFederationRedirectEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationRedirectEndPoint"];
+            }
+        }
+
+        /// <summary>
+        /// ID連携時のTokenエンドポイント
+        /// </summary>
+        public static string IdFederationTokenEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationTokenEndPoint"];
+            }
+        }
+
+        /// <summary>
+        /// ID連携時のUserInfoエンドポイント
+        /// </summary>
+        public static string IdFederationUserInfoEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationUserInfoEndPoint"];
+            }
+        }
+
+        #endregion
     }
 }

@@ -85,10 +85,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // ・ RFC上の記載で、RedirectEndpointのURIは、AbsoluteUriである必要があるとの記載あり。
             //    ASP.NET IdentityのチェックでAbsoluteUriである必要があるとの記載あり形式でないと弾かれる。
 
-            // response_type
+            #region response_type
+
             string response_type = context.Request.Query.Get("response_type");
 
-            // 書き換え
+            // OIDC implicitの場合、書き換え
             if (response_type.ToLower() == "id_token"
                 || response_type.ToLower() == "id_token token")
             {
@@ -113,10 +114,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
             }
 
-            // redirect_uri
+            #endregion
+
+            #region redirect_uri
+
             string redirect_uri = context.RedirectUri;
 
-            #region redirect_uriのチェック
+            // redirect_uriのチェック
             if (string.IsNullOrEmpty(redirect_uri))
             {
                 // redirect_uriの指定が無い。
@@ -140,6 +144,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         context.Validated(
                             ASPNETIdentityConfig.OAuthClientEndpointsRootURI
                             + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
+                    }
+                    else if (redirect_uri.ToLower() == "id_federation_code")
+                    {
+                        // ID連携時のエンドポイント
+                        context.Validated(ASPNETIdentityConfig.IdFederationRedirectEndPoint);
                     }
                     else
                     {
@@ -185,6 +194,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     }
                 }
             }
+
             #endregion
 
             // 結果を返す。

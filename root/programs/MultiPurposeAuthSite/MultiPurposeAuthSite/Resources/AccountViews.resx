@@ -154,13 +154,13 @@
     <value>There are no external authentication services configured.</value>
   </data>
   <data name="ExternalLoginsListPartialSubmit" xml:space="preserve">
-    <value>Log in using your {0} account</value>
+    <value>Login using your {0} account</value>
   </data>
   <data name="FIDO2Login" xml:space="preserve">
     <value>FIDO2 login</value>
   </data>
   <data name="FIDO2LoginSubmit" xml:space="preserve">
-    <value>Log in with FIDO2 authenticator</value>
+    <value>Login with FIDO2 authenticator</value>
   </data>
   <data name="ForgotPasswordConfirmationP" xml:space="preserve">
     <value>Please check your email to reset your password.</value>
@@ -176,6 +176,12 @@
   </data>
   <data name="ForgotPasswordTitle" xml:space="preserve">
     <value>Forgot your password ?</value>
+  </data>
+  <data name="IdFederationLogin" xml:space="preserve">
+    <value>Id federation login</value>
+  </data>
+  <data name="IdFederationLoginSubmit" xml:space="preserve">
+    <value>Login with id federation</value>
   </data>
   <data name="LoginForgotPasswordActionLink" xml:space="preserve">
     <value>Forgot your password ?</value>
