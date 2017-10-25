@@ -155,12 +155,10 @@ namespace MultiPurposeAuthSite.Controllers
                     case ASPNETIdentityConst.Scope_Userid:
                         userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
                         break;
-                    case ASPNETIdentityConst.Scope_Parentid:
-                        userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Parentid, user.ParentId);
-                        break;
                     case ASPNETIdentityConst.Scope_Roles:
-                        IList<string> roles = await UserManager.GetRolesAsync(user.Id);
-                        userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Roles, roles);
+                        userinfoClaimSet.Add(
+                            ASPNETIdentityConst.Scope_Roles,
+                            await UserManager.GetRolesAsync(user.Id));
                         break;
 
                     #endregion

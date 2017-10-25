@@ -1853,15 +1853,14 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 新規作成
                         user = new ApplicationUser()
-                        {   
+                        {
                             Id = (string)jobj["userid"],
-                            ParentId = (string)jobj["parentid"],
 
-                            UserName = (string)jobj["sub"],
+                            UserName = sub,
 
                             Email = (string)jobj["email"],
                             EmailConfirmed = (bool)Convert.ToBoolean((string)jobj["email_verified"]),
-                            
+
                             PhoneNumber = (string)jobj["phone_number"],
                             PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj["phone_number_verified"]),
 
@@ -1870,15 +1869,16 @@ namespace MultiPurposeAuthSite.Controllers
 
                         result = await UserManager.CreateAsync(user);
 
-                        // Roles
+                        // Roles(追加)
+                        foreach (string roleName in roles)
+                        {
+                            await this.UserManager.AddToRoleAsync(user.Id, roleName);
+                        }
                     }
                     else
                     {
                         // 属性更新
-                        user.Id = (string)jobj["userid"];
-                        user.ParentId = (string)jobj["parentid"];
-
-                        user.UserName = (string)jobj["sub"];
+                        user.UserName = sub;
 
                         user.Email = (string)jobj["email"];
                         user.EmailConfirmed = (bool)Convert.ToBoolean((string)jobj["email_verified"]);
@@ -1889,6 +1889,35 @@ namespace MultiPurposeAuthSite.Controllers
                         result = await UserManager.UpdateAsync(user);
 
                         // Roles
+                        IList<string> currentRoles = await UserManager.GetRolesAsync(user.Id);
+
+                        // 追加
+                        foreach (string roleName in roles)
+                        {
+                            if (currentRoles.Any(x => x == roleName))
+                            {
+                                // currentにある ---> 何もしない
+                            }
+                            else
+                            {
+                                // currentにない ---> 追加
+                                await this.UserManager.AddToRoleAsync(user.Id, roleName);
+                            }
+                        }
+
+                        // 削除
+                        foreach (string roleName in currentRoles)
+                        {
+                            if (roles.Any(x => x == roleName))
+                            {
+                                // 連携先にある ---> 何もしない
+                            }
+                            else
+                            {
+                                // 連携先にない ---> 削除
+                                await this.UserManager.RemoveFromRoleAsync(user.Id, roleName);
+                            }
+                        }
                     }
 
                     #region サインイン

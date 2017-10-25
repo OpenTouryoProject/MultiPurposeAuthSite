@@ -80,18 +80,15 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     IList<string> roles = UserManager.GetRoles(User.Identity.GetUserId());
-                    foreach (string roleName in roles)
+                    if (roles.Any(x => x == ASPNETIdentityConst.Role_SystemAdmin))
                     {
-                        //if (ASPNETIdentityConfig.MultiTenant)
-                        //{
-                        //    if (roleName == ASPNETIdentityConst.Role_Admin) return;
-                        //}
-
-                        if (roleName == ASPNETIdentityConst.Role_SystemAdmin) return;
+                        return;
                     }
-
-                    // 認証されない。
-                    throw new SecurityException(Resources.AdminController.UnAuthorized);
+                    else
+                    {
+                        // 認証されない。
+                        throw new SecurityException(Resources.AdminController.UnAuthorized);
+                    }
                 }
             }
             else

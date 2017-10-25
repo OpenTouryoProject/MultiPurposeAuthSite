@@ -115,7 +115,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + Scope_Phone + " "
             + Scope_Address + " "
             + Scope_Userid + " "
-            + Scope_Parentid + " "
             + Scope_Roles;
         // authは他のscopeをフィルタするので。
 
@@ -144,10 +143,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         /// <summary>useridを要求するscope</summary>
         public const string Scope_Userid = "userid";
-
-        /// <summary>parentidを要求するscope</summary>
-        public const string Scope_Parentid = "parentid";
-
+        
         /// <summary>認証を要求するscope</summary>
         /// <remarks>OAuth2用のprompt=none的な</remarks>
         public const string Scope_Auth = "auth";
