@@ -31,6 +31,11 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Util;
+using MultiPurposeAuthSite.Models.ViewModels;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -45,12 +50,9 @@ using System.Web;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
-using MultiPurposeAuthSite.Models.Util;
-using MultiPurposeAuthSite.Models.ViewModels;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-
 using Newtonsoft.Json;
+
+using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 {
@@ -204,9 +206,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
                 "Basic",
-                Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(
-                    string.Format("{0}:{1}",
-                    client_id, client_secret))));
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(
+                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
 
             httpRequestMessage.Content = new FormUrlEncodedContent(
                 new Dictionary<string, string>
@@ -223,10 +224,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         /// <summary>Refresh Tokenを使用してAccess Tokenを更新</summary>
         /// <param name="tokenEndpointUri">tokenEndpointUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
         /// <param name="refreshToken">refreshToken</param>
         /// <returns>結果のJSON文字列</returns>
         public async Task<string> UpdateAccessTokenByRefreshTokenAsync(
-            Uri tokenEndpointUri, string refreshToken)
+            Uri tokenEndpointUri, string client_id, string client_secret, string refreshToken)
         {
             // 6.  アクセストークンの更新
             // http://openid-foundation-japan.github.io/rfc6749.ja.html#token-refresh
@@ -241,6 +244,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                 Method = HttpMethod.Post,
                 RequestUri = tokenEndpointUri,
             };
+
+            // HttpRequestMessage (Headers & Content)
+
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(
+                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
 
             // HttpRequestMessage (Content)
             httpRequestMessage.Content = new FormUrlEncodedContent(
@@ -279,6 +289,46 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             // HttpRequestMessage (Headers)
             httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+
+        /// <summary>Revokeエンドポイントで、Access Tokenを無効化する。</summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="token">token</param>
+        /// <param name="token_type_hint">token_type_hint</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> RevokeTokenAsync(
+            Uri revokeTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
+        {
+            // 通信用の変数
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = revokeTokenEndpointUri,
+            };
+
+            // HttpRequestMessage (Headers & Content)
+
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(
+                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
+
+            httpRequestMessage.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    { "token", token },
+                    { "token_type_hint", token_type_hint },
+                });
 
             // HttpResponseMessage
             httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
@@ -349,7 +399,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
@@ -380,7 +430,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
@@ -418,7 +468,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             }
 
             // OAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(client_id);
+            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
 
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
@@ -496,33 +546,34 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// ClaimsIdentityに所定のClaimを追加する。
         /// </summary>
         /// <param name="identity">ClaimsIdentity</param>
-        /// <param name="client_id">client_id</param>
+        /// <param name="client_id">string</param>
         /// <param name="state">string</param>
+        /// <param name="scopes">string[]</param>
         /// <param name="nonce">string</param>
-        /// <param name="scopes">権限情報</param>
+        /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
-        public static ClaimsIdentity AddClaim(ClaimsIdentity identity, string client_id, string state, string nonce, IEnumerable<string> scopes)
+        public static ClaimsIdentity AddClaim(ClaimsIdentity identity, 
+            string client_id, string state, IEnumerable<string> scopes,
+             string nonce, string jti)
         {
-            // OpenID Connect - マイクロソフト系技術情報 Wiki > IDトークン（クレーム）
-            // - クレームセット
-            //   https://techinfoofmicrosofttech.osscons.jp/index.php?OpenID%20Connect#h586dfab
-            // - 例 > Google
-            //   https://techinfoofmicrosofttech.osscons.jp/index.php?OpenID%20Connect#jaec1c75
-            //{
-            //  ★ "iss":"accounts.google.com",
-            //  ★ "aud":"クライアント識別子.apps.googleusercontent.com",
-            //  ★ "sub":"ユーザーの一意識別子",
-            //  ★ "iat":JWT の発行日時（Unix時間）,
-            //  ★ "exp":JWT の有効期限（Unix時間）
-            //  "email":"・・・・",
-            //  "email_verified":"true",
-            //  "azp":"認可した対象者のID.apps.googleusercontent.com",
-            //  "at_hash":"・・・", ← Hybrid Flowの追加クレーム
-            //}
-
             // 発行者の情報を含める。
+
+            #region 標準
+
             identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Issuer, ASPNETIdentityConfig.OAuthIssuerId));
             identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Audience, client_id));
+
+            foreach (string scope in scopes)
+            {
+                // その他のscopeは、Claimの下記urnに組み込む。
+                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Scope, scope));
+            }
+
+            #endregion
+
+            #region 拡張
+
+            // OpenID Connect
             if (string.IsNullOrEmpty(nonce))
             {
                 identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, state));
@@ -532,11 +583,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                 identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, nonce));
             }
 
-            foreach (string scope in scopes)
+            // Token Revocation
+            if (!string.IsNullOrEmpty(jti))
             {
-                // その他のscopeは、Claimの下記urnに組み込む。
-                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Scope, scope));
+                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Jti, jti));
             }
+
+            #endregion
 
             return identity;
         }

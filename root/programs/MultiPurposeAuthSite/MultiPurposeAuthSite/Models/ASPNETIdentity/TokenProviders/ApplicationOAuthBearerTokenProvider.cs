@@ -239,17 +239,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
                         if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
-                        }
-                        else
-                        {
-                            // 検証未完
                         }
                     }
                 }
@@ -270,17 +266,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
                         if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
-                        }
-                        else
-                        {
-                            // 検証未完
                         }
                     }
                 }
@@ -294,17 +286,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    if (string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret) == false)
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
                         if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
-                        }
-                        else
-                        {
-                            // 検証未完
                         }
                     }
                 }
@@ -313,18 +301,28 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
             else if (context.Parameters["grant_type"].ToLower() == "refresh_token")
             {
-                // refresh_tokenでは、不要。
-                //if (context.TryGetBasicCredentials(out clientId, out clientSecret))
-                //{
-                //}
+                #region RefreshToken
 
                 if (!ASPNETIdentityConfig.EnableRefreshToken)
                 {
                     throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
                 }
 
-                // 検証完了
-                context.Validated();
+                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
+                if (context.TryGetBasicCredentials(out clientId, out clientSecret))
+                {
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
+                    {
+                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
+                        {
+                            // 検証完了
+                            context.Validated(clientId);
+                        }
+                    }
+                }
+
+                #endregion
             }
             else
             {
@@ -381,7 +379,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             user, DefaultAuthenticationTypes.ExternalBearer);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        OAuth2Helper.AddClaim(identity, context.ClientId, "", "", context.Scope);
+                        OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "", "");
 
                         // 検証完了
                         context.Validated(identity);
@@ -479,7 +477,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     user, DefaultAuthenticationTypes.ExternalBearer);
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2Helper.AddClaim(identity, context.ClientId, "", "", context.Scope);
+                OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "", "");
                 
                 // 検証完了
                 context.Validated(identity);

@@ -2034,7 +2034,7 @@ namespace MultiPurposeAuthSite.Controllers
                         scopes = OAuth2Helper.FilterClaimAtAuth(scopes).ToArray();
                     }
 
-                    OAuth2Helper.AddClaim(identity, client_id, state, nonce, scopes);
+                    OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce, "");
 
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);
@@ -2069,7 +2069,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    OAuth2Helper.AddClaim(identity, client_id, state, nonce, scopes);
+                    OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce, "");
 
                     // ClaimsIdentityでサインインして、Access Tokenを発行
                     AuthenticationManager.SignIn(identity);
@@ -2131,7 +2131,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2Helper.AddClaim(identity, client_id, state, nonce, scopes);
+                OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce, "");
 
                 // ClaimsIdentityでサインインして、仲介コードを発行
                 this.AuthenticationManager.SignIn(identity);
@@ -2214,19 +2214,22 @@ namespace MultiPurposeAuthSite.Controllers
                 // 余談：OpenID Connectであれば、ここで id_token 検証。
 
                 // 結果の表示
-                if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                {
-                    model.AccessToken = dic["access_token"] ?? "";
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                //{
 
-                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                }
-                else
-                {
-                    model.AccessToken = dic["access_token"] ?? "";
-                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                }
+                model.AccessToken = dic["access_token"] ?? "";
+                model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                       CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+                model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+
+                //}
+                //else
+                //{
+                //    model.AccessToken = dic["access_token"] ?? "";
+                //    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+                //}
+
                 //}
                 //else
                 //{
@@ -2270,7 +2273,14 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果を格納する変数。
                     Dictionary<string, string> dic = null;
 
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
+                    {
+                        // WebAPIのエンドポイントにアクセス
+
+                        // Response
+                        model.Response = await OAuth2Helper.GetInstance().CallUserInfoEndpointAsync(model.AccessToken);
+                    }
+                    else if(!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
                     {
                         #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
@@ -2279,45 +2289,75 @@ namespace MultiPurposeAuthSite.Controllers
                             + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
                         // Tokenエンドポイントにアクセス
-                        model.Response = await OAuth2Helper.GetInstance()
-                            .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
+
+                        //  client_Idから、client_secretを取得。
+                        string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+
+                        model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                            tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                         // 結果の表示
-                        if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                        {
-                            model.AccessToken = dic["access_token"] ?? "";
-                            model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                                CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                        //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                        //{
 
-                            model.RefreshToken = dic["refresh_token"] ?? "";
-                        }
-                        else
+                        model.AccessToken = dic["access_token"] ?? "";
+                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+                        model.RefreshToken = dic["refresh_token"] ?? "";
+
+                        //}
+                        //else
+                        //{
+                        //    model.AccessToken = dic["access_token"] ?? "";
+                        //    model.RefreshToken = dic["refresh_token"] ?? "";
+                        //}
+
+                        #endregion
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.RevokeAccess"))
+                        || !string.IsNullOrEmpty(Request.Form.Get("submit.RevokeRefresh")))
+                    {
+                        #region Revokeエンドポイントで、Tokenを無効化
+
+                        // token_type_hint設定
+                        string token = "";
+                        string token_type_hint = "";
+
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.RevokeAccess")))
                         {
-                            model.AccessToken = dic["access_token"] ?? "";
-                            model.RefreshToken = dic["refresh_token"] ?? "";
+                            token = model.AccessToken;
+                            token_type_hint = "access_token";
                         }
+
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.RevokeRefresh")))
+                        {
+                            token = model.RefreshToken;
+                            token_type_hint = "refresh_token";
+                        }
+
+                        Uri revokeTokenEndpointUri = new Uri(
+                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuthRevokeTokenEndpoint);
+
+                        // Tokenエンドポイントにアクセス
+
+                        //  client_Idから、client_secretを取得。
+                        string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+
+                        model.Response = await OAuth2Helper.GetInstance().RevokeTokenAsync(
+                            revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
+
+                        dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                         #endregion
                     }
                     else
                     {
-                        #region Access Tokenを使用してResourceServerのWebAPIにアクセス
-
-                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
-                        {
-                            // WebAPIのエンドポイントにアクセス
-
-                            // Response
-                            model.Response = await OAuth2Helper.GetInstance()
-                                .CallUserInfoEndpointAsync(model.AccessToken);
-                        }
-                        else
-                        {
-                            // ・・・
-                        }
-
-                        #endregion
+                        // ・・・
                     }
                 }
 

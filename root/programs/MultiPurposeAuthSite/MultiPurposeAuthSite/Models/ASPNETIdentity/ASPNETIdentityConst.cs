@@ -80,17 +80,28 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region Claim(のurn
 
+        #region 標準
+
         /// <summary>issuerクレームのurn</summary>
         public static readonly string Claim_Issuer = "urn:oauth:issuer";
 
         /// <summary>audienceクレームのurn</summary>
         public static readonly string Claim_Audience = "urn:oauth:audience";
 
+        /// <summary>scopeクレームのurn</summary>
+        public static readonly string Claim_Scope = "urn:oauth:scope";
+
+        #endregion
+
+        #region 拡張
+
         /// <summary>nonceクレームのurn</summary>
         public static readonly string Claim_Nonce = "urn:oauth:nonce";
 
-        /// <summary>scopeクレームのurn</summary>
-        public static readonly string Claim_Scope = "urn:oauth:scope";
+        /// <summary>jtiクレームのurn</summary>
+        public static readonly string Claim_Jti = "urn:oauth:jti";
+
+        #endregion
 
         #endregion
 

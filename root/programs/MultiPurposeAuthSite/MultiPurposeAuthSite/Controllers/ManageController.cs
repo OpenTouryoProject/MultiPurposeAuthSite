@@ -205,7 +205,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+                string oAuth2Data = OAuth2DataProvider.GetInstance().Get(user.ClientID);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
@@ -1987,7 +1987,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddOAuth2DataViewModel model = null;
 
-                string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+                string oAuth2Data = OAuth2DataProvider.GetInstance().Get(user.ClientID);
 
                 if (!string.IsNullOrEmpty(oAuth2Data))
                 {
@@ -2051,7 +2051,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                OAuth2DataProvider.GetInstance().UpdateOAuth2Data(user.ClientID, unstructuredData);
+                                OAuth2DataProvider.GetInstance().Update(user.ClientID, unstructuredData);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -2070,8 +2070,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 成功
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().DeleteOAuth2Data(temp);
-                                    OAuth2DataProvider.GetInstance().CreateOAuth2Data(user.ClientID, unstructuredData);
+                                    if (!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().Delete(temp);
+                                    OAuth2DataProvider.GetInstance().Create(user.ClientID, unstructuredData);
 
                                     // 再ログイン
                                     await this.ReSignInAsync();
@@ -2183,7 +2183,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // OAuth2関連の非構造化データのクリア
-                OAuth2DataProvider.GetInstance().DeleteOAuth2Data(user.ClientID);
+                OAuth2DataProvider.GetInstance().Delete(user.ClientID);
 
                 // ユーザーの保存（ClientIDのクリア）
                 //user.ClientID = ""; 一意制約エラーになるので
@@ -2401,19 +2401,21 @@ namespace MultiPurposeAuthSite.Controllers
                     // 余談：OpenID Connectであれば、ここで id_token 検証。
 
                     // 結果の表示
-                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                               CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                    //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                    //{
 
-                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                    }
-                    else
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                    }
+                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+
+                    //}
+                    //else
+                    //{
+                    //    model.AccessToken = dic["access_token"] ?? "";
+                    //    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+                    //}
                 }
                 else
                 {
@@ -2457,24 +2459,31 @@ namespace MultiPurposeAuthSite.Controllers
                         + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2Helper.GetInstance()
-                        .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
+
+                    //  client_Idから、client_secretを取得。
+                    string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+
+                    model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                        tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                     // 結果の表示
-                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                    //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                    //{
 
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-                    }
-                    else
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-                    }
+                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+                    model.RefreshToken = dic["refresh_token"] ?? "";
+
+                    //}
+                    //else
+                    //{
+                    //    model.AccessToken = dic["access_token"] ?? "";
+                    //    model.RefreshToken = dic["refresh_token"] ?? "";
+                    //}
 
                     #endregion
                 }

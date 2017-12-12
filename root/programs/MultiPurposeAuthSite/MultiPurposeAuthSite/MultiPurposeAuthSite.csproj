@@ -306,6 +306,7 @@
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationSignInManager.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationUserManager.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\CustomPasswordHasher.cs" />
+    <Compile Include="Models\ASPNETIdentity\OAuth2Extension\OAuth2RevocationProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\StartupAuth.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AuthorizationCodeProvider.cs" />

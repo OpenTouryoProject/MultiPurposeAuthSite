@@ -278,5 +278,72 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         }
 
         #endregion
+
+        #region Delete
+
+        /// <summary>直接的な削除</summary>
+        /// <param name="key">string</param>
+        /// <remarks>OAuth 2.0 Token Revocationサポートのための直接的な削除</remarks>
+        public static void DeleteDirectly(string key)
+        {
+            if (ASPNETIdentityConfig.EnableRefreshToken)
+            {
+                // EnableRefreshToken == true
+
+                AuthenticationTicket ticket;
+                TicketSerializer serializer = new TicketSerializer();
+
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        if (RefreshTokenProvider.RefreshTokens.TryRemove(key, out ticket))
+                        {
+                            // 1 refresh : 1 access なので、単に捨てればOK。
+                        }
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+                                    // 1 refresh : 1 access なので、単に捨てればOK。
+                                    cnn.Execute(
+                                        "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+                                    // 1 refresh : 1 access なので、単に捨てればOK。
+                                    cnn.Execute(
+                                        "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+                                    // 1 refresh : 1 access なので、単に捨てればOK。
+                                    cnn.Execute(
+                                        "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            else
+            {
+                // EnableRefreshToken == false
+            }
+        }
+
+        #endregion
     }
 }

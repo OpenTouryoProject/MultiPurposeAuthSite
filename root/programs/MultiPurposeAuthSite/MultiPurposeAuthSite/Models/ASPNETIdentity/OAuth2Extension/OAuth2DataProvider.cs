@@ -65,10 +65,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         #region Create
 
-        /// <summary>CreateOAuth2Data</summary>
+        /// <summary>Create</summary>
         /// <param name="clientID">string</param>
         /// <param name="unstructuredData">string</param>
-        public void CreateOAuth2Data(string clientID, string unstructuredData)
+        public void Create(string clientID, string unstructuredData)
         {
             switch (ASPNETIdentityConfig.UserStoreType)
             {
@@ -119,10 +119,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #endregion
 
         #region Get(Reference)
-        
-        /// <summary>GetOAuth2Data</summary>
+
+        /// <summary>Get</summary>
         /// <param name="clientID">string</param>
-        public string GetOAuth2Data(string clientID)
+        /// <returns>unstructuredData</returns>
+        public string Get(string clientID)
         {
             string unstructuredData = "";
 
@@ -176,10 +177,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         #region Update
 
-        /// <summary>UpdateOAuth2Data</summary>
+        /// <summary>Update</summary>
         /// <param name="clientID">string</param>
         /// <param name="unstructuredData">string</param>
-        public void UpdateOAuth2Data(string clientID, string unstructuredData)
+        public void Update(string clientID, string unstructuredData)
         {
             switch (ASPNETIdentityConfig.UserStoreType)
             {
@@ -235,9 +236,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         #region Delete
 
-        /// <summary>DeleteOAuth2Data</summary>
+        /// <summary>Delete</summary>
         /// <param name="clientID">string</param>
-        public void DeleteOAuth2Data(string clientID)
+        public void Delete(string clientID)
         {
             switch (ASPNETIdentityConfig.UserStoreType)
             {

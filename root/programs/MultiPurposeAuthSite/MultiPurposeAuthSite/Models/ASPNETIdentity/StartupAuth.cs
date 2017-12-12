@@ -487,9 +487,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     };
 
                 #region Options可変部分
+
                 // AccessTokenFormat（OAuth Access Token の Format をJWTフォーマットに変更する。
-                if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    oAuthAuthorizationServerOptions.AccessTokenFormat = new AccessTokenFormatJwt();
+                //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                oAuthAuthorizationServerOptions.AccessTokenFormat = new AccessTokenFormatJwt();
+                
                 #endregion
 
                 // UseOAuthBearerTokensにOAuthAuthorizationServerOptionsを設定

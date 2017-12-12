@@ -34,6 +34,7 @@
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using System;
@@ -45,15 +46,21 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Web.Http;
 using System.Web.Http.Cors;
+using System.Net.Http.Formatting;
 
+using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuthResourceServerのApiController（ライブラリ）</summary>
-    [Authorize]
     [EnableCors(
         // リソースへのアクセスを許可されている発生元
         origins: "*",
@@ -89,13 +96,16 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region WebAPI
 
+        #region /userinfo
+
         /// <summary>
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
         /// GET: /userinfo
         /// </summary>
-        /// <returns>OAuthAuthenticatedUsersClaimViewModel</returns>
+        /// <returns>Dictionary(string, object)</returns>
         [HttpGet]
         [Route("userinfo")] // OpenID Connectライクなインターフェイスに変更した。
+        [Authorize]
         public async Task<Dictionary<string, object>> GetUserClaims()
         {
             // Claim情報を参照する。
@@ -167,7 +177,108 @@ namespace MultiPurposeAuthSite.Controllers
 
             return userinfoClaimSet;
         }
-        
+
+        #endregion
+
+        #region /revoke 
+
+        /// <summary>
+        /// AccessTokenとRefreshTokenの取り消し
+        /// POST: /revoke
+        /// </summary>
+        /// <param name="formData">
+        /// token
+        /// token_type_hint
+        /// </param>
+        /// <returns>Dictionary(string, object)</returns>
+        [HttpPost]
+        [Route("revoke")]
+        //[Authorize]
+        public Dictionary<string, object> RevokeOAuthToken(FormDataCollection formData)
+        {
+            // 戻り値（エラー）
+            Dictionary<string, object> err = new Dictionary<string, object>();
+
+            // 変数
+            string[] temp = null;
+            string token = formData["token"];
+            string token_type_hint = formData["token_type_hint"];
+
+            // クライアント認証
+
+            // クライアント識別子
+            string authHeader = HttpContext.Current.Request.Headers["Authorization"];
+            
+            temp = authHeader.Split(' ');
+
+            if (temp[0].ToLower() == "basic")
+            {
+                temp = CustomEncode.ByteToString(
+                    CustomEncode.FromBase64String(temp[1]), CustomEncode.us_ascii).Split(':');
+
+                string clientId = temp[0];
+                string clientSecret = temp[1];
+
+                if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
+                {
+                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                    if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(clientId))
+                    {
+                        // 検証完了
+
+                        if (token_type_hint == "access_token")
+                        {
+                            // 検証
+                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
+                            AuthenticationTicket ticket = verifier.Unprotect(token);
+
+                            if (ticket == null)
+                            {
+                                // 検証失敗
+                                // 検証エラー
+                            }
+                            else
+                            {
+                                // 検証成功
+
+                                // jtiの取り出し
+                                Claim claim = ticket.Identity.Claims.Where(
+                                    x => x.Type == ASPNETIdentityConst.Claim_Jti).FirstOrDefault<Claim>();
+
+                                // access_token取消
+                                OAuth2RevocationProvider.GetInstance().Create(claim.Value);
+                            }
+                        }
+                        else if (token_type_hint == "refresh_token")
+                        {
+                            // refresh_token取消
+                            RefreshTokenProvider.DeleteDirectly(token);
+                        }
+                        else
+                        {
+                            // token_type_hint パラメタ・エラー
+                        }
+                    }
+                    else
+                    {
+                        // クライアント認証エラー（Credential不正
+                    }
+                }
+                else
+                {
+                    // クライアント認証エラー（Credential不正
+                }
+            }
+            else
+            {
+                // クライアント認証エラー（ヘッダ不正
+            }
+
+            return null;
+        }
+
+        #endregion
+
         #endregion
     }
 }

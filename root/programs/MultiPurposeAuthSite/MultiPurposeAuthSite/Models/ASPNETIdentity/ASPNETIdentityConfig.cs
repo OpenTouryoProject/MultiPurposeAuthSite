@@ -972,16 +972,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region JWT
 
-        /// <summary>
-        /// Custom Token Format (JWT) のサポート
-        /// </summary>
-        public static bool EnableCustomTokenFormat
-        {
-            get
-            {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableCustomTokenFormat"]);
-            }
-        }
+        ///// <summary>
+        ///// Custom Token Format (JWT) のサポート
+        ///// </summary>
+        //public static bool EnableCustomTokenFormat
+        //{
+        //    get
+        //    {
+        //        return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableCustomTokenFormat"]);
+        //    }
+        //}
 
         /// <summary>
         /// JWTのIssuerId (OAuth Server)
@@ -1099,6 +1099,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        #region 既定
+        
         /// <summary>
         /// OAuthのAuthorizeのEndpoint
         /// </summary>
@@ -1121,6 +1123,47 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        #endregion
+
+        #region 拡張（WebAPI）
+
+        /// <summary>
+        /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
+        /// </summary>
+        public static string OAuthGetUserClaimsWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthGetUserClaimsWebAPI"];
+            }
+        }
+
+        /// <summary>
+        /// OAuthで認可したTokenを無効化するWebAPI
+        /// </summary>
+        public static string OAuthRevokeTokenEndpoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthRevokeTokenEndpoint"];
+            }
+        }
+
+        /// <summary>
+        /// OAuthで認可したTokenのメタデータを返すWebAPI
+        /// </summary>
+        public static string OAuthIntrospectTokenEndpoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthIntrospectTokenEndpoint"];
+            }
+        }
+
+        #endregion
+
+        #region テスト用
+
         /// <summary>
         /// ManageController.OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
         /// </summary>
@@ -1131,6 +1174,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 return ConfigurationManager.AppSettings["OAuthAuthorizationCodeGrantClient_Manage"];
             }
         }
+
+        #endregion
 
         #endregion
 
@@ -1217,17 +1262,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// OAuthで認証を認可したユーザ情報のClaimを発行するWebAPI
-        /// </summary>
-        public static string OAuthAuthenticateUserWebAPI
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthAuthenticateUserWebAPI"];
-            }
-        }
-
-        /// <summary>
         /// OAuthで認可したユーザ情報に課金するWebAPI
         /// </summary>
         public static string OAuthChageToUserWebAPI
@@ -1235,17 +1269,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return ConfigurationManager.AppSettings["OAuthChageToUserWebAPI"];
-            }
-        }
-
-        /// <summary>
-        /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
-        /// </summary>
-        public static string OAuthGetUserClaimsWebAPI
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthGetUserClaimsWebAPI"];
             }
         }
 
