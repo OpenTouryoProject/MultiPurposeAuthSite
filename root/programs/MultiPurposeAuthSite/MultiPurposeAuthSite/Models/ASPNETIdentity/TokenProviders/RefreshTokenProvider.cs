@@ -279,19 +279,97 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
         #endregion
 
+        #region Reference
+
+        /// <summary>（インスタンス化不要な直接的な）参照</summary>
+        /// <param name="key">string</param>
+        /// <returns>AuthenticationTicket</returns>
+        /// <remarks>OAuth 2.0 Token Introspectionサポート</remarks>
+        public static AuthenticationTicket ReferenceDirectly(string key)
+        {
+            AuthenticationTicket ticket = null;
+
+            if (ASPNETIdentityConfig.EnableRefreshToken)
+            {
+                // EnableRefreshToken == true
+
+                TicketSerializer serializer = new TicketSerializer();
+
+                IEnumerable<byte[]> values = null;
+
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        RefreshTokenProvider.RefreshTokens.TryGetValue(key, out ticket);
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    values = cnn.Query<byte[]>(
+                                        "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
+
+                                    ticket = serializer.Deserialize(values.AsList()[0]);
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    values = cnn.Query<byte[]>(
+                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
+
+                                    ticket = serializer.Deserialize(values.AsList()[0]);
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    values = cnn.Query<byte[]>(
+                                       "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
+
+                                    ticket = serializer.Deserialize(values.AsList()[0]);
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            else
+            {
+                // EnableRefreshToken == false
+            }
+
+            return ticket;
+        }
+
+        #endregion
+
         #region Delete
 
-        /// <summary>直接的な削除</summary>
+        /// <summary>（インスタンス化不要な直接的な）削除</summary>
         /// <param name="key">string</param>
-        /// <remarks>OAuth 2.0 Token Revocationサポートのための直接的な削除</remarks>
-        public static void DeleteDirectly(string key)
+        /// <returns>削除できたか否か</returns>
+        /// <remarks>OAuth 2.0 Token Revocationサポート</remarks>
+        public static bool DeleteDirectly(string key)
         {
+            int ret = 0;
+
             if (ASPNETIdentityConfig.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
 
                 AuthenticationTicket ticket;
-                TicketSerializer serializer = new TicketSerializer();
 
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
@@ -299,6 +377,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         if (RefreshTokenProvider.RefreshTokens.TryRemove(key, out ticket))
                         {
                             // 1 refresh : 1 access なので、単に捨てればOK。
+                            ret = 1;
                         }
                         break;
 
@@ -313,22 +392,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             switch (ASPNETIdentityConfig.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
+
                                     // 1 refresh : 1 access なので、単に捨てればOK。
-                                    cnn.Execute(
+                                    ret = cnn.Execute(
                                         "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
+
                                     // 1 refresh : 1 access なので、単に捨てればOK。
-                                    cnn.Execute(
+                                    ret = cnn.Execute(
                                         "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
+
                                     // 1 refresh : 1 access なので、単に捨てればOK。
-                                    cnn.Execute(
+                                    ret = cnn.Execute(
                                         "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
 
                                     break;
@@ -342,6 +424,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             {
                 // EnableRefreshToken == false
             }
+
+            return !(ret == 0);
         }
 
         #endregion

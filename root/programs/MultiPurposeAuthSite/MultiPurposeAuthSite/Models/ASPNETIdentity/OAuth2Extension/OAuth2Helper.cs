@@ -222,7 +222,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
-        /// <summary>Refresh Tokenを使用してAccess Tokenを更新</summary>
+        /// <summary>Refresh Tokenを使用してAccess Tokenを更新する。</summary>
         /// <param name="tokenEndpointUri">tokenEndpointUri</param>
         /// <param name="client_id">client_id</param>
         /// <param name="client_secret">client_secret</param>
@@ -265,10 +265,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
-        /// <summary>認可したユーザのClaim情報を取得するWebAPIを呼び出す</summary>
+        /// <summary>UserInfoエンドポイントで、認可ユーザのClaim情報を取得する。</summary>
         /// <param name="accessToken">accessToken</param>
         /// <returns>結果のJSON文字列（認可したユーザのClaim情報）</returns>
-        public async Task<string> CallUserInfoEndpointAsync(string accessToken)
+        public async Task<string> GetUserInfoAsync(string accessToken)
         {
             // 通信用の変数
 
@@ -295,8 +295,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
-        /// <summary>Revokeエンドポイントで、Access Tokenを無効化する。</summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <summary>Revokeエンドポイントで、Tokenを無効化する。</summary>
+        /// <param name="revokeTokenEndpointUri">RevokeエンドポイントのUri</param>
         /// <param name="client_id">client_id</param>
         /// <param name="client_secret">client_secret</param>
         /// <param name="token">token</param>
@@ -314,6 +314,45 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             {
                 Method = HttpMethod.Post,
                 RequestUri = revokeTokenEndpointUri,
+            };
+
+            // HttpRequestMessage (Headers & Content)
+
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(
+                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
+
+            httpRequestMessage.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    { "token", token },
+                    { "token_type_hint", token_type_hint },
+                });
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+        /// <summary>Introspectエンドポイントで、Tokenを無効化する。</summary>
+        /// <param name="introspectTokenEndpointUri">IntrospectエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="token">token</param>
+        /// <param name="token_type_hint">token_type_hint</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> IntrospectTokenAsync(
+            Uri introspectTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
+        {
+            // 通信用の変数
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = introspectTokenEndpointUri,
             };
 
             // HttpRequestMessage (Headers & Content)
@@ -553,8 +592,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
         public static ClaimsIdentity AddClaim(ClaimsIdentity identity, 
-            string client_id, string state, IEnumerable<string> scopes,
-             string nonce, string jti)
+            string client_id, string state, IEnumerable<string> scopes, string nonce)
+            // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
         {
             // 発行者の情報を含める。
 
@@ -581,12 +620,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             else
             {
                 identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, nonce));
-            }
-
-            // Token Revocation
-            if (!string.IsNullOrEmpty(jti))
-            {
-                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Jti, jti));
             }
 
             #endregion

@@ -112,8 +112,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             authTokenClaimSet.Add("sub", ticket.Identity.Name);
-            authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("nbf", DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
 
             // scope値によって、返す値を変更する。
@@ -152,7 +153,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         break;
 
                     #endregion
-
                 }
             }
 
@@ -241,9 +241,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             }
 
                             OAuth2Helper.AddClaim(identity,
-                                (string)authTokenClaimSet["aud"], "", scopes,
-                                (string)authTokenClaimSet["nonce"], (string)authTokenClaimSet["jti"]);
+                                (string)authTokenClaimSet["aud"], "", scopes,　(string)authTokenClaimSet["nonce"]);
 
+                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
+                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
+                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
+                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
+                            
                             // AuthenticationPropertiesの生成
                             AuthenticationProperties prop = new AuthenticationProperties();
 
@@ -278,8 +282,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 }
 
                                 OAuth2Helper.AddClaim(identity,
-                                    (string)authTokenClaimSet["aud"], "", scopes,
-                                    (string)authTokenClaimSet["nonce"], (string)authTokenClaimSet["jti"]);
+                                    (string)authTokenClaimSet["aud"], "", scopes, (string)authTokenClaimSet["nonce"]);
+
+                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
+                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
+                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
+                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
 
                                 // AuthenticationPropertiesの生成
                                 AuthenticationProperties prop = new AuthenticationProperties();

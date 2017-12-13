@@ -78,28 +78,48 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region STS
 
-        #region Claim(のurn
+        #region Claim（のurn）
 
-        #region 標準
+        /// <summary>ベース部分</summary>
+        public static readonly string Claim_Base = "urn:oauth:";
+
+        #region 標準Claim
 
         /// <summary>issuerクレームのurn</summary>
-        public static readonly string Claim_Issuer = "urn:oauth:issuer";
+        public static readonly string Claim_Issuer = Claim_Base + "iss";
 
         /// <summary>audienceクレームのurn</summary>
-        public static readonly string Claim_Audience = "urn:oauth:audience";
+        public static readonly string Claim_Audience = Claim_Base + "aud";
 
         /// <summary>scopeクレームのurn</summary>
-        public static readonly string Claim_Scope = "urn:oauth:scope";
+        public static readonly string Claim_Scope = Claim_Base + "scope";
 
         #endregion
 
-        #region 拡張
+        #region 拡張Claim
 
-        /// <summary>nonceクレームのurn</summary>
-        public static readonly string Claim_Nonce = "urn:oauth:nonce";
+        #region JWT
+
+        /// <summary>expクレームのurn</summary>
+        public static readonly string Claim_ExpirationTime = Claim_Base + "exp";
+
+        /// <summary>nbfクレームのurn</summary>
+        public static readonly string Claim_NotBefore = Claim_Base + "nbf";
+
+        /// <summary>iatクレームのurn</summary>
+        public static readonly string Claim_IssuedAt = Claim_Base + "iat";
 
         /// <summary>jtiクレームのurn</summary>
-        public static readonly string Claim_Jti = "urn:oauth:jti";
+        public static readonly string Claim_JwtId = Claim_Base + "jti";
+
+        #region OIDC
+
+        /// <summary>nonceクレームのurn</summary>
+        public static readonly string Claim_Nonce = Claim_Base + "nonce";
+
+        #endregion
+
+        #endregion
 
         #endregion
 
@@ -156,7 +176,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         public const string Scope_Userid = "userid";
         
         /// <summary>認証を要求するscope</summary>
-        /// <remarks>OAuth2用のprompt=none的な</remarks>
+        /// <remarks>OAuth2用のprompt=none(@OIDC)的な</remarks>
         public const string Scope_Auth = "auth";
         
         /// <summary>rolesを要求するscope</summary>

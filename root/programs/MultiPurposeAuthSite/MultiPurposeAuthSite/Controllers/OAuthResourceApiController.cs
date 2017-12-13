@@ -194,7 +194,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [Route("revoke")]
         //[Authorize]
-        public Dictionary<string, object> RevokeOAuthToken(FormDataCollection formData)
+        public Dictionary<string, object> RevokeToken(FormDataCollection formData)
         {
             // 戻り値（エラー）
             Dictionary<string, object> err = new Dictionary<string, object>();
@@ -236,45 +236,233 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // 検証失敗
                                 // 検証エラー
+                                err.Add("error", "invalid_request");
+                                err.Add("error_description", "invalid token");
                             }
                             else
                             {
                                 // 検証成功
 
                                 // jtiの取り出し
-                                Claim claim = ticket.Identity.Claims.Where(
-                                    x => x.Type == ASPNETIdentityConst.Claim_Jti).FirstOrDefault<Claim>();
+                                Claim jti = ticket.Identity.Claims.Where(
+                                    x => x.Type == ASPNETIdentityConst.Claim_JwtId).FirstOrDefault<Claim>();
 
                                 // access_token取消
-                                OAuth2RevocationProvider.GetInstance().Create(claim.Value);
+                                OAuth2RevocationProvider.GetInstance().Create(jti.Value);
+                                return null; // 成功
                             }
                         }
                         else if (token_type_hint == "refresh_token")
                         {
                             // refresh_token取消
-                            RefreshTokenProvider.DeleteDirectly(token);
+                            if (RefreshTokenProvider.DeleteDirectly(token))
+                            {
+                                // 取り消し成功
+                                return null; // 成功
+                            }
+                            else
+                            {
+                                // 取り消し失敗
+                                err.Add("error", "invalid_request");
+                                err.Add("error_description", "invalid token");
+                            }
                         }
                         else
                         {
                             // token_type_hint パラメタ・エラー
+                            err.Add("error", "invalid_request");
+                            err.Add("error_description", "invalid token_type_hint");
                         }
                     }
                     else
                     {
                         // クライアント認証エラー（Credential不正
+                        err.Add("error", "invalid_client");
+                        err.Add("error_description", "Invalid credential");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential不正
+                    err.Add("error", "invalid_client");
+                    err.Add("error_description", "Invalid credential");
                 }
             }
             else
             {
                 // クライアント認証エラー（ヘッダ不正
+                err.Add("error", "invalid_request");
+                err.Add("error_description", "Invalid authentication header");
             }
 
-            return null;
+            return err;
+
+        }
+
+        #endregion
+
+        #region /revoke 
+
+        /// <summary>
+        /// AccessTokenとRefreshTokenのメタデータを返す。
+        /// POST: /introspect
+        /// </summary>
+        /// <param name="formData">
+        /// token
+        /// token_type_hint
+        /// </param>
+        /// <returns>Dictionary(string, object)</returns>
+        [HttpPost]
+        [Route("introspect")]
+        //[Authorize]
+        public Dictionary<string, object> IntrospectToken(FormDataCollection formData)
+        {
+            // 戻り値
+            // 
+            Dictionary<string, object> ret = new Dictionary<string, object>();
+            // エラー
+            Dictionary<string, object> err = new Dictionary<string, object>();
+
+            // 変数
+            string[] temp = null;
+            string token = formData["token"];
+            string token_type_hint = formData["token_type_hint"];
+
+            // クライアント認証
+
+            // クライアント識別子
+            string authHeader = HttpContext.Current.Request.Headers["Authorization"];
+
+            temp = authHeader.Split(' ');
+
+            if (temp[0].ToLower() == "basic")
+            {
+                temp = CustomEncode.ByteToString(
+                    CustomEncode.FromBase64String(temp[1]), CustomEncode.us_ascii).Split(':');
+
+                string clientId = temp[0];
+                string clientSecret = temp[1];
+
+                if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
+                {
+                    // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                    if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(clientId))
+                    {
+                        // 検証完了
+                        AuthenticationTicket ticket = null;
+
+                        if (token_type_hint == "access_token")
+                        {
+                            // 検証
+                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
+                            ticket = verifier.Unprotect(token);
+
+                            if (ticket == null)
+                            {
+                                // 検証失敗
+                                // 検証エラー
+                                err.Add("error", "invalid_request");
+                                err.Add("error_description", "invalid token");
+                            }
+                            else
+                            {
+                                // 検証成功
+                                // メタデータの返却
+                                ret.Add("active", "true");
+                                ret.Add("token_type", token_type_hint);
+
+                                string scopes = "";
+                                foreach (Claim claim in ticket.Identity.Claims)
+                                {
+                                    if (claim.Type.StartsWith(ASPNETIdentityConst.Claim_Base))
+                                    {
+                                        if (claim.Type == ASPNETIdentityConst.Claim_Scope)
+                                        {
+                                            scopes += claim.Value + " ";
+                                        }
+                                        else
+                                        {
+                                            ret.Add(claim.Type.Substring(
+                                                ASPNETIdentityConst.Claim_Base.Length), claim.Value);
+                                        }
+                                    }
+                                }
+                                ret.Add(ASPNETIdentityConst.Claim_Scope.Substring(
+                                    ASPNETIdentityConst.Claim_Base.Length), scopes.Trim());
+
+                                return ret; // 成功
+                            }
+                        }
+                        else if (token_type_hint == "refresh_token")
+                        {
+                            // refresh_token参照
+                            ticket = RefreshTokenProvider.ReferenceDirectly(token);
+
+                            if (ticket == null)
+                            {
+                                // 検証失敗
+                                // 検証エラー
+                                err.Add("error", "invalid_request");
+                                err.Add("error_description", "invalid token");
+                            }
+                            else
+                            {
+                                // 検証成功
+                                // メタデータの返却
+                                ret.Add("active", "true");
+                                ret.Add("token_type", token_type_hint);
+
+                                string scopes = "";
+                                foreach (Claim claim in ticket.Identity.Claims)
+                                {
+                                    if (claim.Type.StartsWith(ASPNETIdentityConst.Claim_Base))
+                                    {
+                                        if (claim.Type == ASPNETIdentityConst.Claim_Scope)
+                                        {
+                                            scopes += claim.Value + " ";
+                                        }
+                                        else
+                                        {
+                                            ret.Add(claim.Type.Substring(
+                                                ASPNETIdentityConst.Claim_Base.Length), claim.Value);
+                                        }
+                                    }
+                                }
+                                ret.Add(ASPNETIdentityConst.Claim_Scope.Substring(
+                                    ASPNETIdentityConst.Claim_Base.Length), scopes.Trim());
+
+                                return ret; // 成功
+                            }
+                        }
+                        else
+                        {
+                            // token_type_hint パラメタ・エラー
+                            err.Add("error", "invalid_request");
+                            err.Add("error_description", "invalid token_type_hint");
+                        }
+                    }
+                    else
+                    {
+                        // クライアント認証エラー（Credential不正
+                        err.Add("error", "invalid_client");
+                        err.Add("error_description", "Invalid credential");
+                    }
+                }
+                else
+                {
+                    // クライアント認証エラー（Credential不正
+                    err.Add("error", "invalid_client");
+                    err.Add("error_description", "Invalid credential");
+                }
+            }
+            else
+            {
+                // クライアント認証エラー（ヘッダ不正
+                err.Add("error", "invalid_request");
+                err.Add("error_description", "Invalid authentication header");
+            }
+
+            return err;
         }
 
         #endregion

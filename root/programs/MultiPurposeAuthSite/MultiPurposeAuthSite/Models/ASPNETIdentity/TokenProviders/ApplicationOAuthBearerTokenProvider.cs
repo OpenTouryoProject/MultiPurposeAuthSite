@@ -379,7 +379,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             user, DefaultAuthenticationTypes.ExternalBearer);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "", "");
+                        OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
                         // 検証完了
                         context.Validated(identity);
@@ -477,7 +477,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     user, DefaultAuthenticationTypes.ExternalBearer);
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "", "");
+                OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
                 
                 // 検証完了
                 context.Validated(identity);

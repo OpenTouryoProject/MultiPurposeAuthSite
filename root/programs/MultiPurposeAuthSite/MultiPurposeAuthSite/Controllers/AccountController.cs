@@ -2034,7 +2034,7 @@ namespace MultiPurposeAuthSite.Controllers
                         scopes = OAuth2Helper.FilterClaimAtAuth(scopes).ToArray();
                     }
 
-                    OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce, "");
+                    OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                     // ClaimsIdentityでサインインして、仲介コードを発行
                     this.AuthenticationManager.SignIn(identity);
@@ -2069,7 +2069,7 @@ namespace MultiPurposeAuthSite.Controllers
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce, "");
+                    OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                     // ClaimsIdentityでサインインして、Access Tokenを発行
                     AuthenticationManager.SignIn(identity);
@@ -2131,7 +2131,7 @@ namespace MultiPurposeAuthSite.Controllers
                 //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce, "");
+                OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                 // ClaimsIdentityでサインインして、仲介コードを発行
                 this.AuthenticationManager.SignIn(identity);
@@ -2278,9 +2278,9 @@ namespace MultiPurposeAuthSite.Controllers
                         // WebAPIのエンドポイントにアクセス
 
                         // Response
-                        model.Response = await OAuth2Helper.GetInstance().CallUserInfoEndpointAsync(model.AccessToken);
+                        model.Response = await OAuth2Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
                     }
-                    else if(!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
                     {
                         #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
@@ -2342,7 +2342,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
                             + ASPNETIdentityConfig.OAuthRevokeTokenEndpoint);
 
-                        // Tokenエンドポイントにアクセス
+                        // Revokeエンドポイントにアクセス
 
                         //  client_Idから、client_secretを取得。
                         string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
@@ -2351,7 +2351,41 @@ namespace MultiPurposeAuthSite.Controllers
                         model.Response = await OAuth2Helper.GetInstance().RevokeTokenAsync(
                             revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
-                        dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+                        #endregion
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectAccess"))
+                        || !string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectRefresh")))
+                    {
+                        #region Introspectエンドポイントで、Token情報を取得
+
+                        // token_type_hint設定
+                        string token = "";
+                        string token_type_hint = "";
+
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectAccess")))
+                        {
+                            token = model.AccessToken;
+                            token_type_hint = "access_token";
+                        }
+
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectRefresh")))
+                        {
+                            token = model.RefreshToken;
+                            token_type_hint = "refresh_token";
+                        }
+
+                        Uri introspectTokenEndpointUri = new Uri(
+                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuthIntrospectTokenEndpoint);
+
+                        // Introspectエンドポイントにアクセス
+
+                        //  client_Idから、client_secretを取得。
+                        string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+
+                        model.Response = await OAuth2Helper.GetInstance().IntrospectTokenAsync(
+                            introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
                     }
