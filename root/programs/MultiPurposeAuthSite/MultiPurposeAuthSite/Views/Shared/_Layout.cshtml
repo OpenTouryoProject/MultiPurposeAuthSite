@@ -29,9 +29,7 @@
 @using MultiPurposeAuthSite.Models.ASPNETIdentity
 @using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
 @using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
-@using Touryo.Infrastructure.Public.Security
 
 @{
     #region Role
@@ -60,27 +58,9 @@
             roles = (IList<string>)Session["Roles"];
         }
 
-        
+
         canShowAdminScreen = (roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
     }
-
-    #endregion
-
-    #region OAuth2
-
-    // 認可エンドポイント
-    string oAuthAuthorizeEndpoint =
-        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-        + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
-
-    // client_id
-    string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
-    // state (nonce) // 記号は入れない。
-    string state = GetPassword.Generate(10, 0);
-    // nonce // 記号は入れない。
-    string nonce = GetPassword.Generate(20, 0);
-    // scope
-    string scope = ASPNETIdentityConst.StandardScopes;
 
     #endregion
 }
@@ -118,7 +98,7 @@
         </div>
         <div id="header-button" class="col-xs-3">
 @if (User.Identity.IsAuthenticated)
-                {
+    {
             @* サインアウトボタンは、ユーザーが認証されている時だけ表示する *@
             <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Logoff", "Account")';">Sign-out</button>
 }
@@ -141,8 +121,6 @@ else
                         </li>
 @if (canShowAdminScreen)
 {
-                        @* 各メニューは、ユーザーが認証されている時だけ表示する *@
-
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
                         </li>
@@ -150,31 +128,9 @@ else
                             <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
                         </li>
 }
-
-@if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
-{
                         <li>
-                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state" style="color:peachpuff">Test Authorization Code Flow</a>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("OAuth Starters", "OAuthStarters", "Home", null, new { style = "color:peachpuff" })
                         </li>
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state&response_mode=form_post" style="color:peachpuff">Test Authorization Code Flow(form_post)</a>
-                        </li>
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=@scope&state=@state" style="color:peachpuff">Test Implicit Flow</a>
-                        </li>
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope%20openid&prompt=none&state=@state&nonce=@nonce" style="color:peachpuff">Test Auth Code Flow(OIDC)</a>
-                        </li>
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope%20openid&prompt=none&state=@state&nonce=@nonce&response_mode=form_post" style="color:peachpuff">Test Auth Code Flow(OIDC, form_post)</a>
-                        </li>
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=id_token token&scope=@scope%20openid&state=@state&nonce=@nonce" style="color:peachpuff">Test Implicit Flow *2(OIDC)</a>
-                        </li>
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=id_token&scope=@scope%20openid&state=@state&nonce=@nonce" style="color:peachpuff">Test Implicit Flow *1(OIDC)</a>
-                        </li>
-}
                     </ul>
                 </div>
             </div>

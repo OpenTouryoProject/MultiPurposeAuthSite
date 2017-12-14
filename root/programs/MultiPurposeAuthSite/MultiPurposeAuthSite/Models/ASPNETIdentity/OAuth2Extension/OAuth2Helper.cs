@@ -53,6 +53,7 @@ using Microsoft.AspNet.Identity.Owin;
 using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Security;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 {
@@ -183,10 +184,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="client_id">client_id</param>
         /// <param name="client_secret">client_secret</param>
         /// <param name="redirect_uri">redirect_uri</param>
-        /// <param name="code">仲介コード</param>
+        /// <param name="code">code</param>
+        /// <param name="code_verifier">code_verifier</param>
         /// <returns>結果のJSON文字列</returns>
         public async Task<string> GetAccessTokenByCodeAsync(
-            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code)
+            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
         {
             // 4.1.3.  アクセストークンリクエスト
             // http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req
@@ -209,13 +211,29 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                 CustomEncode.ToBase64String(CustomEncode.StringToByte(
                     string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
 
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
+            if (string.IsNullOrEmpty(code_verifier))
+            {
+                // 通常のアクセストークン・リクエスト
+                httpRequestMessage.Content = new FormUrlEncodedContent(
+                    new Dictionary<string, string>
+                    {
                     { "grant_type", "authorization_code" },
                     { "code", code },
                     { "redirect_uri", HttpUtility.HtmlEncode(redirect_uri) },
-                });
+                    });
+            }
+            else
+            {
+                // OAuth PKCEのアクセストークン・リクエスト
+                httpRequestMessage.Content = new FormUrlEncodedContent(
+                    new Dictionary<string, string>
+                    {
+                    { "grant_type", "authorization_code" },
+                    { "code", code },
+                    { "code_verifier", code_verifier },
+                    { "redirect_uri", HttpUtility.HtmlEncode(redirect_uri) },
+                    });
+            }
 
             // HttpResponseMessage
             httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
@@ -423,7 +441,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #endregion
 
         #region OAuth2関連ヘルパ
-        
+
+        #region Credential取得
         /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_secret</returns>
@@ -555,11 +574,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         #endregion
 
+        #endregion
+
         #region staticメソッド
 
         #region Claim関連ヘルパ
 
         /// <summary>認証の場合クレームをフィルタリング</summary>
+        /// <param name="scopes">フィルタ前のscopes</param>
+        /// <returns>フィルタ後のscopes</returns>
         public static IEnumerable<string> FilterClaimAtAuth(IEnumerable<string> scopes)
         {
             List<string> temp = new List<string>();
@@ -625,6 +648,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             #endregion
 
             return identity;
+        }
+
+        #endregion
+
+        #region PKCE_CodeChallengeMethod
+
+        /// <summary>
+        /// code_challenge_method=S256
+        /// BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))</summary>
+        /// <param name="code_verifier">string</param>
+        /// <returns>code_challenge</returns>
+        public static string PKCE_S256_CodeChallengeMethod(string code_verifier)
+        {
+            return CustomEncode.ToBase64UrlString(
+                GetHash.GetHashBytes(
+                    CustomEncode.StringToByte(code_verifier, CustomEncode.us_ascii),
+                    EnumHashAlgorithm.SHA256Managed));
         }
 
         #endregion

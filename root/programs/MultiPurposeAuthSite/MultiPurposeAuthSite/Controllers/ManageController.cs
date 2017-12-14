@@ -2393,7 +2393,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await OAuth2Helper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                     #endregion

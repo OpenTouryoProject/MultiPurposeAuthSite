@@ -519,6 +519,7 @@
     <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Manage\AddFIDO2Data.cshtml" />
+    <Content Include="Views\Home\OAuthStarters.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

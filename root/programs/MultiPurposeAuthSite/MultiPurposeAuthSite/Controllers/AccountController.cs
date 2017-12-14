@@ -1779,7 +1779,7 @@ namespace MultiPurposeAuthSite.Controllers
                     model.Response = await OAuth2Helper.GetInstance()
                         .GetAccessTokenByCodeAsync(
                              new Uri(ASPNETIdentityConfig.IdFederationTokenEndPoint),
-                            client_id, client_secret, redirect_uri, code);
+                            client_id, client_secret, redirect_uri, code, "");
 
                     #endregion
 
@@ -1995,11 +1995,25 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="state">state（推奨）</param>
         /// <param name="nonce">nonce（OIDC）</param>
         /// <param name="prompt">認可画面の扱い</param>
+        /// <param name="code_challenge">OAuth PKCE</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state, string nonce, string prompt)
+        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state,
+            string nonce, string prompt, // OpenID Connect
+            string code_challenge, string code_challenge_method) // OAuth PKCE
         {
+            #region テスト用
+
+            // state
+            Session["state"] = state;
+
+            // code_verifier
+            Session["code_challenge"] = code_challenge;
+            Session["code_challenge_method"] = code_challenge_method;
+
+            #endregion
+
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
                 .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
@@ -2172,6 +2186,46 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
         {
+            #region テスト用
+
+            // state
+            string stateInSession = (string)Session["state"];
+
+            // code_verifier
+            string code_verifier = "";
+            if (Session["code_challenge"] == null)
+            {
+                // Not PKCE
+                code_verifier = "";
+            }
+            else
+            {
+                // Is PKCE
+                if (Session["code_challenge_method"] == null)
+                {
+                    // plain
+                    code_verifier = (string)Session["code_challenge"];
+                }
+                else if (Session["code_challenge_method"].ToString().ToLower() == "plain")
+                {
+                    // plain
+                    code_verifier = (string)Session["code_challenge"];
+                }
+                else if (Session["code_challenge_method"].ToString().ToLower() == "s256")
+                {
+                    // S256
+                    code_verifier = Request.Cookies["test_code_verifier"].Value;
+                }
+            }
+
+            // クリア
+            Session["state"] = null;
+            Session["code_challenge"] = null;
+            Session["code_challenge_method"] = null;
+            Response.Cookies["test_code_verifier"].Value = "";
+
+            #endregion
+
             if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
             {
                 // Tokenエンドポイントにアクセス
@@ -2195,51 +2249,49 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // メニューに入れたら上手く行かなくなった、
                 // テスト用なのでstate検証はコメントアウトする。
+                
+                //stateの検証
+                if (state == stateInSession)
+                {
+                    //state正常
 
-                // stateの検証
-                //if (state == (string)Session["state"])
-                //{
-                // state正常
-
-                // 仲介コードからAccess Tokenを取得する。
-                string redirect_uri
+                    // 仲介コードからAccess Tokenを取得する。
+                    string redirect_uri
                     = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
                     + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account;
 
-                // Tokenエンドポイントにアクセス
-                model.Response = await OAuth2Helper.GetInstance()
-                    .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
-                dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+                    // Tokenエンドポイントにアクセス
+                    model.Response = await OAuth2Helper.GetInstance()
+                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
+                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
-                // 余談：OpenID Connectであれば、ここで id_token 検証。
+                    // 余談：OpenID Connectであれば、ここで id_token 検証。
 
-                // 結果の表示
-                //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                //{
+                    // 結果の表示
+                    //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
+                    //{
 
-                model.AccessToken = dic["access_token"] ?? "";
-                model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                       CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
 
-                //}
-                //else
-                //{
-                //    model.AccessToken = dic["access_token"] ?? "";
-                //    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                //}
+                    //}
+                    //else
+                    //{
+                    //    model.AccessToken = dic["access_token"] ?? "";
+                    //    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+                    //}
 
-                //}
-                //else
-                //{
-                //    // state異常
-                //}
+                }
+                else
+                {
+                    // state異常
+                }
 
-                //ViewBag.QS_State = state;
-                //ViewBag.SS_State = (string)Session["state"];
-
-                //Session["state"] = ""; // 誤動作防止
+                ViewBag.QS_State = state;
+                ViewBag.SS_State = stateInSession;
 
                 #endregion
 

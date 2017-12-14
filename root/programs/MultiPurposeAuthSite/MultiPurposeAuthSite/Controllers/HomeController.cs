@@ -35,5 +35,13 @@ namespace MultiPurposeAuthSite.Controllers
         {
             return View();
         }
+
+        /// <summary>OAuthStarters</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult OAuthStarters()
+        {
+            return View();
+        }
     }
 }
