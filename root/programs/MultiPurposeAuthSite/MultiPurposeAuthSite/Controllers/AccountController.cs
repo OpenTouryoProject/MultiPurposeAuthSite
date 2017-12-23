@@ -2003,17 +2003,6 @@ namespace MultiPurposeAuthSite.Controllers
             string nonce, string prompt, // OpenID Connect
             string code_challenge, string code_challenge_method) // OAuth PKCE
         {
-            #region テスト用
-
-            // state
-            Session["state"] = state;
-
-            // code_verifier
-            Session["code_challenge"] = code_challenge;
-            Session["code_challenge_method"] = code_challenge_method;
-
-            #endregion
-
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
                 .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
@@ -2189,39 +2178,23 @@ namespace MultiPurposeAuthSite.Controllers
             #region テスト用
 
             // state
-            string stateInSession = (string)Session["state"];
+            string state_InSessionOrCookie = (string)Session["test_state"];
+            if (string.IsNullOrEmpty(state_InSessionOrCookie))
+            {
+                state_InSessionOrCookie = Request.Cookies["test_state"].Value;
+            }
 
             // code_verifier
-            string code_verifier = "";
-            if (Session["code_challenge"] == null)
+            string code_verifier_InSessionOrCookie = (string)Session["test_code_verifier"];
+            if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
             {
-                // Not PKCE
-                code_verifier = "";
-            }
-            else
-            {
-                // Is PKCE
-                if (Session["code_challenge_method"] == null)
-                {
-                    // plain
-                    code_verifier = (string)Session["code_challenge"];
-                }
-                else if (Session["code_challenge_method"].ToString().ToLower() == "plain")
-                {
-                    // plain
-                    code_verifier = (string)Session["code_challenge"];
-                }
-                else if (Session["code_challenge_method"].ToString().ToLower() == "s256")
-                {
-                    // S256
-                    code_verifier = Request.Cookies["test_code_verifier"].Value;
-                }
+                code_verifier_InSessionOrCookie = Request.Cookies["test_code_verifier"].Value;
             }
 
             // クリア
-            Session["state"] = null;
-            Session["code_challenge"] = null;
-            Session["code_challenge_method"] = null;
+            Session["test_state"] = null;
+            Response.Cookies["test_state"].Value = "";
+            Session["test_code_verifier"] = null;
             Response.Cookies["test_code_verifier"].Value = "";
 
             #endregion
@@ -2251,7 +2224,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // テスト用なのでstate検証はコメントアウトする。
                 
                 //stateの検証
-                if (state == stateInSession)
+                if (state == state_InSessionOrCookie)
                 {
                     //state正常
 
@@ -2262,7 +2235,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await OAuth2Helper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
+                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier_InSessionOrCookie);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                     // 余談：OpenID Connectであれば、ここで id_token 検証。
@@ -2289,9 +2262,6 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // state異常
                 }
-
-                ViewBag.QS_State = state;
-                ViewBag.SS_State = stateInSession;
 
                 #endregion
 

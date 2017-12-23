@@ -20,47 +20,9 @@
 *@
 @using MultiPurposeAuthSite.Models.ViewModels
 @using MultiPurposeAuthSite.Models.ASPNETIdentity
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
-
-@using Touryo.Infrastructure.Public.Security
-
 @{
     ViewBag.Title = "OAuth Starters";
     Layout = "~/Views/Shared/_Layout.cshtml";
-
-    #region OAuth2
-
-    // 認可エンドポイント
-    string oAuthAuthorizeEndpoint =
-        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-        + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
-
-    // client_id
-    string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
-    // state (nonce) // 記号は入れない。
-    string state = GetPassword.Generate(10, 0);
-    // nonce // 記号は入れない。
-    string nonce = GetPassword.Generate(20, 0);
-    // scope
-    string scope = ASPNETIdentityConst.StandardScopes;
-    // code_verifier
-    string code_verifier = GetPassword.Base64UrlSecret(50);
-    string code_challenge = OAuth2Helper.PKCE_S256_CodeChallengeMethod(code_verifier);
-
-    // テスト用にcode_verifierを、Cookieに保存
-    if (Request.Cookies["test_code_verifier"] == null)
-    {
-        Response.Cookies["test_code_verifier"].Value = code_verifier;
-    }
-    else
-    {
-        if (string.IsNullOrEmpty(Request.Cookies["test_code_verifier"].Value))
-        {
-            Response.Cookies["test_code_verifier"].Value = code_verifier;
-        }
-    }
-
-    #endregion
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -73,32 +35,22 @@
     @if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
     {
         <ul>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state">Test Authorization Code</a>
+            <li>Authorization Code Flow
+                <ul>
+                    <li>@Html.ActionLink("Test Code", "TestCode", "Home")</li>
+                    <li>@Html.ActionLink("Test Code (form_post)", "TestCode_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Code (OIDC)", "TestCode_OIDC", "Home")</li>
+                    <li>@Html.ActionLink("Test Code (OIDC, form_post)", "TestCode_OIDC_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Code (PKCE plain)", "TestCode_PKCE_Plain", "Home")</li>
+                    <li>@Html.ActionLink("Test Code (PKCE S256)", "TestCode_PKCE_S256", "Home")</li>
+                </ul>
             </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state&response_mode=form_post">Test Authorization Code(form_post)</a>
-            </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state&code_challenge=@code_verifier&code_challenge_method=plain">Test Authorization Code(PKCE plain)</a>
-            </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope&state=@state&code_challenge=@code_challenge&code_challenge_method=S256">Test Authorization Code(PKCE S256)</a>
-            </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=token&scope=@scope&state=@state">Test Implicit</a>
-            </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope%20openid&prompt=none&state=@state&nonce=@nonce">Test Auth Code(OIDC)</a>
-            </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=code&scope=@scope%20openid&prompt=none&state=@state&nonce=@nonce&response_mode=form_post">Test Auth Code(OIDC, form_post)</a>
-            </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=id_token token&scope=@scope%20openid&state=@state&nonce=@nonce">Test Implicit "id_token token"(OIDC)</a>
-            </li>
-            <li>
-                <a href="@oAuthAuthorizeEndpoint?client_id=@client_id&response_type=id_token&scope=@scope%20openid&state=@state&nonce=@nonce">Test Implicit "id_token"(OIDC)</a>
+            <li>Implicit Flow
+                <ul>
+                    <li>@Html.ActionLink("Test Token", "TestToken", "Home")</li>
+                    <li>@Html.ActionLink("Test Token 'id_token'(OIDC)", "TestToken_OIDC1", "Home")</li>
+                    <li>@Html.ActionLink("Test Token 'id_token token'(OIDC)", "TestToken_OIDC2", "Home")</li>
+                </ul>
             </li>
         </ul>
     }
