@@ -78,7 +78,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region STS
 
-        #region Claim（のurn）
+        #region GrantType
+
+        public const string JwtBearerTokenFlowGrantType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+
+        #endregion
+
+        #region Claimのurn
 
         /// <summary>ベース部分</summary>
         public static readonly string Claim_Base = "urn:oauth:";

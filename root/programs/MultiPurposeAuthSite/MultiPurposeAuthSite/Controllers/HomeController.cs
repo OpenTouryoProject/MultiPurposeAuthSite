@@ -21,17 +21,28 @@
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
+using System;
+using System.Collections.Generic;
 using System.Web.Mvc;
+using System.Threading.Tasks;
 using System.Diagnostics;
 
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
 using Touryo.Infrastructure.Business.Presentation;
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Util;
 
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>HomeController</summary>
     public class HomeController : MyBaseMVController
-    {   
+    {
+        #region Action Method
+
         /// <summary>
         /// GET: Home
         /// </summary>
@@ -45,6 +56,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View();
         }
+
+        #endregion
 
         #region Test OAuth2
 
@@ -260,6 +273,39 @@ namespace MultiPurposeAuthSite.Controllers
             return Redirect(this.OAuthAuthorizeEndpoint + 
                 "?client_id=" + this.ClientId + "&response_type=id_token token&scope=" + this.Scope + "%20openid&state=" + 
                 this.State + "&nonce=" + this.Nonce);
+        }
+
+        #endregion
+
+        #region JWT Bearer Token Flow
+
+        /// <summary>TestJWTBearerTokenFlow</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public async Task<ActionResult> TestJWTBearerTokenFlow()
+        {
+            // Token2エンドポイントにアクセス
+
+            //  client_Idから、client_secretを取得。
+            string iss = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+
+            string aud = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2;
+
+            string privateKey = GetConfigParameter.GetConfigValue("OAuth2JwtAssertionPrivatekey");
+            privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
+
+            string response = await OAuth2Helper.GetInstance()
+                .JwtBearerTokenFlowAsync(new Uri(
+                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2),
+                     JwtAssertion.CreateJwtBearerTokenFlowAssertion(
+                         iss, aud, new TimeSpan(0, 0, 30), "hoge1 hoge2 hoge3", privateKey));
+
+            ViewBag.Response = response;
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
+
+            return View("OAuthJWTBearerTokenFlow");
         }
 
         #endregion

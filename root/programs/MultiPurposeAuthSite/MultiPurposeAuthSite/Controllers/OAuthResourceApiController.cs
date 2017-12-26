@@ -191,14 +191,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// token
         /// token_type_hint
         /// </param>
-        /// <returns>Dictionary(string, object)</returns>
+        /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
         [Route("revoke")]
         //[Authorize]
-        public Dictionary<string, object> RevokeToken(FormDataCollection formData)
+        public Dictionary<string, string> RevokeToken(FormDataCollection formData)
         {
             // 戻り値（エラー）
-            Dictionary<string, object> err = new Dictionary<string, object>();
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             // 変数
             string[] temp = null;
@@ -296,13 +296,13 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add("error_description", "Invalid authentication header");
             }
 
-            return err;
+            return err; // 失敗
 
         }
 
         #endregion
 
-        #region /revoke 
+        #region /introspect 
 
         /// <summary>
         /// AccessTokenとRefreshTokenのメタデータを返す。
@@ -312,17 +312,17 @@ namespace MultiPurposeAuthSite.Controllers
         /// token
         /// token_type_hint
         /// </param>
-        /// <returns>Dictionary(string, object)</returns>
+        /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
         [Route("introspect")]
         //[Authorize]
-        public Dictionary<string, object> IntrospectToken(FormDataCollection formData)
+        public Dictionary<string, string> IntrospectToken(FormDataCollection formData)
         {
             // 戻り値
             // ・正常
-            Dictionary<string, object> ret = new Dictionary<string, object>();
+            Dictionary<string, string> ret = new Dictionary<string, string>();
             // ・異常
-            Dictionary<string, object> err = new Dictionary<string, object>();
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             // 変数
             string[] temp = null;
@@ -463,12 +463,12 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add("error_description", "Invalid authentication header");
             }
 
-            return err;
+            return err; // 失敗
         }
 
         #endregion
 
-        #region /revoke 
+        #region /OAuthBearerToken2 
 
         /// <summary>
         /// JWT bearer token authorizationグラント種別のTokenエンドポイント
@@ -478,17 +478,17 @@ namespace MultiPurposeAuthSite.Controllers
         /// grant_type = urn:ietf:params:oauth:grant-type:jwt-bearer
         /// assertion  = jwt_assertion
         /// </param>
-        /// <returns>Dictionary(string, object)</returns>
+        /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
         [Route("OAuthBearerToken2")]
         //[Authorize]
-        public Dictionary<string, object> OAuthBearerToken2(FormDataCollection formData)
+        public Dictionary<string, string> OAuthBearerToken2(FormDataCollection formData)
         {
             // 戻り値
             // ・正常
-            Dictionary<string, object> ret = new Dictionary<string, object>();
+            Dictionary<string, string> ret = new Dictionary<string, string>();
             // ・異常
-            Dictionary<string, object> err = new Dictionary<string, object>();
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             // 変数
             string grant_type = formData["grant_type"];
@@ -504,7 +504,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic["iss"]);
                 pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(pubKey), CustomEncode.us_ascii);
 
-                if (string.IsNullOrEmpty(pubKey))
+                if (!string.IsNullOrEmpty(pubKey))
                 {
                     string iss = "";
                     string aud = "";
@@ -513,43 +513,63 @@ namespace MultiPurposeAuthSite.Controllers
 
                     if (JwtAssertion.VerifyJwtBearerTokenFlowAssertion(assertion, out iss, out aud, out scopes, out jobj, pubKey))
                     {
+                        // aud 検証
                         if (aud == ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
                             + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2)
                         {
-                            ClaimsIdentity claims = new ClaimsIdentity();
-                            claims = OAuth2Helper.AddClaim(claims, iss, "", scopes.Split(' '), "");
+                            // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
+                            ClaimsIdentity claims = OAuth2Helper.AddClaim(
+                                new ClaimsIdentity(), iss, "", scopes.Split(' '), "");
+
                             AuthenticationProperties prop = new AuthenticationProperties();
-                            AuthenticationTicket ticket = new AuthenticationTicket(claims, prop);
-                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            string access_token = verifier.Protect(ticket);
+                            prop.IssuedUtc = DateTimeOffset.UtcNow;
+                            prop.ExpiresUtc = DateTimeOffset.Now.Add(ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes);
 
-                            ret.Add("access_token", access_token);
+                            // token_type
                             ret.Add("token_type", "bearer");
-                            ret.Add("expires_in", "");
 
-                            return ret;
+                            // access_token
+                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
+                            string access_token = verifier.Protect(new AuthenticationTicket(claims, prop));
+                            ret.Add("access_token", access_token);
+                            
+                            // expires_in
+                            jobj = (JObject)JsonConvert.DeserializeObject(
+                                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                                    access_token.Split('.')[1]), CustomEncode.us_ascii));
+                            ret.Add("expires_in", (long.Parse((string)jobj["exp"]) - long.Parse((string)jobj["iat"])).ToString());
+
+                            return ret; // 成功
                         }
                         else
                         {
-                            // aud不正
+                            // クライアント認証エラー（Credential（aud）不正
+                            err.Add("error", "invalid_client");
+                            err.Add("error_description", "Invalid credential");
                         }
                     }
                     else
                     {
-                        // 署名不正
+                        // クライアント認証エラー（Credential（署名）不正
+                        err.Add("error", "invalid_client");
+                        err.Add("error_description", "Invalid credential");
                     }
                 }
                 else
                 {
-                    // iss or pubKey不正
+                    // クライアント認証エラー（Credential（iss or pubKey）不正
+                    err.Add("error", "invalid_client");
+                    err.Add("error_description", "Invalid credential");
                 }
             }
             else
             {
-                // grant_type不正
+                // grant_type パラメタ・エラー
+                err.Add("error", "invalid_request");
+                err.Add("error_description", "invalid grant_type");
             }
 
-            return err;
+            return err; // 失敗
         }
 
         #endregion

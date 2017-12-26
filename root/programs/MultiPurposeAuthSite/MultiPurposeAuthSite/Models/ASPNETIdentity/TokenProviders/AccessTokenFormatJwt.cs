@@ -76,7 +76,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             ApplicationUserManager userManager
                 = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            ApplicationUser user = userManager.FindByName(ticket.Identity.Name); // 同期版でOK。
+
+            ApplicationUser user = null;
+
+            if (ticket.Identity.Name == null)
+            {
+                // Client認証の場合、
+                user = null;
+            }
+            else
+            {
+                // Resource Owner認証の場合、
+                user = userManager.FindByName(ticket.Identity.Name); // 同期版でOK。
+            }
 
             #region ClaimSetの生成
 
@@ -108,48 +120,62 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
             }
 
-            authTokenClaimSet.Add("sub", ticket.Identity.Name);
+            if (ticket.Identity.Name == null)
+            {
+                // Client認証の場合、aud（client_id）に対応するClient名称
+                authTokenClaimSet.Add("sub", 
+                    OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]));
+            }
+            else
+            {
+                // Resource Owner認証の場合、Resource Ownerの名称
+                authTokenClaimSet.Add("sub", ticket.Identity.Name);
+            }
+
             authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("nbf", DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
 
             // scope値によって、返す値を変更する。
-            foreach (string scope in scopes)
+            if (user != null)
             {
-                switch (scope.ToLower())
+                foreach (string scope in scopes)
                 {
-                    #region OpenID Connect
+                    switch (scope.ToLower())
+                    {
+                        #region OpenID Connect
 
-                    case ASPNETIdentityConst.Scope_Profile:
-                        // ・・・
-                        break;
-                    case ASPNETIdentityConst.Scope_Email:
-                        authTokenClaimSet.Add("email", user.Email);
-                        authTokenClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
-                        break;
-                    case ASPNETIdentityConst.Scope_Phone:
-                        authTokenClaimSet.Add("phone_number", user.PhoneNumber);
-                        authTokenClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
-                        break;
-                    case ASPNETIdentityConst.Scope_Address:
-                        // ・・・
-                        break;
+                        case ASPNETIdentityConst.Scope_Profile:
+                            // ・・・
+                            break;
+                        case ASPNETIdentityConst.Scope_Email:
+                            authTokenClaimSet.Add("email", user.Email);
+                            authTokenClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
+                            break;
+                        case ASPNETIdentityConst.Scope_Phone:
+                            authTokenClaimSet.Add("phone_number", user.PhoneNumber);
+                            authTokenClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
+                            break;
+                        case ASPNETIdentityConst.Scope_Address:
+                            // ・・・
+                            break;
 
-                    #endregion
+                        #endregion
 
-                    #region Else
+                        #region Else
 
-                    case ASPNETIdentityConst.Scope_Userid:
-                        authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
-                        break;
-                    case ASPNETIdentityConst.Scope_Roles:
-                        authTokenClaimSet.Add(
-                            ASPNETIdentityConst.Scope_Roles,
-                            userManager.GetRolesAsync(user.Id).Result);
-                        break;
+                        case ASPNETIdentityConst.Scope_Userid:
+                            authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                            break;
+                        case ASPNETIdentityConst.Scope_Roles:
+                            authTokenClaimSet.Add(
+                                ASPNETIdentityConst.Scope_Roles,
+                                userManager.GetRolesAsync(user.Id).Result);
+                            break;
 
-                    #endregion
+                            #endregion
+                    }
                 }
             }
 
