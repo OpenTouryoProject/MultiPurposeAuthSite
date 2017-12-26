@@ -60,6 +60,11 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [JsonProperty(PropertyName = "redirect_uri_token")]
         public string RedirectUriToken { get; set; }
 
+        /// <summary>JwtAssertionPublickey</summary>
+        [Display(Name = "JwtAssertionPublickey", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "jwt_assertion_publickey")]
+        public string JwtAssertionPublickey { get; set; }
+
         /// <summary>ClientName</summary>
         [Display(Name = "ClientName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(

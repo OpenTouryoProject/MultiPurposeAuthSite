@@ -443,6 +443,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #region OAuth2関連ヘルパ
 
         #region Credential取得
+
+        #region Client authentication
+
         /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_secret</returns>
@@ -465,37 +468,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             }
 
             return "";
-            
-        }
-
-        /// <summary>client_idからclient_nameを取得する。</summary>
-        /// <param name="client_id">client_id</param>
-        /// <returns>client_name</returns>
-        /// <remarks>
-        /// Client Credentialsグラント種別の場合に、
-        /// ・AccessTokenFormatJwt
-        /// ・OAuthResourceApiController
-        /// からclient_id（aud）に対応するsubを取得するために利用される。
-        /// </remarks>
-        public string GetClientName(string client_id)
-        {
-            client_id = client_id ?? "";
-
-            // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
-            {
-                return this.OauthClientsInfo[client_id]["client_name"];
-            }
-
-            // oAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
-            if (!string.IsNullOrEmpty(oAuth2Data))
-            {
-                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
-                return model.ClientName;
-            }
-
-            return ""; 
         }
 
         /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
@@ -545,6 +517,65 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             return "";
         }
 
+        /// <summary>client_idからjwt_assertion_publickeyを取得する（Client認証で使用する）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>jwt_assertion_publickey</returns>
+        public string GetJwtAssertionPublickey(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.OauthClientsInfo.ContainsKey(client_id))
+            {
+                return this.OauthClientsInfo[client_id]["jwt_assertion_publickey"];
+            }
+
+            // oAuth2Dataを検索
+            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
+            if (!string.IsNullOrEmpty(oAuth2Data))
+            {
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                return model.JwtAssertionPublickey;
+            }
+
+            return "";
+
+        }
+
+        #endregion
+
+        #region Name
+
+        /// <summary>client_idからclient_nameを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>client_name</returns>
+        /// <remarks>
+        /// Client Credentialsグラント種別の場合に、
+        /// ・AccessTokenFormatJwt
+        /// ・OAuthResourceApiController
+        /// からclient_id（aud）に対応するsubを取得するために利用される。
+        /// </remarks>
+        public string GetClientName(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.OauthClientsInfo.ContainsKey(client_id))
+            {
+                return this.OauthClientsInfo[client_id]["client_name"];
+            }
+
+            // oAuth2Dataを検索
+            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
+            if (!string.IsNullOrEmpty(oAuth2Data))
+            {
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                return model.ClientName;
+            }
+
+            return "";
+        }
+
         /// <summary>clientNameからclientIdを取得</summary>
         /// <returns>指定したclientNameのclientId</returns>
         public string GetClientIdByName(string clientName)
@@ -569,6 +600,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             return user.ClientID;
         }
+
+        #endregion
 
         #endregion
 
@@ -607,14 +640,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <summary>
         /// ClaimsIdentityに所定のClaimを追加する。
         /// </summary>
-        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="claims">ClaimsIdentity</param>
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">string[]</param>
         /// <param name="nonce">string</param>
         /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
-        public static ClaimsIdentity AddClaim(ClaimsIdentity identity, 
+        public static ClaimsIdentity AddClaim(ClaimsIdentity claims, 
             string client_id, string state, IEnumerable<string> scopes, string nonce)
             // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
         {
@@ -622,13 +655,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             #region 標準
 
-            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Issuer, ASPNETIdentityConfig.OAuthIssuerId));
-            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Audience, client_id));
+            claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Issuer, ASPNETIdentityConfig.OAuthIssuerId));
+            claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Audience, client_id));
 
             foreach (string scope in scopes)
             {
                 // その他のscopeは、Claimの下記urnに組み込む。
-                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Scope, scope));
+                claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Scope, scope));
             }
 
             #endregion
@@ -638,16 +671,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             // OpenID Connect
             if (string.IsNullOrEmpty(nonce))
             {
-                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, state));
+                claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, state));
             }
             else
             {
-                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, nonce));
+                claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, nonce));
             }
 
             #endregion
 
-            return identity;
+            return claims;
         }
 
         #endregion

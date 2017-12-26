@@ -46,7 +46,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
+namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
     /// OpenIDConnect対応用のHttpModule

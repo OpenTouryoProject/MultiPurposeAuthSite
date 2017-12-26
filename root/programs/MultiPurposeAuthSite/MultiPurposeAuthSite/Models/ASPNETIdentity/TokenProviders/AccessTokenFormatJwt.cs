@@ -58,10 +58,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
     public class AccessTokenFormatJwt: ISecureDataFormat<AuthenticationTicket>
     {
         /// <summary>constructor</summary>
-        /// <param name="oAuthIssuerId">oAuthIssuerId</param>
-        public AccessTokenFormatJwt()
-        {
-        }
+        public AccessTokenFormatJwt() { }
 
         /// <summary>Protect</summary>
         /// <param name="ticket">AuthenticationTicket</param>

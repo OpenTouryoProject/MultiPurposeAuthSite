@@ -55,6 +55,7 @@ using Microsoft.AspNet.Identity.Owin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -318,9 +319,9 @@ namespace MultiPurposeAuthSite.Controllers
         public Dictionary<string, object> IntrospectToken(FormDataCollection formData)
         {
             // 戻り値
-            // 
+            // ・正常
             Dictionary<string, object> ret = new Dictionary<string, object>();
-            // エラー
+            // ・異常
             Dictionary<string, object> err = new Dictionary<string, object>();
 
             // 変数
@@ -460,6 +461,92 @@ namespace MultiPurposeAuthSite.Controllers
                 // クライアント認証エラー（ヘッダ不正
                 err.Add("error", "invalid_request");
                 err.Add("error_description", "Invalid authentication header");
+            }
+
+            return err;
+        }
+
+        #endregion
+
+        #region /revoke 
+
+        /// <summary>
+        /// JWT bearer token authorizationグラント種別のTokenエンドポイント
+        /// POST: /OAuthBearerToken2
+        /// </summary>
+        /// <param name="formData">
+        /// grant_type = urn:ietf:params:oauth:grant-type:jwt-bearer
+        /// assertion  = jwt_assertion
+        /// </param>
+        /// <returns>Dictionary(string, object)</returns>
+        [HttpPost]
+        [Route("OAuthBearerToken2")]
+        //[Authorize]
+        public Dictionary<string, object> OAuthBearerToken2(FormDataCollection formData)
+        {
+            // 戻り値
+            // ・正常
+            Dictionary<string, object> ret = new Dictionary<string, object>();
+            // ・異常
+            Dictionary<string, object> err = new Dictionary<string, object>();
+
+            // 変数
+            string grant_type = formData["grant_type"];
+            string assertion = formData["assertion"];
+
+            // クライアント認証
+            if (grant_type == "urn:ietf:params:oauth:grant-type:jwt-bearer")
+            {
+                Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                        assertion.Split('.')[1]), CustomEncode.us_ascii));
+
+                string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic["iss"]);
+                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(pubKey), CustomEncode.us_ascii);
+
+                if (string.IsNullOrEmpty(pubKey))
+                {
+                    string iss = "";
+                    string aud = "";
+                    string scopes = "";
+                    JObject jobj = null;
+
+                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertion(assertion, out iss, out aud, out scopes, out jobj, pubKey))
+                    {
+                        if (aud == ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2)
+                        {
+                            ClaimsIdentity claims = new ClaimsIdentity();
+                            claims = OAuth2Helper.AddClaim(claims, iss, "", scopes.Split(' '), "");
+                            AuthenticationProperties prop = new AuthenticationProperties();
+                            AuthenticationTicket ticket = new AuthenticationTicket(claims, prop);
+                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
+                            string access_token = verifier.Protect(ticket);
+
+                            ret.Add("access_token", access_token);
+                            ret.Add("token_type", "bearer");
+                            ret.Add("expires_in", "");
+
+                            return ret;
+                        }
+                        else
+                        {
+                            // aud不正
+                        }
+                    }
+                    else
+                    {
+                        // 署名不正
+                    }
+                }
+                else
+                {
+                    // iss or pubKey不正
+                }
+            }
+            else
+            {
+                // grant_type不正
             }
 
             return err;

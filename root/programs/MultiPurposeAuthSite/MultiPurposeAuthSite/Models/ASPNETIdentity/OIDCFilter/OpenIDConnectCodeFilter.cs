@@ -39,7 +39,7 @@ using System.Collections.Generic;
 
 using Newtonsoft.Json;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
+namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
     /// OpenIDConnectCodeFilter

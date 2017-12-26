@@ -22,6 +22,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using System.Web.Mvc;
+using System.Diagnostics;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Public.Security;
@@ -30,7 +31,25 @@ namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>HomeController</summary>
     public class HomeController : MyBaseMVController
-    {
+    {   
+        /// <summary>
+        /// GET: Home
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult Index()
+        {
+            Debug.WriteLine(
+                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2);
+
+            return View();
+        }
+
+        #region Test OAuth2
+
+        #region Common
+
         /// <summary>認可エンドポイント</summary>
         public string OAuthAuthorizeEndpoint = "";
 
@@ -96,15 +115,9 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
-        /// <summary>
-        /// GET: Home
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        public ActionResult Index()
-        {
-            return View();
-        }
+        #endregion
+        
+        #region Action Method
 
         /// <summary>OAuthStarters</summary>
         /// <returns>ActionResult</returns>
@@ -248,6 +261,10 @@ namespace MultiPurposeAuthSite.Controllers
                 "?client_id=" + this.ClientId + "&response_type=id_token token&scope=" + this.Scope + "%20openid&state=" + 
                 this.State + "&nonce=" + this.Nonce);
         }
+
+        #endregion
+
+        #endregion
 
         #endregion
     }

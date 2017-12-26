@@ -1113,13 +1113,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// OAuthのBearerTokenのEndpoint
+        /// OAuthのBearerTokenのTokenエンドポイント 
         /// </summary>
         public static string OAuthBearerTokenEndpoint
         {
             get
             {
                 return ConfigurationManager.AppSettings["OAuthBearerTokenEndpoint"];
+            }
+        }
+
+        /// <summary>
+        /// JWT bearer token authorizationグラント種別の
+        /// BearerTokenのTokenエンドポイント
+        /// </summary>
+        public static string OAuthBearerTokenEndpoint2
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthBearerTokenEndpoint2"];
             }
         }
 

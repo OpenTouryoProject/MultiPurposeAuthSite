@@ -83,50 +83,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
             JObject clientJson = JObject.Parse(//Encoding.ASCII.GetString(clientDataBytes));
                 Encoding.ASCII.GetString(clientDataBytes).Replace("\0", "").Trim());
 
+            byte[] hashBytes = null;
+            byte[] data = null;
+            hashBytes = GetHash.GetHashBytes(clientDataBytes, EnumHashAlgorithm.SHA256Managed, 0);
+            data = authenticatorDataBytes.Concat(hashBytes).ToArray();
+
             if ((string)clientJson["challenge"] == this.Challenge)
             {
                 // Challengeの一致
 
                 // Load public key
-                JObject jwk = JObject.Parse(this.PublicKey);
-
-                if (jwk["alg"].ToString().ToLower() == "rs256")
-                {
-                    // RSAParameters
-                    RSAParameters rsaParameters = new RSAParameters();
-                    string modulus = (string)jwk["n"]; // JWK - ...
-                    string exponent = (string)jwk["e"]; // JWK - Key
-                    //Debug.WriteLine("modulus: " + modulus);
-                    //Debug.WriteLine("exponent: " + exponent);
-
-                    // VerifyData
-                    byte[] hashBytes = null;
-                    byte[] data = null;
-
-                    // ----------
-
-                    // FromBase64Stringだとエラーになる。
-                    
-                    rsaParameters = new RSAParameters
-                    {
-                        Modulus = CustomEncode.FromBase64UrlString(modulus),
-                        Exponent = CustomEncode.FromBase64UrlString(exponent),
-                    };
-
-                    hashBytes = GetHash.GetHashBytes(clientDataBytes, EnumHashAlgorithm.SHA256Managed, 0);
-                    data = authenticatorDataBytes.Concat(hashBytes).ToArray();
-
-                    //Debug.WriteLine("hashBytes : " + CustomEncode.ToHexString(hashBytes));
-                    //Debug.WriteLine("data : " + CustomEncode.ToHexString(data));
-
-                    RSACryptoServiceProvider rsaCryptoServiceProvider = new RSACryptoServiceProvider();
-                    rsaCryptoServiceProvider.ImportParameters(rsaParameters);
-                    ret = rsaCryptoServiceProvider.VerifyData(
-                        data, signatureBytes,
-                        HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-
-                    //Debug.WriteLine("ret : " + ret);
-                }
+                RSACryptoServiceProvider rsaCryptoServiceProvider = 
+                    RS256_KeyConverter.JwkToProvider(this.PublicKey);
+                
+                // VerifyData
+                ret = rsaCryptoServiceProvider.VerifyData(
+                    data, signatureBytes,
+                    HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 
                 return ret;
             }
