@@ -75,6 +75,48 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
             // Add to OwinContext.
 
+            #region AuthenticationType
+
+            // AuthenticationType:
+            //   ClaimsIdentity生成時や、AuthenticationTicket取得時に指定する。
+
+            // --------------------------------------------------
+            // OAuthDefaultsクラス (Microsoft.Owin.Security)
+            // https://msdn.microsoft.com/ja-jp/library/microsoft.owin.security.oauth.oauthdefaults.aspx
+            // --------------------------------------------------
+            // - OAuthDefaults.AuthenticationType フィールド (Microsoft.Owin.Security.OAuth)
+            //   https://msdn.microsoft.com/ja-jp/library/microsoft.owin.security.oauth.oauthdefaults.authenticationtype.aspx
+            //   OAuthBearerAuthenticationOptions と OAuthAuthorizationServerOptions の AuthenticationType プロパティの既定値。
+            //   - AuthenticationOptions.AuthenticationType プロパティ (Microsoft.Owin.Security)
+            //     https://msdn.microsoft.com/ja-jp/library/dn300391.aspx
+            //   - AuthenticationOptions.AuthenticationType プロパティ (Microsoft.Owin.Security)
+            //     https://msdn.microsoft.com/ja-jp/library/dn300391.aspx
+            // --------------------------------------------------
+
+            // --------------------------------------------------
+            // DefaultAuthenticationTypes クラス (Microsoft.AspNet.Identity)
+            // https://msdn.microsoft.com/ja-jp/library/microsoft.aspnet.identity.defaultauthenticationtypes.aspx
+            // --------------------------------------------------
+            // - ApplicationCookie
+            //   Forms認証用 Cookie認証チケット
+            //   https://msdn.microsoft.com/ja-jp/library/microsoft.aspnet.identity.defaultauthenticationtypes.applicationcookie.aspx
+            // - TwoFactorRememberBrowserCookie
+            //   Browser認証用 Cookie認証チケット
+            //   https://msdn.microsoft.com/en-us/library/microsoft.aspnet.identity.defaultauthenticationtypes.twofactorrememberbrowsercookie.aspx
+            // - TwoFactorCookie
+            //   TwoFactor認証用 Cookie認証チケット
+            //   https://msdn.microsoft.com/en-us/library/microsoft.aspnet.identity.defaultauthenticationtypes.twofactorcookie.aspx
+            // - ExternalCookie
+            //   外部ログイン Cookie認証チケット
+            //   /userinfoやid_tokenの情報をCookieに格納してある。
+            //   https://msdn.microsoft.com/ja-jp/library/microsoft.aspnet.identity.defaultauthenticationtypes.externalcookie.aspx
+            // - ExternalBearer
+            //   Bearer TokenのUnprotectする際、ClaimsIdentityに指定。
+            //   https://msdn.microsoft.com/ja-jp/library/microsoft.aspnet.identity.defaultauthenticationtypes.externalbearer.aspx
+            // --------------------------------------------------
+
+            #endregion
+
             #region EntityFramework
             //app.CreatePerOwinContext(ApplicationDbContext.Create);
             #endregion
@@ -489,7 +531,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 #region Options可変部分
 
                 // AccessTokenFormat（OAuth Access Token の Format をJWTフォーマットに変更する。
-                //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
                 oAuthAuthorizationServerOptions.AccessTokenFormat = new AccessTokenFormatJwt();
                 
                 #endregion

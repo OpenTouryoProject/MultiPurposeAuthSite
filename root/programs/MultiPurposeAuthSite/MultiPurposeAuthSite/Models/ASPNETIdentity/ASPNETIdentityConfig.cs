@@ -971,18 +971,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #endregion
 
         #region JWT
-
-        ///// <summary>
-        ///// Custom Token Format (JWT) のサポート
-        ///// </summary>
-        //public static bool EnableCustomTokenFormat
-        //{
-        //    get
-        //    {
-        //        return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableCustomTokenFormat"]);
-        //    }
-        //}
-
+        
         /// <summary>
         /// JWTのIssuerId (OAuth Server)
         /// </summary>

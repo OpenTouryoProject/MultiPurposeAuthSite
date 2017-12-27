@@ -31,6 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Log;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
@@ -527,7 +528,7 @@ namespace MultiPurposeAuthSite.Controllers
                             + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2)
                         {
                             // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
-                            ClaimsIdentity claims = OAuth2Helper.AddClaim(
+                            ClaimsIdentity identity = OAuth2Helper.AddClaim(
                                 new ClaimsIdentity(OAuthDefaults.AuthenticationType), iss, "", scopes.Split(' '), "");
 
                             AuthenticationProperties prop = new AuthenticationProperties();
@@ -539,7 +540,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // access_token
                             AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            string access_token = verifier.Protect(new AuthenticationTicket(claims, prop));
+                            string access_token = verifier.Protect(new AuthenticationTicket(identity, prop));
                             ret.Add("access_token", access_token);
                             
                             // expires_in
@@ -547,6 +548,12 @@ namespace MultiPurposeAuthSite.Controllers
                                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                                     access_token.Split('.')[1]), CustomEncode.us_ascii));
                             ret.Add("expires_in", (long.Parse((string)jobj["exp"]) - long.Parse((string)jobj["iat"])).ToString());
+
+                            // オペレーション・トレース・ログ出力
+                            string clientName = OAuth2Helper.GetInstance().GetClientName(iss);
+                            Logging.MyOperationTrace(string.Format(
+                                "{0}({1}) passed the 'jwt bearer token flow' by {2}({3}).",
+                                iss, clientName, iss, clientName));
 
                             return ret; // 成功
                         }

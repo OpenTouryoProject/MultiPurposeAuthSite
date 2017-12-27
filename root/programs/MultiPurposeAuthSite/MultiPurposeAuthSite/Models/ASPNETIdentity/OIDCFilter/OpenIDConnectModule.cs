@@ -116,7 +116,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             string path = context.Request.Url.AbsolutePath;
 
-            if (path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) == -1
+            if (path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint2) == -1
                 && path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) != -1)
             {
                 // OpenID Connect : Authorization Code Flow, [response_type=code]に対応

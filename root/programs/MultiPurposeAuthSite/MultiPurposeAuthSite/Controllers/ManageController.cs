@@ -49,6 +49,8 @@ using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
+using Facebook;
+
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -1406,12 +1408,12 @@ namespace MultiPurposeAuthSite.Controllers
                     && externalLoginInfo != null)
                 {
                     // ログイン情報を受け取れた場合、クレーム情報を分析
-                    ClaimsIdentity claims = authenticateResult.Identity;
+                    ClaimsIdentity identity = authenticateResult.Identity;
 
                     // ID情報とe-mail, name情報は必須
-                    Claim idClaim = claims.FindFirst(ClaimTypes.NameIdentifier);
-                    Claim emailClaim = claims.FindFirst(ClaimTypes.Email);
-                    Claim nameClaim = claims.FindFirst(ClaimTypes.Name);
+                    Claim idClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+                    Claim emailClaim = identity.FindFirst(ClaimTypes.Email);
+                    Claim nameClaim = identity.FindFirst(ClaimTypes.Name);
 
                     // 外部ログインで取得するクレームを標準化する。
                     // ・・・
@@ -1438,13 +1440,13 @@ namespace MultiPurposeAuthSite.Controllers
                             // emailClaimが取得できなかった場合、
                             if (externalLoginInfo.Login.LoginProvider == "Facebook")
                             {
-                                var identity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
-                                var access_token = identity.FindFirstValue("FacebookAccessToken");
-                                var fb = new Facebook.FacebookClient(access_token);
+                                ClaimsIdentity excIdentity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
+                                string access_token = excIdentity.FindFirstValue("FacebookAccessToken");
+                                FacebookClient facebookClient = new FacebookClient(access_token);
 
                                 // e.g. :
                                 // "/me?fields=id,email,gender,link,locale,name,timezone,updated_time,verified,last_name,first_name,middle_name"
-                                dynamic myInfo = fb.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
+                                dynamic myInfo = facebookClient.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
 
                                 email = myInfo.email; // Microsoft.Owin.Security.Facebookでは、emailClaimとして取得できない。
                                 emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
@@ -2409,21 +2411,11 @@ namespace MultiPurposeAuthSite.Controllers
                     // 余談：OpenID Connectであれば、ここで id_token 検証。
 
                     // 結果の表示
-                    //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    //{
-
                     model.AccessToken = dic["access_token"] ?? "";
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                     model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-
-                    //}
-                    //else
-                    //{
-                    //    model.AccessToken = dic["access_token"] ?? "";
-                    //    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                    //}
                 }
                 else
                 {
@@ -2477,21 +2469,11 @@ namespace MultiPurposeAuthSite.Controllers
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                     // 結果の表示
-                    //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    //{
-
                     model.AccessToken = dic["access_token"] ?? "";
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                         CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                     model.RefreshToken = dic["refresh_token"] ?? "";
-
-                    //}
-                    //else
-                    //{
-                    //    model.AccessToken = dic["access_token"] ?? "";
-                    //    model.RefreshToken = dic["refresh_token"] ?? "";
-                    //}
 
                     #endregion
                 }

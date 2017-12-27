@@ -40,11 +40,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
-using System.Diagnostics;
 using System.Configuration;
 using System.Web.Configuration;
 
 using Microsoft.Owin.Security;
+using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
@@ -52,9 +52,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
-using Touryo.Infrastructure.Business.Util;
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Framework.Util;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Util;
@@ -1477,8 +1475,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // emailClaimが取得できなかった場合、
                         if (externalLoginInfo.Login.LoginProvider == "Facebook")
                         {
-                            ClaimsIdentity exIdentity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
-                            string access_token = exIdentity.FindFirstValue("FacebookAccessToken");
+                            ClaimsIdentity excIdentity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
+                            string access_token = excIdentity.FindFirstValue("FacebookAccessToken");
                             FacebookClient facebookClient = new FacebookClient(access_token);
 
                             // e.g. :
@@ -2029,7 +2027,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 認可画面をスキップ
 
                     // アクセス要求を保存して、仲介コードを発行する。
-                    identity = new ClaimsIdentity(identity.Claims, "Bearer", identity.NameClaimType, identity.RoleClaimType);
+                    identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する
@@ -2070,7 +2068,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // アクセス要求の許可
-                    identity = new ClaimsIdentity(identity.Claims, "Bearer", identity.NameClaimType, identity.RoleClaimType);
+                    identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
@@ -2132,7 +2130,7 @@ namespace MultiPurposeAuthSite.Controllers
             else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
             {
                 // アクセス要求を保存して、仲介コードを発行する。
-                identity = new ClaimsIdentity(identity.Claims, "Bearer", identity.NameClaimType, identity.RoleClaimType);
+                identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
                 //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
@@ -2240,25 +2238,19 @@ namespace MultiPurposeAuthSite.Controllers
                         .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier_InSessionOrCookie);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
-                    // 余談：OpenID Connectであれば、ここで id_token 検証。
-
-                    // 結果の表示
-                    //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    //{
-
-                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessToken = dic["access_token"];
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
+                    // 余談：OpenID Connectであれば、ここで id_token 検証。                    
+                    if (dic.ContainsKey("id_token"))
+                    {
+                        model.IdToken = dic["id_token"];
+                        model.IdTokenJwtToJson = CustomEncode.ByteToString(
+                            CustomEncode.FromBase64UrlString(model.IdToken.Split('.')[1]), CustomEncode.UTF_8);
+                    }
+
                     model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-
-                    //}
-                    //else
-                    //{
-                    //    model.AccessToken = dic["access_token"] ?? "";
-                    //    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                    //}
-
                 }
                 else
                 {
@@ -2321,23 +2313,12 @@ namespace MultiPurposeAuthSite.Controllers
                         model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                        // 結果の表示
-                        //if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                        //{
-
-                        model.AccessToken = dic["access_token"] ?? "";
+                        
+                        model.AccessToken = dic["access_token"];
                         model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                             CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-
-                        //}
-                        //else
-                        //{
-                        //    model.AccessToken = dic["access_token"] ?? "";
-                        //    model.RefreshToken = dic["refresh_token"] ?? "";
-                        //}
+                        model.RefreshToken = dic["refresh_token"] ?? "";                        
 
                         #endregion
                     }

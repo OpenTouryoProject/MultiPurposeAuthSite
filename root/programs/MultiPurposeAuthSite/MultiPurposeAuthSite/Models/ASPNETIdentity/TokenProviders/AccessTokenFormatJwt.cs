@@ -296,7 +296,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             if ((string)authTokenClaimSet["sub"] == OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]))
                             {
                                 // ClaimsIdentityを生成し、
-                                ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
+                                ClaimsIdentity identity = new ClaimsIdentity(DefaultAuthenticationTypes.ExternalBearer);
 
                                 // sub（client_idに対応するclient_name）Claimを設定する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet["sub"]));
