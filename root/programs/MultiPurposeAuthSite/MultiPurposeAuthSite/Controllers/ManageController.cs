@@ -1992,12 +1992,20 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!string.IsNullOrEmpty(oAuth2Data))
                 {
                     model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
-                    model.ClientID = user.ClientID;
+                    if (string.IsNullOrEmpty(model.ClientID))
+                    {
+                        // 空（userから取得
+                        model.ClientID = user.ClientID;
+                    }
+                    else
+                    {
+                        // 既（user側が先に更新されることは無い。
+                    }
                 }
                 else
                 {
+                    // 初期
                     model = new ManageAddOAuth2DataViewModel();
-                    model.ClientID = "";
                 }
 
                 return View(model);

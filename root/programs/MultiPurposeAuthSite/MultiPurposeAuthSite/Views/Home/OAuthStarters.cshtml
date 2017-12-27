@@ -37,23 +37,26 @@
         <ul>
             <li>Authorization Code Flow
                 <ul>
-                    <li>@Html.ActionLink("Test Code", "TestCode", "Home")</li>
-                    <li>@Html.ActionLink("Test Code (form_post)", "TestCode_FormPost", "Home")</li>
-                    <li>@Html.ActionLink("Test Code (OIDC)", "TestCode_OIDC", "Home")</li>
-                    <li>@Html.ActionLink("Test Code (OIDC, form_post)", "TestCode_OIDC_FormPost", "Home")</li>
-                    <li>@Html.ActionLink("Test Code (PKCE plain)", "TestCode_PKCE_Plain", "Home")</li>
-                    <li>@Html.ActionLink("Test Code (PKCE S256)", "TestCode_PKCE_S256", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow", "TestCode", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (form_post)", "TestCode_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC)", "TestCode_OIDC", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC, form_post)", "TestCode_OIDC_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE plain)", "TestCode_PKCE_Plain", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE S256)", "TestCode_PKCE_S256", "Home")</li>
                 </ul>
             </li>
             <li>Implicit Flow
                 <ul>
-                    <li>@Html.ActionLink("Test Token", "TestToken", "Home")</li>
-                    <li>@Html.ActionLink("Test Token 'id_token'(OIDC)", "TestToken_OIDC1", "Home")</li>
-                    <li>@Html.ActionLink("Test Token 'id_token token'(OIDC)", "TestToken_OIDC2", "Home")</li>
+                    <li>@Html.ActionLink("Test Implicit Flow", "TestToken", "Home")</li>
+                    <li>@Html.ActionLink("Test Implicit Flow 'id_token'(OIDC)", "TestToken_OIDC1", "Home")</li>
+                    <li>@Html.ActionLink("Test Implicit Flow 'id_token token'(OIDC)", "TestToken_OIDC2", "Home")</li>
                 </ul>
             </li>
             <li>
-                Else Flow
+                Client Authentication Flow
+                <ul>
+                    <li>@Html.ActionLink("Test Client Credentials Flow", "TestClientCredentialsFlow", "Home")</li>
+                </ul>
                 <ul>
                     <li>@Html.ActionLink("Test JWT Bearer Token Flow", "TestJWTBearerTokenFlow", "Home")</li>
                 </ul>

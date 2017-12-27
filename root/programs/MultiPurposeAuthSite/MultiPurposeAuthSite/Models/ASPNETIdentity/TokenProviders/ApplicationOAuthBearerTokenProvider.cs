@@ -41,6 +41,7 @@ using System.Web;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
+using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
@@ -232,7 +233,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // 指定なし。
                 // 検証未完
             }
-            else if (context.Parameters["grant_type"].ToLower() == "authorization_code")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.AuthorizationCodeGrantType)
             {
                 #region Authorization Codeグラント種別
 
@@ -252,7 +253,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == "password")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.ResourceOwnerPasswordCredentialsGrantType)
             {
                 #region Resource Owner Password Credentialsグラント種別
 
@@ -279,7 +280,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == "client_credentials")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.ClientCredentialsGrantType)
             {
                 #region Client Credentialsグラント種別
 
@@ -299,7 +300,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == "refresh_token")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.RefreshTokenGrantType)
             {
                 #region RefreshToken
 
@@ -461,23 +462,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 user = await userManager.FindByNameAsync(
                     OAuth2Helper.GetInstance().GetClientName(context.ClientId));
 
-                if (user == null)
+                // ClaimsIdentity
+                ClaimsIdentity identity = null;
+                if (user != null)
                 {
-                    // *.configに定義したclient_idの場合は、アカウントが存在しない。
-                    // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
-                    user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
 
-                    // ClaimsIdentityを自前で生成する場合、
-                    //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
-                    //・・・
+                    // User Accountの場合、ユーザーに対応するClaimsIdentityを生成する。
+                    identity = await userManager.CreateIdentityAsync(user, OAuthDefaults.AuthenticationType);
+                    // ClaimsIdentityに、その他、所定のClaimを追加する。
+                    identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
                 }
-
-                // ユーザーに対応するClaimsIdentityを生成する。
-                ClaimsIdentity identity = await userManager.CreateIdentityAsync(
-                    user, DefaultAuthenticationTypes.ExternalBearer);
-
-                // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
+                else
+                {
+                    // Client Accountの場合、ClaimsIdentityを自前で生成する。
+                    identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
+                    identity = OAuth2Helper.AddClaim(
+                        new ClaimsIdentity(OAuthDefaults.AuthenticationType), context.ClientId, "", context.Scope, "");
+                }
                 
                 // 検証完了
                 context.Validated(identity);

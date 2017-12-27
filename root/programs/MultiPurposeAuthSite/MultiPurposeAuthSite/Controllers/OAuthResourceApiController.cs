@@ -49,6 +49,7 @@ using System.Web.Http.Cors;
 using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
+using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
@@ -140,39 +141,47 @@ namespace MultiPurposeAuthSite.Controllers
             // scope値によって、返す値を変更する。
             foreach (Claim scope in claimScope)
             {
-                switch (scope.Value.ToLower())
+                if (user != null)
                 {
-                    #region OpenID Connect
+                    // user == null では NG な Resource（Resource Owner の Resource）
+                    switch (scope.Value.ToLower())
+                    {
+                        #region OpenID Connect
 
-                    case ASPNETIdentityConst.Scope_Profile:
-                        // ・・・
-                        break;
-                    case ASPNETIdentityConst.Scope_Email:
-                        userinfoClaimSet.Add("email", user.Email);
-                        userinfoClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
-                        break;
-                    case ASPNETIdentityConst.Scope_Phone:
-                        userinfoClaimSet.Add("phone_number", user.PhoneNumber);
-                        userinfoClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
-                        break;
-                    case ASPNETIdentityConst.Scope_Address:
-                        // ・・・
-                        break;
+                        case ASPNETIdentityConst.Scope_Profile:
+                            // ・・・
+                            break;
+                        case ASPNETIdentityConst.Scope_Email:
+                            userinfoClaimSet.Add("email", user.Email);
+                            userinfoClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
+                            break;
+                        case ASPNETIdentityConst.Scope_Phone:
+                            userinfoClaimSet.Add("phone_number", user.PhoneNumber);
+                            userinfoClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
+                            break;
+                        case ASPNETIdentityConst.Scope_Address:
+                            // ・・・
+                            break;
 
-                    #endregion
+                        #endregion
 
-                    #region Else
+                        #region Else
 
-                    case ASPNETIdentityConst.Scope_Userid:
-                        userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
-                        break;
-                    case ASPNETIdentityConst.Scope_Roles:
-                        userinfoClaimSet.Add(
-                            ASPNETIdentityConst.Scope_Roles,
-                            await UserManager.GetRolesAsync(user.Id));
-                        break;
+                        case ASPNETIdentityConst.Scope_Userid:
+                            userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                            break;
+                        case ASPNETIdentityConst.Scope_Roles:
+                            userinfoClaimSet.Add(
+                                ASPNETIdentityConst.Scope_Roles,
+                                await UserManager.GetRolesAsync(user.Id));
+                            break;
 
-                    #endregion
+                            #endregion
+                    }
+                }
+                else
+                {
+                    // user == null でも OK な Resource
                 }
             }
 
@@ -495,7 +504,7 @@ namespace MultiPurposeAuthSite.Controllers
             string assertion = formData["assertion"];
 
             // クライアント認証
-            if (grant_type == "urn:ietf:params:oauth:grant-type:jwt-bearer")
+            if (grant_type == ASPNETIdentityConst.JwtBearerTokenFlowGrantType)
             {
                 Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
@@ -519,7 +528,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
                             ClaimsIdentity claims = OAuth2Helper.AddClaim(
-                                new ClaimsIdentity(), iss, "", scopes.Split(' '), "");
+                                new ClaimsIdentity(OAuthDefaults.AuthenticationType), iss, "", scopes.Split(' '), "");
 
                             AuthenticationProperties prop = new AuthenticationProperties();
                             prop.IssuedUtc = DateTimeOffset.UtcNow;

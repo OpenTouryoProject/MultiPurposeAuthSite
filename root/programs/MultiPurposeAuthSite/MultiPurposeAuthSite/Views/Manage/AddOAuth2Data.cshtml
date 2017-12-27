@@ -80,6 +80,12 @@
         </div>
     </div>
     <div class="form-group">
+        @Html.LabelFor(m => m.JwtAssertionPublickey, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.JwtAssertionPublickey, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
             <input type="submit" class="btn btn-default" name="submit.Add" value="@ManageViews.AddOAuth2DataSubmit" />
         </div>

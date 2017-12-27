@@ -138,10 +138,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
 
             // scope値によって、返す値を変更する。
-            if (user != null)
+            foreach (string scope in scopes)
             {
-                foreach (string scope in scopes)
+                if (user != null)
                 {
+                    // user == null では NG な Resource（Resource Owner の Resource）
                     switch (scope.ToLower())
                     {
                         #region OpenID Connect
@@ -176,6 +177,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             #endregion
                     }
+                }
+                else
+                {
+                    // user == null でも OK な Resource
                 }
             }
 
@@ -253,10 +258,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             // User Accountの場合
 
-                            // ユーザーに対応するClaimsIdentityを生成する。
+                            // ユーザーに対応するClaimsIdentityを生成し、
                             ClaimsIdentity identity = userManager.CreateIdentity(user, DefaultAuthenticationTypes.ExternalBearer);
 
-                            // ClaimsIdentityに、その他、所定のClaimを追加する。
+                            // aud、scopes、nonceなどのClaimを追加する。
                             List<string> scopes = new List<string>();
                             foreach (string s in (JArray)authTokenClaimSet["scopes"])
                             {
@@ -266,6 +271,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             OAuth2Helper.AddClaim(identity,
                                 (string)authTokenClaimSet["aud"], "", scopes,　(string)authTokenClaimSet["nonce"]);
 
+                            // その他、所定のClaimを追加する。
                             identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
                             identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
                             identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
@@ -273,10 +279,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             
                             // AuthenticationPropertiesの生成
                             AuthenticationProperties prop = new AuthenticationProperties();
-
-                            // AuthenticationTicketに格納不要
-                            //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
-                            //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
+                            prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
+                            prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
 
                             AuthenticationTicket auth = new AuthenticationTicket(identity, prop);
 
@@ -287,17 +291,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             // Client Accountの場合
 
-                            // ClaimとStoreのAudienceに対応するSubjectが一致するかを確認し、一致する場合のみ、認証する。
-                            // でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
+                            // ClaimとStoreのAudience(aud)に対応するSubject(sub)が一致するかを確認し、一致する場合のみ、認証する。
+                            // ※ でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
                             if ((string)authTokenClaimSet["sub"] == OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]))
                             {
                                 // ClaimsIdentityを生成し、
                                 ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
 
-                                // ClaimsIdentityに、client_idに対応するclient_nameを設定する。
+                                // sub（client_idに対応するclient_name）Claimを設定する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet["sub"]));
 
-                                // ClaimsIdentityに、その他、所定のClaimを追加する。
+                                // aud、scopes、nonceなどのClaimを追加する。
                                 List<string> scopes = new List<string>();
                                 foreach (string s in (JArray)authTokenClaimSet["scopes"])
                                 {
@@ -307,6 +311,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 OAuth2Helper.AddClaim(identity,
                                     (string)authTokenClaimSet["aud"], "", scopes, (string)authTokenClaimSet["nonce"]);
 
+                                // その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
                                 identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
                                 identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
@@ -314,10 +319,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 // AuthenticationPropertiesの生成
                                 AuthenticationProperties prop = new AuthenticationProperties();
-
-                                // AuthenticationTicketに格納不要
-                                //prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
-                                //prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
+                                prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
+                                prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
 
                                 AuthenticationTicket auth = new AuthenticationTicket(identity, prop);
 

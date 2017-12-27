@@ -277,6 +277,49 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region Client Authentication Flow
+
+        #region Client Credentials Flow
+
+        /// <summary>TestClientCredentialsFlow</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public async Task<ActionResult> TestClientCredentialsFlow()
+        {
+            // Tokenエンドポイントにアクセス
+            string aud = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint;
+
+            // ClientNameから、client_id, client_secretを取得。
+            string client_id = "";
+            string client_secret = "";
+            if (User.Identity.IsAuthenticated)
+            {
+                // User Accountの場合、
+                client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+            }
+            else
+            {
+                // Client Accountの場合、
+                client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+                client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+            }
+            
+            string response = await OAuth2Helper.GetInstance()
+                .ClientCredentialsFlowAsync(new Uri(
+                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint),
+                     client_id, client_secret, ASPNETIdentityConst.StandardScopes);
+
+            ViewBag.Response = response;
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
+
+            return View("OAuthClientAuthenticationFlow");
+        }
+
+        #endregion
+
         #region JWT Bearer Token Flow
 
         /// <summary>TestJWTBearerTokenFlow</summary>
@@ -285,13 +328,23 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Token2エンドポイントにアクセス
-
-            //  client_Idから、client_secretを取得。
-            string iss = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
-
             string aud = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
                      + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2;
 
+            // ClientNameから、client_id(iss)を取得。
+            string iss = "";
+            if (User.Identity.IsAuthenticated)
+            {
+                // User Accountの場合、
+                iss = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name); 
+            }
+            else
+            {
+                // Client Accountの場合、
+                iss = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+            }
+
+            // テストなので秘密鍵は共通とする。
             string privateKey = GetConfigParameter.GetConfigValue("OAuth2JwtAssertionPrivatekey");
             privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
 
@@ -300,13 +353,15 @@ namespace MultiPurposeAuthSite.Controllers
                     ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
                      + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2),
                      JwtAssertion.CreateJwtBearerTokenFlowAssertion(
-                         iss, aud, new TimeSpan(0, 0, 30), "hoge1 hoge2 hoge3", privateKey));
+                         iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
 
-            return View("OAuthJWTBearerTokenFlow");
+            return View("OAuthClientAuthenticationFlow");
         }
+
+        #endregion
 
         #endregion
 

@@ -80,6 +80,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region GrantType
 
+        /// <summary>Authorization Codeグラント種別</summary>
+        public const string AuthorizationCodeGrantType = "authorization_code";
+
+        /// <summary>Implicitグラント種別</summary>
+        public const string ImplicitGrantType = "-"; // Implicitには無い。
+
+        /// <summary>Resource Owner Password Credentialsグラント種別</summary>
+        public const string ResourceOwnerPasswordCredentialsGrantType = "password";
+
+        /// <summary>Client Credentialsグラント種別</summary>
+        public const string ClientCredentialsGrantType = "client_credentials";
+
+        /// <summary>Refresh Tokenグラント種別</summary>
+        public const string RefreshTokenGrantType = "refresh_token";
+
+        /// <summary>JWT bearer token authorizationグラント種別</summary>
         public const string JwtBearerTokenFlowGrantType = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
         #endregion

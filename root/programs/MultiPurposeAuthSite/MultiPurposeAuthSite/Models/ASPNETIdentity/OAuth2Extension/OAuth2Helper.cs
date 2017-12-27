@@ -217,7 +217,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                 httpRequestMessage.Content = new FormUrlEncodedContent(
                     new Dictionary<string, string>
                     {
-                    { "grant_type", "authorization_code" },
+                    { "grant_type", ASPNETIdentityConst.AuthorizationCodeGrantType },
                     { "code", code },
                     { "redirect_uri", HttpUtility.HtmlEncode(redirect_uri) },
                     });
@@ -228,7 +228,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                 httpRequestMessage.Content = new FormUrlEncodedContent(
                     new Dictionary<string, string>
                     {
-                    { "grant_type", "authorization_code" },
+                    { "grant_type", ASPNETIdentityConst.AuthorizationCodeGrantType },
                     { "code", code },
                     { "code_verifier", code_verifier },
                     { "redirect_uri", HttpUtility.HtmlEncode(redirect_uri) },
@@ -274,7 +274,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             httpRequestMessage.Content = new FormUrlEncodedContent(
                 new Dictionary<string, string>
                 {
-                    { "grant_type", "refresh_token" },
+                    { "grant_type", ASPNETIdentityConst.RefreshTokenGrantType },
                     { "refresh_token", refreshToken },
                 });
 
@@ -321,6 +321,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         #region Extension
 
+        #region Revoke & Introspect
+        
         /// <summary>Revokeエンドポイントで、Tokenを無効化する。</summary>
         /// <param name="revokeTokenEndpointUri">RevokeエンドポイントのUri</param>
         /// <param name="client_id">client_id</param>
@@ -401,10 +403,60 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
+        #endregion
+
+        #region Client Authentication Flow
+
+        #region Client Credentials Flow
+
+        /// <summary>
+        /// Tokenエンドポイントで、
+        /// Client Credentialsグラント種別の要求を行う。</summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="scopes">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> ClientCredentialsFlowAsync(Uri tokenEndpointUri, string client_id, string client_secret, string scopes)
+        {
+            // 通信用の変数
+            HttpRequestMessage httpRequestMessage = null;
+            HttpResponseMessage httpResponseMessage = null;
+
+            // HttpRequestMessage (Method & RequestUri)
+            httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = tokenEndpointUri,
+            };
+
+            // HttpRequestMessage (Headers & Content)
+
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(
+                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
+
+            httpRequestMessage.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    { "grant_type", ASPNETIdentityConst.ClientCredentialsGrantType },
+                    { "scope", scopes },
+                });
+
+            // HttpResponseMessage
+            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
+        }
+
+        #endregion
+
+        #region JWT Bearer Token Flow
+
         /// <summary>
         /// Token2エンドポイントで、
         /// JWT bearer token authorizationグラント種別の要求を行う。</summary>
-        /// <param name="Token2EndpointUri">IntrospectエンドポイントのUri</param>
+        /// <param name="token2EndpointUri">Token2エンドポイントのUri</param>
         /// <param name="assertion">string</param>
         /// <returns>結果のJSON文字列</returns>
         public async Task<string> JwtBearerTokenFlowAsync(Uri token2EndpointUri, string assertion)
@@ -433,6 +485,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
+
+        #endregion
+
+        #endregion
 
         #endregion
 
