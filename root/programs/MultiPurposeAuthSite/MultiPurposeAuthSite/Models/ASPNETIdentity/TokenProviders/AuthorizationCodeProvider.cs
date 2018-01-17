@@ -360,7 +360,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    if (_authenticationCodes.TryRemove(code, out value))
+                    if (_authenticationCodes.TryGetValue(code, out value))
                     {
                     }
                     break;

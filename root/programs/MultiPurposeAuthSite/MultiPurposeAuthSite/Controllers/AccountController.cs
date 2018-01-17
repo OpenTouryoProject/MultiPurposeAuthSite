@@ -2220,10 +2220,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
-
-                // メニューに入れたら上手く行かなくなった、
-                // テスト用なのでstate検証はコメントアウトする。
-                
+                                
                 //stateの検証
                 if (state == state_InSessionOrCookie)
                 {
@@ -2292,9 +2289,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
                     {
-                        // WebAPIのエンドポイントにアクセス
-
-                        // Response
+                        // UserInfoエンドポイントにアクセス
                         model.Response = await OAuth2Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
                     }
                     else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
@@ -2346,7 +2341,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         Uri revokeTokenEndpointUri = new Uri(
                             ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthRevokeTokenEndpoint);
+                            + ASPNETIdentityConfig.OAuthRevokeTokenWebAPI);
 
                         // Revokeエンドポイントにアクセス
 
@@ -2382,7 +2377,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         Uri introspectTokenEndpointUri = new Uri(
                             ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthIntrospectTokenEndpoint);
+                            + ASPNETIdentityConfig.OAuthIntrospectTokenWebAPI);
 
                         // Introspectエンドポイントにアクセス
 

@@ -265,7 +265,8 @@ else
                     using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                     {
                         @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn-link" />]</text>
+                        <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn-link" />]</text><br/>
+                        <text>※ If test the this function, there is needs to obtain the OAuth2 access token beforehand.</text>
                     }
                 }
             }

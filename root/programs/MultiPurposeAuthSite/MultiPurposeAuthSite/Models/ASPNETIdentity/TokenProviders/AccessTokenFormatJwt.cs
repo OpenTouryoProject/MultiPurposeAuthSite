@@ -221,6 +221,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <returns>AuthenticationTicket</returns>
         public AuthenticationTicket Unprotect(string jwt)
         {
+            // 空のケースあり。
+            if (string.IsNullOrEmpty(jwt))
+            {
+                return null;
+            }
+
             // 検証
             JWT_RS256 jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword);
             if (jwtRS256.Verify(jwt))

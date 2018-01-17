@@ -48,7 +48,7 @@
             <li>Implicit Flow
                 <ul>
                     <li>@Html.ActionLink("Test Implicit Flow", "Implicit", "Home")</li>
-                    <li>@Html.ActionLink("Test Implicit Flow 'id_token'(OIDC)", "Implicit_OIDC1", "Home") ・・・動かない</li>
+                    <li>@Html.ActionLink("Test Implicit Flow 'id_token'(OIDC)", "Implicit_OIDC1", "Home") ... this is not supported.</li>
                     <li>@Html.ActionLink("Test Implicit Flow 'id_token token'(OIDC)", "Implicit_OIDC2", "Home")</li>
                 </ul>
             </li>
@@ -62,13 +62,12 @@
             </li>
             <li>
                 Client Authentication Flow<br />
-                If you use a user account for client authentication, registration of OAuth2 data is necessary.
+                ※ If you use a user account for client authentication in the "jwt bearer token flow", registration of OAuth2 data is necessary to the account.
                 <ul>
                     <li>@Html.ActionLink("Test Client Credentials Flow", "TestClientCredentialsFlow", "Home")</li>
                 </ul>
                 <ul>
                     <li>@Html.ActionLink("Test JWT Bearer Token Flow", "TestJWTBearerTokenFlow", "Home")</li>
-                    ※ 認証状態で実行する場合は、サインインアカウントを使用するので、アカウントに公開鍵登録が必要。
                 </ul>
             </li>
         </ul>

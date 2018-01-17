@@ -1733,18 +1733,22 @@ namespace MultiPurposeAuthSite.Controllers
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute
                 && ASPNETIdentityConfig.IsDebug)
             {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 // 課金のテスト処理
-                JObject jobj = await WebAPIHelper.GetInstance().ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, "jpy", "1000");
-                // 元の画面に戻る
-                return RedirectToAction("Index");
+                string ret = (string)JsonConvert.DeserializeObject(
+                    await OAuth2Helper.GetInstance().CallOAuthChageToUserWebAPIAsync(
+                    (string)Session["access_token"], "jpy", "1000"));
+
+                if (ret == "OK")
+                {
+                    // 元の画面に戻る
+                    return RedirectToAction("Index");
+                }
+                else { }
             }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+            else { }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
@@ -2416,6 +2420,9 @@ namespace MultiPurposeAuthSite.Controllers
                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                     model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+
+                    // 課金処理で使用する。
+                    Session["access_token"] = model.AccessToken;
                 }
                 else
                 {
@@ -2474,6 +2481,9 @@ namespace MultiPurposeAuthSite.Controllers
                         CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                     model.RefreshToken = dic["refresh_token"] ?? "";
+
+                    // 課金処理で使用する。
+                    Session["access_token"] = model.AccessToken; 
 
                     #endregion
                 }

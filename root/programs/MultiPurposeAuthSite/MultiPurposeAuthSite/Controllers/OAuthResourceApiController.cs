@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Models.Log;
+using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
@@ -587,6 +588,96 @@ namespace MultiPurposeAuthSite.Controllers
 
             return err; // 失敗
         }
+
+        #endregion
+
+        #region Test
+
+        #region Hybrid Flow
+
+        /// <summary>
+        /// Hybrid Flowのテスト用エンドポイント
+        /// POST: /TestHybridFlow
+        /// </summary>
+        /// <param name="formData">code</param>
+        /// <returns>Dictionary(string, string)</returns>
+        [HttpPost]
+        [Route("TestHybridFlow")]
+        //[Authorize]
+        public async Task<Dictionary<string, string>> TestHybridFlow(FormDataCollection formData)
+        {
+            // 変数
+            string code = formData["code"];
+
+            // Tokenエンドポイントにアクセス
+            Uri tokenEndpointUri = new Uri(
+            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+            + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+
+            // 結果を格納する変数。
+            Dictionary<string, string> dic = null;
+
+            //  client_Idから、client_secretを取得。
+            string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+            string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+
+            // Hybridは、Implicitのredirect_uriを使用
+            string redirect_uri 
+                = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
+                + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account;
+
+            // Tokenエンドポイントにアクセス
+            string response = await OAuth2Helper.GetInstance()
+            .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
+            dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
+
+            // UserInfoエンドポイントにアクセス
+            dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                await OAuth2Helper.GetInstance().GetUserInfoAsync(dic["access_token"]));
+
+            return dic;
+        }
+
+        #endregion
+
+        #region Chage
+
+        /// <summary>
+        /// 課金テスト用エンドポイント
+        /// POST: /TestChageToUser
+        /// </summary>
+        /// <param name="formData">
+        /// - currency
+        /// - amount
+        /// </param>
+        /// <returns>string</returns>
+        [HttpPost]
+        [Route("TestChageToUser")]
+        [Authorize]
+        public async Task<string> TestChageToUser(FormDataCollection formData)
+        {
+            // 変数
+            string currency = formData["currency"];
+            string amount = formData["amount"];
+
+            if (ASPNETIdentityConfig.CanEditPayment
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute
+                && ASPNETIdentityConfig.IsDebug)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                // 課金のテスト処理
+                JObject jobj = await WebAPIHelper.GetInstance().ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, currency, amount);
+
+                return "OK";
+            }
+            else
+            {
+                return "NG";
+            }
+        }
+
+        #endregion
 
         #endregion
 

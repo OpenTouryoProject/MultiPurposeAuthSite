@@ -1101,17 +1101,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// OAuthのAuthorizeエンドポイント2 (Financial API)
-        /// </summary>
-        public static string OAuthAuthorizeEndpoint2
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthAuthorizeEndpoint2"];
-            }
-        }
-
-        /// <summary>
         /// OAuthのBearerTokenのTokenエンドポイント 
         /// </summary>
         public static string OAuthBearerTokenEndpoint
@@ -1122,9 +1111,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        #endregion
+
+        #region OAuth拡張
+
+        #region Authorize&Token2
+
         /// <summary>
-        /// JWT bearer token authorizationグラント種別の
-        /// BearerTokenのTokenエンドポイント
+        /// Financial API用のOAuthのAuthorizeエンドポイント
+        /// </summary>
+        public static string OAuthAuthorizeEndpoint2
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthAuthorizeEndpoint2"];
+            }
+        }
+
+        /// <summary>
+        /// JWT bearer token flow用のTokenエンドポイント
         /// </summary>
         public static string OAuthBearerTokenEndpoint2
         {
@@ -1136,7 +1141,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region 拡張（WebAPI）
+        #region WebAPI
 
         /// <summary>
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
@@ -1152,26 +1157,30 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         /// <summary>
         /// OAuthで認可したTokenを無効化するWebAPI
         /// </summary>
-        public static string OAuthRevokeTokenEndpoint
+        public static string OAuthRevokeTokenWebAPI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthRevokeTokenEndpoint"];
+                return ConfigurationManager.AppSettings["OAuthRevokeTokenWebAPI"];
             }
         }
 
         /// <summary>
         /// OAuthで認可したTokenのメタデータを返すWebAPI
         /// </summary>
-        public static string OAuthIntrospectTokenEndpoint
+        public static string OAuthIntrospectTokenWebAPI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthIntrospectTokenEndpoint"];
+                return ConfigurationManager.AppSettings["OAuthIntrospectTokenWebAPI"];
             }
         }
 
         #endregion
+
+        #endregion
+
+        #region その他
 
         #region Token取得用
 
@@ -1185,6 +1194,34 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 return ConfigurationManager.AppSettings["OAuthAuthorizationCodeGrantClient_Manage"];
             }
         }
+
+        #endregion
+
+        #region WebAPI
+
+        /// <summary>
+        /// Hybrid Flowのテスト用WebAPI
+        /// </summary>
+        public static string TestHybridFlowWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["TestHybridFlowWebAPI"];
+            }
+        }
+
+        /// <summary>
+        /// ユーザ情報に課金するWebAPI
+        /// </summary>
+        public static string TestChageToUserWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["TestChageToUserWebAPI"];
+            }
+        }
+
+        #endregion
 
         #endregion
 
@@ -1221,6 +1258,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 return ConfigurationManager.AppSettings["OAuthClientEndpointsRootURI"];
             }
         }
+
+        #region Redirect
 
         /// <summary>
         /// AccountController.OAuthAuthorizationCodeGrantClientのRedirectエンドポイント
@@ -1261,9 +1300,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #endregion
+
         #region ResourceServer関連
 
-        #region エンドポイント（WebAPI）
+        #region エンドポイント
 
         /// <summary>
         /// OAuthのResourceServerのEndpointのRootURI
@@ -1273,17 +1314,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return ConfigurationManager.AppSettings["OAuthResourceServerEndpointsRootURI"];
-            }
-        }
-
-        /// <summary>
-        /// OAuthで認可したユーザ情報に課金するWebAPI
-        /// </summary>
-        public static string OAuthChageToUserWebAPI
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthChageToUserWebAPI"];
             }
         }
 

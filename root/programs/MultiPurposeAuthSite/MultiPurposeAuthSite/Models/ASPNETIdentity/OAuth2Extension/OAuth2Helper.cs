@@ -504,10 +504,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         {
             // 通信用の変数
 
-            // 認証用のWebAPI（認証を認可したユーザのClaim情報を取得）
+            // 課金用のWebAPI
             Uri webApiEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthChageToUserWebAPI);
+                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                + ASPNETIdentityConfig.TestChageToUserWebAPI);
 
             HttpRequestMessage httpRequestMessage = null;
             HttpResponseMessage httpResponseMessage = null;
