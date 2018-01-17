@@ -921,7 +921,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-        #region プロパティ
+        #region OAuth関連プロパティ
 
         /// <summary>
         /// OAuthのAllowInsecureHttpEndpointsプロパティ値
@@ -967,10 +967,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-
         #endregion
 
-        #region JWT
+        #region JWT関連プロパティ
         
         /// <summary>
         /// JWTのIssuerId (OAuth Server)
@@ -1024,9 +1023,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region AuthorizationServer
+        #region AuthorizationServer関連
 
-        #region Grant Type
+        #region Grant Typeの有効 / 無効
 
         /// <summary>EnableAuthorizationCodeGrantType</summary>
         public static bool EnableAuthorizationCodeGrantType
@@ -1075,7 +1074,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region Endpoint
+        #region エンドポイント 
 
         /// <summary>
         /// OAuthのAuthorizationServerのEndpointのRootのURI
@@ -1089,15 +1088,26 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         #region 既定
-        
+
         /// <summary>
-        /// OAuthのAuthorizeのEndpoint
+        /// OAuthのAuthorizeエンドポイント 
         /// </summary>
         public static string OAuthAuthorizeEndpoint
         {
             get
             {
                 return ConfigurationManager.AppSettings["OAuthAuthorizeEndpoint"];
+            }
+        }
+
+        /// <summary>
+        /// OAuthのAuthorizeエンドポイント2 (Financial API)
+        /// </summary>
+        public static string OAuthAuthorizeEndpoint2
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthAuthorizeEndpoint2"];
             }
         }
 
@@ -1163,10 +1173,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region テスト用
+        #region Token取得用
 
         /// <summary>
-        /// ManageController.OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
+        /// ManageController.OAuthAuthorizationCodeGrantClientのRedirectエンドポイント
         /// </summary>
         public static string OAuthAuthorizationCodeGrantClient_Manage
         {
@@ -1182,7 +1192,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region Client (Test)
+        #region Client関連
+
+        #region 静的設定
 
         /// <summary>
         /// OAuthのClientのInformation
@@ -1195,7 +1207,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-        #region Endpoint
+        #endregion
+
+        #region エンドポイント
 
         /// <summary>
         /// OAuthのClientのEndpointのRootURI
@@ -1209,7 +1223,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// AccountController.OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
+        /// AccountController.OAuthAuthorizationCodeGrantClientのRedirectエンドポイント
         /// </summary>
         public static string OAuthAuthorizationCodeGrantClient_Account
         {
@@ -1220,7 +1234,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// AccountController.OAuthImplicitGrantClientのEndpoint (Redirectエンドポイント)
+        /// AccountController.OAuthImplicitGrantClientのRedirectエンドポイント
         /// </summary>
         public static string OAuthImplicitGrantClient_Account
         {
@@ -1247,9 +1261,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region ResourceServer
+        #region ResourceServer関連
 
-        #region Endpoint (WebAPI)
+        #region エンドポイント（WebAPI）
 
         /// <summary>
         /// OAuthのResourceServerのEndpointのRootURI
@@ -1349,7 +1363,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region ロックダウン
+        #region 機能ロックダウン（STS専用モード）
 
         /// <summary>
         /// EnableSignupProcess
@@ -1386,10 +1400,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region ID連携
+        #region IDフェデレーション関連
 
         /// <summary>
-        /// ID連携時の認可エンドポイント
+        /// IDフェデレーション時の認可エンドポイント
         /// </summary>
         public static string IdFederationAuthorizeEndPoint
         {
@@ -1400,7 +1414,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// ID連携時のRedirectエンドポイント
+        /// IDフェデレーション時のRedirectエンドポイント
         /// </summary>
         public static string IdFederationRedirectEndPoint
         {
@@ -1411,7 +1425,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// ID連携時のTokenエンドポイント
+        /// IDフェデレーション時のTokenエンドポイント
         /// </summary>
         public static string IdFederationTokenEndPoint
         {
@@ -1422,7 +1436,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// ID連携時のUserInfoエンドポイント
+        /// IDフェデレーション時のUserInfoエンドポイント
         /// </summary>
         public static string IdFederationUserInfoEndPoint
         {

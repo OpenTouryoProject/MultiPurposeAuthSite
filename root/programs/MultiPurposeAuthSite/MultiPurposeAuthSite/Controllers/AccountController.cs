@@ -2011,7 +2011,7 @@ namespace MultiPurposeAuthSite.Controllers
             // scopeパラメタ
             string[] scopes = (scope ?? "").Split(' ');
 
-            if (response_type.ToLower() == "code")
+            if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
             {
                 // Authorization Codeグラント種別（仲介コードの発行）
                 ViewBag.Name = identity.Name;
@@ -2021,8 +2021,10 @@ namespace MultiPurposeAuthSite.Controllers
                 bool isAuth = scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth);
 
                 if (string.IsNullOrEmpty(prompt)) prompt = "";
+
                 if (isAuth                           // OAuth2 拡張仕様
                     || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                    // OIDC Hybrid Flowはresponse_type=codeに書換、識別できないので、prompt=noneを設定。
                 {
                     // 認可画面をスキップ
 
@@ -2030,7 +2032,7 @@ namespace MultiPurposeAuthSite.Controllers
                     identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
 
-                    // ClaimsIdentityに、その他、所定のClaimを追加する
+                    // ClaimsIdentityに、その他、所定のClaimを追加する。
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
                     if (isAuth)
                     {
@@ -2056,9 +2058,8 @@ namespace MultiPurposeAuthSite.Controllers
                     return View();
                 }
             }
-            else if ((response_type.ToLower() == "token")
-                || (response_type.ToLower() == "id_token")
-                || (response_type.ToLower() == "id_token token"))
+            else if ((response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType))
+                    // OIDC Implicit Flowはresponse_type=tokenに書換、識別できないので、prompt=noneを設定。
             {
                 // Implicitグラント種別（Access Tokenの発行）
                 if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))

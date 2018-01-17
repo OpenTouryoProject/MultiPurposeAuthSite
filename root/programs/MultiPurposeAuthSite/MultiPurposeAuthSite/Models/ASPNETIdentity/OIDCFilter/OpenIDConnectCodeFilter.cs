@@ -133,7 +133,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 if (accessTokenResponse.ContainsKey("access_token"))
                 {
                     string access_token = (string)accessTokenResponse["access_token"];
-                    string id_token = OpenIDConnectModule.ChangeToIdTokenFromJwt(access_token);
+                    string id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token);
                     if (!string.IsNullOrEmpty(id_token))
                     {
                         // responseにid_tokenとして、このJWTを追加する。

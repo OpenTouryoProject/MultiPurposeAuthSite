@@ -585,11 +585,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             // *.config内を検索
             if (this.OauthClientsInfo.ContainsKey(client_id))
             {
-                if (response_type.ToLower() == "code")
+                if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
                 {
                     return this.OauthClientsInfo[client_id]["redirect_uri_code"];
                 }
-                else if (response_type.ToLower() == "token")
+                else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
                 {
                     return this.OauthClientsInfo[client_id]["redirect_uri_token"];
                 }
@@ -602,11 +602,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             {
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
 
-                if (response_type.ToLower() == "code")
+                if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
                 {
                     return model.RedirectUriCode;
                 }
-                else if (response_type.ToLower() == "token")
+                else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
                 {
                     return model.RedirectUriToken;
                 }

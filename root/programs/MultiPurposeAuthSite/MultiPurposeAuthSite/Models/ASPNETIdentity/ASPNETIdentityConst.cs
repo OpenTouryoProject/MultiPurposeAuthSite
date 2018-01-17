@@ -100,6 +100,31 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #region ResponseType
+
+        /// <summary>Authorization Codeグラント種別</summary>
+        public const string AuthorizationCodeResponseType = "code";
+
+        /// <summary>Implicitグラント種別</summary>
+        public const string ImplicitResponseType = "token";
+
+        /// <summary>OIDC - Implicit</summary>
+        public const string OidcImplicit1_ResponseType = "id_token";
+
+        /// <summary>OIDC - Implicit2</summary>
+        public const string OidcImplicit2_ResponseType = "id_token token";
+
+        /// <summary>OIDC - Hybrid(IdToken)</summary>
+        public const string OidcHybrid2_IdToken_ResponseType = "code id_token";
+
+        /// <summary>OIDC - Hybrid(Token)</summary>
+        public const string OidcHybrid2_Token_ResponseType = "code token";
+
+        /// <summary>OIDC - Hybrid(IdToken & Token)</summary>
+        public const string OidcHybrid3_ResponseType = "code id_token token";
+
+        #endregion
+
         #region Claimのurn
 
         /// <summary>ベース部分</summary>

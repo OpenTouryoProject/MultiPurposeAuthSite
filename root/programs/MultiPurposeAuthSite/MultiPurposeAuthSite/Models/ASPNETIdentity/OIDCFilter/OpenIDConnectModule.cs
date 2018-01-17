@@ -31,14 +31,19 @@
 //*  2017/07/14  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
+
 using System;
 using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
 using System.Web;
+
+using Microsoft.Owin.Security;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -92,18 +97,35 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
         // 恐らく、Global.asaxと同じ。
         // http:// support.microsoft.com/kb/312607/ja
-        
-        /// <summary>ResponseTypeの書き換え(id_token token)</summary>
-        private bool RewritedResponseType_IdTokenToken = false;
-        
-        /// <summary>ResponseTypeの書き換え(id_token)</summary>
-        private bool RewritedResponseType_IdToken = false;
 
-        /// <summary>ResponseModeの書き換え(form_post)</summary>
-        private bool RewritedResponseMode_FromPost = false;
-        
-        /// <summary>書き換え</summary>
+        #region 書き換え
+
+        #region ResponseTypeの書き換え
+
+        /// <summary>id_token</summary>
+        private bool RewritedResponseTypeFrom_IdToken = false;
+
+        /// <summary>id_token token</summary>
+        private bool RewritedResponseTypeFrom_IdTokenToken = false;
+
+        /// <summary>code id_token</summary>
+        private bool RewritedResponseTypeFrom_CodeIdToken = false;
+
+        /// <summary>code token</summary>
+        private bool RewritedResponseTypeFrom_CodeToken = false;
+
+        /// <summary>code id_token token</summary>
+        private bool RewritedResponseTypeFrom_CodeIdTokenToken = false;
+
+        #endregion
+
+        /// <summary>response_mode=form_post</summary>
+        private bool RewritedResponseModeFrom_FromPost = false;
+
+        /// <summary>VirtualPathの書き換え</summary>
         private string OriginalVirtualPath = "";
+
+        #endregion
 
         /// <summary>OnBeginRequest</summary>
         /// <param name="sender">object</param>
@@ -144,7 +166,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 string virtualPath = path.Substring(path.IndexOf(context.Request.ApplicationPath));
                 this.OriginalVirtualPath = virtualPath + orgQuery;
 
-                if (path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
+                if (path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint2) == -1
+                    && path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
                 {
                     string pattern = "";
 
@@ -154,37 +177,106 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                         #region response_type
 
-                        // OpenID Connect : Implicit Flow,
-                        //                  [response_type=id_token token] or [response_type=id_token]に対応
+                        // OpenID Connect : Implicit Flow
+                        //                  - [response_type=id_token]
+                        //                  - or [response_type=id_token token]
+                        //                : Hybrid Flow
+                        //                  - [response_type=code id_token]
+                        //                  - or [response_type=code token]
+                        //                  - or [response_type=code id_token token]
 
                         pattern = "response_type=";
                         string responseType = orgQuery.Substring(orgQuery.IndexOf(pattern) + pattern.Length);
 
                         if (!string.IsNullOrEmpty(responseType))
                         {
-                            bool is_id_token_token = false;
+                            #region フラグ初期化
+
+                            // OIDC Implicit
                             bool is_id_token = false;
+                            bool is_id_token_token = false;
 
-                            is_id_token_token = responseType.StartsWith("id_token%20token");
-
+                            // [response_type=id_token token]
+                            is_id_token_token = responseType.StartsWith(
+                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType));                            
                             if (!is_id_token_token)
                             {
-                                is_id_token = responseType.StartsWith("id_token");
+                                // [response_type=token]
+                                is_id_token = responseType.StartsWith(ASPNETIdentityConst.OidcImplicit1_ResponseType);
                             }
 
-                            if (is_id_token_token || is_id_token)
+                            // OIDC Hybrid
+                            bool is_code_id_token = false;
+                            bool is_code_token = false;
+                            bool is_code_id_token_token = false;
+
+                            // [response_type=code id_token token]
+                            is_code_id_token_token = responseType.StartsWith(
+                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid3_ResponseType));
+
+                            if (!is_code_id_token_token)
                             {
-                                if (is_id_token_token)
+                                // [response_type=code id_token]
+                                is_code_id_token = responseType.StartsWith(
+                                    CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType));
+                                // [response_type=code token]
+                                is_code_token = responseType.StartsWith(
+                                    CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_Token_ResponseType));
+                            }
+
+                            #endregion
+
+                            #region パラメタ書き換え（補助輪回避）
+                            // [response_type=id_token] or [response_type=id_token token]
+                            if (is_id_token || is_id_token_token)
+                            {
+                                // OIDC Implicit
+                                if (is_id_token)
                                 {
-                                    this.RewritedResponseType_IdTokenToken = true;
-                                    reWritedQuery = reWritedQuery.Replace("response_type=id_token%20token", "response_type=token");
+                                    this.RewritedResponseTypeFrom_IdToken = true;
+                                    reWritedQuery = reWritedQuery.Replace(
+                                        "response_type=" + ASPNETIdentityConst.OidcImplicit1_ResponseType,
+                                        "response_type=" + ASPNETIdentityConst.ImplicitResponseType);
                                 }
-                                else if (is_id_token)
+                                else if (is_id_token_token)
                                 {
-                                    this.RewritedResponseType_IdToken = true;
-                                    reWritedQuery = reWritedQuery.Replace("response_type=id_token", "response_type=token");
+                                    this.RewritedResponseTypeFrom_IdTokenToken = true;
+                                    reWritedQuery = reWritedQuery.Replace(
+                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType),
+                                        "response_type=" + ASPNETIdentityConst.ImplicitResponseType);
                                 }
                             }
+                            else if (is_code_id_token || is_code_token || is_code_id_token_token)
+                            {
+                                // OIDC Hybrid
+                                if (is_code_id_token)
+                                {
+                                    this.RewritedResponseTypeFrom_CodeIdToken = true;
+                                    reWritedQuery = reWritedQuery.Replace(
+                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType),
+                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                }
+                                else if (is_code_token)
+                                {
+                                    this.RewritedResponseTypeFrom_CodeToken = true;
+                                    reWritedQuery = reWritedQuery.Replace(
+                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_Token_ResponseType),
+                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                }
+                                else if (is_code_id_token_token)
+                                {
+                                    this.RewritedResponseTypeFrom_CodeIdTokenToken = true;
+                                    reWritedQuery = reWritedQuery.Replace(
+                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid3_ResponseType),
+                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                }
+                            }
+                            else
+                            {
+                                // サポートなし
+                            }
+
+                            #endregion
                         }
 
                         #endregion
@@ -208,16 +300,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                             if (is_form_post)
                             {
-                                this.RewritedResponseMode_FromPost = true;
-                                reWritedQuery = reWritedQuery.Replace("response_mode=form_post","");
+                                this.RewritedResponseModeFrom_FromPost = true;
+                                //reWritedQuery = reWritedQuery.Replace("response_mode=form_post","");
                             }
                         }
 
                         #endregion
 
-                        if (this.RewritedResponseType_IdTokenToken
-                            || this.RewritedResponseType_IdToken
-                            || this.RewritedResponseMode_FromPost)
+                        if (this.RewritedResponseTypeFrom_IdToken
+                            || this.RewritedResponseTypeFrom_IdTokenToken
+                            || this.RewritedResponseTypeFrom_CodeIdToken
+                            || this.RewritedResponseTypeFrom_CodeToken
+                            || this.RewritedResponseTypeFrom_CodeIdTokenToken)
+                            //|| this.RewritedResponseModeFrom_FromPost)
                         {
                             context.RewritePath(virtualPath + reWritedQuery, false);
                         }
@@ -249,20 +344,44 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
         {
             // PreSendRequestHeadersのロジックはここに挿入
 
+            #region 変数
+
+            #region Context
             HttpApplication application = (HttpApplication)sender;
             HttpContext context = application.Context;
             HttpResponse response = context.Response;
+            #endregion
 
-            if (context.Request.Url.AbsolutePath.IndexOf(
-                ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
+            #region ワーク
+            // code
+            string code = "";
+            // state
+            string state = "";
+            // expires_in
+            string expires_in = "";
+            // redirect_uri
+            string redirect_url = "";
+            // access_token
+            string access_token = "";
+            // id_token
+            string id_token = "";
+            #endregion
+            
+            #endregion
+
+            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint2) == -1
+                && context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
             {
                 #region response_type
 
-                if (this.RewritedResponseType_IdTokenToken || this.RewritedResponseType_IdToken)
+                if (this.RewritedResponseTypeFrom_IdToken
+                    || this.RewritedResponseTypeFrom_IdTokenToken)
                 {
-                    // OpenID Connect : [response_type=id_token token] or [response_type=id_token]に対応
+                    // OpenID Connect : Implicit Flowに対応
+                    //                  - [response_type=id_token]
+                    //                  - or [response_type=id_token token]
 
-                    //レスポンス内容を参照して書き換え
+                    //レスポンス内容を参照して書き換え（fragmentにid_tokenを追加）
                     string location = response.Headers["Location"];
 
                     if (!string.IsNullOrEmpty(location)
@@ -270,17 +389,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                     {
                         // ・正規表現でaccess_tokenを抜き出す。
                         string pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
-                        string access_token = Regex.Match(location, pattern).Groups["accessToken"].Value;
-                        string id_token = OpenIDConnectModule.ChangeToIdTokenFromJwt(access_token);
+                        access_token = Regex.Match(location, pattern).Groups["accessToken"].Value;
+                        id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token);
 
                         if (!string.IsNullOrEmpty(id_token))
                         {
                             // responseにid_tokenとして、このJWTを追加する。
-                            if (this.RewritedResponseType_IdTokenToken)
+                            if (this.RewritedResponseTypeFrom_IdTokenToken)
                             {
                                 response.Headers["Location"] = location + "&id_token=" + id_token;
                             }
-                            else if (this.RewritedResponseType_IdToken)
+                            else if (this.RewritedResponseTypeFrom_IdToken)
                             {
                                 location = location.Replace("access_token=" + access_token + "&", "");
                                 location = location.Replace("token_type=beara" + access_token + "&", "");
@@ -289,17 +408,109 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         }
                     }
                 }
+                else if (this.RewritedResponseTypeFrom_CodeIdToken
+                    || this.RewritedResponseTypeFrom_CodeToken
+                    || this.RewritedResponseTypeFrom_CodeIdTokenToken)
+                {
+                    // OpenID Connect : Hybrid Flowに対応
+                    //                  - [response_type=code id_token]
+                    //                  - or [response_type=code token]
+                    //                  - or [response_type=code id_token token]
+
+                    //レスポンス内容を参照して書き換え（RedirectをFragmentに変更）
+                    if (response.StatusCode == 302) // 302 Found
+                    {
+                        // ・Rewriteした為か、
+                        //   何故か、以下が、
+                        //     "?code=code値&state=state値&redirect_uri=Urlエンコードされたredirect_uri値"
+                        //   となっている。
+                        //   ※ redirect_uriがlocationのQueryStringに混じる。
+                        //
+                        // ・本来は、
+                        //     "http(s)://redirect_uri値?code=code値&state=state値"
+                        //   を期待していた。
+                        string location = response.Headers["Location"];
+
+                        string paramStrCode = "?code=";
+                        string paramStrState = "&state=";
+                        string paramStrRedirectUri = "&redirect_uri=";
+
+                        if (location.IndexOf(paramStrCode) != -1
+                            || location.IndexOf(paramStrState) != -1
+                            || location.IndexOf(paramStrRedirectUri) != -1)
+                        {
+                            response.Headers.Remove("Location");
+
+                            // 以下は、"?code=XXX&state=YYY&" という並びが前提。
+                            MatchCollection matches = StringChecker.Matches(
+                                location,
+                                "\\?code=(?<code>.+)&state=(?<state>.+)");
+
+                            foreach (Match match in matches)
+                            {
+                                GroupCollection groups = match.Groups;
+                                code = groups["code"].Value;
+                                state = groups["state"].Value;
+                            }
+
+                            expires_in = ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString();
+                            redirect_url = location.Substring(0, location.IndexOf('?'));
+
+                            // Fragmentに組み込む
+                            string fragment = "";
+
+                            if (this.RewritedResponseTypeFrom_CodeIdToken)
+                            {
+                                fragment = "#id_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
+
+                                // id_tokenを取得
+                                AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
+                                AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
+                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(OpenIDConnectModule.CustomizedProtect(ticket));
+
+                                fragment = string.Format(fragment, new object[] { id_token, code, expires_in, state });
+                            }
+                            else if (this.RewritedResponseTypeFrom_CodeToken)
+                            {
+                                fragment = "#access_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
+
+                                // access_tokenを取得
+                                AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
+                                AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
+                                access_token = OpenIDConnectModule.CustomizedProtect(ticket);
+
+                                fragment = string.Format(fragment, new object[] { access_token, code, expires_in, state });
+                            }
+                            else if (this.RewritedResponseTypeFrom_CodeIdTokenToken)
+                            {
+                                fragment = "#access_token={0}&id_token={1}&token_type=Bearer&code={2}&expires_in={3}&state={4}";
+
+                                // id_token, access_tokenを取得
+                                AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
+                                AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
+                                access_token = OpenIDConnectModule.CustomizedProtect(ticket);
+                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token);
+
+                                fragment = string.Format(fragment, new object[] { access_token, id_token, code, expires_in, state });
+                            }
+
+                            // Fragmentを設定したLocationに変更。
+                            response.Headers.Add("Location", redirect_url + fragment);
+                        }
+                    }
+                }
 
                 #endregion
 
                 #region response_mode
 
-                if (this.RewritedResponseMode_FromPost)
+                if (this.RewritedResponseModeFrom_FromPost)
                 {
                     // OAuth2.0, OpenID Connect : response_mode=form_postに対応
 
                     //レスポンス内容を参照して書き換え
-                    if (response.StatusCode == 302)
+                    //（Redirect（get）をAuto-Submit Form（post）に変更）
+                    if (response.StatusCode == 302) // 302 Found
                     {
                         // ・Rewriteした為か、
                         //   何故か、以下が、
@@ -324,6 +535,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             response.StatusCode = 200;
                             response.Headers.Remove("Location");
 
+                            // 以下は、"?code=XXX&state=YYY&redirect_uri=ZZZ" という並びが前提。
+                            MatchCollection matches = StringChecker.Matches(
+                                location,
+                                "\\?code=(?<code>.+)&state=(?<state>.+)&redirect_uri=(?<redirect_uri>.+)");
+
+                            foreach (Match match in matches)
+                            {
+                                GroupCollection groups = match.Groups;
+                                code = groups["code"].Value;
+                                state = groups["state"].Value;
+                                redirect_url = CustomEncode.UrlDecode(groups["redirect_uri"].Value);
+                            }
+
                             // form_postに必要な、HTTP response message body
                             string body =
                                 "<html>" +
@@ -335,28 +559,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 "  </body>" +
                                 "</html>";
 
-                            int startIndexOfCode = location.IndexOf(paramStrCode);
-                            int startIndexOfState = location.IndexOf(paramStrState);
-                            int startIndexOfRedirectUri = location.IndexOf(paramStrRedirectUri);
+                            // bodyに組み込んで
+                            body = string.Format(body, redirect_url, code, state);
 
-                            // code
-                            string code = location.Substring(
-                                    startIndexOfCode + paramStrCode.Length,
-                                    startIndexOfState - (startIndexOfCode + paramStrCode.Length));
-
-                            // state
-                            string state = location.Substring(
-                                    startIndexOfState + paramStrState.Length,
-                                    startIndexOfRedirectUri - (startIndexOfState + paramStrState.Length));
-
-                            // redirect_uri
-                            string redirectUrl = CustomEncode.UrlDecode(
-                                location.Substring(startIndexOfRedirectUri + paramStrRedirectUri.Length));
-
-                            // 組み込んで
-                            body = string.Format(body, redirectUrl, code, state);
-
-                            // 書き出し
+                            // HTTP Responseに書き出し
                             byte[] buffer = response.ContentEncoding.GetBytes(body);
                             response.OutputStream.Write(buffer, 0, buffer.Length);
                         }
@@ -365,25 +571,45 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                 #endregion
 
-                if (this.RewritedResponseType_IdTokenToken
-                    || this.RewritedResponseType_IdToken
-                    || this.RewritedResponseMode_FromPost)
+                if (this.RewritedResponseTypeFrom_IdToken
+                    || this.RewritedResponseTypeFrom_IdTokenToken
+                    || this.RewritedResponseTypeFrom_CodeIdToken
+                    || this.RewritedResponseTypeFrom_CodeToken
+                    || this.RewritedResponseTypeFrom_CodeIdTokenToken)
+                    //|| this.RewritedResponseModeFrom_FromPost)
                 {
                     context.RewritePath(this.OriginalVirtualPath);
-
-                    // 忘れずに！！
-                    this.OriginalVirtualPath = "";
-                    this.RewritedResponseType_IdTokenToken = false;
-                    this.RewritedResponseType_IdToken = false;
-                    this.RewritedResponseMode_FromPost = false;
                 }
+
+                #region 再利用されるinstance memberの初期化を忘れずに！！
+                //      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+                this.OriginalVirtualPath = "";
+
+                this.RewritedResponseTypeFrom_IdTokenToken = false;
+                this.RewritedResponseTypeFrom_IdToken = false;
+
+                this.RewritedResponseTypeFrom_CodeIdToken = false;
+                this.RewritedResponseTypeFrom_CodeToken = false;
+                this.RewritedResponseTypeFrom_CodeIdTokenToken = false;
+
+                this.RewritedResponseModeFrom_FromPost = false;
+
+                #endregion
             }
         }
 
-        /// <summary>ChangeToIdTokenFromJwt</summary>
-        /// <param name="access_token">Jwt (string)</param>
-        /// <returns>IdToken (string)</returns>
-        public static string ChangeToIdTokenFromJwt(string access_token)
+        /// <summary>
+        /// ChangeToIdTokenFromAccessToken
+        ///   OIDC対応（AccessTokenからIdTokenを生成）
+        /// </summary>
+        /// <param name="access_token">Jwt AccessToken</param>
+        /// <returns>IdToken</returns>
+        /// <remarks>
+        /// OIDC対応
+        /// </remarks>
+
+        public static string ChangeToIdTokenFromAccessToken(string access_token)
         {
             if (access_token.Contains("."))
             {
@@ -442,6 +668,104 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             }
 
             return "";
+        }
+
+        /// <summary>
+        /// CustomizedProtect
+        ///   Hybrid Flow対応
+        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
+        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道を準備したが、
+        ///   今後は、AccessTokenFormatJwtから、ApplicationUserManagerにアクセス
+        ///   できなかったため、AccessTokenFormatJwt.Protectをカスタマイズした。）
+        /// </summary>
+        /// <param name="ticket">AuthenticationTicket</param>
+        /// <returns>Jwt AccessToken</returns>
+        /// <remarks>
+        /// Hybrid Flow対応なので、scopeを制限してもイイ。
+        /// </remarks>
+        public static string CustomizedProtect(AuthenticationTicket ticket)
+        {
+            string json = "";
+            string jwt = "";
+
+            // チェック
+            if (ticket == null)
+            {
+                throw new ArgumentNullException("ticket");
+            }
+
+            #region ClaimSetの生成
+
+            Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
+            List<string> scopes = new List<string>();
+            List<string> roles = new List<string>();
+
+            foreach (Claim c in ticket.Identity.Claims)
+            {
+                if (c.Type == ASPNETIdentityConst.Claim_Issuer)
+                {
+                    authTokenClaimSet.Add("iss", c.Value);
+                }
+                else if (c.Type == ASPNETIdentityConst.Claim_Audience)
+                {
+                    authTokenClaimSet.Add("aud", c.Value);
+                }
+                else if (c.Type == ASPNETIdentityConst.Claim_Nonce)
+                {
+                    authTokenClaimSet.Add("nonce", c.Value);
+                }
+                else if (c.Type == ASPNETIdentityConst.Claim_Scope)
+                {
+                    scopes.Add(c.Value);
+                }
+                else if (c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                {
+                    roles.Add(c.Value);
+                }
+            }
+            
+            // Resource Owner認証の場合、Resource Ownerの名称
+            authTokenClaimSet.Add("sub", ticket.Identity.Name);
+
+            authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("nbf", DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
+
+            // scope値によって、返す値を変更する。
+            // ココでは返さない（別途ユーザ取得処理を実装してもイイ）。
+
+            // Hybrid Flow対応なので、scopeを制限してもイイ。
+            authTokenClaimSet.Add("scopes", scopes);
+
+            json = JsonConvert.SerializeObject(authTokenClaimSet);
+
+            #endregion
+
+            #region JWT化
+
+            JWT_RS256 jwtRS256 = null;
+
+            // 署名
+            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+
+            jwt = jwtRS256.Create(json);
+
+            // 検証
+            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+
+            if (jwtRS256.Verify(jwt))
+            {
+                return jwt; // 検証できた。
+            }
+            else
+            {
+                return ""; // 検証できなかった。
+            }
+
+            #endregion
         }
     }
 }

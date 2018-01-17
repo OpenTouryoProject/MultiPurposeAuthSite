@@ -41,15 +41,20 @@ using System.Data;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Collections.Specialized;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 using System.Web;
 
 using Microsoft.Owin;
+using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Infrastructure;
 
 using Dapper;
 using Newtonsoft.Json;
+
+using Touryo.Infrastructure.Public.IO;
+using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {
@@ -105,9 +110,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             Dictionary<string, string> temp = new Dictionary<string, string>();
             NameValueCollection queryString = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
 
+            // 標準
             temp.Add("ticket", context.SerializeTicket());
+
+            // OAuth PKCE 対応
             temp.Add("code_challenge", queryString["code_challenge"]);
             temp.Add("code_challenge_method", queryString["code_challenge_method"]);
+
+            // Hybrid Flow対応
+            //   OAuthAuthorizationServerHandler経由での呼び出しができず、
+            //   AuthenticationTokenXXXXContextを取得できないため、抜け道。
+            temp.Add("claims",  CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Identity)));
+            temp.Add("properties", CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Properties.Dictionary)));
 
             string value = JsonConvert.SerializeObject(temp);
 
@@ -326,6 +340,70 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 return null;
             }
+        }
+
+        #endregion
+
+        #region Hybrid Flow対応
+
+        /// <summary>
+        /// Hybrid Flow対応
+        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
+        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道。
+        /// </summary>
+        /// <param name="code">code</param>
+        /// <returns>AuthenticationTicket</returns>
+        public AuthenticationTicket GetAuthenticationTicket(string code)
+        {
+            string value = "";
+
+            switch (ASPNETIdentityConfig.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    if (_authenticationCodes.TryRemove(code, out value))
+                    {
+                    }
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (ASPNETIdentityConfig.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                value = cnn.ExecuteScalar<string>(
+                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+
+            Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
+
+            // AuthenticationTicketを生成して返す。
+            return new AuthenticationTicket(
+                (ClaimsIdentity)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["claims"])),
+                new AuthenticationProperties((IDictionary<string, string>)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["properties"]))));
         }
 
         #endregion

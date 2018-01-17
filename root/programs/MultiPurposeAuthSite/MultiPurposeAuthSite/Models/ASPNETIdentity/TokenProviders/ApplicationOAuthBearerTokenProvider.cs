@@ -90,23 +90,28 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             string response_type = context.Request.Query.Get("response_type");
 
-            // OIDC implicitの場合、書き換え
-            if (response_type.ToLower() == "id_token"
-                || response_type.ToLower() == "id_token token")
+            // OIDC Implicit, Hybridの場合、書き換え
+            if (response_type.ToLower() == ASPNETIdentityConst.OidcImplicit1_ResponseType
+                || response_type.ToLower() == ASPNETIdentityConst.OidcImplicit2_ResponseType
+                || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType
+                || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_Token_ResponseType
+                || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid3_ResponseType)
             {
-                response_type = "token";
+                // OIDC Implicit, Hybridの場合、書き換え
+                // ※ この変数は、使用するredirect_uriを決定するだめダケに利用される。
+                response_type = ASPNETIdentityConst.ImplicitResponseType;
             }
 
             if (!string.IsNullOrEmpty(response_type))
             {
-                if (response_type.ToLower() == "code")
+                if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
                 {
                     if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
                     {
                         throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
                     }
                 }
-                else if (response_type.ToLower() == "token")
+                else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
                 {
                     if (!ASPNETIdentityConfig.EnableImplicitGrantType)
                     {

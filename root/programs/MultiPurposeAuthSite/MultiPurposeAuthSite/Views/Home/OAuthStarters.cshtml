@@ -37,19 +37,27 @@
         <ul>
             <li>Authorization Code Flow
                 <ul>
-                    <li>@Html.ActionLink("Test Authorization Code Flow", "TestCode", "Home")</li>
-                    <li>@Html.ActionLink("Test Authorization Code Flow (form_post)", "TestCode_FormPost", "Home")</li>
-                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC)", "TestCode_OIDC", "Home")</li>
-                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC, form_post)", "TestCode_OIDC_FormPost", "Home")</li>
-                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE plain)", "TestCode_PKCE_Plain", "Home")</li>
-                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE S256)", "TestCode_PKCE_S256", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow", "AuthorizationCode", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (form_post)", "AuthorizationCode_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC)", "AuthorizationCode_OIDC", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC, form_post)", "AuthorizationCode_OIDC_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE plain)", "AuthorizationCode_PKCE_Plain", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE S256)", "AuthorizationCode_PKCE_S256", "Home")</li>
                 </ul>
             </li>
             <li>Implicit Flow
                 <ul>
-                    <li>@Html.ActionLink("Test Implicit Flow", "TestToken", "Home")</li>
-                    <li>@Html.ActionLink("Test Implicit Flow 'id_token'(OIDC)", "TestToken_OIDC1", "Home")</li>
-                    <li>@Html.ActionLink("Test Implicit Flow 'id_token token'(OIDC)", "TestToken_OIDC2", "Home")</li>
+                    <li>@Html.ActionLink("Test Implicit Flow", "Implicit", "Home")</li>
+                    <li>@Html.ActionLink("Test Implicit Flow 'id_token'(OIDC)", "Implicit_OIDC1", "Home") ・・・動かない</li>
+                    <li>@Html.ActionLink("Test Implicit Flow 'id_token token'(OIDC)", "Implicit_OIDC2", "Home")</li>
+                </ul>
+            </li>
+            <li>
+                Hybrid Flow
+                <ul>
+                    <li>@Html.ActionLink("Test Hybrid Flow 'code id_token'(OIDC)", "Hybrid_OIDC1", "Home")</li>
+                    <li>@Html.ActionLink("Test Hybrid Flow 'code token'(OIDC)", "Hybrid_OIDC2", "Home")</li>
+                    <li>@Html.ActionLink("Test Hybrid Flow 'code id_token token'(OIDC)", "Hybrid_OIDC3", "Home")</li>
                 </ul>
             </li>
             <li>
@@ -60,6 +68,7 @@
                 </ul>
                 <ul>
                     <li>@Html.ActionLink("Test JWT Bearer Token Flow", "TestJWTBearerTokenFlow", "Home")</li>
+                    ※ 認証状態で実行する場合は、サインインアカウントを使用するので、アカウントに公開鍵登録が必要。
                 </ul>
             </li>
         </ul>

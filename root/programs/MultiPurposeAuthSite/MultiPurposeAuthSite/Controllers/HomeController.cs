@@ -50,10 +50,6 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult Index()
         {
-            Debug.WriteLine(
-                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2);
-
             return View();
         }
 
@@ -129,7 +125,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
-        
+
         #region Action Method
 
         /// <summary>OAuthStarters</summary>
@@ -140,140 +136,239 @@ namespace MultiPurposeAuthSite.Controllers
             return View();
         }
 
-        #region Code
+        #region Authorization Code Flow
 
-        /// <summary>TestCode</summary>
+        #region OAuth2
+
+        /// <summary>Test Authorization Code Flow</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestCode()
+        public ActionResult AuthorizationCode()
         {
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=code&scope=" + this.Scope + 
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
+                "&scope=" + this.Scope +
                 "&state=" + this.State);
         }
 
-        /// <summary>TestCode_FormPost</summary>
+        /// <summary>Test Authorization Code Flow (form_post)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestCode_FormPost()
+        public ActionResult AuthorizationCode_FormPost()
         {
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=code&scope=" + this.Scope + 
-                "&state=" + this.State + "&response_mode=form_post");
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
+                "&scope=" + this.Scope +
+                "&state=" + this.State +
+                "&response_mode=form_post");
         }
+
+        #endregion
 
         #region OIDC
 
-        /// <summary>TestCode_OIDC</summary>
+        /// <summary>Test Authorization Code Flow (OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestCode_OIDC()
+        public ActionResult AuthorizationCode_OIDC()
         {
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=code&scope=" + this.Scope + 
-                "%20openid&prompt=none&state=" + this.State + "&nonce=" + this.Nonce);
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
+                "&scope=" + this.Scope + "%20openid " +
+                "&state=" + this.State +
+                "&nonce=" + this.Nonce +
+                "&prompt=none");
         }
 
-        /// <summary>TestCode_OIDC_FormPost</summary>
+        /// <summary>Test Authorization Code Flow (OIDC, form_post)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestCode_OIDC_FormPost()
+        public ActionResult AuthorizationCode_OIDC_FormPost()
         {
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=code&scope=" + this.Scope + 
-                "%20openid&prompt=none&state=" + this.State + "&nonce=" + this.Nonce + "&response_mode=form_post");
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
+                "&scope=" + this.Scope + "%20openid" +
+                "&state=" + this.State +
+                "&nonce=" + this.Nonce +
+                "&prompt=none" +
+                "&response_mode=form_post");
         }
 
         #endregion
 
         #region PKCE
 
-        /// <summary>TestCode_PKCE_Plain</summary>
+        /// <summary>Test Authorization Code Flow (PKCE plain)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestCode_PKCE_Plain()
+        public ActionResult AuthorizationCode_PKCE_Plain()
         {
             this.Init();
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = this.CodeVerifier;
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=code&scope=" + this.Scope + 
-                "&state=" + this.State + "&code_challenge=" + this.CodeChallenge + "&code_challenge_method=plain");
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
+                "&scope=" + this.Scope +
+                "&state=" + this.State +
+                "&code_challenge=" + this.CodeChallenge +
+                "&code_challenge_method=plain");
         }
 
-        /// <summary>TestCode_PKCE_S256</summary>
+        /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestCode_PKCE_S256()
+        public ActionResult AuthorizationCode_PKCE_S256()
         {
             this.Init();
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = OAuth2Helper.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=code&scope=" + this.Scope + 
-                "&state=" + this.State + "&code_challenge=" + this.CodeChallenge + "&code_challenge_method=S256");
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
+                "&scope=" + this.Scope +
+                "&state=" + this.State +
+                "&code_challenge=" + this.CodeChallenge +
+                "&code_challenge_method=S256");
         }
 
         #endregion
 
         #endregion
 
-        #region Token
+        #region Implicit Flow
 
-        /// <summary>TestToken</summary>
+        #region OAuth2
+
+        /// <summary>Test Implicit Flow</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestToken()
+        public ActionResult Implicit()
         {
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=token&scope=" + this.Scope +
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.ImplicitResponseType +
+                "&scope=" + this.Scope +
                 "&state=" + this.State);
         }
 
-        /// <summary>TestToken_OIDC1</summary>
+        #endregion
+
+        #region OIDC
+
+        /// <summary>Test Implicit Flow 'id_token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestToken_OIDC1()
+        public ActionResult Implicit_OIDC1()
         {
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=id_token&scope=" + this.Scope + "%20openid&state=" +
-                this.State + "&nonce=" + this.Nonce);
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.OidcImplicit1_ResponseType +
+                "&scope=" + this.Scope + "%20openid" +
+                "&state=" + this.State +
+                "&nonce=" + this.Nonce);
         }
 
-        /// <summary>TestToken_OIDC2</summary>
+
+        /// <summary>Test Implicit Flow 'id_token token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult TestToken_OIDC2()
+        public ActionResult Implicit_OIDC2()
         {
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint + 
-                "?client_id=" + this.ClientId + "&response_type=id_token token&scope=" + this.Scope + "%20openid&state=" + 
-                this.State + "&nonce=" + this.Nonce);
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.OidcImplicit2_ResponseType +
+                "&scope=" + this.Scope + "%20openid" +
+                "&state=" + this.State +
+                "&nonce=" + this.Nonce);
         }
+
+        #endregion
+
+        #endregion
+
+        #region Hybrid Flow
+
+        #region OIDC
+
+        /// <summary>Test Hybrid Flow 'code id_token'(OIDC)</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult Hybrid_OIDC1()
+        {
+            this.Init();
+            this.Save();
+
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType +
+                "&scope=" + this.Scope + "%20openid" +
+                "&state=" + this.State +
+                "&nonce=" + this.Nonce);
+        }
+
+        /// <summary>Test Hybrid Flow 'code token'(OIDC)</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult Hybrid_OIDC2()
+        {
+            this.Init();
+            this.Save();
+
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.OidcHybrid2_Token_ResponseType +
+                "&scope=" + this.Scope + "%20openid" +
+                "&state=" + this.State +
+                "&nonce=" + this.Nonce);
+        }
+
+        /// <summary>Test Hybrid Flow 'code id_token token'(OIDC)</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult Hybrid_OIDC3()
+        {
+            this.Init();
+            this.Save();
+
+            return Redirect(this.OAuthAuthorizeEndpoint +
+                "?client_id=" + this.ClientId +
+                "&response_type=" + ASPNETIdentityConst.OidcHybrid3_ResponseType +
+                "&scope=" + this.Scope + "%20openid" +
+                "&state=" + this.State +
+                "&nonce=" + this.Nonce);
+        }
+
+        #endregion
 
         #endregion
 
@@ -305,7 +400,7 @@ namespace MultiPurposeAuthSite.Controllers
                 client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
                 client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
             }
-            
+
             string response = await OAuth2Helper.GetInstance()
                 .ClientCredentialsFlowAsync(new Uri(
                     ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
@@ -336,7 +431,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (User.Identity.IsAuthenticated)
             {
                 // User Accountの場合、
-                iss = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name); 
+                iss = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
             }
             else
             {
