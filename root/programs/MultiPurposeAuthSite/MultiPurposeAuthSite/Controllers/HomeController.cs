@@ -60,20 +60,45 @@ namespace MultiPurposeAuthSite.Controllers
         #region Common
 
         /// <summary>認可エンドポイント</summary>
-        public string OAuthAuthorizeEndpoint = "";
+        private string OAuthAuthorizeEndpoint = "";
 
         /// <summary>client_id</summary>
-        public string ClientId = "";
+        private string ClientId = "";
+
         /// <summary>state (nonce)</summary>
-        public string State = "";
+        private string State = "";
+
         /// <summary>nonce</summary>
-        public string Nonce = "";
-        /// <summary>scope</summary>
-        public string Scope = "";
+        private string Nonce = "";
+
         /// <summary>code_verifier</summary>
-        public string CodeVerifier = "";
+        private string CodeVerifier = "";
+
         /// <summary>code_verifier</summary>
-        public string CodeChallenge = "";
+        private string CodeChallenge = "";
+
+        /// <summary>OAuth2スターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたOAuth2スターター</returns>
+        private string AssembleOAuth2Starter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId, response_type, ASPNETIdentityConst.StandardScopes, this.State);
+        }
+
+        /// <summary>OIDCスターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたOIDCスターター</returns>
+        private string AssembleOidcStarter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId, response_type, ASPNETIdentityConst.OidcScopes, this.State)
+                    + "&nonce=" + this.Nonce;
+        }
 
         /// <summary>初期化</summary>
         private void Init()
@@ -85,7 +110,7 @@ namespace MultiPurposeAuthSite.Controllers
             this.ClientId = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
             this.Nonce = GetPassword.Generate(20, 0); // 記号は入れない。
-            this.Scope = ASPNETIdentityConst.StandardScopes;
+
             this.CodeVerifier = "";
             this.CodeChallenge = "";
         }
@@ -148,11 +173,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
-                "&scope=" + this.Scope +
-                "&state=" + this.State);
+            // Authorization Code Flow
+            return Redirect(this.AssembleOAuth2Starter(
+                ASPNETIdentityConst.AuthorizationCodeResponseType));
         }
 
         /// <summary>Test Authorization Code Flow (form_post)</summary>
@@ -163,12 +186,10 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
-                "&scope=" + this.Scope +
-                "&state=" + this.State +
-                "&response_mode=form_post");
+            // Authorization Code Flow (form_post)
+            return Redirect(this.AssembleOAuth2Starter(
+                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                + "&response_mode=form_post");
         }
 
         #endregion
@@ -183,13 +204,10 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
-                "&scope=" + this.Scope + "%20openid " +
-                "&state=" + this.State +
-                "&nonce=" + this.Nonce +
-                "&prompt=none");
+            // Authorization Code Flow (OIDC)
+            return Redirect(this.AssembleOidcStarter(
+                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                + "&prompt=none");
         }
 
         /// <summary>Test Authorization Code Flow (OIDC, form_post)</summary>
@@ -200,14 +218,11 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
-                "&scope=" + this.Scope + "%20openid" +
-                "&state=" + this.State +
-                "&nonce=" + this.Nonce +
-                "&prompt=none" +
-                "&response_mode=form_post");
+            // Authorization Code Flow (OIDC, form_post)
+            return Redirect(this.AssembleOidcStarter(
+                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                + "&prompt=none"
+                + "&response_mode=form_post");
         }
 
         #endregion
@@ -224,13 +239,11 @@ namespace MultiPurposeAuthSite.Controllers
             this.CodeChallenge = this.CodeVerifier;
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
-                "&scope=" + this.Scope +
-                "&state=" + this.State +
-                "&code_challenge=" + this.CodeChallenge +
-                "&code_challenge_method=plain");
+            // Authorization Code Flow (PKCE plain)
+            return Redirect(this.AssembleOAuth2Starter(
+                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                + "&code_challenge=" + this.CodeChallenge
+                + "&code_challenge_method=plain");
         }
 
         /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
@@ -243,13 +256,11 @@ namespace MultiPurposeAuthSite.Controllers
             this.CodeChallenge = OAuth2Helper.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType +
-                "&scope=" + this.Scope +
-                "&state=" + this.State +
-                "&code_challenge=" + this.CodeChallenge +
-                "&code_challenge_method=S256");
+            // Authorization Code Flow (PKCE S256)
+            return Redirect(this.AssembleOAuth2Starter(
+                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                + "&code_challenge=" + this.CodeChallenge
+                + "&code_challenge_method=S256");
         }
 
         #endregion
@@ -268,11 +279,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.ImplicitResponseType +
-                "&scope=" + this.Scope +
-                "&state=" + this.State);
+            // Implicit Flow
+            return Redirect(this.AssembleOAuth2Starter(
+                ASPNETIdentityConst.ImplicitResponseType));
         }
 
         #endregion
@@ -287,12 +296,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.OidcImplicit1_ResponseType +
-                "&scope=" + this.Scope + "%20openid" +
-                "&state=" + this.State +
-                "&nonce=" + this.Nonce);
+            // Implicit Flow 'id_token'(OIDC)
+            return Redirect(this.AssembleOidcStarter(
+                ASPNETIdentityConst.ImplicitResponseType));
         }
 
 
@@ -304,12 +310,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.OidcImplicit2_ResponseType +
-                "&scope=" + this.Scope + "%20openid" +
-                "&state=" + this.State +
-                "&nonce=" + this.Nonce);
+            // Implicit Flow 'id_token token'(OIDC)
+            return Redirect(this.AssembleOidcStarter(
+                ASPNETIdentityConst.OidcImplicit2_ResponseType));
         }
 
         #endregion
@@ -328,12 +331,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType +
-                "&scope=" + this.Scope + "%20openid" +
-                "&state=" + this.State +
-                "&nonce=" + this.Nonce);
+            // Hybrid Flow 'code id_token'(OIDC)
+            return Redirect(this.AssembleOidcStarter(
+                ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType));
         }
 
         /// <summary>Test Hybrid Flow 'code token'(OIDC)</summary>
@@ -344,12 +344,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.OidcHybrid2_Token_ResponseType +
-                "&scope=" + this.Scope + "%20openid" +
-                "&state=" + this.State +
-                "&nonce=" + this.Nonce);
+            // Hybrid Flow 'code token'(OIDC)
+            return Redirect(this.AssembleOidcStarter(
+                ASPNETIdentityConst.OidcHybrid2_Token_ResponseType));
         }
 
         /// <summary>Test Hybrid Flow 'code id_token token'(OIDC)</summary>
@@ -360,12 +357,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.Init();
             this.Save();
 
-            return Redirect(this.OAuthAuthorizeEndpoint +
-                "?client_id=" + this.ClientId +
-                "&response_type=" + ASPNETIdentityConst.OidcHybrid3_ResponseType +
-                "&scope=" + this.Scope + "%20openid" +
-                "&state=" + this.State +
-                "&nonce=" + this.Nonce);
+            // Hybrid Flow 'code id_token token'(OIDC)
+            return Redirect(this.AssembleOidcStarter(
+                ASPNETIdentityConst.OidcHybrid3_ResponseType));
         }
 
         #endregion
@@ -388,6 +382,7 @@ namespace MultiPurposeAuthSite.Controllers
             // ClientNameから、client_id, client_secretを取得。
             string client_id = "";
             string client_secret = "";
+
             if (User.Identity.IsAuthenticated)
             {
                 // User Accountの場合、
@@ -428,6 +423,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // ClientNameから、client_id(iss)を取得。
             string iss = "";
+
             if (User.Identity.IsAuthenticated)
             {
                 // User Accountの場合、

@@ -1072,6 +1072,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>EnableOpenIDConnect</summary>
+        public static bool EnableOpenIDConnect
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableOpenIDConnect"]);
+            }
+        }
+
         #endregion
 
         #region エンドポイント 

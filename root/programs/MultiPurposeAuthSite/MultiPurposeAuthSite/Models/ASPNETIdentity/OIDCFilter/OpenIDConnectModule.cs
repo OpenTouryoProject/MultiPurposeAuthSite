@@ -49,6 +49,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
@@ -76,16 +77,29 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             // HttpApplication（Global.asax）、HttpModule、HttpHandler - マイクロソフト系技術情報 Wiki
             // https://techinfoofmicrosofttech.osscons.jp/index.php?HttpApplication%EF%BC%88Global.asax%EF%BC%89%E3%80%81HttpModule%E3%80%81HttpHandler
 
-            //context.LogRequest += new EventHandler(this.OnLogRequest);
+            if (ASPNETIdentityConfig.EnableOpenIDConnect)
+            {
+                //context.LogRequest += new EventHandler(this.OnLogRequest);
 
-            context.BeginRequest += new EventHandler(this.OnBeginRequest);
-            context.AuthorizeRequest += new EventHandler(this.OnAuthorizeRequest);
-            context.PreRequestHandlerExecute += new EventHandler(this.OnPreRequestHandlerExecute);
-            context.EndRequest += new EventHandler(this.OnEndRequest);
-            context.PreSendRequestHeaders += new EventHandler(this.OnPreSendRequestHeaders);
+                // Response.Filterの適用判断
+                context.BeginRequest += new EventHandler(this.OnBeginRequest);
+
+                // Request時のparameter書き換え
+                context.AuthorizeRequest += new EventHandler(this.OnAuthorizeRequest);
+
+                //context.PreRequestHandlerExecute += new EventHandler(this.OnPreRequestHandlerExecute);
+                //context.EndRequest += new EventHandler(this.OnEndRequest);
+
+                // Response時のheader、body書き換え
+                context.PreSendRequestHeaders += new EventHandler(this.OnPreSendRequestHeaders);
+            }
         }
 
         #endregion
+
+        #region Http Event
+
+        #region 不使用
 
         /// <summary>OnLogRequest</summary>
         /// <param name="source">object</param>
@@ -95,12 +109,32 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             // LogRequestのロジックはここに挿入
         }
 
-        // 恐らく、Global.asaxと同じ。
-        // http:// support.microsoft.com/kb/312607/ja
+        /// <summary>OnPreRequestHandlerExecute</summary>
+        /// <param name="sender">object</param>
+        /// <param name="e">EventArgs</param>
+        private void OnPreRequestHandlerExecute(object sender, EventArgs e)
+        {
+            // OnPreRequestHandlerExecuteのロジックはここに挿入
+        }
+
+        /// <summary>OnEndRequest</summary>
+        /// <param name="sender">object</param>
+        /// <param name="e">EventArgs</param>
+        private void OnEndRequest(object sender, EventArgs e)
+        {
+            // OnEndRequestのロジックはここに挿入
+        }
+
+        #endregion
 
         #region 書き換え
 
-        #region ResponseTypeの書き換え
+        #region 書換用変数
+
+        /// <summary>VirtualPathの書き換え</summary>
+        private string OriginalVirtualPath = "";
+
+        #region ResponseType
 
         /// <summary>id_token</summary>
         private bool RewritedResponseTypeFrom_IdToken = false;
@@ -119,13 +153,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
         #endregion
 
+        #region response_mode
+
         /// <summary>response_mode=form_post</summary>
         private bool RewritedResponseModeFrom_FromPost = false;
 
-        /// <summary>VirtualPathの書き換え</summary>
-        private string OriginalVirtualPath = "";
+        #endregion
 
         #endregion
+        
+        #region TokenEndpoint
 
         /// <summary>OnBeginRequest</summary>
         /// <param name="sender">object</param>
@@ -147,6 +184,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 context.Response.Filter = new OpenIDConnectCodeFilter(context);
             }
         }
+
+        #endregion
+
+        #region AuthorizeEndpoint
+
+        #region Request
 
         /// <summary>OnAuthorizeRequest</summary>
         /// <param name="sender">object</param>
@@ -198,7 +241,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                             // [response_type=id_token token]
                             is_id_token_token = responseType.StartsWith(
-                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType));                            
+                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType));
                             if (!is_id_token_token)
                             {
                                 // [response_type=token]
@@ -312,7 +355,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             || this.RewritedResponseTypeFrom_CodeIdToken
                             || this.RewritedResponseTypeFrom_CodeToken
                             || this.RewritedResponseTypeFrom_CodeIdTokenToken)
-                            //|| this.RewritedResponseModeFrom_FromPost)
+                        //|| this.RewritedResponseModeFrom_FromPost)
                         {
                             context.RewritePath(virtualPath + reWritedQuery, false);
                         }
@@ -321,22 +364,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             }
         }
 
-        /// <summary>OnPreRequestHandlerExecute</summary>
-        /// <param name="sender">object</param>
-        /// <param name="e">EventArgs</param>
-        private void OnPreRequestHandlerExecute(object sender, EventArgs e)
-        {
-            // OnPreRequestHandlerExecuteのロジックはここに挿入
-        }
+        #endregion
 
-        /// <summary>OnEndRequest</summary>
-        /// <param name="sender">object</param>
-        /// <param name="e">EventArgs</param>
-        private void OnEndRequest(object sender, EventArgs e)
-        {
-            // OnEndRequestのロジックはここに挿入
-        }
-
+        #region Response
+         
         /// <summary>OnPreSendRequestHeaders</summary>
         /// <param name="sender">object</param>
         /// <param name="e">EventArgs</param>
@@ -353,18 +384,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             #endregion
 
             #region ワーク
+
             // code
             string code = "";
             // state
             string state = "";
             // expires_in
-            string expires_in = "";
+            ulong expires_in = 0;
             // redirect_uri
             string redirect_url = "";
             // access_token
             string access_token = "";
             // id_token
             string id_token = "";
+
             #endregion
             
             #endregion
@@ -390,7 +423,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         // ・正規表現でaccess_tokenを抜き出す。
                         string pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
                         access_token = Regex.Match(location, pattern).Groups["accessToken"].Value;
-                        id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token);
+
+                        // at_hashを付与
+                        id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.AtHash);
 
                         if (!string.IsNullOrEmpty(id_token))
                         {
@@ -401,8 +436,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             }
                             else if (this.RewritedResponseTypeFrom_IdToken)
                             {
+                                // ココは未サポート状態なので、テストできていない。
                                 location = location.Replace("access_token=" + access_token + "&", "");
-                                location = location.Replace("token_type=beara" + access_token + "&", "");
+                                location = location.Replace("&token_type=beara", "");
                                 response.Headers["Location"] = location + "&id_token=" + id_token;
                             }
                         }
@@ -453,48 +489,52 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 state = groups["state"].Value;
                             }
 
-                            expires_in = ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString();
                             redirect_url = location.Substring(0, location.IndexOf('?'));
+
+                            // ★ Hybrid Flow対応なので、expを短縮してもイイ。
+                            expires_in = ulong.Parse(ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
 
                             // Fragmentに組み込む
                             string fragment = "";
 
                             if (this.RewritedResponseTypeFrom_CodeIdToken)
                             {
-                                fragment = "#id_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
-
                                 // id_tokenを取得
                                 AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
                                 AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
-                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(OpenIDConnectModule.CustomizedProtect(ticket));
 
+                                // c_hashを付与
+                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(
+                                    OpenIDConnectModule.CustomizedProtect(ticket, expires_in), code, HashClaimType.CHash);
+
+                                fragment = "#id_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { id_token, code, expires_in, state });
                             }
                             else if (this.RewritedResponseTypeFrom_CodeToken)
                             {
-                                fragment = "#access_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
-
                                 // access_tokenを取得
                                 AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
                                 AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
-                                access_token = OpenIDConnectModule.CustomizedProtect(ticket);
+                                access_token = OpenIDConnectModule.CustomizedProtect(ticket, expires_in);
 
+                                fragment = "#access_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { access_token, code, expires_in, state });
                             }
                             else if (this.RewritedResponseTypeFrom_CodeIdTokenToken)
                             {
-                                fragment = "#access_token={0}&id_token={1}&token_type=Bearer&code={2}&expires_in={3}&state={4}";
-
                                 // id_token, access_tokenを取得
                                 AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
                                 AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
-                                access_token = OpenIDConnectModule.CustomizedProtect(ticket);
-                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token);
+                                access_token = OpenIDConnectModule.CustomizedProtect(ticket, expires_in);
 
+                                // at_hash, c_hashの両方を付与
+                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token, code, HashClaimType.Both);
+
+                                fragment = "#access_token={0}&id_token={1}&token_type=Bearer&code={2}&expires_in={3}&state={4}";
                                 fragment = string.Format(fragment, new object[] { access_token, id_token, code, expires_in, state });
                             }
 
-                            // Fragmentを設定したLocationに変更。
+                            // Locationを追加（redirect_url + fragment）。
                             response.Headers.Add("Location", redirect_url + fragment);
                         }
                     }
@@ -599,17 +639,29 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             }
         }
 
+        #endregion
+
+        #endregion
+
+        #endregion
+
+        #endregion
+
+        #region 共通関数
+
         /// <summary>
         /// ChangeToIdTokenFromAccessToken
         ///   OIDC対応（AccessTokenからIdTokenを生成）
         /// </summary>
-        /// <param name="access_token">Jwt AccessToken</param>
+        /// <param name="access_token">string</param>
+        /// <param name="code">string</param>
+        /// <param name="HashClaimType">HashClaimType</param>
         /// <returns>IdToken</returns>
         /// <remarks>
         /// OIDC対応
         /// </remarks>
 
-        public static string ChangeToIdTokenFromAccessToken(string access_token)
+        public static string ChangeToIdTokenFromAccessToken(string access_token, string code, HashClaimType hct)
         {
             if (access_token.Contains("."))
             {
@@ -628,6 +680,38 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                     {
                         //・payloadからscopeを削除する。
                         authTokenClaimSet.Remove("scopes");
+
+                        //・payloadにat_hash, c_hashを追加する。
+                        switch (hct)
+                        {
+                            case HashClaimType.None:
+                                break;
+
+                            case HashClaimType.AtHash:
+                                // at_hash
+                                authTokenClaimSet.Add(
+                                    "at_hash",
+                                    OpenIDConnectModule.CreateHash(access_token));
+                                break;
+
+                            case HashClaimType.CHash:
+                                // c_hash
+                                authTokenClaimSet.Add(
+                                    "c_hash",
+                                    OpenIDConnectModule.CreateHash(code));
+                                break;
+
+                            case HashClaimType.Both:
+                                // at_hash, c_hash
+                                authTokenClaimSet.Add(
+                                    "at_hash",
+                                    OpenIDConnectModule.CreateHash(access_token));
+                                authTokenClaimSet.Add(
+                                    "c_hash",
+                                    OpenIDConnectModule.CreateHash(code));
+                                break;
+                        }
+
                         //・編集したpayloadを再度JWTとして署名する。
                         string newPayload = JsonConvert.SerializeObject(authTokenClaimSet);
                         JWT_RS256 jwtRS256 = null;
@@ -679,11 +763,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
         ///   できなかったため、AccessTokenFormatJwt.Protectをカスタマイズした。）
         /// </summary>
         /// <param name="ticket">AuthenticationTicket</param>
+        /// <param name="customExp">Hybrid Flowのtokenに対応したexp</param>
         /// <returns>Jwt AccessToken</returns>
         /// <remarks>
-        /// Hybrid Flow対応なので、scopeを制限してもイイ。
+        /// Hybrid Flow対応なので、scope, expires_inを制限してもイイ。
         /// </remarks>
-        public static string CustomizedProtect(AuthenticationTicket ticket)
+        public static string CustomizedProtect(AuthenticationTicket ticket, ulong customExp)
         {
             string json = "";
             string jwt = "";
@@ -727,16 +812,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             // Resource Owner認証の場合、Resource Ownerの名称
             authTokenClaimSet.Add("sub", ticket.Identity.Name);
 
-            authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+            #region authTokenClaimSet.Add("exp", ・・・
+
+            // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
+            //authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+
+            // customExpの値を使用する。
+            authTokenClaimSet.Add("exp", DateTimeOffset.Now.AddSeconds(customExp).ToUnixTimeSeconds().ToString());
+            
+            #endregion
+
             authTokenClaimSet.Add("nbf", DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
 
+            // ★ Hybrid Flow対応なので、scopeを制限してもイイ。
+            authTokenClaimSet.Add("scopes", scopes);
+
             // scope値によって、返す値を変更する。
             // ココでは返さない（別途ユーザ取得処理を実装してもイイ）。
-
-            // Hybrid Flow対応なので、scopeを制限してもイイ。
-            authTokenClaimSet.Add("scopes", scopes);
 
             json = JsonConvert.SerializeObject(authTokenClaimSet);
 
@@ -767,5 +861,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             #endregion
         }
-    }
+
+        /// <summary>
+        /// SHA256でat_hash, c_hashを作成。
+        /// （現時点でRS256固定になっているので）
+        /// </summary>
+        /// <returns>hash</returns>
+        public static string CreateHash(string input)
+        {
+            // ID Token の JOSE Header にある alg Header Parameterのアルゴリズムで使用されるハッシュアルゴリズムを用い、
+            // input(access_token や code) のASCII オクテット列からハッシュ値を求め、左半分を base64url エンコードした値。
+            return CustomEncode.ToBase64UrlString(
+                PubCmnFunction.ShortenByteArray(
+                    GetHash.GetHashBytes(
+                        CustomEncode.StringToByte(input, CustomEncode.us_ascii),
+                        EnumHashAlgorithm.SHA256Managed), (256 / 2)));
+        }
+
+            #endregion
+        }
 }

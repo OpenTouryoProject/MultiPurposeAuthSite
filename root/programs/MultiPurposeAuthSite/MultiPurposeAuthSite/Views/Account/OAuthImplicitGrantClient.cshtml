@@ -98,9 +98,11 @@
         }
 
         $(function () {
+
             // フラグメントを取得し、
             fragment = getFragment();
-            alert(JSON.stringify(fragment));
+            //alert("location.hash : " + window.location.hash);
+            alert("Objected fragment : " + JSON.stringify(fragment));
 
             // 「access_token」（Bearer Token）が
             // "露見"しないようwindow.location.hashを消去。

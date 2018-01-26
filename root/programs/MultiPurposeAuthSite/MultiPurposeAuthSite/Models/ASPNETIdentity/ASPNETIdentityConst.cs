@@ -185,6 +185,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + Scope_Userid;
         // authは他のscopeをフィルタするので。
 
+        /// <summary>OIDCのscope</summary>
+        public static readonly string OidcScopes =
+            Scope_Openid + " "
+            + Scope_Profile + " "
+            + Scope_Email + " "
+            + Scope_Phone + " "
+            + Scope_Address + " "
+            + Scope_Userid;
+        // authは他のscopeをフィルタするので。
+
         /// <summary>ID連携 scope</summary>
         public static readonly string IdFederationScopes =
             Scope_Openid + " "

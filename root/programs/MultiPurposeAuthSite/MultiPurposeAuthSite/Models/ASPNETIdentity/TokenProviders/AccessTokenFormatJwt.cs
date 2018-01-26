@@ -137,6 +137,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
 
+            authTokenClaimSet.Add("scopes", scopes);
+
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)
             {
@@ -183,8 +185,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     // user == null でも OK な Resource
                 }
             }
-
-            authTokenClaimSet.Add("scopes", scopes);
             
             json = JsonConvert.SerializeObject(authTokenClaimSet);
 

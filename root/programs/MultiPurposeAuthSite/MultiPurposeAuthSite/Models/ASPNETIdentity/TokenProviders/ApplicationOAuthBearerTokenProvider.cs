@@ -91,15 +91,43 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             string response_type = context.Request.Query.Get("response_type");
 
             // OIDC Implicit, Hybridの場合、書き換え
-            if (response_type.ToLower() == ASPNETIdentityConst.OidcImplicit1_ResponseType
-                || response_type.ToLower() == ASPNETIdentityConst.OidcImplicit2_ResponseType
-                || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType
-                || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_Token_ResponseType
-                || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid3_ResponseType)
+            if (ASPNETIdentityConfig.EnableOpenIDConnect)
             {
-                // OIDC Implicit, Hybridの場合、書き換え
-                // ※ この変数は、使用するredirect_uriを決定するだめダケに利用される。
-                response_type = ASPNETIdentityConst.ImplicitResponseType;
+                if (response_type.ToLower() == ASPNETIdentityConst.OidcImplicit1_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcImplicit2_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_Token_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid3_ResponseType)
+                {
+                    // OIDC Implicit, Hybridの場合、書き換え
+                    // Authorization Code Flowの場合は、codeなので書き換え不要。
+                    // ※ この変数は、使用するredirect_uriを決定するだめダケに利用される。
+                    response_type = ASPNETIdentityConst.ImplicitResponseType;
+
+                    // OIDC Implicit Flow、Hybrid Flowのパラメタチェック
+
+                    // nonceパラメタ 必須
+                    string nonce = context.Request.Query.Get("nonce");
+                    if (string.IsNullOrEmpty(nonce))
+                    {
+                        //throw new NotSupportedException("there was no nonce in query.");
+                        context.SetError(
+                            "server_error",
+                            "there was no nonce in query.");
+                        return Task.FromResult(0);
+                    }
+
+                    // scopeパラメタ 必須
+                    string scope = context.Request.Query.Get("scope");
+                    if (scope.IndexOf("openid") == -1)
+                    {
+                        //throw new NotSupportedException("there was no openid in scope of query.");
+                        context.SetError(
+                            "server_error",
+                            "there was no openid in scope of query.");
+                        return Task.FromResult(0);
+                    }
+                }
             }
 
             if (!string.IsNullOrEmpty(response_type))
@@ -108,14 +136,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 {
                     if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
                     {
-                        throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                        //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                        context.SetError(
+                            "server_error",
+                            Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                        return Task.FromResult(0);
                     }
                 }
                 else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
                 {
                     if (!ASPNETIdentityConfig.EnableImplicitGrantType)
                     {
-                        throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                        //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                        context.SetError(
+                            "server_error",
+                            Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                        return Task.FromResult(0);
                     }
                 }
             }
