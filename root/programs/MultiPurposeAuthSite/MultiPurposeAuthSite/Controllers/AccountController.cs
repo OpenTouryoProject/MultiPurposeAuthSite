@@ -2309,12 +2309,18 @@ namespace MultiPurposeAuthSite.Controllers
                         model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-                        
-                        model.AccessToken = dic["access_token"];
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                        model.RefreshToken = dic["refresh_token"] ?? "";                        
+                        if (dic.ContainsKey("access_token"))
+                        {
+                            model.AccessToken = dic["access_token"];
+                            model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                                CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                        }
+
+                        if (dic.ContainsKey("refresh_token"))
+                        {
+                            model.RefreshToken = dic["refresh_token"] ?? "";
+                        }   
 
                         #endregion
                     }

@@ -207,6 +207,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 TicketSerializer serializer = new TicketSerializer();
 
                 IEnumerable<byte[]> values = null;
+                List<byte[]> list = null;
 
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
@@ -232,11 +233,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                         "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
-                                    context.SetTicket(ticket);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                        context.SetTicket(ticket);
 
-                                    cnn.Execute(
-                                        "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                                        cnn.Execute(
+                                            "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                                    }
 
                                     break;
 
@@ -245,11 +250,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                         "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
-                                    context.SetTicket(ticket);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                        context.SetTicket(ticket);
 
-                                    cnn.Execute(
-                                        "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+                                        cnn.Execute(
+                                            "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+                                    }
 
                                     break;
 
@@ -258,11 +267,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                        "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
-                                    context.SetTicket(ticket);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                        context.SetTicket(ticket);
 
-                                    cnn.Execute(
-                                        "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+                                        cnn.Execute(
+                                            "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+                                    }
 
                                     break;
                             }
@@ -296,6 +309,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 TicketSerializer serializer = new TicketSerializer();
 
                 IEnumerable<byte[]> values = null;
+                List<byte[]> list = null;
 
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
@@ -318,7 +332,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                         "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                    }
 
                                     break;
 
@@ -327,16 +345,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                         "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                    }
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
                                     values = cnn.Query<byte[]>(
-                                       "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
+                                      "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                    }
 
                                     break;
                             }

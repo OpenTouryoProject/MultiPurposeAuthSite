@@ -512,29 +512,40 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
                     // オペレーション・トレース・ログ出力
-                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
-                                user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+                    Logging.MyOperationTrace(
+                        string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
+                        user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+
+                    // 検証完了
+                    context.Validated(identity);
                 }
                 else
                 {
                     // Client Accountの場合、
 
-                    // ClaimsIdentityを自前で生成する。
-                    identity = new ClaimsIdentity(context.Options.AuthenticationType);
-                    // Name Claimを追加
-                    identity.AddClaim(new Claim(ClaimTypes.Name, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
-                    // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
-                    
-                    // オペレーション・トレース・ログ出力
                     string clientName = OAuth2Helper.GetInstance().GetClientName(context.ClientId);
-                    Logging.MyOperationTrace(string.Format(
-                        "{0}({1}) passed the 'client credentials flow' by {2}({3}).",
-                        context.ClientId, clientName, context.ClientId, clientName));
-                }
+                    if (string.IsNullOrEmpty(clientName))
+                    {
+                        // 検証失敗
+                        context.Rejected();
+                    }
+                    else
+                    {
+                        // ClaimsIdentityを自前で生成する。
+                        identity = new ClaimsIdentity(context.Options.AuthenticationType);
+                        // Name Claimを追加
+                        identity.AddClaim(new Claim(ClaimTypes.Name, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+                        // ClaimsIdentityに、その他、所定のClaimを追加する。
+                        identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
-                // 検証完了
-                context.Validated(identity);
+                        // オペレーション・トレース・ログ出力
+                        Logging.MyOperationTrace(string.Format(
+                            "Passed the 'client credentials flow' by {0}({1}).", context.ClientId, clientName));
+
+                        // 検証完了
+                        context.Validated(identity);
+                    }
+                }   
             }
             catch
             {

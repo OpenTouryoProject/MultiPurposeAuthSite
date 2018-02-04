@@ -279,6 +279,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <returns>ticket</returns>
         private string Verifier(string value, string code_verifier)
         {
+            // null チェック
+            if (string.IsNullOrEmpty(value)) { return ""; }
+
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
             bool isPKCE = (code_verifier != null);

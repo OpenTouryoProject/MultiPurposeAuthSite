@@ -174,7 +174,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                     break;
             }
 
-            return datetime;
+            // {0001/01/01 00:00} チェック
+            if (datetime == DateTime.MinValue)
+            {
+                return null;
+            }
+            else
+            {
+                return datetime;
+            }
         }
         
         #endregion
