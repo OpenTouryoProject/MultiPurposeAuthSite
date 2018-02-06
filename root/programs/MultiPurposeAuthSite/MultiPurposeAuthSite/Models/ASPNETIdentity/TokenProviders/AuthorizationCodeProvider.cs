@@ -33,6 +33,7 @@
 
 using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter;
 
 using System;
 using System.IO;
@@ -110,8 +111,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             Dictionary<string, string> temp = new Dictionary<string, string>();
             NameValueCollection queryString = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
 
-            // 標準
+            // 標準（標準方式は、今のところ、残しておく）
             temp.Add("ticket", context.SerializeTicket());
+
+            // 有効期限が無効なtokenのペイロードだけ作成
+            AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
+            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayload(context.Ticket);
+            temp.Add("access_token_payload", access_token_payload);
 
             // OAuth PKCE 対応
             temp.Add("code_challenge", queryString["code_challenge"]);
@@ -120,9 +126,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // Hybrid Flow対応
             //   OAuthAuthorizationServerHandler経由での呼び出しができず、
             //   AuthenticationTokenXXXXContextを取得できないため、抜け道。
-            temp.Add("claims",  CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Identity)));
-            temp.Add("properties", CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Properties.Dictionary)));
-
+            // サイズ大き過ぎるので根本の方式を修正。
+            //temp.Add("claims",  CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Identity)));
+            //temp.Add("properties", CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Properties.Dictionary)));
+            
             string value = JsonConvert.SerializeObject(temp);
 
             switch (ASPNETIdentityConfig.UserStoreType)
@@ -355,8 +362,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         ///   AuthenticationTokenXXXXContextを取得できないため、抜け道。
         /// </summary>
         /// <param name="code">code</param>
-        /// <returns>AuthenticationTicket</returns>
-        public AuthenticationTicket GetAuthenticationTicket(string code)
+        /// <returns>Jwt AccessTokenのPayload部</returns>
+        public string GetAccessTokenPayload(string code)
         {
             string value = "";
 
@@ -403,10 +410,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
-            // AuthenticationTicketを生成して返す。
-            return new AuthenticationTicket(
-                (ClaimsIdentity)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["claims"])),
-                new AuthenticationProperties((IDictionary<string, string>)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["properties"]))));
+            //// AuthenticationTicketを生成して返す。
+            //return new AuthenticationTicket(
+            //    (ClaimsIdentity)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["claims"])),
+            //    new AuthenticationProperties((IDictionary<string, string>)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["properties"]))));
+
+            return temp["access_token_payload"];
         }
 
         #endregion

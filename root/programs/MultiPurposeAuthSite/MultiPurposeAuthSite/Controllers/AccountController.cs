@@ -2541,10 +2541,9 @@ namespace MultiPurposeAuthSite.Controllers
                 );
 
             // E-mailの送信
-            await UserManager.SendEmailAsync(
-                    user.Id,
-                    GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm),
-                    string.Format(GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg), callbackUrl));
+            string subject = GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm);
+            string body = GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg);
+            await UserManager.SendEmailAsync(user.Id, subject, string.Format(body, callbackUrl, user.UserName));
         }
 
         /// <summary>

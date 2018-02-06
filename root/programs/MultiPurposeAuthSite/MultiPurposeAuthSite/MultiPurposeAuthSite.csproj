@@ -300,7 +300,7 @@
     <Compile Include="Models\ASPNETIdentity\Entity\UserStore.cs" />
     <Compile Include="Models\ASPNETIdentity\ExternalLoginHelper\ExternalLoginStarter.cs" />
     <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FIDO2Helper.cs" />
-    <Compile Include="Models\ASPNETIdentity\OIDCFilter\HashClaim.cs" />
+    <Compile Include="Models\ASPNETIdentity\OIDCFilter\HashClaimType.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\OpenIDConnectCodeFilter.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\OpenIDConnectModule.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationRoleManager.cs" />
@@ -308,6 +308,7 @@
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationUserManager.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\CustomPasswordHasher.cs" />
     <Compile Include="Models\ASPNETIdentity\OAuth2Extension\OAuth2RevocationProvider.cs" />
+    <Compile Include="Models\ASPNETIdentity\OIDCFilter\OidcTokenEditor.cs" />
     <Compile Include="Models\ASPNETIdentity\StartupAuth.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Include="Models\ASPNETIdentity\TokenProviders\AuthorizationCodeProvider.cs" />

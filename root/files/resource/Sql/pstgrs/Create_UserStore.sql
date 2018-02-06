@@ -57,7 +57,7 @@ CREATE TABLE UserClaims(           -- Users ---* UserClaims
 
 CREATE TABLE AuthenticationCodeDictionary(
     Key varchar(64) NOT NULL,                -- PK
-    Value varchar(1024) NOT NULL,            -- AuthenticationCode
+    Value varchar(2000) NOT NULL,            -- AuthenticationCode
     CreatedDate timestamp NOT NULL,
     CONSTRAINT PK_AuthenticationCodeDictionary PRIMARY KEY (Key)
 );
@@ -80,6 +80,12 @@ CREATE TABLE OAuth2Data(           -- OAuth2Data
     ClientID varchar(256) NOT NULL,          -- PK
     UnstructuredData varchar(2000) NULL,     -- OAuth2 Unstructured Data
     CONSTRAINT PK_OAuth2Data PRIMARY KEY (ClientID)
+);
+
+CREATE TABLE OAuth2Revocation(
+    Jti varchar(38) NOT NULL,                -- PK, guid
+    CreatedDate timestamp NOT NULL,
+    CONSTRAINT PK_OAuth2Revocation PRIMARY KEY (Jti)
 );
 
 -- INDEX

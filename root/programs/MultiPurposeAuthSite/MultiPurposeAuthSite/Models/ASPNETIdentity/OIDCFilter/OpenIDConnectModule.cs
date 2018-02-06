@@ -34,23 +34,13 @@
 using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
 
 using System;
-using System.Text;
-using System.Linq;
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using System.Security.Claims;
-using System.Security.Cryptography.X509Certificates;
 
 using System.Web;
 
 using Microsoft.Owin.Security;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util;
-using Touryo.Infrastructure.Public.Security;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 {
@@ -425,7 +415,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         access_token = Regex.Match(location, pattern).Groups["accessToken"].Value;
 
                         // at_hashを付与
-                        id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.AtHash);
+                        id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.AtHash);
 
                         if (!string.IsNullOrEmpty(id_token))
                         {
@@ -500,12 +490,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             if (this.RewritedResponseTypeFrom_CodeIdToken)
                             {
                                 // id_tokenを取得
-                                AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
-                                AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
+                                string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
 
                                 // c_hashを付与
-                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(
-                                    OpenIDConnectModule.CustomizedProtect(ticket, expires_in), code, HashClaimType.CHash);
+                                id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(
+                                    OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in), code, HashClaimType.CHash);
 
                                 fragment = "#id_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { id_token, code, expires_in, state });
@@ -513,9 +502,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             else if (this.RewritedResponseTypeFrom_CodeToken)
                             {
                                 // access_tokenを取得
-                                AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
-                                AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
-                                access_token = OpenIDConnectModule.CustomizedProtect(ticket, expires_in);
+                                string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
+                                access_token = OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in);
 
                                 fragment = "#access_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { access_token, code, expires_in, state });
@@ -523,12 +511,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             else if (this.RewritedResponseTypeFrom_CodeIdTokenToken)
                             {
                                 // id_token, access_tokenを取得
-                                AuthenticationTicket ticket = AuthorizationCodeProvider.GetInstance().GetAuthenticationTicket(code);
-                                AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
-                                access_token = OpenIDConnectModule.CustomizedProtect(ticket, expires_in);
+                                string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
+                                access_token = OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in);
 
                                 // at_hash, c_hashの両方を付与
-                                id_token = OpenIDConnectModule.ChangeToIdTokenFromAccessToken(access_token, code, HashClaimType.Both);
+                                id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, code, HashClaimType.Both);
 
                                 fragment = "#access_token={0}&id_token={1}&token_type=Bearer&code={2}&expires_in={3}&state={4}";
                                 fragment = string.Format(fragment, new object[] { access_token, id_token, code, expires_in, state });
@@ -646,238 +633,5 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
         #endregion
 
         #endregion
-
-        #region 共通関数
-
-        /// <summary>
-        /// ChangeToIdTokenFromAccessToken
-        ///   OIDC対応（AccessTokenからIdTokenを生成）
-        /// </summary>
-        /// <param name="access_token">string</param>
-        /// <param name="code">string</param>
-        /// <param name="HashClaimType">HashClaimType</param>
-        /// <returns>IdToken</returns>
-        /// <remarks>
-        /// OIDC対応
-        /// </remarks>
-
-        public static string ChangeToIdTokenFromAccessToken(string access_token, string code, HashClaimType hct)
-        {
-            if (access_token.Contains("."))
-            {
-                string[] temp = access_token.Split('.');
-                string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
-                Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-
-                // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
-                if (authTokenClaimSet.ContainsKey("nonce")
-                    && authTokenClaimSet.ContainsKey("scopes"))
-                {
-                    JArray scopes = (JArray)authTokenClaimSet["scopes"];
-
-                    // ・OpenID Connect : response_type=codeに対応する。
-                    if (scopes.Any(x => x.ToString() == ASPNETIdentityConst.Scope_Openid))
-                    {
-                        //・payloadからscopeを削除する。
-                        authTokenClaimSet.Remove("scopes");
-
-                        //・payloadにat_hash, c_hashを追加する。
-                        switch (hct)
-                        {
-                            case HashClaimType.None:
-                                break;
-
-                            case HashClaimType.AtHash:
-                                // at_hash
-                                authTokenClaimSet.Add(
-                                    "at_hash",
-                                    OpenIDConnectModule.CreateHash(access_token));
-                                break;
-
-                            case HashClaimType.CHash:
-                                // c_hash
-                                authTokenClaimSet.Add(
-                                    "c_hash",
-                                    OpenIDConnectModule.CreateHash(code));
-                                break;
-
-                            case HashClaimType.Both:
-                                // at_hash, c_hash
-                                authTokenClaimSet.Add(
-                                    "at_hash",
-                                    OpenIDConnectModule.CreateHash(access_token));
-                                authTokenClaimSet.Add(
-                                    "c_hash",
-                                    OpenIDConnectModule.CreateHash(code));
-                                break;
-                        }
-
-                        //・編集したpayloadを再度JWTとして署名する。
-                        string newPayload = JsonConvert.SerializeObject(authTokenClaimSet);
-                        JWT_RS256 jwtRS256 = null;
-
-                        // 署名
-                        jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword,
-                            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-                        string id_token = jwtRS256.Create(newPayload);
-
-                        // 検証
-                        jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword,
-                            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-                        if (jwtRS256.Verify(id_token))
-                        {
-                            // 検証できた。
-                            return id_token;
-                        }
-                        else
-                        {
-                            // 検証できなかった。
-                        }
-                    }
-                    else
-                    {
-                        // OIDCでない。
-                    }
-                }
-                else
-                {
-                    // OIDCでない。
-                }
-            }
-            else
-            {
-                // JWTでない。
-            }
-
-            return "";
-        }
-
-        /// <summary>
-        /// CustomizedProtect
-        ///   Hybrid Flow対応
-        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
-        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道を準備したが、
-        ///   今後は、AccessTokenFormatJwtから、ApplicationUserManagerにアクセス
-        ///   できなかったため、AccessTokenFormatJwt.Protectをカスタマイズした。）
-        /// </summary>
-        /// <param name="ticket">AuthenticationTicket</param>
-        /// <param name="customExp">Hybrid Flowのtokenに対応したexp</param>
-        /// <returns>Jwt AccessToken</returns>
-        /// <remarks>
-        /// Hybrid Flow対応なので、scope, expires_inを制限してもイイ。
-        /// </remarks>
-        public static string CustomizedProtect(AuthenticationTicket ticket, ulong customExp)
-        {
-            string json = "";
-            string jwt = "";
-
-            // チェック
-            if (ticket == null)
-            {
-                throw new ArgumentNullException("ticket");
-            }
-
-            #region ClaimSetの生成
-
-            Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
-            List<string> scopes = new List<string>();
-            List<string> roles = new List<string>();
-
-            foreach (Claim c in ticket.Identity.Claims)
-            {
-                if (c.Type == ASPNETIdentityConst.Claim_Issuer)
-                {
-                    authTokenClaimSet.Add("iss", c.Value);
-                }
-                else if (c.Type == ASPNETIdentityConst.Claim_Audience)
-                {
-                    authTokenClaimSet.Add("aud", c.Value);
-                }
-                else if (c.Type == ASPNETIdentityConst.Claim_Nonce)
-                {
-                    authTokenClaimSet.Add("nonce", c.Value);
-                }
-                else if (c.Type == ASPNETIdentityConst.Claim_Scope)
-                {
-                    scopes.Add(c.Value);
-                }
-                else if (c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                {
-                    roles.Add(c.Value);
-                }
-            }
-            
-            // Resource Owner認証の場合、Resource Ownerの名称
-            authTokenClaimSet.Add("sub", ticket.Identity.Name);
-
-            #region authTokenClaimSet.Add("exp", ・・・
-
-            // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
-            //authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-
-            // customExpの値を使用する。
-            authTokenClaimSet.Add("exp", DateTimeOffset.Now.AddSeconds(customExp).ToUnixTimeSeconds().ToString());
-            
-            #endregion
-
-            authTokenClaimSet.Add("nbf", DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
-
-            // ★ Hybrid Flow対応なので、scopeを制限してもイイ。
-            authTokenClaimSet.Add("scopes", scopes);
-
-            // scope値によって、返す値を変更する。
-            // ココでは返さない（別途ユーザ取得処理を実装してもイイ）。
-
-            json = JsonConvert.SerializeObject(authTokenClaimSet);
-
-            #endregion
-
-            #region JWT化
-
-            JWT_RS256 jwtRS256 = null;
-
-            // 署名
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-            jwt = jwtRS256.Create(json);
-
-            // 検証
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-            if (jwtRS256.Verify(jwt))
-            {
-                return jwt; // 検証できた。
-            }
-            else
-            {
-                return ""; // 検証できなかった。
-            }
-
-            #endregion
-        }
-
-        /// <summary>
-        /// SHA256でat_hash, c_hashを作成。
-        /// （現時点でRS256固定になっているので）
-        /// </summary>
-        /// <returns>hash</returns>
-        public static string CreateHash(string input)
-        {
-            // ID Token の JOSE Header にある alg Header Parameterのアルゴリズムで使用されるハッシュアルゴリズムを用い、
-            // input(access_token や code) のASCII オクテット列からハッシュ値を求め、左半分を base64url エンコードした値。
-            return CustomEncode.ToBase64UrlString(
-                PubCmnFunction.ShortenByteArray(
-                    GetHash.GetHashBytes(
-                        CustomEncode.StringToByte(input, CustomEncode.us_ascii),
-                        EnumHashAlgorithm.SHA256Managed), (256 / 2)));
-        }
-
-            #endregion
-        }
+    }
 }

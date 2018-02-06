@@ -58,7 +58,7 @@ CREATE TABLE "UserClaims"(         -- Users ---* UserClaims
 
 CREATE TABLE "AuthenticationCodeDictionary"(
     "Key" NVARCHAR2(64) NOT NULL,            -- PK
-    "Value" NVARCHAR2(1024) NOT NULL,        -- AuthenticationCode
+    "Value" NVARCHAR2(2000) NOT NULL,        -- AuthenticationCode
     "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.AuthCodeDictionary" PRIMARY KEY ("Key")
 );
@@ -81,6 +81,12 @@ CREATE TABLE "OAuth2Data"(         -- OAuth2Data
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
     "UnstructuredData" NVARCHAR2(2000) NULL, -- OAuth2 Unstructured Data
     CONSTRAINT "PK.OAuth2Data" PRIMARY KEY ("ClientID")
+);
+
+CREATE TABLE "OAuth2Revocation"(
+    "Jti" NVARCHAR2(38) NOT NULL,            -- PK, guid
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.OAuth2Revocation" PRIMARY KEY ("Jti")
 );
 
 -- INDEX
