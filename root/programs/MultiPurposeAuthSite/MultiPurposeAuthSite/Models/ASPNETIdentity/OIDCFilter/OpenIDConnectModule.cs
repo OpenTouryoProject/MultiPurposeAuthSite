@@ -404,7 +404,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                     //                  - [response_type=id_token]
                     //                  - or [response_type=id_token token]
 
-                    //レスポンス内容を参照して書き換え（fragmentにid_tokenを追加）
+                    // レスポンス内容を参照して書き換え（fragmentにid_tokenを追加）
                     string location = response.Headers["Location"];
 
                     if (!string.IsNullOrEmpty(location)

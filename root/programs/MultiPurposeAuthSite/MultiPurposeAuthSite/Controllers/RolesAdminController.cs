@@ -73,7 +73,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 string uid = User.Identity.GetUserId();
 
-                if (string.IsNullOrEmpty(uid))
+                if (string.IsNullOrWhiteSpace(uid))
                 {
                     // 未認証
                     throw new SecurityException(Resources.AdminController.UnAuthenticate);

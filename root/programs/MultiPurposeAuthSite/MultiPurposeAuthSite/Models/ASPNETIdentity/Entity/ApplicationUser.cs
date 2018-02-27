@@ -79,11 +79,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #region CreateBy
 
-        /// <summary>サインアップのためのApplicationUserを生成します</summary>
+        /// <summary>ApplicationUser生成</summary>
         /// <param name="userName">string</param>
         /// <param name="emailConfirmed">bool</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser CreateBySignup(string userName, bool emailConfirmed)
+        public static ApplicationUser CreateUser(string userName, bool emailConfirmed)
         {
             // ApplicationUserのCreate
             ApplicationUser user = new ApplicationUser
@@ -119,7 +119,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             return user;
         }
 
-        /// <summary>管理者登録のためのApplicationUserを生成します</summary>
+        /* マルチテナント機能は削除済みのため、コメントアウト
+        /// <summary>
+        /// SignUpに対応する管理者登録によるApplicationUser生成
+        /// </summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
         public static ApplicationUser CreateByRegister(string userName)
@@ -157,6 +160,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             return user;
         }
+        */
 
         #endregion
 

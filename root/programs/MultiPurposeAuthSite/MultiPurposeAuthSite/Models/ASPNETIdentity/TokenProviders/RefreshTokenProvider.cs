@@ -297,8 +297,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <summary>（インスタンス化不要な直接的な）参照</summary>
         /// <param name="key">string</param>
         /// <returns>AuthenticationTicket</returns>
-        /// <remarks>OAuth 2.0 Token Introspectionサポート</remarks>
-        public static AuthenticationTicket ReferenceDirectly(string key)
+        /// <remarks>OAuth 2.0 Token Introspectionのサポートのために必要</remarks>
+        public static AuthenticationTicket ReferDirectly(string key)
         {
             AuthenticationTicket ticket = null;
 

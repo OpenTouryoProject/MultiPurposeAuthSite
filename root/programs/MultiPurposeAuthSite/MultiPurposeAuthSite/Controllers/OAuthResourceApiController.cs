@@ -407,7 +407,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (token_type_hint == "refresh_token")
                         {
                             // refresh_token参照
-                            ticket = RefreshTokenProvider.ReferenceDirectly(token);
+                            ticket = RefreshTokenProvider.ReferDirectly(token);
 
                             if (ticket == null)
                             {

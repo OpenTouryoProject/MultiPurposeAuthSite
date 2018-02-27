@@ -72,7 +72,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 string uid = User.Identity.GetUserId();
 
-                if (string.IsNullOrEmpty(uid))
+                if (string.IsNullOrWhiteSpace(uid))
                 {
                     // 未認証
                     throw new SecurityException(Resources.AdminController.UnAuthenticate);
@@ -287,12 +287,12 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ASPNETIdentityConfig.RequireUniqueEmail)
                 {
                     // userViewModel.Emailはチェック済み。
-                    user = ApplicationUser.CreateByRegister(userViewModel.Email);
+                    user = ApplicationUser.CreateUser(userViewModel.Email, true);
                 }
                 else
                 {
                     // userViewModel.Nameのカスタムのチェック処理は必要か？
-                    user = ApplicationUser.CreateByRegister(userViewModel.Name);
+                    user = ApplicationUser.CreateUser(userViewModel.Name, true);
                 }
 
                 // ApplicationUserManagerのCreateAsync
@@ -430,7 +430,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 // ユーザーの更新
-                if (string.IsNullOrEmpty(user.UserName))
+                if (string.IsNullOrWhiteSpace(user.UserName))
                 {
                     // 入力値が無いので更新しない。
                 }

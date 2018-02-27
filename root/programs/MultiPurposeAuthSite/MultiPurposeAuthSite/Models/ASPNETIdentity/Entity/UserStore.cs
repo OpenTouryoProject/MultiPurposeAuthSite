@@ -486,7 +486,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
-                    user = ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                    user = ApplicationUser.CreateUser(ASPNETIdentityConfig.AdministratorUID, true);
                     user.Id = userId;
                     user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
                     return Task.FromResult(user);
@@ -589,7 +589,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     // テスト：管理者ユーザを返す。
                     if (userName == ASPNETIdentityConfig.AdministratorUID)
                     {
-                        user = ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                        user = ApplicationUser.CreateUser(ASPNETIdentityConfig.AdministratorUID, true);
                         user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
                     }
 

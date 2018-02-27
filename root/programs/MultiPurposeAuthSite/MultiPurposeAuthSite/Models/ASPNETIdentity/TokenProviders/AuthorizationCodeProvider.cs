@@ -224,7 +224,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 case EnumUserStoreType.Memory:
                     if (_authenticationCodes.TryRemove(context.Token, out value))
                     {
-                        context.DeserializeTicket(this.Verifier(value, code_verifier));
+                        context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
                     }
                     break;
 
@@ -243,7 +243,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 value = cnn.ExecuteScalar<string>(
                                   "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
 
-                                context.DeserializeTicket(this.Verifier(value, code_verifier));
+                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
 
                                 cnn.Execute(
                                     "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
@@ -255,7 +255,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 value = cnn.ExecuteScalar<string>(
                                     "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
 
-                                context.DeserializeTicket(this.Verifier(value, code_verifier));
+                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
 
                                 cnn.Execute(
                                     "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
@@ -267,7 +267,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 value = cnn.ExecuteScalar<string>(
                                     "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
 
-                                context.DeserializeTicket(this.Verifier(value, code_verifier));
+                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
 
                                 cnn.Execute(
                                     "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
@@ -280,11 +280,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
         }
 
-        /// <summary>Verifier</summary>
+        /// <summary>VerifyCodeVerifier</summary>
         /// <param name="value">string</param>
         /// <param name="code_verifier">string</param>
         /// <returns>ticket</returns>
-        private string Verifier(string value, string code_verifier)
+        private string VerifyCodeVerifier(string value, string code_verifier)
         {
             // null チェック
             if (string.IsNullOrEmpty(value)) { return ""; }

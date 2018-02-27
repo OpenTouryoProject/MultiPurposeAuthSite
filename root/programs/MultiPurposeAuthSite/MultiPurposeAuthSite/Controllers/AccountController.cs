@@ -239,7 +239,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 通常のサインイン
 
-                    if (!string.IsNullOrEmpty(model.Password))
+                    if (!string.IsNullOrWhiteSpace(model.Password))
                     {
                         string uid = "";
                         // サインアップしたユーザを取得
@@ -619,14 +619,14 @@ namespace MultiPurposeAuthSite.Controllers
                         uid = model.Name;
                     }
 
-                    if (!string.IsNullOrEmpty(uid))
+                    if (!string.IsNullOrWhiteSpace(uid))
                     {
                         // uidが空文字列でない場合。
 
                         #region サインアップ
 
                         // ユーザを作成
-                        ApplicationUser user = ApplicationUser.CreateBySignup(uid, false);
+                        ApplicationUser user = ApplicationUser.CreateUser(uid, false);
 
                         // ApplicationUserManagerのCreateAsync
                         IdentityResult result = await UserManager.CreateAsync(
@@ -849,7 +849,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
             // 入力の検証
-            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
+            if (string.IsNullOrWhiteSpace(userId)
+                || string.IsNullOrWhiteSpace(code))
             {
                 // エラー画面
                 return View("Error");
@@ -1103,8 +1104,8 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> ResetPassword(string userId, string code)
         {
-            if (string.IsNullOrEmpty(userId)
-                || string.IsNullOrEmpty(code))
+            if (string.IsNullOrWhiteSpace(userId)
+                || string.IsNullOrWhiteSpace(code))
             {
                 // パラメタが無い場合はエラー
                 return View("Error");
@@ -1520,8 +1521,8 @@ namespace MultiPurposeAuthSite.Controllers
                         uid = name;
                     }
 
-                    if (!string.IsNullOrEmpty(email)
-                        && !string.IsNullOrEmpty(name))
+                    if (!string.IsNullOrWhiteSpace(email)
+                        && !string.IsNullOrWhiteSpace(name))
                     {
                         // クレーム情報（e-mail, name情報）を取得できた。
 
@@ -1650,7 +1651,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 // 外部ログイン プロバイダのユーザー情報でユーザを作成
                                 // uid = 連携先メアドの場合、E-mail confirmationはしない（true）。
-                                user = ApplicationUser.CreateBySignup(uid, true);
+                                user = ApplicationUser.CreateUser(uid, true);
 
                                 // サインアップ時のみ、メアドも追加
                                 //（RequireUniqueEmail = false時を想定）
@@ -2020,7 +2021,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // 認証の場合、余計なscopeをfilterする。
                 bool isAuth = scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth);
 
-                if (string.IsNullOrEmpty(prompt)) prompt = "";
+                if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
                 if (isAuth                           // OAuth2 拡張仕様
                     || prompt.ToLower() == "none")   // OIDC   RFC仕様
@@ -2679,7 +2680,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region 管理者ユーザ
 
-                user =  ApplicationUser.CreateBySignup(ASPNETIdentityConfig.AdministratorUID, true);
+                user =  ApplicationUser.CreateUser(ASPNETIdentityConfig.AdministratorUID, true);
                 result = await this.UserManager.CreateAsync(user, ASPNETIdentityConfig.AdministratorPWD);
                 if (result.Succeeded)
                 {
@@ -2695,10 +2696,10 @@ namespace MultiPurposeAuthSite.Controllers
                 string password = ASPNETIdentityConfig.TestUserPWD;
 
                 if (ASPNETIdentityConfig.IsDebug
-                    && !string.IsNullOrEmpty(password))
+                    && !string.IsNullOrWhiteSpace(password))
                 {
                     // 管理者ユーザを作成
-                    user = ApplicationUser.CreateBySignup("super_tanaka@gmail.com", true);
+                    user = ApplicationUser.CreateUser("super_tanaka@gmail.com", true);
 
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
@@ -2710,7 +2711,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
 
                     // 一般ユーザを作成
-                    user = ApplicationUser.CreateByRegister("tanaka@gmail.com");
+                    user = ApplicationUser.CreateUser("tanaka@gmail.com", true);
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {

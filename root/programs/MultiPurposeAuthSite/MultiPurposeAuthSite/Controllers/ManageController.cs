@@ -779,7 +779,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // 入力の検証 1
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
+                if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(code))
                 {
                     // ・・・
                 }
@@ -791,7 +791,7 @@ namespace MultiPurposeAuthSite.Controllers
                         bool isExpired = false;
                         string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code, out isExpired);
 
-                        if (!string.IsNullOrEmpty(email))
+                        if (!string.IsNullOrWhiteSpace(email))
                         {
                             // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1485,8 +1485,8 @@ namespace MultiPurposeAuthSite.Controllers
                             uid = name;
                         }
 
-                        if (!string.IsNullOrEmpty(email)
-                            && !string.IsNullOrEmpty(name))
+                        if (!string.IsNullOrWhiteSpace(email)
+                            && !string.IsNullOrWhiteSpace(name))
                         {
                             // クレーム情報（e-mail, name情報）を取得できた。
 

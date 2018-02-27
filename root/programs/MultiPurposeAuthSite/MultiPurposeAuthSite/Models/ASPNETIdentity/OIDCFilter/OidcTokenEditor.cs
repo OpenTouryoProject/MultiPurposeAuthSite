@@ -49,16 +49,24 @@ using Touryo.Infrastructure.Public.Security;
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 {
     /// <summary>OIDC用のtoken編集処理クラス</summary>
+    /// <remarks>
+    /// ・OIDC対応（AccessTokenからIdTokenを生成）
+    ///   書き換えで対応するので、AccessTokenからIdTokenを生成する拡張メソッドを新設した。
+    ///   
+    /// ・Hybrid Flow対応（access_token_payloadを処理）
+    ///   codeのフローをtokenのフローに変更するため、tokenをcodeプロバイダを使用して生成する必要があった。
+    ///   この際、OAuthAuthorizationServerHandler経由でのAuthorizationCodeProviderの呼び出しが実装できなかったため、
+    ///   （ApplicationUserから、ticketを生成する）抜け道を準備したが、今度は、
+    ///   AccessTokenFormatJwtから、ApplicationUserManagerにアクセスできなかったため、この拡張メソッドを新設した。
+    ///   また、ticketのシリアライズしたものはサイズが大き過ぎたため、access_tokenのpayloadを使用することとした。
+    /// </remarks>
     public class OidcTokenEditor
     {
         #region AccessToken
 
         /// <summary>
         /// CreateAccessTokenPayload
-        ///   Hybrid Flow対応
-        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
-        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道を準備したが、
-        ///   今後は、AccessTokenFormatJwtから、ApplicationUserManagerにアクセスできなかったため、）
+        ///   Hybrid Flow対応（access_token_payloadを処理）
         /// </summary>
         /// <param name="ticket">AuthenticationTicket</param>
         /// <returns>Jwt AccessTokenのPayload部</returns>
@@ -129,10 +137,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
         /// <summary>
         /// ProtectFromPayload
-        ///   Hybrid Flow対応
-        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
-        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道を準備したが、
-        ///   今後は、AccessTokenFormatJwtから、ApplicationUserManagerにアクセスできなかったため）
+        ///   Hybrid Flow対応（access_token_payloadを処理）
         /// </summary>
         /// <param name="access_token_payload">AccessTokenのPayload</param>
         /// <param name="customExp">Hybrid Flowのtokenに対応したexp</param>
