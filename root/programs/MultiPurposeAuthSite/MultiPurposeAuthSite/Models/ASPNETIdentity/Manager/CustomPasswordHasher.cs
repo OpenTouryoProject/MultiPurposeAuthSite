@@ -95,18 +95,26 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
         public PasswordVerificationResult VerifyHashedPassword(
             string hashedPassword, string providedPassword)
         {
-            // バージョン情報を見て振り分ける
-            if (hashedPassword.IndexOf("$0$") == 0)
+            if (string.IsNullOrEmpty(hashedPassword))
             {
-                return this.V0VerifyHashAlgorithm(hashedPassword, providedPassword);
-            }
-            if (hashedPassword.IndexOf("$1$") == 0)
-            {
-                return this.V1VerifyHashAlgorithm(hashedPassword, providedPassword);
+                // 外部ログインのみの（ローカル・パスワードが存在しない）状態
+                return PasswordVerificationResult.Failed;
             }
             else
             {
-                return PasswordVerificationResult.Failed;
+                // バージョン情報を見て振り分ける
+                if (hashedPassword.IndexOf("$0$") == 0)
+                {
+                    return this.V0VerifyHashAlgorithm(hashedPassword, providedPassword);
+                }
+                if (hashedPassword.IndexOf("$1$") == 0)
+                {
+                    return this.V1VerifyHashAlgorithm(hashedPassword, providedPassword);
+                }
+                else
+                {
+                    return PasswordVerificationResult.Failed;
+                }
             }
         }
 

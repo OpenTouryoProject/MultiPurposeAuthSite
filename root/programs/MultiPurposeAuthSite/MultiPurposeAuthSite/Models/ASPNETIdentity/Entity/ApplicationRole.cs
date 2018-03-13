@@ -27,52 +27,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
     /// <summary>ApplicationRole</summary>
     public class ApplicationRole : IRole<string>
     {
-        #region constructor
-
         /// <summary>constructor</summary>
         public ApplicationRole()
         {
             // 引数なしのpublic default constructor以外 NGっぽい。
         }
-
-        #region CreateFor
-
-        /// <summary>システム共通のApplicationRoleを生成</summary>
-        /// <param name="name">string</param>
-        /// <returns>ApplicationRole</returns>
-        public static ApplicationRole CreateForCommon(string name)
-        {
-            // ApplicationRole
-            return new ApplicationRole
-            {
-                ParentId = "", // システム共通の場合は空文字列
-                Name = name
-            };
-        }
-
-        /// <summary>個別のApplicationRoleを生成</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="name">string</param>
-        /// <returns>ApplicationRole</returns>
-        public static ApplicationRole CreateForIndividual(ApplicationUser user, string name)
-        {
-            // ApplicationRole
-            ApplicationRole role = new ApplicationRole
-            {
-                Name = name,
-            };
-
-            // ParentId（実質的に分割キー）
-            // ・マルチテナントの場合、「テナントの管理者ユーザ」が管理者ユーザになる。
-            // ・マルチテナントでない場合、「既定の管理者ユーザ」が管理者ユーザになる。
-            role.ParentId = user.ParentId;
-            
-            return role;
-        }
-
-        #endregion
-
-        #endregion
 
         #region properties
 
@@ -83,18 +42,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         /// <summary>Name</summary>
         public string Name { get; set; }
-
-        #endregion
-
-        #region Additional properties
-
-        /// <summary>
-        /// Gets or sets the parent user identifier.
-        /// </summary>
-        /// <remarks>
-        /// このフィールドはマルチテナント処理のために使用されます。
-        /// </remarks>
-        public string ParentId { get; set; } = null;
 
         #endregion
 

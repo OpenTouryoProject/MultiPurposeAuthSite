@@ -226,7 +226,7 @@
     <value>ローカル ログイン作成フォーム</value>
   </data>
   <data name="SetPasswordP" xml:space="preserve">
-    <value>このサイトに対するローカルのユーザー名/パスワードがありません。外部ログインを使用しないでログインするには、ローカルのアカウントを追加してください。</value>
+    <value>このサイトに対するローカルのパスワードがありません。外部ログインを使用しないでログインするには、ローカルのパスワードを追加してください。</value>
   </data>
   <data name="SetPasswordSubmit" xml:space="preserve">
     <value>パスワードの設定</value>
@@ -338,5 +338,23 @@
   </data>
   <data name="IndexOAuth2TokenGetButton" xml:space="preserve">
     <value>OAuth2アクセス トークンの取得</value>
+  </data>
+  <data name="AddFIDO2DataH4" xml:space="preserve">
+    <value>FIDO2データの追加フォーム</value>
+  </data>
+  <data name="AddFIDO2DataSubmit" xml:space="preserve">
+    <value>FIDO2 認証器を登録する</value>
+  </data>
+  <data name="AddFIDO2DataTitle" xml:space="preserve">
+    <value>FIDO2データの追加</value>
+  </data>
+  <data name="IndexFIDO2Data" xml:space="preserve">
+    <value>FIDO2データ</value>
+  </data>
+  <data name="IndexFIDO2DataAddActionLink" xml:space="preserve">
+    <value>FIDO2データの設定</value>
+  </data>
+  <data name="IndexFIDO2DataRemoveButton" xml:space="preserve">
+    <value>FIDO2データの削除</value>
   </data>
 </root>

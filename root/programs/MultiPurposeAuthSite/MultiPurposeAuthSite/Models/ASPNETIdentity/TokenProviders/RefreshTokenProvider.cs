@@ -207,6 +207,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 TicketSerializer serializer = new TicketSerializer();
 
                 IEnumerable<byte[]> values = null;
+                List<byte[]> list = null;
 
                 switch (ASPNETIdentityConfig.UserStoreType)
                 {
@@ -232,11 +233,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                         "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
-                                    context.SetTicket(ticket);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                        context.SetTicket(ticket);
 
-                                    cnn.Execute(
-                                        "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                                        cnn.Execute(
+                                            "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                                    }
 
                                     break;
 
@@ -245,11 +250,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                         "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
-                                    context.SetTicket(ticket);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                        context.SetTicket(ticket);
 
-                                    cnn.Execute(
-                                        "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+                                        cnn.Execute(
+                                            "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+                                    }
 
                                     break;
 
@@ -258,11 +267,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     values = cnn.Query<byte[]>(
                                        "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
 
-                                    ticket = serializer.Deserialize(values.AsList()[0]);
-                                    context.SetTicket(ticket);
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                        context.SetTicket(ticket);
 
-                                    cnn.Execute(
-                                        "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+                                        cnn.Execute(
+                                            "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+                                    }
 
                                     break;
                             }
@@ -275,6 +288,170 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             {
                 // EnableRefreshToken == false
             }
+        }
+
+        #endregion
+
+        #region Reference
+
+        /// <summary>（インスタンス化不要な直接的な）参照</summary>
+        /// <param name="key">string</param>
+        /// <returns>AuthenticationTicket</returns>
+        /// <remarks>OAuth 2.0 Token Introspectionのサポートのために必要</remarks>
+        public static AuthenticationTicket ReferDirectly(string key)
+        {
+            AuthenticationTicket ticket = null;
+
+            if (ASPNETIdentityConfig.EnableRefreshToken)
+            {
+                // EnableRefreshToken == true
+
+                TicketSerializer serializer = new TicketSerializer();
+
+                IEnumerable<byte[]> values = null;
+                List<byte[]> list = null;
+
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        RefreshTokenProvider.RefreshTokens.TryGetValue(key, out ticket);
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    values = cnn.Query<byte[]>(
+                                        "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
+
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                    }
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    values = cnn.Query<byte[]>(
+                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
+
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                    }
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    values = cnn.Query<byte[]>(
+                                      "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
+
+                                    list = values.AsList();
+                                    if (list.Count != 0)
+                                    {
+                                        ticket = serializer.Deserialize(values.AsList()[0]);
+                                    }
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            else
+            {
+                // EnableRefreshToken == false
+            }
+
+            return ticket;
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>（インスタンス化不要な直接的な）削除</summary>
+        /// <param name="key">string</param>
+        /// <returns>削除できたか否か</returns>
+        /// <remarks>OAuth 2.0 Token Revocationサポート</remarks>
+        public static bool DeleteDirectly(string key)
+        {
+            int ret = 0;
+
+            if (ASPNETIdentityConfig.EnableRefreshToken)
+            {
+                // EnableRefreshToken == true
+
+                AuthenticationTicket ticket;
+
+                switch (ASPNETIdentityConfig.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        if (RefreshTokenProvider.RefreshTokens.TryRemove(key, out ticket))
+                        {
+                            // 1 refresh : 1 access なので、単に捨てればOK。
+                            ret = 1;
+                        }
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            switch (ASPNETIdentityConfig.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    // 1 refresh : 1 access なので、単に捨てればOK。
+                                    ret = cnn.Execute(
+                                        "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    // 1 refresh : 1 access なので、単に捨てればOK。
+                                    ret = cnn.Execute(
+                                        "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    // 1 refresh : 1 access なので、単に捨てればOK。
+                                    ret = cnn.Execute(
+                                        "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            else
+            {
+                // EnableRefreshToken == false
+            }
+
+            return !(ret == 0);
         }
 
         #endregion

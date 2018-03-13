@@ -151,6 +151,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Public key of JWT assertion に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string JwtAssertionPublickey {
+            get {
+                return ResourceManager.GetString("JwtAssertionPublickey", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   The {0} must be at less than or equal to {1} characters long. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string MaxLengthErrMsg {

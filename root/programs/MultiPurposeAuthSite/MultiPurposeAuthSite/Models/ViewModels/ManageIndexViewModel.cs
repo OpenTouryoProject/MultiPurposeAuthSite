@@ -54,6 +54,9 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>HasOAuth2Data</summary>
         public bool HasOAuth2Data { get; set; }
 
+        /// <summary>HasFIDO2Data</summary>
+        public bool HasFIDO2Data { get; set; }
+
         /// <summary>Scopes</summary>
         public string Scopes { get; set; }
     }

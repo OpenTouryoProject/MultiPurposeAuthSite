@@ -1,7 +1,7 @@
 
 -- TABLE
-CREATE TABLE Users(
-    Id varchar(38) NOT NULL,            -- PK, guid
+CREATE TABLE Users(                -- Users
+    Id varchar(38) NOT NULL,                 -- PK, guid
     UserName varchar(256) NOT NULL,
     Email varchar(256) NULL,
     EmailConfirmed boolean NOT NULL,
@@ -14,73 +14,78 @@ CREATE TABLE Users(
     LockoutEnabled boolean NOT NULL,
     AccessFailedCount integer NOT NULL,
     -- 追加の情報
-    ParentId varchar(38) NULL,          -- guid
     ClientID varchar(256) NOT NULL,
     PaymentInformation varchar(256) NULL,
     UnstructuredData varchar(2000) NULL,
+    FIDO2PublicKey varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,
     CONSTRAINT PK_Users PRIMARY KEY (Id)
 );
 
-CREATE TABLE Roles(
-    Id varchar(38) NOT NULL,            -- PK, guid
+CREATE TABLE Roles(                -- Roles
+    Id varchar(38) NOT NULL,                 -- PK, guid
     Name varchar(256) NOT NULL,
-    ParentId varchar(38) NULL,          -- guid
     CONSTRAINT PK_Roles PRIMARY KEY (Id)
 );
 
-CREATE TABLE UserRoles(        -- 関連エンティティ
-    UserId varchar(38) NOT NULL,        -- PK, guid
-    RoleId varchar(38) NOT NULL,        -- PK, guid
+CREATE TABLE UserRoles(            -- 関連エンティティ (Users *--- UserRoles ---* Roles)
+    UserId varchar(38) NOT NULL,             -- PK, guid
+    RoleId varchar(38) NOT NULL,             -- PK, guid
     CONSTRAINT PK_UserRoles PRIMARY KEY (
         UserId,
         RoleId)
 );
 
-CREATE TABLE UserLogins(       -- Users ---* UserLogins
-    UserId varchar(38) NOT NULL,        -- PK, guid
-    LoginProvider varchar(128) NOT NULL,-- PK
-    ProviderKey varchar(128) NOT NULL,  -- PK
+CREATE TABLE UserLogins(           -- Users ---* UserLogins
+    UserId varchar(38) NOT NULL,             -- PK, guid
+    LoginProvider varchar(128) NOT NULL,     -- PK
+    ProviderKey varchar(128) NOT NULL,       -- PK
     CONSTRAINT PK_UserLogins PRIMARY KEY (
         UserId,
         LoginProvider,
         ProviderKey)
 );
 
-CREATE TABLE UserClaims(       -- Users ---* UserClaims
-    Id serial NOT NULL,       -- PK (キー長に問題があるためId intを使用)
-    UserId varchar(38) NOT NULL,        -- *PK, guid
-    Issuer varchar(128) NOT NULL,       -- *PKLoginProvider)
-    ClaimType varchar(1024) NULL,       -- *PK(実質的に*PKが複合主キー)
+CREATE TABLE UserClaims(           -- Users ---* UserClaims
+    Id serial NOT NULL,                      -- PK (キー長に問題があるためId intを使用)
+    UserId varchar(38) NOT NULL,                -- *PK, guid
+    Issuer varchar(128) NOT NULL,               -- *PK(LoginProvider) *PK(実質的に複合主キー)
+    ClaimType varchar(1024) NULL,
     ClaimValue varchar(1024) NULL,
     CONSTRAINT PK_UserClaims PRIMARY KEY (Id)
 );
 
 CREATE TABLE AuthenticationCodeDictionary(
-    Key varchar(64) NOT NULL,           -- PK
-    Value varchar(1024) NOT NULL,       -- AuthenticationCode
+    Key varchar(64) NOT NULL,                -- PK
+    Value varchar(2000) NOT NULL,            -- AuthenticationCode
     CreatedDate timestamp NOT NULL,
     CONSTRAINT PK_AuthenticationCodeDictionary PRIMARY KEY (Key)
 );
 
 CREATE TABLE RefreshTokenDictionary(
-    Key varchar(256) NOT NULL,          -- PK
-    Value bytea NOT NULL,         -- RefreshToken
+    Key varchar(256) NOT NULL,               -- PK
+    Value bytea NOT NULL,                    -- RefreshToken
     CreatedDate timestamp NOT NULL,
     CONSTRAINT PK_RefreshTokenDictionary PRIMARY KEY (Key)
 );
 
 CREATE TABLE CustomizedConfirmation(
-    UserId varchar(38) NOT NULL,        -- PK, guid
-    Value varchar(2000) NOT NULL,        -- Value
+    UserId varchar(38) NOT NULL,             -- PK, guid
+    Value varchar(2000) NOT NULL,            -- Value
     CreatedDate timestamp NOT NULL,
     CONSTRAINT PK_CustomizedConfirmation PRIMARY KEY (UserId)
 );
 
-CREATE TABLE OAuth2Data(
-    ClientID varchar(256) NOT NULL,     -- PK
-    UnstructuredData varchar(2000) NULL, -- OAuth2 Unstructured Data
+CREATE TABLE OAuth2Data(           -- OAuth2Data
+    ClientID varchar(256) NOT NULL,          -- PK
+    UnstructuredData varchar(2000) NULL,     -- OAuth2 Unstructured Data
     CONSTRAINT PK_OAuth2Data PRIMARY KEY (ClientID)
+);
+
+CREATE TABLE OAuth2Revocation(
+    Jti varchar(38) NOT NULL,                -- PK, guid
+    CreatedDate timestamp NOT NULL,
+    CONSTRAINT PK_OAuth2Revocation PRIMARY KEY (Jti)
 );
 
 -- INDEX

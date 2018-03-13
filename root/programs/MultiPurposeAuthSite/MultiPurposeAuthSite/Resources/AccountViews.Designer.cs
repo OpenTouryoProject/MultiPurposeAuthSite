@@ -142,6 +142,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Social login に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ExternalLogins {
+            get {
+                return ResourceManager.GetString("ExternalLogins", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Use another service to log in. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ExternalLoginsListPartialH4 {
@@ -160,11 +169,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Log in using your {0} account に類似しているローカライズされた文字列を検索します。
+        ///   Login using your {0} account に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ExternalLoginsListPartialSubmit {
             get {
                 return ResourceManager.GetString("ExternalLoginsListPartialSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   FIDO2 login に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string FIDO2Login {
+            get {
+                return ResourceManager.GetString("FIDO2Login", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Login with FIDO2 authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string FIDO2LoginSubmit {
+            get {
+                return ResourceManager.GetString("FIDO2LoginSubmit", resourceCulture);
             }
         }
         
@@ -214,11 +241,20 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Social login に類似しているローカライズされた文字列を検索します。
+        ///   Id federation login に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string LoginExternalLogins {
+        public static string IdFederationLogin {
             get {
-                return ResourceManager.GetString("LoginExternalLogins", resourceCulture);
+                return ResourceManager.GetString("IdFederationLogin", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Login with id federation に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdFederationLoginSubmit {
+            get {
+                return ResourceManager.GetString("IdFederationLoginSubmit", resourceCulture);
             }
         }
         

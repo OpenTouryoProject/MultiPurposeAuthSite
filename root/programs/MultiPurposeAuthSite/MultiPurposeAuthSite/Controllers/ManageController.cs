@@ -26,7 +26,8 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 using System;
 using System.Collections.Generic;
@@ -47,6 +48,8 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
+
+using Facebook;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -96,6 +99,14 @@ namespace MultiPurposeAuthSite.Controllers
             AddUnstructuredDataSuccess,
             /// <summary>RemoveUnstructuredDataSuccess</summary>
             RemoveUnstructuredDataSuccess,
+            /// <summary>AddOAuth2DataSuccess</summary>
+            AddOAuth2DataSuccess,
+            /// <summary>RemoveOAuth2DataSuccess</summary>
+            RemoveOAuth2DataSuccess,
+            /// <summary>AddFIDO2DataSuccess</summary>
+            AddFIDO2DataSuccess,
+            /// <summary>RemoveFIDO2DataSuccess</summary>
+            RemoveFIDO2DataSuccess,
             /// <summary>Error</summary>
             Error
         }
@@ -113,7 +124,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region property (GetOwinContext)
 
         /// <summary>ApplicationUserManager</summary>
-        public ApplicationUserManager UserManager
+        private ApplicationUserManager UserManager
         {
             get
             {
@@ -122,7 +133,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>ApplicationRoleManager</summary>
-        public ApplicationRoleManager RoleManager
+        private ApplicationRoleManager RoleManager
         {
             get
             {
@@ -131,7 +142,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>ApplicationSignInManager</summary>
-        public ApplicationSignInManager SignInManager
+        private ApplicationSignInManager SignInManager
         {
             get
             {
@@ -185,6 +196,10 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemovePaymentInformationSuccess ? Resources.ManageController.RemovePaymentInformationSuccess
                 : message == EnumManageMessageId.AddUnstructuredDataSuccess ? Resources.ManageController.AddUnstructuredDataSuccess
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
+                : message == EnumManageMessageId.AddOAuth2DataSuccess ? Resources.ManageController.AddOAuth2DataSuccess
+                : message == EnumManageMessageId.RemoveOAuth2DataSuccess ? Resources.ManageController.RemoveOAuth2DataSuccess
+                : message == EnumManageMessageId.AddFIDO2DataSuccess ? Resources.ManageController.AddFIDO2DataSuccess
+                : message == EnumManageMessageId.RemoveFIDO2DataSuccess ? Resources.ManageController.RemoveFIDO2DataSuccess
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
 
@@ -192,7 +207,8 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+                string oAuth2Data = OAuth2DataProvider.GetInstance().Get(user.ClientID);
+
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
                     // パスワード
@@ -211,6 +227,8 @@ namespace MultiPurposeAuthSite.Controllers
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // OAuth2Data
                     HasOAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
+                    // FIDO2PublicKey
+                    HasFIDO2Data = !string.IsNullOrEmpty(user.FIDO2PublicKey),
                     // Scopes
                     Scopes = ASPNETIdentityConst.StandardScopes
                 };
@@ -761,7 +779,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // 入力の検証 1
-                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
+                if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(code))
                 {
                     // ・・・
                 }
@@ -773,7 +791,7 @@ namespace MultiPurposeAuthSite.Controllers
                         bool isExpired = false;
                         string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code, out isExpired);
 
-                        if (!string.IsNullOrEmpty(email))
+                        if (!string.IsNullOrWhiteSpace(email))
                         {
                             // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1390,12 +1408,12 @@ namespace MultiPurposeAuthSite.Controllers
                     && externalLoginInfo != null)
                 {
                     // ログイン情報を受け取れた場合、クレーム情報を分析
-                    ClaimsIdentity claims = authenticateResult.Identity;
+                    ClaimsIdentity identity = authenticateResult.Identity;
 
                     // ID情報とe-mail, name情報は必須
-                    Claim idClaim = claims.FindFirst(ClaimTypes.NameIdentifier);
-                    Claim emailClaim = claims.FindFirst(ClaimTypes.Email);
-                    Claim nameClaim = claims.FindFirst(ClaimTypes.Name);
+                    Claim idClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+                    Claim emailClaim = identity.FindFirst(ClaimTypes.Email);
+                    Claim nameClaim = identity.FindFirst(ClaimTypes.Name);
 
                     // 外部ログインで取得するクレームを標準化する。
                     // ・・・
@@ -1422,13 +1440,13 @@ namespace MultiPurposeAuthSite.Controllers
                             // emailClaimが取得できなかった場合、
                             if (externalLoginInfo.Login.LoginProvider == "Facebook")
                             {
-                                var identity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
-                                var access_token = identity.FindFirstValue("FacebookAccessToken");
-                                var fb = new Facebook.FacebookClient(access_token);
+                                ClaimsIdentity excIdentity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
+                                string access_token = excIdentity.FindFirstValue("FacebookAccessToken");
+                                FacebookClient facebookClient = new FacebookClient(access_token);
 
                                 // e.g. :
                                 // "/me?fields=id,email,gender,link,locale,name,timezone,updated_time,verified,last_name,first_name,middle_name"
-                                dynamic myInfo = fb.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
+                                dynamic myInfo = facebookClient.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
 
                                 email = myInfo.email; // Microsoft.Owin.Security.Facebookでは、emailClaimとして取得できない。
                                 emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
@@ -1467,8 +1485,8 @@ namespace MultiPurposeAuthSite.Controllers
                             uid = name;
                         }
 
-                        if (!string.IsNullOrEmpty(email)
-                            && !string.IsNullOrEmpty(name))
+                        if (!string.IsNullOrWhiteSpace(email)
+                            && !string.IsNullOrWhiteSpace(name))
                         {
                             // クレーム情報（e-mail, name情報）を取得できた。
 
@@ -1715,18 +1733,22 @@ namespace MultiPurposeAuthSite.Controllers
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute
                 && ASPNETIdentityConfig.IsDebug)
             {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                 // 課金のテスト処理
-                JObject jobj = await WebAPIHelper.GetInstance().ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, "jpy", "1000");
-                // 元の画面に戻る
-                return RedirectToAction("Index");
+                string ret = (string)JsonConvert.DeserializeObject(
+                    await OAuth2Helper.GetInstance().CallOAuthChageToUserWebAPIAsync(
+                    (string)Session["access_token"], "jpy", "1000"));
+
+                if (ret == "OK")
+                {
+                    // 元の画面に戻る
+                    return RedirectToAction("Index");
+                }
+                else { }
             }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+            else { }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
@@ -1864,8 +1886,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // 再ログイン
                             await this.ReSignInAsync();
-
-                            // Index - SetPasswordSuccess
                             return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
                         }
                         else
@@ -1973,17 +1993,25 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddOAuth2DataViewModel model = null;
 
-                string oAuth2Data = OAuth2DataProvider.GetInstance().GetOAuth2Data(user.ClientID);
+                string oAuth2Data = OAuth2DataProvider.GetInstance().Get(user.ClientID);
 
                 if (!string.IsNullOrEmpty(oAuth2Data))
                 {
                     model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
-                    model.ClientID = user.ClientID;
+                    if (string.IsNullOrEmpty(model.ClientID))
+                    {
+                        // 空（userから取得
+                        model.ClientID = user.ClientID;
+                    }
+                    else
+                    {
+                        // 既（user側が先に更新されることは無い。
+                    }
                 }
                 else
                 {
+                    // 初期
                     model = new ManageAddOAuth2DataViewModel();
-                    model.ClientID = "";
                 }
 
                 return View(model);
@@ -2037,13 +2065,11 @@ namespace MultiPurposeAuthSite.Controllers
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                OAuth2DataProvider.GetInstance().UpdateOAuth2Data(user.ClientID, unstructuredData);
+                                OAuth2DataProvider.GetInstance().Update(user.ClientID, unstructuredData);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
-
-                                // Index - SetPasswordSuccess
-                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
                             }
                             else
                             {
@@ -2058,14 +2084,12 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 成功
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().DeleteOAuth2Data(temp);
-                                    OAuth2DataProvider.GetInstance().CreateOAuth2Data(user.ClientID, unstructuredData);
+                                    if (!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().Delete(temp);
+                                    OAuth2DataProvider.GetInstance().Create(user.ClientID, unstructuredData);
 
                                     // 再ログイン
                                     await this.ReSignInAsync();
-
-                                    // Index - SetPasswordSuccess
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
                                 }
                                 else
                                 {
@@ -2126,18 +2150,16 @@ namespace MultiPurposeAuthSite.Controllers
                     + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
 
                     // client_id
-                    string client_id = OAuth2ProviderHelper.GetInstance().GetClientIdByName(User.Identity.Name);
-                    Session["client_id"] = client_id;
+                    string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
 
                     // redirect_uri
                     string redirect_uri = CustomEncode.UrlEncode2(
                         ASPNETIdentityConfig.OAuthClientEndpointsRootURI
                         + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
-                    Session["redirect_uri"] = redirect_uri;
 
                     // state (nonce) // 記号は入れない。
                     string state = GetPassword.Generate(10, 0);
-                    Session["state"] = state;
+                    Session["get_oauth2_token_state"] = state;
 
                     return Redirect(
                         oAuthAuthorizeEndpoint +
@@ -2145,7 +2167,8 @@ namespace MultiPurposeAuthSite.Controllers
                         "&response_type=code" +
                         "&redirect_uri=" + redirect_uri +
                         "&scope=" + model.Scopes +
-                        "&state=" + state);
+                        "&state=" + state +
+                        "&response_mode=form_post");
                 }
             }
 
@@ -2174,7 +2197,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // OAuth2関連の非構造化データのクリア
-                OAuth2DataProvider.GetInstance().DeleteOAuth2Data(user.ClientID);
+                OAuth2DataProvider.GetInstance().Delete(user.ClientID);
 
                 // ユーザーの保存（ClientIDのクリア）
                 //user.ClientID = ""; 一意制約エラーになるので
@@ -2183,13 +2206,13 @@ namespace MultiPurposeAuthSite.Controllers
                 // 結果の確認
                 if (result.Succeeded)
                 {
-                    // 支払元情報 削除の成功
+                    // 削除の成功
 
                     // 再ログイン
                     if (await this.ReSignInAsync())
                     {
                         // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveOAuth2DataSuccess });
                     }
                     else
                     {
@@ -2198,7 +2221,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // 非構造化データ 削除の失敗
+                    // 削除の失敗
                 }
 
                 // Index - Error
@@ -2209,6 +2232,124 @@ namespace MultiPurposeAuthSite.Controllers
                 // エラー画面
                 return View("Error");
             }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region FIDO2 Data
+
+        #region Create
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddFIDO2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> AddFIDO2Data()
+        {
+            if (ASPNETIdentityConfig.CanEditFIDO2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                ViewBag.UserId = user.Id;
+                ViewBag.UserName = user.UserName;
+                ViewBag.AttestationChallenge = GetPassword.Generate(22, 0);
+
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの追加・編集画面（FIDO2関連の非構造化データ設定）
+        /// POST: /Manage/AddFIDO2Data
+        /// </summary>
+        /// <param name="fido2UserId">string</param>
+        /// <param name="fido2Publickey">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddFIDO2Data(
+            string fido2UserId, string fido2Publickey)
+        {
+            if (ASPNETIdentityConfig.CanEditFIDO2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                if (user != null)
+                {
+                    // ユーザを取得できた。
+                    //if (user.Id == credentialId)
+                    if (user.UserName == fido2UserId)
+                    {
+                        // 公開鍵を保存
+                        user.FIDO2PublicKey = fido2Publickey;
+
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddFIDO2DataSuccess });
+                        }
+                    }
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの削除
+        /// POST: /Manage/RemoveFIDO2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveFIDO2Data()
+        {
+            if (ASPNETIdentityConfig.CanEditFIDO2Data
+                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                if (user != null)
+                {
+                    // ユーザを取得できた
+
+                    // 公開鍵をクリア
+                    user.FIDO2PublicKey = null;
+
+                    // ユーザーの保存
+                    IdentityResult result = await UserManager.UpdateAsync(user);
+
+                    // 結果の確認
+                    if (result.Succeeded)
+                    {
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveFIDO2DataSuccess });
+                    }
+                }
+            }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
@@ -2229,7 +2370,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
-        [HttpGet]
+        [HttpPost]
         public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data
@@ -2248,15 +2389,16 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = (string)Session["client_id"];
-                string client_secret = OAuth2ProviderHelper.GetInstance().GetClientSecret(client_id);
-
-                #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
+                string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
                 // stateの検証
-                if (state == (string)Session["state"])
+                if (state == (string)Session["get_oauth2_token_state"])
                 {
                     // state正常
+                    Session["get_oauth2_token_state"] = ""; // 誤動作防止
+
+                    #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                     // 仲介コードからAccess Tokenを取得する。
                     string redirect_uri
@@ -2264,59 +2406,28 @@ namespace MultiPurposeAuthSite.Controllers
                         + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2ProviderHelper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+                    model.Response = await OAuth2Helper.GetInstance()
+                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+
+                    #endregion
 
                     // 余談：OpenID Connectであれば、ここで id_token 検証。
 
                     // 結果の表示
-                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                               CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                    }
-                    else
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
-                    }
+                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+
+                    // 課金処理で使用する。
+                    Session["access_token"] = model.AccessToken;
                 }
                 else
                 {
                     // state異常
                 }
-
-                Session["state"] = ""; // 誤動作防止
-
-                #endregion
-
-                //// 画面の表示。
-                //return View(model);
-
-                // 情報消去のためのRedirect用アクション・メソッドを経由
-                Session["OAuthAuthorizationCodeGrantClientViewModel"] = model;
-                return RedirectToAction("OAuthAuthorizationCodeGrantClient2");
-            }
-            else
-            {
-                return View("Error");
-            }
-        }
-
-        /// <summary>情報消去のためのRedirect用アクション・メソッド</summary>
-        /// <returns>ActionResult</returns>
-        public ActionResult OAuthAuthorizationCodeGrantClient2()
-        {
-            if (ASPNETIdentityConfig.CanEditOAuth2Data
-                && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
-            {
-                // OAuthAuthorizationCodeGrantClientViewModelを取得。
-                OAuthAuthorizationCodeGrantClientViewModel model = null;
-                model = (OAuthAuthorizationCodeGrantClientViewModel)Session["OAuthAuthorizationCodeGrantClientViewModel"];
 
                 // 画面の表示。
                 return View(model);
@@ -2355,31 +2466,31 @@ namespace MultiPurposeAuthSite.Controllers
                         + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2ProviderHelper.GetInstance()
-                        .UpdateAccessTokenByRefreshTokenAsync(tokenEndpointUri, model.RefreshToken);
+
+                    //  client_Idから、client_secretを取得。
+                    string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+
+                    model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                        tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                     // 結果の表示
-                    if (ASPNETIdentityConfig.EnableCustomTokenFormat)
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-                    }
-                    else
-                    {
-                        model.AccessToken = dic["access_token"] ?? "";
-                        model.RefreshToken = dic["refresh_token"] ?? "";
-                    }
+                    model.RefreshToken = dic["refresh_token"] ?? "";
+
+                    // 課金処理で使用する。
+                    Session["access_token"] = model.AccessToken; 
 
                     #endregion
                 }
 
                 // 画面の表示。
                 ModelState.Clear();
-                return View(model);
+                return View("OAuthAuthorizationCodeGrantClient", model);
             }
             else
             {

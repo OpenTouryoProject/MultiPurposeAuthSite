@@ -62,8 +62,7 @@ namespace CreateClientsIdentity
             string json = JsonConvert.SerializeObject(obj, Formatting.Indented);
             Console.WriteLine(json);
 
-            //obj = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(json);
-            //json = Console.ReadLine();
+            Console.ReadLine();
         }
     }
 }

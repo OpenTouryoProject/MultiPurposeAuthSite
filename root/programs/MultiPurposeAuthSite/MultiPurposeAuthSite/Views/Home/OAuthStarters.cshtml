@@ -1,0 +1,80 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // OAuth 2.0 テスト用 画面なので、必要に応じて流用 or 削除して下さい。
+
+    //**********************************************************************************
+    //* クラス名        ：OAuth Starters
+    //* クラス日本語名  ：OAuth Starters
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/12/14  西野 大介         新規
+    //**********************************************************************************
+*@
+@using MultiPurposeAuthSite.Models.ViewModels
+@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@{
+    ViewBag.Title = "OAuth Starters";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<div class="col-md-8">
+    @if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+    {
+        <ul>
+            <li>Authorization Code Flow
+                <ul>
+                    <li>@Html.ActionLink("Test Authorization Code Flow", "AuthorizationCode", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (form_post)", "AuthorizationCode_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC)", "AuthorizationCode_OIDC", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (OIDC, form_post)", "AuthorizationCode_OIDC_FormPost", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE plain)", "AuthorizationCode_PKCE_Plain", "Home")</li>
+                    <li>@Html.ActionLink("Test Authorization Code Flow (PKCE S256)", "AuthorizationCode_PKCE_S256", "Home")</li>
+                </ul>
+            </li>
+            <li>Implicit Flow
+                <ul>
+                    <li>@Html.ActionLink("Test Implicit Flow", "Implicit", "Home")</li>
+                    <li>@Html.ActionLink("Test Implicit Flow 'id_token'(OIDC)", "Implicit_OIDC1", "Home") ... this is not supported.</li>
+                    <li>@Html.ActionLink("Test Implicit Flow 'id_token token'(OIDC)", "Implicit_OIDC2", "Home")</li>
+                </ul>
+            </li>
+            <li>
+                Hybrid Flow
+                <ul>
+                    <li>@Html.ActionLink("Test Hybrid Flow 'code id_token'(OIDC)", "Hybrid_OIDC1", "Home")</li>
+                    <li>@Html.ActionLink("Test Hybrid Flow 'code token'(OIDC)", "Hybrid_OIDC2", "Home")</li>
+                    <li>@Html.ActionLink("Test Hybrid Flow 'code id_token token'(OIDC)", "Hybrid_OIDC3", "Home")</li>
+                </ul>
+            </li>
+            <li>
+                Client Authentication Flow<br />
+                ※ If you use a user account for client authentication in the following flows, registration of OAuth2 data is necessary to the account.
+                <ul>
+                    <li>@Html.ActionLink("Test Client Credentials Flow", "TestClientCredentialsFlow", "Home")</li>
+                </ul>
+                <ul>
+                    <li>@Html.ActionLink("Test JWT Bearer Token Flow", "TestJWTBearerTokenFlow", "Home")</li>
+                </ul>
+            </li>
+        </ul>
+    }
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+       <!-- Footer 部の section -->
+}

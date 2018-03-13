@@ -23,6 +23,7 @@
 
 // System
 using System;
+
 // OpenTouryo
 using Touryo.Infrastructure.Public.Log;
 using Touryo.Infrastructure.Public.Util;
@@ -178,7 +179,7 @@ namespace MultiPurposeAuthSite
         /// ① リクエスト処理を開始する前に発生
         /// </summary>
         void Application_OnBeginRequest(object sender, EventArgs e)
-        {
+        {   
         }
 
         /// <summary>

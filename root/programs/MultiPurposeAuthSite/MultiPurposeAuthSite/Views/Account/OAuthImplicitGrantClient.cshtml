@@ -50,8 +50,10 @@
 <h2>@ViewBag.Title.</h2>
 <div class="row">
     <div class="col-md-8">
-        <p><a class="btn btn-default" href="#" id="OAuthGetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-default" href="#" id="OAuthGetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-default" href="#" id="TestHybridFlowWebAPI" url="@(ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.TestHybridFlowWebAPI)">Test hybrid flow</a></p>
         <br />
+        <div id="debug"></div>
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
         <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
@@ -65,22 +67,25 @@
     <script type="text/javascript">
 
         var fragment = "";
-        var token = "";
 
-        function CallOAuthAPI(url, httpMethod, postdata) {
+        function CallOAuthAPI(url, httpMethod, token, postData) {
             alert(
                 "<httpMethod>" + "\n" + httpMethod + "\n" +
                 "<url>" + "\n" + url + "\n" +
                 "<token>" + "\n" + token);
 
+            var authorizationHeaders = null;
+
+            if (fragment.access_token) {
+                authorizationHeaders = { 'Authorization': 'Bearer ' + fragment.access_token };
+            }
+
             $.ajax({
                 type: httpMethod,
                 url: url,
                 crossDomain: true,
-                headers: {
-                    'Authorization': 'Bearer ' + token
-                },
-                data: postdata,
+                headers: authorizationHeaders,
+                data: postData,
                 xhrFields: {
                     withCredentials: true
                 },
@@ -94,25 +99,34 @@
         }
 
         $(function () {
+
             // フラグメントを取得し、
             fragment = getFragment();
-            // フラグメントに access_token (Bearer Token) がある場合、
-            if (fragment.access_token) {
+            
+            //alert("location.hash : " + window.location.hash);
+            //alert("Objected fragment : " + JSON.stringify(fragment));
+            
+            document.getElementById("debug").innerHTML
+                = "Objected fragment : " + JSON.stringify(fragment);
 
-                // access_token (Bearer Token) を使用して
-                // ResourceServerのWebAPIにアクセスする。
-                token = fragment.access_token;
+            // 「access_token」（Bearer Token）が
+            // "露見"しないようwindow.location.hashを消去。
+            // ~~~~~~
+            window.location.hash = fragment.state || '';
 
-                // 「access_token」（Bearer Token）が
-                // "露見"しないようwindow.location.hashを消去。
-                // ~~~~~~
-                window.location.hash = fragment.state || '';
-                
-                // OAuthGetUserClaimsWebAPI
-                $('#OAuthGetUserClaimsWebAPI').on('click', function () {
-                    CallOAuthAPI($('#OAuthGetUserClaimsWebAPI').attr("url"), 'get', null)
-                });
-            }
+            // OAuthGetUserClaimsWebAPI
+            //   access_token (Bearer Token) を使用して
+            //   AuthorizationServerのWebAPIにアクセスする。
+            $('#OAuthGetUserClaimsWebAPI').on('click', function () {
+                CallOAuthAPI($('#OAuthGetUserClaimsWebAPI').attr("url"), 'get', fragment.access_token, null)
+            });
+
+            // TestHybridFlowWebAPI
+            //   Hybridのテスト用のAuthorizationServerのWebAPIにアクセスする。
+            $('#TestHybridFlowWebAPI').on('click', function () {
+                CallOAuthAPI($('#TestHybridFlowWebAPI').attr("url"), 'post', null, 'code=' + fragment.code)
+            });
         });
+
     </script>
 }

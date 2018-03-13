@@ -31,19 +31,34 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Util;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter;
+
 using System;
+using System.IO;
+using System.Text;
 using System.Data;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Collections.Specialized;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
-using Dapper;
+using System.Web;
 
-using MultiPurposeAuthSite.Models.Util;
+using Microsoft.Owin;
+using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Infrastructure;
 
+using Dapper;
+using Newtonsoft.Json;
+
+using Touryo.Infrastructure.Public.IO;
+using Touryo.Infrastructure.Public.Str;
+
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
-{   
+{
     /// <summary>
     /// AuthorizationCodeのProvider
     /// TokenにSerializeTicket一時保存する。
@@ -93,10 +108,34 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         {
             context.SetToken(Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n"));
 
+            Dictionary<string, string> temp = new Dictionary<string, string>();
+            NameValueCollection queryString = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
+
+            // 標準（標準方式は、今のところ、残しておく）
+            temp.Add("ticket", context.SerializeTicket());
+
+            // 有効期限が無効なtokenのペイロードだけ作成
+            AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
+            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayload(context.Ticket);
+            temp.Add("access_token_payload", access_token_payload);
+
+            // OAuth PKCE 対応
+            temp.Add("code_challenge", queryString["code_challenge"]);
+            temp.Add("code_challenge_method", queryString["code_challenge_method"]);
+
+            // Hybrid Flow対応
+            //   OAuthAuthorizationServerHandler経由での呼び出しができず、
+            //   AuthenticationTokenXXXXContextを取得できないため、抜け道。
+            // サイズ大き過ぎるので根本の方式を修正。
+            //temp.Add("claims",  CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Identity)));
+            //temp.Add("properties", CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Properties.Dictionary)));
+            
+            string value = JsonConvert.SerializeObject(temp);
+
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    _authenticationCodes[context.Token] = context.SerializeTicket();
+                    _authenticationCodes[context.Token] = value;
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -113,7 +152,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 cnn.Execute(
                                     "INSERT INTO [AuthenticationCodeDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
-                                    new { Key = context.Token, Value = context.SerializeTicket(), CreatedDate = DateTime.Now });
+                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
 
                                 break;
 
@@ -121,7 +160,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 cnn.Execute(
                                     "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
-                                    new { Key = context.Token, Value = context.SerializeTicket(), CreatedDate = DateTime.Now });
+                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
 
                                 break;
 
@@ -129,7 +168,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                                 cnn.Execute(
                                     "INSERT INTO \"authenticationcodedictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
-                                    new { Key = context.Token, Value = context.SerializeTicket(), CreatedDate = DateTime.Now });
+                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
 
                                 break;
                         }
@@ -162,15 +201,30 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <param name="context">AuthenticationTokenReceiveContext</param>
         private void ReceiveAuthenticationCode(AuthenticationTokenReceiveContext context)
         {
-            IEnumerable<string> values = null;
+            context.Request.Body.Position = 0;
 
+            string code_verifier = null;
+            string body = new StreamReader(context.Request.Body).ReadToEnd();
+
+            if (body.IndexOf("code_verifier=") != -1)
+            {
+                string[] forms = body.Split('&');
+                foreach (string form in forms)
+                {
+                    if (form.StartsWith("code_verifier="))
+                    {
+                        code_verifier = form.Split('=')[1];
+                    }
+                }
+            }
+
+            string value = "";
             switch (ASPNETIdentityConfig.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    string value;
                     if (_authenticationCodes.TryRemove(context.Token, out value))
                     {
-                        context.DeserializeTicket(value);
+                        context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
                     }
                     break;
 
@@ -186,10 +240,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             case EnumUserStoreType.SqlServer:
 
-                                values = cnn.Query<string>(
+                                value = cnn.ExecuteScalar<string>(
                                   "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
 
-                                context.DeserializeTicket(values.AsList()[0]);
+                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
 
                                 cnn.Execute(
                                     "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
@@ -198,10 +252,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.ODPManagedDriver:
 
-                                values = cnn.Query<string>(
+                                value = cnn.ExecuteScalar<string>(
                                     "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
 
-                                context.DeserializeTicket(values.AsList()[0]);
+                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
 
                                 cnn.Execute(
                                     "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
@@ -210,10 +264,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                values = cnn.Query<string>(
+                                value = cnn.ExecuteScalar<string>(
                                     "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
 
-                                context.DeserializeTicket(values.AsList()[0]);
+                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
 
                                 cnn.Execute(
                                     "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
@@ -226,7 +280,144 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
         }
 
+        /// <summary>VerifyCodeVerifier</summary>
+        /// <param name="value">string</param>
+        /// <param name="code_verifier">string</param>
+        /// <returns>ticket</returns>
+        private string VerifyCodeVerifier(string value, string code_verifier)
+        {
+            // null チェック
+            if (string.IsNullOrEmpty(value)) { return ""; }
+
+            Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
+
+            bool isPKCE = (code_verifier != null);
+            
+            if (!isPKCE)
+            {
+                // 通常のアクセストークン・リクエスト
+                if (string.IsNullOrEmpty(temp["code_challenge"]))
+                {
+                    // Authorization Codeのcode
+                    return temp["ticket"];
+                }
+                else
+                {
+                    // OAuth PKCEのcode（要 code_verifier）
+                    return "";
+                }
+            }
+            else
+            {
+                // OAuth PKCEのアクセストークン・リクエスト
+                if (!string.IsNullOrEmpty(temp["code_challenge"]) && !string.IsNullOrEmpty(code_verifier))
+                {
+                    if (temp["code_challenge_method"].ToLower() == "plain")
+                    {
+                        // plain
+                        if (temp["code_challenge"] == code_verifier)
+                        {
+                            // 検証成功
+                            return temp["ticket"];
+                        }
+                        else
+                        {
+                            // 検証失敗
+                        }
+                    }
+                    else if (temp["code_challenge_method"].ToLower() == "s256")
+                    {
+                        // s256
+                        if (temp["code_challenge"] == OAuth2Helper.PKCE_S256_CodeChallengeMethod(code_verifier))
+                        {
+                            // 検証成功
+                            return temp["ticket"];
+                        }
+                        else
+                        {
+                            // 検証失敗
+                        }
+                    }
+                    else
+                    {
+                        // パラメタ不正
+                    }
+                }
+                else
+                {
+                    // パラメタ不正
+                }
+
+                return null;
+            }
+        }
+
         #endregion
 
+        #region Hybrid Flow対応
+
+        /// <summary>
+        /// Hybrid Flow対応
+        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
+        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道。
+        /// </summary>
+        /// <param name="code">code</param>
+        /// <returns>Jwt AccessTokenのPayload部</returns>
+        public string GetAccessTokenPayload(string code)
+        {
+            string value = "";
+
+            switch (ASPNETIdentityConfig.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    if (_authenticationCodes.TryGetValue(code, out value))
+                    {
+                    }
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (ASPNETIdentityConfig.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                value = cnn.ExecuteScalar<string>(
+                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+
+            Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
+
+            //// AuthenticationTicketを生成して返す。
+            //return new AuthenticationTicket(
+            //    (ClaimsIdentity)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["claims"])),
+            //    new AuthenticationProperties((IDictionary<string, string>)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["properties"]))));
+
+            return temp["access_token_payload"];
+        }
+
+        #endregion
     }
 }

@@ -32,15 +32,16 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Models.Log;
-using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using System;
 using System.Web;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
+using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
@@ -85,37 +86,89 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // ・ RFC上の記載で、RedirectEndpointのURIは、AbsoluteUriである必要があるとの記載あり。
             //    ASP.NET IdentityのチェックでAbsoluteUriである必要があるとの記載あり形式でないと弾かれる。
 
-            // response_type
+            #region response_type
+
             string response_type = context.Request.Query.Get("response_type");
 
-            if (!string.IsNullOrEmpty(response_type))
+            // OIDC Implicit, Hybridの場合、書き換え
+            if (ASPNETIdentityConfig.EnableOpenIDConnect)
             {
-                if (response_type.ToLower() == "code")
+                if (response_type.ToLower() == ASPNETIdentityConst.OidcImplicit1_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcImplicit2_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_Token_ResponseType
+                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid3_ResponseType)
                 {
-                    if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+                    // OIDC Implicit, Hybridの場合、書き換え
+                    // Authorization Code Flowの場合は、codeなので書き換え不要。
+                    // ※ この変数は、使用するredirect_uriを決定するだめダケに利用される。
+                    response_type = ASPNETIdentityConst.ImplicitResponseType;
+
+                    // OIDC Implicit Flow、Hybrid Flowのパラメタチェック
+
+                    // nonceパラメタ 必須
+                    string nonce = context.Request.Query.Get("nonce");
+                    if (string.IsNullOrEmpty(nonce))
                     {
-                        throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                        //throw new NotSupportedException("there was no nonce in query.");
+                        context.SetError(
+                            "server_error",
+                            "there was no nonce in query.");
+                        return Task.FromResult(0);
                     }
-                }
-                else if (response_type.ToLower() == "token")
-                {
-                    if (!ASPNETIdentityConfig.EnableImplicitGrantType)
+
+                    // scopeパラメタ 必須
+                    string scope = context.Request.Query.Get("scope");
+                    if (scope.IndexOf("openid") == -1)
                     {
-                        throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                        //throw new NotSupportedException("there was no openid in scope of query.");
+                        context.SetError(
+                            "server_error",
+                            "there was no openid in scope of query.");
+                        return Task.FromResult(0);
                     }
                 }
             }
 
-            // redirect_uri
+            if (!string.IsNullOrEmpty(response_type))
+            {
+                if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
+                {
+                    if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+                    {
+                        //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                        context.SetError(
+                            "server_error",
+                            Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                        return Task.FromResult(0);
+                    }
+                }
+                else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
+                {
+                    if (!ASPNETIdentityConfig.EnableImplicitGrantType)
+                    {
+                        //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                        context.SetError(
+                            "server_error",
+                            Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
+                        return Task.FromResult(0);
+                    }
+                }
+            }
+
+            #endregion
+
+            #region redirect_uri
+
             string redirect_uri = context.RedirectUri;
 
-            #region redirect_uriのチェック
+            // redirect_uriのチェック
             if (string.IsNullOrEmpty(redirect_uri))
             {
                 // redirect_uriの指定が無い。
 
                 // クライアント識別子に対応する事前登録したredirect_uriを取得する。
-                redirect_uri = OAuth2ProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+                redirect_uri = OAuth2Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
                 if (!string.IsNullOrEmpty(redirect_uri))
                 {
@@ -133,6 +186,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         context.Validated(
                             ASPNETIdentityConfig.OAuthClientEndpointsRootURI
                             + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
+                    }
+                    else if (redirect_uri.ToLower() == "id_federation_code")
+                    {
+                        // ID連携時のエンドポイント
+                        context.Validated(ASPNETIdentityConfig.IdFederationRedirectEndPoint);
                     }
                     else
                     {
@@ -161,7 +219,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 else
                 {
                     // クライアント識別子に対応する事前登録したredirect_uriに
-                    string preRegisteredUri = OAuth2ProviderHelper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+                    string preRegisteredUri = OAuth2Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
                     //if (redirect_uri.StartsWith(preRegisteredUri))
                     if (redirect_uri == preRegisteredUri)
@@ -178,6 +236,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     }
                 }
             }
+
             #endregion
 
             // 結果を返す。
@@ -215,31 +274,27 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // 指定なし。
                 // 検証未完
             }
-            else if (context.Parameters["grant_type"].ToLower() == "authorization_code")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.AuthorizationCodeGrantType)
             {
                 #region Authorization Codeグラント種別
 
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2ProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
-                        }
-                        else
-                        {
-                            // 検証未完
                         }
                     }
                 }
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == "password")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.ResourceOwnerPasswordCredentialsGrantType)
             {
                 #region Resource Owner Password Credentialsグラント種別
 
@@ -253,61 +308,63 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    if ((string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)) == false)
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2ProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
-                        }
-                        else
-                        {
-                            // 検証未完
                         }
                     }
                 }
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == "client_credentials")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.ClientCredentialsGrantType)
             {
                 #region Client Credentialsグラント種別
 
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
-                    if (string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret) == false)
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2ProviderHelper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
-                        }
-                        else
-                        {
-                            // 検証未完
                         }
                     }
                 }
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == "refresh_token")
+            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.RefreshTokenGrantType)
             {
-                // refresh_tokenでは、不要。
-                //if (context.TryGetBasicCredentials(out clientId, out clientSecret))
-                //{
-                //}
+                #region RefreshToken
 
                 if (!ASPNETIdentityConfig.EnableRefreshToken)
                 {
                     throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
                 }
 
-                // 検証完了
-                context.Validated();
+                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
+                if (context.TryGetBasicCredentials(out clientId, out clientSecret))
+                {
+                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
+                    {
+                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
+                        {
+                            // 検証完了
+                            context.Validated(clientId);
+                        }
+                    }
+                }
+
+                #endregion
             }
             else
             {
@@ -360,18 +417,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     try
                     {
                         // ユーザーに対応するClaimsIdentityを生成する。
-                        ClaimsIdentity identity = await userManager.CreateIdentityAsync(
-                            user, DefaultAuthenticationTypes.ExternalBearer);
+                        ClaimsIdentity identity = await userManager.CreateIdentityAsync(user, OAuthDefaults.AuthenticationType);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        OAuth2ProviderHelper.AddClaim(identity, context.ClientId, "", "", context.Scope);
+                        OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
                         // 検証完了
                         context.Validated(identity);
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
-                            user.Id, user.UserName, context.ClientId, OAuth2ProviderHelper.GetInstance().GetClientName(context.ClientId)));
+                            user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
                     }
                     catch
                     {
@@ -431,8 +487,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // ASP.Net MVC: Creating an OAuth client credentials grant type token endpoint
             // http://www.hackered.co.uk/articles/asp-net-mvc-creating-an-oauth-client-credentials-grant-type-token-endpoint
-            //var client = clientService.GetClient(context.ClientId);
-
             // WEB API 2 OAuth Client Credentials Authentication, How to add additional parameters? - Stack Overflow
             // http://stackoverflow.com/questions/29132031/web-api-2-oauth-client-credentials-authentication-how-to-add-additional-paramet
 
@@ -444,32 +498,54 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 // client_idに対応するApplicationUserを取得する。
                 user = await userManager.FindByNameAsync(
-                    OAuth2ProviderHelper.GetInstance().GetClientName(context.ClientId));
+                    OAuth2Helper.GetInstance().GetClientName(context.ClientId));
 
-                if (user == null)
+                // ClaimsIdentity
+                ClaimsIdentity identity = null;
+                if (user != null)
                 {
-                    // *.configに定義したclient_idの場合は、アカウントが存在しない。
-                    // その場合、どうするか？は案件毎に検討する（既定では、既定の管理者ユーザを使用する）。
-                    user = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
+                    // User Accountの場合、
+                    
+                    // ユーザーに対応するClaimsIdentityを生成する。
+                    identity = await userManager.CreateIdentityAsync(user, OAuthDefaults.AuthenticationType);
+                    // ClaimsIdentityに、その他、所定のClaimを追加する。
+                    identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
-                    // ClaimsIdentityを自前で生成する場合、
-                    //ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
-                    //・・・
+                    // オペレーション・トレース・ログ出力
+                    Logging.MyOperationTrace(
+                        string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
+                        user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+
+                    // 検証完了
+                    context.Validated(identity);
                 }
+                else
+                {
+                    // Client Accountの場合、
 
-                // ユーザーに対応するClaimsIdentityを生成する。
-                ClaimsIdentity identity = await userManager.CreateIdentityAsync(
-                    user, DefaultAuthenticationTypes.ExternalBearer);
+                    string clientName = OAuth2Helper.GetInstance().GetClientName(context.ClientId);
+                    if (string.IsNullOrEmpty(clientName))
+                    {
+                        // 検証失敗
+                        context.Rejected();
+                    }
+                    else
+                    {
+                        // ClaimsIdentityを自前で生成する。
+                        identity = new ClaimsIdentity(context.Options.AuthenticationType);
+                        // Name Claimを追加
+                        identity.AddClaim(new Claim(ClaimTypes.Name, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+                        // ClaimsIdentityに、その他、所定のClaimを追加する。
+                        identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
-                // ClaimsIdentityに、その他、所定のClaimを追加する。
-                OAuth2ProviderHelper.AddClaim(identity, context.ClientId, "", "", context.Scope);
-                
-                // 検証完了
-                context.Validated(identity);
+                        // オペレーション・トレース・ログ出力
+                        Logging.MyOperationTrace(string.Format(
+                            "Passed the 'client credentials flow' by {0}({1}).", context.ClientId, clientName));
 
-                // オペレーション・トレース・ログ出力
-                Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
-                            user.Id, user.UserName, context.ClientId, OAuth2ProviderHelper.GetInstance().GetClientName(context.ClientId)));
+                        // 検証完了
+                        context.Validated(identity);
+                    }
+                }   
             }
             catch
             {

@@ -147,6 +147,9 @@
   <data name="Email" xml:space="preserve">
     <value>E-mail</value>
   </data>
+  <data name="JwtAssertionPublickey" xml:space="preserve">
+    <value>Public key of JWT assertion</value>
+  </data>
   <data name="MaxLengthErrMsg" xml:space="preserve">
     <value>The {0} must be at less than or equal to {1} characters long.</value>
   </data>

@@ -15,7 +15,7 @@ USE [UserStore]
 GO
 
 -- TABLE
-CREATE TABLE [Users](
+CREATE TABLE [Users](              -- Users
     [Id] [nvarchar](38) NOT NULL,            -- PK, guid
     [UserName] [nvarchar](256) NOT NULL,
     [Email] [nvarchar](256) NULL,
@@ -29,27 +29,26 @@ CREATE TABLE [Users](
     [LockoutEnabled] [bit] NOT NULL,
     [AccessFailedCount] [int] NOT NULL,
     -- 追加の情報
-    [ParentId] [nvarchar](38) NULL,          -- guid
     [ClientID] [nvarchar](256) NOT NULL,
     [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
+    [FIDO2PublicKey] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
-    CONSTRAINT [PK.Users] PRIMARY KEY CLUSTERED ([Id] ASC)
+    CONSTRAINT [PK.Users] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 
-CREATE TABLE [Roles](
+CREATE TABLE [Roles](              -- Roles
     [Id] [nvarchar](38) NOT NULL,            -- PK, guid
     [Name] [nvarchar](256) NOT NULL,
-    [ParentId] [nvarchar](38) NULL,          -- guid
-    CONSTRAINT [PK.Roles] PRIMARY KEY CLUSTERED ([Id] ASC)
+    CONSTRAINT [PK.Roles] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [UserRoles](        -- 関連エンティティ
+CREATE TABLE [UserRoles](          -- 関連エンティティ (Users *--- UserRoles ---* Roles)
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [RoleId] [nvarchar](38) NOT NULL,        -- PK, guid
-    CONSTRAINT [PK.UserRoles] PRIMARY KEY CLUSTERED (
+    CONSTRAINT [PK.UserRoles] PRIMARY KEY NONCLUSTERED (
         [UserId] ASC,
         [RoleId] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
@@ -59,18 +58,18 @@ CREATE TABLE [UserLogins](       -- Users ---* UserLogins
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [LoginProvider] [nvarchar](128) NOT NULL,-- PK
     [ProviderKey] [nvarchar](128) NOT NULL,  -- PK
-    CONSTRAINT [PK.UserLogins] PRIMARY KEY CLUSTERED (
+    CONSTRAINT [PK.UserLogins] PRIMARY KEY NONCLUSTERED (
         [UserId] ASC,
         [LoginProvider] ASC,
         [ProviderKey] ASC)
     WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [UserClaims](       -- Users ---* UserClaims
+CREATE TABLE [UserClaims](         -- Users ---* UserClaims
     [Id] [int] IDENTITY(1,1) NOT NULL,       -- PK (キー長に問題があるため[Id] [int]を使用)
-    [UserId] [nvarchar](38) NOT NULL,        -- *PK, guid
-    [Issuer] [nvarchar](128) NOT NULL,       -- *PK[LoginProvider)
-    [ClaimType] [nvarchar](1024) NULL,       -- *PK(実質的に*PKが複合主キー)
+    [UserId] [nvarchar](38) NOT NULL,           -- *PK, guid
+    [Issuer] [nvarchar](128) NOT NULL,          -- *PK(LoginProvider) *PK(実質的に複合主キー)
+    [ClaimType] [nvarchar](1024) NULL,
     [ClaimValue] [nvarchar](1024) NULL,
     CONSTRAINT [PK.UserClaims] PRIMARY KEY CLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
@@ -78,9 +77,9 @@ CREATE TABLE [UserClaims](       -- Users ---* UserClaims
 
 CREATE TABLE [AuthenticationCodeDictionary](
     [Key] [nvarchar](64) NOT NULL,           -- PK
-    [Value] [nvarchar](1024) NOT NULL,       -- AuthenticationCode
+    [Value] [nvarchar](max) NOT NULL,        -- AuthenticationCode
     [CreatedDate] [smalldatetime] NOT NULL,
-    CONSTRAINT [PK.AuthenticationCodeDictionary] PRIMARY KEY CLUSTERED ([Key] ASC)
+    CONSTRAINT [PK.AuthenticationCodeDictionary] PRIMARY KEY NONCLUSTERED ([Key] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
@@ -88,7 +87,7 @@ CREATE TABLE [RefreshTokenDictionary](
     [Key] [nvarchar](256) NOT NULL,          -- PK
     [Value] [binary](1024) NOT NULL,         -- RefreshToken
     [CreatedDate] [smalldatetime] NOT NULL,
-    CONSTRAINT [PK.RefreshTokenDictionary] PRIMARY KEY CLUSTERED ([Key] ASC)
+    CONSTRAINT [PK.RefreshTokenDictionary] PRIMARY KEY NONCLUSTERED ([Key] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
@@ -96,16 +95,24 @@ CREATE TABLE [CustomizedConfirmation](
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [Value] [nvarchar](max) NOT NULL,        -- Value
     [CreatedDate] [smalldatetime] NOT NULL,
-    CONSTRAINT [PK.CustomizedConfirmation] PRIMARY KEY CLUSTERED ([UserId] ASC)
+    CONSTRAINT [PK.CustomizedConfirmation] PRIMARY KEY NONCLUSTERED ([UserId] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
 CREATE TABLE [OAuth2Data](
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
     [UnstructuredData] [nvarchar](max) NULL, -- OAuth2 Unstructured Data
-    CONSTRAINT [PK.OAuth2Data] PRIMARY KEY CLUSTERED ([ClientID] ASC)
+    CONSTRAINT [PK.OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
+
+CREATE TABLE [OAuth2Revocation](
+    [Jti] [nvarchar](38) NOT NULL,            -- PK, guid
+    [CreatedDate] [smalldatetime] NOT NULL,
+    CONSTRAINT [PK.OAuth2Revocation] PRIMARY KEY NONCLUSTERED ([Jti] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 
 -- INDEX
 ---- Users

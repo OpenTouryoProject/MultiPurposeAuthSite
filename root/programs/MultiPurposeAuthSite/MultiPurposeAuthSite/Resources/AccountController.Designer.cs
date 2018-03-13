@@ -70,20 +70,20 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Invalid Sign-in attempt. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string Login {
-            get {
-                return ResourceManager.GetString("Login", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   E-Mail Confirmation is needed ! に類似しているローカライズされた文字列を検索します。
         /// </summary>
         internal static string Login_emailconfirm {
             get {
                 return ResourceManager.GetString("Login_emailconfirm", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Invalid Sign-in attempt. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string Login_Error {
+            get {
+                return ResourceManager.GetString("Login_Error", resourceCulture);
             }
         }
         

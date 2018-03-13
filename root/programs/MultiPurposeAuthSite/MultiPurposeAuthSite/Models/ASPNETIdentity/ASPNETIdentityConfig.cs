@@ -254,20 +254,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         #endregion
-
-        #region マルチテナント
-
-        /// <summary>マルチテナント</summary>
-        public static bool MultiTenant
-        {
-            get
-            {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["Multi-tenant"]);
-            }
-        }
-
-        #endregion
-
+        
         #region UserListCount
 
         /// <summary>
@@ -874,6 +861,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
+        /// CanEditFIDO2Data
+        /// </summary>
+        public static bool CanEditFIDO2Data
+        {
+            get
+            {
+                return
+                    ASPNETIdentityConfig.EquipOAuthServer
+                    && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditFIDO2Data"]);
+            }
+        }
+
+        #region 複合
+
+        /// <summary>
         /// CanEditExtLogin
         /// </summary>
         public static bool CanEditExtLogin
@@ -902,6 +904,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #endregion
+
         #region OAuth Client & Server
 
         #region 共通設定
@@ -917,7 +921,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-        #region プロパティ
+        #region OAuth関連プロパティ
 
         /// <summary>
         /// OAuthのAllowInsecureHttpEndpointsプロパティ値
@@ -963,22 +967,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-
         #endregion
 
-        #region JWT
-
-        /// <summary>
-        /// Custom Token Format (JWT) のサポート
-        /// </summary>
-        public static bool EnableCustomTokenFormat
-        {
-            get
-            {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableCustomTokenFormat"]);
-            }
-        }
-
+        #region JWT関連プロパティ
+        
         /// <summary>
         /// JWTのIssuerId (OAuth Server)
         /// </summary>
@@ -1031,9 +1023,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region AuthorizationServer
+        #region AuthorizationServer関連
 
-        #region Grant Type
+        #region Grant Typeの有効 / 無効
 
         /// <summary>EnableAuthorizationCodeGrantType</summary>
         public static bool EnableAuthorizationCodeGrantType
@@ -1080,9 +1072,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>EnableOpenIDConnect</summary>
+        public static bool EnableOpenIDConnect
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableOpenIDConnect"]);
+            }
+        }
+
         #endregion
 
-        #region Endpoint
+        #region エンドポイント 
 
         /// <summary>
         /// OAuthのAuthorizationServerのEndpointのRootのURI
@@ -1095,8 +1096,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        #region 既定
+
         /// <summary>
-        /// OAuthのAuthorizeのEndpoint
+        /// OAuthのAuthorizeエンドポイント 
         /// </summary>
         public static string OAuthAuthorizeEndpoint
         {
@@ -1107,7 +1110,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// OAuthのBearerTokenのEndpoint
+        /// OAuthのBearerTokenのTokenエンドポイント 
         /// </summary>
         public static string OAuthBearerTokenEndpoint
         {
@@ -1117,8 +1120,81 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        #endregion
+
+        #region OAuth拡張
+
+        #region Authorize&Token2
+
         /// <summary>
-        /// ManageController.OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
+        /// Financial API用のOAuthのAuthorizeエンドポイント
+        /// </summary>
+        public static string OAuthAuthorizeEndpoint2
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthAuthorizeEndpoint2"];
+            }
+        }
+
+        /// <summary>
+        /// JWT bearer token flow用のTokenエンドポイント
+        /// </summary>
+        public static string OAuthBearerTokenEndpoint2
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthBearerTokenEndpoint2"];
+            }
+        }
+
+        #endregion
+
+        #region WebAPI
+
+        /// <summary>
+        /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
+        /// </summary>
+        public static string OAuthGetUserClaimsWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthGetUserClaimsWebAPI"];
+            }
+        }
+
+        /// <summary>
+        /// OAuthで認可したTokenを無効化するWebAPI
+        /// </summary>
+        public static string OAuthRevokeTokenWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthRevokeTokenWebAPI"];
+            }
+        }
+
+        /// <summary>
+        /// OAuthで認可したTokenのメタデータを返すWebAPI
+        /// </summary>
+        public static string OAuthIntrospectTokenWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["OAuthIntrospectTokenWebAPI"];
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region その他
+
+        #region Token取得用
+
+        /// <summary>
+        /// ManageController.OAuthAuthorizationCodeGrantClientのRedirectエンドポイント
         /// </summary>
         public static string OAuthAuthorizationCodeGrantClient_Manage
         {
@@ -1130,9 +1206,41 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
+        #region WebAPI
+
+        /// <summary>
+        /// Hybrid Flowのテスト用WebAPI
+        /// </summary>
+        public static string TestHybridFlowWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["TestHybridFlowWebAPI"];
+            }
+        }
+
+        /// <summary>
+        /// ユーザ情報に課金するWebAPI
+        /// </summary>
+        public static string TestChageToUserWebAPI
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["TestChageToUserWebAPI"];
+            }
+        }
+
         #endregion
 
-        #region Client (Test)
+        #endregion
+
+        #endregion
+
+        #endregion
+
+        #region Client関連
+
+        #region 静的設定
 
         /// <summary>
         /// OAuthのClientのInformation
@@ -1145,7 +1253,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-        #region Endpoint
+        #endregion
+
+        #region エンドポイント
 
         /// <summary>
         /// OAuthのClientのEndpointのRootURI
@@ -1158,8 +1268,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        #region Redirect
+
         /// <summary>
-        /// AccountController.OAuthAuthorizationCodeGrantClientのEndpoint (Redirectエンドポイント)
+        /// AccountController.OAuthAuthorizationCodeGrantClientのRedirectエンドポイント
         /// </summary>
         public static string OAuthAuthorizationCodeGrantClient_Account
         {
@@ -1170,7 +1282,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         }
 
         /// <summary>
-        /// AccountController.OAuthImplicitGrantClientのEndpoint (Redirectエンドポイント)
+        /// AccountController.OAuthImplicitGrantClientのRedirectエンドポイント
         /// </summary>
         public static string OAuthImplicitGrantClient_Account
         {
@@ -1197,9 +1309,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region ResourceServer
+        #endregion
 
-        #region Endpoint (WebAPI)
+        #region ResourceServer関連
+
+        #region エンドポイント
 
         /// <summary>
         /// OAuthのResourceServerのEndpointのRootURI
@@ -1209,39 +1323,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return ConfigurationManager.AppSettings["OAuthResourceServerEndpointsRootURI"];
-            }
-        }
-
-        /// <summary>
-        /// OAuthで認証を認可したユーザ情報のClaimを発行するWebAPI
-        /// </summary>
-        public static string OAuthAuthenticateUserWebAPI
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthAuthenticateUserWebAPI"];
-            }
-        }
-
-        /// <summary>
-        /// OAuthで認可したユーザ情報に課金するWebAPI
-        /// </summary>
-        public static string OAuthChageToUserWebAPI
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthChageToUserWebAPI"];
-            }
-        }
-
-        /// <summary>
-        /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
-        /// </summary>
-        public static string OAuthGetUserClaimsWebAPI
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthGetUserClaimsWebAPI"];
             }
         }
 
@@ -1321,7 +1402,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region ロックダウン
+        #region 機能ロックダウン（STS専用モード）
 
         /// <summary>
         /// EnableSignupProcess
@@ -1353,6 +1434,54 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableAdministrationOfUsersAndRoles"]);
+            }
+        }
+
+        #endregion
+
+        #region IDフェデレーション関連
+
+        /// <summary>
+        /// IDフェデレーション時の認可エンドポイント
+        /// </summary>
+        public static string IdFederationAuthorizeEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationAuthorizeEndPoint"];
+            }
+        }
+
+        /// <summary>
+        /// IDフェデレーション時のRedirectエンドポイント
+        /// </summary>
+        public static string IdFederationRedirectEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationRedirectEndPoint"];
+            }
+        }
+
+        /// <summary>
+        /// IDフェデレーション時のTokenエンドポイント
+        /// </summary>
+        public static string IdFederationTokenEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationTokenEndPoint"];
+            }
+        }
+
+        /// <summary>
+        /// IDフェデレーション時のUserInfoエンドポイント
+        /// </summary>
+        public static string IdFederationUserInfoEndPoint
+        {
+            get
+            {
+                return ConfigurationManager.AppSettings["IdFederationUserInfoEndPoint"];
             }
         }
 

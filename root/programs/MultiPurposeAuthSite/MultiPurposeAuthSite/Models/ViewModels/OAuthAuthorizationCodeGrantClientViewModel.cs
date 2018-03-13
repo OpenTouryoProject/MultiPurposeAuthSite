@@ -43,7 +43,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
     [Serializable]
     public class OAuthAuthorizationCodeGrantClientViewModel : BaseViewModel
     {
+        /// <summary>State</summary>
+        [Display(Name = "State")]
+        public string State { get; set; }
+
         /// <summary>Code</summary>
+        [Display(Name = "Code")]
         public string Code { get; set; }
 
         /// <summary>AccessToken</summary>
@@ -51,6 +56,12 @@ namespace MultiPurposeAuthSite.Models.ViewModels
 
         /// <summary>AccessTokenJwtToJson</summary>
         public string AccessTokenJwtToJson { get; set; }
+
+        /// <summary>IdToken</summary>
+        public string IdToken { get; set; }
+
+        /// <summary>IdTokenJwtToJson</summary>
+        public string IdTokenJwtToJson { get; set; }
 
         /// <summary>RefreshToken</summary>
         public string RefreshToken { get; set; }

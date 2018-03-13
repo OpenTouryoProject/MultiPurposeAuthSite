@@ -39,7 +39,7 @@ using System.Collections.Generic;
 
 using Newtonsoft.Json;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
+namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
     /// OpenIDConnectCodeFilter
@@ -133,7 +133,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Filter
                 if (accessTokenResponse.ContainsKey("access_token"))
                 {
                     string access_token = (string)accessTokenResponse["access_token"];
-                    string id_token = OpenIDConnectModule.ChangeToIdTokenFromJwt(access_token);
+                    string id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.None);
                     if (!string.IsNullOrEmpty(id_token))
                     {
                         // responseにid_tokenとして、このJWTを追加する。

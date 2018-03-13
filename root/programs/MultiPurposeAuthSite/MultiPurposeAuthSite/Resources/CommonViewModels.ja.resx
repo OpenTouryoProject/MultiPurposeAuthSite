@@ -201,4 +201,7 @@
   <data name="ConfirmNewEmailErrMsg" xml:space="preserve">
     <value>新しいE-mailアドレスと確認のE-mailアドレスが一致しません。</value>
   </data>
+  <data name="JwtAssertionPublickey" xml:space="preserve">
+    <value>JWTアサーションの公開鍵</value>
+  </data>
 </root>

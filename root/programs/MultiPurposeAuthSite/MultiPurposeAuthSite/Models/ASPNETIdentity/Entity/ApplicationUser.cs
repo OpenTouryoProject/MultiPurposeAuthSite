@@ -79,11 +79,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
         #region CreateBy
 
-        /// <summary>サインアップのためのApplicationUserを生成します</summary>
+        /// <summary>ApplicationUser生成</summary>
         /// <param name="userName">string</param>
         /// <param name="emailConfirmed">bool</param>
         /// <returns>ApplicationUser</returns>
-        public static async Task<ApplicationUser> CreateBySignup(string userName, bool emailConfirmed)
+        public static ApplicationUser CreateUser(string userName, bool emailConfirmed)
         {
             // ApplicationUserのCreate
             ApplicationUser user = new ApplicationUser
@@ -116,42 +116,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 user.EmailConfirmed = !ASPNETIdentityConfig.DisplayAgreementScreen; // 固定値
             }
 
-            // ParentId（実質的に分割キー）
-            if (ASPNETIdentityConfig.MultiTenant)
-            {
-                // マルチテナントの場合、サインアップするユーザが「テナントの管理者ユーザ」になる。
-                user.ParentId = user.Id;
-            }
-            else
-            {
-                // マルチテナントでない場合、「既定の管理者ユーザ」を使用する。
-
-                if (userName == ASPNETIdentityConfig.AdministratorUID)
-                {
-                    // 自分が「既定の管理者ユーザ」の場合、
-                    user.ParentId = user.Id;
-                }
-                else
-                {
-                    // 自分が既定の管理者ユーザでない場合、
-                    ApplicationUserManager userManager
-                        = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-
-                    ApplicationUser parentUser = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
-
-                    // 「既定の管理者ユーザ」が管理者ユーザになる。
-                    user.ParentId = parentUser.Id;
-                }
-            }
-            
             return user;
         }
 
-        /// <summary>管理者登録のためのApplicationUserを生成します</summary>
-        /// <param name="parentId">string</param>
+        /* マルチテナント機能は削除済みのため、コメントアウト
+        /// <summary>
+        /// SignUpに対応する管理者登録によるApplicationUser生成
+        /// </summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public static async Task<ApplicationUser> CreateByRegister(string parentId, string userName)
+        public static ApplicationUser CreateByRegister(string userName)
         {
             // ApplicationUserのCreate
             ApplicationUser user = new ApplicationUser
@@ -184,27 +158,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 user.EmailConfirmed = true;                                         // 固定値
             }
 
-            // ParentId（実質的に分割キー）
-            if (ASPNETIdentityConfig.MultiTenant)
-            {
-                // マルチテナントの場合、「一般ユーザ」は「テナントの管理者ユーザ」が管理者ユーザになる。
-                user.ParentId = parentId;
-            }
-            else
-            {
-                // マルチテナントでない場合、「一般ユーザ」は「既定の管理者ユーザ」が管理者ユーザになる。
-
-                // AdministratorのApplicationUser を取得する。
-                ApplicationUserManager userManager
-                    = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-
-                ApplicationUser parentUser = await userManager.FindByNameAsync(ASPNETIdentityConfig.AdministratorUID);
-                
-                user.ParentId = parentUser.Id;
-            }
-
             return user;
         }
+        */
 
         #endregion
 
@@ -330,15 +286,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         #endregion
 
         #region Additional properties
-
-        /// <summary>
-        /// ParentId
-        /// </summary>
-        /// <remarks>
-        /// このフィールドはマルチテナント処理のために使用されます。
-        /// </remarks>
-        public string ParentId { get; set; } = null;
-
+        
         /// <summary>
         /// ClientID
         /// </summary>
@@ -356,6 +304,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// 非構造化データ
         /// </summary>
         public string UnstructuredData { get; set; } = null;
+
+        /// <summary>
+        /// FIDO2PublicKey
+        /// </summary>
+        public string FIDO2PublicKey { get; set; } = null;
 
         /// <summary>
         /// レコード生成日

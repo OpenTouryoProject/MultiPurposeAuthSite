@@ -55,7 +55,8 @@ namespace MultiPurposeAuthSite
                         "~/Scripts/touryo/else.js"));
 
             bundles.Add(new ScriptBundle("~/bundles/multiauthsite").Include(
-                        "~/Scripts/touryo/oauthimplicit.js"));
+                        "~/Scripts/touryo/oauthimplicit.js",
+                        "~/Scripts/touryo/webauthn.js"));
 
             bundles.Add(new ScriptBundle(
                 "~/bundles/jquery",

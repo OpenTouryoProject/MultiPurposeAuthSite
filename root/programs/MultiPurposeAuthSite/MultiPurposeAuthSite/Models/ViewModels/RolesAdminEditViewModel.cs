@@ -31,12 +31,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         //[Required(AllowEmptyStrings = false)] // Create時は存在しない。
         // [StringLength( // ユーザ入力でないので不要
         public string Id { get; set; }
-
-        /// <summary>ParentId(UI制御用)</summary>
-        //[Required(AllowEmptyStrings = false)] // グローバル ロールは空文字列になる。
-        // [StringLength( // ユーザ入力でないので不要
-        public string ParentId { get; set; }
-
+        
         /// <summary>ロール名</summary>
         [Required(AllowEmptyStrings = false)]
         [Display(Name = "RoleName", ResourceType = typeof(Resources.CommonViewModels))]

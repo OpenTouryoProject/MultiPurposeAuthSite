@@ -72,7 +72,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 string uid = User.Identity.GetUserId();
 
-                if (string.IsNullOrEmpty(uid))
+                if (string.IsNullOrWhiteSpace(uid))
                 {
                     // 未認証
                     throw new SecurityException(Resources.AdminController.UnAuthenticate);
@@ -80,18 +80,15 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     IList<string> roles = UserManager.GetRoles(User.Identity.GetUserId());
-                    foreach (string roleName in roles)
+                    if (roles.Any(x => x == ASPNETIdentityConst.Role_SystemAdmin))
                     {
-                        if (ASPNETIdentityConfig.MultiTenant)
-                        {
-                            if (roleName == ASPNETIdentityConst.Role_Admin) return;
-                        }
-
-                        if (roleName == ASPNETIdentityConst.Role_SystemAdmin) return;
+                        return;
                     }
-
-                    // 認証されない。
-                    throw new SecurityException(Resources.AdminController.UnAuthorized);
+                    else
+                    {
+                        // 認証されない。
+                        throw new SecurityException(Resources.AdminController.UnAuthorized);
+                    }
                 }
             }
             else
@@ -101,96 +98,18 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
-        /// <summary>マルチテナント時の所有権を確認するユーティリティ・メソッド</summary>
-        /// <param name="objParentId">string</param>
-        /// <returns>所有権の有・無</returns>
-        private async Task<bool> CheckOwnershipInMultitenantMode(string objParentId)
-        {
-            if (ASPNETIdentityConfig.MultiTenant)
-            {
-                // マルチテナントの場合、
-
-                ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                IList<string> roles = await UserManager.GetRolesAsync(adminUser.Id);
-                //if ((adminUser.UserName == ASPNETIdentityConfig.AdministratorUID))
-                if (CheckRole.IsSystemAdmin(roles))
-                {
-                    // 「既定の管理者ユーザ」の場合。
-                }
-                else
-                {
-                    // 「既定の管理者ユーザ」で無い場合、
-                    // 配下のobjectかどうか、チェックをする。
-                    return (objParentId == adminUser.Id);
-                }
-            }
-            else
-            {
-                // マルチテナントでない場合。
-            }
-
-            return true;
-        }
-
         /// <summary>利用可能なロールのみを返す。</summary>
         /// <returns>利用可能なロールの一覧</returns>
-        private async Task<List<ApplicationRole>> GetSelectableRoles()
+        private List<ApplicationRole> GetSelectableRoles()
         {
             List<ApplicationRole> selectableRoles = new List<ApplicationRole>();
-
-            // 認証された（管理者）ユーザを取得
-            ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            IList<string> adminUserRoles = await UserManager.GetRolesAsync(User.Identity.GetUserId());
-
-            // グローバル・ロールは自分の持つロールだけ。
-            foreach (string roleName in adminUserRoles)
-            {
-                ApplicationRole role = await RoleManager.FindByNameAsync(roleName);
-
-                if (role.ParentId == "")
-                {
-                    selectableRoles.Add(role);
-                }
-            }
-            // テナント・ロールは全て追加
+            
             foreach (ApplicationRole role in RoleManager.Roles)
             {
-                if (role.ParentId == adminUser.ParentId)
-                {
-                    selectableRoles.Add(role);
-                }
+                selectableRoles.Add(role);
             }
 
             return selectableRoles;
-        }
-
-        private async Task CheckSelectableRoles(string[] selectedRoles)
-        {
-            // 認証された（管理者）ユーザを取得
-            ApplicationUser adminUser = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            IList<string> adminUserRoles = await UserManager.GetRolesAsync(User.Identity.GetUserId());
-
-            foreach (string roleName in selectedRoles)
-            {
-                ApplicationRole role = await RoleManager.FindByNameAsync(roleName);
-
-                if (role.ParentId == "")
-                {
-                    // グローバル・ロールは自分の持つロールだけ。
-                    if (!adminUserRoles.Where(x => x == roleName).Any())
-                    {
-                        throw new System.Exception(Resources.AdminController.Error);
-                    }
-                }
-                else
-                {
-                    // テナント・ロールは自テナントか確認
-                    if (role.ParentId != adminUser.ParentId)
-                    {
-                        throw new System.Exception(Resources.AdminController.Error);
-                    }
-                }
-            }
         }
 
         #endregion
@@ -205,7 +124,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region property (GetOwinContext)
 
         /// <summary>ApplicationUserManager</summary>
-        public ApplicationUserManager UserManager
+        private ApplicationUserManager UserManager
         {
             get
             {
@@ -214,7 +133,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>ApplicationRoleManager</summary>
-        public ApplicationRoleManager RoleManager
+        private ApplicationRoleManager RoleManager
         {
             get
             {
@@ -223,7 +142,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>ApplicationSignInManager</summary>
-        public ApplicationSignInManager SignInManager
+        private ApplicationSignInManager SignInManager
         {
             get
             {
@@ -268,15 +187,13 @@ namespace MultiPurposeAuthSite.Controllers
             // ユーザ一覧表示
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-            Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsSystemAdmin"] = CheckRole.IsSystemAdmin(await UserManager.GetRolesAsync(user.Id)); // 「管理者ユーザ」か否か。
-            //(user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
-
+            
             // Usersへのアクセスを非同期化出来ず
-            UsersAdminSearchViewModel model = new UsersAdminSearchViewModel();
-            model.UserNameforSearch = "";
-            model.Users = UserManager.Users.AsEnumerable();
+            UsersAdminSearchViewModel model = new UsersAdminSearchViewModel
+            {
+                UserNameforSearch = "",
+                Users = UserManager.Users.AsEnumerable()
+            };
 
             return View(model);
         }
@@ -295,14 +212,10 @@ namespace MultiPurposeAuthSite.Controllers
             // ユーザ一覧表示
             // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-            Session["ParentId"] = user.ParentId; // 分割キー
-            Session["IsSystemAdmin"] = CheckRole.IsSystemAdmin(await UserManager.GetRolesAsync(user.Id)); // 「管理者ユーザ」か否か。
-            //(user.UserName == ASPNETIdentityConfig.AdministratorUID); // 「既定の管理者ユーザ」か否か。
+            
             Session["SearchConditionOfUsers"] = model.UserNameforSearch; // ユーザ一覧の検索条件
 
             // Usersへのアクセスを非同期化出来ず
-            //model.UserNameforSearch = "";
             model.Users = UserManager.Users.AsEnumerable();
 
             return View("Index", model);
@@ -321,19 +234,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // ユーザの取得
             ApplicationUser user = await UserManager.FindByIdAsync(id);
-
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
-            {
-                // 配下のobjectである。
-            }
-            else
-            {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-            }
-
+            
             // ユーザ詳細表示
             ViewBag.RoleNames = await UserManager.GetRolesAsync(user.Id);
             return View(user);
@@ -349,12 +250,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public async Task<ActionResult> Create()
+        public ActionResult Create()
         {
             this.Authorize();
 
-            ViewBag.RoleId = new SelectList(
-                await this.GetSelectableRoles(), "Name", "Name");
+            ViewBag.RoleId = new SelectList(this.GetSelectableRoles(), "Name", "Name");
 
             return View();
         }
@@ -387,12 +287,12 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ASPNETIdentityConfig.RequireUniqueEmail)
                 {
                     // userViewModel.Emailはチェック済み。
-                    user = await ApplicationUser.CreateByRegister(adminUser.ParentId, userViewModel.Email);
+                    user = ApplicationUser.CreateUser(userViewModel.Email, true);
                 }
                 else
                 {
                     // userViewModel.Nameのカスタムのチェック処理は必要か？
-                    user = await ApplicationUser.CreateByRegister(adminUser.ParentId, userViewModel.Name);
+                    user = ApplicationUser.CreateUser(userViewModel.Name, true);
                 }
 
                 // ApplicationUserManagerのCreateAsync
@@ -409,10 +309,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (selectedRoles != null)
                     {
                         // ロールがある
-
-                        // チェック
-                        await this.CheckSelectableRoles(selectedRoles);
-
+                        
                         // ロールの登録
                         IdentityResult rolesResult = await UserManager.AddToRolesAsync(user.Id, selectedRoles);
 
@@ -471,28 +368,15 @@ namespace MultiPurposeAuthSite.Controllers
 
             // ユーザとロールの情報を取得
             ApplicationUser user = await UserManager.FindByIdAsync(id);
-
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
-            {
-                // 配下のobjectである。
-            }
-            else
-            {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-            }
-
+            
             // 「選択可能なロール」に「現在のロール」のチェックを入れる。
-            List<ApplicationRole> selectableRoles = await this.GetSelectableRoles();
+            List<ApplicationRole> selectableRoles = this.GetSelectableRoles();
             IList<string> usersRoles = await UserManager.GetRolesAsync(user.Id);
 
             // ユーザとロールの情報を表示
             return View(new UsersAdminEditViewModel()
             {
                 Id = user.Id,
-                ParentId = user.ParentId,
 
                 Name = user.UserName,
                 Email = user.Email,
@@ -517,7 +401,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> Edit(
-            [Bind(Include = "Id,ParentId,Name,Email")] UsersAdminEditViewModel editUser, params string[] selectedRole)
+            [Bind(Include = "Id,Name,Email")] UsersAdminEditViewModel editUser, params string[] selectedRole)
         {
             this.Authorize();
 
@@ -530,109 +414,85 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region ユーザーの更新
 
-                ApplicationUser user = await UserManager.FindByIdAsync(editUser.Id);
-
-                // マルチテナントの場合、所有権を確認する。
-                if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
-                {
-                    // 配下のobjectである。
-                }
-                else
-                {
-                    // 配下のobjectでない。
-                    // エラー → リダイレクト（一覧へ）
-                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-                }
+                ApplicationUser user = await UserManager.FindByIdAsync(editUser.Id);                
 
                 // 編集結果を反映
-                if (user.Id == user.ParentId)
+                if (ASPNETIdentityConfig.RequireUniqueEmail)
                 {
-                    // サインアップした管理者ユーザ
-                    //UserName & Emailは変更不可能。
+                    // userViewModel.Emailはチェック済み。
+                    user.UserName = editUser.Email;
+                    user.Email = editUser.Email;
                 }
                 else
                 {
-                    // 上記以外のユーザの編集は可能
-                    if (ASPNETIdentityConfig.RequireUniqueEmail)
-                    {
-                        // userViewModel.Emailはチェック済み。
-                        user.UserName = editUser.Email;
-                        user.Email = editUser.Email;
-                    }
-                    else
-                    {
-                        // userViewModel.Nameのカスタムのチェック処理は必要か？
-                        user.UserName = editUser.Name;
-                    }
+                    // userViewModel.Nameのカスタムのチェック処理は必要か？
+                    user.UserName = editUser.Name;
+                }
 
-                    // ユーザーの更新
-                    if (string.IsNullOrEmpty(user.UserName))
+                // ユーザーの更新
+                if (string.IsNullOrWhiteSpace(user.UserName))
+                {
+                    // 入力値が無いので更新しない。
+                }
+                else
+                {
+                    // 入力値で更新する。
+                    result = await UserManager.UpdateAsync(user);
+
+                    if (result.Succeeded)
                     {
-                        // 入力値が無いので更新しない。
-                    }
-                    else
-                    {
-                        // 入力値で更新する。
-                        result = await UserManager.UpdateAsync(user);
+                        #region ロールの更新
+
+                        IList<string> roles = await UserManager.GetRolesAsync(user.Id);
+
+                        //?? : nullだったら右
+                        selectedRole = selectedRole ?? new string[] { };
+
+                        // ロールの削除
+                        // selectedRoleに含まれないroleNameは削除対象。
+                        result = await UserManager.RemoveFromRolesAsync(
+                            user.Id, roles.Except(selectedRole).ToArray<string>());
 
                         if (result.Succeeded)
                         {
-                            #region ロールの更新
+                            // ロールの削除の成功
 
-                            IList<string> roles = await UserManager.GetRolesAsync(user.Id);
-
-                            //?? : nullだったら右
-                            selectedRole = selectedRole ?? new string[] { };
-
-                            // ロールの削除
-                            // selectedRoleに含まれないroleNameは削除対象。
-                            result = await UserManager.RemoveFromRolesAsync(
-                                user.Id, roles.Except(selectedRole).ToArray<string>());
+                            // ロールの追加
+                            string[] selectedRoles = selectedRole.Except(roles).ToArray<string>();
+                            result = await UserManager.AddToRolesAsync(user.Id, selectedRoles);
 
                             if (result.Succeeded)
                             {
-                                // ロールの削除の成功
+                                // ロールの追加の成功
 
-                                // チェック
-                                string[] selectedRoles = selectedRole.Except(roles).ToArray<string>();
-                                await this.CheckSelectableRoles(selectedRoles);
-
-                                // ロールの追加
-                                result = await UserManager.AddToRolesAsync(user.Id, selectedRoles);
-
-                                if (result.Succeeded)
-                                {
-                                    // ロールの追加の成功
-
-                                    // リダイレクト（一覧へ）
-                                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.EditSuccess });
-                                }
-                                else
-                                {
-                                    // ロールの追加の失敗
-                                    ModelState.AddModelError("", result.Errors.First());
-                                }
+                                // リダイレクト（一覧へ）
+                                return RedirectToAction("Index", new { Message = EnumAdminMessageId.EditSuccess });
                             }
                             else
                             {
-                                // ロールの削除の失敗
+                                // ロールの追加の失敗
                                 ModelState.AddModelError("", result.Errors.First());
                             }
-
-                            #endregion
                         }
+                        else
+                        {
+                            // ロールの削除の失敗
+                            ModelState.AddModelError("", result.Errors.First());
+                        }
+
+                        #endregion
                     }
                 }
+                
 
                 // 再表示
                 // 「選択可能なロール」に「現在のロール」のチェックを入れる。
-                List<ApplicationRole> selectableRoles = await this.GetSelectableRoles();
+                List<ApplicationRole> selectableRoles = this.GetSelectableRoles();
                 IList<string> usersRoles = await UserManager.GetRolesAsync(user.Id);
 
                 return View(new UsersAdminEditViewModel()
                 {
                     Id = user.Id,
-                    ParentId = user.ParentId,
 
                     Name = user.UserName,
                     Email = user.Email,
@@ -676,19 +536,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 選択したユーザを示表
             ApplicationUser user = await UserManager.FindByIdAsync(id);
-
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
-            {
-                // 配下のobjectである。
-            }
-            else
-            {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-            }
-
+            
             return View(user);
         }
 
@@ -709,46 +557,22 @@ namespace MultiPurposeAuthSite.Controllers
 
             // ユーザを取得して削除（少々冗長な気がするが）
             ApplicationUser user = await UserManager.FindByIdAsync(id);
+            IdentityResult result = await UserManager.DeleteAsync(user);
 
-            // マルチテナントの場合、所有権を確認する。
-            if (await this.CheckOwnershipInMultitenantMode(user.ParentId))
+            if (result.Succeeded)
             {
-                // 配下のobjectである。
-            }
-            else
-            {
-                // 配下のobjectでない。
-                // エラー → リダイレクト（一覧へ）
-                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DoNotHaveOwnershipOfTheObject });
-            }
-
-            if (user.Id == user.ParentId)
-            {
-                // サインアップした管理者ユーザは、削除不可能。
-                // （ボタンを表示しないのでココには来ない）
+                // 削除の成功
 
                 // リダイレクト（一覧へ）
-                return RedirectToAction("Index");
+                return RedirectToAction("Index", new { Message = EnumAdminMessageId.DeleteSuccess });
             }
             else
             {
-                IdentityResult result = await UserManager.DeleteAsync(user);
+                // 削除の失敗
+                ModelState.AddModelError("", result.Errors.First());
 
-                if (result.Succeeded)
-                {
-                    // 削除の成功
-
-                    // リダイレクト（一覧へ）
-                    return RedirectToAction("Index", new { Message = EnumAdminMessageId.DeleteSuccess });
-                }
-                else
-                {
-                    // 削除の失敗
-                    ModelState.AddModelError("", result.Errors.First());
-
-                    // 再表示
-                    return View();
-                }
+                // 再表示
+                return View();
             }
         }
 

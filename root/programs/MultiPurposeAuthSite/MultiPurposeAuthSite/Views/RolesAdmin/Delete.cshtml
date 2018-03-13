@@ -47,15 +47,7 @@
             {
                 @Html.AntiForgeryToken()
                 <b>@AdminViews.RolesAdminRoleName</b> <text>&#058;</text> <span>@Html.DisplayFor(model => model.Name)</span>
-
-                if (string.IsNullOrEmpty(Model.ParentId))
-                {
-                    // submitボタンを表示しない。
-                }
-                else
-                {
-                    <input type="submit" value="@AdminViews.RolesAdminDeleteSubmit" class="btn btn-default" />
-                }
+                <input type="submit" value="@AdminViews.RolesAdminDeleteSubmit" class="btn btn-default" />
             }
         </div>
     </div>

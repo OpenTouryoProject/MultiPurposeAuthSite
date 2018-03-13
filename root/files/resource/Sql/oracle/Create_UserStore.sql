@@ -5,8 +5,8 @@
 
 --UserClaimsのIDENTITY
 
-CREATE TABLE "Users"(
-    "Id" NVARCHAR2(38) NOT NULL,            -- PK, guid
+CREATE TABLE "Users"(              -- Users
+    "Id" NVARCHAR2(38) NOT NULL,             -- PK, guid
     "UserName" NVARCHAR2(256) NOT NULL,
     "Email" NVARCHAR2(256) NULL,
     "EmailConfirmed" NUMBER(3) NOT NULL,
@@ -19,69 +19,74 @@ CREATE TABLE "Users"(
     "LockoutEnabled" NUMBER(3) NOT NULL,
     "AccessFailedCount" NUMBER(10) NOT NULL,
     -- 追加の情報
-    "ParentId" NVARCHAR2(38) NULL,          -- guid
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
+    "FIDO2PublicKey" NVARCHAR2(2000) NULL,
     "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.Users" PRIMARY KEY ("Id")
 );
 
-CREATE TABLE "Roles"(
-    "Id" NVARCHAR2(38) NOT NULL,            -- PK, guid
+CREATE TABLE "Roles"(              -- Roles
+    "Id" NVARCHAR2(38) NOT NULL,             -- PK, guid
     "Name" NVARCHAR2(256) NOT NULL,
-    "ParentId" NVARCHAR2(38) NULL,          -- guid
     CONSTRAINT "PK.Roles" PRIMARY KEY ("Id")
 );
 
-CREATE TABLE "UserRoles"(        -- 関連エンティティ
-    "UserId" NVARCHAR2(38) NOT NULL,        -- PK, guid
-    "RoleId" NVARCHAR2(38) NOT NULL,        -- PK, guid
+CREATE TABLE "UserRoles"(          -- 関連エンティティ (Users *--- UserRoles ---* Roles)
+    "UserId" NVARCHAR2(38) NOT NULL,         -- PK, guid
+    "RoleId" NVARCHAR2(38) NOT NULL,         -- PK, guid
     CONSTRAINT "PK.UserRoles" PRIMARY KEY ("UserId", "RoleId")
 );
 
-CREATE TABLE "UserLogins"(       -- Users ---* UserLogins
-    "UserId" NVARCHAR2(38) NOT NULL,        -- PK, guid
-    "LoginProvider" NVARCHAR2(128) NOT NULL,-- PK
-    "ProviderKey" NVARCHAR2(128) NOT NULL,  -- PK
+CREATE TABLE "UserLogins"(         -- Users ---* UserLogins
+    "UserId" NVARCHAR2(38) NOT NULL,         -- PK, guid
+    "LoginProvider" NVARCHAR2(128) NOT NULL, -- PK
+    "ProviderKey" NVARCHAR2(128) NOT NULL,   -- PK
     CONSTRAINT "PK.UserLogins" PRIMARY KEY ("UserId", "LoginProvider", "ProviderKey")
 );
 
-CREATE SEQUENCE TS_UserClaimID;  -- TS_UserClaimID.NEXTVAL
-CREATE TABLE "UserClaims"(       -- Users ---* UserClaims
-    "Id" NUMBER(10) NOT NULL,       -- PK (キー長に問題があるため"Id" "NUMBER(10)"を使用)
-    "UserId" NVARCHAR2(38) NOT NULL,        -- *PK, guid
-    "Issuer" NVARCHAR2(128) NOT NULL,       -- *PK"LoginProvider)
-    "ClaimType" NVARCHAR2(1024) NULL,       -- *PK(実質的に*PKが複合主キー)
+CREATE SEQUENCE TS_UserClaimID;    -- TS_UserClaimID.NEXTVAL
+CREATE TABLE "UserClaims"(         -- Users ---* UserClaims
+    "Id" NUMBER(10) NOT NULL,                -- PK (キー長に問題があるため"Id" "NUMBER(10)"を使用)
+    "UserId" NVARCHAR2(38) NOT NULL,            -- *PK, guid
+    "Issuer" NVARCHAR2(128) NOT NULL,           -- *PK(LoginProvider) *PK(実質的に複合主キー)
+    "ClaimType" NVARCHAR2(1024) NULL,
     "ClaimValue" NVARCHAR2(1024) NULL,
     CONSTRAINT "PK.UserClaims" PRIMARY KEY ("Id")
 );
 
 CREATE TABLE "AuthenticationCodeDictionary"(
-    "Key" NVARCHAR2(64) NOT NULL,           -- PK
-    "Value" NVARCHAR2(1024) NOT NULL,       -- AuthenticationCode
+    "Key" NVARCHAR2(64) NOT NULL,            -- PK
+    "Value" NVARCHAR2(2000) NOT NULL,        -- AuthenticationCode
     "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.AuthCodeDictionary" PRIMARY KEY ("Key")
 );
 
 CREATE TABLE "RefreshTokenDictionary"(
-    "Key" NVARCHAR2(256) NOT NULL,          -- PK
-    "Value" RAW(1024) NOT NULL,             -- RefreshToken
+    "Key" NVARCHAR2(256) NOT NULL,           -- PK
+    "Value" RAW(1024) NOT NULL,              -- RefreshToken
     "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.RefreshTokenDictionary" PRIMARY KEY ("Key")
 );
 
 CREATE TABLE "CustomizedConfirmation"(
-    "UserId" NVARCHAR2(38) NOT NULL,        -- PK, guid
-    "Value" NVARCHAR2(2000) NOT NULL,       -- Value
+    "UserId" NVARCHAR2(38) NOT NULL,         -- PK, guid
+    "Value" NVARCHAR2(2000) NOT NULL,        -- Value
     "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.CustomizedConfirmation" PRIMARY KEY ("UserId")
 );
 
-CREATE TABLE "OAuth2Data"(
+CREATE TABLE "OAuth2Data"(         -- OAuth2Data
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
     "UnstructuredData" NVARCHAR2(2000) NULL, -- OAuth2 Unstructured Data
     CONSTRAINT "PK.OAuth2Data" PRIMARY KEY ("ClientID")
+);
+
+CREATE TABLE "OAuth2Revocation"(
+    "Jti" NVARCHAR2(38) NOT NULL,            -- PK, guid
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.OAuth2Revocation" PRIMARY KEY ("Jti")
 );
 
 -- INDEX

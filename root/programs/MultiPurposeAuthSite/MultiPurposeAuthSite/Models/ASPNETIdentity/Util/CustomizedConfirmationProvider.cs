@@ -41,7 +41,7 @@ using Newtonsoft.Json;
 
 using MultiPurposeAuthSite.Models.Util;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
 {
     /// <summary>CustomizedConfirmationData</summary>
     public class CustomizedConfirmationJson

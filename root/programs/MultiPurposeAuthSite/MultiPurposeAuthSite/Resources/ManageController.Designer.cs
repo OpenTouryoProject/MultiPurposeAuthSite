@@ -19,7 +19,7 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class ManageController {
@@ -84,6 +84,24 @@ namespace MultiPurposeAuthSite.Resources {
         internal static string AddEmailSuccess {
             get {
                 return ResourceManager.GetString("AddEmailSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your FIDO2 data has been added. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string AddFIDO2DataSuccess {
+            get {
+                return ResourceManager.GetString("AddFIDO2DataSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your OAuth2 data has been added. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string AddOAuth2DataSuccess {
+            get {
+                return ResourceManager.GetString("AddOAuth2DataSuccess", resourceCulture);
             }
         }
         
@@ -201,6 +219,24 @@ namespace MultiPurposeAuthSite.Resources {
         internal static string RemoveExternalLoginSuccess {
             get {
                 return ResourceManager.GetString("RemoveExternalLoginSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your FIDO2 has been removed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string RemoveFIDO2DataSuccess {
+            get {
+                return ResourceManager.GetString("RemoveFIDO2DataSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your OAuth2 has been removed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        internal static string RemoveOAuth2DataSuccess {
+            get {
+                return ResourceManager.GetString("RemoveOAuth2DataSuccess", resourceCulture);
             }
         }
         

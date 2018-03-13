@@ -170,7 +170,9 @@ namespace MultiPurposeAuthSite.Models.Util
             string oauth_signature_method = "HMAC-SHA1";
 
             // unique request details
-            string oauth_nonce = Convert.ToBase64String(new ASCIIEncoding().GetBytes(DateTime.Now.Ticks.ToString()));
+            string oauth_nonce = CustomEncode.ToBase64String(
+                CustomEncode.StringToByte(DateTime.Now.Ticks.ToString(), CustomEncode.us_ascii));
+
             TimeSpan timeSpan = DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
             string oauth_timestamp = Convert.ToInt64(timeSpan.TotalSeconds).ToString();
 
@@ -201,10 +203,11 @@ namespace MultiPurposeAuthSite.Models.Util
                 Uri.EscapeDataString(oauth_token_secret));
 
             string oauth_signature;
-            using (HMACSHA1 hasher = new HMACSHA1(ASCIIEncoding.ASCII.GetBytes(compositeKey)))
+            using (HMACSHA1 hasher = new HMACSHA1(
+                CustomEncode.StringToByte(compositeKey, CustomEncode.us_ascii)))
             {
-                oauth_signature = Convert.ToBase64String(
-                    hasher.ComputeHash(ASCIIEncoding.ASCII.GetBytes(baseString)));
+                oauth_signature = CustomEncode.ToBase64String(
+                    hasher.ComputeHash(CustomEncode.StringToByte(baseString, CustomEncode.us_ascii)));
             }
 
             // create the request header
