@@ -168,10 +168,28 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             if (path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint2) == -1
                 && path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) != -1)
             {
-                // OpenID Connect : Authorization Code Flow, [response_type=code]に対応
-
-                //レスポンス内容を参照して書き換え
-                context.Response.Filter = new OpenIDConnectCodeFilter(context);
+                if (context.Request.Form["grant_type"] == ASPNETIdentityConst.RefreshTokenGrantType)
+                {
+                    // なにもしない
+                }
+                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ResourceOwnerPasswordCredentialsGrantType)
+                {
+                    // なにもしない
+                }
+                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ClientCredentialsGrantType)
+                {
+                    // Refresh Tokenの削除
+                    context.Response.Filter = new ClientCredentialsFilter(context);
+                }
+                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ImplicitGrantType)
+                {
+                    // ↓OnPreSendRequestHeadersで処理
+                }
+                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.AuthorizationCodeGrantType)
+                {
+                    // OpenID Connect の "response_type=code"に対応したレスポンスに書き換え
+                    context.Response.Filter = new OpenIDConnectCodeFilter(context);
+                }
             }
         }
 
