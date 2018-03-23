@@ -299,6 +299,7 @@
     <Compile Include="Models\ASPNETIdentity\ExternalLoginHelper\ExternalLoginStarter.cs" />
     <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FIDO2Helper.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\HashClaimType.cs" />
+    <Compile Include="Models\ASPNETIdentity\OIDCFilter\ClientCredentialsFilter.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\OpenIDConnectCodeFilter.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\OpenIDConnectModule.cs" />
     <Compile Include="Models\ASPNETIdentity\Manager\ApplicationRoleManager.cs" />

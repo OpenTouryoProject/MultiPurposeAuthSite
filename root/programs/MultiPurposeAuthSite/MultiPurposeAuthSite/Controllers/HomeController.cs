@@ -298,7 +298,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Implicit Flow 'id_token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.ImplicitResponseType));
+                ASPNETIdentityConst.OidcImplicit1_ResponseType));
         }
 
 
