@@ -37,7 +37,7 @@
 	
 	<!-- ローリング・ログファイル出力用アペンダ -->
 	<appender name="ACCESS" type="log4net.Appender.RollingFileAppender">
-		<param name="File" value="C:\root\files\resource\Log\ACCESS" />
+		<param name="File" value="C:\root\files\resource\MultiPurposeAuthSite\Log\ACCESS" />
 		<!-- ローリングの設定 -->
 		<param name="StaticLogFileName" value="false" />
 		<param name="RollingStyle" value="date " />
@@ -58,7 +58,7 @@
 		
 	<!-- ローリング・ログファイル出力用アペンダ -->
 	<appender name="SQLTRACE" type="log4net.Appender.RollingFileAppender">
-		<param name="File" value="C:\root\files\resource\Log\SQLTRACE" />
+		<param name="File" value="C:\root\files\resource\MultiPurposeAuthSite\Log\SQLTRACE" />
 		<!-- ローリングの設定 -->
 		<param name="StaticLogFileName" value="false" />
 		<param name="RollingStyle" value="date " />
@@ -79,7 +79,7 @@
 	
 	<!-- ローリング・ログファイル出力用アペンダ -->
 	<appender name="OPERATION" type="log4net.Appender.RollingFileAppender">
-		<param name="File" value="C:\root\files\resource\Log\OPERATION" />
+		<param name="File" value="C:\root\files\resource\MultiPurposeAuthSite\Log\OPERATION" />
 		<!-- ローリングの設定 -->
 		<param name="StaticLogFileName" value="false" />
 		<param name="RollingStyle" value="date " />
