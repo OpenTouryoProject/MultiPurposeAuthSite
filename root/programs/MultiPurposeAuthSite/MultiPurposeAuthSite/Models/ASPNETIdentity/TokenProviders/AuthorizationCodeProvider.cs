@@ -54,8 +54,7 @@ using Microsoft.Owin.Security.Infrastructure;
 using Dapper;
 using Newtonsoft.Json;
 
-using Touryo.Infrastructure.Public.IO;
-using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Framework.Authentication;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {
@@ -328,7 +327,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     else if (temp["code_challenge_method"].ToLower() == "s256")
                     {
                         // s256
-                        if (temp["code_challenge"] == OAuth2Helper.PKCE_S256_CodeChallengeMethod(code_verifier))
+                        if (temp["code_challenge"] == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
                         {
                             // 検証成功
                             return temp["ticket"];

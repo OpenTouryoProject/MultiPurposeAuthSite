@@ -42,6 +42,7 @@ using Microsoft.Owin.Security;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security;
@@ -87,19 +88,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             foreach (Claim c in ticket.Identity.Claims)
             {
-                if (c.Type == ASPNETIdentityConst.Claim_Issuer)
+                if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
                 {
                     authTokenClaimSet.Add("iss", c.Value);
                 }
-                else if (c.Type == ASPNETIdentityConst.Claim_Audience)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
                 {
                     authTokenClaimSet.Add("aud", c.Value);
                 }
-                else if (c.Type == ASPNETIdentityConst.Claim_Nonce)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
                 {
                     authTokenClaimSet.Add("nonce", c.Value);
                 }
-                else if (c.Type == ASPNETIdentityConst.Claim_Scope)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Scope)
                 {
                     scopes.Add(c.Value);
                 }
@@ -223,7 +224,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                     JArray scopes = (JArray)authTokenClaimSet["scopes"];
 
                     // ・OpenID Connect : response_type=codeに対応する。
-                    if (scopes.Any(x => x.ToString() == ASPNETIdentityConst.Scope_Openid))
+                    if (scopes.Any(x => x.ToString() == OAuth2AndOIDCConst.Scope_Openid))
                     {
                         //・payloadからscopeを削除する。
                         authTokenClaimSet.Remove("scopes");

@@ -44,6 +44,7 @@
 //*  2017/02/28  西野 大介         OnExceptionのErrorMessage生成処理の見直し。
 //*  2017/02/28  西野 大介         TransferErrorScreenメソッドを追加した。
 //*  2017/02/28  西野 大介         エラーログの見直し（その他の例外の場合、ex.ToString()を出力）
+//*  2018/07/19  西野 大介         復元後のユーザー情報をSessionに設定するコードを追加
 //**********************************************************************************
 
 using System;
@@ -361,29 +362,29 @@ namespace Touryo.Infrastructure.Business.Presentation
         #region OnException
 
         /// <summary>アクションでハンドルされない例外が発生したときに呼び出されます。</summary>
-        /// <param name="filterContext">
+        /// <param name="exceptionContext">
         /// 型: System.Web.Mvc.ResultExecutingContext
         /// 現在の要求およびアクション結果に関する情報。
         /// </param>
         /// <remarks>
         /// web.config に customErrors mode="on" を追記（無い場合は、OnExceptionメソッドが動かない 
         /// </remarks>
-        protected override void OnException(ExceptionContext filterContext)
+        protected override void OnException(ExceptionContext exceptionContext)
         {
             // Calling base class method.
-            base.OnException(filterContext);            
+            base.OnException(exceptionContext);            
             // エラーログの出力
-            this.OutputErrorLog(filterContext);
+            this.OutputErrorLog(exceptionContext);
             // エラー画面に画面遷移する
-            this.TransferErrorScreen(filterContext);
+            this.TransferErrorScreen(exceptionContext);
         }
 
         /// <summary>エラーログの出力</summary>
-        /// <param name="filterContext">ExceptionContext</param>
-        private void OutputErrorLog(ExceptionContext filterContext)
+        /// <param name="exceptionContext">ExceptionContext</param>
+        private void OutputErrorLog(ExceptionContext exceptionContext)
         {
             // 非同期ControllerのInnerException対策（底のExceptionを取得する）。
-            Exception ex = filterContext.Exception;
+            Exception ex = exceptionContext.Exception;
             Exception bottomException = ex;
             while (bottomException.InnerException != null)
             {
@@ -402,7 +403,7 @@ namespace Touryo.Infrastructure.Business.Presentation
             string strLogMessage =
                 "," + (this.UserInfo != null ? this.UserInfo.UserName : "null") +
                 "," + (this.UserInfo != null ? this.UserInfo.IPAddress : "null") +
-                "," + "----->>" +
+                "," + "<-----" +
                 "," + this.ControllerName +
                 "," + this.ActionName + "(OnException)" +
                 "," + //this.perfRec.ExecTime +
@@ -416,11 +417,11 @@ namespace Touryo.Infrastructure.Business.Presentation
         }
 
         /// <summary>例外発生時に、エラー画面に画面遷移</summary>
-        /// <param name="filterContext">ExceptionContext</param>
-        private void TransferErrorScreen(ExceptionContext filterContext)
+        /// <param name="exceptionContext">ExceptionContext</param>
+        private void TransferErrorScreen(ExceptionContext exceptionContext)
         {
             // 非同期ControllerのInnerException対策（底のExceptionを取得する）。
-            Exception ex = filterContext.Exception;
+            Exception ex = exceptionContext.Exception;
             Exception bottomException = ex;
             while (bottomException.InnerException != null)
             {
@@ -477,25 +478,25 @@ namespace Touryo.Infrastructure.Business.Presentation
 
             // Add Form information to Session
             Session[FxHttpContextIndex.FORMS_INFORMATION] = Request.Form;
-            
+
             #endregion
 
             #region  エラー画面へ画面遷移
 
-            filterContext.ExceptionHandled = true;
-            filterContext.HttpContext.Response.Clear();
+            exceptionContext.ExceptionHandled = true;
+            exceptionContext.HttpContext.Response.Clear();
 
-            if (filterContext.HttpContext.Request.IsAjaxRequest())
+            if (exceptionContext.HttpContext.Request.IsAjaxRequest())
             {
-                filterContext.Result = new JavaScriptResult() { Script = "location.href = '" + errorScreenPath + "'" };
+                exceptionContext.Result = new JavaScriptResult() { Script = "location.href = '" + errorScreenPath + "'" };
             }
-            else if (filterContext.IsChildAction)
+            else if (exceptionContext.IsChildAction)
             {
-                filterContext.Result = new ContentResult() { Content = "<script>location.href = '" + errorScreenPath + "'</script>" };
+                exceptionContext.Result = new ContentResult() { Content = "<script>location.href = '" + errorScreenPath + "'</script>" };
             }
             else
             {
-                filterContext.Result = new RedirectResult(errorScreenPath);
+                exceptionContext.Result = new RedirectResult(errorScreenPath);
             }
 
             #endregion
@@ -542,33 +543,32 @@ namespace Touryo.Infrastructure.Business.Presentation
             {
                 // 取得を試みる。
                 this.UserInfo = (MyUserInfo)UserInfoHandle.GetUserInformation();
-            }
 
-            // nullチェック
-            if (this.UserInfo == null)
-            {
-                // nullの場合、仮の値を生成 / 設定する。
-                string userName = System.Threading.Thread.CurrentPrincipal.Identity.Name;
-
-                if (userName == null || userName == "")
+                // nullチェック
+                if (this.UserInfo == null)
                 {
-                    // 未認証状態
-                    this.UserInfo = new MyUserInfo("未認証", this.HttpContext.Request.UserHostAddress);
-                }
-                else
-                {
-                    // 認証状態
-                    this.UserInfo = new MyUserInfo(userName, this.HttpContext.Request.UserHostAddress);
-                    // 必要に応じて認証チケットの
-                    // ユーザ名からユーザ情報を復元する。
-                }
-            }
-            else
-            {
-                // nullで無い場合、取得した値を設定する。
-            }
+                    // nullの場合、仮の値を生成 / 設定する。
+                    string userName = System.Threading.Thread.CurrentPrincipal.Identity.Name;
 
-            // ★ 必要であれば、他の業務共通引継ぎ情報などをロードする。
+                    if (userName == null || userName == "")
+                    {
+                        // 未認証状態
+                        this.UserInfo = new MyUserInfo("未認証", this.HttpContext.Request.UserHostAddress);
+                    }
+                    else
+                    {
+                        // 認証状態
+                        this.UserInfo = new MyUserInfo(userName, this.HttpContext.Request.UserHostAddress);
+
+                        // 必要に応じて認証チケットのユーザ名からユーザ情報を復元する。
+                        // ★ 必要であれば、他の業務共通引継ぎ情報などをロードする。
+                        // ・・・
+
+                        // 復元したユーザ情報をセット
+                        UserInfoHandle.SetUserInformation(this.UserInfo);
+                    }
+                }
+            }            
         }
 
         /// <summary>ルーティング情報を取得する</summary>

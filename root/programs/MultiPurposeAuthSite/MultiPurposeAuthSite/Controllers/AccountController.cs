@@ -2012,7 +2012,7 @@ namespace MultiPurposeAuthSite.Controllers
             // scopeパラメタ
             string[] scopes = (scope ?? "").Split(' ');
 
-            if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
+            if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
             {
                 // Authorization Codeグラント種別（仲介コードの発行）
                 ViewBag.Name = identity.Name;
@@ -2059,7 +2059,7 @@ namespace MultiPurposeAuthSite.Controllers
                     return View();
                 }
             }
-            else if ((response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType))
+            else if ((response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType))
                     // OIDC Implicit Flowはresponse_type=tokenに書換、識別できないので、prompt=noneを設定。
             {
                 // Implicitグラント種別（Access Tokenの発行）
@@ -2307,7 +2307,8 @@ namespace MultiPurposeAuthSite.Controllers
                         string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
                         string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                        model.Response = await OAuth2Helper.GetInstance().
+                            UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 

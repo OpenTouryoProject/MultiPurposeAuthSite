@@ -49,6 +49,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
@@ -98,19 +99,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             foreach (Claim c in ticket.Identity.Claims)
             {
-                if (c.Type == ASPNETIdentityConst.Claim_Issuer)
+                if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
                 {
                     authTokenClaimSet.Add("iss", c.Value);
                 }
-                else if (c.Type == ASPNETIdentityConst.Claim_Audience)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
                 {
                     authTokenClaimSet.Add("aud", c.Value);
                 }
-                else if (c.Type == ASPNETIdentityConst.Claim_Nonce)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
                 {
                     authTokenClaimSet.Add("nonce", c.Value);
                 }
-                else if (c.Type == ASPNETIdentityConst.Claim_Scope)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Scope)
                 {
                     scopes.Add(c.Value);
                 }
@@ -149,18 +150,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     {
                         #region OpenID Connect
 
-                        case ASPNETIdentityConst.Scope_Profile:
+                        case OAuth2AndOIDCConst.Scope_Profile:
                             // ・・・
                             break;
-                        case ASPNETIdentityConst.Scope_Email:
+                        case OAuth2AndOIDCConst.Scope_Email:
                             authTokenClaimSet.Add("email", user.Email);
                             authTokenClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
                             break;
-                        case ASPNETIdentityConst.Scope_Phone:
+                        case OAuth2AndOIDCConst.Scope_Phone:
                             authTokenClaimSet.Add("phone_number", user.PhoneNumber);
                             authTokenClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
                             break;
-                        case ASPNETIdentityConst.Scope_Address:
+                        case OAuth2AndOIDCConst.Scope_Address:
                             // ・・・
                             break;
 
@@ -278,10 +279,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 (string)authTokenClaimSet["aud"], "", scopes,　(string)authTokenClaimSet["nonce"]);
 
                             // その他、所定のClaimを追加する。
-                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
-                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
-                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
-                            identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
                             
                             // AuthenticationPropertiesの生成
                             AuthenticationProperties prop = new AuthenticationProperties();
@@ -318,10 +319,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                     (string)authTokenClaimSet["aud"], "", scopes, (string)authTokenClaimSet["nonce"]);
 
                                 // その他、所定のClaimを追加する。
-                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
-                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
-                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
-                                identity.AddClaim(new Claim(ASPNETIdentityConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
 
                                 // AuthenticationPropertiesの生成
                                 AuthenticationProperties prop = new AuthenticationProperties();

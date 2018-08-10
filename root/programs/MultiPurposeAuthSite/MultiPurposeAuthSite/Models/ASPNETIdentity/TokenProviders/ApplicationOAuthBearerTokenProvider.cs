@@ -46,6 +46,8 @@ using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
+
+using Touryo.Infrastructure.Framework.Authentication;
 /// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders</summary>
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {
@@ -93,16 +95,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // OIDC Implicit, Hybridの場合、書き換え
             if (ASPNETIdentityConfig.EnableOpenIDConnect)
             {
-                if (response_type.ToLower() == ASPNETIdentityConst.OidcImplicit1_ResponseType
-                    || response_type.ToLower() == ASPNETIdentityConst.OidcImplicit2_ResponseType
-                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType
-                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid2_Token_ResponseType
-                    || response_type.ToLower() == ASPNETIdentityConst.OidcHybrid3_ResponseType)
+                if (response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     // OIDC Implicit, Hybridの場合、書き換え
                     // Authorization Code Flowの場合は、codeなので書き換え不要。
                     // ※ この変数は、使用するredirect_uriを決定するだめダケに利用される。
-                    response_type = ASPNETIdentityConst.ImplicitResponseType;
+                    response_type = OAuth2AndOIDCConst.ImplicitResponseType;
 
                     // OIDC Implicit Flow、Hybrid Flowのパラメタチェック
 
@@ -132,7 +134,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             if (!string.IsNullOrEmpty(response_type))
             {
-                if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
+                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
                     {
@@ -143,7 +145,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         return Task.FromResult(0);
                     }
                 }
-                else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
                 {
                     if (!ASPNETIdentityConfig.EnableImplicitGrantType)
                     {
@@ -274,7 +276,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // 指定なし。
                 // 検証未完
             }
-            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.AuthorizationCodeGrantType)
+            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
             {
                 #region Authorization Codeグラント種別
 
@@ -294,7 +296,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.ResourceOwnerPasswordCredentialsGrantType)
+            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
             {
                 #region Resource Owner Password Credentialsグラント種別
 
@@ -321,7 +323,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.ClientCredentialsGrantType)
+            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
             {
                 #region Client Credentialsグラント種別
 
@@ -341,7 +343,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == ASPNETIdentityConst.RefreshTokenGrantType)
+            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
             {
                 #region RefreshToken
 

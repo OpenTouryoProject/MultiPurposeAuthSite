@@ -38,8 +38,7 @@ using System.Text.RegularExpressions;
 
 using System.Web;
 
-using Microsoft.Owin.Security;
-
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
@@ -168,24 +167,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             if (path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint2) == -1
                 && path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) != -1)
             {
-                if (context.Request.Form["grant_type"] == ASPNETIdentityConst.RefreshTokenGrantType)
+                if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
                     // なにもしない
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ResourceOwnerPasswordCredentialsGrantType)
+                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
                 {
                     // なにもしない
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ClientCredentialsGrantType)
+                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.ClientCredentialsGrantType)
                 {
                     // Refresh Tokenの削除
                     context.Response.Filter = new ClientCredentialsFilter(context);
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ImplicitGrantType)
+                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.ImplicitGrantType)
                 {
                     // ↓OnPreSendRequestHeadersで処理
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.AuthorizationCodeGrantType)
+                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
                 {
                     // OpenID Connect の "response_type=code"に対応したレスポンスに書き換え
                     context.Response.Filter = new OpenIDConnectCodeFilter(context);
@@ -249,11 +248,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                             // [response_type=id_token token]
                             is_id_token_token = responseType.StartsWith(
-                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType));
+                                CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcImplicit2_ResponseType));
                             if (!is_id_token_token)
                             {
                                 // [response_type=token]
-                                is_id_token = responseType.StartsWith(ASPNETIdentityConst.OidcImplicit1_ResponseType);
+                                is_id_token = responseType.StartsWith(OAuth2AndOIDCConst.OidcImplicit1_ResponseType);
                             }
 
                             // OIDC Hybrid
@@ -263,16 +262,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                             // [response_type=code id_token token]
                             is_code_id_token_token = responseType.StartsWith(
-                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid3_ResponseType));
+                                CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid3_ResponseType));
 
                             if (!is_code_id_token_token)
                             {
                                 // [response_type=code id_token]
                                 is_code_id_token = responseType.StartsWith(
-                                    CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType));
+                                    CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType));
                                 // [response_type=code token]
                                 is_code_token = responseType.StartsWith(
-                                    CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_Token_ResponseType));
+                                    CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType));
                             }
 
                             #endregion
@@ -286,15 +285,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 {
                                     this.RewritedResponseTypeFrom_IdToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + ASPNETIdentityConst.OidcImplicit1_ResponseType,
-                                        "response_type=" + ASPNETIdentityConst.ImplicitResponseType);
+                                        "response_type=" + OAuth2AndOIDCConst.OidcImplicit1_ResponseType,
+                                        "response_type=" + OAuth2AndOIDCConst.ImplicitResponseType);
                                 }
                                 else if (is_id_token_token)
                                 {
                                     this.RewritedResponseTypeFrom_IdTokenToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.ImplicitResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcImplicit2_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.ImplicitResponseType);
                                 }
                             }
                             else if (is_code_id_token || is_code_token || is_code_id_token_token)
@@ -304,22 +303,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 {
                                     this.RewritedResponseTypeFrom_CodeIdToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.AuthorizationCodeResponseType);
                                 }
                                 else if (is_code_token)
                                 {
                                     this.RewritedResponseTypeFrom_CodeToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_Token_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.AuthorizationCodeResponseType);
                                 }
                                 else if (is_code_id_token_token)
                                 {
                                     this.RewritedResponseTypeFrom_CodeIdTokenToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid3_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid3_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.AuthorizationCodeResponseType);
                                 }
                             }
                             else

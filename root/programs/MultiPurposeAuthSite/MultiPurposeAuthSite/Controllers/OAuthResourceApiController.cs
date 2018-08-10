@@ -115,7 +115,7 @@ namespace MultiPurposeAuthSite.Controllers
             // Claim情報を参照する。
             // iss, aud, expのチェックは、AccessTokenFormatJwt.Unprotectで実施済。
             ClaimsIdentity id = (ClaimsIdentity)User.Identity;
-            Claim claim_aud = id.FindFirst(ASPNETIdentityConst.Claim_Audience);
+            Claim claim_aud = id.FindFirst(OAuth2AndOIDCConst.Claim_Audience);
             
             // ユーザ認証を行なう。
             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -137,7 +137,7 @@ namespace MultiPurposeAuthSite.Controllers
             userinfoClaimSet.Add("sub", subject);
 
             // Scope
-            IEnumerable<Claim> claimScope = id.FindAll(ASPNETIdentityConst.Claim_Scope).AsEnumerable();
+            IEnumerable<Claim> claimScope = id.FindAll(OAuth2AndOIDCConst.Claim_Scope).AsEnumerable();
 
             // scope値によって、返す値を変更する。
             foreach (Claim scope in claimScope)
@@ -149,18 +149,18 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         #region OpenID Connect
 
-                        case ASPNETIdentityConst.Scope_Profile:
+                        case OAuth2AndOIDCConst.Scope_Profile:
                             // ・・・
                             break;
-                        case ASPNETIdentityConst.Scope_Email:
+                        case OAuth2AndOIDCConst.Scope_Email:
                             userinfoClaimSet.Add("email", user.Email);
                             userinfoClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
                             break;
-                        case ASPNETIdentityConst.Scope_Phone:
+                        case OAuth2AndOIDCConst.Scope_Phone:
                             userinfoClaimSet.Add("phone_number", user.PhoneNumber);
                             userinfoClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
                             break;
-                        case ASPNETIdentityConst.Scope_Address:
+                        case OAuth2AndOIDCConst.Scope_Address:
                             // ・・・
                             break;
 
@@ -256,7 +256,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 // jtiの取り出し
                                 Claim jti = ticket.Identity.Claims.Where(
-                                    x => x.Type == ASPNETIdentityConst.Claim_JwtId).FirstOrDefault<Claim>();
+                                    x => x.Type == OAuth2AndOIDCConst.Claim_JwtId).FirstOrDefault<Claim>();
 
                                 // access_token取消
                                 OAuth2RevocationProvider.GetInstance().Create(jti.Value);
@@ -385,21 +385,21 @@ namespace MultiPurposeAuthSite.Controllers
                                 string scopes = "";
                                 foreach (Claim claim in ticket.Identity.Claims)
                                 {
-                                    if (claim.Type.StartsWith(ASPNETIdentityConst.Claim_Base))
+                                    if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
                                     {
-                                        if (claim.Type == ASPNETIdentityConst.Claim_Scope)
+                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scope)
                                         {
                                             scopes += claim.Value + " ";
                                         }
                                         else
                                         {
                                             ret.Add(claim.Type.Substring(
-                                                ASPNETIdentityConst.Claim_Base.Length), claim.Value);
+                                                OAuth2AndOIDCConst.Claim_Base.Length), claim.Value);
                                         }
                                     }
                                 }
-                                ret.Add(ASPNETIdentityConst.Claim_Scope.Substring(
-                                    ASPNETIdentityConst.Claim_Base.Length), scopes.Trim());
+                                ret.Add(OAuth2AndOIDCConst.Claim_Scope.Substring(
+                                    OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
 
                                 return ret; // 成功
                             }
@@ -426,21 +426,21 @@ namespace MultiPurposeAuthSite.Controllers
                                 string scopes = "";
                                 foreach (Claim claim in ticket.Identity.Claims)
                                 {
-                                    if (claim.Type.StartsWith(ASPNETIdentityConst.Claim_Base))
+                                    if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
                                     {
-                                        if (claim.Type == ASPNETIdentityConst.Claim_Scope)
+                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scope)
                                         {
                                             scopes += claim.Value + " ";
                                         }
                                         else
                                         {
                                             ret.Add(claim.Type.Substring(
-                                                ASPNETIdentityConst.Claim_Base.Length), claim.Value);
+                                                OAuth2AndOIDCConst.Claim_Base.Length), claim.Value);
                                         }
                                     }
                                 }
-                                ret.Add(ASPNETIdentityConst.Claim_Scope.Substring(
-                                    ASPNETIdentityConst.Claim_Base.Length), scopes.Trim());
+                                ret.Add(OAuth2AndOIDCConst.Claim_Scope.Substring(
+                                    OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
 
                                 return ret; // 成功
                             }
@@ -505,7 +505,7 @@ namespace MultiPurposeAuthSite.Controllers
             string assertion = formData["assertion"];
 
             // クライアント認証
-            if (grant_type == ASPNETIdentityConst.JwtBearerTokenFlowGrantType)
+            if (grant_type == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
             {
                 Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(

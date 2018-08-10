@@ -175,7 +175,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType));
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
         }
 
         /// <summary>Test Authorization Code Flow (form_post)</summary>
@@ -188,7 +188,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (form_post)
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&response_mode=form_post");
         }
 
@@ -206,7 +206,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none");
         }
 
@@ -220,7 +220,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (OIDC, form_post)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none"
                 + "&response_mode=form_post");
         }
@@ -241,7 +241,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (PKCE plain)
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
                 + "&code_challenge_method=plain");
         }
@@ -253,12 +253,12 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.Init();
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
-            this.CodeChallenge = OAuth2Helper.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
+            this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
             this.Save();
 
             // Authorization Code Flow (PKCE S256)
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
                 + "&code_challenge_method=S256");
         }
@@ -281,7 +281,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Implicit Flow
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.ImplicitResponseType));
+                OAuth2AndOIDCConst.ImplicitResponseType));
         }
 
         #endregion
@@ -298,7 +298,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Implicit Flow 'id_token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcImplicit1_ResponseType));
+                OAuth2AndOIDCConst.OidcImplicit1_ResponseType));
         }
 
 
@@ -312,7 +312,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Implicit Flow 'id_token token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcImplicit2_ResponseType));
+                OAuth2AndOIDCConst.OidcImplicit2_ResponseType));
         }
 
         #endregion
@@ -333,7 +333,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybrid Flow 'code id_token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType));
+                OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType));
         }
 
         /// <summary>Test Hybrid Flow 'code token'(OIDC)</summary>
@@ -346,7 +346,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybrid Flow 'code token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcHybrid2_Token_ResponseType));
+                OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType));
         }
 
         /// <summary>Test Hybrid Flow 'code id_token token'(OIDC)</summary>
@@ -359,7 +359,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybrid Flow 'code id_token token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcHybrid3_ResponseType));
+                OAuth2AndOIDCConst.OidcHybrid3_ResponseType));
         }
 
         #endregion
@@ -397,7 +397,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             string response = await OAuth2Helper.GetInstance()
-                .ClientCredentialsFlowAsync(new Uri(
+                .ClientCredentialsGrantAsync(new Uri(
                     ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
                      + ASPNETIdentityConfig.OAuthBearerTokenEndpoint),
                      client_id, client_secret, ASPNETIdentityConst.StandardScopes);
