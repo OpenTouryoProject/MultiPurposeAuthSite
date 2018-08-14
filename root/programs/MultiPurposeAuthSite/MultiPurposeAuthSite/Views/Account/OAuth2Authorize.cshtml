@@ -20,7 +20,7 @@
     #endregion
 
     //**********************************************************************************
-    //* クラス名        ：OAuthAuthorize
+    //* クラス名        ：OAuth2Authorize
     //* クラス日本語名  ：認可の要求用のView
     //*
     //* 作成日時        ：－
@@ -35,7 +35,7 @@
 
 @using MultiPurposeAuthSite.Resources;
 @{
-    ViewBag.Title = AccountViews.OAuthAuthorizeTitle;
+    ViewBag.Title = AccountViews.OAuth2AuthorizeTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -51,8 +51,8 @@
         <form method="POST">
             @Html.AntiForgeryToken() @*追加*@
 
-            <p>@AccountViews.OAuthAuthorizeP1 @Html.Label("name", (string)ViewBag.Name)</p>
-            <p>@AccountViews.OAuthAuthorizeP2</p>
+            <p>@AccountViews.OAuth2AuthorizeP1 @Html.Label("name", (string)ViewBag.Name)</p>
+            <p>@AccountViews.OAuth2AuthorizeP2</p>
             <ul>
                 @foreach (string scope in ViewBag.Scopes)
                 {
@@ -60,8 +60,8 @@
                 }
             </ul>
             <p>
-                <input class="btn btn-default" type="submit" name="submit.Grant" value="@AccountViews.OAuthAuthorizeGrantButton" />
-                <input class="btn btn-default" type="submit" name="submit.Login" value="@AccountViews.OAuthAuthorizeSIDUButton" />
+                <input class="btn btn-default" type="submit" name="submit.Grant" value="@AccountViews.OAuth2AuthorizeGrantButton" />
+                <input class="btn btn-default" type="submit" name="submit.Login" value="@AccountViews.OAuth2AuthorizeSIDUButton" />
             </p>
         </form>
     </div>

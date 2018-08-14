@@ -179,15 +179,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     {
                         // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
                         context.Validated(
-                            ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account);
+                            ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Account);
                     }
                     else if (redirect_uri.ToLower() == "test_self_token")
                     {
                         // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                         context.Validated(
-                            ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account);
+                            ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2ImplicitGrantClient_Account);
                     }
                     else if (redirect_uri.ToLower() == "id_federation_code")
                     {
@@ -212,7 +212,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // 指定されたredirect_uriを使用する場合は、チェックが必要になる。
                 if (
                     // self_code : Authorization Codeグラント種別
-                    redirect_uri == (ASPNETIdentityConfig.OAuthClientEndpointsRootURI + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage)
+                    redirect_uri == (ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Manage)
                 )
                 {
                     // 不特定多数のクライアント識別子に許可されたredirect_uri
@@ -395,7 +395,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn343587.aspx"/>
         public override async Task GrantResourceOwnerCredentials(OAuthGrantResourceOwnerCredentialsContext context)
         {
-            if (!ASPNETIdentityConfig.EnableResourceOwnerCredentialsGrantType)
+            if (!ASPNETIdentityConfig.EnableResourceOwnerPasswordCredentialsGrantType)
             {
                 throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableResourceOwnerCredentialsGrantType);
             }

@@ -21,7 +21,7 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuthAuthorizationCodeGrantClientViewModel
+//* クラス名        ：OAuth2AuthorizationCodeGrantClientViewModel
 //* クラス日本語名  ：Claimを返すための共通ViewModel
 //*
 //* 作成日時        ：－
@@ -39,9 +39,9 @@ using System.ComponentModel.DataAnnotations;
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
 {
-    /// <summary>OAuthAuthorizationCodeGrantClient画面のViewModel（ライブラリ）</summary>
+    /// <summary>OAuth2AuthorizationCodeGrantClient画面のViewModel（ライブラリ）</summary>
     [Serializable]
-    public class OAuthAuthorizationCodeGrantClientViewModel : BaseViewModel
+    public class OAuth2AuthorizationCodeGrantClientViewModel : BaseViewModel
     {
         /// <summary>State</summary>
         [Display(Name = "State")]

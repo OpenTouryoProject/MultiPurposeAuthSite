@@ -301,7 +301,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                         // Open-Redirect対策
                                         if (!string.IsNullOrEmpty(model.ReturnUrl)
-                                            && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                            && ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
                                         {
                                             return RedirectToLocal(model.ReturnUrl);
                                         }
@@ -369,8 +369,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 認可エンドポイント
                     string oAuthAuthorizeEndpoint =
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint;
 
                     // client_id
                     string client_id = OAuth2AndOIDCParams.ClientID;
@@ -482,7 +482,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // Open-Redirect対策
                                     if (!string.IsNullOrEmpty(model.ReturnUrl)
-                                        && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                        && ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
                                     {
                                         return RedirectToLocal(model.ReturnUrl);
                                     }
@@ -1753,7 +1753,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
-                OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
+                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
                 {
                     State = state,
                     Code = code
@@ -2000,7 +2000,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state,
+        public async Task<ActionResult> OAuth2Authorize(string response_type, string client_id, string scope, string state,
             string nonce, string prompt, // OpenID Connect
             string code_challenge, string code_challenge_method) // OAuth PKCE
         {
@@ -2110,7 +2110,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuthAuthorize(string client_id, string scope, string state, string nonce)
+        public async Task<ActionResult> OAuth2Authorize(string client_id, string scope, string state, string nonce)
         {
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -2175,7 +2175,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
         [AllowAnonymous]
-        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
             #region テスト用
 
@@ -2205,12 +2205,12 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
-                OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
+                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
                 {
                     State = state,
                     Code = code
@@ -2229,8 +2229,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 仲介コードからAccess Tokenを取得する。
                     string redirect_uri
-                    = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account;
+                    = ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Account;
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await OAuth2Helper.GetInstance()
@@ -2278,7 +2278,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient2(OAuthAuthorizationCodeGrantClientViewModel model)
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
         {
             if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
             {
@@ -2298,8 +2298,8 @@ namespace MultiPurposeAuthSite.Controllers
                         #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                         Uri tokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
 
                         // Tokenエンドポイントにアクセス
 
@@ -2348,8 +2348,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         Uri revokeTokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthRevokeTokenWebAPI);
+                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2RevokeTokenWebAPI);
 
                         // Revokeエンドポイントにアクセス
 
@@ -2384,8 +2384,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         Uri introspectTokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthIntrospectTokenWebAPI);
+                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2IntrospectTokenWebAPI);
 
                         // Introspectエンドポイントにアクセス
 
@@ -2406,7 +2406,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 画面の表示。
                 ModelState.Clear();
-                return View("OAuthAuthorizationCodeGrantClient", model);
+                return View("OAuth2AuthorizationCodeGrantClient", model);
             }
             else
             {
@@ -2433,7 +2433,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#implicit-authz-resp"/>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult OAuthImplicitGrantClient()
+        public ActionResult OAuth2ImplicitGrantClient()
         {
             if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
             {

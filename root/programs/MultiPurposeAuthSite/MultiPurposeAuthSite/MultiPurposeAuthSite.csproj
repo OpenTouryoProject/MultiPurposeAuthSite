@@ -287,7 +287,7 @@
     <Compile Include="Controllers\ErrorController.cs" />
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ManageController.cs" />
-    <Compile Include="Controllers\OAuthResourceApiController.cs" />
+    <Compile Include="Controllers\OAuth2ResourceApiController.cs" />
     <Compile Include="Controllers\PingController.cs" />
     <Compile Include="Controllers\RolesAdminController.cs" />
     <Compile Include="Controllers\UsersAdminController.cs" />
@@ -354,7 +354,7 @@
     <Compile Include="Models\ViewModels\ManageAddPaymentInformationViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageSetPasswordViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageVerifyPhoneNumberViewModel.cs" />
-    <Compile Include="Models\ViewModels\OAuthAuthorizationCodeGrantClientViewModel.cs" />
+    <Compile Include="Models\ViewModels\OAuth2AuthorizationCodeGrantClientViewModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Resources\AccountController.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -481,9 +481,9 @@
     <Content Include="Views\Account\ForgotPassword.cshtml" />
     <Content Include="Views\Account\ForgotPasswordConfirmation.cshtml" />
     <Content Include="Views\Account\Login.cshtml" />
-    <Content Include="Views\Account\OAuthAuthorizationCodeGrantClient.cshtml" />
-    <Content Include="Views\Account\OAuthAuthorize.cshtml" />
-    <Content Include="Views\Account\OAuthImplicitGrantClient.cshtml" />
+    <Content Include="Views\Account\OAuth2AuthorizationCodeGrantClient.cshtml" />
+    <Content Include="Views\Account\OAuth2Authorize.cshtml" />
+    <Content Include="Views\Account\OAuth2ImplicitGrantClient.cshtml" />
     <Content Include="Views\Account\Register.cshtml" />
     <Content Include="Views\Account\ResetPassword.cshtml" />
     <Content Include="Views\Account\ResetPasswordConfirmation.cshtml" />
@@ -516,12 +516,12 @@
     <Content Include="Views\Manage\ChangeEmail.cshtml" />
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
-    <Content Include="Views\Manage\OAuthAuthorizationCodeGrantClient.cshtml" />
+    <Content Include="Views\Manage\OAuth2AuthorizationCodeGrantClient.cshtml" />
     <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Manage\AddFIDO2Data.cshtml" />
-    <Content Include="Views\Home\OAuthStarters.cshtml" />
-    <Content Include="Views\Home\OAuthClientAuthenticationFlow.cshtml" />
+    <Content Include="Views\Home\OAuth2Starters.cshtml" />
+    <Content Include="Views\Home\OAuth2ClientAuthenticationFlow.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

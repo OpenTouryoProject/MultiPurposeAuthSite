@@ -62,10 +62,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #region member variable
 
         /// <summary>Singleton (instance)</summary>
-        private static OAuth2Helper _oAuthHelper = new OAuth2Helper();
+        private static OAuth2Helper _oAuth2Helper = new OAuth2Helper();
 
         /// <summary>クライアント識別子情報</summary>
-        private Dictionary<string, Dictionary<string, string>> _oauthClientsInfo = null;
+        private Dictionary<string, Dictionary<string, string>> _oauth2ClientsInfo = null;
 
         /// <summary>
         /// OAuth Server
@@ -80,7 +80,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// https://techinfoofmicrosofttech.osscons.jp/index.php?HttpClient%E3%81%AE%E9%A1%9E%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9#l0c18008
         /// Singletonで使うので、ここではstaticではない。
         /// </remarks>
-        private HttpClient _oAuthHttpClient = null;
+        private HttpClient _oAuth2HttpClient = null;
 
         #endregion
 
@@ -90,13 +90,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         private OAuth2Helper()
         {
             // クライアント識別子情報
-            this._oauthClientsInfo =
-                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(ASPNETIdentityConfig.OAuthClientsInformation);
+            this._oauth2ClientsInfo =
+                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(ASPNETIdentityConfig.OAuth2ClientsInformation);
             // OAuth ServerにアクセスするためのHttpClient
-            this._oAuthHttpClient = HttpClientBuilder(EnumProxyType.Intranet);
+            this._oAuth2HttpClient = HttpClientBuilder(EnumProxyType.Intranet);
 
             // ライブラリを使用
-            OAuth2AndOIDCClient.HttpClient = this._oAuthHttpClient;
+            OAuth2AndOIDCClient.HttpClient = this._oAuth2HttpClient;
         }
 
         #endregion
@@ -106,22 +106,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <summary>
         /// OauthClientsInfo
         /// </summary>
-        private Dictionary<string, Dictionary<string, string>> OauthClientsInfo
+        private Dictionary<string, Dictionary<string, string>> Oauth2ClientsInfo
         {
             get
             {
-                return this._oauthClientsInfo;
+                return this._oauth2ClientsInfo;
             }
         }
 
         /// <summary>
         /// OAuthHttpClient
         /// </summary>
-        private HttpClient OAuthHttpClient
+        private HttpClient OAuth2HttpClient
         {
             get
             {
-                return this._oAuthHttpClient;
+                return this._oAuth2HttpClient;
             }
         }
 
@@ -133,7 +133,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <returns>OAuthHelper</returns>
         public static OAuth2Helper GetInstance()
         {
-            return OAuth2Helper._oAuthHelper;
+            return OAuth2Helper._oAuth2Helper;
         }
 
         #endregion
@@ -251,8 +251,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri userInfoUri = new Uri(
-                ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI);
+                ASPNETIdentityConfig.OAuth2ResourceServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI);
 
             return await OAuth2AndOIDCClient.CallUserInfoEndpointAsync(userInfoUri, accessToken);
         }
@@ -317,14 +317,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="currency">通貨</param>
         /// <param name="amount">料金</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> CallOAuthChageToUserWebAPIAsync(
+        public async Task<string> CallOAuth2ChageToUserWebAPIAsync(
             string accessToken, string currency, string amount)
         {
             // 通信用の変数
 
             // 課金用のWebAPI
             Uri webApiEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
                 + ASPNETIdentityConfig.TestChageToUserWebAPI);
 
             HttpRequestMessage httpRequestMessage = null;
@@ -348,7 +348,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
             // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            httpResponseMessage = await _oAuth2HttpClient.SendAsync(httpRequestMessage);
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
@@ -368,9 +368,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             client_id = client_id ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.OauthClientsInfo[client_id]["client_secret"];
+                return this.Oauth2ClientsInfo[client_id]["client_secret"];
             }
 
             // oAuth2Dataを検索
@@ -399,15 +399,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             response_type = response_type ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
                 if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
-                    return this.OauthClientsInfo[client_id]["redirect_uri_code"];
+                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
                 }
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
                 {
-                    return this.OauthClientsInfo[client_id]["redirect_uri_token"];
+                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
                 }
             }
 
@@ -439,9 +439,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             client_id = client_id ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.OauthClientsInfo[client_id]["jwt_assertion_publickey"];
+                return this.Oauth2ClientsInfo[client_id]["jwt_assertion_publickey"];
             }
 
             // oAuth2Dataを検索
@@ -474,9 +474,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             client_id = client_id ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.OauthClientsInfo[client_id]["client_name"];
+                return this.Oauth2ClientsInfo[client_id]["client_name"];
             }
 
             // oAuth2Dataを検索
@@ -495,10 +495,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public string GetClientIdByName(string clientName)
         {
             // *.config内を検索
-            foreach (string clientId in this.OauthClientsInfo.Keys)
+            foreach (string clientId in this.Oauth2ClientsInfo.Keys)
             {
                 Dictionary<string, string> client
-                    = this.OauthClientsInfo[clientId];
+                    = this.Oauth2ClientsInfo[clientId];
 
                 string temp = client["client_name"];
                 if (temp.ToLower() == clientName.ToLower())
@@ -567,7 +567,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             #region 標準
 
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, ASPNETIdentityConfig.OAuthIssuerId));
+            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, ASPNETIdentityConfig.OAuth2IssuerId));
             claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Audience, client_id));
 
             foreach (string scope in scopes)

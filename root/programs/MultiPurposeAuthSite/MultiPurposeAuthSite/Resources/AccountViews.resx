@@ -198,19 +198,19 @@
   <data name="LoginTitle" xml:space="preserve">
     <value>Sign-in</value>
   </data>
-  <data name="OAuthAuthorizeGrantButton" xml:space="preserve">
+  <data name="OAuth2AuthorizeGrantButton" xml:space="preserve">
     <value>Grant</value>
   </data>
-  <data name="OAuthAuthorizeP1" xml:space="preserve">
+  <data name="OAuth2AuthorizeP1" xml:space="preserve">
     <value>Hello,</value>
   </data>
-  <data name="OAuthAuthorizeP2" xml:space="preserve">
+  <data name="OAuth2AuthorizeP2" xml:space="preserve">
     <value>A third party application want to do the following on your behalf:</value>
   </data>
-  <data name="OAuthAuthorizeSIDUButton" xml:space="preserve">
+  <data name="OAuth2AuthorizeSIDUButton" xml:space="preserve">
     <value>Sign in as different user</value>
   </data>
-  <data name="OAuthAuthorizeTitle" xml:space="preserve">
+  <data name="OAuth2AuthorizeTitle" xml:space="preserve">
     <value>Authorization of resource access.</value>
   </data>
   <data name="RegisterH4" xml:space="preserve">

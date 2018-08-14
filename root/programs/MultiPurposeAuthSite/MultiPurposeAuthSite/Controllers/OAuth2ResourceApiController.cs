@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuthResourceApiController
-//* クラス日本語名  ：OAuthResourceServerのApiController
+//* クラス名        ：OAuth2ResourceApiController
+//* クラス日本語名  ：OAuth2ResourceServerのApiController
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -40,6 +40,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using System;
+using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Claims;
@@ -48,6 +49,9 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Web.Http;
 using System.Web.Http.Cors;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
@@ -57,14 +61,16 @@ using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Framework.Presentation;
 using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
 {
-    /// <summary>OAuthResourceServerのApiController（ライブラリ）</summary>
+    /// <summary>OAuth2ResourceServerのApiController（ライブラリ）</summary>
     [EnableCors(
         // リソースへのアクセスを許可されている発生元
         origins: "*",
@@ -74,12 +80,12 @@ namespace MultiPurposeAuthSite.Controllers
         methods: "*",
         // 
         SupportsCredentials = true)]
-    public class OAuthResourceApiController : ApiController
+    public class OAuth2ResourceApiController : ApiController
     {
         #region constructor
 
         /// <summary>constructor</summary>
-        public OAuthResourceApiController()
+        public OAuth2ResourceApiController()
         {
         }
 
@@ -99,7 +105,7 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region WebAPI
-
+        
         #region /userinfo
 
         /// <summary>
@@ -478,11 +484,11 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region /OAuthBearerToken2 
+        #region /OAuth2BearerToken2 
 
         /// <summary>
         /// JWT bearer token authorizationグラント種別のTokenエンドポイント
-        /// POST: /OAuthBearerToken2
+        /// POST: /OAuth2BearerToken2
         /// </summary>
         /// <param name="formData">
         /// grant_type = urn:ietf:params:oauth:grant-type:jwt-bearer
@@ -490,9 +496,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        [Route("OAuthBearerToken2")]
+        [Route("OAuth2BearerToken2")]
         //[Authorize]
-        public Dictionary<string, string> OAuthBearerToken2(FormDataCollection formData)
+        public Dictionary<string, string> OAuth2BearerToken2(FormDataCollection formData)
         {
             // 戻り値
             // ・正常
@@ -524,8 +530,8 @@ namespace MultiPurposeAuthSite.Controllers
                     if (JwtAssertion.VerifyJwtBearerTokenFlowAssertion(assertion, out iss, out aud, out scopes, out jobj, pubKey))
                     {
                         // aud 検証
-                        if (aud == ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2)
+                        if (aud == ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2)
                         {
                             // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
                             ClaimsIdentity identity = OAuth2Helper.AddClaim(
@@ -533,7 +539,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             AuthenticationProperties prop = new AuthenticationProperties();
                             prop.IssuedUtc = DateTimeOffset.UtcNow;
-                            prop.ExpiresUtc = DateTimeOffset.Now.Add(ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes);
+                            prop.ExpiresUtc = DateTimeOffset.Now.Add(ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes);
 
                             // token_type
                             ret.Add("token_type", "bearer");
@@ -610,8 +616,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Tokenエンドポイントにアクセス
             Uri tokenEndpointUri = new Uri(
-            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-            + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+            + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
 
             // 結果を格納する変数。
             Dictionary<string, string> dic = null;
@@ -622,8 +628,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybridは、Implicitのredirect_uriを使用
             string redirect_uri 
-                = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthImplicitGrantClient_Account;
+                = ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
+                + ASPNETIdentityConfig.OAuth2ImplicitGrantClient_Account;
 
             // Tokenエンドポイントにアクセス
             string response = await OAuth2Helper.GetInstance()

@@ -22,12 +22,10 @@
     #endregion
 
     //**********************************************************************************
-    //* クラス名        ：OAuthClientAuthenticationFlow
-    //* クラス日本語名  ：OAuthClientAuthenticationFlow（テスト用）
-    //* ・この画面は、OAuth2 Client Authentication Flowのテスト用画面です。
-    //*   テストのためこの画面はbearer tokenを露見させます。本番環境にこの画面を提供しないで下さい。
-    //* ・This screen is the test screen of OAuth2 Client Authentication Flow.
-    //*   This screen exposes bearer token for testing. Do not provide this screen for production environment.
+    //* クラス名        ：OAuth2ImplicitGrantClient
+    //* クラス日本語名  ：OAuth2ImplicitGrantClient（テスト用）
+    //* ・この画面は、OAuth2のテスト用画面です。テストのためこの画面はbearer tokenを露見させます。本番環境にこの画面を提供しないで下さい。
+    //* ・This screen is the test screen of OAuth 2. This screen exposes bearer token for testing. Do not provide this screen for production environment.
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -35,13 +33,13 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2017/12/26  西野 大介         新規
+    //*  2017/04/24  西野 大介         新規
     //**********************************************************************************
 *@
 
 @using MultiPurposeAuthSite.Models.ASPNETIdentity
 @{
-    ViewBag.Title = "OAuthClientAuthenticationFlow";
+    ViewBag.Title = "OAuth2ImplicitGrantClient";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -52,8 +50,10 @@
 <h2>@ViewBag.Title.</h2>
 <div class="row">
     <div class="col-md-8">
-        <p><a class="btn btn-default" href="#" id="OAuthGetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-default" href="#" id="OAuthGetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-default" href="#" id="TestHybridFlowWebAPI" url="@(ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.TestHybridFlowWebAPI)">Test hybrid flow</a></p>
         <br />
+        <div id="debug"></div>
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
         <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
@@ -67,22 +67,25 @@
     <script type="text/javascript">
 
         var fragment = "";
-        var token = "";
 
-        function CallOAuthAPI(url, httpMethod, postdata) {
+        function CallOAuthAPI(url, httpMethod, token, postData) {
             alert(
                 "<httpMethod>" + "\n" + httpMethod + "\n" +
                 "<url>" + "\n" + url + "\n" +
                 "<token>" + "\n" + token);
 
+            var authorizationHeaders = null;
+
+            if (fragment.access_token) {
+                authorizationHeaders = { 'Authorization': 'Bearer ' + fragment.access_token };
+            }
+
             $.ajax({
                 type: httpMethod,
                 url: url,
                 crossDomain: true,
-                headers: {
-                    'Authorization': 'Bearer ' + token
-                },
-                data: postdata,
+                headers: authorizationHeaders,
+                data: postData,
                 xhrFields: {
                     withCredentials: true
                 },
@@ -96,19 +99,34 @@
         }
 
         $(function () {
-            // Response
-            alert(JSON.stringify('@ViewBag.Response'));
 
-            // access_token
-            // access_token (Bearer Token) を使用して
-            // ResourceServerのWebAPIにアクセスする。
-            token = '@ViewBag.AccessToken';
+            // フラグメントを取得し、
+            fragment = getFragment();
+            
+            //alert("location.hash : " + window.location.hash);
+            //alert("Objected fragment : " + JSON.stringify(fragment));
+            
+            document.getElementById("debug").innerHTML
+                = "Objected fragment : " + JSON.stringify(fragment);
+
+            // 「access_token」（Bearer Token）が
+            // "露見"しないようwindow.location.hashを消去。
+            // ~~~~~~
+            window.location.hash = fragment.state || '';
 
             // OAuthGetUserClaimsWebAPI
+            //   access_token (Bearer Token) を使用して
+            //   AuthorizationServerのWebAPIにアクセスする。
             $('#OAuthGetUserClaimsWebAPI').on('click', function () {
-                CallOAuthAPI($('#OAuthGetUserClaimsWebAPI').attr("url"), 'get', null)
+                CallOAuthAPI($('#OAuthGetUserClaimsWebAPI').attr("url"), 'get', fragment.access_token, null)
             });
 
+            // TestHybridFlowWebAPI
+            //   Hybridのテスト用のAuthorizationServerのWebAPIにアクセスする。
+            $('#TestHybridFlowWebAPI').on('click', function () {
+                CallOAuthAPI($('#TestHybridFlowWebAPI').attr("url"), 'post', null, 'code=' + fragment.code)
+            });
         });
+
     </script>
 }

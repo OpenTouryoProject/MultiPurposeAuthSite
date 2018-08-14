@@ -22,8 +22,8 @@
     #endregion
 
     //**********************************************************************************
-    //* クラス名        ：OAuthAuthorizationCodeGrantClient
-    //* クラス日本語名  ：OAuthAuthorizationCodeGrantClient（テスト用）
+    //* クラス名        ：OAuth2AuthorizationCodeGrantClient
+    //* クラス日本語名  ：OAuth2AuthorizationCodeGrantClient（テスト用）
     //* ・この画面は、OAuth2のテスト用画面です。テストのためこの画面はbearer tokenを露見させます。本番環境にこの画面を提供しないで下さい。
     //* ・This screen is the test screen of OAuth 2. This screen exposes bearer token for testing. Do not provide this screen for production environment.
     //*
@@ -40,9 +40,9 @@
 @*@using MultiPurposeAuthSite.Models.ASPNETIdentity*@
 @using MultiPurposeAuthSite.Models.ViewModels
 
-@model OAuthAuthorizationCodeGrantClientViewModel
+@model OAuth2AuthorizationCodeGrantClientViewModel
 @{
-    ViewBag.Title = "OAuthAuthorizationCodeGrantClient";
+    ViewBag.Title = "OAuth2AuthorizationCodeGrantClient";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -52,7 +52,7 @@
 
 <h2>@ViewBag.Title.</h2>
 <hr />
-@using (Html.BeginForm("OAuthAuthorizationCodeGrantClient2", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+@using (Html.BeginForm("OAuth2AuthorizationCodeGrantClient2", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
 {
     @Html.AntiForgeryToken()
 

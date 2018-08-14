@@ -104,8 +104,8 @@ namespace MultiPurposeAuthSite.Controllers
         private void Init()
         {
             this.OAuthAuthorizeEndpoint =
-            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-            + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+            + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint;
 
             this.ClientId = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
@@ -156,7 +156,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>OAuthStarters</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult OAuthStarters()
+        public ActionResult OAuth2Starters()
         {
             return View();
         }
@@ -243,7 +243,7 @@ namespace MultiPurposeAuthSite.Controllers
             return Redirect(this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=plain");
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain);
         }
 
         /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
@@ -260,7 +260,7 @@ namespace MultiPurposeAuthSite.Controllers
             return Redirect(this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=S256");
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256);
         }
 
         #endregion
@@ -376,8 +376,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestClientCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
-            string aud = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint;
+            string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint;
 
             // ClientNameから、client_id, client_secretを取得。
             string client_id = "";
@@ -398,14 +398,14 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await OAuth2Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint),
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint),
                      client_id, client_secret, ASPNETIdentityConst.StandardScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
 
-            return View("OAuthClientAuthenticationFlow");
+            return View("OAuth2ClientAuthenticationFlow");
         }
 
         #endregion
@@ -418,8 +418,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Token2エンドポイントにアクセス
-            string aud = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2;
+            string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2;
 
             // ClientNameから、client_id(iss)を取得。
             string iss = "";
@@ -436,20 +436,20 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // テストなので秘密鍵は共通とする。
-            string privateKey = GetConfigParameter.GetConfigValue("OAuth2JwtAssertionPrivatekey");
+            string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
             privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
 
             string response = await OAuth2Helper.GetInstance()
                 .JwtBearerTokenFlowAsync(new Uri(
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2),
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2),
                      JwtAssertion.CreateJwtBearerTokenFlowAssertion(
                          iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
 
-            return View("OAuthClientAuthenticationFlow");
+            return View("OAuth2ClientAuthenticationFlow");
         }
 
         #endregion

@@ -311,7 +311,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // OAuth PKCEのアクセストークン・リクエスト
                 if (!string.IsNullOrEmpty(temp["code_challenge"]) && !string.IsNullOrEmpty(code_verifier))
                 {
-                    if (temp["code_challenge_method"].ToLower() == "plain")
+                    if (temp["code_challenge_method"].ToLower() == OAuth2AndOIDCConst.PKCE_plain)
                     {
                         // plain
                         if (temp["code_challenge"] == code_verifier)
@@ -324,9 +324,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             // 検証失敗
                         }
                     }
-                    else if (temp["code_challenge_method"].ToLower() == "s256")
+                    else if (temp["code_challenge_method"].ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
                     {
-                        // s256
+                        // S256
                         if (temp["code_challenge"] == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
                         {
                             // 検証成功

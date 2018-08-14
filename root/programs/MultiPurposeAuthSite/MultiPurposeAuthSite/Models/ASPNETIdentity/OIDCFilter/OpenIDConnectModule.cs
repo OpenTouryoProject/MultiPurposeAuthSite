@@ -164,8 +164,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             string path = context.Request.Url.AbsolutePath;
 
-            if (path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint2) == -1
-                && path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) != -1)
+            if (path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2) == -1
+                && path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint) != -1)
             {
                 if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
@@ -216,8 +216,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 string virtualPath = path.Substring(path.IndexOf(context.Request.ApplicationPath));
                 this.OriginalVirtualPath = virtualPath + orgQuery;
 
-                if (path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint2) == -1
-                    && path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
+                if (path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2) == -1
+                    && path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
                 {
                     string pattern = "";
 
@@ -409,8 +409,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             
             #endregion
 
-            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint2) == -1
-                && context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
+            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2) == -1
+                && context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
             {
                 #region response_type
 
@@ -499,7 +499,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             redirect_url = location.Substring(0, location.IndexOf('?'));
 
                             // ★ Hybrid Flow対応なので、expを短縮してもイイ。
-                            expires_in = ulong.Parse(ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
+                            expires_in = ulong.Parse(ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
 
                             // Fragmentに組み込む
                             string fragment = "";

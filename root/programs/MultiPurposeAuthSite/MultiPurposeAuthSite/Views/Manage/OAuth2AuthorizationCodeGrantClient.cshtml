@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：OAuthAuthorizationCodeGrantClient2
-    //* クラス日本語名  ：OAuthAuthorizationCodeGrantClient2
+    //* クラス名        ：OAuth2AuthorizationCodeGrantClient2
+    //* クラス日本語名  ：OAuth2AuthorizationCodeGrantClient2
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -23,9 +23,9 @@
 @*@using MultiPurposeAuthSite.Models.ASPNETIdentity*@
 @using MultiPurposeAuthSite.Models.ViewModels
 
-@model OAuthAuthorizationCodeGrantClientViewModel
+@model OAuth2AuthorizationCodeGrantClientViewModel
 @{
-    ViewBag.Title = "OAuthAuthorizationCodeGrantClient";
+    ViewBag.Title = "OAuth2AuthorizationCodeGrantClient";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -35,7 +35,7 @@
 
 <h2>@ViewBag.Title.</h2>
 <hr />
-@using (Html.BeginForm("OAuthAuthorizationCodeGrantClient2", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+@using (Html.BeginForm("OAuth2AuthorizationCodeGrantClient2", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
 { 
     @Html.AntiForgeryToken()
 

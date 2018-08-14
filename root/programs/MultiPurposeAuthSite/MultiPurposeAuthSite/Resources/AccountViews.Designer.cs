@@ -306,45 +306,45 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Grant に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string OAuthAuthorizeGrantButton {
+        public static string OAuth2AuthorizeGrantButton {
             get {
-                return ResourceManager.GetString("OAuthAuthorizeGrantButton", resourceCulture);
+                return ResourceManager.GetString("OAuth2AuthorizeGrantButton", resourceCulture);
             }
         }
         
         /// <summary>
         ///   Hello, に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string OAuthAuthorizeP1 {
+        public static string OAuth2AuthorizeP1 {
             get {
-                return ResourceManager.GetString("OAuthAuthorizeP1", resourceCulture);
+                return ResourceManager.GetString("OAuth2AuthorizeP1", resourceCulture);
             }
         }
         
         /// <summary>
         ///   A third party application want to do the following on your behalf: に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string OAuthAuthorizeP2 {
+        public static string OAuth2AuthorizeP2 {
             get {
-                return ResourceManager.GetString("OAuthAuthorizeP2", resourceCulture);
+                return ResourceManager.GetString("OAuth2AuthorizeP2", resourceCulture);
             }
         }
         
         /// <summary>
         ///   Sign in as different user に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string OAuthAuthorizeSIDUButton {
+        public static string OAuth2AuthorizeSIDUButton {
             get {
-                return ResourceManager.GetString("OAuthAuthorizeSIDUButton", resourceCulture);
+                return ResourceManager.GetString("OAuth2AuthorizeSIDUButton", resourceCulture);
             }
         }
         
         /// <summary>
         ///   Authorization of resource access. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string OAuthAuthorizeTitle {
+        public static string OAuth2AuthorizeTitle {
             get {
-                return ResourceManager.GetString("OAuthAuthorizeTitle", resourceCulture);
+                return ResourceManager.GetString("OAuth2AuthorizeTitle", resourceCulture);
             }
         }
         

@@ -1735,7 +1735,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 課金のテスト処理
                 string ret = (string)JsonConvert.DeserializeObject(
-                    await OAuth2Helper.GetInstance().CallOAuthChageToUserWebAPIAsync(
+                    await OAuth2Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
                     (string)Session["access_token"], "jpy", "1000"));
 
                 if (ret == "OK")
@@ -2141,21 +2141,21 @@ namespace MultiPurposeAuthSite.Controllers
             if (ASPNETIdentityConfig.CanEditOAuth2Data
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
-                // OAuthAuthorizationCodeGrantClientViewModelの検証
+                // OAuth2AuthorizationCodeGrantClientViewModelの検証
                 if (ModelState.IsValid)
                 {
                     // 認可エンドポイント
                     string oAuthAuthorizeEndpoint =
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint;
 
                     // client_id
                     string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
 
                     // redirect_uri
                     string redirect_uri = CustomEncode.UrlEncode2(
-                        ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage);
+                        ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Manage);
 
                     // state (nonce) // 記号は入れない。
                     string state = GetPassword.Generate(10, 0);
@@ -2371,19 +2371,19 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
         [HttpPost]
-        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
-                OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
+                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
                 {
                     Code = code
                 };
@@ -2402,8 +2402,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 仲介コードからAccess Tokenを取得する。
                     string redirect_uri
-                        = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                        + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Manage;
+                        = ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Manage;
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await OAuth2Helper.GetInstance()
@@ -2448,7 +2448,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient2(OAuthAuthorizationCodeGrantClientViewModel model)
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data
                 && ASPNETIdentityConfig.EnableEditingOfUserAttribute)
@@ -2462,8 +2462,8 @@ namespace MultiPurposeAuthSite.Controllers
                     #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                     Uri tokenEndpointUri = new Uri(
-                        ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                        + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+                        ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                        + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
 
                     // Tokenエンドポイントにアクセス
 
@@ -2490,7 +2490,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 画面の表示。
                 ModelState.Clear();
-                return View("OAuthAuthorizationCodeGrantClient", model);
+                return View(model);
             }
             else
             {

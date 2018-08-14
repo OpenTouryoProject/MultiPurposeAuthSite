@@ -380,7 +380,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             // c# - ASP.Net identity: Difference between UseOAuthBearerTokens and UseCookieAuthentication? - Stack Overflow
             // http://stackoverflow.com/questions/22121330/asp-net-identity-difference-between-useoauthbearertokens-and-usecookieauthentic
 
-            if (ASPNETIdentityConfig.EquipOAuthServer)
+            if (ASPNETIdentityConfig.EquipOAuth2Server)
             {
                 // OAuth Bearer Tokenを使用可能に設定する。
                 // UseOAuthAuthorizationServerとUseOAuthBearerTokensの違いが不明だが、
@@ -468,19 +468,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                         //AccessTokenFormat = new AccessTokenFormatJwt(),
                 
                         // ・AccessTokenExpireTimeSpan（OAuth Access Token の 有効期限
-                        AccessTokenExpireTimeSpan = ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes, // System.TimeSpan.FromSeconds(10), // Debug時 
+                        AccessTokenExpireTimeSpan = ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes, // System.TimeSpan.FromSeconds(10), // Debug時 
 
                         // ・AllowInsecureHttp
                         //   認証して、Token要求が http URI アドレスに届くことを許可し、
                         //   受信する redirect_uri 承認要求パラメータに http URI アドレスを設定する場合は true。
-                        AllowInsecureHttp = ASPNETIdentityConfig.AllowOAuthInsecureHttpEndpoints,
+                        AllowInsecureHttp = ASPNETIdentityConfig.AllowOAuth2InsecureHttpEndpoints,
 
                         #endregion
 
                         #region  Implicitグラント種別を除く全てのグラント種別の共通設定
 
                         // ・OAuth Bearer Token の Token Endpoint
-                        TokenEndpointPath = new PathString(ASPNETIdentityConfig.OAuthBearerTokenEndpoint),
+                        TokenEndpointPath = new PathString(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint),
 
                         #endregion
 
@@ -488,11 +488,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
                         // ・AuthorizeEndpointPath
                         //   OAuth の Authorize Endpoint
-                        AuthorizeEndpointPath = new PathString(ASPNETIdentityConfig.OAuthAuthorizeEndpoint),
+                        AuthorizeEndpointPath = new PathString(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint),
 
                         // ・ApplicationCanDisplayErrors
                         //   AuthorizeEndpointPath上でエラー メッセージを表示できるようにする。
-                        ApplicationCanDisplayErrors = ASPNETIdentityConfig.OAuthAuthorizeEndpointCanDisplayErrors,
+                        ApplicationCanDisplayErrors = ASPNETIdentityConfig.OAuth2AuthorizeEndpointCanDisplayErrors,
 
                         #endregion
 

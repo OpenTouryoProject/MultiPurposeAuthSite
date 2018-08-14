@@ -196,13 +196,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             JWT_RS256 jwtRS256 = null;
 
             // 署名
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_pfx, ASPNETIdentityConfig.OAuthJWTPassword,
+            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             jwt = jwtRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword,
+            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             if (jwtRS256.Verify(jwt))
@@ -229,7 +229,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             // 検証
-            JWT_RS256 jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuthJWT_cer, ASPNETIdentityConfig.OAuthJWTPassword);
+            JWT_RS256 jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_cer, ASPNETIdentityConfig.OAuth2JWTPassword);
             if (jwtRS256.Verify(jwt))
             {
                 // 検証できた。
@@ -251,7 +251,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 if (datetime == null)
                 {
                     // authToken.iss, authToken.expの検証
-                    if ((string)authTokenClaimSet["iss"] == ASPNETIdentityConfig.OAuthIssuerId
+                    if ((string)authTokenClaimSet["iss"] == ASPNETIdentityConfig.OAuth2IssuerId
                         && OAuth2Helper.GetInstance().GetClientSecret((string)authTokenClaimSet["aud"]) != null
                         && long.Parse((string)authTokenClaimSet["exp"]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                     {
