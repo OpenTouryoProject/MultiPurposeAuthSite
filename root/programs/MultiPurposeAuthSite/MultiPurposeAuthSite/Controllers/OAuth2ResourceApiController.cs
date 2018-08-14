@@ -106,6 +106,220 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region WebAPI
         
+        #region /.well-known/openid-configuration
+
+        /// <summary>
+        /// OpenID Provider Configurationを返すWebAPI
+        /// GET: /jwks.json
+        /// </summary>
+        /// <returns>Dictionary(string, object)</returns>
+        [HttpGet]
+        [Route(".well-known/openid-configuration")]
+        //[Authorize]
+        public HttpResponseMessage OpenIDConfig()
+        {
+            Dictionary<string, object> OpenIDConfig = new Dictionary<string, object>();
+
+            #region 基本
+
+            OpenIDConfig.Add("issuer", ASPNETIdentityConfig.OAuth2IssuerId);
+            OpenIDConfig.Add("access_token_issuer", ASPNETIdentityConfig.OAuth2IssuerId);
+
+            OpenIDConfig.Add("authorization_endpoint", new List<string> {
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint,
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2
+            });
+
+            OpenIDConfig.Add("token_endpoint", new List<string> {
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint,
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2
+            });
+
+            OpenIDConfig.Add("userinfo_endpoint",
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI);
+
+            #endregion
+
+            #region オプション
+
+            List<string> grant_types_supported = new List<string>();
+            List<string> response_types_supported = new List<string>();
+            List<string> scopes_supported = new List<string>();
+
+            OpenIDConfig.Add("grant_types_supported", grant_types_supported);
+            OpenIDConfig.Add("response_types_supported", response_types_supported);
+            OpenIDConfig.Add("scopes_supported", scopes_supported);
+
+            #region token
+
+            scopes_supported = new List<string> {
+                "auth",
+                "profile",
+                "email",
+                "phone",
+                "address",
+                "userid",
+                "roles"
+            };
+
+            OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
+                "client_secret_basic",
+                "private_key_jwt"
+            });
+
+            OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
+                "RS256"
+            });
+
+            #endregion
+
+            #region grant_types and response_types
+
+            grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
+
+            if (ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
+                response_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+            }
+            else if (ASPNETIdentityConfig.EnableImplicitGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.ImplicitGrantType);
+                response_types_supported.Add(OAuth2AndOIDCConst.ImplicitResponseType);
+            }
+            else if (ASPNETIdentityConfig.EnableResourceOwnerPasswordCredentialsGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
+            }
+            else if (ASPNETIdentityConfig.EnableClientCredentialsGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
+            }
+            else if (ASPNETIdentityConfig.EnableRefreshToken)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
+            }
+
+            #endregion
+
+            #region OpenID Connect
+
+            if (ASPNETIdentityConfig.EnableOpenIDConnect)
+            {
+                scopes_supported.Add("openid");
+
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
+
+                // subject_types_supported
+                OpenIDConfig.Add("subject_types_supported", new List<string> {
+                    "pairwise"
+                });
+
+                // claims_supported
+                OpenIDConfig.Add("claims_supported", new List<string> {
+                    "iss",
+                    "aud",
+                    "nonce",
+                    "sub",
+                    "iat",
+                    "exp",
+                    "nbf",
+                    "iat",
+                    "jti",
+                    "at_hash",
+                    "c_hash"
+                });
+
+                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
+                    "RS256"
+                });
+
+                OpenIDConfig.Add("jwks_uri", "・・・");
+            }
+
+            #endregion
+
+            #region OAuth2拡張
+
+            OpenIDConfig.Add("response_modes_supported", new List<string> {
+                "query",
+                "form_post"
+            });
+
+            #region revocation
+
+            OpenIDConfig.Add("revocation_endpoint", new List<string> {
+                ASPNETIdentityConfig.OAuth2RevokeTokenWebAPI
+            });
+
+            OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
+               "client_secret_basic"
+            });
+
+            #endregion
+
+            #region revocation
+
+            OpenIDConfig.Add("introspection_endpoint", new List<string> {
+                ASPNETIdentityConfig.OAuth2IntrospectTokenWebAPI
+            });
+
+            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
+               "none"
+            });
+
+            #endregion
+
+            #region OAuth2拡張
+
+            OpenIDConfig.Add("code_challenge_methods_supported", new List<string> {
+                OAuth2AndOIDCConst.PKCE_plain,
+                OAuth2AndOIDCConst.PKCE_S256
+            });
+
+            #endregion
+
+            OpenIDConfig.Add("service_documentation", "・・・");
+
+            #endregion
+
+            #endregion
+
+            // JsonSerializerSettingsを指定して、可読性の高いJSONを返す。
+            return new HttpResponseMessage()
+            {
+                Content = new JsonContent(OpenIDConfig,
+                    new JsonSerializerSettings
+                    {
+                        Formatting = Formatting.Indented,
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    })
+            };
+        }
+
+        #endregion
+
+        #region /jwks.json
+
+        /// <summary>
+        /// JWK Set documentを返すWebAPI
+        /// GET: /jwks.json
+        /// </summary>
+        /// <returns>Dictionary(string, object)</returns>
+        [HttpGet]
+        [Route("jwks.json")]
+        //[Authorize]
+        public async Task<Dictionary<string, object>> JwksUri()
+        {
+            Dictionary<string, object> JWKSet = new Dictionary<string, object>();
+            return JWKSet;
+        }
+
+        #endregion
+
         #region /userinfo
 
         /// <summary>

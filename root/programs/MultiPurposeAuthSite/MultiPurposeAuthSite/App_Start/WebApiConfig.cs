@@ -44,7 +44,9 @@ namespace MultiPurposeAuthSite
             config.SuppressDefaultHostAuthentication();
             config.Filters.Add(new HostAuthenticationFilter(OAuthDefaults.AuthenticationType));
 
-            // JSON データにはCamelCaseを使用 (JSON.NET)
+            // JSON を既定にして、CamelCaseを使用 (JSON.NET)
+            config.Formatters.Remove(config.Formatters.XmlFormatter);
+            config.Formatters.Add(config.Formatters.JsonFormatter);
             config.Formatters.JsonFormatter.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
 
             // CORS (Cross-Origin Resource Sharing)の有効化
