@@ -1006,17 +1006,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-        /// <summary>
-        /// OAuth2/OIDCのTokenに使用するJWTの検証用証明書（*.cer）のパス
-        /// </summary>
-        public static string OAuth2JWT_cer
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuth2JWT_cer"];
-            }
-        }
-
         #endregion
 
         #endregion
@@ -1160,17 +1149,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return ConfigurationManager.AppSettings["OAuth2GetUserClaimsWebAPI"];
-            }
-        }
-
-        /// <summary>
-        ///OAuth2/OIDCのConfigurationを返すWebAPI
-        /// </summary>
-        public static string OpenIDConfigWebAPI
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OpenIDConfigWebAPI"];
             }
         }
 

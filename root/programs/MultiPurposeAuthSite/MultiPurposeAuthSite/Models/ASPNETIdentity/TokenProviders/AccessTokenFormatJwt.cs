@@ -202,7 +202,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             jwt = jwtRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             if (jwtRS256.Verify(jwt))
@@ -229,7 +229,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             // 検証
-            JWT_RS256 jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_cer, ASPNETIdentityConfig.OAuth2JWTPassword);
+            JWT_RS256 jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword);
             if (jwtRS256.Verify(jwt))
             {
                 // 検証できた。

@@ -178,7 +178,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             jwt = jwtRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             if (jwtRS256.Verify(jwt))
@@ -271,7 +271,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         string id_token = jwtRS256.Create(newPayload);
 
                         // 検証
-                        jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+                        jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
                         if (jwtRS256.Verify(id_token))

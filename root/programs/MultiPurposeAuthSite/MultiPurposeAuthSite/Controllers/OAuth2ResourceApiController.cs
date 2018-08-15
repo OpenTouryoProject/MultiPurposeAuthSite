@@ -40,7 +40,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using System;
-using System.IO;
+using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Claims;
@@ -49,9 +49,7 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Web.Http;
 using System.Web.Http.Cors;
-using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
@@ -65,6 +63,7 @@ using Newtonsoft.Json.Serialization;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.Presentation;
+using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -105,14 +104,14 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region WebAPI
-        
+
         #region /.well-known/openid-configuration
 
         /// <summary>
         /// OpenID Provider Configurationを返すWebAPI
         /// GET: /jwks.json
         /// </summary>
-        /// <returns>Dictionary(string, object)</returns>
+        /// <returns>HttpResponseMessage</returns>
         [HttpGet]
         [Route(".well-known/openid-configuration")]
         //[Authorize]
@@ -153,13 +152,13 @@ namespace MultiPurposeAuthSite.Controllers
             #region token
 
             scopes_supported = new List<string> {
-                "auth",
-                "profile",
-                "email",
-                "phone",
-                "address",
-                "userid",
-                "roles"
+                OAuth2AndOIDCConst.Scope_Auth,
+                OAuth2AndOIDCConst.Scope_Profile,
+                OAuth2AndOIDCConst.Scope_Email,
+                OAuth2AndOIDCConst.Scope_Phone,
+                OAuth2AndOIDCConst.Scope_Address,
+                OAuth2AndOIDCConst.Scope_UserID,
+                OAuth2AndOIDCConst.Scope_Roles
             };
 
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
@@ -206,7 +205,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (ASPNETIdentityConfig.EnableOpenIDConnect)
             {
-                scopes_supported.Add("openid");
+                scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
 
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
@@ -220,17 +219,16 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // claims_supported
                 OpenIDConfig.Add("claims_supported", new List<string> {
-                    "iss",
-                    "aud",
-                    "nonce",
-                    "sub",
-                    "iat",
-                    "exp",
-                    "nbf",
-                    "iat",
-                    "jti",
-                    "at_hash",
-                    "c_hash"
+                    OAuth2AndOIDCConst.iss,
+                    OAuth2AndOIDCConst.aud,
+                    OAuth2AndOIDCConst.sub,
+                    OAuth2AndOIDCConst.exp,
+                    OAuth2AndOIDCConst.nbf,
+                    OAuth2AndOIDCConst.iat,
+                    OAuth2AndOIDCConst.jti,
+                    OAuth2AndOIDCConst.nonce,
+                    OAuth2AndOIDCConst.at_hash,
+                    OAuth2AndOIDCConst.c_hash
                 });
 
                 OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
@@ -252,7 +250,7 @@ namespace MultiPurposeAuthSite.Controllers
             #region revocation
 
             OpenIDConfig.Add("revocation_endpoint", new List<string> {
-                ASPNETIdentityConfig.OAuth2RevokeTokenWebAPI
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2RevokeTokenWebAPI
             });
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
@@ -264,7 +262,7 @@ namespace MultiPurposeAuthSite.Controllers
             #region revocation
 
             OpenIDConfig.Add("introspection_endpoint", new List<string> {
-                ASPNETIdentityConfig.OAuth2IntrospectTokenWebAPI
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2IntrospectTokenWebAPI
             });
 
             OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
@@ -306,16 +304,21 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// JWK Set documentを返すWebAPI
-        /// GET: /jwks.json
+        /// GET: /jwkcerts
         /// </summary>
-        /// <returns>Dictionary(string, object)</returns>
+        /// <returns>HttpResponseMessage</returns>
         [HttpGet]
-        [Route("jwks.json")]
+        [Route("jwkcerts")]
         //[Authorize]
-        public async Task<Dictionary<string, object>> JwksUri()
-        {
-            Dictionary<string, object> JWKSet = new Dictionary<string, object>();
-            return JWKSet;
+        public HttpResponseMessage JwksUri()
+        {   
+            return new HttpResponseMessage()
+            {
+                Content = new JsonContent(
+                    ResourceLoader.LoadAsString(
+                        OAuth2AndOIDCParams.JwkSetFilePath,
+                        Encoding.GetEncoding(CustomEncode.UTF_8)))
+            };
         }
 
         #endregion
