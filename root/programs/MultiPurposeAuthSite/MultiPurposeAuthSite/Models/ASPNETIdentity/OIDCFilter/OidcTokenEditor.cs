@@ -169,16 +169,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             #region JWT化
 
-            JWT_RS256 jwtRS256 = null;
+            JWT_RS256_X509 jwtRS256 = null;
 
             // 署名
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwtRS256 = new JWT_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             jwt = jwtRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             if (jwtRS256.Verify(jwt))
@@ -262,16 +262,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                         //・編集したpayloadを再度JWTとして署名する。
                         string newPayload = JsonConvert.SerializeObject(authTokenClaimSet);
-                        JWT_RS256 jwtRS256 = null;
+                        JWT_RS256_X509 jwtRS256 = null;
 
                         // 署名
-                        jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+                        jwtRS256 = new JWT_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
                         string id_token = jwtRS256.Create(newPayload);
 
                         // 検証
-                        jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+                        jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
                         if (jwtRS256.Verify(id_token))

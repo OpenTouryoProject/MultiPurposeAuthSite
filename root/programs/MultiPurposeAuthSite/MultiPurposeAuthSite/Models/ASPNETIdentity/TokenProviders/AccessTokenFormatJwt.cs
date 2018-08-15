@@ -33,12 +33,11 @@
 
 using System;
 using System.Web;
-using System.Security.Claims;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
 using Microsoft.Owin.Security;
-using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
@@ -193,16 +192,25 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             #region JWT化
 
-            JWT_RS256 jwtRS256 = null;
+            JWT_RS256_X509 jwtRS256 = null;
 
-            // 署名
-            jwtRS256 = new JWT_RS256(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+            // JWT_RS256_X509
+            jwtRS256 = new JWT_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
+            // JWSHeaderのセット
+            // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
+            Dictionary<string, string> dic =
+                JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                    RS256_KeyConverter.X509PfxToJwkPublicKey(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
+            jwtRS256.JWSHeader.kid = dic["kid"];
+            jwtRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+            
+            // 署名
             jwt = jwtRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             if (jwtRS256.Verify(jwt))
@@ -229,7 +237,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             // 検証
-            JWT_RS256 jwtRS256 = new JWT_RS256(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword);
+            JWT_RS256_X509 jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword);
             if (jwtRS256.Verify(jwt))
             {
                 // 検証できた。
