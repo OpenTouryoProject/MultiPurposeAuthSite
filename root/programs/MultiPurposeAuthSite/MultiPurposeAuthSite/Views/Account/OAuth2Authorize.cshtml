@@ -34,6 +34,8 @@
 *@
 
 @using MultiPurposeAuthSite.Resources;
+@using Touryo.Infrastructure.Framework.Authentication;
+
 @{
     ViewBag.Title = AccountViews.OAuth2AuthorizeTitle;
 }
@@ -56,7 +58,7 @@
             <ul>
                 @foreach (string scope in ViewBag.Scopes)
                 {
-                    <li>@Html.Label("scope", scope)</li>
+                    <li>@Html.Label(OAuth2AndOIDCConst.scope, scope)</li>
                 }
             </ul>
             <p>

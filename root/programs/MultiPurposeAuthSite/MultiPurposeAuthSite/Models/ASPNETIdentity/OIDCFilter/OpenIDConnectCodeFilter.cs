@@ -39,6 +39,8 @@ using System.Collections.Generic;
 
 using Newtonsoft.Json;
 
+using Touryo.Infrastructure.Framework.Authentication;
+
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
@@ -130,14 +132,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 Dictionary<string, object> accessTokenResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
 
                 // access_tokenを
-                if (accessTokenResponse.ContainsKey("access_token"))
+                if (accessTokenResponse.ContainsKey(OAuth2AndOIDCConst.AccessToken))
                 {
-                    string access_token = (string)accessTokenResponse["access_token"];
+                    string access_token = (string)accessTokenResponse[OAuth2AndOIDCConst.AccessToken];
                     string id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.None);
                     if (!string.IsNullOrEmpty(id_token))
                     {
                         // responseにid_tokenとして、このJWTを追加する。
-                        accessTokenResponse.Add("id_token", id_token);
+                        accessTokenResponse.Add(OAuth2AndOIDCConst.IDToken, id_token);
                         bb = enc.GetBytes(JsonConvert.SerializeObject(accessTokenResponse));
                     }           
                 }

@@ -109,7 +109,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     // OIDC Implicit Flow、Hybrid Flowのパラメタチェック
 
                     // nonceパラメタ 必須
-                    string nonce = context.Request.Query.Get("nonce");
+                    string nonce = context.Request.Query.Get(OAuth2AndOIDCConst.nonce);
                     if (string.IsNullOrEmpty(nonce))
                     {
                         //throw new NotSupportedException("there was no nonce in query.");
@@ -120,8 +120,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     }
 
                     // scopeパラメタ 必須
-                    string scope = context.Request.Query.Get("scope");
-                    if (scope.IndexOf("openid") == -1)
+                    string scope = context.Request.Query.Get(OAuth2AndOIDCConst.scope);
+                    if (scope.IndexOf(OAuth2AndOIDCConst.Scope_Openid) == -1)
                     {
                         //throw new NotSupportedException("there was no openid in scope of query.");
                         context.SetError(
@@ -271,12 +271,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             #region クライアント認証を行なう。
 
-            if (string.IsNullOrEmpty(context.Parameters["grant_type"]))
+            if (string.IsNullOrEmpty(context.Parameters[OAuth2AndOIDCConst.grant_type]))
             {
                 // 指定なし。
                 // 検証未完
             }
-            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
+            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
             {
                 #region Authorization Codeグラント種別
 
@@ -296,7 +296,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
+            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
             {
                 #region Resource Owner Password Credentialsグラント種別
 
@@ -323,7 +323,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
+            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
             {
                 #region Client Credentialsグラント種別
 
@@ -343,7 +343,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                 #endregion
             }
-            else if (context.Parameters["grant_type"].ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
+            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
             {
                 #region RefreshToken
 

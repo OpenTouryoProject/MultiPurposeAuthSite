@@ -167,24 +167,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             if (path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2) == -1
                 && path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint) != -1)
             {
-                if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.RefreshTokenGrantType)
+                if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
                     // なにもしない
                 }
-                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
                 {
                     // なにもしない
                 }
-                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.ClientCredentialsGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.ClientCredentialsGrantType)
                 {
                     // Refresh Tokenの削除
                     context.Response.Filter = new ClientCredentialsFilter(context);
                 }
-                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.ImplicitGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.ImplicitGrantType)
                 {
                     // ↓OnPreSendRequestHeadersで処理
                 }
-                else if (context.Request.Form["grant_type"] == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
                 {
                     // OpenID Connect の "response_type=code"に対応したレスポンスに書き換え
                     context.Response.Filter = new OpenIDConnectCodeFilter(context);
@@ -492,7 +492,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             foreach (Match match in matches)
                             {
                                 GroupCollection groups = match.Groups;
-                                code = groups["code"].Value;
+                                code = groups[OAuth2AndOIDCConst.code].Value;
                                 state = groups["state"].Value;
                             }
 
@@ -587,7 +587,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             foreach (Match match in matches)
                             {
                                 GroupCollection groups = match.Groups;
-                                code = groups["code"].Value;
+                                code = groups[OAuth2AndOIDCConst.code].Value;
                                 state = groups["state"].Value;
                                 redirect_url = CustomEncode.UrlDecode(groups["redirect_uri"].Value);
                             }

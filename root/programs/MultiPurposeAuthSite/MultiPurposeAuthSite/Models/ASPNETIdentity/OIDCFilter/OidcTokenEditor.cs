@@ -90,17 +90,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             {
                 if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
                 {
-                    authTokenClaimSet.Add("iss", c.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, c.Value);
                 }
                 else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
                 {
-                    authTokenClaimSet.Add("aud", c.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, c.Value);
                 }
                 else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
                 {
-                    authTokenClaimSet.Add("nonce", c.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, c.Value);
                 }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Scope)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Scopes)
                 {
                     scopes.Add(c.Value);
                 }
@@ -111,24 +111,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             }
 
             // Resource Owner認証の場合、Resource Ownerの名称
-            authTokenClaimSet.Add("sub", ticket.Identity.Name);
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, ticket.Identity.Name);
 
-            #region authTokenClaimSet.Add("exp", ・・・
+            #region authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ・・・
 
             // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
-            //authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+            //authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
 
             // この時点では空にしておく。
-            authTokenClaimSet.Add("exp", "");
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, "");
 
             #endregion
 
-            authTokenClaimSet.Add("nbf", DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
 
             // ★ Hybrid Flow対応なので、scopeを制限してもイイ。
-            authTokenClaimSet.Add("scopes", scopes);
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
 
             // scope値によって、返す値を変更する。
             // ココでは返さない（別途ユーザ取得処理を実装してもイイ）。
@@ -149,21 +149,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             string jws = "";
 
             // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
-            //authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-            //authTokenClaimSet.Add("exp", DateTimeOffset.Now.AddSeconds(customExp).ToUnixTimeSeconds().ToString());
+            //authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+            //authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, DateTimeOffset.Now.AddSeconds(customExp).ToUnixTimeSeconds().ToString());
 
             #region JSON編集
 
             // access_token_payloadのDictionary化
-            Dictionary<string, object> dic =
+            Dictionary<string, object> payload =
                 JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
 
             // ★ customExpの値を使用する。
-            dic["exp"] = DateTimeOffset.Now.AddSeconds(customExp).ToUnixTimeSeconds().ToString();
+            payload[OAuth2AndOIDCConst.exp] = DateTimeOffset.Now.AddSeconds(customExp).ToUnixTimeSeconds().ToString();
             // ★ Hybrid Flow対応なので、scopeを制限してもイイ。
-            dic["scopes"] = dic["scopes"];
+            payload[OAuth2AndOIDCConst.scopes] = payload[OAuth2AndOIDCConst.scopes];
 
-            json = JsonConvert.SerializeObject(dic);
+            json = JsonConvert.SerializeObject(payload);
 
             #endregion
 
@@ -174,6 +174,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             // 署名
             jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+
+            // JWSHeaderのセット
+            // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
+            Dictionary<string, string> jwk =
+                JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                    RS256_KeyConverter.X509PfxToJwkPublicKey(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
+
+            jwsRS256.JWSHeader.kid = jwk["kid"];
+            jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             jws = jwsRS256.Create(json);
 
@@ -218,16 +227,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
 
                 // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
-                if (authTokenClaimSet.ContainsKey("nonce")
-                    && authTokenClaimSet.ContainsKey("scopes"))
+                if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
+                    && authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
                 {
-                    JArray scopes = (JArray)authTokenClaimSet["scopes"];
+                    JArray scopes = (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes];
 
                     // ・OpenID Connect : response_type=codeに対応する。
                     if (scopes.Any(x => x.ToString() == OAuth2AndOIDCConst.Scope_Openid))
                     {
                         //・payloadからscopeを削除する。
-                        authTokenClaimSet.Remove("scopes");
+                        authTokenClaimSet.Remove(OAuth2AndOIDCConst.scopes);
 
                         //・payloadにat_hash, c_hashを追加する。
                         switch (hct)
@@ -238,24 +247,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             case HashClaimType.AtHash:
                                 // at_hash
                                 authTokenClaimSet.Add(
-                                    "at_hash",
+                                    OAuth2AndOIDCConst.at_hash,
                                     OidcTokenEditor.CreateHash(access_token));
                                 break;
 
                             case HashClaimType.CHash:
                                 // c_hash
                                 authTokenClaimSet.Add(
-                                    "c_hash",
+                                    OAuth2AndOIDCConst.c_hash,
                                     OidcTokenEditor.CreateHash(code));
                                 break;
 
                             case HashClaimType.Both:
                                 // at_hash, c_hash
                                 authTokenClaimSet.Add(
-                                    "at_hash",
+                                    OAuth2AndOIDCConst.at_hash,
                                     OidcTokenEditor.CreateHash(access_token));
                                 authTokenClaimSet.Add(
-                                    "c_hash",
+                                    OAuth2AndOIDCConst.c_hash,
                                     OidcTokenEditor.CreateHash(code));
                                 break;
                         }
@@ -268,6 +277,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
+                        // ヘッダ
+                        JWS_Header jwsHeader = 
+                            JsonConvert.DeserializeObject<JWS_Header>(
+                                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[0]), CustomEncode.UTF_8));
+
+                        if (!string.IsNullOrEmpty(jwsHeader.jku) 
+                            && !string.IsNullOrEmpty(jwsHeader.kid))
+                        {
+                            jwsRS256.JWSHeader.jku = jwsHeader.jku;
+                            jwsRS256.JWSHeader.kid = jwsHeader.kid;
+                        }
+                        
                         string id_token = jwsRS256.Create(newPayload);
 
                         // 検証

@@ -42,6 +42,8 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
 
+using Touryo.Infrastructure.Framework.Authentication;
+
 /// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity</summary>
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 {
@@ -279,9 +281,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     ClientSecret = ASPNETIdentityConfig.GoogleAuthenticationClientSecret
                 };
                 // スコープを追加する。
-                options.Scope.Add("openid");
-                options.Scope.Add("profile");
-                options.Scope.Add("email");
+                options.Scope.Add(OAuth2AndOIDCConst.Scope_Openid);
+                options.Scope.Add(OAuth2AndOIDCConst.Scope_Profile);
+                options.Scope.Add(OAuth2AndOIDCConst.Scope_Email);
 
                 // GoogleAuthenticationの有効化
                 app.UseGoogleAuthentication(options);
@@ -312,7 +314,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     }
                 };
                 // スコープを追加する。
-                options.Scope.Add("email");
+                options.Scope.Add(OAuth2AndOIDCConst.Scope_Email);
 
                 // FacebookAuthenticationの有効化
                 app.UseFacebookAuthentication(options);

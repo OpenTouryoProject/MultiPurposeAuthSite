@@ -18,9 +18,13 @@
 //*  2017/06/07  西野 大介         新規
 //**********************************************************************************
 
-using Newtonsoft.Json;
-using System.ComponentModel.DataAnnotations;
 using MultiPurposeAuthSite.Models.ASPNETIdentity;
+
+using System.ComponentModel.DataAnnotations;
+
+using Newtonsoft.Json;
+
+using Touryo.Infrastructure.Framework.Authentication;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -71,7 +75,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
             ASPNETIdentityConst.MaxLengthOfClientName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "sub")]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.sub)]
         public string ClientName { get; set; }
     }
 }

@@ -66,57 +66,25 @@ namespace CreateJwkSetJson
             }
 
             // JwkSet.jsonファイルのロード
-            string jwkSetString = ResourceLoader.LoadAsString(
-                OAuth2AndOIDCParams.JwkSetFilePath,
-                Encoding.GetEncoding(CustomEncode.UTF_8));
-
-            JwkSet jwkSetObject = new JwkSet();
+            JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
 
             // 判定
-            if (string.IsNullOrWhiteSpace(jwkSetString))
+            if (jwkSetObject == null)
             {
                 // 新規
+                jwkSetObject = new JwkSet();
                 jwkSetObject.keys.Add(jwkObject);
             }
             else
             {
                 // 既存
-                jwkSetObject = JsonConvert.DeserializeObject<JwkSet>(jwkSetString);
 
                 // kidの重複確認
-                bool exist = false;
-                foreach (Dictionary<string, string> key in jwkSetObject.keys)
-                {
-                    if (key["kid"] == jwkObject["kid"])
-                    {
-                        exist = true;
-                    }
-                }
-                
-                if (exist)
-                {
-                    // 既存
-                    return; // 終了
-                }
-                else
-                {
-                    // 追加
-                    jwkSetObject.keys.Add(jwkObject);
-                }
+                JwkSet.AddJwkToJwkSet(jwkSetObject, jwkObject);
             }
 
             // jwkSetObjectのセーブ
-            using (StreamWriter sr = File.CreateText(OAuth2AndOIDCParams.JwkSetFilePath))
-            {
-                sr.Write(
-                    JsonConvert.SerializeObject(
-                        jwkSetObject,
-                        new JsonSerializerSettings
-                        {
-                            Formatting = Formatting.Indented,
-                            ContractResolver = new CamelCasePropertyNamesContractResolver()
-                        }));
-            }
+            JwkSet.SaveJwkSet(OAuth2AndOIDCParams.JwkSetFilePath, jwkSetObject);
         }
     }
 }

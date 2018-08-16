@@ -1500,7 +1500,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 ASPNETIdentityConfig.TwitterAuthenticationClientId,
                                 ASPNETIdentityConfig.TwitterAuthenticationClientSecret);
 
-                            email = (string)myInfo["email"]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
+                            email = (string)myInfo[OAuth2AndOIDCConst.Scope_Email]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
                             emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
                         }
                     }
@@ -1793,13 +1793,13 @@ namespace MultiPurposeAuthSite.Controllers
                     List<string> scopes = null;
                     JObject jobj = null;
 
-                    if (dic.ContainsKey("id_token"))
+                    if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
                         // id_tokenがある。
-                        string id_token = dic["id_token"];
+                        string id_token = dic[OAuth2AndOIDCConst.IDToken];
 
                         if (JwtToken.Verify(id_token, out sub, out roles, out scopes, out jobj)
-                            && jobj["nonce"].ToString() == (string)Session["id_federation_signin_nonce"])
+                            && jobj[OAuth2AndOIDCConst.nonce].ToString() == (string)Session["id_federation_signin_nonce"])
                         {
                             // id_token検証OK。
                         }
@@ -1822,7 +1822,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region /userinfoエンドポイント
                     //// /userinfoエンドポイントにアクセスする場合
                     //string response = await OAuth2AndOIDCClient.CallUserInfoEndpointAsync(
-                    //    new Uri(ASPNETIdentityConfig.IdFederationUserInfoEndPoint), dic["access_token"]);
+                    //    new Uri(ASPNETIdentityConfig.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
 
                     #region ユーザの登録・更新
@@ -1848,22 +1848,22 @@ namespace MultiPurposeAuthSite.Controllers
                     // }
 
                     IdentityResult result = null;
-                    ApplicationUser user = await UserManager.FindByIdAsync((string)jobj["userid"]);
+                    ApplicationUser user = await UserManager.FindByIdAsync((string)jobj[OAuth2AndOIDCConst.Scope_UserID]);
 
                     if (user == null)
                     {
                         // 新規作成
                         user = new ApplicationUser()
                         {
-                            Id = (string)jobj["userid"],
+                            Id = (string)jobj[OAuth2AndOIDCConst.Scope_UserID],
 
                             UserName = sub,
 
-                            Email = (string)jobj["email"],
-                            EmailConfirmed = (bool)Convert.ToBoolean((string)jobj["email_verified"]),
+                            Email = (string)jobj[OAuth2AndOIDCConst.Scope_Email],
+                            EmailConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.email_verified]),
 
-                            PhoneNumber = (string)jobj["phone_number"],
-                            PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj["phone_number_verified"]),
+                            PhoneNumber = (string)jobj[OAuth2AndOIDCConst.phone_number],
+                            PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.phone_number_verified]),
 
                             CreatedDate = DateTime.Now
                         };
@@ -1881,11 +1881,11 @@ namespace MultiPurposeAuthSite.Controllers
                         // 属性更新
                         user.UserName = sub;
 
-                        user.Email = (string)jobj["email"];
-                        user.EmailConfirmed = (bool)Convert.ToBoolean((string)jobj["email_verified"]);
+                        user.Email = (string)jobj[OAuth2AndOIDCConst.Scope_Email];
+                        user.EmailConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.email_verified]);
 
-                        user.PhoneNumber = (string)jobj["phone_number"];
-                        user.PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj["phone_number_verified"]);
+                        user.PhoneNumber = (string)jobj[OAuth2AndOIDCConst.phone_number];
+                        user.PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.phone_number_verified]);
 
                         result = await UserManager.UpdateAsync(user);
 
@@ -2019,7 +2019,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ViewBag.Scopes = scopes;
 
                 // 認証の場合、余計なscopeをfilterする。
-                bool isAuth = scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth);
+                bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
 
                 if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
@@ -2063,7 +2063,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // OIDC Implicit Flowはresponse_type=tokenに書換、識別できないので、prompt=noneを設定。
             {
                 // Implicitグラント種別（Access Tokenの発行）
-                if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))
+                if (scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth))
                 {
                     // authの場合、Implicitグラント種別はNGとする。
                 }
@@ -2237,19 +2237,19 @@ namespace MultiPurposeAuthSite.Controllers
                         .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier_InSessionOrCookie);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
-                    model.AccessToken = dic["access_token"];
+                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                     // 余談：OpenID Connectであれば、ここで id_token 検証。                    
-                    if (dic.ContainsKey("id_token"))
+                    if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
-                        model.IdToken = dic["id_token"];
+                        model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
                         model.IdTokenJwtToJson = CustomEncode.ByteToString(
                             CustomEncode.FromBase64UrlString(model.IdToken.Split('.')[1]), CustomEncode.UTF_8);
                     }
 
-                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
                 }
                 else
                 {
@@ -2312,16 +2312,16 @@ namespace MultiPurposeAuthSite.Controllers
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
-                        if (dic.ContainsKey("access_token"))
+                        if (dic.ContainsKey(OAuth2AndOIDCConst.AccessToken))
                         {
-                            model.AccessToken = dic["access_token"];
+                            model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
                             model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                                 CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
                         }
 
-                        if (dic.ContainsKey("refresh_token"))
+                        if (dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken))
                         {
-                            model.RefreshToken = dic["refresh_token"] ?? "";
+                            model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
                         }   
 
                         #endregion
@@ -2338,13 +2338,13 @@ namespace MultiPurposeAuthSite.Controllers
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.RevokeAccess")))
                         {
                             token = model.AccessToken;
-                            token_type_hint = "access_token";
+                            token_type_hint = OAuth2AndOIDCConst.AccessToken;
                         }
 
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.RevokeRefresh")))
                         {
                             token = model.RefreshToken;
-                            token_type_hint = "refresh_token";
+                            token_type_hint = OAuth2AndOIDCConst.RefreshToken;
                         }
 
                         Uri revokeTokenEndpointUri = new Uri(
@@ -2374,13 +2374,13 @@ namespace MultiPurposeAuthSite.Controllers
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectAccess")))
                         {
                             token = model.AccessToken;
-                            token_type_hint = "access_token";
+                            token_type_hint = OAuth2AndOIDCConst.AccessToken;
                         }
 
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectRefresh")))
                         {
                             token = model.RefreshToken;
-                            token_type_hint = "refresh_token";
+                            token_type_hint = OAuth2AndOIDCConst.RefreshToken;
                         }
 
                         Uri introspectTokenEndpointUri = new Uri(

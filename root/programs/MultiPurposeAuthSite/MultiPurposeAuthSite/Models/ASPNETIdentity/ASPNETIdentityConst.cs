@@ -75,21 +75,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #endregion
 
         #region Scope
-
-        #region Custom
-
-        /// <summary>useridを要求するscope</summary>
-        public const string Scope_Userid = "userid";
-
-        /// <summary>認証を要求するscope</summary>
-        /// <remarks>OAuth2用のprompt=none(@OIDC)的な</remarks>
-        public const string Scope_Auth = "auth";
-
-        /// <summary>rolesを要求するscope</summary>
-        public const string Scope_Roles = "roles";
-
-        #endregion
-
+        
         #region ScopeSet
 
         /// <summary>標準的なscope</summary>
@@ -98,7 +84,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
-            + Scope_Userid;
+            + OAuth2AndOIDCConst.Scope_UserID;
         // authは他のscopeをフィルタするので。
 
         /// <summary>OIDCのscope</summary>
@@ -108,7 +94,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
-            + Scope_Userid;
+            + OAuth2AndOIDCConst.Scope_UserID;
         // authは他のscopeをフィルタするので。
 
         /// <summary>ID連携 scope</summary>
@@ -118,8 +104,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
-            + Scope_Userid + " "
-            + Scope_Roles;
+            + OAuth2AndOIDCConst.Scope_UserID + " "
+            + OAuth2AndOIDCConst.Scope_Roles;
         // authは他のscopeをフィルタするので。
 
         #endregion

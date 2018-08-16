@@ -254,7 +254,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                 ASPNETIdentityConfig.OAuth2ResourceServerEndpointsRootURI
                 + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI);
 
-            return await OAuth2AndOIDCClient.CallUserInfoEndpointAsync(userInfoUri, accessToken);
+            return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
         }
 
         #endregion
@@ -531,7 +531,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public static IEnumerable<string> FilterClaimAtAuth(IEnumerable<string> scopes)
         {
             List<string> temp = new List<string>();
-            temp.Add(ASPNETIdentityConst.Scope_Auth);
+            temp.Add(OAuth2AndOIDCConst.Scope_Auth);
 
             // フィルタ・コード
             foreach (string s in scopes)
@@ -540,9 +540,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                 {
                     temp.Add(OAuth2AndOIDCConst.Scope_Openid);
                 }
-                else if (s == ASPNETIdentityConst.Scope_Userid)
+                else if (s == OAuth2AndOIDCConst.Scope_UserID)
                 {
-                    temp.Add(ASPNETIdentityConst.Scope_Userid);
+                    temp.Add(OAuth2AndOIDCConst.Scope_UserID);
                 }
             }
 
@@ -573,7 +573,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             foreach (string scope in scopes)
             {
                 // その他のscopeは、Claimの下記urnに組み込む。
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Scope, scope));
+                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Scopes, scope));
             }
 
             #endregion

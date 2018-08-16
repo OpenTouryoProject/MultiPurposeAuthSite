@@ -403,7 +403,7 @@ namespace MultiPurposeAuthSite.Controllers
                      client_id, client_secret, ASPNETIdentityConst.StandardScopes);
 
             ViewBag.Response = response;
-            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
 
             return View("OAuth2ClientAuthenticationFlow");
         }
@@ -447,7 +447,7 @@ namespace MultiPurposeAuthSite.Controllers
                          iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
 
             ViewBag.Response = response;
-            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
 
             return View("OAuth2ClientAuthenticationFlow");
         }

@@ -33,6 +33,7 @@
 
 using System;
 using System.Web;
+using System.Linq;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
@@ -49,6 +50,7 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
@@ -100,17 +102,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             {
                 if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
                 {
-                    authTokenClaimSet.Add("iss", c.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, c.Value);
                 }
                 else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
                 {
-                    authTokenClaimSet.Add("aud", c.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, c.Value);
                 }
                 else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
                 {
-                    authTokenClaimSet.Add("nonce", c.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, c.Value);
                 }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Scope)
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Scopes)
                 {
                     scopes.Add(c.Value);
                 }
@@ -123,21 +125,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             if (ticket.Identity.Name == null)
             {
                 // Client認証の場合、aud（client_id）に対応するClient名称
-                authTokenClaimSet.Add("sub", 
-                    OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]));
+                authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, 
+                    OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]));
             }
             else
             {
                 // Resource Owner認証の場合、Resource Ownerの名称
-                authTokenClaimSet.Add("sub", ticket.Identity.Name);
+                authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, ticket.Identity.Name);
             }
 
-            authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("nbf", DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("iat", ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add("jti", Guid.NewGuid().ToString("N"));
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
 
-            authTokenClaimSet.Add("scopes", scopes);
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
 
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)
@@ -153,12 +155,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             // ・・・
                             break;
                         case OAuth2AndOIDCConst.Scope_Email:
-                            authTokenClaimSet.Add("email", user.Email);
-                            authTokenClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
+                            authTokenClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
+                            authTokenClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
                             break;
                         case OAuth2AndOIDCConst.Scope_Phone:
-                            authTokenClaimSet.Add("phone_number", user.PhoneNumber);
-                            authTokenClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
+                            authTokenClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
+                            authTokenClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed.ToString());
                             break;
                         case OAuth2AndOIDCConst.Scope_Address:
                             // ・・・
@@ -168,12 +170,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                         #region Else
 
-                        case ASPNETIdentityConst.Scope_Userid:
-                            authTokenClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                        case OAuth2AndOIDCConst.Scope_UserID:
+                            authTokenClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
                             break;
-                        case ASPNETIdentityConst.Scope_Roles:
+                        case OAuth2AndOIDCConst.Scope_Roles:
                             authTokenClaimSet.Add(
-                                ASPNETIdentityConst.Scope_Roles,
+                                OAuth2AndOIDCConst.Scope_Roles,
                                 userManager.GetRolesAsync(user.Id).Result);
                             break;
 
@@ -200,10 +202,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // JWSHeaderのセット
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
-            Dictionary<string, string> dic =
+            Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     RS256_KeyConverter.X509PfxToJwkPublicKey(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
-            jwsRS256.JWSHeader.kid = dic["kid"];
+
+            jwsRS256.JWSHeader.kid = jwk["kid"];
             jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             // 署名
@@ -237,7 +240,39 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             // 検証
-            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword);
+            JWS_RS256 jwsRS256 = null;
+
+            // 証明書を使用するか、Jwkを使用するか判定
+            Dictionary<string, string> header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwt.Split('.')[0]),CustomEncode.UTF_8));
+
+            if (header.Keys.Any(s => s == "kid"))
+            {
+                if (string.IsNullOrEmpty(header["kid"]))
+                {
+                    // 証明書を使用
+                    jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, "");
+                }
+                else
+                {
+                    JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
+                    Dictionary<string, string> jwkObject = JwkSet.GetJwkObject(jwkSetObject, header["kid"]);
+
+                    if (jwkObject == null)
+                    {
+                        // 証明書を使用
+                        jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, "");
+                    }
+                    else
+                    {
+                        // Jwkを使用
+                        jwsRS256 = new JWS_RS256_Param(
+                            RS256_KeyConverter.JwkToProvider(
+                                JsonConvert.SerializeObject(jwkObject)).ExportParameters(false));
+                    }
+                }
+            }
+
             if (jwsRS256.Verify(jwt))
             {
                 // 検証できた。
@@ -254,20 +289,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 //  ★ "exp": JWT の有効期限（Unix時間）
                 //  ☆ "jti": JWT のID（OAuth Token Revocation）
 
-                DateTime? datetime = OAuth2RevocationProvider.GetInstance().Get((string)authTokenClaimSet["jti"]);
+                DateTime? datetime = OAuth2RevocationProvider.GetInstance().Get((string)authTokenClaimSet[OAuth2AndOIDCConst.jti]);
 
                 if (datetime == null)
                 {
                     // authToken.iss, authToken.expの検証
-                    if ((string)authTokenClaimSet["iss"] == ASPNETIdentityConfig.OAuth2IssuerId
-                        && OAuth2Helper.GetInstance().GetClientSecret((string)authTokenClaimSet["aud"]) != null
-                        && long.Parse((string)authTokenClaimSet["exp"]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
+                    if ((string)authTokenClaimSet[OAuth2AndOIDCConst.iss] == ASPNETIdentityConfig.OAuth2IssuerId
+                        && OAuth2Helper.GetInstance().GetClientSecret((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]) != null
+                        && long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.exp]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                     {
                         // authToken.subの検証
                         // ApplicationUser を取得する。
                         ApplicationUserManager userManager
                         = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-                        ApplicationUser user = userManager.FindByName((string)authTokenClaimSet["sub"]); // 同期版でOK。
+                        ApplicationUser user = userManager.FindByName((string)authTokenClaimSet[OAuth2AndOIDCConst.sub]); // 同期版でOK。
 
                         if (user != null)
                         {
@@ -278,24 +313,24 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             // aud、scopes、nonceなどのClaimを追加する。
                             List<string> scopes = new List<string>();
-                            foreach (string s in (JArray)authTokenClaimSet["scopes"])
+                            foreach (string s in (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes])
                             {
                                 scopes.Add(s);
                             }
 
                             OAuth2Helper.AddClaim(identity,
-                                (string)authTokenClaimSet["aud"], "", scopes,　(string)authTokenClaimSet["nonce"]);
+                                (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes,　(string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
 
                             // その他、所定のClaimを追加する。
-                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
-                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
-                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
-                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
+                            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
                             
                             // AuthenticationPropertiesの生成
                             AuthenticationProperties prop = new AuthenticationProperties();
-                            prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
-                            prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
+                            prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
+                            prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
 
                             AuthenticationTicket auth = new AuthenticationTicket(identity, prop);
 
@@ -308,34 +343,34 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
                             // ClaimとStoreのAudience(aud)に対応するSubject(sub)が一致するかを確認し、一致する場合のみ、認証する。
                             // ※ でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
-                            if ((string)authTokenClaimSet["sub"] == OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet["aud"]))
+                            if ((string)authTokenClaimSet[OAuth2AndOIDCConst.sub] == OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]))
                             {
                                 // ClaimsIdentityを生成し、
                                 ClaimsIdentity identity = new ClaimsIdentity(DefaultAuthenticationTypes.ExternalBearer);
 
                                 // sub（client_idに対応するclient_name）Claimを設定する。
-                                identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet["sub"]));
+                                identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet[OAuth2AndOIDCConst.sub]));
 
                                 // aud、scopes、nonceなどのClaimを追加する。
                                 List<string> scopes = new List<string>();
-                                foreach (string s in (JArray)authTokenClaimSet["scopes"])
+                                foreach (string s in (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes])
                                 {
                                     scopes.Add(s);
                                 }
 
                                 OAuth2Helper.AddClaim(identity,
-                                    (string)authTokenClaimSet["aud"], "", scopes, (string)authTokenClaimSet["nonce"]);
+                                    (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
 
                                 // その他、所定のClaimを追加する。
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet["exp"]));
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet["nbf"]));
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet["iat"]));
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet["jti"]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
+                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
 
                                 // AuthenticationPropertiesの生成
                                 AuthenticationProperties prop = new AuthenticationProperties();
-                                prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["iat"]));
-                                prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet["exp"]));
+                                prop.IssuedUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
+                                prop.ExpiresUtc = DateTimeOffset.FromUnixTimeSeconds(long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
 
                                 AuthenticationTicket auth = new AuthenticationTicket(identity, prop);
 

@@ -357,10 +357,10 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
-            userinfoClaimSet.Add("sub", subject);
+            userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, subject);
 
             // Scope
-            IEnumerable<Claim> claimScope = id.FindAll(OAuth2AndOIDCConst.Claim_Scope).AsEnumerable();
+            IEnumerable<Claim> claimScope = id.FindAll(OAuth2AndOIDCConst.Claim_Scopes).AsEnumerable();
 
             // scope値によって、返す値を変更する。
             foreach (Claim scope in claimScope)
@@ -376,12 +376,12 @@ namespace MultiPurposeAuthSite.Controllers
                             // ・・・
                             break;
                         case OAuth2AndOIDCConst.Scope_Email:
-                            userinfoClaimSet.Add("email", user.Email);
-                            userinfoClaimSet.Add("email_verified", user.EmailConfirmed.ToString());
+                            userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
+                            userinfoClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
                             break;
                         case OAuth2AndOIDCConst.Scope_Phone:
-                            userinfoClaimSet.Add("phone_number", user.PhoneNumber);
-                            userinfoClaimSet.Add("phone_number_verified", user.PhoneNumberConfirmed.ToString());
+                            userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
+                            userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed.ToString());
                             break;
                         case OAuth2AndOIDCConst.Scope_Address:
                             // ・・・
@@ -391,12 +391,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                         #region Else
 
-                        case ASPNETIdentityConst.Scope_Userid:
-                            userinfoClaimSet.Add(ASPNETIdentityConst.Scope_Userid, user.Id);
+                        case OAuth2AndOIDCConst.Scope_UserID:
+                            userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
                             break;
-                        case ASPNETIdentityConst.Scope_Roles:
+                        case OAuth2AndOIDCConst.Scope_Roles:
                             userinfoClaimSet.Add(
-                                ASPNETIdentityConst.Scope_Roles,
+                                OAuth2AndOIDCConst.Scope_Roles,
                                 await UserManager.GetRolesAsync(user.Id));
                             break;
 
@@ -435,7 +435,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 変数
             string[] temp = null;
-            string token = formData["token"];
+            string token = formData[OAuth2AndOIDCConst.token];
             string token_type_hint = formData["token_type_hint"];
 
             // クライアント認証
@@ -460,7 +460,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 検証完了
 
-                        if (token_type_hint == "access_token")
+                        if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
                             // 検証
                             AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
@@ -486,7 +486,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 return null; // 成功
                             }
                         }
-                        else if (token_type_hint == "refresh_token")
+                        else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
                         {
                             // refresh_token取消
                             if (RefreshTokenProvider.DeleteDirectly(token))
@@ -559,7 +559,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 変数
             string[] temp = null;
-            string token = formData["token"];
+            string token = formData[OAuth2AndOIDCConst.token];
             string token_type_hint = formData["token_type_hint"];
 
             // クライアント認証
@@ -585,7 +585,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 検証完了
                         AuthenticationTicket ticket = null;
 
-                        if (token_type_hint == "access_token")
+                        if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
                             // 検証
                             AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
@@ -610,7 +610,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 {
                                     if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
                                     {
-                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scope)
+                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
                                         {
                                             scopes += claim.Value + " ";
                                         }
@@ -621,13 +621,13 @@ namespace MultiPurposeAuthSite.Controllers
                                         }
                                     }
                                 }
-                                ret.Add(OAuth2AndOIDCConst.Claim_Scope.Substring(
+                                ret.Add(OAuth2AndOIDCConst.Claim_Scopes.Substring(
                                     OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
 
                                 return ret; // 成功
                             }
                         }
-                        else if (token_type_hint == "refresh_token")
+                        else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
                         {
                             // refresh_token参照
                             ticket = RefreshTokenProvider.ReferDirectly(token);
@@ -651,7 +651,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 {
                                     if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
                                     {
-                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scope)
+                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
                                         {
                                             scopes += claim.Value + " ";
                                         }
@@ -662,7 +662,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         }
                                     }
                                 }
-                                ret.Add(OAuth2AndOIDCConst.Claim_Scope.Substring(
+                                ret.Add(OAuth2AndOIDCConst.Claim_Scopes.Substring(
                                     OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
 
                                 return ret; // 成功
@@ -724,7 +724,7 @@ namespace MultiPurposeAuthSite.Controllers
             Dictionary<string, string> err = new Dictionary<string, string>();
 
             // 変数
-            string grant_type = formData["grant_type"];
+            string grant_type = formData[OAuth2AndOIDCConst.grant_type];
             string assertion = formData["assertion"];
 
             // クライアント認証
@@ -734,7 +734,7 @@ namespace MultiPurposeAuthSite.Controllers
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                         assertion.Split('.')[1]), CustomEncode.us_ascii));
 
-                string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic["iss"]);
+                string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
                 pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(pubKey), CustomEncode.us_ascii);
 
                 if (!string.IsNullOrEmpty(pubKey))
@@ -764,13 +764,13 @@ namespace MultiPurposeAuthSite.Controllers
                             // access_token
                             AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
                             string access_token = verifier.Protect(new AuthenticationTicket(identity, prop));
-                            ret.Add("access_token", access_token);
+                            ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);
                             
                             // expires_in
                             jobj = (JObject)JsonConvert.DeserializeObject(
                                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                                     access_token.Split('.')[1]), CustomEncode.us_ascii));
-                            ret.Add("expires_in", (long.Parse((string)jobj["exp"]) - long.Parse((string)jobj["iat"])).ToString());
+                            ret.Add("expires_in", (long.Parse((string)jobj[OAuth2AndOIDCConst.exp]) - long.Parse((string)jobj[OAuth2AndOIDCConst.iat])).ToString());
 
                             // オペレーション・トレース・ログ出力
                             string clientName = OAuth2Helper.GetInstance().GetClientName(iss);
@@ -829,7 +829,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<Dictionary<string, string>> TestHybridFlow(FormDataCollection formData)
         {
             // 変数
-            string code = formData["code"];
+            string code = formData[OAuth2AndOIDCConst.code];
 
             // Tokenエンドポイントにアクセス
             Uri tokenEndpointUri = new Uri(
@@ -855,7 +855,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // UserInfoエンドポイントにアクセス
             dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                await OAuth2Helper.GetInstance().GetUserInfoAsync(dic["access_token"]));
+                await OAuth2Helper.GetInstance().GetUserInfoAsync(dic[OAuth2AndOIDCConst.AccessToken]));
 
             return dic;
         }

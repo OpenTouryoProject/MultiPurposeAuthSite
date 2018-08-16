@@ -47,6 +47,7 @@ using System.Net.Http.Headers;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util;
 
@@ -314,7 +315,7 @@ namespace MultiPurposeAuthSite.Models.Util
                 httpRequestMessage.Content = new FormUrlEncodedContent(
                     new Dictionary<string, string>
                     {
-                        { "email", email },
+                        { OAuth2AndOIDCConst.Scope_Email, email },
                         { "source", token }
                     });
             }
@@ -323,7 +324,7 @@ namespace MultiPurposeAuthSite.Models.Util
                 httpRequestMessage.Content = new FormUrlEncodedContent(
                     new Dictionary<string, string>
                     {
-                        { "email", email },
+                        { OAuth2AndOIDCConst.Scope_Email, email },
                         { "card", token }
                     });
             }

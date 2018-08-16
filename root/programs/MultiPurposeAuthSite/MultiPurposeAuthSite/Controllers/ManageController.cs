@@ -46,6 +46,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
@@ -1464,7 +1465,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     ASPNETIdentityConfig.TwitterAuthenticationClientId,
                                     ASPNETIdentityConfig.TwitterAuthenticationClientSecret);
 
-                                email = (string)myInfo["email"]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
+                                email = (string)myInfo[OAuth2AndOIDCConst.Scope_Email]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
                                 emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
                             }
                         }
@@ -1736,7 +1737,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // 課金のテスト処理
                 string ret = (string)JsonConvert.DeserializeObject(
                     await OAuth2Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
-                    (string)Session["access_token"], "jpy", "1000"));
+                    (string)Session[OAuth2AndOIDCConst.AccessToken], "jpy", "1000"));
 
                 if (ret == "OK")
                 {
@@ -2415,14 +2416,14 @@ namespace MultiPurposeAuthSite.Controllers
                     // 余談：OpenID Connectであれば、ここで id_token 検証。
 
                     // 結果の表示
-                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
 
                     // 課金処理で使用する。
-                    Session["access_token"] = model.AccessToken;
+                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken;
                 }
                 else
                 {
@@ -2476,14 +2477,14 @@ namespace MultiPurposeAuthSite.Controllers
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                     // 結果の表示
-                    model.AccessToken = dic["access_token"] ?? "";
+                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                         CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
-                    model.RefreshToken = dic["refresh_token"] ?? "";
+                    model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
 
                     // 課金処理で使用する。
-                    Session["access_token"] = model.AccessToken; 
+                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken; 
 
                     #endregion
                 }
