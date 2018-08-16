@@ -146,7 +146,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
         public static string ProtectFromPayload(string access_token_payload, ulong customExp)
         {
             string json = "";
-            string jwt = "";
+            string jws = "";
 
             // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
             //authTokenClaimSet.Add("exp", ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
@@ -167,23 +167,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             #endregion
 
-            #region JWT化
+            #region JWS化
 
-            JWT_RS256_X509 jwtRS256 = null;
+            JWS_RS256_X509 jwsRS256 = null;
 
             // 署名
-            jwtRS256 = new JWT_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
-            jwt = jwtRS256.Create(json);
+            jws = jwsRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
-            if (jwtRS256.Verify(jwt))
+            if (jwsRS256.Verify(jws))
             {
-                return jwt; // 検証できた。
+                return jws; // 検証できた。
             }
             else
             {
@@ -262,19 +262,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                         //・編集したpayloadを再度JWTとして署名する。
                         string newPayload = JsonConvert.SerializeObject(authTokenClaimSet);
-                        JWT_RS256_X509 jwtRS256 = null;
+                        JWS_RS256_X509 jwsRS256 = null;
 
                         // 署名
-                        jwtRS256 = new JWT_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+                        jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
-                        string id_token = jwtRS256.Create(newPayload);
+                        string id_token = jwsRS256.Create(newPayload);
 
                         // 検証
-                        jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+                        jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
-                        if (jwtRS256.Verify(id_token))
+                        if (jwsRS256.Verify(id_token))
                         {
                             // 検証できた。
                             return id_token;

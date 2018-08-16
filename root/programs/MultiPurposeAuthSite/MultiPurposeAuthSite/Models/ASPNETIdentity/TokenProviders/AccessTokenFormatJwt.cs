@@ -66,7 +66,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         public string Protect(AuthenticationTicket ticket)
         {
             string json = "";
-            string jwt = "";
+            string jws = "";
             
             // チェック
             if (ticket == null)
@@ -190,12 +190,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             #endregion
 
-            #region JWT化
+            #region JWS化
 
-            JWT_RS256_X509 jwtRS256 = null;
+            JWS_RS256_X509 jwsRS256 = null;
 
             // JWT_RS256_X509
-            jwtRS256 = new JWT_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // JWSHeaderのセット
@@ -203,19 +203,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             Dictionary<string, string> dic =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     RS256_KeyConverter.X509PfxToJwkPublicKey(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
-            jwtRS256.JWSHeader.kid = dic["kid"];
-            jwtRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
-            
+            jwsRS256.JWSHeader.kid = dic["kid"];
+            jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+
             // 署名
-            jwt = jwtRS256.Create(json);
+            jws = jwsRS256.Create(json);
 
             // 検証
-            jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
-            if (jwtRS256.Verify(jwt))
+            if (jwsRS256.Verify(jws))
             {
-                return jwt; // 検証できた。
+                return jws; // 検証できた。
             }
             else
             {
@@ -237,8 +237,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             // 検証
-            JWT_RS256_X509 jwtRS256 = new JWT_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword);
-            if (jwtRS256.Verify(jwt))
+            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword);
+            if (jwsRS256.Verify(jwt))
             {
                 // 検証できた。
 

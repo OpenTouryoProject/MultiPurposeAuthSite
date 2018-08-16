@@ -51,26 +51,26 @@ namespace CreateJwtBearerTokenFlowAssertion
             string scopes = "hoge1 hoge2 hoge3";
             JObject jobj = null;
 
-            JWT_RS256_XML jwt_RS256 = new JWT_RS256_XML();
+            JWS_RS256_XML jws_RS256 = new JWS_RS256_XML();
 
             Console.WriteLine("PrivateKey:");
             Console.WriteLine(CustomEncode.ToBase64String(
-                CustomEncode.StringToByte(jwt_RS256.XMLPrivateKey, CustomEncode.us_ascii)));
+                CustomEncode.StringToByte(jws_RS256.XMLPrivateKey, CustomEncode.us_ascii)));
             Console.WriteLine("");
 
             Console.WriteLine("PublicKey:");
             Console.WriteLine(CustomEncode.ToBase64String(
-                CustomEncode.StringToByte(jwt_RS256.XMLPublicKey, CustomEncode.us_ascii)));
+                CustomEncode.StringToByte(jws_RS256.XMLPublicKey, CustomEncode.us_ascii)));
             Console.WriteLine("");
 
             string jwtAssertion = JwtAssertion.CreateJwtBearerTokenFlowAssertion(
                 OAuth2AndOIDCParams.Isser,
                 OAuth2AndOIDCParams.Audience,
             new System.TimeSpan(0, 30, 0), scopes,
-                jwt_RS256.XMLPrivateKey);
+                jws_RS256.XMLPrivateKey);
 
             if (JwtAssertion.VerifyJwtBearerTokenFlowAssertion(
-                jwtAssertion, out iss, out aud, out scopes, out jobj, jwt_RS256.XMLPublicKey))
+                jwtAssertion, out iss, out aud, out scopes, out jobj, jws_RS256.XMLPublicKey))
             {
                 if (iss == OAuth2AndOIDCParams.Isser
                     && aud == OAuth2AndOIDCParams.Audience)
