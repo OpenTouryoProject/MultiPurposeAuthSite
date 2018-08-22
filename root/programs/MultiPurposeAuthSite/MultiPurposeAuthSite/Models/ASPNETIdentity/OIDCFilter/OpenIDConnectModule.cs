@@ -427,12 +427,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                     if (!string.IsNullOrEmpty(location)
                         && location.IndexOf("#access_token=") != -1)
                     {
+                        string pattern = "";
+
                         // ・正規表現でaccess_tokenを抜き出す。
-                        string pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
+                        pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
                         access_token = Regex.Match(location, pattern).Groups["accessToken"].Value;
 
-                        // at_hashを付与
-                        id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.AtHash);
+                        // ・正規表現でstateを抜き出す。
+                        pattern = "&state=(?<state>.+)";
+                        state = Regex.Match(location, pattern).Groups["state"].Value;
+
+                        // at_hash と s_hashを付与
+                        id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                            access_token, "", state, HashClaimType.AtHash | HashClaimType.SHash, // ★
+                            ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
 
                         if (!string.IsNullOrEmpty(id_token))
                         {
@@ -493,13 +501,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             {
                                 GroupCollection groups = match.Groups;
                                 code = groups[OAuth2AndOIDCConst.code].Value;
-                                state = groups["state"].Value;
+                                state = groups[OAuth2AndOIDCConst.state].Value;
                             }
 
                             redirect_url = location.Substring(0, location.IndexOf('?'));
 
                             // ★ Hybrid Flow対応なので、expを短縮してもイイ。
-                            expires_in = ulong.Parse(ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
+                            expires_in = ulong.Parse(
+                                ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
 
                             // Fragmentに組み込む
                             string fragment = "";
@@ -509,9 +518,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 // id_tokenを取得
                                 string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
 
-                                // c_hashを付与
-                                id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(
-                                    OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in), code, HashClaimType.CHash);
+                                // c_hash, s_hashを付与
+                                id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                                    OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in),
+                                    code, state, HashClaimType.CHash | HashClaimType.SHash,
+                                    ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
 
                                 fragment = "#id_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { id_token, code, expires_in, state });
@@ -520,7 +531,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             {
                                 // access_tokenを取得
                                 string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
-                                access_token = OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in);
+                                access_token = OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in);
 
                                 fragment = "#access_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { access_token, code, expires_in, state });
@@ -529,10 +540,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             {
                                 // id_token, access_tokenを取得
                                 string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
-                                access_token = OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in);
+                                access_token = OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in);
 
-                                // at_hash, c_hashの両方を付与
-                                id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, code, HashClaimType.Both);
+                                // at_hash, c_hash, s_hashを付与
+                                id_token = IdToken.ChangeToIdTokenFromAccessToken(access_token, code, state,
+                                    HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
+                                    ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
 
                                 fragment = "#access_token={0}&id_token={1}&token_type=Bearer&code={2}&expires_in={3}&state={4}";
                                 fragment = string.Format(fragment, new object[] { access_token, id_token, code, expires_in, state });

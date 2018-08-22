@@ -43,8 +43,6 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
@@ -74,7 +72,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
         /// <remarks>
         /// Hybrid Flow対応なので、scopeを制限してもイイ。
         /// </remarks>
-        public static string CreateAccessTokenPayload(AuthenticationTicket ticket)
+        public static string CreateAccessTokenPayloadFromAuthenticationTicket(AuthenticationTicket ticket)
         {
             // チェック
             if (ticket == null)
@@ -137,16 +135,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
         }
 
         /// <summary>
-        /// ProtectFromPayload
+        /// ProtectFromAccessTokenPayload
         ///   Hybrid Flow対応（access_token_payloadを処理）
         /// </summary>
         /// <param name="access_token_payload">AccessTokenのPayload</param>
         /// <param name="customExp">Hybrid Flowのtokenに対応したexp</param>
-        /// <returns></returns>
-        public static string ProtectFromPayload(string access_token_payload, ulong customExp)
+        /// <returns>IdToken</returns>
+        public static string ProtectFromAccessTokenPayload(string access_token_payload, ulong customExp)
         {
             string json = "";
-            string jws = "";
+            //string jws = "";
 
             // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
             //authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
@@ -184,159 +182,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             jwsRS256.JWSHeader.kid = jwk["kid"];
             jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
-            jws = jwsRS256.Create(json);
+            return jwsRS256.Create(json);
 
-            // 検証
-            jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+            //// 検証
+            //jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            //    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
-            if (jwsRS256.Verify(jws))
-            {
-                return jws; // 検証できた。
-            }
-            else
-            {
-                return ""; // 検証できなかった。
-            }
+            //if (jwsRS256.Verify(jws))
+            //{
+            //    return jws; // 検証できた。
+            //}
+            //else
+            //{
+            //    return ""; // 検証できなかった。
+            //}
 
             #endregion
-        }
-
-        #endregion
-
-        #region IdToken
-
-        /// <summary>
-        /// ChangeToIdTokenFromAccessToken
-        ///   OIDC対応（AccessTokenからIdTokenを生成）
-        /// </summary>
-        /// <param name="access_token">string</param>
-        /// <param name="code">string</param>
-        /// <param name="HashClaimType">HashClaimType</param>
-        /// <returns>IdToken</returns>
-        /// <remarks>
-        /// OIDC対応
-        /// </remarks>
-
-        public static string ChangeToIdTokenFromAccessToken(string access_token, string code, HashClaimType hct)
-        {
-            if (access_token.Contains("."))
-            {
-                string[] temp = access_token.Split('.');
-                string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
-                Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-
-                // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
-                if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
-                    && authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
-                {
-                    JArray scopes = (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes];
-
-                    // ・OpenID Connect : response_type=codeに対応する。
-                    if (scopes.Any(x => x.ToString() == OAuth2AndOIDCConst.Scope_Openid))
-                    {
-                        //・payloadからscopeを削除する。
-                        authTokenClaimSet.Remove(OAuth2AndOIDCConst.scopes);
-
-                        //・payloadにat_hash, c_hashを追加する。
-                        switch (hct)
-                        {
-                            case HashClaimType.None:
-                                break;
-
-                            case HashClaimType.AtHash:
-                                // at_hash
-                                authTokenClaimSet.Add(
-                                    OAuth2AndOIDCConst.at_hash,
-                                    OidcTokenEditor.CreateHash(access_token));
-                                break;
-
-                            case HashClaimType.CHash:
-                                // c_hash
-                                authTokenClaimSet.Add(
-                                    OAuth2AndOIDCConst.c_hash,
-                                    OidcTokenEditor.CreateHash(code));
-                                break;
-
-                            case HashClaimType.Both:
-                                // at_hash, c_hash
-                                authTokenClaimSet.Add(
-                                    OAuth2AndOIDCConst.at_hash,
-                                    OidcTokenEditor.CreateHash(access_token));
-                                authTokenClaimSet.Add(
-                                    OAuth2AndOIDCConst.c_hash,
-                                    OidcTokenEditor.CreateHash(code));
-                                break;
-                        }
-
-                        //・編集したpayloadを再度JWTとして署名する。
-                        string newPayload = JsonConvert.SerializeObject(authTokenClaimSet);
-                        JWS_RS256_X509 jwsRS256 = null;
-
-                        // 署名
-                        jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
-                            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-                        // ヘッダ
-                        JWS_Header jwsHeader = 
-                            JsonConvert.DeserializeObject<JWS_Header>(
-                                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[0]), CustomEncode.UTF_8));
-
-                        if (!string.IsNullOrEmpty(jwsHeader.jku) 
-                            && !string.IsNullOrEmpty(jwsHeader.kid))
-                        {
-                            jwsRS256.JWSHeader.jku = jwsHeader.jku;
-                            jwsRS256.JWSHeader.kid = jwsHeader.kid;
-                        }
-                        
-                        string id_token = jwsRS256.Create(newPayload);
-
-                        // 検証
-                        jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
-                            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-                        if (jwsRS256.Verify(id_token))
-                        {
-                            // 検証できた。
-                            return id_token;
-                        }
-                        else
-                        {
-                            // 検証できなかった。
-                        }
-                    }
-                    else
-                    {
-                        // OIDCでない。
-                    }
-                }
-                else
-                {
-                    // OIDCでない。
-                }
-            }
-            else
-            {
-                // JWTでない。
-            }
-
-            return "";
-        }
-
-        /// <summary>
-        /// SHA256でat_hash, c_hashを作成。
-        /// （現時点でRS256固定になっているので）
-        /// </summary>
-        /// <returns>hash</returns>
-        public static string CreateHash(string input)
-        {
-            // ID Token の JOSE Header にある alg Header Parameterのアルゴリズムで使用されるハッシュアルゴリズムを用い、
-            // input(access_token や code) のASCII オクテット列からハッシュ値を求め、左半分を base64url エンコードした値。
-            return CustomEncode.ToBase64UrlString(
-                PubCmnFunction.ShortenByteArray(
-                    GetHash.GetHashBytes(
-                        CustomEncode.StringToByte(input, CustomEncode.us_ascii),
-                        EnumHashAlgorithm.SHA256Managed), (256 / 2)));
         }
 
         #endregion

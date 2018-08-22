@@ -115,7 +115,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // 有効期限が無効なtokenのペイロードだけ作成
             AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
-            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayload(context.Ticket);
+            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayloadFromAuthenticationTicket(context.Ticket);
             temp.Add("access_token_payload", access_token_payload);
 
             // OAuth PKCE 対応

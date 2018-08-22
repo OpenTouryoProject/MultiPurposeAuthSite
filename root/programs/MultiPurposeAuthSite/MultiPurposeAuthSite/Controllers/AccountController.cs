@@ -2221,7 +2221,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
-                                
+
                 //stateの検証
                 if (state == state_InSessionOrCookie)
                 {
@@ -2263,6 +2263,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
+                // エラー
                 return View("Error");
             }
         }

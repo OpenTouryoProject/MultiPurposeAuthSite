@@ -68,7 +68,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         public string Protect(AuthenticationTicket ticket)
         {
             string json = "";
-            string jws = "";
+            //string jws = "";
             
             // チェック
             if (ticket == null)
@@ -210,20 +210,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             // 署名
-            jws = jwsRS256.Create(json);
+            return jwsRS256.Create(json);
 
-            // 検証
-            jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+            //// 検証
+            //jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            //    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
-            if (jwsRS256.Verify(jws))
-            {
-                return jws; // 検証できた。
-            }
-            else
-            {
-                return ""; // 検証できなかった。
-            }
+            //if (jwsRS256.Verify(jws))
+            //{
+            //    return jws; // 検証できた。
+            //}
+            //else
+            //{
+            //    return ""; // 検証できなかった。
+            //}
 
             #endregion
         }

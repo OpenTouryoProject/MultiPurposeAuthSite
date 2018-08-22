@@ -129,13 +129,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 string content = enc.GetString(bb);
                 
                 // JSON形式なので、JsonConvertでaccess_tokenを抜き出す。
-                Dictionary<string, object> accessTokenResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
+                Dictionary<string, object> accessTokenResponse = 
+                    JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
 
                 // access_tokenを
                 if (accessTokenResponse.ContainsKey(OAuth2AndOIDCConst.AccessToken))
                 {
                     string access_token = (string)accessTokenResponse[OAuth2AndOIDCConst.AccessToken];
-                    string id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.None);
+
+                    string id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                        access_token, "", "", HashClaimType.None,
+                        ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
+
                     if (!string.IsNullOrEmpty(id_token))
                     {
                         // responseにid_tokenとして、このJWTを追加する。
