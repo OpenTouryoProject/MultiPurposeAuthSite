@@ -243,8 +243,8 @@ namespace MultiPurposeAuthSite.Controllers
             #region OAuth2拡張
 
             OpenIDConfig.Add("response_modes_supported", new List<string> {
-                "query",
-                "form_post"
+                OAuth2AndOIDCConst.query,
+                OAuth2AndOIDCConst.form_post
             });
 
             #region revocation
@@ -436,16 +436,16 @@ namespace MultiPurposeAuthSite.Controllers
             // 変数
             string[] temp = null;
             string token = formData[OAuth2AndOIDCConst.token];
-            string token_type_hint = formData["token_type_hint"];
+            string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
 
             // クライアント認証
 
             // クライアント識別子
-            string authHeader = HttpContext.Current.Request.Headers["Authorization"];
+            string authHeader = HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization];
             
             temp = authHeader.Split(' ');
 
-            if (temp[0].ToLower() == "basic")
+            if (temp[0] == OAuth2AndOIDCConst.Basic)
             {
                 temp = CustomEncode.ByteToString(
                     CustomEncode.FromBase64String(temp[1]), CustomEncode.us_ascii).Split(':');
@@ -560,16 +560,16 @@ namespace MultiPurposeAuthSite.Controllers
             // 変数
             string[] temp = null;
             string token = formData[OAuth2AndOIDCConst.token];
-            string token_type_hint = formData["token_type_hint"];
+            string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
 
             // クライアント認証
 
             // クライアント識別子
-            string authHeader = HttpContext.Current.Request.Headers["Authorization"];
+            string authHeader = HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization];
 
             temp = authHeader.Split(' ');
 
-            if (temp[0].ToLower() == "basic")
+            if (temp[0] == OAuth2AndOIDCConst.Basic)
             {
                 temp = CustomEncode.ByteToString(
                     CustomEncode.FromBase64String(temp[1]), CustomEncode.us_ascii).Split(':');
@@ -603,7 +603,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // 検証成功
                                 // メタデータの返却
                                 ret.Add("active", "true");
-                                ret.Add("token_type", token_type_hint);
+                                ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
 
                                 string scopes = "";
                                 foreach (Claim claim in ticket.Identity.Claims)
@@ -644,7 +644,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // 検証成功
                                 // メタデータの返却
                                 ret.Add("active", "true");
-                                ret.Add("token_type", token_type_hint);
+                                ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
 
                                 string scopes = "";
                                 foreach (Claim claim in ticket.Identity.Claims)
@@ -725,7 +725,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 変数
             string grant_type = formData[OAuth2AndOIDCConst.grant_type];
-            string assertion = formData["assertion"];
+            string assertion = formData[OAuth2AndOIDCConst.assertion];
 
             // クライアント認証
             if (grant_type == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
@@ -759,7 +759,7 @@ namespace MultiPurposeAuthSite.Controllers
                             prop.ExpiresUtc = DateTimeOffset.Now.Add(ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes);
 
                             // token_type
-                            ret.Add("token_type", "bearer");
+                            ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
 
                             // access_token
                             AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();

@@ -2031,7 +2031,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // アクセス要求を保存して、仲介コードを発行する。
                     identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
@@ -2071,7 +2071,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // アクセス要求の許可
                     identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce);
@@ -2133,7 +2133,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // アクセス要求を保存して、仲介コードを発行する。
                 identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+                //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                 OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce);
@@ -2223,7 +2223,8 @@ namespace MultiPurposeAuthSite.Controllers
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                 //stateの検証
-                if (state == state_InSessionOrCookie)
+                if (state == state_InSessionOrCookie
+                    || state == "fapi1:" + state_InSessionOrCookie)
                 {
                     //state正常
 
@@ -2233,8 +2234,46 @@ namespace MultiPurposeAuthSite.Controllers
                     + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Account;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2Helper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier_InSessionOrCookie);
+                    if (!state.StartsWith("fapi1:"))
+                    {
+                        if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
+                        {
+                            // 通常
+                            model.Response = await OAuth2Helper.GetInstance()
+                                .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+                        }
+                        else
+                        {
+                            // PKCE
+                            model.Response = await OAuth2Helper.GetInstance()
+                               .GetAccessTokenByCodeAsync(
+                                tokenEndpointUri, client_id, client_secret, redirect_uri,
+                                code, code_verifier_InSessionOrCookie);
+                        }
+                    }
+                    else
+                    {
+                        // FAPI1
+
+                        // Tokenエンドポイントにアクセス
+                        string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                                 + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint;
+
+                        // ClientNameから、client_id(iss)を取得。
+                        string iss = "";
+
+                        // Client Accountのみ
+                        iss = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+
+                        // テストなので秘密鍵は共通とする。
+                        string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
+                        privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
+
+                        model.Response = await OAuth2Helper.GetInstance().GetAccessTokenByCodeAsync(
+                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
+                                iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
+                    }
+
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                     model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];

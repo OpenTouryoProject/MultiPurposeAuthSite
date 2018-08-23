@@ -246,7 +246,7 @@ namespace MultiPurposeAuthSite.Models.Util
             };
 
             // HttpRequestMessage (Headers)
-            httpRequestMessage.Headers.Add("Authorization", authHeader);
+            httpRequestMessage.Headers.Add(OAuth2AndOIDCConst.HttpHeader_Authorization, authHeader);
             //httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("OAuth", authHeader);
 
             //httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
@@ -260,7 +260,7 @@ namespace MultiPurposeAuthSite.Models.Util
             //ServicePointManager.Expect100Continue = false;
             //HttpWebRequest request = (HttpWebRequest)WebRequest.Create(resource_url);
             //request.Method = "GET";
-            //request.Headers.Add("Authorization", authHeader);
+            //request.Headers.Add(OAuth2AndOIDCConst.HttpHeader_Authorization, authHeader);
             //WebResponse response = request.GetResponse();
             //return JsonConvert.DeserializeObject<Dictionary<string, string>>(
             //    new StreamReader(response.GetResponseStream()).ReadToEnd());
@@ -308,7 +308,8 @@ namespace MultiPurposeAuthSite.Models.Util
 
             // HttpRequestMessage (Headers)
             httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic", CustomEncode.ToBase64String(CustomEncode.StringToByte(secretKey, CustomEncode.us_ascii)));
+                OAuth2AndOIDCConst.Basic,
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(secretKey, CustomEncode.us_ascii)));
 
             if (ASPNETIdentityConfig.EnableStripe)
             {
@@ -379,7 +380,8 @@ namespace MultiPurposeAuthSite.Models.Util
 
             // HttpRequestMessage (Headers)
             httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic", CustomEncode.ToBase64String(CustomEncode.StringToByte(secretKey, CustomEncode.us_ascii)));
+                OAuth2AndOIDCConst.Basic,
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(secretKey, CustomEncode.us_ascii)));
 
             httpRequestMessage.Content = new FormUrlEncodedContent(
                 new Dictionary<string, string>

@@ -100,6 +100,17 @@ namespace MultiPurposeAuthSite.Controllers
                     + "&nonce=" + this.Nonce;
         }
 
+        /// <summary>FAPI1スターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたFAPI1スターター</returns>
+        private string AssembleFAPI1Starter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId, response_type, ASPNETIdentityConst.StandardScopes, "fapi1:" + this.State);
+        }
+
         /// <summary>初期化</summary>
         private void Init()
         {
@@ -227,7 +238,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region PKCE
+        #region PKCE(FAPI1)
 
         /// <summary>Test Authorization Code Flow (PKCE plain)</summary>
         /// <returns>ActionResult</returns>
@@ -261,6 +272,23 @@ namespace MultiPurposeAuthSite.Controllers
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
                 + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256);
+        }
+
+        #endregion
+
+        #region FAPI1
+
+        /// <summary>Test Authorization Code Flow (FAPI1)</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult FAPI1AuthorizationCode()
+        {
+            this.Init();
+            this.Save();
+
+            // Authorization Code Flow
+            return Redirect(this.AssembleFAPI1Starter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
         }
 
         #endregion
@@ -361,6 +389,10 @@ namespace MultiPurposeAuthSite.Controllers
             return Redirect(this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcHybrid3_ResponseType));
         }
+
+        #endregion
+
+        #region FAPI2
 
         #endregion
 

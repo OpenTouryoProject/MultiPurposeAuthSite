@@ -182,7 +182,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #region 基本 4 フローのWebAPI
 
         /// <summary>
-        /// Authentication Code or Hybrid Flow : codeからAccess Tokenを取得する。
+        /// Authentication Code : codeからAccess Tokenを取得する。
         /// </summary>
         /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
         /// <param name="client_id">client_id</param>
@@ -212,6 +212,21 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         {
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
+        }
+
+        /// <summary>
+        /// FAPI1 : code, code_verifierからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, redirect_uri, code, assertion);
         }
 
         /// <summary>
@@ -338,7 +353,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             };
 
             // HttpRequestMessage (Headers & Content)
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(OAuth2AndOIDCConst.Bearer, accessToken);
             httpRequestMessage.Content = new FormUrlEncodedContent(
                 new Dictionary<string, string>
                 {

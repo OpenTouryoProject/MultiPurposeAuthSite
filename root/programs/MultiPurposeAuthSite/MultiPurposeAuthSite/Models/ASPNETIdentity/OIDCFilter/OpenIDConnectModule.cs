@@ -344,9 +344,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             //bool is_fragment = false;
                             bool is_form_post = false;
 
-                            //is_query = responseMode.StartsWith("query");
-                            //is_fragment = responseMode.StartsWith("fragment");
-                            is_form_post = responseMode.StartsWith("form_post");
+                            //is_query = responseMode.StartsWith(OAuth2AndOIDCConst.query);
+                            //is_fragment = responseMode.StartsWith(OAuth2AndOIDCConst.fragment);
+                            is_form_post = responseMode.StartsWith(OAuth2AndOIDCConst.form_post);
 
                             if (is_form_post)
                             {
@@ -422,7 +422,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                     //                  - or [response_type=id_token token]
 
                     // レスポンス内容を参照して書き換え（fragmentにid_tokenを追加）
-                    string location = response.Headers["Location"];
+                    string location = response.Headers[OAuth2AndOIDCConst.HttpHeader_Location];
 
                     if (!string.IsNullOrEmpty(location)
                         && location.IndexOf("#access_token=") != -1)
@@ -447,14 +447,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             // responseにid_tokenとして、このJWTを追加する。
                             if (this.RewritedResponseTypeFrom_IdTokenToken)
                             {
-                                response.Headers["Location"] = location + "&id_token=" + id_token;
+                                response.Headers[OAuth2AndOIDCConst.HttpHeader_Location] = location + "&id_token=" + id_token;
                             }
                             else if (this.RewritedResponseTypeFrom_IdToken)
                             {
                                 // ココは未サポート状態なので、テストできていない。
                                 location = location.Replace("access_token=" + access_token + "&", "");
                                 location = location.Replace("&token_type=beara", "");
-                                response.Headers["Location"] = location + "&id_token=" + id_token;
+                                response.Headers[OAuth2AndOIDCConst.HttpHeader_Location] = location + "&id_token=" + id_token;
                             }
                         }
                     }
@@ -480,7 +480,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         // ・本来は、
                         //     "http(s)://redirect_uri値?code=code値&state=state値"
                         //   を期待していた。
-                        string location = response.Headers["Location"];
+                        string location = response.Headers[OAuth2AndOIDCConst.HttpHeader_Location];
 
                         string paramStrCode = "?code=";
                         string paramStrState = "&state=";
@@ -490,7 +490,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             || location.IndexOf(paramStrState) != -1
                             || location.IndexOf(paramStrRedirectUri) != -1)
                         {
-                            response.Headers.Remove("Location");
+                            response.Headers.Remove(OAuth2AndOIDCConst.HttpHeader_Location);
 
                             // 以下は、"?code=XXX&state=YYY&" という並びが前提。
                             MatchCollection matches = StringChecker.Matches(
@@ -552,7 +552,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             }
 
                             // Locationを追加（redirect_url + fragment）。
-                            response.Headers.Add("Location", redirect_url + fragment);
+                            response.Headers.Add(OAuth2AndOIDCConst.HttpHeader_Location, redirect_url + fragment);
                         }
                     }
                 }
@@ -578,7 +578,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         // ・本来は、
                         //     "http(s)://redirect_uri値?code=code値&state=state値"
                         //   を期待していた。
-                        string location = response.Headers["Location"];
+                        string location = response.Headers[OAuth2AndOIDCConst.HttpHeader_Location];
 
                         string paramStrCode = "?code=";
                         string paramStrState = "&state=";
@@ -590,7 +590,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         {
                             // 302 Found ---> 200 OK
                             response.StatusCode = 200;
-                            response.Headers.Remove("Location");
+                            response.Headers.Remove(OAuth2AndOIDCConst.HttpHeader_Location);
 
                             // 以下は、"?code=XXX&state=YYY&redirect_uri=ZZZ" という並びが前提。
                             MatchCollection matches = StringChecker.Matches(
@@ -601,8 +601,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             {
                                 GroupCollection groups = match.Groups;
                                 code = groups[OAuth2AndOIDCConst.code].Value;
-                                state = groups["state"].Value;
-                                redirect_url = CustomEncode.UrlDecode(groups["redirect_uri"].Value);
+                                state = groups[OAuth2AndOIDCConst.state].Value;
+                                redirect_url = CustomEncode.UrlDecode(groups[OAuth2AndOIDCConst.redirect_uri].Value);
                             }
 
                             // form_postに必要な、HTTP response message body

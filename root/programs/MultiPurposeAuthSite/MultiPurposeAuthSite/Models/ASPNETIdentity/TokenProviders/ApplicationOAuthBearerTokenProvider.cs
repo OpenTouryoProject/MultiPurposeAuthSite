@@ -37,17 +37,24 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 
 using System;
-using System.Web;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Claims;
+
+using System.Web;
+using System.Net.Http;
 
 using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.Str;
+
 /// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders</summary>
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {
@@ -283,6 +290,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
                 if (context.TryGetBasicCredentials(out clientId, out clientSecret))
                 {
+                    // 通常のクライアント認証
                     if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
@@ -291,6 +299,45 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             // 検証完了
                             context.Validated(clientId);
                         }
+                    }
+                }
+                else
+                {
+                    // その他のクライアント認証の可能性
+                    string assertion = context.Parameters.Get(OAuth2AndOIDCConst.assertion);
+                    if (!string.IsNullOrEmpty(assertion))
+                    {
+                        // JWT client assertion
+                        Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                                assertion.Split('.')[1]), CustomEncode.us_ascii));
+
+                        string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                        pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(pubKey), CustomEncode.us_ascii);
+
+                        if (!string.IsNullOrEmpty(pubKey))
+                        {
+                            string iss = "";
+                            string aud = "";
+                            string scopes = "";
+                            JObject jobj = null;
+
+                            if (JwtAssertion.VerifyJwtBearerTokenFlowAssertion(
+                                assertion, out iss, out aud, out scopes, out jobj, pubKey))
+                            {
+                                // aud 検証
+                                if (aud == ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                                    + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint)
+                                {
+                                    // 検証完了
+                                    context.Validated(iss);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // クライアント認証なしエラー
                     }
                 }
 

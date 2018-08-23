@@ -85,7 +85,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
             + OAuth2AndOIDCConst.Scope_UserID;
-        // authは他のscopeをフィルタするので。
 
         /// <summary>OIDCのscope</summary>
         public static readonly string OidcScopes =
@@ -95,8 +94,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
             + OAuth2AndOIDCConst.Scope_UserID;
-        // authは他のscopeをフィルタするので。
-
+        
         /// <summary>ID連携 scope</summary>
         public static readonly string IdFederationScopes =
             OAuth2AndOIDCConst.Scope_Openid + " "
@@ -106,7 +104,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             + OAuth2AndOIDCConst.Scope_Address + " "
             + OAuth2AndOIDCConst.Scope_UserID + " "
             + OAuth2AndOIDCConst.Scope_Roles;
-        // authは他のscopeをフィルタするので。
 
         #endregion
 
