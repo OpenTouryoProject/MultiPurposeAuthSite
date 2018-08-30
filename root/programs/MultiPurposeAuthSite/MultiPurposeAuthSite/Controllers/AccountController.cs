@@ -2186,6 +2186,13 @@ namespace MultiPurposeAuthSite.Controllers
                 state_InSessionOrCookie = Request.Cookies["test_state"].Value;
             }
 
+            // nonce
+            string nonce_InSessionOrCookie = (string)Session["test_nonce"];
+            if (string.IsNullOrEmpty(nonce_InSessionOrCookie))
+            {
+                nonce_InSessionOrCookie = Request.Cookies["test_nonce"].Value;
+            }
+
             // code_verifier
             string code_verifier_InSessionOrCookie = (string)Session["test_code_verifier"];
             if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
@@ -2294,6 +2301,38 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // state異常
                 }
+
+                #region 各種Token検証
+
+                string out_sub = "";
+                JObject out_jobj = null;
+
+                if (!string.IsNullOrEmpty(model.AccessToken))
+                {
+                    List<string> out_roles = null;
+                    List<string> out_scopes = null;
+
+                    if (!JwtToken.Verify(model.AccessToken, 
+                        out out_sub, out out_roles, out out_scopes, out out_jobj))
+                    {
+                        throw new Exception("AccessToken検証エラー");
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(model.IdToken))
+                {
+                    string out_nonce = "";
+
+                    if(!IdToken.Verify(model.IdToken,
+                        model.AccessToken, code, state,
+                        out out_sub, out out_nonce, out out_jobj)
+                        && out_nonce == nonce_InSessionOrCookie)
+                    {
+                        throw new Exception("IdToken検証エラー");
+                    }
+                }
+
+                #endregion
 
                 #endregion
 

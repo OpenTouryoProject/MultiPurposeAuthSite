@@ -179,7 +179,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     RS256_KeyConverter.X509PfxToJwkPublicKey(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
 
-            jwsRS256.JWSHeader.kid = jwk["kid"];
+            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             return jwsRS256.Create(json);

@@ -129,10 +129,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>保存</summary>
         private void Save()
         {
-            // テスト用にstate, code_verifierを、Session, Cookieに保存
+            // テスト用にstate, nonce, code_verifierを、Session, Cookieに保存
             // ・Session : サイト分割時
             // ・Cookie : 同一サイト時
 
+            // state
             Session["test_state"] = this.State;
             if (Request.Cookies["test_state"] == null)
             {
@@ -146,6 +147,21 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
+            // nonce
+            Session["test_nonce"] = this.Nonce;
+            if (Request.Cookies["test_nonce"] == null)
+            {
+                Response.Cookies["test_nonce"].Value = this.Nonce;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Request.Cookies["test_nonce"].Value))
+                {
+                    Response.Cookies["test_nonce"].Value = this.Nonce;
+                }
+            }
+
+            // code_verifier
             Session["test_code_verifier"] = this.CodeVerifier;
             if (Request.Cookies["test_code_verifier"] == null)
             {

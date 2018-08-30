@@ -206,7 +206,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     RS256_KeyConverter.X509PfxToJwkPublicKey(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
 
-            jwsRS256.JWSHeader.kid = jwk["kid"];
+            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             // 署名
@@ -246,9 +246,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             Dictionary<string, string> header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwt.Split('.')[0]),CustomEncode.UTF_8));
 
-            if (header.Keys.Any(s => s == "kid"))
+            if (header.Keys.Any(s => s == JwtConst.kid))
             {
-                if (string.IsNullOrEmpty(header["kid"]))
+                if (string.IsNullOrEmpty(header[JwtConst.kid]))
                 {
                     // 証明書を使用
                     jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, "");
@@ -256,7 +256,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 else
                 {
                     JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
-                    Dictionary<string, string> jwkObject = JwkSet.GetJwkObject(jwkSetObject, header["kid"]);
+                    Dictionary<string, string> jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
 
                     if (jwkObject == null)
                     {
