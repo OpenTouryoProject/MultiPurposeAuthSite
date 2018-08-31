@@ -15,7 +15,7 @@ CREATE TABLE "Users"(              -- Users
     "PhoneNumber" NVARCHAR2(256) NULL,
     "PhoneNumberConfirmed" NUMBER(3) NOT NULL,
     "TwoFactorEnabled" NUMBER(3) NOT NULL,
-    "LockoutEndDateUtc" DATE NULL,
+    "LockoutEndDateUtc" TIMESTAMP NULL,
     "LockoutEnabled" NUMBER(3) NOT NULL,
     "AccessFailedCount" NUMBER(10) NOT NULL,
     -- 追加の情報
@@ -23,7 +23,8 @@ CREATE TABLE "Users"(              -- Users
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
     "FIDO2PublicKey" NVARCHAR2(2000) NULL,
-    "CreatedDate" DATE NOT NULL,
+    "CreatedDate" TIMESTAMP NOT NULL,
+    "PasswordChangeDate" TIMESTAMP NOT NULL,
     CONSTRAINT "PK.Users" PRIMARY KEY ("Id")
 );
 

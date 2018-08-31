@@ -19,6 +19,7 @@ CREATE TABLE Users(                -- Users
     UnstructuredData varchar(2000) NULL,
     FIDO2PublicKey varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,
+    PasswordChangeDate timestamp NOT NULL,
     CONSTRAINT PK_Users PRIMARY KEY (Id)
 );
 

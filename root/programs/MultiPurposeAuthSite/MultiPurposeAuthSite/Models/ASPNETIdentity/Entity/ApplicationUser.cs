@@ -186,11 +186,35 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// Gets or sets the user name ( = Email) .
         /// </summary>
         public string UserName { get; set; }
-        
+
+        /// <summary>salted / hashed form of the user password</summary>
+        private string _passwordHash = "";
+
         /// <summary>
         /// Gets or sets the salted / hashed form of the user password.
         /// </summary>
-        public string PasswordHash { get; set; }
+        public string PasswordHash
+        {
+            get
+            {
+                return this._passwordHash;
+            }
+            set
+            {
+                // Support "90-day update policy" of PCI DSS 
+                if (string.IsNullOrEmpty(this._passwordHash))
+                {
+                    // 新規や、DBからロード
+                }
+                else
+                {
+                    // 更新時
+                    this.PasswordChangeDate = DateTime.Now;
+                }
+
+                this._passwordHash = value;
+            }
+        }
 
         #endregion
 
@@ -314,6 +338,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// レコード生成日
         /// </summary>
         public DateTime CreatedDate { get; set; } = DateTime.Now ;
+
+        /// <summary>
+        /// パスワード更新日
+        /// </summary>
+        public DateTime PasswordChangeDate { get; set; } = DateTime.Now;
 
         #endregion
 

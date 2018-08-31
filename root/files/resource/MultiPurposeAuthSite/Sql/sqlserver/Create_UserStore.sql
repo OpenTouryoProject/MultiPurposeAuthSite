@@ -34,6 +34,7 @@ CREATE TABLE [Users](              -- Users
     [UnstructuredData] [nvarchar](max) NULL,
     [FIDO2PublicKey] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
+    [PasswordChangeDate] [smalldatetime] NOT NULL,
     CONSTRAINT [PK.Users] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
