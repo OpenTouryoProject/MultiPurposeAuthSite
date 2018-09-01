@@ -19,15 +19,13 @@
 //**********************************************************************************
 
 using System;
-using System.Web;
 using System.Collections.Generic;
-
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
+using Microsoft.AspNet.Identity;
+
+using Newtonsoft.Json;
 
 /// <summary>MultiPurposeAuthSite.Models</summary>
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
@@ -193,6 +191,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>
         /// Gets or sets the salted / hashed form of the user password.
         /// </summary>
+        [JsonIgnore]
         public string PasswordHash
         {
             get

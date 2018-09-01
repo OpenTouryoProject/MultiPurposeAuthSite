@@ -867,9 +867,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return
-                    ASPNETIdentityConfig.EquipOAuth2Server
-                    && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditFIDO2Data"]);
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditFIDO2Data"]);
+            }
+        }
+
+        /// <summary>
+        /// CanUseGdprFunction
+        /// </summary>
+        public static bool CanUseGdprFunction
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanUseGdprFunction"]);
             }
         }
 

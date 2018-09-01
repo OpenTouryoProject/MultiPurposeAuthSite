@@ -30,13 +30,16 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
 using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using System.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Security.Claims;
+
 using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
-using System.Threading.Tasks;
-using System.Security.Claims;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -2357,6 +2360,139 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region GDPR
+
+        /// <summary>
+        /// GDPR対策処理
+        /// GET: /Manage/ManageGdprData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public ActionResult ManageGdprData()
+        {
+            if (ASPNETIdentityConfig.CanUseGdprFunction)
+            //&& ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// GDPR対策のユーザデータ照会処理
+        /// POST: /Manage/ReferGdprPersonalData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        public async Task<ActionResult> ReferGdprPersonalData()
+        {
+            if (ASPNETIdentityConfig.CanUseGdprFunction)
+            //&& ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    using (StreamWriter streamWriter = new StreamWriter(ms, Encoding.GetEncoding(CustomEncode.UTF_8)))
+                    {
+                        streamWriter.WriteLine(JsonConvert.SerializeObject(user));
+                        streamWriter.Flush();
+                    }
+                    
+                    return File(ms.ToArray(), "application/json", "user.json");
+                }
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// GDPR対策のユーザデータ削除処理
+        /// POST: /Manage/DeleteGdprPersonalData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        public async Task<ActionResult> DeleteGdprPersonalData()
+        {
+            if (ASPNETIdentityConfig.CanUseGdprFunction)
+            //&& ASPNETIdentityConfig.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                #region データ消去
+                // 既定の属性
+                //user.Id = "";
+                user.UserName = user.Id;
+                user.PasswordHash = "";
+                user.Email = user.Id + "@yyy.com";
+                user.EmailConfirmed = false;
+                user.PhoneNumber = user.Id;
+                user.PhoneNumberConfirmed = false;
+                user.AccessFailedCount = 0;
+                user.LockoutEnabled = false;
+                user.LockoutEndDateUtc = DateTime.MaxValue;
+                //user.SecurityStamp = user.SecurityStamp;
+                user.TwoFactorEnabled = false;
+                // Collection
+                //user.Roles = null;
+                //user.Logins = null;
+                //user.Claims = null;
+
+                // 追加の属性
+                user.ClientID = user.Id;
+                user.PaymentInformation = "";
+                user.UnstructuredData = "";
+                user.FIDO2PublicKey = "";
+                //user.CreatedDate = ;
+                //user.PasswordChangeDate = 
+                #endregion
+
+                // ユーザ・データの削除
+                IdentityResult result = null;
+                
+                foreach (UserLoginInfo l in user.Logins)
+                {
+                    result = await UserManager.RemoveLoginAsync(user.Id, l);
+                }
+                user.Logins = null;
+                
+                foreach (Claim c in user.Claims)
+                {
+                    result = await UserManager.RemoveClaimAsync(user.Id, c);
+                }
+                user.Claims = null;
+
+                result = await UserManager.UpdateAsync(user);
+                
+                if (result.Succeeded)
+                {
+                    // サインアウト（Cookieの削除）
+                    AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+                    //// オペレーション・トレース・ログ出力
+                    //Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
+
+                    // リダイレクト "Index", "Home"へ
+                    return RedirectToAction("Index", "Home");
+                }
+                else { }
+            }
+            else { }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
         #region Client (Redirectエンドポイント)
 
         #region Authorization Codeグラント種別
@@ -2484,7 +2620,7 @@ namespace MultiPurposeAuthSite.Controllers
                     model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
 
                     // 課金処理で使用する。
-                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken; 
+                    Session[OAuth2AndOIDCConst.AccessToken] = model.AccessToken;
 
                     #endregion
                 }

@@ -1,0 +1,65 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：ManageGDPRData
+    //* クラス日本語名  ：GDPR関連の個人データの照会・削除用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2018/09/01  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Resources
+
+@{
+    ViewBag.Title = ManageViews.ManageGdprPersonalDataTitle;
+}
+
+@Scripts.Render("~/bundles/multiauthsite")
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<h4>@ManageViews.ManageGdprPersonalDataH4</h4>
+
+@using (Html.BeginForm("ReferGdprPersonalData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form" })) // FileのDLは二重送信防止しない
+{
+    @Html.AntiForgeryToken()
+    @Html.ValidationSummary("", new { @class = "text-danger" })
+    <div class="form-group">
+        <div class="col-md-6">
+            
+            <input type="submit" class="btn btn-default" value="@ManageViews.ReferGdprPersonalDataSubmit" />
+        </div>
+    </div>
+}
+
+@using (Html.BeginForm("DeleteGdprPersonalData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken()
+    @Html.ValidationSummary("", new { @class = "text-danger" })
+    <div class="form-group">
+        <div class="col-md-6">
+            <input type="submit" class="btn btn-default" value="@ManageViews.DeleteGdprPersonalDataSubmit" />
+        </div>
+    </div>
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

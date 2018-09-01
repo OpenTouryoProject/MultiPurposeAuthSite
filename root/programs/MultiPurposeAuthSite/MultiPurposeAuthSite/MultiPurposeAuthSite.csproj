@@ -520,6 +520,7 @@
     <Content Include="Views\Manage\AddFIDO2Data.cshtml" />
     <Content Include="Views\Home\OAuth2Starters.cshtml" />
     <Content Include="Views\Home\OAuth2ClientAuthenticationFlow.cshtml" />
+    <Content Include="Views\Manage\ManageGDPRData.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">
