@@ -2388,6 +2388,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> ReferGdprPersonalData()
         {
             if (ASPNETIdentityConfig.CanUseGdprFunction)
@@ -2420,6 +2421,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<ActionResult> DeleteGdprPersonalData()
         {
             if (ASPNETIdentityConfig.CanUseGdprFunction)
@@ -2508,6 +2510,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
         [HttpPost]
+        //[ValidateAntiForgeryToken] // response_mode=form_postで実装しているためハズす。
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
             if (ASPNETIdentityConfig.CanEditOAuth2Data
@@ -2627,7 +2630,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 画面の表示。
                 ModelState.Clear();
-                return View(model);
+                return View("OAuth2AuthorizationCodeGrantClient", model);
             }
             else
             {
