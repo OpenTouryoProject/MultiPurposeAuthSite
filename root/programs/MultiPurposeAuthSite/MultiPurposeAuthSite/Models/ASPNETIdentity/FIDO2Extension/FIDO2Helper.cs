@@ -93,9 +93,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
                 // Challengeの一致
 
                 // Load public key
-                RSACryptoServiceProvider rsaCryptoServiceProvider = 
+                RSACryptoServiceProvider rsaCryptoServiceProvider =
                     RS256_KeyConverter.JwkToProvider(this.PublicKey);
-                
+
                 // VerifyData
                 ret = rsaCryptoServiceProvider.VerifyData(
                     data, signatureBytes,

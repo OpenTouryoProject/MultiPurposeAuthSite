@@ -256,7 +256,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 else
                 {
                     JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
-                    Dictionary<string, string> jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
+                    JObject jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
 
                     if (jwkObject == null)
                     {
@@ -267,8 +267,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     {
                         // Jwkを使用
                         jwsRS256 = new JWS_RS256_Param(
-                            RS256_KeyConverter.JwkToProvider(
-                                JsonConvert.SerializeObject(jwkObject)).ExportParameters(false));
+                            RS256_KeyConverter.JwkToProvider(jwkObject).ExportParameters(false));
                     }
                 }
             }

@@ -36,7 +36,7 @@ using System.Text;
 using System.Collections.Generic;
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security;
@@ -50,8 +50,8 @@ namespace CreateJwkSetJson
         static void Main(string[] args)
         {
             // 現在の証明書のJwk
-            Dictionary<string, string> jwkObject = 
-                JsonConvert.DeserializeObject<Dictionary<string, string>>(
+            JObject jwkObject = 
+                JsonConvert.DeserializeObject<JObject>(
                     RS256_KeyConverter.X509CerToJwkPublicKey(OAuth2AndOIDCParams.RS256Cer));
 
             // JwkSet.jsonファイルの存在チェック
