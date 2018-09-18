@@ -50,7 +50,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>bin\Debug\OpenTouryo.Business.xml</DocumentationFile>
+    <DocumentationFile>bin\Debug\OpenTouryo.Business.XML</DocumentationFile>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
@@ -75,12 +75,16 @@
       <HintPath>..\packages\Microsoft.Owin.3.1.0\lib\net45\Microsoft.Owin.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="Microsoft.Owin.Security, Version=3.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Owin.Security.3.1.0\lib\net45\Microsoft.Owin.Security.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Web.Infrastructure.1.0.0.0\lib\net40\Microsoft.Web.Infrastructure.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="MySql.Data, Version=6.9.9.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL">
-      <HintPath>..\packages\MySql.Data.6.9.9\lib\net45\MySql.Data.dll</HintPath>
+    <Reference Include="MySql.Data, Version=6.9.12.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL">
+      <HintPath>..\packages\MySql.Data.6.9.12\lib\net45\MySql.Data.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
@@ -91,24 +95,24 @@
       <HintPath>..\packages\Npgsql.3.2.5\lib\net451\Npgsql.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="OpenTouryo.DamManagedOdp, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Touryo.Infrastructure.Public.Db.DamManagedOdp.2.2.0\lib\net46\OpenTouryo.DamManagedOdp.dll</HintPath>
+    <Reference Include="OpenTouryo.DamManagedOdp, Version=2.3.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Touryo.Infrastructure.Public.Db.DamManagedOdp.2.3.0\lib\net46\OpenTouryo.DamManagedOdp.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="OpenTouryo.DamMySQL, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Touryo.Infrastructure.Public.Db.DamMySQL.2.2.0\lib\net46\OpenTouryo.DamMySQL.dll</HintPath>
+    <Reference Include="OpenTouryo.DamMySQL, Version=2.3.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Touryo.Infrastructure.Public.Db.DamMySQL.2.3.0\lib\net46\OpenTouryo.DamMySQL.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="OpenTouryo.DamPstGrS, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Touryo.Infrastructure.Public.Db.DamPstGrS.2.2.0\lib\net46\OpenTouryo.DamPstGrS.dll</HintPath>
+    <Reference Include="OpenTouryo.DamPstGrS, Version=2.3.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Touryo.Infrastructure.Public.Db.DamPstGrS.2.3.0\lib\net46\OpenTouryo.DamPstGrS.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="OpenTouryo.Framework, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Touryo.Infrastructure.Framework.2.2.0\lib\net46\OpenTouryo.Framework.dll</HintPath>
+    <Reference Include="OpenTouryo.Framework, Version=2.3.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Touryo.Infrastructure.Framework.2.3.0\lib\net46\OpenTouryo.Framework.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="OpenTouryo.Public, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Touryo.Infrastructure.Public.2.2.0\lib\net46\OpenTouryo.Public.dll</HintPath>
+    <Reference Include="OpenTouryo.Public, Version=2.3.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Touryo.Infrastructure.Public.2.3.0\lib\net46\OpenTouryo.Public.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Oracle.ManagedDataAccess, Version=4.122.1.0, Culture=neutral, PublicKeyToken=89b483f429c47342, processorArchitecture=MSIL">
