@@ -814,7 +814,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザー情報を更新</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>－</returns>
-        public async Task UpdateAsync(ApplicationUser user)
+        public Task UpdateAsync(ApplicationUser user)
         {
             // 更新系の機能のため、
             //OnlySts.STSOnly_M();
@@ -822,7 +822,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 // 何も更新しない。
                 // IUserLockoutStore機能などで使用するため。
-                return;
+                return Task.FromResult(0);
             }
             // Debug
             Logging.MyDebugSQLTrace("★ : " +
@@ -966,7 +966,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 Logging.MySQLLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(0);
         }
 
         #region ユーザの関連情報の更新（ Roles, Logins, Claims ）
