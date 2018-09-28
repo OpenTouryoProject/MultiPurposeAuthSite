@@ -33,13 +33,11 @@
 
 using System;
 
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util;
 
 namespace CreateJwtBearerTokenFlowAssertion
 {
@@ -47,34 +45,35 @@ namespace CreateJwtBearerTokenFlowAssertion
     {
         static void Main(string[] args)
         {
-            string iss = GetConfigParameter.GetConfigValue("iss");
-            string aud = GetConfigParameter.GetConfigValue("aud");
+            string iss = OAuth2AndOIDCParams.Isser;
+            string aud = OAuth2AndOIDCParams.Audience;
+
             string scopes = "hoge1 hoge2 hoge3";
             JObject jobj = null;
 
-            JWT_RS256_XML jwt_RS256 = new JWT_RS256_XML();
+            JWS_RS256_XML jws_RS256 = new JWS_RS256_XML();
 
             Console.WriteLine("PrivateKey:");
             Console.WriteLine(CustomEncode.ToBase64String(
-                CustomEncode.StringToByte(jwt_RS256.XMLPrivateKey, CustomEncode.us_ascii)));
+                CustomEncode.StringToByte(jws_RS256.XMLPrivateKey, CustomEncode.us_ascii)));
             Console.WriteLine("");
 
             Console.WriteLine("PublicKey:");
             Console.WriteLine(CustomEncode.ToBase64String(
-                CustomEncode.StringToByte(jwt_RS256.XMLPublicKey, CustomEncode.us_ascii)));
+                CustomEncode.StringToByte(jws_RS256.XMLPublicKey, CustomEncode.us_ascii)));
             Console.WriteLine("");
 
             string jwtAssertion = JwtAssertion.CreateJwtBearerTokenFlowAssertion(
-                GetConfigParameter.GetConfigValue("iss"),
-                GetConfigParameter.GetConfigValue("aud"),
-                new System.TimeSpan(0, 30, 0), scopes,
-                jwt_RS256.XMLPrivateKey);
+                OAuth2AndOIDCParams.Isser,
+                OAuth2AndOIDCParams.Audience,
+            new System.TimeSpan(0, 30, 0), scopes,
+                jws_RS256.XMLPrivateKey);
 
             if (JwtAssertion.VerifyJwtBearerTokenFlowAssertion(
-                jwtAssertion, out iss, out aud, out scopes, out jobj, jwt_RS256.XMLPublicKey))
+                jwtAssertion, out iss, out aud, out scopes, out jobj, jws_RS256.XMLPublicKey))
             {
-                if (iss == GetConfigParameter.GetConfigValue("iss")
-                    && aud == GetConfigParameter.GetConfigValue("aud"))
+                if (iss == OAuth2AndOIDCParams.Isser
+                    && aud == OAuth2AndOIDCParams.Audience)
                 {
                     Console.WriteLine("JwtAssertion:");
                     Console.WriteLine(jwtAssertion);

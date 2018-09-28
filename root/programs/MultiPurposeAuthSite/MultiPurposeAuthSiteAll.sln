@@ -1,0 +1,58 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiPurposeAuthSite", "MultiPurposeAuthSite\MultiPurposeAuthSite.csproj", "{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateClientsIdentity", "CreateClientsIdentity\CreateClientsIdentity.csproj", "{9176504B-F14B-4C59-8601-5C04BE9A889D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateJwtBearerTokenFlowAssertion", "CreateJwtBearerTokenFlowAssertion\CreateJwtBearerTokenFlowAssertion.csproj", "{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateJwkSetJson", "CreateJwkSetJson\CreateJwkSetJson.csproj", "{5E268E70-CCCC-4629-A442-F077FAB243A1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Debug|x86.Build.0 = Debug|Any CPU
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Release|x86.ActiveCfg = Release|Any CPU
+		{4BA4D9DE-2656-4FBD-8F1F-31FC9583B5F5}.Release|x86.Build.0 = Release|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Debug|x86.Build.0 = Debug|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Release|x86.ActiveCfg = Release|Any CPU
+		{9176504B-F14B-4C59-8601-5C04BE9A889D}.Release|x86.Build.0 = Release|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Debug|x86.Build.0 = Debug|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Release|x86.ActiveCfg = Release|Any CPU
+		{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}.Release|x86.Build.0 = Release|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Debug|x86.Build.0 = Debug|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Release|x86.ActiveCfg = Release|Any CPU
+		{5E268E70-CCCC-4629-A442-F077FAB243A1}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

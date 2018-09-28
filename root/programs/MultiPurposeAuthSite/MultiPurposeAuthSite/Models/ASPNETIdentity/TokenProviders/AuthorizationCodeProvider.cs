@@ -54,8 +54,7 @@ using Microsoft.Owin.Security.Infrastructure;
 using Dapper;
 using Newtonsoft.Json;
 
-using Touryo.Infrastructure.Public.IO;
-using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Framework.Authentication;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 {
@@ -116,12 +115,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // 有効期限が無効なtokenのペイロードだけ作成
             AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
-            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayload(context.Ticket);
+            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayloadFromAuthenticationTicket(context.Ticket);
             temp.Add("access_token_payload", access_token_payload);
 
             // OAuth PKCE 対応
-            temp.Add("code_challenge", queryString["code_challenge"]);
-            temp.Add("code_challenge_method", queryString["code_challenge_method"]);
+            temp.Add(OAuth2AndOIDCConst.code_challenge, queryString[OAuth2AndOIDCConst.code_challenge]);
+            temp.Add(OAuth2AndOIDCConst.code_challenge_method, queryString[OAuth2AndOIDCConst.code_challenge_method]);
 
             // Hybrid Flow対応
             //   OAuthAuthorizationServerHandler経由での呼び出しができず、
@@ -296,7 +295,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             if (!isPKCE)
             {
                 // 通常のアクセストークン・リクエスト
-                if (string.IsNullOrEmpty(temp["code_challenge"]))
+                if (string.IsNullOrEmpty(temp[OAuth2AndOIDCConst.code_challenge]))
                 {
                     // Authorization Codeのcode
                     return temp["ticket"];
@@ -310,12 +309,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             else
             {
                 // OAuth PKCEのアクセストークン・リクエスト
-                if (!string.IsNullOrEmpty(temp["code_challenge"]) && !string.IsNullOrEmpty(code_verifier))
+                if (!string.IsNullOrEmpty(temp[OAuth2AndOIDCConst.code_challenge]) && !string.IsNullOrEmpty(code_verifier))
                 {
-                    if (temp["code_challenge_method"].ToLower() == "plain")
+                    if (temp[OAuth2AndOIDCConst.code_challenge_method].ToLower() == OAuth2AndOIDCConst.PKCE_plain)
                     {
                         // plain
-                        if (temp["code_challenge"] == code_verifier)
+                        if (temp[OAuth2AndOIDCConst.code_challenge] == code_verifier)
                         {
                             // 検証成功
                             return temp["ticket"];
@@ -325,10 +324,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             // 検証失敗
                         }
                     }
-                    else if (temp["code_challenge_method"].ToLower() == "s256")
+                    else if (temp[OAuth2AndOIDCConst.code_challenge_method].ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
                     {
-                        // s256
-                        if (temp["code_challenge"] == OAuth2Helper.PKCE_S256_CodeChallengeMethod(code_verifier))
+                        // S256
+                        if (temp[OAuth2AndOIDCConst.code_challenge] == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
                         {
                             // 検証成功
                             return temp["ticket"];

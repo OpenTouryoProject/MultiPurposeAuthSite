@@ -52,8 +52,7 @@ using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 
-using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Framework.Authentication;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 {
@@ -63,10 +62,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #region member variable
 
         /// <summary>Singleton (instance)</summary>
-        private static OAuth2Helper _oAuthHelper = new OAuth2Helper();
+        private static OAuth2Helper _oAuth2Helper = new OAuth2Helper();
 
         /// <summary>クライアント識別子情報</summary>
-        private Dictionary<string, Dictionary<string, string>> _oauthClientsInfo = null;
+        private Dictionary<string, Dictionary<string, string>> _oauth2ClientsInfo = null;
 
         /// <summary>
         /// OAuth Server
@@ -81,7 +80,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// https://techinfoofmicrosofttech.osscons.jp/index.php?HttpClient%E3%81%AE%E9%A1%9E%E3%81%AE%E4%BD%BF%E3%81%84%E6%96%B9#l0c18008
         /// Singletonで使うので、ここではstaticではない。
         /// </remarks>
-        private HttpClient _oAuthHttpClient = null;
+        private HttpClient _oAuth2HttpClient = null;
 
         #endregion
 
@@ -91,10 +90,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         private OAuth2Helper()
         {
             // クライアント識別子情報
-            this._oauthClientsInfo =
-                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(ASPNETIdentityConfig.OAuthClientsInformation);
+            this._oauth2ClientsInfo =
+                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(ASPNETIdentityConfig.OAuth2ClientsInformation);
             // OAuth ServerにアクセスするためのHttpClient
-            this._oAuthHttpClient = HttpClientBuilder(EnumProxyType.Intranet);
+            this._oAuth2HttpClient = HttpClientBuilder(EnumProxyType.Intranet);
+
+            // ライブラリを使用
+            OAuth2AndOIDCClient.HttpClient = this._oAuth2HttpClient;
         }
 
         #endregion
@@ -104,22 +106,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <summary>
         /// OauthClientsInfo
         /// </summary>
-        private Dictionary<string, Dictionary<string, string>> OauthClientsInfo
+        private Dictionary<string, Dictionary<string, string>> Oauth2ClientsInfo
         {
             get
             {
-                return this._oauthClientsInfo;
+                return this._oauth2ClientsInfo;
             }
         }
 
         /// <summary>
         /// OAuthHttpClient
         /// </summary>
-        private HttpClient OAuthHttpClient
+        private HttpClient OAuth2HttpClient
         {
             get
             {
-                return this._oAuthHttpClient;
+                return this._oAuth2HttpClient;
             }
         }
 
@@ -131,14 +133,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <returns>OAuthHelper</returns>
         public static OAuth2Helper GetInstance()
         {
-            return OAuth2Helper._oAuthHelper;
+            return OAuth2Helper._oAuth2Helper;
         }
 
         #endregion
 
         #region instanceメソッド
 
-        #region HttpClient
+        #region HTTP
 
         #region ClientBuilder
 
@@ -177,9 +179,27 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         #endregion
 
-        #region Access Token
+        #region 基本 4 フローのWebAPI
 
-        /// <summary>仲介コードからAccess Tokenを取得する。</summary>
+        /// <summary>
+        /// Authentication Code : codeからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+        }
+
+        /// <summary>
+        /// PKCE : code, code_verifierからAccess Tokenを取得する。
+        /// </summary>
         /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
         /// <param name="client_id">client_id</param>
         /// <param name="client_secret">client_secret</param>
@@ -190,54 +210,38 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public async Task<string> GetAccessTokenByCodeAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
         {
-            // 4.1.3.  アクセストークンリクエスト
-            // http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
+        }
 
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
+        /// <summary>
+        /// FAPI1 : code, code_verifierからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, redirect_uri, code, assertion);
+        }
 
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = tokenEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers & Content)
-
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic",
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(
-                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
-
-            if (string.IsNullOrEmpty(code_verifier))
-            {
-                // 通常のアクセストークン・リクエスト
-                httpRequestMessage.Content = new FormUrlEncodedContent(
-                    new Dictionary<string, string>
-                    {
-                    { "grant_type", ASPNETIdentityConst.AuthorizationCodeGrantType },
-                    { "code", code },
-                    { "redirect_uri", HttpUtility.HtmlEncode(redirect_uri) },
-                    });
-            }
-            else
-            {
-                // OAuth PKCEのアクセストークン・リクエスト
-                httpRequestMessage.Content = new FormUrlEncodedContent(
-                    new Dictionary<string, string>
-                    {
-                    { "grant_type", ASPNETIdentityConst.AuthorizationCodeGrantType },
-                    { "code", code },
-                    { "code_verifier", code_verifier },
-                    { "redirect_uri", HttpUtility.HtmlEncode(redirect_uri) },
-                    });
-            }
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
+        /// <summary>
+        /// Client Credentials Grant
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="scopes">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> ClientCredentialsGrantAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret, string scopes)
+        {
+            return await OAuth2AndOIDCClient.ClientCredentialsGrantAsync(
+                tokenEndpointUri, client_id, client_secret, scopes);
         }
 
         /// <summary>Refresh Tokenを使用してAccess Tokenを更新する。</summary>
@@ -249,43 +253,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public async Task<string> UpdateAccessTokenByRefreshTokenAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string refreshToken)
         {
-            // 6.  アクセストークンの更新
-            // http://openid-foundation-japan.github.io/rfc6749.ja.html#token-refresh
-
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = tokenEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers & Content)
-
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic",
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(
-                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
-
-            // HttpRequestMessage (Content)
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                    { "grant_type", ASPNETIdentityConst.RefreshTokenGrantType },
-                    { "refresh_token", refreshToken },
-                });
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
+            return await OAuth2AndOIDCClient.UpdateAccessTokenByRefreshTokenAsync(
+                tokenEndpointUri, client_id, client_secret, refreshToken);
         }
-
-        #endregion
-
-        #region UserInfo
 
         /// <summary>UserInfoエンドポイントで、認可ユーザのClaim情報を取得する。</summary>
         /// <param name="accessToken">accessToken</param>
@@ -295,34 +265,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             // 通信用の変数
 
             // 認可したユーザのClaim情報を取得するWebAPI
-            Uri webApiEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthResourceServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthGetUserClaimsWebAPI);
+            Uri userInfoUri = new Uri(
+                ASPNETIdentityConfig.OAuth2ResourceServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI);
 
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Get,
-                RequestUri = webApiEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers)
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
+            return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
         }
 
         #endregion
 
-        #region Extension
+        #region 拡張フローのWebAPI
 
         #region Revoke & Introspect
-        
+
         /// <summary>Revokeエンドポイントで、Tokenを無効化する。</summary>
         /// <param name="revokeTokenEndpointUri">RevokeエンドポイントのUri</param>
         /// <param name="client_id">client_id</param>
@@ -333,34 +288,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public async Task<string> RevokeTokenAsync(
             Uri revokeTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
         {
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = revokeTokenEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers & Content)
-
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic",
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(
-                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
-
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                    { "token", token },
-                    { "token_type_hint", token_type_hint },
-                });
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
+            return await OAuth2AndOIDCClient.RevokeTokenAsync(
+                revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
         }
 
         /// <summary>Introspectエンドポイントで、Tokenを無効化する。</summary>
@@ -373,84 +302,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public async Task<string> IntrospectTokenAsync(
             Uri introspectTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
         {
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = introspectTokenEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers & Content)
-
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic",
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(
-                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
-
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                    { "token", token },
-                    { "token_type_hint", token_type_hint },
-                });
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
+            return await OAuth2AndOIDCClient.IntrospectTokenAsync(
+                introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
         }
 
         #endregion
-
-        #region Client Authentication Flow
-
-        #region Client Credentials Flow
-
-        /// <summary>
-        /// Tokenエンドポイントで、
-        /// Client Credentialsグラント種別の要求を行う。</summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
-        /// <param name="client_id">string</param>
-        /// <param name="client_secret">string</param>
-        /// <param name="scopes">string</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> ClientCredentialsFlowAsync(Uri tokenEndpointUri, string client_id, string client_secret, string scopes)
-        {
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = tokenEndpointUri,
-            };
-
-            // HttpRequestMessage (Headers & Content)
-
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic",
-                CustomEncode.ToBase64String(CustomEncode.StringToByte(
-                    string.Format("{0}:{1}", client_id, client_secret), CustomEncode.us_ascii)));
-
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                    { "grant_type", ASPNETIdentityConst.ClientCredentialsGrantType },
-                    { "scope", scopes },
-                });
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
-        }
-
-        #endregion
-
+        
         #region JWT Bearer Token Flow
 
         /// <summary>
@@ -461,35 +318,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <returns>結果のJSON文字列</returns>
         public async Task<string> JwtBearerTokenFlowAsync(Uri token2EndpointUri, string assertion)
         {
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
-
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = token2EndpointUri,
-            };
-
-            // HttpRequestMessage (Headers & Content)
-            
-            httpRequestMessage.Content = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                    { "grant_type", ASPNETIdentityConst.JwtBearerTokenFlowGrantType },
-                    { "assertion", assertion },
-                });
-
-            // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
-            return await httpResponseMessage.Content.ReadAsStringAsync();
+            return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(token2EndpointUri, assertion);
         }
 
         #endregion
-
-        #endregion
-
+        
         #endregion
 
         #region OAuth2（ResourcesServer）WebAPI
@@ -499,14 +332,14 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="currency">通貨</param>
         /// <param name="amount">料金</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> CallOAuthChageToUserWebAPIAsync(
+        public async Task<string> CallOAuth2ChageToUserWebAPIAsync(
             string accessToken, string currency, string amount)
         {
             // 通信用の変数
 
             // 課金用のWebAPI
             Uri webApiEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
                 + ASPNETIdentityConfig.TestChageToUserWebAPI);
 
             HttpRequestMessage httpRequestMessage = null;
@@ -520,7 +353,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             };
 
             // HttpRequestMessage (Headers & Content)
-            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(OAuth2AndOIDCConst.Bearer, accessToken);
             httpRequestMessage.Content = new FormUrlEncodedContent(
                 new Dictionary<string, string>
                 {
@@ -530,7 +363,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
             // HttpResponseMessage
-            httpResponseMessage = await _oAuthHttpClient.SendAsync(httpRequestMessage);
+            httpResponseMessage = await _oAuth2HttpClient.SendAsync(httpRequestMessage);
             return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
@@ -538,9 +371,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
         #endregion
 
-        #region OAuth2関連ヘルパ
-
-        #region Credential取得
+        #region Credential
 
         #region Client authentication
 
@@ -552,9 +383,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             client_id = client_id ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.OauthClientsInfo[client_id]["client_secret"];
+                return this.Oauth2ClientsInfo[client_id]["client_secret"];
             }
 
             // oAuth2Dataを検索
@@ -583,15 +414,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             response_type = response_type ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
+                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
-                    return this.OauthClientsInfo[client_id]["redirect_uri_code"];
+                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
                 }
-                else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
                 {
-                    return this.OauthClientsInfo[client_id]["redirect_uri_token"];
+                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
                 }
             }
 
@@ -602,11 +433,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             {
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
 
-                if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
+                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     return model.RedirectUriCode;
                 }
-                else if (response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType)
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
                 {
                     return model.RedirectUriToken;
                 }
@@ -623,9 +454,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             client_id = client_id ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.OauthClientsInfo[client_id]["jwt_assertion_publickey"];
+                return this.Oauth2ClientsInfo[client_id]["jwt_assertion_publickey"];
             }
 
             // oAuth2Dataを検索
@@ -658,9 +489,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             client_id = client_id ?? "";
 
             // *.config内を検索
-            if (this.OauthClientsInfo.ContainsKey(client_id))
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.OauthClientsInfo[client_id]["client_name"];
+                return this.Oauth2ClientsInfo[client_id]["client_name"];
             }
 
             // oAuth2Dataを検索
@@ -679,10 +510,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public string GetClientIdByName(string clientName)
         {
             // *.config内を検索
-            foreach (string clientId in this.OauthClientsInfo.Keys)
+            foreach (string clientId in this.Oauth2ClientsInfo.Keys)
             {
                 Dictionary<string, string> client
-                    = this.OauthClientsInfo[clientId];
+                    = this.Oauth2ClientsInfo[clientId];
 
                 string temp = client["client_name"];
                 if (temp.ToLower() == clientName.ToLower())
@@ -702,9 +533,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         #endregion
 
         #endregion
-
-        #endregion
-
+        
         #endregion
 
         #region staticメソッド
@@ -717,18 +546,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         public static IEnumerable<string> FilterClaimAtAuth(IEnumerable<string> scopes)
         {
             List<string> temp = new List<string>();
-            temp.Add(ASPNETIdentityConst.Scope_Auth);
+            temp.Add(OAuth2AndOIDCConst.Scope_Auth);
 
             // フィルタ・コード
             foreach (string s in scopes)
             {
-                if (s == ASPNETIdentityConst.Scope_Openid)
+                if (s == OAuth2AndOIDCConst.Scope_Openid)
                 {
-                    temp.Add(ASPNETIdentityConst.Scope_Openid);
+                    temp.Add(OAuth2AndOIDCConst.Scope_Openid);
                 }
-                else if (s == ASPNETIdentityConst.Scope_Userid)
+                else if (s == OAuth2AndOIDCConst.Scope_UserID)
                 {
-                    temp.Add(ASPNETIdentityConst.Scope_Userid);
+                    temp.Add(OAuth2AndOIDCConst.Scope_UserID);
                 }
             }
 
@@ -753,13 +582,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             #region 標準
 
-            claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Issuer, ASPNETIdentityConfig.OAuthIssuerId));
-            claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Audience, client_id));
+            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, ASPNETIdentityConfig.OAuth2IssuerId));
+            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Audience, client_id));
 
             foreach (string scope in scopes)
             {
                 // その他のscopeは、Claimの下記urnに組み込む。
-                claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Scope, scope));
+                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Scopes, scope));
             }
 
             #endregion
@@ -769,11 +598,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
             // OpenID Connect
             if (string.IsNullOrEmpty(nonce))
             {
-                claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, state));
+                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, state));
             }
             else
             {
-                claims.AddClaim(new Claim(ASPNETIdentityConst.Claim_Nonce, nonce));
+                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, nonce));
             }
 
             #endregion
@@ -782,24 +611,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         }
 
         #endregion
-
-        #region PKCE_CodeChallengeMethod
-
-        /// <summary>
-        /// code_challenge_method=S256
-        /// BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))</summary>
-        /// <param name="code_verifier">string</param>
-        /// <returns>code_challenge</returns>
-        public static string PKCE_S256_CodeChallengeMethod(string code_verifier)
-        {
-            return CustomEncode.ToBase64UrlString(
-                GetHash.GetHashBytes(
-                    CustomEncode.StringToByte(code_verifier, CustomEncode.us_ascii),
-                    EnumHashAlgorithm.SHA256Managed));
-        }
-
-        #endregion
-
+        
         #endregion
     }
 }

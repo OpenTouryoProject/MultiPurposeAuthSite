@@ -301,7 +301,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                         // Open-Redirect対策
                                         if (!string.IsNullOrEmpty(model.ReturnUrl)
-                                            && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                            && ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
                                         {
                                             return RedirectToLocal(model.ReturnUrl);
                                         }
@@ -369,8 +369,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 認可エンドポイント
                     string oAuthAuthorizeEndpoint =
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint;
 
                     // client_id
                     string client_id = OAuth2AndOIDCParams.ClientID;
@@ -482,7 +482,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // Open-Redirect対策
                                     if (!string.IsNullOrEmpty(model.ReturnUrl)
-                                        && GetConfigParameter.GetConfigValue("OAuthAuthorizationServerEndpointsRootURI").IndexOf(model.ReturnUrl) != 1)
+                                        && ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
                                     {
                                         return RedirectToLocal(model.ReturnUrl);
                                     }
@@ -1500,7 +1500,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 ASPNETIdentityConfig.TwitterAuthenticationClientId,
                                 ASPNETIdentityConfig.TwitterAuthenticationClientSecret);
 
-                            email = (string)myInfo["email"]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
+                            email = (string)myInfo[OAuth2AndOIDCConst.Scope_Email]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
                             emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
                         }
                     }
@@ -1753,7 +1753,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
-                OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
+                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
                 {
                     State = state,
                     Code = code
@@ -1793,13 +1793,13 @@ namespace MultiPurposeAuthSite.Controllers
                     List<string> scopes = null;
                     JObject jobj = null;
 
-                    if (dic.ContainsKey("id_token"))
+                    if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
                         // id_tokenがある。
-                        string id_token = dic["id_token"];
+                        string id_token = dic[OAuth2AndOIDCConst.IDToken];
 
                         if (JwtToken.Verify(id_token, out sub, out roles, out scopes, out jobj)
-                            && jobj["nonce"].ToString() == (string)Session["id_federation_signin_nonce"])
+                            && jobj[OAuth2AndOIDCConst.nonce].ToString() == (string)Session["id_federation_signin_nonce"])
                         {
                             // id_token検証OK。
                         }
@@ -1822,7 +1822,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region /userinfoエンドポイント
                     //// /userinfoエンドポイントにアクセスする場合
                     //string response = await OAuth2AndOIDCClient.CallUserInfoEndpointAsync(
-                    //    new Uri(ASPNETIdentityConfig.IdFederationUserInfoEndPoint), dic["access_token"]);
+                    //    new Uri(ASPNETIdentityConfig.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
 
                     #region ユーザの登録・更新
@@ -1848,22 +1848,22 @@ namespace MultiPurposeAuthSite.Controllers
                     // }
 
                     IdentityResult result = null;
-                    ApplicationUser user = await UserManager.FindByIdAsync((string)jobj["userid"]);
+                    ApplicationUser user = await UserManager.FindByIdAsync((string)jobj[OAuth2AndOIDCConst.Scope_UserID]);
 
                     if (user == null)
                     {
                         // 新規作成
                         user = new ApplicationUser()
                         {
-                            Id = (string)jobj["userid"],
+                            Id = (string)jobj[OAuth2AndOIDCConst.Scope_UserID],
 
                             UserName = sub,
 
-                            Email = (string)jobj["email"],
-                            EmailConfirmed = (bool)Convert.ToBoolean((string)jobj["email_verified"]),
+                            Email = (string)jobj[OAuth2AndOIDCConst.Scope_Email],
+                            EmailConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.email_verified]),
 
-                            PhoneNumber = (string)jobj["phone_number"],
-                            PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj["phone_number_verified"]),
+                            PhoneNumber = (string)jobj[OAuth2AndOIDCConst.phone_number],
+                            PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.phone_number_verified]),
 
                             CreatedDate = DateTime.Now
                         };
@@ -1881,11 +1881,11 @@ namespace MultiPurposeAuthSite.Controllers
                         // 属性更新
                         user.UserName = sub;
 
-                        user.Email = (string)jobj["email"];
-                        user.EmailConfirmed = (bool)Convert.ToBoolean((string)jobj["email_verified"]);
+                        user.Email = (string)jobj[OAuth2AndOIDCConst.Scope_Email];
+                        user.EmailConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.email_verified]);
 
-                        user.PhoneNumber = (string)jobj["phone_number"];
-                        user.PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj["phone_number_verified"]);
+                        user.PhoneNumber = (string)jobj[OAuth2AndOIDCConst.phone_number];
+                        user.PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.phone_number_verified]);
 
                         result = await UserManager.UpdateAsync(user);
 
@@ -2000,7 +2000,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public async Task<ActionResult> OAuthAuthorize(string response_type, string client_id, string scope, string state,
+        public async Task<ActionResult> OAuth2Authorize(string response_type, string client_id, string scope, string state,
             string nonce, string prompt, // OpenID Connect
             string code_challenge, string code_challenge_method) // OAuth PKCE
         {
@@ -2012,14 +2012,14 @@ namespace MultiPurposeAuthSite.Controllers
             // scopeパラメタ
             string[] scopes = (scope ?? "").Split(' ');
 
-            if (response_type.ToLower() == ASPNETIdentityConst.AuthorizationCodeResponseType)
+            if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
             {
                 // Authorization Codeグラント種別（仲介コードの発行）
                 ViewBag.Name = identity.Name;
                 ViewBag.Scopes = scopes;
 
                 // 認証の場合、余計なscopeをfilterする。
-                bool isAuth = scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth);
+                bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
 
                 if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
@@ -2031,7 +2031,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // アクセス要求を保存して、仲介コードを発行する。
                     identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     // ただし、認可画面をスキップする場合は、scopeをフィルタする。
@@ -2059,11 +2059,11 @@ namespace MultiPurposeAuthSite.Controllers
                     return View();
                 }
             }
-            else if ((response_type.ToLower() == ASPNETIdentityConst.ImplicitResponseType))
+            else if ((response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType))
                     // OIDC Implicit Flowはresponse_type=tokenに書換、識別できないので、prompt=noneを設定。
             {
                 // Implicitグラント種別（Access Tokenの発行）
-                if (scopes.Any(x => x.ToLower() == ASPNETIdentityConst.Scope_Auth))
+                if (scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth))
                 {
                     // authの場合、Implicitグラント種別はNGとする。
                 }
@@ -2071,7 +2071,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // アクセス要求の許可
                     identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce);
@@ -2110,7 +2110,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuthAuthorize(string client_id, string scope, string state, string nonce)
+        public async Task<ActionResult> OAuth2Authorize(string client_id, string scope, string state, string nonce)
         {
             // Cookie認証チケットからClaimsIdentityを取得しておく。
             AuthenticateResult ticket = this.AuthenticationManager
@@ -2133,7 +2133,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // アクセス要求を保存して、仲介コードを発行する。
                 identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), "Bearer");
+                //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                 OAuth2Helper.AddClaim(identity, client_id, state, scopes, nonce);
@@ -2175,7 +2175,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
         [AllowAnonymous]
-        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient(string code, string state)
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
             #region テスト用
 
@@ -2184,6 +2184,13 @@ namespace MultiPurposeAuthSite.Controllers
             if (string.IsNullOrEmpty(state_InSessionOrCookie))
             {
                 state_InSessionOrCookie = Request.Cookies["test_state"].Value;
+            }
+
+            // nonce
+            string nonce_InSessionOrCookie = (string)Session["test_nonce"];
+            if (string.IsNullOrEmpty(nonce_InSessionOrCookie))
+            {
+                nonce_InSessionOrCookie = Request.Cookies["test_nonce"].Value;
             }
 
             // code_verifier
@@ -2205,12 +2212,12 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
-                OAuthAuthorizationCodeGrantClientViewModel model = new OAuthAuthorizationCodeGrantClientViewModel
+                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
                 {
                     State = state,
                     Code = code
@@ -2221,40 +2228,111 @@ namespace MultiPurposeAuthSite.Controllers
                 string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
-                                
+
                 //stateの検証
-                if (state == state_InSessionOrCookie)
+                if (state == state_InSessionOrCookie
+                    || state == "fapi1:" + state_InSessionOrCookie)
                 {
                     //state正常
 
                     // 仲介コードからAccess Tokenを取得する。
                     string redirect_uri
-                    = ASPNETIdentityConfig.OAuthClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuthAuthorizationCodeGrantClient_Account;
+                    = ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
+                    + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Account;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2Helper.GetInstance()
-                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier_InSessionOrCookie);
+                    if (!state.StartsWith("fapi1:"))
+                    {
+                        if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
+                        {
+                            // 通常
+                            model.Response = await OAuth2Helper.GetInstance()
+                                .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+                        }
+                        else
+                        {
+                            // PKCE
+                            model.Response = await OAuth2Helper.GetInstance()
+                               .GetAccessTokenByCodeAsync(
+                                tokenEndpointUri, client_id, client_secret, redirect_uri,
+                                code, code_verifier_InSessionOrCookie);
+                        }
+                    }
+                    else
+                    {
+                        // FAPI1
+
+                        // Tokenエンドポイントにアクセス
+                        string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                                 + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint;
+
+                        // ClientNameから、client_id(iss)を取得。
+                        string iss = "";
+
+                        // Client Accountのみ
+                        iss = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+
+                        // テストなので秘密鍵は共通とする。
+                        string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
+                        privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
+
+                        model.Response = await OAuth2Helper.GetInstance().GetAccessTokenByCodeAsync(
+                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
+                                iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
+                    }
+
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
-                    model.AccessToken = dic["access_token"];
+                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
                     model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                            CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
 
                     // 余談：OpenID Connectであれば、ここで id_token 検証。                    
-                    if (dic.ContainsKey("id_token"))
+                    if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
-                        model.IdToken = dic["id_token"];
+                        model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
                         model.IdTokenJwtToJson = CustomEncode.ByteToString(
                             CustomEncode.FromBase64UrlString(model.IdToken.Split('.')[1]), CustomEncode.UTF_8);
                     }
 
-                    model.RefreshToken = dic.ContainsKey("refresh_token") ? dic["refresh_token"] : "";
+                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
                 }
                 else
                 {
                     // state異常
                 }
+
+                #region 各種Token検証
+
+                string out_sub = "";
+                JObject out_jobj = null;
+
+                if (!string.IsNullOrEmpty(model.AccessToken))
+                {
+                    List<string> out_roles = null;
+                    List<string> out_scopes = null;
+
+                    if (!JwtToken.Verify(model.AccessToken, 
+                        out out_sub, out out_roles, out out_scopes, out out_jobj))
+                    {
+                        throw new Exception("AccessToken検証エラー");
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(model.IdToken))
+                {
+                    string out_nonce = "";
+
+                    if(!IdToken.Verify(model.IdToken,
+                        model.AccessToken, code, state,
+                        out out_sub, out out_nonce, out out_jobj)
+                        && out_nonce == nonce_InSessionOrCookie)
+                    {
+                        throw new Exception("IdToken検証エラー");
+                    }
+                }
+
+                #endregion
 
                 #endregion
 
@@ -2263,6 +2341,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
+                // エラー
                 return View("Error");
             }
         }
@@ -2278,7 +2357,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuthAuthorizationCodeGrantClient2(OAuthAuthorizationCodeGrantClientViewModel model)
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
         {
             if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
             {
@@ -2298,8 +2377,8 @@ namespace MultiPurposeAuthSite.Controllers
                         #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                         Uri tokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthBearerTokenEndpoint);
+                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
 
                         // Tokenエンドポイントにアクセス
 
@@ -2307,20 +2386,21 @@ namespace MultiPurposeAuthSite.Controllers
                         string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
                         string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                        model.Response = await OAuth2Helper.GetInstance().
+                            UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
-                        if (dic.ContainsKey("access_token"))
+                        if (dic.ContainsKey(OAuth2AndOIDCConst.AccessToken))
                         {
-                            model.AccessToken = dic["access_token"];
+                            model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
                             model.AccessTokenJwtToJson = CustomEncode.ByteToString(
                                 CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
                         }
 
-                        if (dic.ContainsKey("refresh_token"))
+                        if (dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken))
                         {
-                            model.RefreshToken = dic["refresh_token"] ?? "";
+                            model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
                         }   
 
                         #endregion
@@ -2337,18 +2417,18 @@ namespace MultiPurposeAuthSite.Controllers
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.RevokeAccess")))
                         {
                             token = model.AccessToken;
-                            token_type_hint = "access_token";
+                            token_type_hint = OAuth2AndOIDCConst.AccessToken;
                         }
 
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.RevokeRefresh")))
                         {
                             token = model.RefreshToken;
-                            token_type_hint = "refresh_token";
+                            token_type_hint = OAuth2AndOIDCConst.RefreshToken;
                         }
 
                         Uri revokeTokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthRevokeTokenWebAPI);
+                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2RevokeTokenWebAPI);
 
                         // Revokeエンドポイントにアクセス
 
@@ -2373,18 +2453,18 @@ namespace MultiPurposeAuthSite.Controllers
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectAccess")))
                         {
                             token = model.AccessToken;
-                            token_type_hint = "access_token";
+                            token_type_hint = OAuth2AndOIDCConst.AccessToken;
                         }
 
                         if (!string.IsNullOrEmpty(Request.Form.Get("submit.IntrospectRefresh")))
                         {
                             token = model.RefreshToken;
-                            token_type_hint = "refresh_token";
+                            token_type_hint = OAuth2AndOIDCConst.RefreshToken;
                         }
 
                         Uri introspectTokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuthIntrospectTokenWebAPI);
+                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                            + ASPNETIdentityConfig.OAuth2IntrospectTokenWebAPI);
 
                         // Introspectエンドポイントにアクセス
 
@@ -2405,7 +2485,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 画面の表示。
                 ModelState.Clear();
-                return View("OAuthAuthorizationCodeGrantClient", model);
+                return View("OAuth2AuthorizationCodeGrantClient", model);
             }
             else
             {
@@ -2432,7 +2512,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#implicit-authz-resp"/>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult OAuthImplicitGrantClient()
+        public ActionResult OAuth2ImplicitGrantClient()
         {
             if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
             {

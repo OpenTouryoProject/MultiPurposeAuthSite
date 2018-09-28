@@ -855,7 +855,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return
-                    ASPNETIdentityConfig.EquipOAuthServer
+                    ASPNETIdentityConfig.EquipOAuth2Server
                     && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditOAuth2Data"]);
             }
         }
@@ -867,9 +867,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return
-                    ASPNETIdentityConfig.EquipOAuthServer
-                    && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditFIDO2Data"]);
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditFIDO2Data"]);
+            }
+        }
+
+        /// <summary>
+        /// CanUseGdprFunction
+        /// </summary>
+        public static bool CanUseGdprFunction
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanUseGdprFunction"]);
             }
         }
 
@@ -906,64 +915,64 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #endregion
 
-        #region OAuth Client & Server
+        #region OAuth2 Client & Server
 
         #region 共通設定
 
         /// <summary>
-        /// OAuthServerを実装しているか・どうか
+        /// OAuth2Serverを実装しているか・どうか
         /// </summary>
-        public static bool EquipOAuthServer
+        public static bool EquipOAuth2Server
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EquipOAuthServer"]);
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EquipOAuth2Server"]);
             }
         }
 
-        #region OAuth関連プロパティ
+        #region OAuth2関連プロパティ
 
         /// <summary>
-        /// OAuthのAllowInsecureHttpEndpointsプロパティ値
+        /// OAuth2のAllowInsecureHttpEndpointsプロパティ値
         /// </summary>
-        public static bool AllowOAuthInsecureHttpEndpoints
+        public static bool AllowOAuth2InsecureHttpEndpoints
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["AllowOAuthInsecureHttpEndpoints"]);
-            }
-        }
-
-        /// <summary>
-        /// OAuthのAuthorizeEndpointCanDisplayErrorsプロパティ値
-        /// </summary>
-        public static bool OAuthAuthorizeEndpointCanDisplayErrors
-        {
-            get
-            {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["OAuthAuthorizeEndpointCanDisplayErrors"]);
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["AllowOAuth2InsecureHttpEndpoints"]);
             }
         }
 
         /// <summary>
-        /// OAuthのAccessTokenの有効期限
+        /// OAuth2のAuthorizeEndpointCanDisplayErrorsプロパティ値
         /// </summary>
-        public static TimeSpan OAuthAccessTokenExpireTimeSpanFromMinutes
+        public static bool OAuth2AuthorizeEndpointCanDisplayErrors
         {
             get
             {
-                return TimeSpan.FromMinutes(int.Parse(ConfigurationManager.AppSettings["OAuthAccessTokenExpireTimeSpanFromMinutes"]));
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["OAuth2AuthorizeEndpointCanDisplayErrors"]);
             }
         }
 
         /// <summary>
-        /// OAuthのRefreshTokenの有効期限
+        /// OAuth2のAccessTokenの有効期限
         /// </summary>
-        public static TimeSpan OAuthRefreshTokenExpireTimeSpanFromDays
+        public static TimeSpan OAuth2AccessTokenExpireTimeSpanFromMinutes
         {
             get
             {
-                return TimeSpan.FromDays(int.Parse(ConfigurationManager.AppSettings["OAuthRefreshTokenExpireTimeSpanFromDays"]));
+                return TimeSpan.FromMinutes(int.Parse(ConfigurationManager.AppSettings["OAuth2AccessTokenExpireTimeSpanFromMinutes"]));
+            }
+        }
+
+        /// <summary>
+        /// OAuth2のRefreshTokenの有効期限
+        /// </summary>
+        public static TimeSpan OAuth2RefreshTokenExpireTimeSpanFromDays
+        {
+            get
+            {
+                return TimeSpan.FromDays(int.Parse(ConfigurationManager.AppSettings["OAuth2RefreshTokenExpireTimeSpanFromDays"]));
             }
         }
 
@@ -972,48 +981,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #region JWT関連プロパティ
         
         /// <summary>
-        /// JWTのIssuerId (OAuth Server)
+        /// JWTのIssuerId (OAuth2 Server)
         /// </summary>
-        public static string OAuthIssuerId
+        public static string OAuth2IssuerId
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthIssuerId"];
+                return ConfigurationManager.AppSettings["OAuth2IssuerId"];
             }
         }
 
         #region 証明書
 
         /// <summary>
-        /// OAuthのAccess Tokenに使用するJWTの署名用証明書（*.pfx）のパスワード
+        /// OAuth2/OIDCのTokenに使用するJWTの署名用証明書（*.pfx）のパスワード
         /// </summary>
-        public static string OAuthJWTPassword
+        public static string OAuth2JWTPassword
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthJWTPassword"];
+                return ConfigurationManager.AppSettings["OAuth2JWTPassword"];
             }
         }
 
         /// <summary>
-        /// OAuthのAccess Tokenに使用するJWTの署名用証明書（*.pfx）のパス
+        /// OAuth2/OIDCのTokenに使用するJWTの署名用証明書（*.pfx）のパス
         /// </summary>
-        public static string OAuthJWT_pfx
+        public static string OAuth2JWT_pfx
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthJWT_pfx"];
-            }
-        }
-
-        /// <summary>
-        /// OAuthのAccess Tokenに使用するJWTの検証用証明書（*.cer）のパス
-        /// </summary>
-        public static string OAuthJWT_cer
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuthJWT_cer"];
+                return ConfigurationManager.AppSettings["OAuth2JWT_pfx"];
             }
         }
 
@@ -1045,12 +1043,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
-        /// <summary>EnableResourceOwnerCredentialsGrantType</summary>
-        public static bool EnableResourceOwnerCredentialsGrantType
+        /// <summary>EnableResourceOwnerPasswordCredentialsGrantType</summary>
+        public static bool EnableResourceOwnerPasswordCredentialsGrantType
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableResourceOwnerCredentialsGrantType"]);
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableResourceOwnerPasswordCredentialsGrantType"]);
             }
         }
 
@@ -1086,65 +1084,65 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #region エンドポイント 
 
         /// <summary>
-        /// OAuthのAuthorizationServerのEndpointのRootのURI
+        /// OAuth2のAuthorizationServerのEndpointのRootのURI
         /// </summary>
-        public static string OAuthAuthorizationServerEndpointsRootURI
+        public static string OAuth2AuthorizationServerEndpointsRootURI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthAuthorizationServerEndpointsRootURI"];
+                return ConfigurationManager.AppSettings["OAuth2AuthorizationServerEndpointsRootURI"];
             }
         }
 
         #region 既定
 
         /// <summary>
-        /// OAuthのAuthorizeエンドポイント 
+        /// OAuth2のAuthorizeエンドポイント 
         /// </summary>
-        public static string OAuthAuthorizeEndpoint
+        public static string OAuth2AuthorizeEndpoint
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthAuthorizeEndpoint"];
+                return ConfigurationManager.AppSettings["OAuth2AuthorizeEndpoint"];
             }
         }
 
         /// <summary>
-        /// OAuthのBearerTokenのTokenエンドポイント 
+        /// OAuth2のBearerTokenのTokenエンドポイント 
         /// </summary>
-        public static string OAuthBearerTokenEndpoint
+        public static string OAuth2BearerTokenEndpoint
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthBearerTokenEndpoint"];
+                return ConfigurationManager.AppSettings["OAuth2BearerTokenEndpoint"];
             }
         }
 
         #endregion
 
-        #region OAuth拡張
+        #region OAuth2拡張
 
         #region Authorize&Token2
 
         /// <summary>
-        /// Financial API用のOAuthのAuthorizeエンドポイント
+        /// Financial API用のOAuth2のAuthorizeエンドポイント
         /// </summary>
-        public static string OAuthAuthorizeEndpoint2
+        public static string OAuth2AuthorizeEndpoint2
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthAuthorizeEndpoint2"];
+                return ConfigurationManager.AppSettings["OAuth2AuthorizeEndpoint2"];
             }
         }
 
         /// <summary>
         /// JWT bearer token flow用のTokenエンドポイント
         /// </summary>
-        public static string OAuthBearerTokenEndpoint2
+        public static string OAuth2BearerTokenEndpoint2
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthBearerTokenEndpoint2"];
+                return ConfigurationManager.AppSettings["OAuth2BearerTokenEndpoint2"];
             }
         }
 
@@ -1153,35 +1151,35 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #region WebAPI
 
         /// <summary>
-        /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
+        /// OAuth2/OIDCで認可したユーザ情報のClaimを発行するWebAPI
         /// </summary>
-        public static string OAuthGetUserClaimsWebAPI
+        public static string OAuth2GetUserClaimsWebAPI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthGetUserClaimsWebAPI"];
+                return ConfigurationManager.AppSettings["OAuth2GetUserClaimsWebAPI"];
             }
         }
 
         /// <summary>
-        /// OAuthで認可したTokenを無効化するWebAPI
+        /// OAuth2で認可したTokenを無効化するWebAPI
         /// </summary>
-        public static string OAuthRevokeTokenWebAPI
+        public static string OAuth2RevokeTokenWebAPI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthRevokeTokenWebAPI"];
+                return ConfigurationManager.AppSettings["OAuth2RevokeTokenWebAPI"];
             }
         }
 
         /// <summary>
-        /// OAuthで認可したTokenのメタデータを返すWebAPI
+        /// OAuth2で認可したTokenのメタデータを返すWebAPI
         /// </summary>
-        public static string OAuthIntrospectTokenWebAPI
+        public static string OAuth2IntrospectTokenWebAPI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthIntrospectTokenWebAPI"];
+                return ConfigurationManager.AppSettings["OAuth2IntrospectTokenWebAPI"];
             }
         }
 
@@ -1194,13 +1192,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #region Token取得用
 
         /// <summary>
-        /// ManageController.OAuthAuthorizationCodeGrantClientのRedirectエンドポイント
+        /// ManageController.OAuth2AuthorizationCodeGrantClientのRedirectエンドポイント
         /// </summary>
-        public static string OAuthAuthorizationCodeGrantClient_Manage
+        public static string OAuth2AuthorizationCodeGrantClient_Manage
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthAuthorizationCodeGrantClient_Manage"];
+                return ConfigurationManager.AppSettings["OAuth2AuthorizationCodeGrantClient_Manage"];
             }
         }
 
@@ -1243,13 +1241,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #region 静的設定
 
         /// <summary>
-        /// OAuthのClientのInformation
+        /// OAuth2のClientのInformation
         /// </summary>
-        public static string OAuthClientsInformation
+        public static string OAuth2ClientsInformation
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthClientsInformation"];
+                return ConfigurationManager.AppSettings["OAuth2ClientsInformation"];
             }
         }
 
@@ -1258,37 +1256,37 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #region エンドポイント
 
         /// <summary>
-        /// OAuthのClientのEndpointのRootURI
+        /// OAuth2のClientのEndpointのRootURI
         /// </summary>
-        public static string OAuthClientEndpointsRootURI
+        public static string OAuth2ClientEndpointsRootURI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthClientEndpointsRootURI"];
+                return ConfigurationManager.AppSettings["OAuth2ClientEndpointsRootURI"];
             }
         }
 
         #region Redirect
 
         /// <summary>
-        /// AccountController.OAuthAuthorizationCodeGrantClientのRedirectエンドポイント
+        /// AccountController.OAuth2AuthorizationCodeGrantClientのRedirectエンドポイント
         /// </summary>
-        public static string OAuthAuthorizationCodeGrantClient_Account
+        public static string OAuth2AuthorizationCodeGrantClient_Account
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthAuthorizationCodeGrantClient_Account"];
+                return ConfigurationManager.AppSettings["OAuth2AuthorizationCodeGrantClient_Account"];
             }
         }
 
         /// <summary>
-        /// AccountController.OAuthImplicitGrantClientのRedirectエンドポイント
+        /// AccountController.OAuth2ImplicitGrantClientのRedirectエンドポイント
         /// </summary>
-        public static string OAuthImplicitGrantClient_Account
+        public static string OAuth2ImplicitGrantClient_Account
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthImplicitGrantClient_Account"];
+                return ConfigurationManager.AppSettings["OAuth2ImplicitGrantClient_Account"];
             }
         }
 
@@ -1301,7 +1299,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             {
                 return
                     Convert.ToBoolean(ConfigurationManager.AppSettings["IsLockedDownRedirectEndpoint"])
-                    || !ASPNETIdentityConfig.EquipOAuthServer; // IsLockedDownがfalseでもOAuthServerがfalseならtrueを返す.
+                    || !ASPNETIdentityConfig.EquipOAuth2Server; // IsLockedDownがfalseでもOAuthServerがfalseならtrueを返す.
             }
         }
 
@@ -1316,13 +1314,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         #region エンドポイント
 
         /// <summary>
-        /// OAuthのResourceServerのEndpointのRootURI
+        /// OAuth2のResourceServerのEndpointのRootURI
         /// </summary>
-        public static string OAuthResourceServerEndpointsRootURI
+        public static string OAuth2ResourceServerEndpointsRootURI
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuthResourceServerEndpointsRootURI"];
+                return ConfigurationManager.AppSettings["OAuth2ResourceServerEndpointsRootURI"];
             }
         }
 

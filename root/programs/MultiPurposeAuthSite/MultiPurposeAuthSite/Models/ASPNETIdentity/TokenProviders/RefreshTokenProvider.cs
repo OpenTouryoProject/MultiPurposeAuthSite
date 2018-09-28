@@ -107,7 +107,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 {
                     // IssuedUtcとExpiredUtcという有効期限プロパティをAuthenticationTicketに追加
                     IssuedUtc = context.Ticket.Properties.IssuedUtc,
-                    ExpiresUtc = DateTime.UtcNow.Add(ASPNETIdentityConfig.OAuthRefreshTokenExpireTimeSpanFromDays) // System.TimeSpan.FromSeconds(20)) // Debug時  
+                    ExpiresUtc = DateTime.UtcNow.Add(ASPNETIdentityConfig.OAuth2RefreshTokenExpireTimeSpanFromDays) // System.TimeSpan.FromSeconds(20)) // Debug時  
                 };
 
                 // AuthenticationTicket.IdentityのClaimsIdentity値を含む有効期限付きの新しいAuthenticationTicketを作成する。

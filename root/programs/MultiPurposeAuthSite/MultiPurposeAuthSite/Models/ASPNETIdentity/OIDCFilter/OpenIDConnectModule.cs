@@ -38,8 +38,7 @@ using System.Text.RegularExpressions;
 
 using System.Web;
 
-using Microsoft.Owin.Security;
-
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
@@ -165,27 +164,27 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             string path = context.Request.Url.AbsolutePath;
 
-            if (path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint2) == -1
-                && path.IndexOf(ASPNETIdentityConfig.OAuthBearerTokenEndpoint) != -1)
+            if (path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2) == -1
+                && path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint) != -1)
             {
-                if (context.Request.Form["grant_type"] == ASPNETIdentityConst.RefreshTokenGrantType)
+                if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
                     // なにもしない
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ResourceOwnerPasswordCredentialsGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
                 {
                     // なにもしない
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ClientCredentialsGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.ClientCredentialsGrantType)
                 {
                     // Refresh Tokenの削除
                     context.Response.Filter = new ClientCredentialsFilter(context);
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.ImplicitGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.ImplicitGrantType)
                 {
                     // ↓OnPreSendRequestHeadersで処理
                 }
-                else if (context.Request.Form["grant_type"] == ASPNETIdentityConst.AuthorizationCodeGrantType)
+                else if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
                 {
                     // OpenID Connect の "response_type=code"に対応したレスポンスに書き換え
                     context.Response.Filter = new OpenIDConnectCodeFilter(context);
@@ -217,8 +216,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 string virtualPath = path.Substring(path.IndexOf(context.Request.ApplicationPath));
                 this.OriginalVirtualPath = virtualPath + orgQuery;
 
-                if (path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint2) == -1
-                    && path.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
+                if (path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2) == -1
+                    && path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
                 {
                     string pattern = "";
 
@@ -249,11 +248,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                             // [response_type=id_token token]
                             is_id_token_token = responseType.StartsWith(
-                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType));
+                                CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcImplicit2_ResponseType));
                             if (!is_id_token_token)
                             {
                                 // [response_type=token]
-                                is_id_token = responseType.StartsWith(ASPNETIdentityConst.OidcImplicit1_ResponseType);
+                                is_id_token = responseType.StartsWith(OAuth2AndOIDCConst.OidcImplicit1_ResponseType);
                             }
 
                             // OIDC Hybrid
@@ -263,16 +262,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                             // [response_type=code id_token token]
                             is_code_id_token_token = responseType.StartsWith(
-                                CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid3_ResponseType));
+                                CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid3_ResponseType));
 
                             if (!is_code_id_token_token)
                             {
                                 // [response_type=code id_token]
                                 is_code_id_token = responseType.StartsWith(
-                                    CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType));
+                                    CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType));
                                 // [response_type=code token]
                                 is_code_token = responseType.StartsWith(
-                                    CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_Token_ResponseType));
+                                    CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType));
                             }
 
                             #endregion
@@ -286,15 +285,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 {
                                     this.RewritedResponseTypeFrom_IdToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + ASPNETIdentityConst.OidcImplicit1_ResponseType,
-                                        "response_type=" + ASPNETIdentityConst.ImplicitResponseType);
+                                        "response_type=" + OAuth2AndOIDCConst.OidcImplicit1_ResponseType,
+                                        "response_type=" + OAuth2AndOIDCConst.ImplicitResponseType);
                                 }
                                 else if (is_id_token_token)
                                 {
                                     this.RewritedResponseTypeFrom_IdTokenToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcImplicit2_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.ImplicitResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcImplicit2_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.ImplicitResponseType);
                                 }
                             }
                             else if (is_code_id_token || is_code_token || is_code_id_token_token)
@@ -304,22 +303,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 {
                                     this.RewritedResponseTypeFrom_CodeIdToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.AuthorizationCodeResponseType);
                                 }
                                 else if (is_code_token)
                                 {
                                     this.RewritedResponseTypeFrom_CodeToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid2_Token_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.AuthorizationCodeResponseType);
                                 }
                                 else if (is_code_id_token_token)
                                 {
                                     this.RewritedResponseTypeFrom_CodeIdTokenToken = true;
                                     reWritedQuery = reWritedQuery.Replace(
-                                        "response_type=" + CustomEncode.UrlEncode(ASPNETIdentityConst.OidcHybrid3_ResponseType),
-                                        "response_type=" + ASPNETIdentityConst.AuthorizationCodeResponseType);
+                                        "response_type=" + CustomEncode.UrlEncode(OAuth2AndOIDCConst.OidcHybrid3_ResponseType),
+                                        "response_type=" + OAuth2AndOIDCConst.AuthorizationCodeResponseType);
                                 }
                             }
                             else
@@ -345,9 +344,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             //bool is_fragment = false;
                             bool is_form_post = false;
 
-                            //is_query = responseMode.StartsWith("query");
-                            //is_fragment = responseMode.StartsWith("fragment");
-                            is_form_post = responseMode.StartsWith("form_post");
+                            //is_query = responseMode.StartsWith(OAuth2AndOIDCConst.query);
+                            //is_fragment = responseMode.StartsWith(OAuth2AndOIDCConst.fragment);
+                            is_form_post = responseMode.StartsWith(OAuth2AndOIDCConst.form_post);
 
                             if (is_form_post)
                             {
@@ -410,8 +409,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             
             #endregion
 
-            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint2) == -1
-                && context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuthAuthorizeEndpoint) != -1)
+            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2) == -1
+                && context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
             {
                 #region response_type
 
@@ -423,31 +422,39 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                     //                  - or [response_type=id_token token]
 
                     // レスポンス内容を参照して書き換え（fragmentにid_tokenを追加）
-                    string location = response.Headers["Location"];
+                    string location = response.Headers[OAuth2AndOIDCConst.HttpHeader_Location];
 
                     if (!string.IsNullOrEmpty(location)
                         && location.IndexOf("#access_token=") != -1)
                     {
+                        string pattern = "";
+
                         // ・正規表現でaccess_tokenを抜き出す。
-                        string pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
+                        pattern = "(\\#access_token=)(?<accessToken>.+?)(\\&)";
                         access_token = Regex.Match(location, pattern).Groups["accessToken"].Value;
 
-                        // at_hashを付与
-                        id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, "", HashClaimType.AtHash);
+                        // ・正規表現でstateを抜き出す。
+                        pattern = "&state=(?<state>.+)";
+                        state = Regex.Match(location, pattern).Groups["state"].Value;
+
+                        // at_hash と s_hashを付与
+                        id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                            access_token, "", state, HashClaimType.AtHash | HashClaimType.SHash, // ★
+                            ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
 
                         if (!string.IsNullOrEmpty(id_token))
                         {
                             // responseにid_tokenとして、このJWTを追加する。
                             if (this.RewritedResponseTypeFrom_IdTokenToken)
                             {
-                                response.Headers["Location"] = location + "&id_token=" + id_token;
+                                response.Headers[OAuth2AndOIDCConst.HttpHeader_Location] = location + "&id_token=" + id_token;
                             }
                             else if (this.RewritedResponseTypeFrom_IdToken)
                             {
                                 // ココは未サポート状態なので、テストできていない。
                                 location = location.Replace("access_token=" + access_token + "&", "");
                                 location = location.Replace("&token_type=beara", "");
-                                response.Headers["Location"] = location + "&id_token=" + id_token;
+                                response.Headers[OAuth2AndOIDCConst.HttpHeader_Location] = location + "&id_token=" + id_token;
                             }
                         }
                     }
@@ -473,7 +480,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         // ・本来は、
                         //     "http(s)://redirect_uri値?code=code値&state=state値"
                         //   を期待していた。
-                        string location = response.Headers["Location"];
+                        string location = response.Headers[OAuth2AndOIDCConst.HttpHeader_Location];
 
                         string paramStrCode = "?code=";
                         string paramStrState = "&state=";
@@ -483,7 +490,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             || location.IndexOf(paramStrState) != -1
                             || location.IndexOf(paramStrRedirectUri) != -1)
                         {
-                            response.Headers.Remove("Location");
+                            response.Headers.Remove(OAuth2AndOIDCConst.HttpHeader_Location);
 
                             // 以下は、"?code=XXX&state=YYY&" という並びが前提。
                             MatchCollection matches = StringChecker.Matches(
@@ -493,14 +500,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             foreach (Match match in matches)
                             {
                                 GroupCollection groups = match.Groups;
-                                code = groups["code"].Value;
-                                state = groups["state"].Value;
+                                code = groups[OAuth2AndOIDCConst.code].Value;
+                                state = groups[OAuth2AndOIDCConst.state].Value;
                             }
 
                             redirect_url = location.Substring(0, location.IndexOf('?'));
 
                             // ★ Hybrid Flow対応なので、expを短縮してもイイ。
-                            expires_in = ulong.Parse(ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
+                            expires_in = ulong.Parse(
+                                ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
 
                             // Fragmentに組み込む
                             string fragment = "";
@@ -510,9 +518,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 // id_tokenを取得
                                 string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
 
-                                // c_hashを付与
-                                id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(
-                                    OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in), code, HashClaimType.CHash);
+                                // c_hash, s_hashを付与
+                                id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                                    OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in),
+                                    code, state, HashClaimType.CHash | HashClaimType.SHash,
+                                    ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
 
                                 fragment = "#id_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { id_token, code, expires_in, state });
@@ -521,7 +531,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             {
                                 // access_tokenを取得
                                 string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
-                                access_token = OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in);
+                                access_token = OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in);
 
                                 fragment = "#access_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { access_token, code, expires_in, state });
@@ -530,17 +540,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             {
                                 // id_token, access_tokenを取得
                                 string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
-                                access_token = OidcTokenEditor.ProtectFromPayload(access_token_payload, expires_in);
+                                access_token = OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in);
 
-                                // at_hash, c_hashの両方を付与
-                                id_token = OidcTokenEditor.ChangeToIdTokenFromAccessToken(access_token, code, HashClaimType.Both);
+                                // at_hash, c_hash, s_hashを付与
+                                id_token = IdToken.ChangeToIdTokenFromAccessToken(access_token, code, state,
+                                    HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
+                                    ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
 
                                 fragment = "#access_token={0}&id_token={1}&token_type=Bearer&code={2}&expires_in={3}&state={4}";
                                 fragment = string.Format(fragment, new object[] { access_token, id_token, code, expires_in, state });
                             }
 
                             // Locationを追加（redirect_url + fragment）。
-                            response.Headers.Add("Location", redirect_url + fragment);
+                            response.Headers.Add(OAuth2AndOIDCConst.HttpHeader_Location, redirect_url + fragment);
                         }
                     }
                 }
@@ -566,7 +578,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         // ・本来は、
                         //     "http(s)://redirect_uri値?code=code値&state=state値"
                         //   を期待していた。
-                        string location = response.Headers["Location"];
+                        string location = response.Headers[OAuth2AndOIDCConst.HttpHeader_Location];
 
                         string paramStrCode = "?code=";
                         string paramStrState = "&state=";
@@ -578,7 +590,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         {
                             // 302 Found ---> 200 OK
                             response.StatusCode = 200;
-                            response.Headers.Remove("Location");
+                            response.Headers.Remove(OAuth2AndOIDCConst.HttpHeader_Location);
 
                             // 以下は、"?code=XXX&state=YYY&redirect_uri=ZZZ" という並びが前提。
                             MatchCollection matches = StringChecker.Matches(
@@ -588,9 +600,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                             foreach (Match match in matches)
                             {
                                 GroupCollection groups = match.Groups;
-                                code = groups["code"].Value;
-                                state = groups["state"].Value;
-                                redirect_url = CustomEncode.UrlDecode(groups["redirect_uri"].Value);
+                                code = groups[OAuth2AndOIDCConst.code].Value;
+                                state = groups[OAuth2AndOIDCConst.state].Value;
+                                redirect_url = CustomEncode.UrlDecode(groups[OAuth2AndOIDCConst.redirect_uri].Value);
                             }
 
                             // form_postに必要な、HTTP response message body

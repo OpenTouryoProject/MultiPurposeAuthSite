@@ -31,6 +31,8 @@
 //*  2017/06/07  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models.Util;
+
 using System;
 using System.Data;
 using System.Collections.Generic;
@@ -39,17 +41,17 @@ using System.Collections.Concurrent;
 using Dapper;
 using Newtonsoft.Json;
 
-using MultiPurposeAuthSite.Models.Util;
+using Touryo.Infrastructure.Framework.Authentication;
 
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
 {
     /// <summary>CustomizedConfirmationData</summary>
     public class CustomizedConfirmationJson
     {
-        [JsonProperty(PropertyName = "code")]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.code)]
         public string Code { get; set; }
 
-        [JsonProperty(PropertyName = "email")]
+        [JsonProperty(PropertyName = OAuth2AndOIDCConst.Scope_Email)]
         public string Email { get; set; }
     }
 

@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\packages\Microsoft.Net.Compilers.1.3.2\build\Microsoft.Net.Compilers.props" Condition="Exists('..\packages\Microsoft.Net.Compilers.1.3.2\build\Microsoft.Net.Compilers.props')" />
+  <Import Project="..\packages\Microsoft.Net.Compilers.2.9.0\build\Microsoft.Net.Compilers.props" Condition="Exists('..\packages\Microsoft.Net.Compilers.2.9.0\build\Microsoft.Net.Compilers.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -287,7 +287,7 @@
     <Compile Include="Controllers\ErrorController.cs" />
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ManageController.cs" />
-    <Compile Include="Controllers\OAuthResourceApiController.cs" />
+    <Compile Include="Controllers\OAuth2ResourceApiController.cs" />
     <Compile Include="Controllers\PingController.cs" />
     <Compile Include="Controllers\RolesAdminController.cs" />
     <Compile Include="Controllers\UsersAdminController.cs" />
@@ -298,7 +298,6 @@
     <Compile Include="Models\ASPNETIdentity\Entity\UserStore.cs" />
     <Compile Include="Models\ASPNETIdentity\ExternalLoginHelper\ExternalLoginStarter.cs" />
     <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FIDO2Helper.cs" />
-    <Compile Include="Models\ASPNETIdentity\OIDCFilter\HashClaimType.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\ClientCredentialsFilter.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\OpenIDConnectCodeFilter.cs" />
     <Compile Include="Models\ASPNETIdentity\OIDCFilter\OpenIDConnectModule.cs" />
@@ -354,7 +353,7 @@
     <Compile Include="Models\ViewModels\ManageAddPaymentInformationViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageSetPasswordViewModel.cs" />
     <Compile Include="Models\ViewModels\ManageVerifyPhoneNumberViewModel.cs" />
-    <Compile Include="Models\ViewModels\OAuthAuthorizationCodeGrantClientViewModel.cs" />
+    <Compile Include="Models\ViewModels\OAuth2AuthorizationCodeGrantClientViewModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Resources\AccountController.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -481,9 +480,9 @@
     <Content Include="Views\Account\ForgotPassword.cshtml" />
     <Content Include="Views\Account\ForgotPasswordConfirmation.cshtml" />
     <Content Include="Views\Account\Login.cshtml" />
-    <Content Include="Views\Account\OAuthAuthorizationCodeGrantClient.cshtml" />
-    <Content Include="Views\Account\OAuthAuthorize.cshtml" />
-    <Content Include="Views\Account\OAuthImplicitGrantClient.cshtml" />
+    <Content Include="Views\Account\OAuth2AuthorizationCodeGrantClient.cshtml" />
+    <Content Include="Views\Account\OAuth2Authorize.cshtml" />
+    <Content Include="Views\Account\OAuth2ImplicitGrantClient.cshtml" />
     <Content Include="Views\Account\Register.cshtml" />
     <Content Include="Views\Account\ResetPassword.cshtml" />
     <Content Include="Views\Account\ResetPasswordConfirmation.cshtml" />
@@ -516,12 +515,13 @@
     <Content Include="Views\Manage\ChangeEmail.cshtml" />
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
-    <Content Include="Views\Manage\OAuthAuthorizationCodeGrantClient.cshtml" />
+    <Content Include="Views\Manage\OAuth2AuthorizationCodeGrantClient.cshtml" />
     <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Manage\AddFIDO2Data.cshtml" />
-    <Content Include="Views\Home\OAuthStarters.cshtml" />
-    <Content Include="Views\Home\OAuthClientAuthenticationFlow.cshtml" />
+    <Content Include="Views\Home\OAuth2Starters.cshtml" />
+    <Content Include="Views\Home\OAuth2ClientAuthenticationFlow.cshtml" />
+    <Content Include="Views\Manage\ManageGDPRData.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">
@@ -617,6 +617,12 @@
     </VisualStudio>
   </ProjectExtensions>
   <Import Project="..\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets" Condition="Exists('..\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>このプロジェクトは、このコンピューター上にない NuGet パッケージを参照しています。それらのパッケージをダウンロードするには、[NuGet パッケージの復元] を使用します。詳細については、http://go.microsoft.com/fwlink/?LinkID=322105 を参照してください。見つからないファイルは {0} です。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Microsoft.Net.Compilers.2.9.0\build\Microsoft.Net.Compilers.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Net.Compilers.2.9.0\build\Microsoft.Net.Compilers.props'))" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

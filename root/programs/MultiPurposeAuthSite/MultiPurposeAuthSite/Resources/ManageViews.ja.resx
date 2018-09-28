@@ -357,4 +357,22 @@
   <data name="IndexFIDO2DataRemoveButton" xml:space="preserve">
     <value>FIDO2データの削除</value>
   </data>
+  <data name="IndexDeleteGdprPersonalDataButton" xml:space="preserve">
+    <value>GDPR 個人情報データ削除</value>
+  </data>
+  <data name="ReferGdprPersonalDataSubmit" xml:space="preserve">
+    <value>GDPR 個人情報データ参照</value>
+  </data>
+  <data name="ManageGdprPersonalDataH4" xml:space="preserve">
+    <value>GDPR 個人データの管理フォーム</value>
+  </data>
+  <data name="ManageGdprPersonalDataTitle" xml:space="preserve">
+    <value>GDPR 個人データの管理</value>
+  </data>
+  <data name="IndexManageGdprData" xml:space="preserve">
+    <value>GDPR 個人データ</value>
+  </data>
+  <data name="DeleteGdprPersonalDataSubmit" xml:space="preserve">
+    <value>GDPR 個人情報データ削除</value>
+  </data>
 </root>

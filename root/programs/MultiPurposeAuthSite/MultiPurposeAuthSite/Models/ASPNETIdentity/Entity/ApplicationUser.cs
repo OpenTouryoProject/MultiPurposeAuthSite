@@ -19,15 +19,13 @@
 //**********************************************************************************
 
 using System;
-using System.Web;
 using System.Collections.Generic;
-
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
+using Microsoft.AspNet.Identity;
+
+using Newtonsoft.Json;
 
 /// <summary>MultiPurposeAuthSite.Models</summary>
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
@@ -186,11 +184,36 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// Gets or sets the user name ( = Email) .
         /// </summary>
         public string UserName { get; set; }
-        
+
+        /// <summary>salted / hashed form of the user password</summary>
+        private string _passwordHash = "";
+
         /// <summary>
         /// Gets or sets the salted / hashed form of the user password.
         /// </summary>
-        public string PasswordHash { get; set; }
+        [JsonIgnore]
+        public string PasswordHash
+        {
+            get
+            {
+                return this._passwordHash;
+            }
+            set
+            {
+                // Support "90-day update policy" of PCI DSS 
+                if (string.IsNullOrEmpty(this._passwordHash))
+                {
+                    // 新規や、DBからロード
+                }
+                else
+                {
+                    // 更新時
+                    this.PasswordChangeDate = DateTime.Now;
+                }
+
+                this._passwordHash = value;
+            }
+        }
 
         #endregion
 
@@ -314,6 +337,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// レコード生成日
         /// </summary>
         public DateTime CreatedDate { get; set; } = DateTime.Now ;
+
+        /// <summary>
+        /// パスワード更新日
+        /// </summary>
+        public DateTime PasswordChangeDate { get; set; } = DateTime.Now;
 
         #endregion
 

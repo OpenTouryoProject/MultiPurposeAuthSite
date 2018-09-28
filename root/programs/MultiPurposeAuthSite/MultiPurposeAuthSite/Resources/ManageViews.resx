@@ -198,6 +198,9 @@
   <data name="ChangeUserNameTitle" xml:space="preserve">
     <value>Change user name</value>
   </data>
+  <data name="DeleteGdprPersonalDataSubmit" xml:space="preserve">
+    <value>Delete your GDPR personal data</value>
+  </data>
   <data name="IndexChangePasswordActionLink" xml:space="preserve">
     <value>Change your password</value>
   </data>
@@ -236,6 +239,9 @@
   </data>
   <data name="IndexH4" xml:space="preserve">
     <value>Change your account settings</value>
+  </data>
+  <data name="IndexManageGdprData" xml:space="preserve">
+    <value>Gdpr personal data</value>
   </data>
   <data name="IndexOAuth2Data" xml:space="preserve">
     <value>OAuth2 data</value>
@@ -315,6 +321,12 @@
   <data name="IndexUserNameChangeActionLink" xml:space="preserve">
     <value>Change your user name</value>
   </data>
+  <data name="ManageGdprPersonalDataH4" xml:space="preserve">
+    <value>GDPR personal data management form</value>
+  </data>
+  <data name="ManageGdprPersonalDataTitle" xml:space="preserve">
+    <value>Management of GDPR personal data.</value>
+  </data>
   <data name="ManageLoginsAddButtonTitle" xml:space="preserve">
     <value>Log in using your {0} account.</value>
   </data>
@@ -335,6 +347,9 @@
   </data>
   <data name="ManageLoginsTitle" xml:space="preserve">
     <value>Manage your external logins</value>
+  </data>
+  <data name="ReferGdprPersonalDataSubmit" xml:space="preserve">
+    <value>Refer your GDPR personal data</value>
   </data>
   <data name="SetPasswordH4" xml:space="preserve">
     <value>Create local login form</value>

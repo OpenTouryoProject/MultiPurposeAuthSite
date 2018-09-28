@@ -375,12 +375,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    [Id], [UserName], [PasswordHash], " +
                                         "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], " +
-                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate])" +
+                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate], [PasswordChangeDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
 
@@ -391,12 +391,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", " +
-                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\")" +
+                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\", \"PasswordChangeDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :PasswordHash, " +
                                         "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, " +
-                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate)",
+                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate, :PasswordChangeDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -415,7 +415,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
                                             FIDO2PublicKey = user.FIDO2PublicKey,
-                                            CreatedDate = user.CreatedDate
+                                            CreatedDate = user.CreatedDate,
+                                            PasswordChangeDate = user.PasswordChangeDate
                                         });
 
                                     break;
@@ -427,12 +428,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         "    \"id\", \"username\", \"passwordhash\", " +
                                         "    \"email\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
                                         "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", " +
-                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\")" +
+                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\", \"passwordchangedate\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @PasswordHash, " +
                                         "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
                             }
@@ -813,7 +814,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         /// <summary>ユーザー情報を更新</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>－</returns>
-        public async Task UpdateAsync(ApplicationUser user)
+        public Task UpdateAsync(ApplicationUser user)
         {
             // 更新系の機能のため、
             //OnlySts.STSOnly_M();
@@ -821,144 +822,151 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 // 何も更新しない。
                 // IUserLockoutStore機能などで使用するため。
-                return;
+                return Task.FromResult(0);
             }
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             try
             {
-                // ユーザー情報を取得
-                ApplicationUser tgtUser = await this.FindByIdAsync(user.Id);
+                // MemoryStore同一インスタンス問題。
+                // SerializeできないMemberもあり、DeepCloneもできず。
+
+                //// ユーザー情報を取得
+                //ApplicationUser tgtUser = await this.FindByIdAsync(user.Id);
+
+                //// ユーザー情報を更新
+                //if (tgtUser == null)
+                //{
+                //    // なにもしない（というか何もできない）
+                //}
+                //else
+                //{
 
                 // ユーザー情報を更新
-                if (tgtUser == null)
+                switch (ASPNETIdentityConfig.UserStoreType)
                 {
-                    // なにもしない（というか何もできない）
-                }
-                else
-                {
-                    // ユーザー情報を更新
-                    switch (ASPNETIdentityConfig.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
+                    case EnumUserStoreType.Memory:
 
-                            // 既定の属性
-                            tgtUser.Id = user.Id;
-                            tgtUser.UserName = user.UserName;
-                            tgtUser.PasswordHash = user.PasswordHash;
-                            tgtUser.Email = user.Email;
-                            tgtUser.EmailConfirmed = user.EmailConfirmed;
-                            tgtUser.PhoneNumber = user.PhoneNumber;
-                            tgtUser.PhoneNumberConfirmed = user.PhoneNumberConfirmed;
-                            tgtUser.AccessFailedCount = user.AccessFailedCount;
-                            tgtUser.LockoutEnabled = user.LockoutEnabled;
-                            tgtUser.LockoutEndDateUtc = user.LockoutEndDateUtc;
-                            tgtUser.SecurityStamp = user.SecurityStamp;
-                            tgtUser.TwoFactorEnabled = user.TwoFactorEnabled;
-                            // Collection
-                            tgtUser.Roles = user.Roles;
-                            tgtUser.Logins = user.Logins;
-                            tgtUser.Claims = user.Claims;
+                        // MemoryStore同一インスタンス
 
-                            // 追加の属性
-                            tgtUser.ClientID = user.ClientID;
-                            tgtUser.PaymentInformation = user.PaymentInformation;
-                            tgtUser.UnstructuredData = user.UnstructuredData;
-                            tgtUser.FIDO2PublicKey = user.FIDO2PublicKey;
+                        //// 既定の属性
+                        //tgtUser.Id = user.Id;
+                        //tgtUser.UserName = user.UserName;
+                        //tgtUser.PasswordHash = user.PasswordHash;
+                        //tgtUser.Email = user.Email;
+                        //tgtUser.EmailConfirmed = user.EmailConfirmed;
+                        //tgtUser.PhoneNumber = user.PhoneNumber;
+                        //tgtUser.PhoneNumberConfirmed = user.PhoneNumberConfirmed;
+                        //tgtUser.AccessFailedCount = user.AccessFailedCount;
+                        //tgtUser.LockoutEnabled = user.LockoutEnabled;
+                        //tgtUser.LockoutEndDateUtc = user.LockoutEndDateUtc;
+                        //tgtUser.SecurityStamp = user.SecurityStamp;
+                        //tgtUser.TwoFactorEnabled = user.TwoFactorEnabled;
+                        //// Collection
+                        //tgtUser.Roles = user.Roles;
+                        //tgtUser.Logins = user.Logins;
+                        //tgtUser.Claims = user.Claims;
 
-                            break;
+                        //// 追加の属性
+                        //tgtUser.ClientID = user.ClientID;
+                        //tgtUser.PaymentInformation = user.PaymentInformation;
+                        //tgtUser.UnstructuredData = user.UnstructuredData;
+                        //tgtUser.FIDO2PublicKey = user.FIDO2PublicKey;
 
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.ODPManagedDriver:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+                        break;
 
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            // ユーザー情報を更新
+                            switch (ASPNETIdentityConfig.UserStoreType)
                             {
-                                cnn.Open();
+                                case EnumUserStoreType.SqlServer:
 
-                                // ユーザー情報を更新
-                                switch (ASPNETIdentityConfig.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
+                                    cnn.Execute(
+                                        "UPDATE [Users] " +
+                                        "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
+                                        "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
+                                        "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
+                                        "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey, [PasswordChangeDate] = @PasswordChangeDate " +
+                                        "WHERE [Id] = @Id", user);
 
-                                        cnn.Execute(
-                                            "UPDATE [Users] " +
-                                            "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
-                                            "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
-                                            "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
-                                            "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey " +
-                                            "WHERE [Id] = @Id", user);
+                                    break;
 
-                                        break;
+                                case EnumUserStoreType.ODPManagedDriver:
 
-                                    case EnumUserStoreType.ODPManagedDriver:
-
-                                        cnn.Execute(
-                                            "UPDATE \"Users\" " +
-                                            "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
-                                            "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
-                                            "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
-                                            "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey " +
-                                            "WHERE \"Id\" = :Id",
-                                            new // 拡張メソッドで対策できる。
+                                    cnn.Execute(
+                                        "UPDATE \"Users\" " +
+                                        "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
+                                        "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
+                                        "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
+                                        "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey, \"PasswordChangeDate\" = :PasswordChangeDate " +
+                                        "WHERE \"Id\" = :Id",
+                                        new // 拡張メソッドで対策できる。
                                             {
-                                                Id = user.Id,
-                                                UserName = user.UserName,
-                                                PasswordHash = user.PasswordHash,
-                                                Email = user.Email,
-                                                EmailConfirmed = user.EmailConfirmed ? -1 : 0,
-                                                PhoneNumber = user.PhoneNumber,
-                                                PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
-                                                LockoutEnabled = user.LockoutEnabled ? -1 : 0,
-                                                AccessFailedCount = user.AccessFailedCount,
-                                                LockoutEndDateUtc = user.LockoutEndDateUtc,
-                                                SecurityStamp = user.SecurityStamp,
-                                                TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
-                                                ClientID = user.ClientID,
-                                                PaymentInformation = user.PaymentInformation,
-                                                UnstructuredData = user.UnstructuredData,
-                                                FIDO2PublicKey = user.FIDO2PublicKey
-                                            });
+                                            Id = user.Id,
+                                            UserName = user.UserName,
+                                            PasswordHash = user.PasswordHash,
+                                            Email = user.Email,
+                                            EmailConfirmed = user.EmailConfirmed ? -1 : 0,
+                                            PhoneNumber = user.PhoneNumber,
+                                            PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
+                                            LockoutEnabled = user.LockoutEnabled ? -1 : 0,
+                                            AccessFailedCount = user.AccessFailedCount,
+                                            LockoutEndDateUtc = user.LockoutEndDateUtc,
+                                            SecurityStamp = user.SecurityStamp,
+                                            TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
+                                            ClientID = user.ClientID,
+                                            PaymentInformation = user.PaymentInformation,
+                                            UnstructuredData = user.UnstructuredData,
+                                            FIDO2PublicKey = user.FIDO2PublicKey,
+                                            PasswordChangeDate = user.PasswordChangeDate
+                                        });
 
-                                        break;
+                                    break;
 
-                                    case EnumUserStoreType.PostgreSQL:
+                                case EnumUserStoreType.PostgreSQL:
 
-                                        cnn.Execute(
-                                           "UPDATE \"users\" " +
-                                           "SET \"username\" = @UserName, \"passwordhash\" = @PasswordHash, " +
-                                           "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
-                                           "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
-                                           "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey " +
-                                           "WHERE \"id\" = @Id", user);
+                                    cnn.Execute(
+                                       "UPDATE \"users\" " +
+                                       "SET \"username\" = @UserName, \"passwordhash\" = @PasswordHash, " +
+                                       "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
+                                       "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
+                                       "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey, \"passwordchangedate\" = @PasswordChangeDate " +
+                                       "WHERE \"id\" = @Id", user);
 
-                                        break;
-                                }
-
-                                // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
-                                //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
-                                //    その際、二重実行により二重登録（制約により例外になる）が起き得るので、以下は、ココに実装しないことにした。
-                                // await this.UpdateRoles(user, tgtUser);    
-                                // await this.UpdateLogins(user, tgtUser);
-                                // await this.UpdateClaims(user, tgtUser);
+                                    break;
                             }
 
-                            break;
-                    }
+                            // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
+                            //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
+                            //    その際、二重実行により二重登録（制約により例外になる）が起き得るので、以下は、ココに実装しないことにした。
+                            // await this.UpdateRoles(user, tgtUser);    
+                            // await this.UpdateLogins(user, tgtUser);
+                            // await this.UpdateClaims(user, tgtUser);
+                        }
 
-                    Logging.MyOperationTrace(string.Format("{0}({1}) was updated.", user.Id, user.UserName));
+                        break;
                 }
+
+                Logging.MyOperationTrace(string.Format("{0}({1}) was updated.", user.Id, user.UserName));
+                //}
             }
             catch (Exception ex)
             {
                 Logging.MySQLLogForEx(ex);
             }
 
-            return;
+            return Task.FromResult(0);
         }
 
         #region ユーザの関連情報の更新（ Roles, Logins, Claims ）

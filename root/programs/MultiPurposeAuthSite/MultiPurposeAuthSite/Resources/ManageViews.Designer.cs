@@ -19,7 +19,7 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class ManageViews {
@@ -304,6 +304,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Delete your GDPR personal data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string DeleteGdprPersonalDataSubmit {
+            get {
+                return ResourceManager.GetString("DeleteGdprPersonalDataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Change your password に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexChangePasswordActionLink {
@@ -417,6 +426,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexH4 {
             get {
                 return ResourceManager.GetString("IndexH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Gdpr personal data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexManageGdprData {
+            get {
+                return ResourceManager.GetString("IndexManageGdprData", resourceCulture);
             }
         }
         
@@ -655,6 +673,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   GDPR personal data management form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageGdprPersonalDataH4 {
+            get {
+                return ResourceManager.GetString("ManageGdprPersonalDataH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Management of GDPR personal data. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageGdprPersonalDataTitle {
+            get {
+                return ResourceManager.GetString("ManageGdprPersonalDataTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Log in using your {0} account. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ManageLoginsAddButtonTitle {
@@ -714,6 +750,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string ManageLoginsTitle {
             get {
                 return ResourceManager.GetString("ManageLoginsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Refer your GDPR personal data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ReferGdprPersonalDataSubmit {
+            get {
+                return ResourceManager.GetString("ReferGdprPersonalDataSubmit", resourceCulture);
             }
         }
         

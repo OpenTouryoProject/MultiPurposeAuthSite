@@ -39,6 +39,8 @@ using System.Collections.Generic;
 
 using Newtonsoft.Json;
 
+using Touryo.Infrastructure.Framework.Authentication;
+
 namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
@@ -130,9 +132,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 Dictionary<string, object> accessTokenResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
 
                 // refresh_tokenを削除
-                if (accessTokenResponse.ContainsKey("refresh_token"))
+                if (accessTokenResponse.ContainsKey(OAuth2AndOIDCConst.RefreshToken))
                 {
-                    accessTokenResponse.Remove("refresh_token");
+                    accessTokenResponse.Remove(OAuth2AndOIDCConst.RefreshToken);
                     bb = enc.GetBytes(JsonConvert.SerializeObject(accessTokenResponse));
                 }
             }

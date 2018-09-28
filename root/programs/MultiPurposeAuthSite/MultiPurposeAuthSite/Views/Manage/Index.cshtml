@@ -344,7 +344,7 @@ else
 @if (ASPNETIdentityConfig.CanEditFIDO2Data)
 {
     // FIDO2データの変更が許可されている場合。
-    <dt>EditFIDO2Data :</dt>
+            <dt>EditFIDO2Data :</dt>
             <dd>
                 @*"Add" and "Remove or Change"*@
                 @if (!Model.HasFIDO2Data)
@@ -361,6 +361,19 @@ else
                         <text>[<input type="submit" value="@ManageViews.IndexFIDO2DataRemoveButton" class="btn-link" />]</text>
                     }
                 }
+            </dd>
+}
+else
+{
+    // FIDO2データの変更が許可されていない場合。
+}
+
+@if (ASPNETIdentityConfig.CanUseGdprFunction)
+{
+    // GDPR 個人情報管理が許可されている場合。
+            <dt>ManageGdprData :</dt>
+            <dd>
+                <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexManageGdprData, "ManageGdprData")&nbsp;&nbsp;]</text>
             </dd>
 }
 else

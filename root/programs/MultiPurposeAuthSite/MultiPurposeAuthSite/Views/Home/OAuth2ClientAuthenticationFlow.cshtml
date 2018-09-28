@@ -1,0 +1,114 @@
+﻿@*
+    // OAuth 2.0 テスト用 画面なので、必要に応じて流用 or 削除して下さい。
+
+    //**********************************************************************************
+    //* Copyright (C) 2017 Hitachi Solutions,Ltd.
+    //**********************************************************************************
+
+    #region Apache License
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    // http://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
+    //
+    #endregion
+
+    //**********************************************************************************
+    //* クラス名        ：OAuth2ClientAuthenticationFlow
+    //* クラス日本語名  ：OAuth2ClientAuthenticationFlow（テスト用）
+    //* ・この画面は、OAuth2 Client Authentication Flowのテスト用画面です。
+    //*   テストのためこの画面はbearer tokenを露見させます。本番環境にこの画面を提供しないで下さい。
+    //* ・This screen is the test screen of OAuth2 Client Authentication Flow.
+    //*   This screen exposes bearer token for testing. Do not provide this screen for production environment.
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/12/26  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@{
+    ViewBag.Title = "OAuth2ClientAuthenticationFlow";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title.</h2>
+<div class="row">
+    <div class="col-md-8">
+        <p><a class="btn btn-default" href="#" id="OAuth2GetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuth2ResourceServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI)">Get user claims</a></p>
+        <br />
+        <br />
+        <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
+        <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
+    </div>
+</div>
+
+@Scripts.Render("~/bundles/multiauthsite")
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <script type="text/javascript">
+
+        var fragment = "";
+        var token = "";
+
+        function CallOAuthAPI(url, httpMethod, postdata) {
+            alert(
+                "<httpMethod>" + "\n" + httpMethod + "\n" +
+                "<url>" + "\n" + url + "\n" +
+                "<token>" + "\n" + token);
+
+            $.ajax({
+                type: httpMethod,
+                url: url,
+                crossDomain: true,
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                },
+                data: postdata,
+                xhrFields: {
+                    withCredentials: true
+                },
+                success: function (responseData, textStatus, jqXHR) {
+                    alert(textStatus + ', ' + JSON.stringify(responseData));
+                },
+                error: function (responseData, textStatus, errorThrown) {
+                    alert(textStatus + ', ' + errorThrown.message);
+                }
+            });
+        }
+
+        $(function () {
+            // Response
+            alert(JSON.stringify('@ViewBag.Response'));
+
+            // access_token
+            // access_token (Bearer Token) を使用して
+            // ResourceServerのWebAPIにアクセスする。
+            token = '@ViewBag.AccessToken';
+
+            // OAuth2GetUserClaimsWebAPI
+            $('#OAuth2GetUserClaimsWebAPI').on('click', function () {
+                CallOAuthAPI($('#OAuth2GetUserClaimsWebAPI').attr("url"), 'get', null)
+            });
+
+        });
+    </script>
+}

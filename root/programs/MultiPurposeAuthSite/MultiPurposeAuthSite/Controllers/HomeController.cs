@@ -100,12 +100,23 @@ namespace MultiPurposeAuthSite.Controllers
                     + "&nonce=" + this.Nonce;
         }
 
+        /// <summary>FAPI1スターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたFAPI1スターター</returns>
+        private string AssembleFAPI1Starter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId, response_type, ASPNETIdentityConst.StandardScopes, "fapi1:" + this.State);
+        }
+
         /// <summary>初期化</summary>
         private void Init()
         {
             this.OAuthAuthorizeEndpoint =
-            ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-            + ASPNETIdentityConfig.OAuthAuthorizeEndpoint;
+            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+            + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint;
 
             this.ClientId = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
@@ -118,10 +129,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>保存</summary>
         private void Save()
         {
-            // テスト用にstate, code_verifierを、Session, Cookieに保存
+            // テスト用にstate, nonce, code_verifierを、Session, Cookieに保存
             // ・Session : サイト分割時
             // ・Cookie : 同一サイト時
 
+            // state
             Session["test_state"] = this.State;
             if (Request.Cookies["test_state"] == null)
             {
@@ -135,6 +147,21 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
+            // nonce
+            Session["test_nonce"] = this.Nonce;
+            if (Request.Cookies["test_nonce"] == null)
+            {
+                Response.Cookies["test_nonce"].Value = this.Nonce;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Request.Cookies["test_nonce"].Value))
+                {
+                    Response.Cookies["test_nonce"].Value = this.Nonce;
+                }
+            }
+
+            // code_verifier
             Session["test_code_verifier"] = this.CodeVerifier;
             if (Request.Cookies["test_code_verifier"] == null)
             {
@@ -156,7 +183,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>OAuthStarters</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult OAuthStarters()
+        public ActionResult OAuth2Starters()
         {
             return View();
         }
@@ -175,7 +202,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType));
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
         }
 
         /// <summary>Test Authorization Code Flow (form_post)</summary>
@@ -188,7 +215,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (form_post)
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&response_mode=form_post");
         }
 
@@ -206,7 +233,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none");
         }
 
@@ -220,14 +247,14 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (OIDC, form_post)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none"
                 + "&response_mode=form_post");
         }
 
         #endregion
 
-        #region PKCE
+        #region PKCE(FAPI1)
 
         /// <summary>Test Authorization Code Flow (PKCE plain)</summary>
         /// <returns>ActionResult</returns>
@@ -241,9 +268,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Authorization Code Flow (PKCE plain)
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=plain");
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain);
         }
 
         /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
@@ -253,14 +280,31 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.Init();
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
-            this.CodeChallenge = OAuth2Helper.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
+            this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
             this.Save();
 
             // Authorization Code Flow (PKCE S256)
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.AuthorizationCodeResponseType)
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=S256");
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256);
+        }
+
+        #endregion
+
+        #region FAPI1
+
+        /// <summary>Test Authorization Code Flow (FAPI1)</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult FAPI1AuthorizationCode()
+        {
+            this.Init();
+            this.Save();
+
+            // Authorization Code Flow
+            return Redirect(this.AssembleFAPI1Starter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
         }
 
         #endregion
@@ -281,7 +325,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Implicit Flow
             return Redirect(this.AssembleOAuth2Starter(
-                ASPNETIdentityConst.ImplicitResponseType));
+                OAuth2AndOIDCConst.ImplicitResponseType));
         }
 
         #endregion
@@ -298,7 +342,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Implicit Flow 'id_token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcImplicit1_ResponseType));
+                OAuth2AndOIDCConst.OidcImplicit1_ResponseType));
         }
 
 
@@ -312,7 +356,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Implicit Flow 'id_token token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcImplicit2_ResponseType));
+                OAuth2AndOIDCConst.OidcImplicit2_ResponseType));
         }
 
         #endregion
@@ -333,7 +377,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybrid Flow 'code id_token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcHybrid2_IdToken_ResponseType));
+                OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType));
         }
 
         /// <summary>Test Hybrid Flow 'code token'(OIDC)</summary>
@@ -346,7 +390,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybrid Flow 'code token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcHybrid2_Token_ResponseType));
+                OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType));
         }
 
         /// <summary>Test Hybrid Flow 'code id_token token'(OIDC)</summary>
@@ -359,8 +403,12 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybrid Flow 'code id_token token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
-                ASPNETIdentityConst.OidcHybrid3_ResponseType));
+                OAuth2AndOIDCConst.OidcHybrid3_ResponseType));
         }
+
+        #endregion
+
+        #region FAPI2
 
         #endregion
 
@@ -376,8 +424,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestClientCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
-            string aud = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint;
+            string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint;
 
             // ClientNameから、client_id, client_secretを取得。
             string client_id = "";
@@ -397,15 +445,15 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             string response = await OAuth2Helper.GetInstance()
-                .ClientCredentialsFlowAsync(new Uri(
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint),
+                .ClientCredentialsGrantAsync(new Uri(
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint),
                      client_id, client_secret, ASPNETIdentityConst.StandardScopes);
 
             ViewBag.Response = response;
-            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
 
-            return View("OAuthClientAuthenticationFlow");
+            return View("OAuth2ClientAuthenticationFlow");
         }
 
         #endregion
@@ -418,8 +466,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Token2エンドポイントにアクセス
-            string aud = ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2;
+            string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2;
 
             // ClientNameから、client_id(iss)を取得。
             string iss = "";
@@ -436,20 +484,20 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // テストなので秘密鍵は共通とする。
-            string privateKey = GetConfigParameter.GetConfigValue("OAuth2JwtAssertionPrivatekey");
+            string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
             privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
 
             string response = await OAuth2Helper.GetInstance()
                 .JwtBearerTokenFlowAsync(new Uri(
-                    ASPNETIdentityConfig.OAuthAuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuthBearerTokenEndpoint2),
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
+                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2),
                      JwtAssertion.CreateJwtBearerTokenFlowAssertion(
                          iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
 
             ViewBag.Response = response;
-            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))["access_token"];
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
 
-            return View("OAuthClientAuthenticationFlow");
+            return View("OAuth2ClientAuthenticationFlow");
         }
 
         #endregion
