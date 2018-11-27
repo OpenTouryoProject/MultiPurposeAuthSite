@@ -85,7 +85,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
 
             byte[] hashBytes = null;
             byte[] data = null;
-            hashBytes = GetHash.GetHashBytes(clientDataBytes, EnumHashAlgorithm.SHA256Managed, 0);
+            hashBytes = GetHash.GetHashBytes(clientDataBytes, EnumHashAlgorithm.SHA256_M, 0);
             data = authenticatorDataBytes.Concat(hashBytes).ToArray();
 
             if ((string)clientJson["challenge"] == this.Challenge)
@@ -94,8 +94,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
 
                 // Load public key
                 RSACryptoServiceProvider rsaCryptoServiceProvider =
-                    RS256_KeyConverter.JwkToProvider(this.PublicKey);
-
+                    (RSACryptoServiceProvider)RsaPublicKeyConverter.JwkToProvider(this.PublicKey);
+                
                 // VerifyData
                 ret = rsaCryptoServiceProvider.VerifyData(
                     data, signatureBytes,

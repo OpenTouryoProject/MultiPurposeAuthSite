@@ -53,8 +53,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
             //// $0$ バージョン
             //return this.V0HashAlgorithm(password);
 
-            // $1$ バージョン
-            return this.V1HashAlgorithm(password);
+            //// $1$ バージョン
+            //return this.V1HashAlgorithm(password);
+
+            // $2$ バージョン
+            return this.V2HashAlgorithm(password);
         }
 
         #region Hash AlgorithmのVersion管理
@@ -75,7 +78,23 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
         {
             // $1$ バージョンの実装
             return "$1$" + "." +
-                GetKeyedHash.GetSaltedPassword(
+                GetPasswordHashV1.GetSaltedPassword(
+                    password,                            // password
+                    EnumKeyedHashAlgorithm.MACTripleDES, // algorithm
+                    GetPassword.Generate(10, 3),         // key(pwd)
+                    10,                                  // salt length
+                    ASPNETIdentityConfig.StretchCount    // stretch count
+                );
+        }
+
+        /// <summary>Version 2</summary>
+        /// <param name="password">password</param>
+        /// <returns>hashPassword</returns>
+        private string V2HashAlgorithm(string password)
+        {
+            // $2$ バージョンの実装
+            return "$2$" + "." +
+                GetPasswordHashV2.GetSaltedPassword(
                     password,                            // password
                     EnumKeyedHashAlgorithm.MACTripleDES, // algorithm
                     GetPassword.Generate(10, 3),         // key(pwd)
@@ -107,9 +126,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
                 {
                     return this.V0VerifyHashAlgorithm(hashedPassword, providedPassword);
                 }
-                if (hashedPassword.IndexOf("$1$") == 0)
+                else if (hashedPassword.IndexOf("$1$") == 0)
                 {
                     return this.V1VerifyHashAlgorithm(hashedPassword, providedPassword);
+                }
+                else  if (hashedPassword.IndexOf("$2$") == 0)
+                {
+                    return this.V2VerifyHashAlgorithm(hashedPassword, providedPassword);
                 }
                 else
                 {
@@ -143,10 +166,31 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
         /// <returns>検証結果</returns>
         private PasswordVerificationResult V1VerifyHashAlgorithm(
             string hashedPassword, string providedPassword)
-        {   
-            if(GetKeyedHash.EqualSaltedPassword(
-                providedPassword, hashedPassword.Substring(4),
+        {
+            if (GetPasswordHashV1.EqualSaltedPassword(
+                providedPassword,
+                hashedPassword.Substring(4),
                 EnumKeyedHashAlgorithm.MACTripleDES))
+            {
+                return PasswordVerificationResult.Success;
+            }
+            else
+            {
+                return PasswordVerificationResult.Failed;
+            }
+        }
+
+        /// <summary>Version 2</summary>
+        /// <param name="hashedPassword">hashedPassword</param>
+        /// <param name="providedPassword">providedPassword</param>
+        /// <returns>検証結果</returns>
+        private PasswordVerificationResult V2VerifyHashAlgorithm(
+            string hashedPassword, string providedPassword)
+        {   
+            if(GetPasswordHashV2.EqualSaltedPassword(
+                providedPassword,
+                EnumKeyedHashAlgorithm.MACTripleDES,
+                hashedPassword.Substring(4)))
             {
                 return PasswordVerificationResult.Success;
             }

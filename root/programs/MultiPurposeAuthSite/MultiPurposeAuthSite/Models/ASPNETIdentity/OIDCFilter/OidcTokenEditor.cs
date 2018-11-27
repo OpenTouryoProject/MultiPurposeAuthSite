@@ -177,7 +177,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RS256_KeyConverter.X509PfxToJwkPublicKey(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
+                    RsaPublicKeyConverter.X509PfxToJwk(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;

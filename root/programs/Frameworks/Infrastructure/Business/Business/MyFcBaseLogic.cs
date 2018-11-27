@@ -246,7 +246,11 @@ namespace Touryo.Infrastructure.Business.Business
                 }
                 else
                 {
-                    // ここは通らない
+                    // SQL Server / SQL Client用のDamを生成
+                    dam = new DamSqlSvr();
+
+                    // 接続文字列をロード
+                    connstring = GetConfigParameter.GetConnectionString("ConnectionString_SQL");
                 }
 
                 #endregion
