@@ -313,7 +313,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 assertion.Split('.')[1]), CustomEncode.us_ascii));
 
                         string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
-                        pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(pubKey), CustomEncode.us_ascii);
+                        pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                         if (!string.IsNullOrEmpty(pubKey))
                         {
@@ -322,7 +322,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                             string scopes = "";
                             JObject jobj = null;
 
-                            if (JwtAssertion.VerifyJwtBearerTokenFlowAssertion(
+                            if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
                                 assertion, out iss, out aud, out scopes, out jobj, pubKey))
                             {
                                 // aud 検証

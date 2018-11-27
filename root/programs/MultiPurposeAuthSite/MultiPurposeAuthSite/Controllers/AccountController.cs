@@ -2247,15 +2247,16 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // 通常
                             model.Response = await OAuth2Helper.GetInstance()
-                                .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code);
+                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                                client_id, client_secret, redirect_uri, code);
                         }
                         else
                         {
                             // PKCE
                             model.Response = await OAuth2Helper.GetInstance()
-                               .GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, client_id, client_secret, redirect_uri,
-                                code, code_verifier_InSessionOrCookie);
+                               .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                               client_id, client_secret, redirect_uri,
+                               code, code_verifier_InSessionOrCookie);
                         }
                     }
                     else
@@ -2274,10 +2275,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // テストなので秘密鍵は共通とする。
                         string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
-                        privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
+                        privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
 
                         model.Response = await OAuth2Helper.GetInstance().GetAccessTokenByCodeAsync(
-                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
+                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
                                 iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
                     }
 

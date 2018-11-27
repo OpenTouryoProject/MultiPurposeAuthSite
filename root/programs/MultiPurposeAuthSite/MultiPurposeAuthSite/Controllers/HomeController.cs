@@ -485,13 +485,13 @@ namespace MultiPurposeAuthSite.Controllers
 
             // テストなので秘密鍵は共通とする。
             string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
-            privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64String(privateKey), CustomEncode.us_ascii);
+            privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
 
             string response = await OAuth2Helper.GetInstance()
                 .JwtBearerTokenFlowAsync(new Uri(
                     ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
                      + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2),
-                     JwtAssertion.CreateJwtBearerTokenFlowAssertion(
+                     JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
                          iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
 
             ViewBag.Response = response;
