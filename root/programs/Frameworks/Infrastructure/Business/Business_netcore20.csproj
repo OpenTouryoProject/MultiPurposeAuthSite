@@ -49,9 +49,21 @@
     <PackageReference Include="Microsoft.AspNetCore.Http.Extensions" Version="2.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc" Version="2.1.3" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="Touryo.Infrastructure.Framework" Version="2.3.0" />
-    <PackageReference Include="Touryo.Infrastructure.Public.Db.DamMySQL" Version="2.3.0" />
-    <PackageReference Include="Touryo.Infrastructure.Public.Db.DamPstGrS" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="OpenTouryo.DamMySQL">
+      <HintPath>..\Build_netcore20\OpenTouryo.DamMySQL.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenTouryo.DamPstGrS">
+      <HintPath>..\Build_netcore20\OpenTouryo.DamPstGrS.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenTouryo.Framework">
+      <HintPath>..\Build_netcore20\OpenTouryo.Framework.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenTouryo.Public">
+      <HintPath>..\Build_netcore20\OpenTouryo.Public.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

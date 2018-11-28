@@ -212,19 +212,6 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             // 署名
             return jwsRS256.Create(json);
 
-            //// 検証
-            //jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
-            //    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-            //if (jwsRS256.Verify(jws))
-            //{
-            //    return jws; // 検証できた。
-            //}
-            //else
-            //{
-            //    return ""; // 検証できなかった。
-            //}
-
             #endregion
         }
 
@@ -255,8 +242,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
                 else
                 {
-                    JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
-                    JObject jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
+                    JObject jwkObject = null;
+
+                    if (ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))
+                    {
+                        JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
+                        jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
+                    }
 
                     if (jwkObject == null)
                     {

@@ -266,7 +266,7 @@ namespace Touryo.Infrastructure.Business.Presentation
                     List<string> scopes = null;
                     JObject jobj = null;
 
-                    if (JwtToken.Verify(access_token, out sub, out roles, out scopes, out jobj))
+                    if (AccessToken.Verify(access_token, out sub, out roles, out scopes, out jobj))
                     {
 
                         // ActionFilterAttributeとApiController間の情報共有はcontext.Principalを使用する。

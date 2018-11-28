@@ -1797,8 +1797,8 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // id_tokenがある。
                         string id_token = dic[OAuth2AndOIDCConst.IDToken];
-
-                        if (JwtToken.Verify(id_token, out sub, out roles, out scopes, out jobj)
+                        
+                        if (AccessToken.Verify(id_token, out sub, out roles, out scopes, out jobj)
                             && jobj[OAuth2AndOIDCConst.nonce].ToString() == (string)Session["id_federation_signin_nonce"])
                         {
                             // id_token検証OK。
@@ -2313,8 +2313,7 @@ namespace MultiPurposeAuthSite.Controllers
                     List<string> out_roles = null;
                     List<string> out_scopes = null;
 
-                    if (!JwtToken.Verify(model.AccessToken, 
-                        out out_sub, out out_roles, out out_scopes, out out_jobj))
+                    if (!AccessToken.Verify(model.AccessToken, out out_sub, out out_roles, out out_scopes, out out_jobj))
                     {
                         throw new Exception("AccessToken検証エラー");
                     }
@@ -2324,9 +2323,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     string out_nonce = "";
 
-                    if(!IdToken.Verify(model.IdToken,
-                        model.AccessToken, code, state,
-                        out out_sub, out out_nonce, out out_jobj)
+                    if(!IdToken.Verify(model.IdToken, model.AccessToken, code, state, out out_sub, out out_nonce, out out_jobj)
                         && out_nonce == nonce_InSessionOrCookie)
                     {
                         throw new Exception("IdToken検証エラー");

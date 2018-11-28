@@ -235,7 +235,8 @@ namespace MultiPurposeAuthSite.Controllers
                     "RS256"
                 });
 
-                OpenIDConfig.Add("jwks_uri", "・・・");
+                OpenIDConfig.Add("jwks_uri", 
+                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
             }
 
             #endregion
