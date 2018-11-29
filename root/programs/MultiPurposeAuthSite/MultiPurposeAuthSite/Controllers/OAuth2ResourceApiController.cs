@@ -122,12 +122,9 @@ namespace MultiPurposeAuthSite.Controllers
             #region 基本
 
             OpenIDConfig.Add("issuer", ASPNETIdentityConfig.OAuth2IssuerId);
-            OpenIDConfig.Add("access_token_issuer", ASPNETIdentityConfig.OAuth2IssuerId);
 
-            OpenIDConfig.Add("authorization_endpoint", new List<string> {
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint,
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2
-            });
+            OpenIDConfig.Add("authorization_endpoint", 
+                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint);
 
             OpenIDConfig.Add("token_endpoint", new List<string> {
                 ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint,
@@ -151,19 +148,18 @@ namespace MultiPurposeAuthSite.Controllers
 
             #region token
 
-            scopes_supported = new List<string> {
-                OAuth2AndOIDCConst.Scope_Auth,
-                OAuth2AndOIDCConst.Scope_Profile,
-                OAuth2AndOIDCConst.Scope_Email,
-                OAuth2AndOIDCConst.Scope_Phone,
-                OAuth2AndOIDCConst.Scope_Address,
-                OAuth2AndOIDCConst.Scope_UserID,
-                OAuth2AndOIDCConst.Scope_Roles
-            };
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
+            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
 
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
-                "client_secret_basic",
-                "private_key_jwt"
+                OAuth2AndOIDCConst.ClientSecretBasic,
+                OAuth2AndOIDCConst.PrivateKeyJwt
             });
 
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
@@ -174,30 +170,38 @@ namespace MultiPurposeAuthSite.Controllers
 
             #region grant_types and response_types
 
-            grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
-
             if (ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
                 response_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType);
             }
-            else if (ASPNETIdentityConfig.EnableImplicitGrantType)
+
+            if (ASPNETIdentityConfig.EnableImplicitGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ImplicitGrantType);
                 response_types_supported.Add(OAuth2AndOIDCConst.ImplicitResponseType);
             }
-            else if (ASPNETIdentityConfig.EnableResourceOwnerPasswordCredentialsGrantType)
+
+            if (ASPNETIdentityConfig.EnableResourceOwnerPasswordCredentialsGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
             }
-            else if (ASPNETIdentityConfig.EnableClientCredentialsGrantType)
+
+            if (ASPNETIdentityConfig.EnableClientCredentialsGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
             }
-            else if (ASPNETIdentityConfig.EnableRefreshToken)
+
+            if (ASPNETIdentityConfig.EnableJwtBearerTokenFlowGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
+            }
+
+            if (ASPNETIdentityConfig.EnableRefreshToken)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
             }
+            
 
             #endregion
 
@@ -214,11 +218,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // subject_types_supported
                 OpenIDConfig.Add("subject_types_supported", new List<string> {
-                    "pairwise"
+                    "public"
                 });
 
                 // claims_supported
                 OpenIDConfig.Add("claims_supported", new List<string> {
+                    //Jwt
                     OAuth2AndOIDCConst.iss,
                     OAuth2AndOIDCConst.aud,
                     OAuth2AndOIDCConst.sub,
@@ -226,9 +231,21 @@ namespace MultiPurposeAuthSite.Controllers
                     OAuth2AndOIDCConst.nbf,
                     OAuth2AndOIDCConst.iat,
                     OAuth2AndOIDCConst.jti,
+                    // scope
+                    // 標準
+                    OAuth2AndOIDCConst.Scope_Email,
+                    OAuth2AndOIDCConst.email_verified,
+                    OAuth2AndOIDCConst.phone_number,
+                    OAuth2AndOIDCConst.phone_number_verified,
+                    // 拡張
+                    OAuth2AndOIDCConst.scopes,
+                    OAuth2AndOIDCConst.Scope_Roles,
+                    OAuth2AndOIDCConst.Scope_UserID,
+                    // OIDC, FAPI1
                     OAuth2AndOIDCConst.nonce,
                     OAuth2AndOIDCConst.at_hash,
-                    OAuth2AndOIDCConst.c_hash
+                    OAuth2AndOIDCConst.c_hash,
+                    OAuth2AndOIDCConst.s_hash
                 });
 
                 OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
@@ -243,10 +260,13 @@ namespace MultiPurposeAuthSite.Controllers
 
             #region OAuth2拡張
 
+            #region response_modes
             OpenIDConfig.Add("response_modes_supported", new List<string> {
                 OAuth2AndOIDCConst.query,
+                OAuth2AndOIDCConst.fragment,
                 OAuth2AndOIDCConst.form_post
             });
+            #endregion
 
             #region revocation
 
@@ -255,7 +275,7 @@ namespace MultiPurposeAuthSite.Controllers
             });
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
-               "client_secret_basic"
+               OAuth2AndOIDCConst.ClientSecretBasic
             });
 
             #endregion
@@ -267,7 +287,7 @@ namespace MultiPurposeAuthSite.Controllers
             });
 
             OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
-               "none"
+               OAuth2AndOIDCConst.ClientSecretBasic
             });
 
             #endregion
@@ -729,7 +749,8 @@ namespace MultiPurposeAuthSite.Controllers
             string assertion = formData[OAuth2AndOIDCConst.assertion];
 
             // クライアント認証
-            if (grant_type == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
+            if (ASPNETIdentityConfig.EnableJwtBearerTokenFlowGrantType &&
+                grant_type == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
             {
                 Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(

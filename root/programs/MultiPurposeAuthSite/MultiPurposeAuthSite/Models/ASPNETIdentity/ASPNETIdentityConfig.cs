@@ -1061,6 +1061,15 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             }
         }
 
+        /// <summary>EnableJwtBearerTokenFlowGrantType</summary>
+        public static bool EnableJwtBearerTokenFlowGrantType
+        {
+            get
+            {
+                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableJwtBearerTokenFlowGrantType"]);
+            }
+        }
+
         /// <summary>EnableRefreshToken</summary>
         public static bool EnableRefreshToken
         {
