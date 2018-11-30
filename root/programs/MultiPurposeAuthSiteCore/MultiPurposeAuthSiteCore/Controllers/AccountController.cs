@@ -36,30 +36,48 @@ using MultiPurposeAuthSiteCore.Services;
 
 namespace MultiPurposeAuthSiteCore.Controllers
 {
+    /// <summary>AccountController</summary>
     [Authorize]
     [Route("[controller]/[action]")]
     public class AccountController : Controller
     {
+        /// <summary>UserManager</summary>
         private readonly UserManager<ApplicationUser> _userManager;
+        /// <summary>SignInManager</summary>
         private readonly SignInManager<ApplicationUser> _signInManager;
+        /// <summary>IEmailSender</summary>
         private readonly IEmailSender _emailSender;
+        /// <summary>ILogger</summary>
         private readonly ILogger _logger;
 
+        /// <summary>constructor</summary>
+        /// <param name="userManager">UserManager</param>
+        /// <param name="signInManager">SignInManager</param>
+        /// <param name="emailSender">IEmailSender</param>
+        /// <param name="logger">ILogger</param>
         public AccountController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
             IEmailSender emailSender,
             ILogger<AccountController> logger)
         {
+            // UserManager
             _userManager = userManager;
+            // SignInManager
             _signInManager = signInManager;
+            // IEmailSender
             _emailSender = emailSender;
+            // ILogger
             _logger = logger;
         }
 
+        /// <summary>ErrorMessage</summary>
         [TempData]
         public string ErrorMessage { get; set; }
 
+        /// <summary>Login（初期表示）</summary>
+        /// <param name="returnUrl">string</param>
+        /// <returns>IActionResultを非同期的に返す。</returns>
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Login(string returnUrl = null)
@@ -71,16 +89,24 @@ namespace MultiPurposeAuthSiteCore.Controllers
             return View();
         }
 
+        /// <summary>Login（ポストバック）</summary>
+        /// <param name="model">LoginViewModel</param>
+        /// <param name="returnUrl">string</param>
+        /// <returns>IActionResultを非同期的に返す。</returns>
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model, string returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
+
+            // ViewModel検証
             if (ModelState.IsValid)
             {
                 // This doesn't count login failures towards account lockout
                 // To enable password failures to trigger account lockout, set lockoutOnFailure: true
+                // アカウントのロックアウトに対するログイン失敗をカウントしません
+                // パスワードの失敗を有効にしてアカウントのロックアウトをトリガーするには、lockoutOnFailure：trueを設定します。
                 var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
                 if (result.Succeeded)
                 {

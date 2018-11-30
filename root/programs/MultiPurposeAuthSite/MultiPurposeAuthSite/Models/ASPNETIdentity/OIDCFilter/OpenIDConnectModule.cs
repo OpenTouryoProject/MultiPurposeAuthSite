@@ -216,8 +216,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 string virtualPath = path.Substring(path.IndexOf(context.Request.ApplicationPath));
                 this.OriginalVirtualPath = virtualPath + orgQuery;
 
-                if (path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2) == -1
-                    && path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
+                if (path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
                 {
                     string pattern = "";
 
@@ -409,8 +408,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             
             #endregion
 
-            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint2) == -1
-                && context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
+            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
             {
                 #region response_type
 

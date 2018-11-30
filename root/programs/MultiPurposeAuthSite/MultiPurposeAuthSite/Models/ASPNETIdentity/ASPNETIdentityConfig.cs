@@ -1131,18 +1131,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
         #region OAuth2拡張
 
-        #region Authorize&Token2
-
-        /// <summary>
-        /// Financial API用のOAuth2のAuthorizeエンドポイント
-        /// </summary>
-        public static string OAuth2AuthorizeEndpoint2
-        {
-            get
-            {
-                return ConfigurationManager.AppSettings["OAuth2AuthorizeEndpoint2"];
-            }
-        }
+        #region Token2
 
         /// <summary>
         /// JWT bearer token flow用のTokenエンドポイント
