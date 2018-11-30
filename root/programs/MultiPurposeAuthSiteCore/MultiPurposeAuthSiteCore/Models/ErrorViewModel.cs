@@ -20,7 +20,7 @@
 
 using System;
 
-namespace MultiPurposeAuthSiteCore.Models
+namespace MultiPurposeAuthSite.Models
 {
     public class ErrorViewModel
     {

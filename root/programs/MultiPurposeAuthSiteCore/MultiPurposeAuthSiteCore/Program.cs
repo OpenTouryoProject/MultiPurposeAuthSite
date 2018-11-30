@@ -28,7 +28,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace MultiPurposeAuthSiteCore
+namespace MultiPurposeAuthSite
 {
     public class Program
     {

@@ -23,7 +23,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MultiPurposeAuthSiteCore.Services
+namespace MultiPurposeAuthSite.Services
 {
     public interface IEmailSender
     {

@@ -19,27 +19,27 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class ApplicationUserManager {
+    public class SharedViews {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
         private static global::System.Globalization.CultureInfo resourceCulture;
         
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal ApplicationUserManager() {
+        internal SharedViews() {
         }
         
         /// <summary>
         ///   このクラスで使用されているキャッシュされた ResourceManager インスタンスを返します。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Resources.ResourceManager ResourceManager {
+        public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MultiPurposeAuthSite.Resources.ApplicationUserManager", typeof(ApplicationUserManager).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MultiPurposeAuthSite.Resources.SharedViews", typeof(SharedViews).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -47,11 +47,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   厳密に型指定されたこのリソース クラスを使用して、すべての検索リソースに対し、
+        ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Globalization.CultureInfo Culture {
+        public static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -61,47 +61,56 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Email Code に類似しているローカライズされた文字列を検索します。
+        ///   An error occurred while processing your request. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EmailCode {
+        public static string ErrorH4 {
             get {
-                return ResourceManager.GetString("EmailCode", resourceCulture);
+                return ResourceManager.GetString("ErrorH4", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Your security code is {0}. に類似しているローカライズされた文字列を検索します。
+        ///   Error に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EmailCode_body {
+        public static string ErrorTitle {
             get {
-                return ResourceManager.GetString("EmailCode_body", resourceCulture);
+                return ResourceManager.GetString("ErrorTitle", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Security Code に類似しているローカライズされた文字列を検索します。
+        ///   This account has been locked out, please try again later. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EmailCode_sub {
+        public static string LockoutB {
             get {
-                return ResourceManager.GetString("EmailCode_sub", resourceCulture);
+                return ResourceManager.GetString("LockoutB", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Phone Code に類似しているローカライズされた文字列を検索します。
+        ///   Locked Out. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string PhoneCode {
+        public static string LockoutH4 {
             get {
-                return ResourceManager.GetString("PhoneCode", resourceCulture);
+                return ResourceManager.GetString("LockoutH4", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Your security code is {0}. に類似しているローカライズされた文字列を検索します。
+        ///   LockOut に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string PhoneCode_msg {
+        public static string LockoutTitle {
             get {
-                return ResourceManager.GetString("PhoneCode_msg", resourceCulture);
+                return ResourceManager.GetString("LockoutTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Hello {0} ! に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LoginPartial {
+            get {
+                return ResourceManager.GetString("LoginPartial", resourceCulture);
             }
         }
     }

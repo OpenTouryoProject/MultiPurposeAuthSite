@@ -24,9 +24,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using MultiPurposeAuthSiteCore.Models;
+using MultiPurposeAuthSite.Models;
 
-namespace MultiPurposeAuthSiteCore.Controllers
+namespace MultiPurposeAuthSite.Controllers
 {
     public class HomeController : Controller
     {

@@ -24,9 +24,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using MultiPurposeAuthSiteCore.Models;
+using MultiPurposeAuthSite.Models;
 
-namespace MultiPurposeAuthSiteCore.Data
+namespace MultiPurposeAuthSite.Data
 {
     public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {

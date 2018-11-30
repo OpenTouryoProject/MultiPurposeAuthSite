@@ -28,11 +28,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MultiPurposeAuthSiteCore.Data;
-using MultiPurposeAuthSiteCore.Models;
-using MultiPurposeAuthSiteCore.Services;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Models;
+using MultiPurposeAuthSite.Services;
 
-namespace MultiPurposeAuthSiteCore
+namespace MultiPurposeAuthSite
 {
     public class Startup
     {

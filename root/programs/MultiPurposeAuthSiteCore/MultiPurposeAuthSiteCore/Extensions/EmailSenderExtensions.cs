@@ -23,9 +23,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
-using MultiPurposeAuthSiteCore.Services;
+using MultiPurposeAuthSite.Services;
 
-namespace MultiPurposeAuthSiteCore.Services
+namespace MultiPurposeAuthSite.Services
 {
     public static class EmailSenderExtensions
     {

@@ -27,7 +27,7 @@
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
 @using MultiPurposeAuthSite.Models.ASPNETIdentity;
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+@using Manager = MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
 @using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
 @model ManageIndexViewModel
@@ -42,8 +42,8 @@
     {
         if (Session["Roles"] == null)
         {
-            ApplicationUserManager userManager
-                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            Manager.ApplicationUserManager userManager
+                = HttpContext.Current.GetOwinContext().GetUserManager<Manager.ApplicationUserManager>();
             ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
             if (user == null)
             {

@@ -26,7 +26,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
-namespace MultiPurposeAuthSiteCore.Models.ManageViewModels
+namespace MultiPurposeAuthSite.Models.ManageViewModels
 {
     public class EnableAuthenticatorViewModel
     {

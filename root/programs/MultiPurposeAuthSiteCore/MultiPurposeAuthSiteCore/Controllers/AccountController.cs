@@ -30,11 +30,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MultiPurposeAuthSiteCore.Models;
-using MultiPurposeAuthSiteCore.Models.AccountViewModels;
-using MultiPurposeAuthSiteCore.Services;
+using MultiPurposeAuthSite.Models;
+using MultiPurposeAuthSite.Models.AccountViewModels;
+using MultiPurposeAuthSite.Services;
 
-namespace MultiPurposeAuthSiteCore.Controllers
+namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>AccountController</summary>
     [Authorize]

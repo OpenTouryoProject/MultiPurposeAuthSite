@@ -19,10 +19,10 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class ApplicationOAuthBearerTokenProvider {
+    public class ApplicationOAuthBearerTokenProvider {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
@@ -36,7 +36,7 @@ namespace MultiPurposeAuthSite.Resources {
         ///   このクラスで使用されているキャッシュされた ResourceManager インスタンスを返します。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Resources.ResourceManager ResourceManager {
+        public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MultiPurposeAuthSite.Resources.ApplicationOAuthBearerTokenProvider", typeof(ApplicationOAuthBearerTokenProvider).Assembly);
@@ -47,11 +47,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   厳密に型指定されたこのリソース クラスを使用して、すべての検索リソースに対し、
+        ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Globalization.CultureInfo Culture {
+        public static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   The resource owner credentials are invalid or resource owner does not exist. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string access_denied {
+        public static string access_denied {
             get {
                 return ResourceManager.GetString("access_denied", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Authorization Code grant type is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EnableAuthorizationCodeGrantType {
+        public static string EnableAuthorizationCodeGrantType {
             get {
                 return ResourceManager.GetString("EnableAuthorizationCodeGrantType", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Client Credentials grant type is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EnableClientCredentialsGrantType {
+        public static string EnableClientCredentialsGrantType {
             get {
                 return ResourceManager.GetString("EnableClientCredentialsGrantType", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Implicit grant type is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EnableImplicitGrantType {
+        public static string EnableImplicitGrantType {
             get {
                 return ResourceManager.GetString("EnableImplicitGrantType", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Refresh Token is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EnableRefreshToken {
+        public static string EnableRefreshToken {
             get {
                 return ResourceManager.GetString("EnableRefreshToken", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   ResourceOwner Credentials grant type is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EnableResourceOwnerCredentialsGrantType {
+        public static string EnableResourceOwnerCredentialsGrantType {
             get {
                 return ResourceManager.GetString("EnableResourceOwnerCredentialsGrantType", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Invalid redirect_uri. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string Invalid_redirect_uri {
+        public static string Invalid_redirect_uri {
             get {
                 return ResourceManager.GetString("Invalid_redirect_uri", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Could not retrieve the user. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string server_error1 {
+        public static string server_error1 {
             get {
                 return ResourceManager.GetString("server_error1", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   The ClaimsIdentity could not be created by the UserManager. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string server_error2 {
+        public static string server_error2 {
             get {
                 return ResourceManager.GetString("server_error2", resourceCulture);
             }

@@ -19,27 +19,27 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class AdminController {
+    public class AccountController {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
         private static global::System.Globalization.CultureInfo resourceCulture;
         
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal AdminController() {
+        internal AccountController() {
         }
         
         /// <summary>
         ///   このクラスで使用されているキャッシュされた ResourceManager インスタンスを返します。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Resources.ResourceManager ResourceManager {
+        public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MultiPurposeAuthSite.Resources.AdminController", typeof(AdminController).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MultiPurposeAuthSite.Resources.AccountController", typeof(AccountController).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -47,11 +47,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   厳密に型指定されたこのリソース クラスを使用して、すべての検索リソースに対し、
+        ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Globalization.CultureInfo Culture {
+        public static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -61,74 +61,65 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add is succeeded. に類似しているローカライズされた文字列を検索します。
+        ///   Invalid code. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddSuccess {
+        public static string InvalidCode {
             get {
-                return ResourceManager.GetString("AddSuccess", resourceCulture);
+                return ResourceManager.GetString("InvalidCode", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Delete is succeeded. に類似しているローカライズされた文字列を検索します。
+        ///   E-Mail Confirmation is needed ! に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string DeleteSuccess {
+        public static string Login_emailconfirm {
             get {
-                return ResourceManager.GetString("DeleteSuccess", resourceCulture);
+                return ResourceManager.GetString("Login_emailconfirm", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Do not have ownership of this object. に類似しているローカライズされた文字列を検索します。
+        ///   Invalid Sign-in attempt. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string DoNotHaveOwnershipOfTheObject {
+        public static string Login_Error {
             get {
-                return ResourceManager.GetString("DoNotHaveOwnershipOfTheObject", resourceCulture);
+                return ResourceManager.GetString("Login_Error", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Edit is succeeded. に類似しているローカライズされた文字列を検索します。
+        ///   Confirm e-mail account に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string EditSuccess {
+        public static string SendEmail_emailconfirm {
             get {
-                return ResourceManager.GetString("EditSuccess", resourceCulture);
+                return ResourceManager.GetString("SendEmail_emailconfirm", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   An error has occurred. に類似しているローカライズされた文字列を検索します。
+        ///   Please confirm your e-mail account by clicking &lt;a href=&quot;{0}&quot;&gt;here&lt;/a&gt;. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string Error {
+        public static string SendEmail_emailconfirm_msg {
             get {
-                return ResourceManager.GetString("Error", resourceCulture);
+                return ResourceManager.GetString("SendEmail_emailconfirm_msg", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   This feature is locked down. に類似しているローカライズされた文字列を検索します。
+        ///   Reset password に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string LockedDown {
+        public static string SendEmail_passwordreset {
             get {
-                return ResourceManager.GetString("LockedDown", resourceCulture);
+                return ResourceManager.GetString("SendEmail_passwordreset", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   This request has not been authenticated. に類似しているローカライズされた文字列を検索します。
+        ///   Please reset your password by clicking &lt;a href=&quot;{0}&quot;&gt;here&lt;/a&gt;. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string UnAuthenticate {
+        public static string SendEmail_passwordreset_msg {
             get {
-                return ResourceManager.GetString("UnAuthenticate", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   With the granted privilege, this operation is not authorized. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        internal static string UnAuthorized {
-            get {
-                return ResourceManager.GetString("UnAuthorized", resourceCulture);
+                return ResourceManager.GetString("SendEmail_passwordreset_msg", resourceCulture);
             }
         }
     }

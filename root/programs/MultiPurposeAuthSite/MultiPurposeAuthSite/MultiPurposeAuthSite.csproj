@@ -335,56 +335,6 @@
     <Compile Include="Models\ViewModels\ManageVerifyPhoneNumberViewModel.cs" />
     <Compile Include="Models\ViewModels\OAuth2AuthorizationCodeGrantClientViewModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Resources\AccountController.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>AccountController.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\AccountViews.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>AccountViews.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\AdminController.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>AdminController.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\AdminViews.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>AdminViews.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\ApplicationOAuthBearerTokenProvider.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ApplicationOAuthBearerTokenProvider.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\ApplicationUserManager.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ApplicationUserManager.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\CommonViewModels.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>CommonViewModels.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\ManageController.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ManageController.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\ManageViews.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>ManageViews.resx</DependentUpon>
-    </Compile>
-    <Compile Include="Resources\SharedViews.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>SharedViews.resx</DependentUpon>
-    </Compile>
     <Compile Include="Startup.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -510,65 +460,11 @@
       <SubType>Designer</SubType>
     </Content>
   </ItemGroup>
-  <ItemGroup />
   <ItemGroup>
-    <EmbeddedResource Include="Resources\AccountController.ja.resx">
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\AccountController.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>AccountController.Designer.cs</LastGenOutput>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\AccountViews.ja.resx" />
-    <EmbeddedResource Include="Resources\AccountViews.resx">
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>AccountViews.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\AdminController.ja.resx" />
-    <EmbeddedResource Include="Resources\AdminController.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>AdminController.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\AdminViews.ja.resx" />
-    <EmbeddedResource Include="Resources\AdminViews.resx">
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>AdminViews.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\ApplicationOAuthBearerTokenProvider.ja.resx" />
-    <EmbeddedResource Include="Resources\ApplicationOAuthBearerTokenProvider.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>ApplicationOAuthBearerTokenProvider.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\ApplicationUserManager.ja.resx" />
-    <EmbeddedResource Include="Resources\ApplicationUserManager.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>ApplicationUserManager.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\CommonViewModels.ja.resx" />
-    <EmbeddedResource Include="Resources\CommonViewModels.resx">
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>CommonViewModels.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\ManageController.ja.resx" />
-    <EmbeddedResource Include="Resources\ManageController.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>ManageController.Designer.cs</LastGenOutput>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\ManageViews.ja.resx">
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\ManageViews.resx">
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>ManageViews.Designer.cs</LastGenOutput>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\SharedViews.ja.resx" />
-    <EmbeddedResource Include="Resources\SharedViews.resx">
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>SharedViews.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
+    <ProjectReference Include="..\..\CommonLibrary\NetFxLibrary.csproj">
+      <Project>{dbe8bc4c-5358-4dc8-9d5d-2fbb71a9d9f3}</Project>
+      <Name>NetFxLibrary</Name>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

@@ -25,7 +25,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 
-namespace MultiPurposeAuthSiteCore.Models.ManageViewModels
+namespace MultiPurposeAuthSite.Models.ManageViewModels
 {
     public class ExternalLoginsViewModel
     {

@@ -30,11 +30,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MultiPurposeAuthSiteCore.Models;
-using MultiPurposeAuthSiteCore.Models.ManageViewModels;
-using MultiPurposeAuthSiteCore.Services;
+using MultiPurposeAuthSite.Models;
+using MultiPurposeAuthSite.Models.ManageViewModels;
+using MultiPurposeAuthSite.Services;
 
-namespace MultiPurposeAuthSiteCore.Controllers
+namespace MultiPurposeAuthSite.Controllers
 {
     [Authorize]
     [Route("[controller]/[action]")]
@@ -542,7 +542,7 @@ namespace MultiPurposeAuthSiteCore.Controllers
         {
             return string.Format(
                 AuthenticatorUriFormat,
-                _urlEncoder.Encode("MultiPurposeAuthSiteCore"),
+                _urlEncoder.Encode("MultiPurposeAuthSite"),
                 _urlEncoder.Encode(email),
                 unformattedKey);
         }

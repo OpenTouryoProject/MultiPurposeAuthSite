@@ -22,7 +22,7 @@ namespace MultiPurposeAuthSite.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class ManageController {
+    public class ManageController {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
@@ -36,7 +36,7 @@ namespace MultiPurposeAuthSite.Resources {
         ///   このクラスで使用されているキャッシュされた ResourceManager インスタンスを返します。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Resources.ResourceManager ResourceManager {
+        public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("MultiPurposeAuthSite.Resources.ManageController", typeof(ManageController).Assembly);
@@ -47,11 +47,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   厳密に型指定されたこのリソース クラスを使用して、すべての検索リソースに対し、
+        ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        internal static global::System.Globalization.CultureInfo Culture {
+        public static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Account do not match in social login. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AccountConflictInSocialLogin {
+        public static string AccountConflictInSocialLogin {
             get {
                 return ResourceManager.GetString("AccountConflictInSocialLogin", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your E-mail has not been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddEmailFailure {
+        public static string AddEmailFailure {
             get {
                 return ResourceManager.GetString("AddEmailFailure", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your E-mail has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddEmailSuccess {
+        public static string AddEmailSuccess {
             get {
                 return ResourceManager.GetString("AddEmailSuccess", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your FIDO2 data has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddFIDO2DataSuccess {
+        public static string AddFIDO2DataSuccess {
             get {
                 return ResourceManager.GetString("AddFIDO2DataSuccess", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your OAuth2 data has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddOAuth2DataSuccess {
+        public static string AddOAuth2DataSuccess {
             get {
                 return ResourceManager.GetString("AddOAuth2DataSuccess", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your payment information has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddPaymentInformationSuccess {
+        public static string AddPaymentInformationSuccess {
             get {
                 return ResourceManager.GetString("AddPaymentInformationSuccess", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your phone number has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddPhoneSuccess {
+        public static string AddPhoneSuccess {
             get {
                 return ResourceManager.GetString("AddPhoneSuccess", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your additional attribute data has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string AddUnstructuredDataSuccess {
+        public static string AddUnstructuredDataSuccess {
             get {
                 return ResourceManager.GetString("AddUnstructuredDataSuccess", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your E-mail has not been changed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string ChangeEmailFailure {
+        public static string ChangeEmailFailure {
             get {
                 return ResourceManager.GetString("ChangeEmailFailure", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your E-mail has been changed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string ChangeEmailSuccess {
+        public static string ChangeEmailSuccess {
             get {
                 return ResourceManager.GetString("ChangeEmailSuccess", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your password has been changed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string ChangePasswordSuccess {
+        public static string ChangePasswordSuccess {
             get {
                 return ResourceManager.GetString("ChangePasswordSuccess", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your user name has not been changed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string ChangeUserNameFailure {
+        public static string ChangeUserNameFailure {
             get {
                 return ResourceManager.GetString("ChangeUserNameFailure", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your user name has been changed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string ChangeUserNameSuccess {
+        public static string ChangeUserNameSuccess {
             get {
                 return ResourceManager.GetString("ChangeUserNameSuccess", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your security code is: に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string CodeForAddPhoneNumber {
+        public static string CodeForAddPhoneNumber {
             get {
                 return ResourceManager.GetString("CodeForAddPhoneNumber", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   An error has occurred. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string Error {
+        public static string Error {
             get {
                 return ResourceManager.GetString("Error", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Failed to verify your phone number. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string FailedVerifyPhoneNumber {
+        public static string FailedVerifyPhoneNumber {
             get {
                 return ResourceManager.GetString("FailedVerifyPhoneNumber", resourceCulture);
             }
@@ -207,7 +207,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your E-mail has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemoveEmailSuccess {
+        public static string RemoveEmailSuccess {
             get {
                 return ResourceManager.GetString("RemoveEmailSuccess", resourceCulture);
             }
@@ -216,7 +216,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   The external login has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemoveExternalLoginSuccess {
+        public static string RemoveExternalLoginSuccess {
             get {
                 return ResourceManager.GetString("RemoveExternalLoginSuccess", resourceCulture);
             }
@@ -225,7 +225,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your FIDO2 has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemoveFIDO2DataSuccess {
+        public static string RemoveFIDO2DataSuccess {
             get {
                 return ResourceManager.GetString("RemoveFIDO2DataSuccess", resourceCulture);
             }
@@ -234,7 +234,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your OAuth2 has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemoveOAuth2DataSuccess {
+        public static string RemoveOAuth2DataSuccess {
             get {
                 return ResourceManager.GetString("RemoveOAuth2DataSuccess", resourceCulture);
             }
@@ -243,7 +243,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your payment information has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemovePaymentInformationSuccess {
+        public static string RemovePaymentInformationSuccess {
             get {
                 return ResourceManager.GetString("RemovePaymentInformationSuccess", resourceCulture);
             }
@@ -252,7 +252,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your phone number has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemovePhoneSuccess {
+        public static string RemovePhoneSuccess {
             get {
                 return ResourceManager.GetString("RemovePhoneSuccess", resourceCulture);
             }
@@ -261,7 +261,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your additional attribute data has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string RemoveUnstructuredDataSuccess {
+        public static string RemoveUnstructuredDataSuccess {
             get {
                 return ResourceManager.GetString("RemoveUnstructuredDataSuccess", resourceCulture);
             }
@@ -270,7 +270,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your password has been set. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string SetPasswordSuccess {
+        public static string SetPasswordSuccess {
             get {
                 return ResourceManager.GetString("SetPasswordSuccess", resourceCulture);
             }
@@ -279,7 +279,7 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your two-factor authentication provider has been set. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        internal static string SetTwoFactorSuccess {
+        public static string SetTwoFactorSuccess {
             get {
                 return ResourceManager.GetString("SetTwoFactorSuccess", resourceCulture);
             }

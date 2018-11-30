@@ -2,7 +2,9 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp2.0</TargetFramework>
-    <UserSecretsId>aspnet-MultiPurposeAuthSiteCore-4D4ED842-8221-4C3E-A9D4-5295FF6E400D</UserSecretsId>
+    <UserSecretsId>aspnet-MultiPurposeAuthSite-4D4ED842-8221-4C3E-A9D4-5295FF6E400D</UserSecretsId>
+    <RootNamespace>MultiPurposeAuthSite</RootNamespace>
+    <AssemblyName>MultiPurposeAuthSite</AssemblyName>
   </PropertyGroup>
 
 
@@ -16,6 +18,10 @@
     <DotNetCliToolReference Include="Microsoft.EntityFrameworkCore.Tools.DotNet" Version="2.0.3" />
     <DotNetCliToolReference Include="Microsoft.Extensions.SecretManager.Tools" Version="2.0.2" />
     <DotNetCliToolReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Tools" Version="2.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CommonLibrary\NetStdLibrary.csproj" />
   </ItemGroup>
   
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">

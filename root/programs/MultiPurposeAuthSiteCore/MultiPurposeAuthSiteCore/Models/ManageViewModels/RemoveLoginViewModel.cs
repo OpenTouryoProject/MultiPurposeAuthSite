@@ -24,7 +24,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MultiPurposeAuthSiteCore.Models.ManageViewModels
+namespace MultiPurposeAuthSite.Models.ManageViewModels
 {
     public class RemoveLoginViewModel
     {
