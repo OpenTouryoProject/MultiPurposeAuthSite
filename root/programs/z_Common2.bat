@@ -18,6 +18,7 @@ set BUILDFILEPATH4.0="%PROGRAM_FILES%\Microsoft Visual Studio 10.0\Common7\IDE\d
 set BUILDFILEPATH4.5="%PROGRAM_FILES%\Microsoft Visual Studio 11.0\Common7\IDE\devenv.com"
 set BUILDFILEPATH4.5.1="%PROGRAM_FILES%\Microsoft Visual Studio 12.0\Common7\IDE\IDE\devenv.com"
 set BUILDFILEPATH4.6="%PROGRAM_FILES%\Microsoft Visual Studio 14.0\Common7\IDE\devenv.com"
+set BUILDFILEPATH4.7="%PROGRAM_FILES%\Microsoft Visual Studio\2017\Community\Common7\IDE\devenv.exe"
 
 @echo --------------------------------------------------
 @echo The choice of build configuration (Debug / Release).
