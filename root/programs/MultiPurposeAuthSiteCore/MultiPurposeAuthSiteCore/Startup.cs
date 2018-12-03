@@ -28,7 +28,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Models;
 using MultiPurposeAuthSite.Services;
 
@@ -46,11 +45,13 @@ namespace MultiPurposeAuthSite
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+            //services.AddDbContext<ApplicationDbContext>(options =>
+            //    options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 
             services.AddIdentity<ApplicationUser, IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
+                //.AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddUserStore<UserStore>()
+                .AddRoleStore<RoleStore>()
                 .AddDefaultTokenProviders();
 
             // Add application services.
