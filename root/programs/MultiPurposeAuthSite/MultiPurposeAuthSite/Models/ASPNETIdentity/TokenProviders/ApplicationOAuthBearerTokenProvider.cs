@@ -31,10 +31,11 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.Log;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
 
 using System;
 using System.Collections.Generic;
@@ -55,8 +56,8 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+/// <summary>MultiPurposeAuthSite.ASPNETIdentity.TokenProviders</summary>
+namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
 {
     /// <summary>
     /// OAuthAuthorizationServerProviderの派生クラス。
@@ -100,7 +101,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             string response_type = context.Request.Query.Get("response_type");
 
             // OIDC Implicit, Hybridの場合、書き換え
-            if (ASPNETIdentityConfig.EnableOpenIDConnect)
+            if (Config.EnableOpenIDConnect)
             {
                 if (response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
@@ -143,7 +144,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             {
                 if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
-                    if (!ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+                    if (!Config.EnableAuthorizationCodeGrantType)
                     {
                         //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
                         context.SetError(
@@ -154,7 +155,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 }
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
                 {
-                    if (!ASPNETIdentityConfig.EnableImplicitGrantType)
+                    if (!Config.EnableImplicitGrantType)
                     {
                         //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
                         context.SetError(
@@ -186,20 +187,20 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     {
                         // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
                         context.Validated(
-                            ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Account);
+                            Config.OAuth2ClientEndpointsRootURI
+                            + Config.OAuth2AuthorizationCodeGrantClient_Account);
                     }
                     else if (redirect_uri.ToLower() == "test_self_token")
                     {
                         // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                         context.Validated(
-                            ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuth2ImplicitGrantClient_Account);
+                            Config.OAuth2ClientEndpointsRootURI
+                            + Config.OAuth2ImplicitGrantClient_Account);
                     }
                     else if (redirect_uri.ToLower() == "id_federation_code")
                     {
                         // ID連携時のエンドポイント
-                        context.Validated(ASPNETIdentityConfig.IdFederationRedirectEndPoint);
+                        context.Validated(Config.IdFederationRedirectEndPoint);
                     }
                     else
                     {
@@ -219,7 +220,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 // 指定されたredirect_uriを使用する場合は、チェックが必要になる。
                 if (
                     // self_code : Authorization Codeグラント種別
-                    redirect_uri == (ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Manage)
+                    redirect_uri == (Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage)
                 )
                 {
                     // 不特定多数のクライアント識別子に許可されたredirect_uri
@@ -326,8 +327,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                                 assertion, out iss, out aud, out scopes, out jobj, pubKey))
                             {
                                 // aud 検証
-                                if (aud == ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                                    + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint)
+                                if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
+                                    + Config.OAuth2BearerTokenEndpoint)
                                 {
                                     // 検証完了
                                     context.Validated(iss);
@@ -394,7 +395,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             {
                 #region RefreshToken
 
-                if (!ASPNETIdentityConfig.EnableRefreshToken)
+                if (!Config.EnableRefreshToken)
                 {
                     throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
                 }
@@ -442,7 +443,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn343587.aspx"/>
         public override async Task GrantResourceOwnerCredentials(OAuthGrantResourceOwnerCredentialsContext context)
         {
-            if (!ASPNETIdentityConfig.EnableResourceOwnerPasswordCredentialsGrantType)
+            if (!Config.EnableResourceOwnerPasswordCredentialsGrantType)
             {
                 throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableResourceOwnerCredentialsGrantType);
             }
@@ -529,7 +530,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn343586.aspx"/>
         public override async Task GrantClientCredentials(OAuthGrantClientCredentialsContext context)
         {
-            if (!ASPNETIdentityConfig.EnableClientCredentialsGrantType)
+            if (!Config.EnableClientCredentialsGrantType)
             {
                 throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
             }

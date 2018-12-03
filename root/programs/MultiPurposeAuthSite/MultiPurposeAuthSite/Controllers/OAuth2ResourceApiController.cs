@@ -31,13 +31,14 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.Log;
-using MultiPurposeAuthSite.Models.Util;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Network;
+using MultiPurposeAuthSite.Log;
+
+using MultiPurposeAuthSite.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
 
 using System;
 using System.Text;
@@ -121,18 +122,18 @@ namespace MultiPurposeAuthSite.Controllers
 
             #region 基本
 
-            OpenIDConfig.Add("issuer", ASPNETIdentityConfig.OAuth2IssuerId);
+            OpenIDConfig.Add("issuer", Config.OAuth2IssuerId);
 
             OpenIDConfig.Add("authorization_endpoint", 
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2AuthorizeEndpoint);
 
             OpenIDConfig.Add("token_endpoint", new List<string> {
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint,
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint,
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint2
             });
 
             OpenIDConfig.Add("userinfo_endpoint",
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2GetUserClaimsWebAPI);
 
             #endregion
 
@@ -170,34 +171,34 @@ namespace MultiPurposeAuthSite.Controllers
 
             #region grant_types and response_types
 
-            if (ASPNETIdentityConfig.EnableAuthorizationCodeGrantType)
+            if (Config.EnableAuthorizationCodeGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
                 response_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType);
             }
 
-            if (ASPNETIdentityConfig.EnableImplicitGrantType)
+            if (Config.EnableImplicitGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ImplicitGrantType);
                 response_types_supported.Add(OAuth2AndOIDCConst.ImplicitResponseType);
             }
 
-            if (ASPNETIdentityConfig.EnableResourceOwnerPasswordCredentialsGrantType)
+            if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
             }
 
-            if (ASPNETIdentityConfig.EnableClientCredentialsGrantType)
+            if (Config.EnableClientCredentialsGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
             }
 
-            if (ASPNETIdentityConfig.EnableJwtBearerTokenFlowGrantType)
+            if (Config.EnableJwtBearerTokenFlowGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
             }
 
-            if (ASPNETIdentityConfig.EnableRefreshToken)
+            if (Config.EnableRefreshToken)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
             }
@@ -207,7 +208,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             #region OpenID Connect
 
-            if (ASPNETIdentityConfig.EnableOpenIDConnect)
+            if (Config.EnableOpenIDConnect)
             {
                 scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
 
@@ -253,7 +254,7 @@ namespace MultiPurposeAuthSite.Controllers
                 });
 
                 OpenIDConfig.Add("jwks_uri", 
-                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
             }
 
             #endregion
@@ -271,7 +272,7 @@ namespace MultiPurposeAuthSite.Controllers
             #region revocation
 
             OpenIDConfig.Add("revocation_endpoint", new List<string> {
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2RevokeTokenWebAPI
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenWebAPI
             });
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
@@ -283,7 +284,7 @@ namespace MultiPurposeAuthSite.Controllers
             #region revocation
 
             OpenIDConfig.Add("introspection_endpoint", new List<string> {
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2IntrospectTokenWebAPI
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenWebAPI
             });
 
             OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
@@ -749,7 +750,7 @@ namespace MultiPurposeAuthSite.Controllers
             string assertion = formData[OAuth2AndOIDCConst.assertion];
 
             // クライアント認証
-            if (ASPNETIdentityConfig.EnableJwtBearerTokenFlowGrantType &&
+            if (Config.EnableJwtBearerTokenFlowGrantType &&
                 grant_type == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
             {
                 Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
@@ -770,8 +771,8 @@ namespace MultiPurposeAuthSite.Controllers
                         assertion, out iss, out aud, out scopes, out jobj, pubKey))
                     {
                         // aud 検証
-                        if (aud == ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2)
+                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
+                            + Config.OAuth2BearerTokenEndpoint2)
                         {
                             // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
                             ClaimsIdentity identity = OAuth2Helper.AddClaim(
@@ -779,7 +780,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             AuthenticationProperties prop = new AuthenticationProperties();
                             prop.IssuedUtc = DateTimeOffset.UtcNow;
-                            prop.ExpiresUtc = DateTimeOffset.Now.Add(ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes);
+                            prop.ExpiresUtc = DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes);
 
                             // token_type
                             ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
@@ -856,8 +857,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Tokenエンドポイントにアクセス
             Uri tokenEndpointUri = new Uri(
-            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-            + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
+            Config.OAuth2AuthorizationServerEndpointsRootURI
+            + Config.OAuth2BearerTokenEndpoint);
 
             // 結果を格納する変数。
             Dictionary<string, string> dic = null;
@@ -868,8 +869,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Hybridは、Implicitのredirect_uriを使用
             string redirect_uri 
-                = ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
-                + ASPNETIdentityConfig.OAuth2ImplicitGrantClient_Account;
+                = Config.OAuth2ClientEndpointsRootURI
+                + Config.OAuth2ImplicitGrantClient_Account;
 
             // Tokenエンドポイントにアクセス
             string response = await OAuth2Helper.GetInstance()
@@ -905,9 +906,9 @@ namespace MultiPurposeAuthSite.Controllers
             string currency = formData["currency"];
             string amount = formData["amount"];
 
-            if (ASPNETIdentityConfig.CanEditPayment
-                && ASPNETIdentityConfig.EnableEditingOfUserAttribute
-                && ASPNETIdentityConfig.IsDebug)
+            if (Config.CanEditPayment
+                && Config.EnableEditingOfUserAttribute
+                && Config.IsDebug)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());

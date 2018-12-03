@@ -22,7 +22,7 @@
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels;
-@using MultiPurposeAuthSite.Models.ASPNETIdentity;
+@using MultiPurposeAuthSite.Co;
 
 @model UsersAdminEditViewModel
 
@@ -46,7 +46,7 @@
         @Html.HiddenFor(model => model.Id)
         
         <div class="form-group">
-            @if (ASPNETIdentityConfig.RequireUniqueEmail)
+            @if (Config.RequireUniqueEmail)
             {
                 @Html.LabelFor(model => model.Email, new { @class = "control-label col-md-2" })
             }
@@ -57,7 +57,7 @@
 
             <div class="col-md-10">
                 
-                @if (ASPNETIdentityConfig.RequireUniqueEmail)
+                @if (Config.RequireUniqueEmail)
                 {
                     @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
                     @Html.ValidationMessageFor(model => model.Email);

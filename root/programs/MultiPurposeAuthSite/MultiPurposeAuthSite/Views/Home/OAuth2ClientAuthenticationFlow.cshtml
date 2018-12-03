@@ -39,7 +39,7 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Co
 @{
     ViewBag.Title = "OAuth2ClientAuthenticationFlow";
 }
@@ -52,7 +52,7 @@
 <h2>@ViewBag.Title.</h2>
 <div class="row">
     <div class="col-md-8">
-        <p><a class="btn btn-default" href="#" id="OAuth2GetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuth2ResourceServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-default" href="#" id="OAuth2GetUserClaimsWebAPI" url="@(Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2GetUserClaimsWebAPI)">Get user claims</a></p>
         <br />
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />

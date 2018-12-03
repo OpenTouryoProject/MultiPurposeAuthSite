@@ -41,7 +41,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
+namespace MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
     /// ClientCredentialsFilter

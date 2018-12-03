@@ -22,7 +22,7 @@
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity;
+@using MultiPurposeAuthSite.Co;
 
 @model ManageChangeUserNameViewModel
 @{
@@ -48,7 +48,7 @@
             @Html.TextBoxFor(m => m.UserNameForEdit, new { @class = "form-control" })
         </div>
     </div>
-    if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
+    if (Config.RequirePasswordInEditingUserNameAndEmail)
     {
     <div class="form-group">
         @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })

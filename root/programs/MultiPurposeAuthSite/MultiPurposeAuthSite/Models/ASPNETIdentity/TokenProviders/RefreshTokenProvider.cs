@@ -41,12 +41,15 @@ using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Infrastructure;
 using Microsoft.Owin.Security.DataHandler.Serializer;
 
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Co;
+
 using Dapper;
 
-using MultiPurposeAuthSite.Models.Util;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
 {
     /// <summary>
     /// RefreshTokenのProvider
@@ -96,7 +99,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // --------------------------------------------------
 
-            if (ASPNETIdentityConfig.EnableRefreshToken)
+            if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
 
@@ -107,7 +110,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 {
                     // IssuedUtcとExpiredUtcという有効期限プロパティをAuthenticationTicketに追加
                     IssuedUtc = context.Ticket.Properties.IssuedUtc,
-                    ExpiresUtc = DateTime.UtcNow.Add(ASPNETIdentityConfig.OAuth2RefreshTokenExpireTimeSpanFromDays) // System.TimeSpan.FromSeconds(20)) // Debug時  
+                    ExpiresUtc = DateTime.UtcNow.Add(Config.OAuth2RefreshTokenExpireTimeSpanFromDays) // System.TimeSpan.FromSeconds(20)) // Debug時  
                 };
 
                 // AuthenticationTicket.IdentityのClaimsIdentity値を含む有効期限付きの新しいAuthenticationTicketを作成する。
@@ -119,7 +122,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 TicketSerializer serializer = new TicketSerializer();
                 byte[] bytes = serializer.Serialize(refreshTokenTicket);
 
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
                         RefreshTokenProvider.RefreshTokens.TryAdd(token, refreshTokenTicket);
@@ -133,7 +136,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -199,7 +202,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
 
             // --------------------------------------------------
 
-            if (ASPNETIdentityConfig.EnableRefreshToken)
+            if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
                 
@@ -209,7 +212,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 IEnumerable<byte[]> values = null;
                 List<byte[]> list = null;
 
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
                         if (RefreshTokenProvider.RefreshTokens.TryRemove(context.Token, out ticket))
@@ -226,7 +229,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -302,7 +305,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         {
             AuthenticationTicket ticket = null;
 
-            if (ASPNETIdentityConfig.EnableRefreshToken)
+            if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
 
@@ -311,7 +314,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 IEnumerable<byte[]> values = null;
                 List<byte[]> list = null;
 
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
                         RefreshTokenProvider.RefreshTokens.TryGetValue(key, out ticket);
@@ -325,7 +328,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -391,13 +394,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         {
             int ret = 0;
 
-            if (ASPNETIdentityConfig.EnableRefreshToken)
+            if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
 
                 AuthenticationTicket ticket;
 
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
                         if (RefreshTokenProvider.RefreshTokens.TryRemove(key, out ticket))
@@ -415,7 +418,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 

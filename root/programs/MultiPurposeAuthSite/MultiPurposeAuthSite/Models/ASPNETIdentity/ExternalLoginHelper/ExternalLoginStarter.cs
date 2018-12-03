@@ -31,13 +31,15 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
 
 using Microsoft.Owin.Security;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper
+namespace MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper
 {
     /// <summary>
     /// ExternalLoginStarter
@@ -95,7 +97,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper
             // DictionaryのXsrfKeyにUserIdを格納
             if (UserId != null)
             {
-                properties.Dictionary[ASPNETIdentityConfig.XsrfKey] = UserId;
+                properties.Dictionary[Config.XsrfKey] = UserId;
             }
 
             // 認証を実行するタスクを、OWIN ミドルウェアにデリゲート

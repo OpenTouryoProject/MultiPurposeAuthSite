@@ -19,7 +19,7 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：ASPNETIdentityConst
+//* クラス名        ：Const
 //* クラス日本語名  ：ASP.NET IdentityのConstクラス（ライブラリ）
 //*
 //* 作成日時        ：－
@@ -33,11 +33,11 @@
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity
+/// <summary>MultiPurposeAuthSite.Co</summary>
+namespace MultiPurposeAuthSite.Co
 {
-    /// <summary>ASPNETIdentityConst</summary>
-    public class ASPNETIdentityConst
+    /// <summary>Const</summary>
+    public class Const
     {
         #region MaxLength
 

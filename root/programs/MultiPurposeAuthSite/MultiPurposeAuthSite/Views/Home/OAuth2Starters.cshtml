@@ -19,7 +19,7 @@
     //**********************************************************************************
 *@
 @using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Co
 @{
     ViewBag.Title = "OAuth2 Starters";
     Layout = "~/Views/Shared/_Layout.cshtml";
@@ -32,7 +32,7 @@
 
 <h2>@ViewBag.Title</h2>
 <div class="col-md-8">
-    @if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+    @if (!Config.IsLockedDownRedirectEndpoint)
     {
         <ul>
             <li>Authorization Code Flow

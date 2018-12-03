@@ -22,7 +22,7 @@
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Co
 
 @model AccountRegisterViewModel
 @{
@@ -43,7 +43,7 @@
     <hr />
     @Html.ValidationSummary("", new { @class = "text-error" })
     
-    if (ASPNETIdentityConfig.RequireUniqueEmail)
+    if (Config.RequireUniqueEmail)
     {
         <div class="form-group">
             @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })

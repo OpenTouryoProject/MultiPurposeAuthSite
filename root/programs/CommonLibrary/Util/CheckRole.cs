@@ -31,10 +31,12 @@
 //*  2017/06/05  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System.Linq;
 using System.Collections.Generic;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
+namespace MultiPurposeAuthSite.Util
 {
     /// <summary>ロールの確認クラス</summary>
     public class CheckRole
@@ -44,7 +46,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
         /// <returns>IsSystemAdmin</returns>
         public static bool IsSystemAdmin(IList<string> roles)
         {
-            return roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any();
+            return roles.Where(x => x == Const.Role_SystemAdmin).Any();
         }
 
         /// <summary>IsAdmin</summary>
@@ -52,7 +54,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
         /// <returns>IsAdmin</returns>
         public static bool IsAdmin(IList<string> roles)
         {
-            return roles.Where(x => x == ASPNETIdentityConst.Role_Admin).Any();
+            return roles.Where(x => x == Const.Role_Admin).Any();
         }
 
         /// <summary>IsUser</summary>
@@ -60,7 +62,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
         /// <returns>IsUser</returns>
         public static bool IsUser(IList<string> roles)
         {
-            return roles.Where(x => x == ASPNETIdentityConst.Role_User).Any();
+            return roles.Where(x => x == Const.Role_User).Any();
         }
     }
 }

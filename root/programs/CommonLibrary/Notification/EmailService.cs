@@ -31,6 +31,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System.Threading.Tasks;
 using Microsoft.AspNet.Identity;
 
@@ -38,8 +40,8 @@ using System.Net;
 using System.Net.Mail;
 using System.Diagnostics;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider
+/// <summary>MultiPurposeAuthSite.Notification</summary>
+namespace MultiPurposeAuthSite.Notification
 {
     /// <summary>EmailService</summary>
     public class EmailService : IIdentityMessageService
@@ -52,7 +54,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider
         /// <returns>非同期操作</returns>
         public Task SendAsync(IdentityMessage message)
         {
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 // Debug.WriteLine
                 Debug.WriteLine("< EmailService >");
@@ -66,18 +68,18 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider
                 using (SmtpClient smtp = new SmtpClient())
                 {
                     // Smtp clientの初期化
-                    smtp.Host = ASPNETIdentityConfig.SmtpHostName;
-                    smtp.Port = ASPNETIdentityConfig.SmtpPortNo;
-                    smtp.EnableSsl = ASPNETIdentityConfig.SmtpSSL;
+                    smtp.Host = Config.SmtpHostName;
+                    smtp.Port = Config.SmtpPortNo;
+                    smtp.EnableSsl = Config.SmtpSSL;
 
                     // Network credentialの設定
                     smtp.Credentials = new NetworkCredential(
-                        ASPNETIdentityConfig.SmtpAccountUID,
-                        ASPNETIdentityConfig.SmtpAccountPWD);
+                        Config.SmtpAccountUID,
+                        Config.SmtpAccountPWD);
 
                     // Send e-mail message
                     smtp.Send(new MailMessage(
-                        ASPNETIdentityConfig.SmtpAccountUID,
+                        Config.SmtpAccountUID,
                         message.Destination, message.Subject, message.Body));
                 }
             }

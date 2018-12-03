@@ -36,16 +36,18 @@ using Microsoft.Owin.Security.Google;
 using Microsoft.Owin.Security.Facebook;
 using Microsoft.Owin.Security.Twitter;
 
-using MultiPurposeAuthSite.Models.Util;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Network;
+using MultiPurposeAuthSite.Co;
+
+using MultiPurposeAuthSite.ASPNETIdentity.TokenProviders;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity
+/// <summary>MultiPurposeAuthSite.ASPNETIdentity</summary>
+namespace MultiPurposeAuthSite.ASPNETIdentity
 {
     /// <summary>
     /// StartupAuth.Configure
@@ -184,7 +186,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     // --------------------------------------------------
                     OnValidateIdentity = SecurityStampValidator.OnValidateIdentity<ApplicationUserManager, ApplicationUser>(
                         // SecurityStampValidatorによる検証の間隔
-                        validateInterval: ASPNETIdentityConfig.SecurityStampValidateIntervalFromSeconds,
+                        validateInterval: Config.SecurityStampValidateIntervalFromSeconds,
                         // ClaimsIdentityを返すdelegate
                         regenerateIdentity: (manager, user) => user.GenerateUserIdentityAsync(manager))
                         
@@ -192,9 +194,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                 },
 
                 // Cookie認証チケットの有効期限
-                ExpireTimeSpan = ASPNETIdentityConfig.AuthCookieExpiresFromHours,
+                ExpireTimeSpan = Config.AuthCookieExpiresFromHours,
                 // Cookie認証チケットの有効期限を半分過ぎた祭の要求で再発行(Sliding)される。
-                SlidingExpiration = ASPNETIdentityConfig.AuthCookieSlidingExpiration,
+                SlidingExpiration = Config.AuthCookieSlidingExpiration,
 
             });
 
@@ -216,7 +218,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             // 2FAプロセスにおいて第 2 認証要素を検証しているユーザの情報を一時的に格納するようにします。
             app.UseTwoFactorSignInCookie(
                 authenticationType: DefaultAuthenticationTypes.TwoFactorCookie,
-                expires: ASPNETIdentityConfig.TwoFactorCookieExpiresFromHours);
+                expires: Config.TwoFactorCookieExpiresFromHours);
 
             #endregion
 
@@ -244,17 +246,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
             #region MicrosoftAccountAuthentication
 
-            if (ASPNETIdentityConfig.MicrosoftAccountAuthentication)
+            if (Config.MicrosoftAccountAuthentication)
             {
                 MicrosoftAccountAuthenticationOptions options = new MicrosoftAccountAuthenticationOptions
                 {
                     BackchannelHttpHandler = new WebRequestHandler()
                     {
                         Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = ASPNETIdentityConfig.UseInternetProxy
+                        UseProxy = Config.UseInternetProxy
                     },
-                    ClientId = ASPNETIdentityConfig.MicrosoftAccountAuthenticationClientId,
-                    ClientSecret = ASPNETIdentityConfig.MicrosoftAccountAuthenticationClientSecret
+                    ClientId = Config.MicrosoftAccountAuthenticationClientId,
+                    ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret
                 };
                 // スコープを追加する。
                 options.Scope.Add("wl.basic");
@@ -268,17 +270,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
             #region GoogleAuthentication
             
-            if (ASPNETIdentityConfig.GoogleAuthentication)
+            if (Config.GoogleAuthentication)
             {
                 GoogleOAuth2AuthenticationOptions options = new GoogleOAuth2AuthenticationOptions
                 {
                     BackchannelHttpHandler = new WebRequestHandler()
                     {
                         Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = ASPNETIdentityConfig.UseInternetProxy
+                        UseProxy = Config.UseInternetProxy
                     },
-                    ClientId = ASPNETIdentityConfig.GoogleAuthenticationClientId,
-                    ClientSecret = ASPNETIdentityConfig.GoogleAuthenticationClientSecret
+                    ClientId = Config.GoogleAuthenticationClientId,
+                    ClientSecret = Config.GoogleAuthenticationClientSecret
                 };
                 // スコープを追加する。
                 options.Scope.Add(OAuth2AndOIDCConst.Scope_Openid);
@@ -293,17 +295,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
             #region FacebookAuthentication
 
-            if (ASPNETIdentityConfig.FacebookAuthentication)
+            if (Config.FacebookAuthentication)
             {
                 FacebookAuthenticationOptions options = new FacebookAuthenticationOptions
                 {
                     BackchannelHttpHandler = new WebRequestHandler()
                     {
                         Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = ASPNETIdentityConfig.UseInternetProxy
+                        UseProxy = Config.UseInternetProxy
                     },
-                    AppId = ASPNETIdentityConfig.FacebookAuthenticationClientId,
-                    AppSecret = ASPNETIdentityConfig.FacebookAuthenticationClientSecret,
+                    AppId = Config.FacebookAuthenticationClientId,
+                    AppSecret = Config.FacebookAuthenticationClientSecret,
                     Provider = new FacebookAuthenticationProvider
                     {
                         OnAuthenticated = context =>
@@ -324,17 +326,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
             #region TwitterAuthentication
 
-            if (ASPNETIdentityConfig.TwitterAuthentication)
+            if (Config.TwitterAuthentication)
             {
                 TwitterAuthenticationOptions options = new TwitterAuthenticationOptions
                 {
                     BackchannelHttpHandler = new WebRequestHandler()
                     {
                         Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = ASPNETIdentityConfig.UseInternetProxy
+                        UseProxy = Config.UseInternetProxy
                     },
-                    ConsumerKey = ASPNETIdentityConfig.TwitterAuthenticationClientId,
-                    ConsumerSecret = ASPNETIdentityConfig.TwitterAuthenticationClientSecret,
+                    ConsumerKey = Config.TwitterAuthenticationClientId,
+                    ConsumerSecret = Config.TwitterAuthenticationClientSecret,
 
                     Provider = new TwitterAuthenticationProvider
                     {
@@ -382,7 +384,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             // c# - ASP.Net identity: Difference between UseOAuthBearerTokens and UseCookieAuthentication? - Stack Overflow
             // http://stackoverflow.com/questions/22121330/asp-net-identity-difference-between-useoauthbearertokens-and-usecookieauthentic
 
-            if (ASPNETIdentityConfig.EquipOAuth2Server)
+            if (Config.EquipOAuth2Server)
             {
                 // OAuth Bearer Tokenを使用可能に設定する。
                 // UseOAuthAuthorizationServerとUseOAuthBearerTokensの違いが不明だが、
@@ -402,10 +404,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                     new OAuthAuthorizationServerOptions
                     {
                         Provider = new ApplicationOAuthAuthorizationServerProvider(),
-                        AllowInsecureHttp = ASPNETIdentityConfig.AllowOAuthInsecureHttpEndpoints,
-                        ApplicationCanDisplayErrors = ASPNETIdentityConfig.OAuthAuthorizeEndpointCanDisplayErrors,
-                        AuthorizeEndpointPath = ASPNETIdentityConfig.OAuthAuthorizeEndpointPath,
-                        AccessTokenExpireTimeSpan = ASPNETIdentityConfig.OAuthAccessTokenExpireTimeSpanFromMinutes,
+                        AllowInsecureHttp = Config.AllowOAuthInsecureHttpEndpoints,
+                        ApplicationCanDisplayErrors = Config.OAuthAuthorizeEndpointCanDisplayErrors,
+                        AuthorizeEndpointPath = Config.OAuthAuthorizeEndpointPath,
+                        AccessTokenExpireTimeSpan = Config.OAuthAccessTokenExpireTimeSpanFromMinutes,
 
                         // Authorization code provider which creates and receives the authorization code.
                         AuthorizationCodeProvider = new AuthenticationTokenProvider
@@ -470,19 +472,19 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
                         //AccessTokenFormat = new AccessTokenFormatJwt(),
                 
                         // ・AccessTokenExpireTimeSpan（OAuth Access Token の 有効期限
-                        AccessTokenExpireTimeSpan = ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes, // System.TimeSpan.FromSeconds(10), // Debug時 
+                        AccessTokenExpireTimeSpan = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, // System.TimeSpan.FromSeconds(10), // Debug時 
 
                         // ・AllowInsecureHttp
                         //   認証して、Token要求が http URI アドレスに届くことを許可し、
                         //   受信する redirect_uri 承認要求パラメータに http URI アドレスを設定する場合は true。
-                        AllowInsecureHttp = ASPNETIdentityConfig.AllowOAuth2InsecureHttpEndpoints,
+                        AllowInsecureHttp = Config.AllowOAuth2InsecureHttpEndpoints,
 
                         #endregion
 
                         #region  Implicitグラント種別を除く全てのグラント種別の共通設定
 
                         // ・OAuth Bearer Token の Token Endpoint
-                        TokenEndpointPath = new PathString(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint),
+                        TokenEndpointPath = new PathString(Config.OAuth2BearerTokenEndpoint),
 
                         #endregion
 
@@ -490,11 +492,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
 
                         // ・AuthorizeEndpointPath
                         //   OAuth の Authorize Endpoint
-                        AuthorizeEndpointPath = new PathString(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint),
+                        AuthorizeEndpointPath = new PathString(Config.OAuth2AuthorizeEndpoint),
 
                         // ・ApplicationCanDisplayErrors
                         //   AuthorizeEndpointPath上でエラー メッセージを表示できるようにする。
-                        ApplicationCanDisplayErrors = ASPNETIdentityConfig.OAuth2AuthorizeEndpointCanDisplayErrors,
+                        ApplicationCanDisplayErrors = Config.OAuth2AuthorizeEndpointCanDisplayErrors,
 
                         #endregion
 

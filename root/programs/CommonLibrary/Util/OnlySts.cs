@@ -32,8 +32,9 @@
 //**********************************************************************************
 
 using System;
+using MultiPurposeAuthSite.Co;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
+namespace MultiPurposeAuthSite.Util
 {
     /// <summary>ユーザストアを停止させる例外</summary>
     public class StopUserStoreException : Exception
@@ -88,9 +89,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
         /// </returns>
         private static bool Check()
         {
-            if (ASPNETIdentityConfig.EnableSignupProcess
-                || ASPNETIdentityConfig.EnableEditingOfUserAttribute
-                || ASPNETIdentityConfig.EnableAdministrationOfUsersAndRoles)
+            if (Config.EnableSignupProcess
+                || Config.EnableEditingOfUserAttribute
+                || Config.EnableAdministrationOfUsersAndRoles)
             {
                 // STSのみでない場合。
                 return false;

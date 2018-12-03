@@ -31,6 +31,9 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Co;
+
 using System.Data;
 using System.Data.SqlClient;
 using Oracle.ManagedDataAccess.Client;
@@ -38,12 +41,9 @@ using Npgsql;
 
 using StackExchange.Profiling.Data;
 
-using MultiPurposeAuthSite.Models.Log;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-
 using Touryo.Infrastructure.Public.Util;
 
-namespace MultiPurposeAuthSite.Models.Util
+namespace MultiPurposeAuthSite.Data
 {
     /// <summary>DataAccessクラス</summary>
     public class DataAccess
@@ -54,7 +54,7 @@ namespace MultiPurposeAuthSite.Models.Util
         /// <returns>IDbConnection</returns>
         public static IDbConnection CreateConnection()
         {
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.SqlServer:
                     //return new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL"));

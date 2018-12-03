@@ -31,7 +31,8 @@
 //*  2017/07/14  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.ASPNETIdentity.TokenProviders;
 
 using System;
 using System.Text.RegularExpressions;
@@ -41,7 +42,7 @@ using System.Web;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
+namespace MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
     /// OpenIDConnect対応用のHttpModule
@@ -66,7 +67,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             // HttpApplication（Global.asax）、HttpModule、HttpHandler - マイクロソフト系技術情報 Wiki
             // https://techinfoofmicrosofttech.osscons.jp/index.php?HttpApplication%EF%BC%88Global.asax%EF%BC%89%E3%80%81HttpModule%E3%80%81HttpHandler
 
-            if (ASPNETIdentityConfig.EnableOpenIDConnect)
+            if (Config.EnableOpenIDConnect)
             {
                 //context.LogRequest += new EventHandler(this.OnLogRequest);
 
@@ -164,8 +165,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
             string path = context.Request.Url.AbsolutePath;
 
-            if (path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2) == -1
-                && path.IndexOf(ASPNETIdentityConfig.OAuth2BearerTokenEndpoint) != -1)
+            if (path.IndexOf(Config.OAuth2BearerTokenEndpoint2) == -1
+                && path.IndexOf(Config.OAuth2BearerTokenEndpoint) != -1)
             {
                 if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
@@ -216,7 +217,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                 string virtualPath = path.Substring(path.IndexOf(context.Request.ApplicationPath));
                 this.OriginalVirtualPath = virtualPath + orgQuery;
 
-                if (path.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
+                if (path.IndexOf(Config.OAuth2AuthorizeEndpoint) != -1)
                 {
                     string pattern = "";
 
@@ -408,7 +409,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             
             #endregion
 
-            if (context.Request.Url.AbsolutePath.IndexOf(ASPNETIdentityConfig.OAuth2AuthorizeEndpoint) != -1)
+            if (context.Request.Url.AbsolutePath.IndexOf(Config.OAuth2AuthorizeEndpoint) != -1)
             {
                 #region response_type
 
@@ -438,7 +439,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                         // at_hash と s_hashを付与
                         id_token = IdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", state, HashClaimType.AtHash | HashClaimType.SHash, // ★
-                            ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
+                            Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
 
                         if (!string.IsNullOrEmpty(id_token))
                         {
@@ -506,7 +507,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                             // ★ Hybrid Flow対応なので、expを短縮してもイイ。
                             expires_in = ulong.Parse(
-                                ASPNETIdentityConfig.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
+                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds.ToString());
 
                             // Fragmentに組み込む
                             string fragment = "";
@@ -520,7 +521,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 id_token = IdToken.ChangeToIdTokenFromAccessToken(
                                     OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in),
                                     code, state, HashClaimType.CHash | HashClaimType.SHash,
-                                    ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
+                                    Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
 
                                 fragment = "#id_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
                                 fragment = string.Format(fragment, new object[] { id_token, code, expires_in, state });
@@ -543,7 +544,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
                                 // at_hash, c_hash, s_hashを付与
                                 id_token = IdToken.ChangeToIdTokenFromAccessToken(access_token, code, state,
                                     HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                                    ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
+                                    Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
 
                                 fragment = "#access_token={0}&id_token={1}&token_type=Bearer&code={2}&expires_in={3}&state={4}";
                                 fragment = string.Format(fragment, new object[] { access_token, id_token, code, expires_in, state });

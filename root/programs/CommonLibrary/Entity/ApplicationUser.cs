@@ -18,6 +18,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
@@ -27,8 +29,8 @@ using Microsoft.AspNet.Identity;
 
 using Newtonsoft.Json;
 
-/// <summary>MultiPurposeAuthSite.Models</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
+/// <summary>MultiPurposeAuthSite.Entity</summary>
+namespace MultiPurposeAuthSite.Entity
 {
     /// <summary>
     /// You can add profile data for the user by adding more properties to your ApplicationUser class,
@@ -89,7 +91,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 AccessFailedCount = 0,                                              // サインアップ時は、0。
                 //Claims                                                            // サインアップ時は設定しない。
                 //Id                                                                // コンストラクタで自動生成
-                LockoutEnabled = ASPNETIdentityConfig.UserLockoutEnabledByDefault,  // ASPNETIdentityConfig
+                LockoutEnabled = Config.UserLockoutEnabledByDefault,  // Config
                 LockoutEndDateUtc = null,                                           // DateTimeOffset.MinValue.DateTime,
                 //Logins                                                            // サインアップ時は設定しない。
                 //PasswordHash                                                      // PasswordHashは直接設定しない。
@@ -98,12 +100,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 PhoneNumberConfirmed = false,                                       // サインアップ時は、false
                 //Roles                                                             // 後でAddToRoleAsyncで登録する。
                 SecurityStamp = "",                                                 // サインアップ時は、空文字列
-                TwoFactorEnabled = ASPNETIdentityConfig.TwoFactorEnabled,           // ASPNETIdentityConfig
+                TwoFactorEnabled = Config.TwoFactorEnabled,           // Config
                 UserName = userName                                                 // 入力値（パラメタ）
             };
 
             // E-mail
-            if (ASPNETIdentityConfig.RequireUniqueEmail)
+            if (Config.RequireUniqueEmail)
             {
                 user.Email = userName;                                              // 入力値（パラメタ）
                 user.EmailConfirmed = emailConfirmed;                               // 設定値（パラメタ）
@@ -111,7 +113,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             else
             {
                 user.Email = "";                                                    // 固定値
-                user.EmailConfirmed = !ASPNETIdentityConfig.DisplayAgreementScreen; // 固定値
+                user.EmailConfirmed = !Config.DisplayAgreementScreen; // 固定値
             }
 
             return user;
@@ -131,7 +133,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 AccessFailedCount = 0,                                              // 管理者登録時は、0。
                 //Claims                                                            // 管理者登録時は設定しない。
                 //Id                                                                // コンストラクタで自動生成
-                LockoutEnabled = ASPNETIdentityConfig.UserLockoutEnabledByDefault,  // ASPNETIdentityConfig
+                LockoutEnabled = Config.UserLockoutEnabledByDefault,  // Config
                 LockoutEndDateUtc = null,                                           // DateTimeOffset.MinValue.DateTime,
                 //Logins                                                            // 管理者登録時は設定しない。
                 //PasswordHash                                                      // PasswordHashは直接設定しない。
@@ -140,12 +142,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 PhoneNumberConfirmed = false,                                       // 管理者登録時は、false
                 //Roles                                                             // 後でAddToRoleAsyncで登録する。
                 SecurityStamp = "",                                                 // 管理者登録時は、空文字列
-                TwoFactorEnabled = ASPNETIdentityConfig.TwoFactorEnabled,           // ASPNETIdentityConfig
+                TwoFactorEnabled = Config.TwoFactorEnabled,           // Config
                 UserName = userName                                                 // 入力値（パラメタ）
             };
 
             // E-mail
-            if (ASPNETIdentityConfig.RequireUniqueEmail)
+            if (Config.RequireUniqueEmail)
             {
                 user.Email = userName;                                              // 入力値（パラメタ）
                 user.EmailConfirmed = true;                                         // 固定値

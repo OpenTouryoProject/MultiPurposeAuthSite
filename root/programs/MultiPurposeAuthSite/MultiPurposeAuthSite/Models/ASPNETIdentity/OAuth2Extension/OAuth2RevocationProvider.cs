@@ -31,15 +31,16 @@
 //*  2017/06/07  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Co;
+
 using System;
 using System.Data;
 using System.Collections.Concurrent;
 
 using Dapper;
 
-using MultiPurposeAuthSite.Models.Util;
-
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
+namespace MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension
 {
     /// <summary>
     /// OAuth2RevocationProvider
@@ -69,7 +70,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="jti">string</param>
         public void Create(string jti)
         {
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     OAuth2RevocationProvider.OAuth2Revocation.TryAdd(jti, DateTime.Now);
@@ -83,7 +84,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -126,7 +127,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         {
             DateTime? datetime = null;
 
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
 
@@ -146,7 +147,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 

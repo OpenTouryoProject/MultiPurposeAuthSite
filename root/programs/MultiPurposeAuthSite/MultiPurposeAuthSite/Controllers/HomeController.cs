@@ -18,8 +18,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Co;
 
 using System;
 using System.Collections.Generic;
@@ -85,7 +85,7 @@ namespace MultiPurposeAuthSite.Controllers
             return this.OAuthAuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, ASPNETIdentityConst.StandardScopes, this.State);
+                    this.ClientId, response_type, Const.StandardScopes, this.State);
         }
 
         /// <summary>OIDCスターターを組み立てて返す</summary>
@@ -96,7 +96,7 @@ namespace MultiPurposeAuthSite.Controllers
             return this.OAuthAuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, ASPNETIdentityConst.OidcScopes, this.State)
+                    this.ClientId, response_type, Const.OidcScopes, this.State)
                     + "&nonce=" + this.Nonce;
         }
 
@@ -108,15 +108,15 @@ namespace MultiPurposeAuthSite.Controllers
             return this.OAuthAuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, ASPNETIdentityConst.StandardScopes, "fapi1:" + this.State);
+                    this.ClientId, response_type, Const.StandardScopes, "fapi1:" + this.State);
         }
 
         /// <summary>初期化</summary>
         private void Init()
         {
             this.OAuthAuthorizeEndpoint =
-            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-            + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint;
+            Config.OAuth2AuthorizationServerEndpointsRootURI
+            + Config.OAuth2AuthorizeEndpoint;
 
             this.ClientId = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
@@ -424,8 +424,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestClientCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
-            string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint;
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
+                     + Config.OAuth2BearerTokenEndpoint;
 
             // ClientNameから、client_id, client_secretを取得。
             string client_id = "";
@@ -446,9 +446,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await OAuth2Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
-                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint),
-                     client_id, client_secret, ASPNETIdentityConst.StandardScopes);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                     + Config.OAuth2BearerTokenEndpoint),
+                     client_id, client_secret, Const.StandardScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
@@ -466,8 +466,8 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Token2エンドポイントにアクセス
-            string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2;
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
+                     + Config.OAuth2BearerTokenEndpoint2;
 
             // ClientNameから、client_id(iss)を取得。
             string iss = "";
@@ -489,10 +489,10 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await OAuth2Helper.GetInstance()
                 .JwtBearerTokenFlowAsync(new Uri(
-                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                     + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint2),
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                     + Config.OAuth2BearerTokenEndpoint2),
                      JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                         iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
+                         iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];

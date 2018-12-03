@@ -31,6 +31,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System.Threading.Tasks;
 using System.Diagnostics;
 
@@ -40,8 +42,8 @@ using Twilio;
 using Twilio.Types;
 using Twilio.Rest.Api.V2010.Account;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider
+/// <summary>MultiPurposeAuthSite.Notification</summary>
+namespace MultiPurposeAuthSite.Notification
 {
     /// <summary>SmsService</summary>
     /// <see cref="http://www.asp.net/identity/overview/features-api/two-factor-authentication-using-sms-and-email-with-aspnet-identity"/>
@@ -54,7 +56,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider
         /// <returns>非同期操作</returns>
         public Task SendAsync(IdentityMessage message)
         {
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 // Debug.WriteLine
                 Debug.WriteLine("< SmsService >");
@@ -65,12 +67,12 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider
             else
             {
                 TwilioClient.Init(
-                    ASPNETIdentityConfig.TwilioAccountSid,
-                    ASPNETIdentityConfig.TwilioAuthToken);
+                    Config.TwilioAccountSid,
+                    Config.TwilioAuthToken);
 
                 MessageResource mr = MessageResource.Create(
                     to: new PhoneNumber("+" + message.Destination), // "+819074322014"
-                    from: new PhoneNumber(ASPNETIdentityConfig.TwilioFromPhoneNumber),
+                    from: new PhoneNumber(Config.TwilioFromPhoneNumber),
                     body: message.Body);
             }
 

@@ -20,9 +20,9 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
+@using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Co
 
 @model AccountLoginViewModel
 
@@ -49,7 +49,7 @@
                 @Html.ValidationSummary(true, "", new { @class = "text-danger" })
                 @Html.HiddenFor(m => m.ReturnUrl)
 
-                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                if (Config.RequireUniqueEmail)
                 {
                     <div class="form-group">
                         @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
@@ -108,7 +108,7 @@
     </div>
     <div class="col-md-4">
 
-@if (ASPNETIdentityConfig.CanEditExtLogin)
+@if (Config.CanEditExtLogin)
 {
         <div class="sample-box-1">
             @*ここに外部ログインを実装*@
@@ -127,7 +127,7 @@
             </section>
         </div>
 
-@if (ASPNETIdentityConfig.CanEditFIDO2Data)
+@if (Config.CanEditFIDO2Data)
 {
         <div class="sample-box-1">
             @*ここにFIDO2を実装*@

@@ -31,6 +31,12 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Util;
+
 using System;
 using System.Data;
 using System.Linq;
@@ -44,11 +50,6 @@ using System.Web;
 
 using Dapper;
 using Microsoft.AspNet.Identity;
-
-using MultiPurposeAuthSite.Models.Log;
-using MultiPurposeAuthSite.Models.Util;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 
 // --------------------------------------------------
 // UserStoreのTransaction管理について。
@@ -67,8 +68,8 @@ using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
 // Memory Providerを使用する際と、動作が異なるのでテストの際は注意が必要。
 // --------------------------------------------------
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.Entity</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
+/// <summary>MultiPurposeAuthSite.Data</summary>
+namespace MultiPurposeAuthSite.Data
 {
     /// <summary>
     /// UserStoreでApplicationUserを永続化する。
@@ -110,7 +111,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
         {
             string s = "";
 
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 s += "(";
                 for (int i = 0; i < parameters.Length; i++)
@@ -176,7 +177,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     int count = 0;
 
                     // [Roles] が [Users] に先立って登録されるので。
-                    switch (ASPNETIdentityConfig.UserStoreType)
+                    switch (Config.UserStoreType)
                     {
                         case EnumUserStoreType.SqlServer:
 
@@ -235,7 +236,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 IEnumerable<UserLoginInfo> userLogins = null;
                 IEnumerable<dynamic> claims = null;
 
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.SqlServer:
 
@@ -350,7 +351,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // 新規ユーザーの追加
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -366,7 +367,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -487,16 +488,16 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
-                    user = ApplicationUser.CreateUser(ASPNETIdentityConfig.AdministratorUID, true);
+                    user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
                     user.Id = userId;
-                    user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
+                    user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
                     return Task.FromResult(user);
 
                     #endregion
                 }
 
                 // 通常のモードでの実装を行う。
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -515,7 +516,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             // ユーザの情報の取得
                             IEnumerable<ApplicationUser> users = null;
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -588,10 +589,10 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
-                    if (userName == ASPNETIdentityConfig.AdministratorUID)
+                    if (userName == Config.AdministratorUID)
                     {
-                        user = ApplicationUser.CreateUser(ASPNETIdentityConfig.AdministratorUID, true);
-                        user.PasswordHash = (new CustomPasswordHasher()).HashPassword(ASPNETIdentityConfig.AdministratorPWD);
+                        user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                        user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
                     }
 
                     #endregion
@@ -599,7 +600,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 else
                 {
                     // 通常のモードでの実装を行う。
-                    switch (ASPNETIdentityConfig.UserStoreType)
+                    switch (Config.UserStoreType)
                     {
                         case EnumUserStoreType.Memory:
 
@@ -616,7 +617,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 cnn.Open();
 
                                 // ユーザの情報の取得
-                                switch (ASPNETIdentityConfig.UserStoreType)
+                                switch (Config.UserStoreType)
                                 {
                                     case EnumUserStoreType.SqlServer:
 
@@ -688,7 +689,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                     HttpContext.Current.Session["SearchConditionOfUsers"] = ""; // クリアしないと・・・
 
                     // （マルチテナント化対応されたテナント）ユーザ一覧を返す。
-                    switch (ASPNETIdentityConfig.UserStoreType)
+                    switch (Config.UserStoreType)
                     {
                         case EnumUserStoreType.Memory:
 
@@ -709,7 +710,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             string sql = "";
                             using (IDbConnection cnn = DataAccess.CreateConnection())
                             {
-                                switch (ASPNETIdentityConfig.UserStoreType)
+                                switch (Config.UserStoreType)
                                 {
                                     case EnumUserStoreType.SqlServer:
 
@@ -727,9 +728,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                         }
 
                                         // TOP
-                                        if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
+                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
                                         {
-                                            sql = string.Format(sql, "" + ASPNETIdentityConfig.UserListCount);
+                                            sql = string.Format(sql, "" + Config.UserListCount);
                                         }
                                         else
                                         {
@@ -747,9 +748,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                             sql += " AND \"UserName\" Like '%' || :searchConditionOfUsers || '%'";
 
                                         // TOP
-                                        if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
+                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
                                         {
-                                            sql = string.Format(sql, ASPNETIdentityConfig.UserListCount);
+                                            sql = string.Format(sql, Config.UserListCount);
                                         }
                                         else
                                         {
@@ -775,9 +776,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                                         // TOP
                                         sql += " LIMIT {0}";
-                                        if (!string.IsNullOrEmpty(ASPNETIdentityConfig.UserListCount.ToString()))
+                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
                                         {
-                                            sql = string.Format(sql, ASPNETIdentityConfig.UserListCount);
+                                            sql = string.Format(sql, Config.UserListCount);
                                         }
                                         else
                                         {
@@ -847,7 +848,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 //{
 
                 // ユーザー情報を更新
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -888,7 +889,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
 
                             // ユーザー情報を更新
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -988,7 +989,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // Rolesの更新
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -1103,7 +1104,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 // ロール・マップを削除（ロール情報を取得する。
                                 foreach (string roleName in toRmvRolesName)
                                 {
-                                    switch (ASPNETIdentityConfig.UserStoreType)
+                                    switch (Config.UserStoreType)
                                     {
                                         case EnumUserStoreType.SqlServer:
 
@@ -1140,7 +1141,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                                 // ロール・マップを追加（ロール情報を取得する。
                                 foreach (string roleName in toAddRolesName)
                                 {
-                                    switch (ASPNETIdentityConfig.UserStoreType)
+                                    switch (Config.UserStoreType)
                                     {
                                         case EnumUserStoreType.SqlServer:
 
@@ -1215,7 +1216,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザの論理削除
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -1235,7 +1236,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
                             using (IDbTransaction tr = cnn.BeginTransaction())
                             {
-                                switch (ASPNETIdentityConfig.UserStoreType)
+                                switch (Config.UserStoreType)
                                 {
                                     case EnumUserStoreType.SqlServer:
 
@@ -1381,7 +1382,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザを（email指定で）検索して取得
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -1400,7 +1401,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             // ユーザの情報の取得
                             IEnumerable<ApplicationUser> users = null;
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -1631,7 +1632,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 // ロールにユーザを追加
                 ApplicationRole role = null;
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -1671,7 +1672,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
 
                             // ロール・マップを追加（ロール情報を取得する。
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -1761,7 +1762,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザのロール一覧を取得
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -1789,7 +1790,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
                             IEnumerable<ApplicationRole> roles = null;
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -1867,7 +1868,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             {
                 // ユーザーをロールから削除
                 ApplicationRole role = null;
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -1903,7 +1904,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
 
                             // ロール・マップを削除（ロール情報を取得する。
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -2235,7 +2236,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             try
             {
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -2252,7 +2253,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -2312,7 +2313,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
             try
             {
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -2331,7 +2332,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             // ユーザの情報の取得
                             IEnumerable<ApplicationRole> roles = null;
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
                                     roles = cnn.Query<ApplicationRole>(
@@ -2395,7 +2396,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             
             try
             {
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -2413,7 +2414,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
 
                             // ユーザの情報の取得
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -2481,7 +2482,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                 try
                 {
                     // ロール一覧を返す。
-                    switch (ASPNETIdentityConfig.UserStoreType)
+                    switch (Config.UserStoreType)
                     {
                         case EnumUserStoreType.Memory:
 
@@ -2497,7 +2498,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             {
                                 cnn.Open();
 
-                                switch (ASPNETIdentityConfig.UserStoreType)
+                                switch (Config.UserStoreType)
                                 {
                                     case EnumUserStoreType.SqlServer:
 
@@ -2551,7 +2552,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ロールを更新する
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -2579,7 +2580,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                             cnn.Open();
 
                             // ユーザー情報を更新
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -2640,7 +2641,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ロールを削除する
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -2680,7 +2681,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             // ユーザー情報を更新
                             int cnt = 0;
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -2775,7 +2776,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザーに外部ログインを追加
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -2791,7 +2792,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -2852,7 +2853,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // 外部ログインでユーザーを検索
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -2890,7 +2891,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
                             // ユーザの情報の取得
                             IEnumerable<ApplicationUser> users = null;
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -2989,7 +2990,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザーから外部ログインを削除
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -3012,7 +3013,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -3073,7 +3074,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザに外部ログインのクレームを追加
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -3089,7 +3090,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
@@ -3174,7 +3175,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
             try
             {
                 // ユーザの（外部ログインの）クレームを削除
-                switch (ASPNETIdentityConfig.UserStoreType)
+                switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
@@ -3190,7 +3191,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
                         {
                             cnn.Open();
 
-                            switch (ASPNETIdentityConfig.UserStoreType)
+                            switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 

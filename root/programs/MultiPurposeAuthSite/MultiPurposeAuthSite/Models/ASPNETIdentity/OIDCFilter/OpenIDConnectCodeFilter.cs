@@ -31,6 +31,8 @@
 //*  2017/07/14  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System;
 using System.Text;
 using System.IO;
@@ -41,7 +43,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
+namespace MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter
 {
     /// <summary>
     /// OpenIDConnectCodeFilter
@@ -139,7 +141,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
 
                     string id_token = IdToken.ChangeToIdTokenFromAccessToken(
                         access_token, "", "", HashClaimType.None,
-                        ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword);
+                        Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
 
                     if (!string.IsNullOrEmpty(id_token))
                     {

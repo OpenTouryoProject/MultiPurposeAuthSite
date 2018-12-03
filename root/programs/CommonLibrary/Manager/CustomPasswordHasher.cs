@@ -31,11 +31,14 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using Microsoft.AspNet.Identity;
+
 using Touryo.Infrastructure.Public.Security;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.Manager</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+/// <summary>MultiPurposeAuthSite.Manager</summary>
+namespace MultiPurposeAuthSite.Manager
 {
 
     /// <summary>
@@ -83,7 +86,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
                     EnumKeyedHashAlgorithm.MACTripleDES, // algorithm
                     GetPassword.Generate(10, 3),         // key(pwd)
                     10,                                  // salt length
-                    ASPNETIdentityConfig.StretchCount    // stretch count
+                    Config.StretchCount    // stretch count
                 );
         }
 
@@ -99,7 +102,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
                     EnumKeyedHashAlgorithm.MACTripleDES, // algorithm
                     GetPassword.Generate(10, 3),         // key(pwd)
                     10,                                  // salt length
-                    ASPNETIdentityConfig.StretchCount    // stretch count
+                    Config.StretchCount    // stretch count
                 );
         }
 

@@ -44,7 +44,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension
+namespace MultiPurposeAuthSite.ASPNETIdentity.FIDO2Extension
 {
     /// <summary>FIDO2Helper（ライブラリ）</summary>
     public class FIDO2Helper

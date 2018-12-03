@@ -37,9 +37,10 @@ using System.Collections.Concurrent;
 
 using Dapper;
 
-using MultiPurposeAuthSite.Models.Util;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Co;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
+namespace MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension
 {
     /// <summary>
     /// OAuth2DataProvider
@@ -70,7 +71,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="unstructuredData">string</param>
         public void Create(string clientID, string unstructuredData)
         {
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     OAuth2DataProvider.OAuth2Data.TryAdd(clientID, unstructuredData);
@@ -84,7 +85,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -127,7 +128,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         {
             string unstructuredData = "";
 
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     OAuth2DataProvider.OAuth2Data.TryGetValue(clientID, out unstructuredData);
@@ -142,7 +143,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -182,7 +183,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="unstructuredData">string</param>
         public void Update(string clientID, string unstructuredData)
         {
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     // OAuth2DataProvider.OAuth2Data.TryUpdate が使えないので del -> ins にする。
@@ -200,7 +201,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -240,7 +241,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         /// <param name="clientID">string</param>
         public void Delete(string clientID)
         {
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     string unstructuredData = "";
@@ -256,7 +257,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 

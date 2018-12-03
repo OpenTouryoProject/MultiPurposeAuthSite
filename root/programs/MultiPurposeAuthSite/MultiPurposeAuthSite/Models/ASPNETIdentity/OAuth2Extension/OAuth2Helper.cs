@@ -31,10 +31,13 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ViewModels;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Network;
 
 using System;
 using System.Collections.Generic;
@@ -54,7 +57,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
+namespace MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension
 {
     /// <summary>OAuth2Helper（ライブラリ）</summary>
     public class OAuth2Helper
@@ -91,7 +94,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
         {
             // クライアント識別子情報
             this._oauth2ClientsInfo =
-                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(ASPNETIdentityConfig.OAuth2ClientsInformation);
+                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(Config.OAuth2ClientsInformation);
             // OAuth ServerにアクセスするためのHttpClient
             this._oAuth2HttpClient = HttpClientBuilder(EnumProxyType.Intranet);
 
@@ -266,8 +269,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri userInfoUri = new Uri(
-                ASPNETIdentityConfig.OAuth2ResourceServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI);
+                Config.OAuth2ResourceServerEndpointsRootURI
+                + Config.OAuth2GetUserClaimsWebAPI);
 
             return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
         }
@@ -339,8 +342,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             // 課金用のWebAPI
             Uri webApiEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                + ASPNETIdentityConfig.TestChageToUserWebAPI);
+                Config.OAuth2AuthorizationServerEndpointsRootURI
+                + Config.TestChageToUserWebAPI);
 
             HttpRequestMessage httpRequestMessage = null;
             HttpResponseMessage httpResponseMessage = null;
@@ -582,7 +585,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension
 
             #region 標準
 
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, ASPNETIdentityConfig.OAuth2IssuerId));
+            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, Config.OAuth2IssuerId));
             claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Audience, client_id));
 
             foreach (string scope in scopes)

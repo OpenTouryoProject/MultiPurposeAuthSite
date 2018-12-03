@@ -32,7 +32,6 @@
 //**********************************************************************************
 
 using System;
-using System.Text;
 using System.Data;
 using System.Data.Common;
 using System.Collections.Generic;
@@ -43,7 +42,7 @@ using StackExchange.Profiling.Data;
 
 using Touryo.Infrastructure.Public.Str;
 
-namespace MultiPurposeAuthSite.Models.Log
+namespace MultiPurposeAuthSite.Log
 {
     public class TraceDbProfiler : IDbProfiler
     {

@@ -21,8 +21,8 @@
 using System;
 using Microsoft.AspNet.Identity;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.Entity</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
+/// <summary>MultiPurposeAuthSite.Entity</summary>
+namespace MultiPurposeAuthSite.Entity
 {
     /// <summary>ApplicationRole</summary>
     public class ApplicationRole : IRole<string>

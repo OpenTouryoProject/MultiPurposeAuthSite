@@ -19,7 +19,7 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：ASPNETIdentityConfig
+//* クラス名        ：Config
 //* クラス日本語名  ：ASP.NET IdentityのConfigクラス（ライブラリ）
 //*
 //* 作成日時        ：－
@@ -34,24 +34,15 @@
 using System;
 using System.Configuration;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity
-{
-    /// <summary>列挙型</summary>
-    public enum EnumUserStoreType
-    {
-        /// <summary>Memory Provider</summary>
-        Memory,
-        /// <summary>DBMS Provider (SqlServer)</summary>
-        SqlServer,
-        /// <summary>DBMS Provider (ODP.NET Managed Driver)</summary>
-        ODPManagedDriver,
-        /// <summary>DBMS Provider (PostgreSQL)</summary>
-        PostgreSQL
-    }
+using MultiPurposeAuthSite.Data;
 
-    /// <summary>ASPNETIdentityConfig</summary>
-    public class ASPNETIdentityConfig
+using Touryo.Infrastructure.Public.Util;
+
+/// <summary>MultiPurposeAuthSite.Co</summary>
+namespace MultiPurposeAuthSite.Co
+{
+    /// <summary>Config</summary>
+    public class Config
     {
         #region Proxy
 
@@ -64,7 +55,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["UseInternetProxy"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("UseInternetProxy"));
             }
         }
 
@@ -75,7 +66,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["InternetProxyURL"];
+                return GetConfigParameter.GetConfigValue("InternetProxyURL");
             }
         }
 
@@ -86,7 +77,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["InternetProxyUID"];
+                return GetConfigParameter.GetConfigValue("InternetProxyUID");
             }
         }
 
@@ -97,7 +88,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["InternetProxyPWD"];
+                return GetConfigParameter.GetConfigValue("InternetProxyPWD");
             }
         }
 
@@ -112,7 +103,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["UseIntranetProxy"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("UseIntranetProxy"));
             }
         }
 
@@ -123,7 +114,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["IntranetProxyURL"];
+                return GetConfigParameter.GetConfigValue("IntranetProxyURL");
             }
         }
 
@@ -134,7 +125,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["IntranetProxyUID"];
+                return GetConfigParameter.GetConfigValue("IntranetProxyUID");
             }
         }
 
@@ -145,7 +136,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["IntranetProxyPWD"];
+                return GetConfigParameter.GetConfigValue("IntranetProxyPWD");
             }
         }
 
@@ -160,7 +151,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["UseDebugProxy"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("UseDebugProxy"));
             }
         }
 
@@ -171,7 +162,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["DebugProxyURL"];
+                return GetConfigParameter.GetConfigValue("DebugProxyURL");
             }
         }
 
@@ -182,7 +173,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["DebugProxyUID"];
+                return GetConfigParameter.GetConfigValue("DebugProxyUID");
             }
         }
 
@@ -193,7 +184,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["DebugProxyPWD"];
+                return GetConfigParameter.GetConfigValue("DebugProxyPWD");
             }
         }
 
@@ -208,13 +199,13 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                if (ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.Memory)
+                if (Config.UserStoreType == EnumUserStoreType.Memory)
                 {
                     return true; // Memory Provider 利用時は = Debug 扱い。
                 }
                 else
                 {
-                    return Convert.ToBoolean(ConfigurationManager.AppSettings["IsDebug"]);
+                    return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsDebug"));
                 }
             }
         }
@@ -224,7 +215,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnabeDebugTraceLog"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnabeDebugTraceLog"));
             }
         }
 
@@ -237,7 +228,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                switch (ConfigurationManager.AppSettings["UserStoreType"].ToUpper())
+                switch (GetConfigParameter.GetConfigValue("UserStoreType").ToUpper())
                 {
                     case "MEM":
                         return EnumUserStoreType.Memory;
@@ -264,7 +255,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToInt32(ConfigurationManager.AppSettings["UserListCount"]);
+                return Convert.ToInt32(GetConfigParameter.GetConfigValue("UserListCount"));
             }
         }
 
@@ -279,7 +270,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["AdministratorUID"];
+                return GetConfigParameter.GetConfigValue("AdministratorUID");
             }
         }
 
@@ -288,7 +279,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["AdministratorPWD"];
+                return GetConfigParameter.GetConfigValue("AdministratorPWD");
             }
         }
 
@@ -299,7 +290,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TestUserPWD"];
+                return GetConfigParameter.GetConfigValue("TestUserPWD");
             }
         }
 
@@ -314,7 +305,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["SmtpHostName"];
+                return GetConfigParameter.GetConfigValue("SmtpHostName");
             }
         }
 
@@ -323,7 +314,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToInt32(ConfigurationManager.AppSettings["SmtpPortNo"]);
+                return Convert.ToInt32(GetConfigParameter.GetConfigValue("SmtpPortNo"));
             }
         }
 
@@ -332,7 +323,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["SmtpSSL"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("SmtpSSL"));
             }
         }
 
@@ -341,7 +332,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["SmtpAccountUID"];
+                return GetConfigParameter.GetConfigValue("SmtpAccountUID");
             }
         }
 
@@ -350,7 +341,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["SmtpAccountPWD"];
+                return GetConfigParameter.GetConfigValue("SmtpAccountPWD");
             }
         }
 
@@ -363,7 +354,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TwilioAccountSid"];
+                return GetConfigParameter.GetConfigValue("TwilioAccountSid");
             }
         }
 
@@ -372,7 +363,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TwilioAuthToken"];
+                return GetConfigParameter.GetConfigValue("TwilioAuthToken");
             }
         }
 
@@ -381,7 +372,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TwilioFromPhoneNumber"];
+                return GetConfigParameter.GetConfigValue("TwilioFromPhoneNumber");
             }
         }
 
@@ -400,7 +391,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["AllowOnlyAlphanumericUserNames"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("AllowOnlyAlphanumericUserNames"));
             }
         }
 
@@ -411,7 +402,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["RequireUniqueEmail"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireUniqueEmail"));
             }
         }
 
@@ -422,7 +413,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["DisplayAgreementScreen"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("DisplayAgreementScreen"));
             }
         }
 
@@ -433,7 +424,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return TimeSpan.FromHours(Double.Parse(ConfigurationManager.AppSettings["EmailConfirmationTokenLifespanFromHours"]));
+                return TimeSpan.FromHours(Double.Parse(GetConfigParameter.GetConfigValue("EmailConfirmationTokenLifespanFromHours")));
             }
         }
 
@@ -444,7 +435,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["AllowEditingUserName"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("AllowEditingUserName"));
             }
         }
 
@@ -455,7 +446,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["RequirePasswordInEditingUserNameAndEmail"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePasswordInEditingUserNameAndEmail"));
             }
         }
 
@@ -470,7 +461,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToInt32(ConfigurationManager.AppSettings["RequiredLength"]);
+                return Convert.ToInt32(GetConfigParameter.GetConfigValue("RequiredLength"));
             }
         }
 
@@ -481,7 +472,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["RequireNonLetterOrDigit"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireNonLetterOrDigit"));
             }
         }
 
@@ -492,7 +483,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["RequireDigit"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireDigit"));
             }
         }
 
@@ -503,7 +494,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["RequireLowercase"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireLowercase"));
             }
         }
 
@@ -514,7 +505,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["RequireUppercase"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireUppercase"));
             }
         }
 
@@ -525,7 +516,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToInt32(ConfigurationManager.AppSettings["StretchCount"]);
+                return Convert.ToInt32(GetConfigParameter.GetConfigValue("StretchCount"));
             }
         }
 
@@ -540,7 +531,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["UserLockoutEnabledByDefault"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("UserLockoutEnabledByDefault"));
             }
         }
 
@@ -551,7 +542,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return TimeSpan.FromSeconds(Double.Parse(ConfigurationManager.AppSettings["DefaultAccountLockoutTimeSpanFromSeconds"]));
+                return TimeSpan.FromSeconds(Double.Parse(GetConfigParameter.GetConfigValue("DefaultAccountLockoutTimeSpanFromSeconds")));
             }
         }
 
@@ -562,7 +553,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToInt32(ConfigurationManager.AppSettings["MaxFailedAccessAttemptsBeforeLockout"]);
+                return Convert.ToInt32(GetConfigParameter.GetConfigValue("MaxFailedAccessAttemptsBeforeLockout"));
             }
         }
 
@@ -577,7 +568,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return TimeSpan.FromHours(Double.Parse(ConfigurationManager.AppSettings["AuthCookieExpiresFromHours"]));
+                return TimeSpan.FromHours(Double.Parse(GetConfigParameter.GetConfigValue("AuthCookieExpiresFromHours")));
             }
         }
 
@@ -588,7 +579,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["AuthCookieSlidingExpiration"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("AuthCookieSlidingExpiration"));
             }
         }
 
@@ -603,7 +594,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["TwoFactorEnabled"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("TwoFactorEnabled"));
             }
         }
 
@@ -614,7 +605,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return TimeSpan.FromHours(Double.Parse(ConfigurationManager.AppSettings["TwoFactorCookieExpiresFromHours"]));
+                return TimeSpan.FromHours(Double.Parse(GetConfigParameter.GetConfigValue("TwoFactorCookieExpiresFromHours")));
             }
         }
 
@@ -630,7 +621,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["XsrfKey"];
+                return GetConfigParameter.GetConfigValue("XsrfKey");
             }
         }
 
@@ -643,7 +634,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["MicrosoftAccountAuthentication"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("MicrosoftAccountAuthentication"));
             }
         }
 
@@ -654,7 +645,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["MicrosoftAccountAuthenticationClientId"];
+                return GetConfigParameter.GetConfigValue("MicrosoftAccountAuthenticationClientId");
             }
         }
 
@@ -665,7 +656,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["MicrosoftAccountAuthenticationClientSecret"];
+                return GetConfigParameter.GetConfigValue("MicrosoftAccountAuthenticationClientSecret");
             }
         }
 
@@ -680,7 +671,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["GoogleAuthentication"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("GoogleAuthentication"));
             }
         }
 
@@ -691,7 +682,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["GoogleAuthenticationClientId"];
+                return GetConfigParameter.GetConfigValue("GoogleAuthenticationClientId");
             }
         }
 
@@ -702,7 +693,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["GoogleAuthenticationClientSecret"];
+                return GetConfigParameter.GetConfigValue("GoogleAuthenticationClientSecret");
             }
         }
 
@@ -717,7 +708,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["FacebookAuthentication"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("FacebookAuthentication"));
             }
         }
 
@@ -728,7 +719,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["FacebookAuthenticationClientId"];
+                return GetConfigParameter.GetConfigValue("FacebookAuthenticationClientId");
             }
         }
 
@@ -739,7 +730,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["FacebookAuthenticationClientSecret"];
+                return GetConfigParameter.GetConfigValue("FacebookAuthenticationClientSecret");
             }
         }
 
@@ -754,7 +745,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["TwitterAuthentication"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("TwitterAuthentication"));
             }
         }
 
@@ -765,7 +756,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TwitterAuthenticationClientId"];
+                return GetConfigParameter.GetConfigValue("TwitterAuthenticationClientId");
             }
         }
 
@@ -776,7 +767,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TwitterAuthenticationClientSecret"];
+                return GetConfigParameter.GetConfigValue("TwitterAuthenticationClientSecret");
             }
         }
 
@@ -795,7 +786,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return TimeSpan.FromSeconds(Double.Parse(ConfigurationManager.AppSettings["SecurityStampValidateIntervalFromSeconds"]));
+                return TimeSpan.FromSeconds(Double.Parse(GetConfigParameter.GetConfigValue("SecurityStampValidateIntervalFromSeconds")));
             }
         }
 
@@ -810,7 +801,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditEmail"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditEmail"));
             }
         }
 
@@ -821,7 +812,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditPhone"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditPhone"));
             }
         }
 
@@ -832,7 +823,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEdit2FA"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEdit2FA"));
             }
         }
 
@@ -843,7 +834,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditUnstructuredData"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditUnstructuredData"));
             }
         }
 
@@ -855,8 +846,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return
-                    ASPNETIdentityConfig.EquipOAuth2Server
-                    && Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditOAuth2Data"]);
+                    Config.EquipOAuth2Server
+                    && Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditOAuth2Data"));
             }
         }
 
@@ -867,7 +858,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanEditFIDO2Data"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditFIDO2Data"));
             }
         }
 
@@ -878,7 +869,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["CanUseGdprFunction"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanUseGdprFunction"));
             }
         }
 
@@ -892,9 +883,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return
-                    ASPNETIdentityConfig.MicrosoftAccountAuthentication
-                    || ASPNETIdentityConfig.GoogleAuthentication
-                    || ASPNETIdentityConfig.FacebookAuthentication;
+                    Config.MicrosoftAccountAuthentication
+                    || Config.GoogleAuthentication
+                    || Config.FacebookAuthentication;
             }
         }
 
@@ -906,8 +897,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return
-                    ASPNETIdentityConfig.EnableStripe
-                    || ASPNETIdentityConfig.EnablePAYJP;
+                    Config.EnableStripe
+                    || Config.EnablePAYJP;
             }
         }
 
@@ -926,7 +917,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EquipOAuth2Server"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EquipOAuth2Server"));
             }
         }
 
@@ -939,7 +930,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["AllowOAuth2InsecureHttpEndpoints"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("AllowOAuth2InsecureHttpEndpoints"));
             }
         }
 
@@ -950,7 +941,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["OAuth2AuthorizeEndpointCanDisplayErrors"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("OAuth2AuthorizeEndpointCanDisplayErrors"));
             }
         }
 
@@ -961,7 +952,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return TimeSpan.FromMinutes(int.Parse(ConfigurationManager.AppSettings["OAuth2AccessTokenExpireTimeSpanFromMinutes"]));
+                return TimeSpan.FromMinutes(int.Parse(GetConfigParameter.GetConfigValue("OAuth2AccessTokenExpireTimeSpanFromMinutes")));
             }
         }
 
@@ -972,7 +963,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return TimeSpan.FromDays(int.Parse(ConfigurationManager.AppSettings["OAuth2RefreshTokenExpireTimeSpanFromDays"]));
+                return TimeSpan.FromDays(int.Parse(GetConfigParameter.GetConfigValue("OAuth2RefreshTokenExpireTimeSpanFromDays")));
             }
         }
 
@@ -987,7 +978,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2IssuerId"];
+                return GetConfigParameter.GetConfigValue("OAuth2IssuerId");
             }
         }
 
@@ -1000,7 +991,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2JWTPassword"];
+                return GetConfigParameter.GetConfigValue("OAuth2JWTPassword");
             }
         }
 
@@ -1011,7 +1002,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2JWT_pfx"];
+                return GetConfigParameter.GetConfigValue("OAuth2JWT_pfx");
             }
         }
 
@@ -1030,7 +1021,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableAuthorizationCodeGrantType"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableAuthorizationCodeGrantType"));
             }
         }
 
@@ -1039,7 +1030,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableImplicitGrantType"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableImplicitGrantType"));
             }
         }
 
@@ -1048,7 +1039,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableResourceOwnerPasswordCredentialsGrantType"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableResourceOwnerPasswordCredentialsGrantType"));
             }
         }
 
@@ -1057,7 +1048,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableClientCredentialsGrantType"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableClientCredentialsGrantType"));
             }
         }
 
@@ -1066,7 +1057,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableJwtBearerTokenFlowGrantType"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableJwtBearerTokenFlowGrantType"));
             }
         }
 
@@ -1075,7 +1066,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableRefreshToken"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableRefreshToken"));
             }
         }
 
@@ -1084,7 +1075,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableOpenIDConnect"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableOpenIDConnect"));
             }
         }
 
@@ -1099,7 +1090,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2AuthorizationServerEndpointsRootURI"];
+                return GetConfigParameter.GetConfigValue("OAuth2AuthorizationServerEndpointsRootURI");
             }
         }
 
@@ -1112,7 +1103,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2AuthorizeEndpoint"];
+                return GetConfigParameter.GetConfigValue("OAuth2AuthorizeEndpoint");
             }
         }
 
@@ -1123,7 +1114,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2BearerTokenEndpoint"];
+                return GetConfigParameter.GetConfigValue("OAuth2BearerTokenEndpoint");
             }
         }
 
@@ -1140,7 +1131,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2BearerTokenEndpoint2"];
+                return GetConfigParameter.GetConfigValue("OAuth2BearerTokenEndpoint2");
             }
         }
 
@@ -1155,7 +1146,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2GetUserClaimsWebAPI"];
+                return GetConfigParameter.GetConfigValue("OAuth2GetUserClaimsWebAPI");
             }
         }
 
@@ -1166,7 +1157,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2RevokeTokenWebAPI"];
+                return GetConfigParameter.GetConfigValue("OAuth2RevokeTokenWebAPI");
             }
         }
 
@@ -1177,7 +1168,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2IntrospectTokenWebAPI"];
+                return GetConfigParameter.GetConfigValue("OAuth2IntrospectTokenWebAPI");
             }
         }
 
@@ -1196,7 +1187,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2AuthorizationCodeGrantClient_Manage"];
+                return GetConfigParameter.GetConfigValue("OAuth2AuthorizationCodeGrantClient_Manage");
             }
         }
 
@@ -1211,7 +1202,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TestHybridFlowWebAPI"];
+                return GetConfigParameter.GetConfigValue("TestHybridFlowWebAPI");
             }
         }
 
@@ -1222,7 +1213,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["TestChageToUserWebAPI"];
+                return GetConfigParameter.GetConfigValue("TestChageToUserWebAPI");
             }
         }
 
@@ -1245,7 +1236,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2ClientsInformation"];
+                return GetConfigParameter.GetConfigValue("OAuth2ClientsInformation");
             }
         }
 
@@ -1260,7 +1251,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2ClientEndpointsRootURI"];
+                return GetConfigParameter.GetConfigValue("OAuth2ClientEndpointsRootURI");
             }
         }
 
@@ -1273,7 +1264,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2AuthorizationCodeGrantClient_Account"];
+                return GetConfigParameter.GetConfigValue("OAuth2AuthorizationCodeGrantClient_Account");
             }
         }
 
@@ -1284,7 +1275,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2ImplicitGrantClient_Account"];
+                return GetConfigParameter.GetConfigValue("OAuth2ImplicitGrantClient_Account");
             }
         }
 
@@ -1296,8 +1287,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
             get
             {
                 return
-                    Convert.ToBoolean(ConfigurationManager.AppSettings["IsLockedDownRedirectEndpoint"])
-                    || !ASPNETIdentityConfig.EquipOAuth2Server; // IsLockedDownがfalseでもOAuthServerがfalseならtrueを返す.
+                    Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsLockedDownRedirectEndpoint"))
+                    || !Config.EquipOAuth2Server; // IsLockedDownがfalseでもOAuthServerがfalseならtrueを返す.
             }
         }
 
@@ -1318,7 +1309,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["OAuth2ResourceServerEndpointsRootURI"];
+                return GetConfigParameter.GetConfigValue("OAuth2ResourceServerEndpointsRootURI");
             }
         }
 
@@ -1339,7 +1330,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableStripe"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableStripe"));
             }
         }
 
@@ -1348,7 +1339,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["Stripe_PK"];
+                return GetConfigParameter.GetConfigValue("Stripe_PK");
             }
         }
 
@@ -1357,7 +1348,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["Stripe_SK"];
+                return GetConfigParameter.GetConfigValue("Stripe_SK");
             }
         }
 
@@ -1370,7 +1361,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnablePAYJP"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnablePAYJP"));
             }
         }
 
@@ -1379,7 +1370,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["PAYJP_PK"];
+                return GetConfigParameter.GetConfigValue("PAYJP_PK");
             }
         }
 
@@ -1388,7 +1379,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["PAYJP_SK"];
+                return GetConfigParameter.GetConfigValue("PAYJP_SK");
             }
         }
 
@@ -1407,7 +1398,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableSignupProcess"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableSignupProcess"));
             }
         }
 
@@ -1418,7 +1409,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableEditingOfUserAttribute"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableEditingOfUserAttribute"));
             }
         }
 
@@ -1429,7 +1420,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return Convert.ToBoolean(ConfigurationManager.AppSettings["EnableAdministrationOfUsersAndRoles"]);
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableAdministrationOfUsersAndRoles"));
             }
         }
 
@@ -1444,7 +1435,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["IdFederationAuthorizeEndPoint"];
+                return GetConfigParameter.GetConfigValue("IdFederationAuthorizeEndPoint");
             }
         }
 
@@ -1455,7 +1446,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["IdFederationRedirectEndPoint"];
+                return GetConfigParameter.GetConfigValue("IdFederationRedirectEndPoint");
             }
         }
 
@@ -1466,7 +1457,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["IdFederationTokenEndPoint"];
+                return GetConfigParameter.GetConfigValue("IdFederationTokenEndPoint");
             }
         }
 
@@ -1477,7 +1468,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity
         {
             get
             {
-                return ConfigurationManager.AppSettings["IdFederationUserInfoEndPoint"];
+                return GetConfigParameter.GetConfigValue("IdFederationUserInfoEndPoint");
             }
         }
 

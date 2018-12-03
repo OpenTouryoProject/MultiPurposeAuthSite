@@ -25,10 +25,10 @@ using Microsoft.AspNet.Identity.Owin;
 using Microsoft.Owin;
 using Microsoft.Owin.Security;
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+using MultiPurposeAuthSite.Entity;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.Manager</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+/// <summary>MultiPurposeAuthSite.Manager</summary>
+namespace MultiPurposeAuthSite.Manager
 
 {
     /// <summary>

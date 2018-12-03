@@ -19,7 +19,6 @@
 //**********************************************************************************
 
 using System.ComponentModel.DataAnnotations;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels

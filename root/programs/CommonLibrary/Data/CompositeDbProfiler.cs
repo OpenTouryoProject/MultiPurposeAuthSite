@@ -37,18 +37,25 @@ using System.Data.Common;
 
 using StackExchange.Profiling.Data;
 
-namespace MultiPurposeAuthSite.Models.Log
+namespace MultiPurposeAuthSite.Log
 {
     /// <summary>CompositeDbProfiler</summary>
     public class CompositeDbProfiler : IDbProfiler
     {
+        /// <summary>DbProfilers</summary>
         readonly IDbProfiler[] profilers;
 
+        /// <summary>CompositeDbProfiler</summary>
+        /// <param name="dbProfilers">IDbProfiler[]</param>
         public CompositeDbProfiler(params IDbProfiler[] dbProfilers)
         {
             this.profilers = dbProfilers;
         }
 
+        /// <summary>ExecuteFinish</summary>
+        /// <param name="profiledDbCommand">IDbCommand</param>
+        /// <param name="executeType">SqlExecuteType</param>
+        /// <param name="reader">DbDataReader</param>
         public void ExecuteFinish(IDbCommand profiledDbCommand, SqlExecuteType executeType, DbDataReader reader)
         {
             foreach (var item in profilers)
@@ -60,6 +67,9 @@ namespace MultiPurposeAuthSite.Models.Log
             }
         }
 
+        /// <summary>ExecuteStart</summary>
+        /// <param name="profiledDbCommand">IDbCommand</param>
+        /// <param name="executeType">SqlExecuteType</param>
         public void ExecuteStart(IDbCommand profiledDbCommand, SqlExecuteType executeType)
         {
             foreach (var item in profilers)
@@ -71,6 +81,7 @@ namespace MultiPurposeAuthSite.Models.Log
             }
         }
 
+        /// <summary>IsActive</summary>
         public bool IsActive
         {
             get
@@ -79,6 +90,10 @@ namespace MultiPurposeAuthSite.Models.Log
             }
         }
 
+        /// <summary>OnError</summary>
+        /// <param name="profiledDbCommand">IDbCommand</param>
+        /// <param name="executeType">SqlExecuteType</param>
+        /// <param name="exception">Exception</param>
         public void OnError(IDbCommand profiledDbCommand, SqlExecuteType executeType, Exception exception)
         {
             foreach (var item in profilers)
@@ -90,6 +105,8 @@ namespace MultiPurposeAuthSite.Models.Log
             }
         }
 
+        /// <summary>ReaderFinish</summary>
+        /// <param name="reader">IDataReader</param>
         public void ReaderFinish(IDataReader reader)
         {
             foreach (var item in profilers)

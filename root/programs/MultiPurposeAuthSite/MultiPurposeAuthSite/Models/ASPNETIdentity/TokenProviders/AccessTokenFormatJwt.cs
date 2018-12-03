@@ -45,16 +45,17 @@ using Microsoft.AspNet.Identity.Owin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
 {
     /// <summary>AccessTokenFormatJwt</summary>
     public class AccessTokenFormatJwt: ISecureDataFormat<AuthenticationTicket>
@@ -197,17 +198,17 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             JWS_RS256_X509 jwsRS256 = null;
 
             // JWT_RS256_X509
-            jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwsRS256 = new JWS_RS256_X509(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // JWSHeaderのセット
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
+                    RsaPublicKeyConverter.X509PfxToJwk(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             // 署名
             return jwsRS256.Create(json);
@@ -285,7 +286,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                 if (datetime == null)
                 {
                     // authToken.iss, authToken.expの検証
-                    if ((string)authTokenClaimSet[OAuth2AndOIDCConst.iss] == ASPNETIdentityConfig.OAuth2IssuerId
+                    if ((string)authTokenClaimSet[OAuth2AndOIDCConst.iss] == Config.OAuth2IssuerId
                         && OAuth2Helper.GetInstance().GetClientSecret((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]) != null
                         && long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.exp]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                     {

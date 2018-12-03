@@ -31,7 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
+using MultiPurposeAuthSite.Co;
 
 using System;
 using System.Text;
@@ -51,7 +51,7 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util;
 
-namespace MultiPurposeAuthSite.Models.Util
+namespace MultiPurposeAuthSite.Network
 {
     /// <summary>WebAPIHelper（ライブラリ）</summary>
     public class WebAPIHelper
@@ -280,15 +280,15 @@ namespace MultiPurposeAuthSite.Models.Util
             string secretKey = "";
             Uri webApiEndpointUri = null;
 
-            if (ASPNETIdentityConfig.EnableStripe)
+            if (Config.EnableStripe)
             {
                 webApiEndpointUri = new Uri("https://api.stripe.com/v1/customers");
-                secretKey = ASPNETIdentityConfig.Stripe_SK + ":";
+                secretKey = Config.Stripe_SK + ":";
             }
-            else if (ASPNETIdentityConfig.EnablePAYJP)
+            else if (Config.EnablePAYJP)
             {
                 webApiEndpointUri = new Uri("https://api.pay.jp/v1/customers");
-                secretKey = ASPNETIdentityConfig.PAYJP_SK + ":"; // 「:」はUID:PWDの「:」
+                secretKey = Config.PAYJP_SK + ":"; // 「:」はUID:PWDの「:」
             }
             else
             {
@@ -311,7 +311,7 @@ namespace MultiPurposeAuthSite.Models.Util
                 OAuth2AndOIDCConst.Basic,
                 CustomEncode.ToBase64String(CustomEncode.StringToByte(secretKey, CustomEncode.us_ascii)));
 
-            if (ASPNETIdentityConfig.EnableStripe)
+            if (Config.EnableStripe)
             {
                 httpRequestMessage.Content = new FormUrlEncodedContent(
                     new Dictionary<string, string>
@@ -320,7 +320,7 @@ namespace MultiPurposeAuthSite.Models.Util
                         { "source", token }
                     });
             }
-            else if (ASPNETIdentityConfig.EnablePAYJP)
+            else if (Config.EnablePAYJP)
             {
                 httpRequestMessage.Content = new FormUrlEncodedContent(
                     new Dictionary<string, string>
@@ -352,15 +352,15 @@ namespace MultiPurposeAuthSite.Models.Util
             string secretKey = "";
             Uri webApiEndpointUri = null;
 
-            if (ASPNETIdentityConfig.EnableStripe)
+            if (Config.EnableStripe)
             {
                 webApiEndpointUri = new Uri("https://api.stripe.com/v1/charges");
-                secretKey = ASPNETIdentityConfig.Stripe_SK;
+                secretKey = Config.Stripe_SK;
             }
-            else if (ASPNETIdentityConfig.EnablePAYJP)
+            else if (Config.EnablePAYJP)
             {
                 webApiEndpointUri = new Uri("https://api.pay.jp/v1/charges");
-                secretKey = ASPNETIdentityConfig.PAYJP_SK + ":"; // 「:」はUID:PWDの「:」
+                secretKey = Config.PAYJP_SK + ":"; // 「:」はUID:PWDの「:」
             }
             else
             {

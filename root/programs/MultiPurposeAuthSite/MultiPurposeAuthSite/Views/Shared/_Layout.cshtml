@@ -26,9 +26,9 @@
 @using Microsoft.AspNet.Identity.Owin
 
 @using MultiPurposeAuthSite.Resources
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
-@using Manager = MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
+@using MultiPurposeAuthSite.Co
+@using Manager = MultiPurposeAuthSite.Manager
+@using MultiPurposeAuthSite.Entity
 
 
 @{
@@ -59,7 +59,7 @@
         }
 
 
-        canShowAdminScreen = (roles.Where(x => x == ASPNETIdentityConst.Role_SystemAdmin).Any());
+        canShowAdminScreen = (roles.Where(x => x == Const.Role_SystemAdmin).Any());
     }
 
     #endregion

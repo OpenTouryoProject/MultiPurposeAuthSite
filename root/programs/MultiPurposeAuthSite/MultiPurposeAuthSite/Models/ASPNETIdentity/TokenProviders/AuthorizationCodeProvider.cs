@@ -31,9 +31,11 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.Util;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Co;   
+using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter;
 
 using System;
 using System.IO;
@@ -56,7 +58,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
 {
     /// <summary>
     /// AuthorizationCodeのProvider
@@ -131,7 +133,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             
             string value = JsonConvert.SerializeObject(temp);
 
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     _authenticationCodes[context.Token] = value;
@@ -145,7 +147,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -218,7 +220,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
             }
 
             string value = "";
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     if (_authenticationCodes.TryRemove(context.Token, out value))
@@ -235,7 +237,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -366,7 +368,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
         {
             string value = "";
 
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     if (_authenticationCodes.TryGetValue(code, out value))
@@ -382,7 +384,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.TokenProviders
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 

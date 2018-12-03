@@ -18,17 +18,20 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.Log;
-using MultiPurposeAuthSite.Models.Util;
 using MultiPurposeAuthSite.Models.ViewModels;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.ExternalLoginHelper;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.OAuth2Extension;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.FIDO2Extension;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
+
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Network;
+using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Notification;
+using MultiPurposeAuthSite.Util;
+
+using MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper;
+using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.ASPNETIdentity.FIDO2Extension;
 
 using System;
 using System.Collections.Generic;
@@ -55,7 +58,6 @@ using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
-using Touryo.Infrastructure.Public.Util;
 
 using Facebook;
 
@@ -198,7 +200,7 @@ namespace MultiPurposeAuthSite.Controllers
             Session["fido2Challenge"] = fido2Challenge;
 
             // サインアップしたユーザを取得
-            if (ASPNETIdentityConfig.RequireUniqueEmail)
+            if (Config.RequireUniqueEmail)
             {
                 return View(new AccountLoginViewModel
                 {
@@ -243,7 +245,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         string uid = "";
                         // サインアップしたユーザを取得
-                        if (ASPNETIdentityConfig.RequireUniqueEmail)
+                        if (Config.RequireUniqueEmail)
                         {
                             uid = model.Email;
                         }
@@ -270,7 +272,7 @@ namespace MultiPurposeAuthSite.Controllers
                                                         userName: uid,                                                    // アカウント(UID)
                                                         password: model.Password,                                         // アカウント(PWD)
                                                         isPersistent: model.RememberMe,                                   // アカウント記憶
-                                                        shouldLockout: ASPNETIdentityConfig.UserLockoutEnabledByDefault); // ロックアウト
+                                                        shouldLockout: Config.UserLockoutEnabledByDefault); // ロックアウト
 
                                 // SignInStatus
                                 switch (result)
@@ -281,7 +283,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         // テスト機能でSession["state"]のチェックを止めたので不要になった。
                                         // また、ManageControllerの方はログイン済みアクセスになるので。
 
-                                        //if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+                                        //if (Config.IsLockedDownRedirectEndpoint)
                                         //{
 
                                         // AppScan指摘の反映
@@ -301,7 +303,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                         // Open-Redirect対策
                                         if (!string.IsNullOrEmpty(model.ReturnUrl)
-                                            && ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
+                                            && Config.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
                                         {
                                             return RedirectToLocal(model.ReturnUrl);
                                         }
@@ -358,7 +360,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     string uid = "";
                     // サインアップしたユーザを取得
-                    if (ASPNETIdentityConfig.RequireUniqueEmail)
+                    if (Config.RequireUniqueEmail)
                     {
                         uid = model.Email;
                     }
@@ -369,8 +371,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 認可エンドポイント
                     string oAuthAuthorizeEndpoint =
-                    ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuth2AuthorizeEndpoint;
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + Config.OAuth2AuthorizeEndpoint;
 
                     // client_id
                     string client_id = OAuth2AndOIDCParams.ClientID;
@@ -385,10 +387,10 @@ namespace MultiPurposeAuthSite.Controllers
                     Session["id_federation_signin_nonce"] = state;
 
                     // ID連携に必要なscope
-                    string scope = ASPNETIdentityConst.IdFederationScopes;
+                    string scope = Const.IdFederationScopes;
 
                     return Redirect(
-                        ASPNETIdentityConfig.IdFederationAuthorizeEndPoint +
+                        Config.IdFederationAuthorizeEndPoint +
                         "?client_id=" + client_id +
                         "&response_type=code" +
                         "&scope=" + scope +
@@ -462,7 +464,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     // テスト機能でSession["state"]のチェックを止めたので不要になった。
                                     // また、ManageControllerの方はログイン済みアクセスになるので。
 
-                                    //if (ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+                                    //if (Config.IsLockedDownRedirectEndpoint)
                                     //{
 
                                     // AppScan指摘の反映
@@ -482,7 +484,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // Open-Redirect対策
                                     if (!string.IsNullOrEmpty(model.ReturnUrl)
-                                        && ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
+                                        && Config.OAuth2AuthorizationServerEndpointsRootURI.IndexOf(model.ReturnUrl) != 1)
                                     {
                                         return RedirectToLocal(model.ReturnUrl);
                                     }
@@ -573,7 +575,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> Register()
         {
-            if (ASPNETIdentityConfig.EnableSignupProcess)
+            if (Config.EnableSignupProcess)
             {
                 // データの生成
                 await this.CreateData();
@@ -599,7 +601,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> Register(AccountRegisterViewModel model)
         {
-            if (ASPNETIdentityConfig.EnableSignupProcess)
+            if (Config.EnableSignupProcess)
             {
                 // AccountRegisterViewModelの検証
                 if (ModelState.IsValid)
@@ -608,7 +610,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     string uid = "";
                     // サインアップしたユーザを取得
-                    if (ASPNETIdentityConfig.RequireUniqueEmail)
+                    if (Config.RequireUniqueEmail)
                     {
                         // model.Emailはチェック済み。
                         uid = model.Email;
@@ -649,11 +651,11 @@ namespace MultiPurposeAuthSite.Controllers
                             // ロールに追加。
                             if (result.Succeeded)
                             {
-                                await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
-                                await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
+                                await this.UserManager.AddToRoleAsync(user.Id, Const.Role_User);
+                                await this.UserManager.AddToRoleAsync(user.Id, Const.Role_Admin);
                             }
 
-                            if (ASPNETIdentityConfig.RequireUniqueEmail)
+                            if (Config.RequireUniqueEmail)
                             {
                                 // サインインの前にメアド検証用のメールを送信して、
                                 this.SendConfirmEmail(user);
@@ -663,7 +665,7 @@ namespace MultiPurposeAuthSite.Controllers
                             }
                             else
                             {
-                                if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                                if (Config.DisplayAgreementScreen)
                                 {
                                     // 約款あり
                                     // 約款画面を表示
@@ -750,7 +752,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         if (result.Succeeded)
                                         {
                                             // メアド検証の再送について
-                                            if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                            if (Config.RequireUniqueEmail)
                                             {
                                                 // 再度、メアド検証
 
@@ -763,7 +765,7 @@ namespace MultiPurposeAuthSite.Controllers
                                             }
                                             else
                                             {
-                                                if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                                                if (Config.DisplayAgreementScreen)
                                                 {
                                                     // 約款あり
                                                     // 約款画面を表示
@@ -857,7 +859,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                if (ASPNETIdentityConfig.DisplayAgreementScreen)
+                if (Config.DisplayAgreementScreen)
                 {
                     //　約款あり
 
@@ -927,14 +929,14 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> EmailConfirmation(AccountAgreementViewModel model)
         {
-            if (ASPNETIdentityConfig.DisplayAgreementScreen)
+            if (Config.DisplayAgreementScreen)
             {
                 // AccountAgreementViewModelの検証
                 if (ModelState.IsValid)
                 {
                     // AccountAgreementViewModelの検証に成功
 
-                    if (ASPNETIdentityConfig.RequireUniqueEmail)
+                    if (Config.RequireUniqueEmail)
                     {
                         if (model.AcceptedAgreement)
                         {
@@ -1497,8 +1499,8 @@ namespace MultiPurposeAuthSite.Controllers
                             JObject myInfo = await WebAPIHelper.GetInstance().GetTwitterAccountInfo(
                                 "include_email=true",
                                 access_token, access_secret,
-                                ASPNETIdentityConfig.TwitterAuthenticationClientId,
-                                ASPNETIdentityConfig.TwitterAuthenticationClientSecret);
+                                Config.TwitterAuthenticationClientId,
+                                Config.TwitterAuthenticationClientSecret);
 
                             email = (string)myInfo[OAuth2AndOIDCConst.Scope_Email]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
                             emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
@@ -1512,7 +1514,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #endregion
 
                     string uid = "";
-                    if (ASPNETIdentityConfig.RequireUniqueEmail)
+                    if (Config.RequireUniqueEmail)
                     {
                         uid = email;
                     }
@@ -1575,7 +1577,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // サインアップ済み → 外部ログイン追加だけで済む
 
                                 // 外部ログイン（ = UserLoginInfo ）の追加
-                                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                                if (Config.RequireUniqueEmail)
                                 {
                                     result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
                                 }
@@ -1749,7 +1751,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> IDFederationRedirectEndPoint(string code, string state)
         {
-            if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownRedirectEndpoint)
             {
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -1774,12 +1776,12 @@ namespace MultiPurposeAuthSite.Controllers
                     #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                     // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri = ASPNETIdentityConfig.IdFederationRedirectEndPoint;
+                    string redirect_uri = Config.IdFederationRedirectEndPoint;
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await OAuth2Helper.GetInstance()
                         .GetAccessTokenByCodeAsync(
-                             new Uri(ASPNETIdentityConfig.IdFederationTokenEndPoint),
+                             new Uri(Config.IdFederationTokenEndPoint),
                             client_id, client_secret, redirect_uri, code, "");
 
                     #endregion
@@ -1822,7 +1824,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region /userinfoエンドポイント
                     //// /userinfoエンドポイントにアクセスする場合
                     //string response = await OAuth2AndOIDCClient.CallUserInfoEndpointAsync(
-                    //    new Uri(ASPNETIdentityConfig.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
+                    //    new Uri(Config.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
 
                     #region ユーザの登録・更新
@@ -2208,12 +2210,12 @@ namespace MultiPurposeAuthSite.Controllers
 
             #endregion
 
-            if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownRedirectEndpoint)
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
+                Config.OAuth2AuthorizationServerEndpointsRootURI
+                + Config.OAuth2BearerTokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -2237,8 +2239,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 仲介コードからAccess Tokenを取得する。
                     string redirect_uri
-                    = ASPNETIdentityConfig.OAuth2ClientEndpointsRootURI
-                    + ASPNETIdentityConfig.OAuth2AuthorizationCodeGrantClient_Account;
+                    = Config.OAuth2ClientEndpointsRootURI
+                    + Config.OAuth2AuthorizationCodeGrantClient_Account;
 
                     // Tokenエンドポイントにアクセス
                     if (!state.StartsWith("fapi1:"))
@@ -2264,8 +2266,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // FAPI1
 
                         // Tokenエンドポイントにアクセス
-                        string aud = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                                 + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint;
+                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
+                                 + Config.OAuth2BearerTokenEndpoint;
 
                         // ClientNameから、client_id(iss)を取得。
                         string iss = "";
@@ -2279,7 +2281,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         model.Response = await OAuth2Helper.GetInstance().GetAccessTokenByCodeAsync(
                             tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                                iss, aud, new TimeSpan(0, 0, 30), ASPNETIdentityConst.StandardScopes, privateKey));
+                                iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
                     }
 
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
@@ -2357,7 +2359,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
         {
-            if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownRedirectEndpoint)
             {
                 // AccountVerifyCodeViewModelの検証
                 if (ModelState.IsValid)
@@ -2375,8 +2377,8 @@ namespace MultiPurposeAuthSite.Controllers
                         #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                         Uri tokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuth2BearerTokenEndpoint);
+                            Config.OAuth2AuthorizationServerEndpointsRootURI
+                            + Config.OAuth2BearerTokenEndpoint);
 
                         // Tokenエンドポイントにアクセス
 
@@ -2425,8 +2427,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         Uri revokeTokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuth2RevokeTokenWebAPI);
+                            Config.OAuth2AuthorizationServerEndpointsRootURI
+                            + Config.OAuth2RevokeTokenWebAPI);
 
                         // Revokeエンドポイントにアクセス
 
@@ -2461,8 +2463,8 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         Uri introspectTokenEndpointUri = new Uri(
-                            ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI
-                            + ASPNETIdentityConfig.OAuth2IntrospectTokenWebAPI);
+                            Config.OAuth2AuthorizationServerEndpointsRootURI
+                            + Config.OAuth2IntrospectTokenWebAPI);
 
                         // Introspectエンドポイントにアクセス
 
@@ -2512,7 +2514,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult OAuth2ImplicitGrantClient()
         {
-            if (!ASPNETIdentityConfig.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownRedirectEndpoint)
             {
                 // ココでstateの検証を予定していたが、コメントヘッダに有るように、ココでは実装できなかった。
                 // stateは、JWTにnonce Claimとして格納してあるため、必要であれば、UserAgent側で検証できる。
@@ -2718,7 +2720,7 @@ namespace MultiPurposeAuthSite.Controllers
                     return; // break;
                 }
 
-                if (ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.Memory)
+                if (Config.UserStoreType == EnumUserStoreType.Memory)
                 {
                     // Memory Providerの場合、
                     if (AccountController.HasCreated)
@@ -2731,9 +2733,9 @@ namespace MultiPurposeAuthSite.Controllers
                         AccountController.HasCreated = true; // 初期化済みに変更。
                     }
                 }
-                else if (ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.SqlServer
-                    || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.ODPManagedDriver
-                    || ASPNETIdentityConfig.UserStoreType == EnumUserStoreType.PostgreSQL)
+                else if (Config.UserStoreType == EnumUserStoreType.SqlServer
+                    || Config.UserStoreType == EnumUserStoreType.ODPManagedDriver
+                    || Config.UserStoreType == EnumUserStoreType.PostgreSQL)
                 {
                     // DBMS Providerの場合、
                     if (await UserStore.IsDBMSInitialized())
@@ -2750,30 +2752,30 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region ロール
 
-                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = ASPNETIdentityConst.Role_SystemAdmin });
-                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = ASPNETIdentityConst.Role_Admin });
-                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = ASPNETIdentityConst.Role_User });
+                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_SystemAdmin });
+                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_Admin });
+                await this.RoleManager.CreateAsync(new ApplicationRole() { Name = Const.Role_User });
 
                 #endregion
 
                 #region 管理者ユーザ
 
-                user =  ApplicationUser.CreateUser(ASPNETIdentityConfig.AdministratorUID, true);
-                result = await this.UserManager.CreateAsync(user, ASPNETIdentityConfig.AdministratorPWD);
+                user =  ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                result = await this.UserManager.CreateAsync(user, Config.AdministratorPWD);
                 if (result.Succeeded)
                 {
-                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_SystemAdmin);
-                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_User);
-                    await this.UserManager.AddToRoleAsync(user.Id, ASPNETIdentityConst.Role_Admin);
+                    await this.UserManager.AddToRoleAsync(user.Id, Const.Role_SystemAdmin);
+                    await this.UserManager.AddToRoleAsync(user.Id, Const.Role_User);
+                    await this.UserManager.AddToRoleAsync(user.Id, Const.Role_Admin);
                 }
 
                 #endregion
 
                 #region テスト・ユーザ
 
-                string password = ASPNETIdentityConfig.TestUserPWD;
+                string password = Config.TestUserPWD;
 
-                if (ASPNETIdentityConfig.IsDebug
+                if (Config.IsDebug
                     && !string.IsNullOrWhiteSpace(password))
                 {
                     // 管理者ユーザを作成
@@ -2783,9 +2785,9 @@ namespace MultiPurposeAuthSite.Controllers
                     if (result.Succeeded)
                     {
                         await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_User);
+                            (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, Const.Role_User);
                         await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_Admin);
+                            (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, Const.Role_Admin);
                     }
 
                     // 一般ユーザを作成
@@ -2794,7 +2796,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (result.Succeeded)
                     {
                         await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("tanaka@gmail.com")).Id, ASPNETIdentityConst.Role_User);
+                            (await this.UserManager.FindByNameAsync("tanaka@gmail.com")).Id, Const.Role_User);
                     }
                     
                 }

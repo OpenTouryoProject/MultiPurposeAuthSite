@@ -18,11 +18,11 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Web.Mvc;
-
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -38,7 +38,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>Name</summary>
         [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            ASPNETIdentityConst.MaxLengthOfUserName,
+            Const.MaxLengthOfUserName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string Name { get; set; }

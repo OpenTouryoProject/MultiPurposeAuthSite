@@ -35,12 +35,12 @@ using System;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util;
 
 using Touryo.Infrastructure.Public.Log;
 
-namespace MultiPurposeAuthSite.Models.Log
+namespace MultiPurposeAuthSite.Log
 {
     /// <summary>Logging</summary>
     /// <remarks>
@@ -54,13 +54,13 @@ namespace MultiPurposeAuthSite.Models.Log
         public static void MyDebugTrace(string log)
         {
             // デバッグ時にログ出力
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 Debug.WriteLine(log);
             }
 
             // プロビジョニング、プロダクト環境
-            if (ASPNETIdentityConfig.EnabeDebugTraceLog)
+            if (Config.EnabeDebugTraceLog)
             {
                 LogIF.DebugLog("ACCESS", log);
             }
@@ -70,7 +70,7 @@ namespace MultiPurposeAuthSite.Models.Log
         /// <param name="log">string</param>
         public static void MyDebugLogForEx(Exception ex)
         {
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 // デバッグ時
                 Debug.WriteLine(ex.ToString());
@@ -90,13 +90,13 @@ namespace MultiPurposeAuthSite.Models.Log
         public static void MyDebugSQLTrace(string log)
         {
             // デバッグ時
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 Debug.WriteLine(log);
             }
 
             // プロビジョニング、プロダクト環境
-            if (ASPNETIdentityConfig.EnabeDebugTraceLog)
+            if (Config.EnabeDebugTraceLog)
             {
                 LogIF.DebugLog("SQLTRACE", log);
             }
@@ -106,7 +106,7 @@ namespace MultiPurposeAuthSite.Models.Log
         /// <param name="log">string</param>
         public static void MySQLLogForEx(Exception ex)
         {
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 // デバッグ時
                 Debug.WriteLine(ex.ToString());
@@ -134,7 +134,7 @@ namespace MultiPurposeAuthSite.Models.Log
         /// <param name="log">string</param>
         public static void MyOperationTrace(string log)
         {
-            if (ASPNETIdentityConfig.IsDebug)
+            if (Config.IsDebug)
             {
                 // デバッグ時
                 Debug.WriteLine(log);
@@ -148,6 +148,5 @@ namespace MultiPurposeAuthSite.Models.Log
             }
         }
         #endregion
-
     }
 }

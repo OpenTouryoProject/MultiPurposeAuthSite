@@ -33,9 +33,9 @@
 
 using System;
 using System.Net;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
+using MultiPurposeAuthSite.Co;
 
-namespace MultiPurposeAuthSite.Models.Util
+namespace MultiPurposeAuthSite.Network
 {
     /// <summary>ProxyType</summary>
     public enum EnumProxyType
@@ -58,15 +58,15 @@ namespace MultiPurposeAuthSite.Models.Util
             IWebProxy proxy = null;
             NetworkCredential proxyCredentials = null;
 
-            if (ASPNETIdentityConfig.UseInternetProxy)
+            if (Config.UseInternetProxy)
             {
-                proxy = new WebProxy(new Uri(ASPNETIdentityConfig.InternetProxyURL));
+                proxy = new WebProxy(new Uri(Config.InternetProxyURL));
 
-                if (!string.IsNullOrEmpty(ASPNETIdentityConfig.InternetProxyUID))
+                if (!string.IsNullOrEmpty(Config.InternetProxyUID))
                 {
                     proxyCredentials = new NetworkCredential(
-                                                ASPNETIdentityConfig.InternetProxyUID,
-                                                ASPNETIdentityConfig.InternetProxyPWD);
+                                                Config.InternetProxyUID,
+                                                Config.InternetProxyPWD);
 
                     proxy.Credentials = proxyCredentials;
                 }
@@ -85,15 +85,15 @@ namespace MultiPurposeAuthSite.Models.Util
             IWebProxy proxy = null;
             NetworkCredential proxyCredentials = null;
 
-            if (ASPNETIdentityConfig.UseIntranetProxy)
+            if (Config.UseIntranetProxy)
             {
-                proxy = new WebProxy(new Uri(ASPNETIdentityConfig.IntranetProxyURL));
+                proxy = new WebProxy(new Uri(Config.IntranetProxyURL));
 
-                if (!string.IsNullOrEmpty(ASPNETIdentityConfig.IntranetProxyUID))
+                if (!string.IsNullOrEmpty(Config.IntranetProxyUID))
                 {
                     proxyCredentials = new NetworkCredential(
-                                                ASPNETIdentityConfig.IntranetProxyUID,
-                                                ASPNETIdentityConfig.IntranetProxyPWD);
+                                                Config.IntranetProxyUID,
+                                                Config.IntranetProxyPWD);
 
                     proxy.Credentials = proxyCredentials;
                 }
@@ -112,15 +112,15 @@ namespace MultiPurposeAuthSite.Models.Util
             IWebProxy proxy = null;
             NetworkCredential proxyCredentials = null;
 
-            if (ASPNETIdentityConfig.UseDebugProxy)
+            if (Config.UseDebugProxy)
             {
-                proxy = new WebProxy(new Uri(ASPNETIdentityConfig.DebugProxyURL));
+                proxy = new WebProxy(new Uri(Config.DebugProxyURL));
 
-                if (!string.IsNullOrEmpty(ASPNETIdentityConfig.DebugProxyUID))
+                if (!string.IsNullOrEmpty(Config.DebugProxyUID))
                 {
                     proxyCredentials = new NetworkCredential(
-                                                ASPNETIdentityConfig.DebugProxyUID,
-                                                ASPNETIdentityConfig.DebugProxyPWD);
+                                                Config.DebugProxyUID,
+                                                Config.DebugProxyPWD);
 
                     proxy.Credentials = proxyCredentials;
                 }

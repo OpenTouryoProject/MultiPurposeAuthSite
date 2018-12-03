@@ -18,14 +18,15 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Entity;
 
 using Microsoft.Owin;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.Manager</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+/// <summary>MultiPurposeAuthSite.Manager</summary>
+namespace MultiPurposeAuthSite.Manager
 {
     /// <summary>ApplicationRoleManager</summary>
     public class ApplicationRoleManager : RoleManager<ApplicationRole>

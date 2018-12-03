@@ -18,10 +18,12 @@
 //*  2017/05/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Entity;
+
+using MultiPurposeAuthSite.Co;
+
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels
@@ -32,7 +34,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>ユーザ名（検索条件）</summary>
         [Display(Name = "UserNameforSearch", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            ASPNETIdentityConst.MaxLengthOfUserName,
+            Const.MaxLengthOfUserName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         public string UserNameforSearch { get; set; }

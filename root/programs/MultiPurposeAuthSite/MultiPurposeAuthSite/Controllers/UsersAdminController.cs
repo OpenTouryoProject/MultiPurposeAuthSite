@@ -19,10 +19,10 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Models.ViewModels;
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Util;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Entity;
 
 using System.Linq;
 using System.Collections.Generic;
@@ -42,7 +42,7 @@ using Touryo.Infrastructure.Business.Presentation;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>UsersAdminController</summary>
-    //[Authorize(Roles = ASPNETIdentityConst.Role_Admin)] // 切替可能な実装箇所に移動
+    //[Authorize(Roles = Const.Role_Admin)] // 切替可能な実装箇所に移動
     public class UsersAdminController : MyBaseMVController
     {
         /// <summary>列挙型</summary>
@@ -63,12 +63,12 @@ namespace MultiPurposeAuthSite.Controllers
         #region 認証・認可系
 
         /// <summary>
-        /// [Authorize(Roles = ASPNETIdentityConst.Role_Admin)]の代替
+        /// [Authorize(Roles = Const.Role_Admin)]の代替
         /// ※ constructorでは動かないので、このように実装することになった。
         /// </summary>
         private void Authorize()
         {
-            if (ASPNETIdentityConfig.EnableAdministrationOfUsersAndRoles)
+            if (Config.EnableAdministrationOfUsersAndRoles)
             {
                 string uid = User.Identity.GetUserId();
 
@@ -80,7 +80,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     IList<string> roles = UserManager.GetRoles(User.Identity.GetUserId());
-                    if (roles.Any(x => x == ASPNETIdentityConst.Role_SystemAdmin))
+                    if (roles.Any(x => x == Const.Role_SystemAdmin))
                     {
                         return;
                     }
@@ -284,7 +284,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = null;
 
                 // （一般）ユーザを作成
-                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                if (Config.RequireUniqueEmail)
                 {
                     // userViewModel.Emailはチェック済み。
                     user = ApplicationUser.CreateUser(userViewModel.Email, true);
@@ -417,7 +417,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(editUser.Id);                
 
                 // 編集結果を反映
-                if (ASPNETIdentityConfig.RequireUniqueEmail)
+                if (Config.RequireUniqueEmail)
                 {
                     // userViewModel.Emailはチェック済み。
                     user.UserName = editUser.Email;

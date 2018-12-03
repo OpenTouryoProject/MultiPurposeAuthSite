@@ -38,7 +38,7 @@ using System.Globalization;
 using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.IO;
 
-namespace MultiPurposeAuthSite.Models.Util
+namespace MultiPurposeAuthSite.Util
 {
     /// <summary>Log</summary>
     public class GetContentOfLetter

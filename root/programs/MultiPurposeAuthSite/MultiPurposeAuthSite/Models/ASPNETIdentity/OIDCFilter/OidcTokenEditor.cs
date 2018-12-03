@@ -31,6 +31,8 @@
 //*  2018/02/05  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -45,7 +47,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
+namespace MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter
 {
     /// <summary>OIDC用のtoken編集処理クラス</summary>
     /// <remarks>
@@ -170,22 +172,22 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.OIDCFilter
             JWS_RS256_X509 jwsRS256 = null;
 
             // 署名
-            jwsRS256 = new JWS_RS256_X509(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword,
+            jwsRS256 = new JWS_RS256_X509(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // JWSHeaderのセット
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(ASPNETIdentityConfig.OAuth2JWT_pfx, ASPNETIdentityConfig.OAuth2JWTPassword));
+                    RsaPublicKeyConverter.X509PfxToJwk(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = ASPNETIdentityConfig.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
             return jwsRS256.Create(json);
 
             //// 検証
-            //jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, ASPNETIdentityConfig.OAuth2JWTPassword,
+            //jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, Config.OAuth2JWTPassword,
             //    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             //if (jwsRS256.Verify(jws))

@@ -31,7 +31,8 @@
 //*  2017/06/07  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.Util;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Co;
 
 using System;
 using System.Data;
@@ -43,7 +44,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
+namespace MultiPurposeAuthSite.Util
 {
     /// <summary>CustomizedConfirmationData</summary>
     public class CustomizedConfirmationJson
@@ -90,7 +91,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
         {
             string json = JsonConvert.SerializeObject(customizedConfirmationJson);
 
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
 
@@ -109,7 +110,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -157,7 +158,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
             isExpired = false;
             CustomizedConfirmationJson customizedConfirmationJson = null;
 
-            switch (ASPNETIdentityConfig.UserStoreType)
+            switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
 
@@ -191,7 +192,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
                     {
                         cnn.Open();
 
-                        switch (ASPNETIdentityConfig.UserStoreType)
+                        switch (Config.UserStoreType)
                         {
                             case EnumUserStoreType.SqlServer:
 
@@ -227,7 +228,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Util
 
                     // 有効期限のチェック
                     customizedConfirmationRet = customizedConfirmationRets.AsList()[0];
-                    if (DateTime.Now <= customizedConfirmationRet.CreatedDate.Add(ASPNETIdentityConfig.EmailConfirmationTokenLifespanFromHours))
+                    if (DateTime.Now <= customizedConfirmationRet.CreatedDate.Add(Config.EmailConfirmationTokenLifespanFromHours))
                     {
                         customizedConfirmationJson = (CustomizedConfirmationJson)JsonConvert.DeserializeObject<CustomizedConfirmationJson>(customizedConfirmationRet.Value);
                         if (code == customizedConfirmationJson.Code)

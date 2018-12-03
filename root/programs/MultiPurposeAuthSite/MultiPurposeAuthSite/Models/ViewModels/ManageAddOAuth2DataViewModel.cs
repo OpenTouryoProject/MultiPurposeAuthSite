@@ -18,7 +18,7 @@
 //*  2017/06/07  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
+using MultiPurposeAuthSite.Co;
 
 using System.ComponentModel.DataAnnotations;
 
@@ -48,7 +48,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Display(Name = "RedirectUriCode", ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
-            ASPNETIdentityConst.MaxLengthOfUri,
+            Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_code")]
@@ -58,7 +58,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         [Display(Name = "RedirectUriToken", ResourceType = typeof(Resources.CommonViewModels))]
         //[Url] localhost や IPアドレスが入力できない。
         [StringLength(
-            ASPNETIdentityConst.MaxLengthOfUri,
+            Const.MaxLengthOfUri,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_token")]
@@ -72,7 +72,7 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         /// <summary>ClientName</summary>
         [Display(Name = "ClientName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
-            ASPNETIdentityConst.MaxLengthOfClientName,
+            Const.MaxLengthOfClientName,
             ErrorMessageResourceName = "MaxLengthErrMsg",
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = OAuth2AndOIDCConst.sub)]

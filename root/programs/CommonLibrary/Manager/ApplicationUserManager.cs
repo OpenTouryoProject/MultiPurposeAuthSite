@@ -18,16 +18,18 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
-using MultiPurposeAuthSite.Models.ASPNETIdentity.NotificationProvider;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Notification;
+using MultiPurposeAuthSite.Co;
 
 using Microsoft.Owin;
 using Microsoft.Owin.Security.DataProtection;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
-/// <summary>MultiPurposeAuthSite.Models.ASPNETIdentity.Manager</summary>
-namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
+/// <summary>MultiPurposeAuthSite.Manager</summary>
+namespace MultiPurposeAuthSite.Manager
 {
     /// <summary>
     /// ApplicationUserManager
@@ -71,8 +73,8 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
             manager.UserValidator = new UserValidator<ApplicationUser>(manager)
             {
                 // ユーザ名は、E-mail
-                AllowOnlyAlphanumericUserNames = ASPNETIdentityConfig.AllowOnlyAlphanumericUserNames,
-                RequireUniqueEmail = ASPNETIdentityConfig.RequireUniqueEmail
+                AllowOnlyAlphanumericUserNames = Config.AllowOnlyAlphanumericUserNames,
+                RequireUniqueEmail = Config.RequireUniqueEmail
             };
 
             #endregion
@@ -90,11 +92,11 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
                 //    RequireLowercase = true,
                 //    RequireUppercase = true,
                 
-                RequiredLength = ASPNETIdentityConfig.RequiredLength,
-                RequireNonLetterOrDigit = ASPNETIdentityConfig.RequireNonLetterOrDigit,
-                RequireDigit = ASPNETIdentityConfig.RequireDigit,
-                RequireLowercase = ASPNETIdentityConfig.RequireLowercase,
-                RequireUppercase = ASPNETIdentityConfig.RequireUppercase
+                RequiredLength = Config.RequiredLength,
+                RequireNonLetterOrDigit = Config.RequireNonLetterOrDigit,
+                RequireDigit = Config.RequireDigit,
+                RequireLowercase = Config.RequireLowercase,
+                RequireUppercase = Config.RequireUppercase
             };
 
             #endregion
@@ -110,9 +112,9 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
             //manager.DefaultAccountLockoutTimeSpan = TimeSpan.FromMinutes(5);
             //manager.MaxFailedAccessAttemptsBeforeLockout = 5;
 
-            manager.UserLockoutEnabledByDefault = ASPNETIdentityConfig.UserLockoutEnabledByDefault;
-            manager.DefaultAccountLockoutTimeSpan = ASPNETIdentityConfig.DefaultAccountLockoutTimeSpanFromSeconds;
-            manager.MaxFailedAccessAttemptsBeforeLockout = ASPNETIdentityConfig.MaxFailedAccessAttemptsBeforeLockout;
+            manager.UserLockoutEnabledByDefault = Config.UserLockoutEnabledByDefault;
+            manager.DefaultAccountLockoutTimeSpan = Config.DefaultAccountLockoutTimeSpanFromSeconds;
+            manager.MaxFailedAccessAttemptsBeforeLockout = Config.MaxFailedAccessAttemptsBeforeLockout;
 
             #endregion
 
@@ -170,7 +172,7 @@ namespace MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
                 manager.UserTokenProvider =
                     new DataProtectorTokenProvider<ApplicationUser>(dataProtectionProvider.Create("ASP.NET Identity"))
                     {
-                        TokenLifespan = ASPNETIdentityConfig.EmailConfirmationTokenLifespanFromHours,
+                        TokenLifespan = Config.EmailConfirmationTokenLifespanFromHours,
                     };
             }
 

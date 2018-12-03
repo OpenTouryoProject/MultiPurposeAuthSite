@@ -26,9 +26,9 @@
 
 @using MultiPurposeAuthSite.Resources;
 @using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity;
-@using Manager = MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
+@using MultiPurposeAuthSite.Co;
+@using Manager = MultiPurposeAuthSite.Manager
+@using MultiPurposeAuthSite.Entity
 
 @model ManageIndexViewModel
 @{
@@ -61,8 +61,8 @@
 
         foreach (string role in roles)
         {
-            if (role == ASPNETIdentityConst.Role_SystemAdmin
-                || role == ASPNETIdentityConst.Role_Admin)
+            if (role == Const.Role_SystemAdmin
+                || role == Const.Role_Admin)
             {
                 // サインアップしていないユーザは使用不可
                 canShowOAuthScreen = true;
@@ -85,10 +85,10 @@
         <h4>@ManageViews.IndexH4</h4>
         <hr />
         <dl class="dl-horizontal">
-@if (ASPNETIdentityConfig.AllowEditingUserName)
+@if (Config.AllowEditingUserName)
 {
     // UserNameの変更が許可されている場合。
-    if (ASPNETIdentityConfig.RequireUniqueEmail)
+    if (Config.RequireUniqueEmail)
     {
             // UserName＝メアドの場合
             <dt>Email :</dt>
@@ -123,14 +123,14 @@ else
                 ]
             </dd>
 
-@if (ASPNETIdentityConfig.RequireUniqueEmail)
+@if (Config.RequireUniqueEmail)
 {
     // UserName＝メアドの場合
 }
 else
 {
     // UserName≠メアドの場合（のメアド追加
-    if (ASPNETIdentityConfig.CanEditEmail)
+    if (Config.CanEditEmail)
     {
         // メアドの変更が許可されている場合。
 
@@ -159,7 +159,7 @@ else
     }
 }
 
-@if (ASPNETIdentityConfig.CanEditPhone)
+@if (Config.CanEditPhone)
 {
     // 電話番号の変更が許可されている場合。
 
@@ -190,7 +190,7 @@ else
     // 電話番号の変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEdit2FA)
+@if (Config.CanEdit2FA)
 {
     // 2要素認証の変更が許可されている場合。
             <dt>@ManageViews.IndexTwoFactorAuth :</dt>
@@ -222,7 +222,7 @@ else
     // 2要素認証の変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditExtLogin)
+@if (Config.CanEditExtLogin)
 {
     // 外部ログインの変更が許可されている場合。
             <dt>@ManageViews.IndexExternalLogins :</dt>
@@ -235,7 +235,7 @@ else
     // 外部ログインの変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditPayment)
+@if (Config.CanEditPayment)
 {
     // 支払い元情報の変更が許可されている場合。
 
@@ -260,7 +260,7 @@ else
                         <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn-link" />]</text>
                 }
 
-                if (ASPNETIdentityConfig.IsDebug)
+                if (Config.IsDebug)
                 {
                     using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                     {
@@ -277,7 +277,7 @@ else
     // 支払い元情報の変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditUnstructuredData)
+@if (Config.CanEditUnstructuredData)
 {
     // 非構造化データの変更が許可されていない場合。
             <dt>@ManageViews.IndexUnstructuredData :</dt>
@@ -307,7 +307,7 @@ else
     // 非構造化データの変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditOAuth2Data && canShowOAuthScreen)
+@if (Config.CanEditOAuth2Data && canShowOAuthScreen)
 {
     // OAuth2データの変更が許可されている場合。
             <dt>EditOAuth2Data :</dt>
@@ -341,7 +341,7 @@ else
     // OAuth2データの変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditFIDO2Data)
+@if (Config.CanEditFIDO2Data)
 {
     // FIDO2データの変更が許可されている場合。
             <dt>EditFIDO2Data :</dt>
@@ -368,7 +368,7 @@ else
     // FIDO2データの変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanUseGdprFunction)
+@if (Config.CanUseGdprFunction)
 {
     // GDPR 個人情報管理が許可されている場合。
             <dt>ManageGdprData :</dt>
