@@ -17,15 +17,15 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>net46\bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <OutputPath>bin\netfx\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;NETFX</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>net46\bin\Release\</OutputPath>
+    <OutputPath>bin\netfx\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -168,7 +168,7 @@
     <Compile Include="Manager\ApplicationRoleManager.cs" />
     <Compile Include="Manager\ApplicationSignInManager.cs" />
     <Compile Include="Manager\ApplicationUserManager.cs" />
-    <Compile Include="Manager\CustomPasswordHasher.cs" />
+    <Compile Include="Password\CustomPasswordHasher.cs" />
     <Compile Include="Notification\EmailService.cs" />
     <Compile Include="Notification\SmsService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -19,13 +19,21 @@
 //**********************************************************************************
 
 using System;
+#if NETFX
 using Microsoft.AspNet.Identity;
+#else
+using Microsoft.AspNetCore.Identity;
+#endif
 
 /// <summary>MultiPurposeAuthSite.Entity</summary>
 namespace MultiPurposeAuthSite.Entity
 {
     /// <summary>ApplicationRole</summary>
+#if NETFX
     public class ApplicationRole : IRole<string>
+#else
+    public class ApplicationRole
+#endif
     {
         /// <summary>constructor</summary>
         public ApplicationRole()

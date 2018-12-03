@@ -35,7 +35,12 @@ using MultiPurposeAuthSite.Co;
 
 using System;
 using System.Text;
+#if NETFX
 using System.Web.Mvc;
+#else
+using Microsoft.AspNetCore.Mvc.Rendering;
+#endif
+
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Cryptography;

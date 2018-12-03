@@ -19,6 +19,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Notification;
 using MultiPurposeAuthSite.Co;

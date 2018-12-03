@@ -36,7 +36,9 @@ using MultiPurposeAuthSite.Co;
 
 using System.Data;
 using System.Data.SqlClient;
+#if NETFX
 using Oracle.ManagedDataAccess.Client;
+# endif
 using Npgsql;
 
 using StackExchange.Profiling.Data;
@@ -48,7 +50,7 @@ namespace MultiPurposeAuthSite.Data
     /// <summary>DataAccessクラス</summary>
     public class DataAccess
     {
-        #region DB接続
+#region DB接続
 
         /// <summary>Connectionオブジェクト生成メソッド</summary>
         /// <returns>IDbConnection</returns>
@@ -62,11 +64,13 @@ namespace MultiPurposeAuthSite.Data
                         new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL")),
                         new TraceDbProfiler());
 
+#if NETFX
                 case EnumUserStoreType.ODPManagedDriver:
                     //return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP"));
                     return new ProfiledDbConnection(
                         new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP")),
                         new TraceDbProfiler());
+#endif
 
                 case EnumUserStoreType.PostgreSQL:
                     //return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));
@@ -79,10 +83,10 @@ namespace MultiPurposeAuthSite.Data
             }
         }
 
-        #endregion
+#endregion
 
-        #region その他の接続
+#region その他の接続
         // ・・・
-        #endregion
+#endregion
     }
 }

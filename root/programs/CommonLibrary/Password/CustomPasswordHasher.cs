@@ -32,26 +32,42 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
 
+#if NETFX
 using Microsoft.AspNet.Identity;
+#else
+using Microsoft.AspNetCore.Identity;
+#endif
 
 using Touryo.Infrastructure.Public.Security;
 
-/// <summary>MultiPurposeAuthSite.Manager</summary>
-namespace MultiPurposeAuthSite.Manager
+/// <summary>MultiPurposeAuthSite.Password</summary>
+namespace MultiPurposeAuthSite.Password
 {
 
     /// <summary>
     /// CustomPasswordHasher
     /// </summary>
+#if NETFX
     public class CustomPasswordHasher : IPasswordHasher
+#else
+    public class CustomPasswordHasher : IPasswordHasher<ApplicationUser>
+#endif
     {
         /// <summary>
         /// PasswordをHashedPasswordに変換する。
         /// </summary>
+#if NETFX
         /// <param name="password">password</param>
         /// <returns>hashedPassword</returns>
         public string HashPassword(string password)
+#else
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="password">password</param>
+        /// <returns>hashedPassword</returns>
+        public string HashPassword(ApplicationUser user, string password)
+#endif
         {
             //// $0$ バージョン
             //return this.V0HashAlgorithm(password);
@@ -111,11 +127,20 @@ namespace MultiPurposeAuthSite.Manager
         /// <summary>
         /// providedPasswordとhashedPasswordを比較検証する。
         /// </summary>
+#if NETFX
         /// <param name="hashedPassword">hashedPassword</param>
         /// <param name="providedPassword">providedPassword</param>
         /// <returns>検証結果</returns>
         public PasswordVerificationResult VerifyHashedPassword(
             string hashedPassword, string providedPassword)
+#else
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="hashedPassword">hashedPassword</param>
+        /// <param name="providedPassword">providedPassword</param>
+        /// <returns>検証結果</returns>
+        public PasswordVerificationResult VerifyHashedPassword(
+            ApplicationUser user, string hashedPassword, string providedPassword)
+#endif  
         {
             if (string.IsNullOrEmpty(hashedPassword))
             {

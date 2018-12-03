@@ -33,7 +33,7 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util;
 
@@ -131,12 +131,7 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 
         #region Memory Provider
-
-        #region メンバ（マスタ系データ）
-
-        // ユーザ属性（子エンティティ）は、
-        // ApplicationUserのPropertyを使用する。
-
+        
         /// <summary>ユーザ保存先</summary>
         public static List<ApplicationUser> _users { get; } = new List<ApplicationUser>();
 
@@ -145,9 +140,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ユーザとロールのリレーション</summary>
         public static List<Tuple<string, string>> _userRoleMap { get; } = new List<Tuple<string, string>>();
-
-        #endregion
-
+        
         #endregion
 
         #region DBMS Provider

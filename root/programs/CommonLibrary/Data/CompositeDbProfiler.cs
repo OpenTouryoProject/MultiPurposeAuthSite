@@ -45,29 +45,25 @@ namespace MultiPurposeAuthSite.Log
         /// <summary>DbProfilers</summary>
         readonly IDbProfiler[] profilers;
 
+        /// <summary>IsActive</summary>
+        public bool IsActive
+        {
+            get
+            {
+                return true;
+            }
+        }
+
         /// <summary>CompositeDbProfiler</summary>
         /// <param name="dbProfilers">IDbProfiler[]</param>
         public CompositeDbProfiler(params IDbProfiler[] dbProfilers)
         {
             this.profilers = dbProfilers;
         }
-
-        /// <summary>ExecuteFinish</summary>
-        /// <param name="profiledDbCommand">IDbCommand</param>
-        /// <param name="executeType">SqlExecuteType</param>
-        /// <param name="reader">DbDataReader</param>
-        public void ExecuteFinish(IDbCommand profiledDbCommand, SqlExecuteType executeType, DbDataReader reader)
-        {
-            foreach (var item in profilers)
-            {
-                if (item != null && item.IsActive)
-                {
-                    item.ExecuteFinish(profiledDbCommand, executeType, reader);
-                }
-            }
-        }
-
-        /// <summary>ExecuteStart</summary>
+        
+        /// <summary>
+        /// コマンドが開始された時に呼ばれる(ExecuteReaderとかExecuteNonQueryとか)
+        /// </summary>
         /// <param name="profiledDbCommand">IDbCommand</param>
         /// <param name="executeType">SqlExecuteType</param>
         public void ExecuteStart(IDbCommand profiledDbCommand, SqlExecuteType executeType)
@@ -78,15 +74,6 @@ namespace MultiPurposeAuthSite.Log
                 {
                     item.ExecuteStart(profiledDbCommand, executeType);
                 }
-            }
-        }
-
-        /// <summary>IsActive</summary>
-        public bool IsActive
-        {
-            get
-            {
-                return true;
             }
         }
 
@@ -101,6 +88,23 @@ namespace MultiPurposeAuthSite.Log
                 if (item != null && item.IsActive)
                 {
                     item.OnError(profiledDbCommand, executeType, exception);
+                }
+            }
+        }
+
+        /// <summary>
+        /// コマンドが完了された時に呼ばれる
+        /// </summary>
+        /// <param name="profiledDbCommand">IDbCommand</param>
+        /// <param name="executeType">SqlExecuteType</param>
+        /// <param name="reader">DbDataReader</param>
+        public void ExecuteFinish(IDbCommand profiledDbCommand, SqlExecuteType executeType, DbDataReader reader)
+        {
+            foreach (var item in profilers)
+            {
+                if (item != null && item.IsActive)
+                {
+                    item.ExecuteFinish(profiledDbCommand, executeType, reader);
                 }
             }
         }

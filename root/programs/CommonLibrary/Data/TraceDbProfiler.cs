@@ -44,29 +44,49 @@ using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Log
 {
+    /// <summary>TraceDbProfiler</summary>
     public class TraceDbProfiler : IDbProfiler
     {
+        /// <summary>StopWatch</summary>
+        Stopwatch _stopwatch;
+
+        /// <summary>Command Text</summary>
+        string _commandText;
+        /// <summary>Command Parameters</summary>
+        string _commandParameters;
+
+        /// <summary>IsActive</summary>
         public bool IsActive
         {
             get { return true; }
         }
 
-        public void OnError(IDbCommand profiledDbCommand, SqlExecuteType executeType, System.Exception exception)
-        {
-            // 何も記録しない
-        }
-        
-        Stopwatch _stopwatch;
-        string _commandText;
-        string _commandParameters;
-
-        // コマンドが開始された時に呼ばれる(ExecuteReaderとかExecuteNonQueryとか)
+        /// <summary>
+        /// コマンドが開始された時に呼ばれる
+        /// (ExecuteReaderとかExecuteNonQueryとか)
+        /// </summary>
+        /// <param name="profiledDbCommand">IDbCommand</param>
+        /// <param name="executeType">SqlExecuteType</param>
         public void ExecuteStart(IDbCommand profiledDbCommand, SqlExecuteType executeType)
         {
             this._stopwatch = Stopwatch.StartNew();
         }
 
-        // コマンドが完了された時に呼ばれる
+        /// <summary>OnError</summary>
+        /// <param name="profiledDbCommand">IDbCommand</param>
+        /// <param name="executeType">SqlExecuteType</param>
+        /// <param name="exception">Exception</param>
+        public void OnError(IDbCommand profiledDbCommand, SqlExecuteType executeType, System.Exception exception)
+        {
+            // 何も記録しない
+        }
+
+        /// <summary>
+        /// コマンドが完了された時に呼ばれる
+        /// </summary>
+        /// <param name="profiledDbCommand">IDbCommand</param>
+        /// <param name="executeType">SqlExecuteType</param>
+        /// <param name="reader">DbDataReader</param>
         public void ExecuteFinish(IDbCommand profiledDbCommand, SqlExecuteType executeType, DbDataReader reader)
         {
             Dictionary<string, string> dic = new Dictionary<string, string>();
@@ -102,7 +122,10 @@ namespace MultiPurposeAuthSite.Log
             }
         }
 
-        // Readerが完了した時に呼ばれる
+        /// <summary>
+        /// Readerが完了した時に呼ばれる
+        /// </summary>
+        /// <param name="reader">IDataReader</param>
         public void ReaderFinish(IDataReader reader)
         {
             this._stopwatch.Stop();

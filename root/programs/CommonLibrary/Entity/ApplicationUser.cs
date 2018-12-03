@@ -25,7 +25,11 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
+#if NETFX
 using Microsoft.AspNet.Identity;
+#else
+using Microsoft.AspNetCore.Identity;
+#endif
 
 using Newtonsoft.Json;
 
@@ -39,7 +43,11 @@ namespace MultiPurposeAuthSite.Entity
     /// 詳細については、http://go.microsoft.com/fwlink/?LinkID=317594 を参照してください。
     /// #・・・上記は Entity Framework の Code First Migrationsを使用する方法なので・・・。
     /// </summary>
+#if NETFX
     public class ApplicationUser : IUser<string> // IdentityUser (Entity Frameworkの場合)
+#else
+    public class ApplicationUser
+#endif
     {
         // ASP.NET Identity – User Lockout « Trailmax Tech
         // http://tech.trailmax.info/2014/06/asp-net-identity-user-lockout/
@@ -53,7 +61,7 @@ namespace MultiPurposeAuthSite.Entity
 
         // IdentityUser(EF前提クラス)の型情報を確認して自分で定義＆処理。
         // 別途、App_Data中のテーブルのフィールドを確認する。
-        
+
         // IdentityUser(TKey, TLogin, TRole, TClaim) Class
         // (Microsoft.AspNet.Identity.EntityFramework)
         // https://msdn.microsoft.com/en-us/library/dn613256.aspx
@@ -63,7 +71,7 @@ namespace MultiPurposeAuthSite.Entity
 
         // If informations have needs to be stored in a different storage mechanism, it is now possible to plug in different storage providers.
         // 異なる記憶機構に格納される可能性があるということであるならば、別のストレージ・プロバイダーにプラグインすることが可能。
-        
+
         #endregion
 
         #region constructor
@@ -93,8 +101,8 @@ namespace MultiPurposeAuthSite.Entity
                 //Id                                                                // コンストラクタで自動生成
                 LockoutEnabled = Config.UserLockoutEnabledByDefault,  // Config
                 LockoutEndDateUtc = null,                                           // DateTimeOffset.MinValue.DateTime,
-                //Logins                                                            // サインアップ時は設定しない。
-                //PasswordHash                                                      // PasswordHashは直接設定しない。
+                                                                                    //Logins                                                            // サインアップ時は設定しない。
+                                                                                    //PasswordHash                                                      // PasswordHashは直接設定しない。
                                                                                     // CreateAsyncでPasswordを設定。
                 PhoneNumber = "",                                                   // サインアップ時は、空文字列。
                 PhoneNumberConfirmed = false,                                       // サインアップ時は、false
@@ -118,49 +126,6 @@ namespace MultiPurposeAuthSite.Entity
 
             return user;
         }
-
-        /* マルチテナント機能は削除済みのため、コメントアウト
-        /// <summary>
-        /// SignUpに対応する管理者登録によるApplicationUser生成
-        /// </summary>
-        /// <param name="userName">string</param>
-        /// <returns>ApplicationUser</returns>
-        public static ApplicationUser CreateByRegister(string userName)
-        {
-            // ApplicationUserのCreate
-            ApplicationUser user = new ApplicationUser
-            {   
-                AccessFailedCount = 0,                                              // 管理者登録時は、0。
-                //Claims                                                            // 管理者登録時は設定しない。
-                //Id                                                                // コンストラクタで自動生成
-                LockoutEnabled = Config.UserLockoutEnabledByDefault,  // Config
-                LockoutEndDateUtc = null,                                           // DateTimeOffset.MinValue.DateTime,
-                //Logins                                                            // 管理者登録時は設定しない。
-                //PasswordHash                                                      // PasswordHashは直接設定しない。
-                                                                                    // CreateAsyncでPasswordを設定。
-                PhoneNumber = "",                                                   // 管理者登録時は、空文字列。
-                PhoneNumberConfirmed = false,                                       // 管理者登録時は、false
-                //Roles                                                             // 後でAddToRoleAsyncで登録する。
-                SecurityStamp = "",                                                 // 管理者登録時は、空文字列
-                TwoFactorEnabled = Config.TwoFactorEnabled,           // Config
-                UserName = userName                                                 // 入力値（パラメタ）
-            };
-
-            // E-mail
-            if (Config.RequireUniqueEmail)
-            {
-                user.Email = userName;                                              // 入力値（パラメタ）
-                user.EmailConfirmed = true;                                         // 固定値
-            }
-            else
-            {
-                user.Email = "";                                                    // 固定値
-                user.EmailConfirmed = true;                                         // 固定値
-            }
-
-            return user;
-        }
-        */
 
         #endregion
 
@@ -257,7 +222,7 @@ namespace MultiPurposeAuthSite.Entity
         /// Gets or sets a value that indicates whether lockout enabled for this user.
         /// </summary>
         public bool LockoutEnabled { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the number of failures for the purposes of lockout.
         /// </summary>
@@ -269,7 +234,7 @@ namespace MultiPurposeAuthSite.Entity
         public DateTime? LockoutEndDateUtc { get; set; }
 
         #endregion
-        
+
         #region Security options
 
         /// <summary>
@@ -311,7 +276,7 @@ namespace MultiPurposeAuthSite.Entity
         #endregion
 
         #region Additional properties
-        
+
         /// <summary>
         /// ClientID
         /// </summary>
@@ -338,7 +303,7 @@ namespace MultiPurposeAuthSite.Entity
         /// <summary>
         /// レコード生成日
         /// </summary>
-        public DateTime CreatedDate { get; set; } = DateTime.Now ;
+        public DateTime CreatedDate { get; set; } = DateTime.Now;
 
         /// <summary>
         /// パスワード更新日
@@ -351,6 +316,7 @@ namespace MultiPurposeAuthSite.Entity
 
         #region ClaimsIdentity生成メソッド
 
+#if NETFX
         /// <summary>GenerateUserIdentityAsync</summary>
         /// <param name="manager">UserManager</param>
         /// <returns>ClaimsIdentityを非同期に返す</returns>
@@ -372,7 +338,7 @@ namespace MultiPurposeAuthSite.Entity
             // カスタム　ユーザのClaimsをここで追加する。
             return userIdentity;
         }
-
+#endif
         #endregion
     }
 }
