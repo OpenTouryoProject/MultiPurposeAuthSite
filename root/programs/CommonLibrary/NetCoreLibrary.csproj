@@ -2,14 +2,16 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp2.0</TargetFramework>
+    <RootNamespace>MultiPurposeAuthSite</RootNamespace>
+    <AssemblyName>MultiPurposeAuthSite.NetCoreLibrary</AssemblyName>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <OutputPath>bin\netstd\Debug</OutputPath>
+    <OutputPath>bin\netcore\Debug</OutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <OutputPath>bin\netstd\Release</OutputPath>
+    <OutputPath>bin\netcore\Release</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,6 +32,7 @@
     <Compile Remove="TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Remove="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Remove="TokenProviders\RefreshTokenProvider.cs" />
+    <Compile Remove="Util\IdP\ExternalLoginStarter.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,9 +49,14 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="1.50.5" />
-    <PackageReference Include="Microsoft.AspNetCore.All" Version="2.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.All" Version="2.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="2.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="2.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.1.1" />
     <PackageReference Include="MiniProfiler.AspNetCore.Mvc" Version="4.0.138" />
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="Npgsql" Version="4.0.3" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
   </ItemGroup>
 
   <ItemGroup>

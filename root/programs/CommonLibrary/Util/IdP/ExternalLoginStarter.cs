@@ -36,7 +36,6 @@ using MultiPurposeAuthSite.Co;
 using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
-
 using Microsoft.Owin.Security;
 
 namespace MultiPurposeAuthSite.Util.IdP

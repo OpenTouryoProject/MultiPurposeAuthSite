@@ -46,13 +46,9 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
-#if NETFX
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
-#else
-using Microsoft.AspNetCore.Authentication;
-#endif
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
