@@ -39,7 +39,7 @@ using System.Net.Http;
 
 using Microsoft.Owin.Security;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>
     /// ExternalLoginStarter

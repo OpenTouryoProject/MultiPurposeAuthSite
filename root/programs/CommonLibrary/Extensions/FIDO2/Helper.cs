@@ -44,10 +44,10 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.FIDO2Extension
+namespace MultiPurposeAuthSite.Extensions.FIDO2
 {
     /// <summary>FIDO2Helper（ライブラリ）</summary>
-    public class FIDO2Helper
+    public class Helper
     {
         private string PublicKey = "";
         private string Challenge = "";
@@ -55,7 +55,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.FIDO2Extension
         /// <summary>constructor</summary>
         /// <param name="publicKey">string</param>
         /// <param name="challenge">string</param>
-        public FIDO2Helper(string publicKey, string challenge)
+        public Helper(string publicKey, string challenge)
         {
             this.PublicKey = publicKey;
             this.Challenge = challenge;

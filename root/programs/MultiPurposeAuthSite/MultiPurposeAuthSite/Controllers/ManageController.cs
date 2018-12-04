@@ -26,10 +26,7 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notification;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Extensions.OAuth2;
-
 using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper;
-
 
 using System;
 using System.IO;
@@ -50,12 +47,12 @@ using Microsoft.AspNet.Identity.Owin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using Facebook;
+
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
-
-using Facebook;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers

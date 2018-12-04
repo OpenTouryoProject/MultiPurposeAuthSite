@@ -45,7 +45,7 @@ using Microsoft.Owin.Security.Twitter;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity
+namespace MultiPurposeAuthSite
 {
     /// <summary>
     /// StartupAuth.Configure

@@ -257,9 +257,7 @@
     <Compile Include="Controllers\PingController.cs" />
     <Compile Include="Controllers\RolesAdminController.cs" />
     <Compile Include="Controllers\UsersAdminController.cs" />
-    <Compile Include="Models\ASPNETIdentity\ExternalLoginHelper\ExternalLoginStarter.cs" />
-    <Compile Include="Models\ASPNETIdentity\FIDO2Extension\FIDO2Helper.cs" />
-    <Compile Include="Models\ASPNETIdentity\StartupAuth.cs" />
+    <Compile Include="App_Start\StartupAuth.cs" />
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
@@ -394,6 +392,9 @@
       <Project>{dbe8bc4c-5358-4dc8-9d5d-2fbb71a9d9f3}</Project>
       <Name>NetFxLibrary</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Models\" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

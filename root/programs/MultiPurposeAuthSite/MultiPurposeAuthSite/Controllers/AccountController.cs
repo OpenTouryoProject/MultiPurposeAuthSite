@@ -30,9 +30,7 @@ using MultiPurposeAuthSite.Notification;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.Extensions.OAuth2;
-
-using MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper;
-using MultiPurposeAuthSite.ASPNETIdentity.FIDO2Extension;
+using FIDO2 = MultiPurposeAuthSite.Extensions.FIDO2;
 
 using System;
 using System.Collections.Generic;
@@ -443,7 +441,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 //Debug.WriteLine("authenticatorData: " + model.Fido2AuthenticatorData);
                                 //Debug.WriteLine("signature: " + model.Fido2Signature);
 
-                                FIDO2Helper fido2Helper = new FIDO2Helper(user.FIDO2PublicKey, fido2Challenge);
+                                FIDO2.Helper fido2Helper = new FIDO2.Helper(user.FIDO2PublicKey, fido2Challenge);
                                 if (fido2Helper.ValidateSignature(
                                     model.Fido2ClientData, model.Fido2AuthenticatorData, model.Fido2Signature))
                                 {

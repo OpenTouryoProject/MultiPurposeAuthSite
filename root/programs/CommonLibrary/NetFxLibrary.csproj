@@ -169,6 +169,7 @@
     <Compile Include="Co\Config.cs" />
     <Compile Include="Co\Const.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
+    <Compile Include="Extensions\FIDO2\Helper.cs" />
     <Compile Include="Extensions\OAuth2\DataProvider.cs" />
     <Compile Include="Extensions\OAuth2\Helper.cs" />
     <Compile Include="Extensions\OAuth2\RevocationProvider.cs" />
@@ -180,6 +181,7 @@
     <Compile Include="TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="TokenProviders\RefreshTokenProvider.cs" />
+    <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
     <Compile Include="Util\Sts\OnlySts.cs" />
