@@ -36,7 +36,7 @@ using MultiPurposeAuthSite.Co;
 using System.Linq;
 using System.Collections.Generic;
 
-namespace MultiPurposeAuthSite.Util
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>ロールの確認クラス</summary>
     public class CheckRole

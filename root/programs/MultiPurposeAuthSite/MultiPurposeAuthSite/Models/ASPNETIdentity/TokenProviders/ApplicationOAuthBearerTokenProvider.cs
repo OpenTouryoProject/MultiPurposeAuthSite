@@ -31,11 +31,11 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Collections.Generic;

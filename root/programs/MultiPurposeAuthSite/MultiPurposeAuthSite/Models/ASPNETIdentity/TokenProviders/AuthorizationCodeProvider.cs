@@ -31,10 +31,9 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
-using MultiPurposeAuthSite.Co;   
-using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
+
 using MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter;
 
 using System;

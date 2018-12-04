@@ -36,7 +36,6 @@ using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Network;
 
 using System;
@@ -57,7 +56,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension
+namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
     /// <summary>OAuth2Helper（ライブラリ）</summary>
     public class OAuth2Helper

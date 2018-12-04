@@ -44,7 +44,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.Util
+namespace MultiPurposeAuthSite.Util.IdP
 {
     /// <summary>CustomizedConfirmationData</summary>
     public class CustomizedConfirmationJson

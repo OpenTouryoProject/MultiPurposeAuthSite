@@ -40,7 +40,7 @@ using System.Collections.Concurrent;
 
 using Dapper;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension
+namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
     /// <summary>
     /// OAuth2RevocationProvider

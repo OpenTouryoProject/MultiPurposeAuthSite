@@ -27,10 +27,11 @@ using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notification;
-using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper;
-using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
 using MultiPurposeAuthSite.ASPNETIdentity.FIDO2Extension;
 
 using System;

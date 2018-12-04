@@ -24,11 +24,12 @@ using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notification;
-using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using MultiPurposeAuthSite.Models.ViewModels;
 using MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper;
-using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
+
 
 using System;
 using System.IO;

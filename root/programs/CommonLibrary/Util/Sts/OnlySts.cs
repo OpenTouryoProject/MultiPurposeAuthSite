@@ -31,18 +31,12 @@
 //*  2017/09/09  西野 大介         新規
 //**********************************************************************************
 
-using System;
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Data;
 
-namespace MultiPurposeAuthSite.Util
+namespace MultiPurposeAuthSite.Util.Sts
 {
-    /// <summary>ユーザストアを停止させる例外</summary>
-    public class StopUserStoreException : Exception
-    {
-        /// <summary>constructor</summary>
-        /// <param name="message">string</param>
-        public StopUserStoreException(string message) : base(message) { }
-    }
+   
 
     /// <summary>
     /// 提供する機能をSTSだけにする場合の支援機能

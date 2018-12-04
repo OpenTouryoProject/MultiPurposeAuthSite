@@ -36,7 +36,7 @@ using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Data;
 
 using Touryo.Infrastructure.Public.Log;
 

@@ -31,16 +31,16 @@
 //*  2017/06/07  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Data;
+
 using System;
 using System.Data;
 using System.Collections.Concurrent;
 
 using Dapper;
 
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Co;
-
-namespace MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension
+namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
     /// <summary>
     /// OAuth2DataProvider

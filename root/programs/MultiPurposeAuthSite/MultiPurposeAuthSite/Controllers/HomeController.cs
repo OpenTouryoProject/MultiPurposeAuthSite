@@ -18,8 +18,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Collections.Generic;
@@ -34,7 +34,6 @@ using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Util;
 
 namespace MultiPurposeAuthSite.Controllers
 {

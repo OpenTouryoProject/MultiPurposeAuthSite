@@ -32,13 +32,13 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Log;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using MultiPurposeAuthSite.ASPNETIdentity.TokenProviders;
-using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
 
 using System;
 using System.Text;

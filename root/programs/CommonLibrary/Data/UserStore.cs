@@ -35,7 +35,7 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util;
+using MultiPurposeAuthSite.Util.Sts;
 
 using System;
 using System.Data;

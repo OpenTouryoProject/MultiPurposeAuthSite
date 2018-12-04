@@ -31,6 +31,11 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Extensions.OAuth2;
+
 using System;
 using System.Web;
 using System.Linq;
@@ -44,11 +49,6 @@ using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.ASPNETIdentity.OAuth2Extension;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.IO;

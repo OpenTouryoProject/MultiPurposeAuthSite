@@ -55,6 +55,10 @@
       <HintPath>..\MultiPurposeAuthSite\packages\Microsoft.Owin.4.0.0\lib\net451\Microsoft.Owin.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="Microsoft.Owin.Host.SystemWeb, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\MultiPurposeAuthSite\packages\Microsoft.Owin.Host.SystemWeb.4.0.0\lib\net451\Microsoft.Owin.Host.SystemWeb.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Microsoft.Owin.Security, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\MultiPurposeAuthSite\packages\Microsoft.Owin.Security.4.0.0\lib\net451\Microsoft.Owin.Security.dll</HintPath>
       <Private>True</Private>
@@ -83,6 +87,9 @@
       <HintPath>..\MultiPurposeAuthSite\packages\Npgsql.4.0.3\lib\net451\Npgsql.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="OpenTouryo.Business">
+      <HintPath>..\Frameworks\Infrastructure\Build\OpenTouryo.Business.dll</HintPath>
+    </Reference>
     <Reference Include="OpenTouryo.Framework">
       <HintPath>..\Frameworks\Infrastructure\Build\OpenTouryo.Framework.dll</HintPath>
     </Reference>
@@ -98,6 +105,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Core" />
     <Reference Include="System.IdentityModel.Tokens.Jwt, Version=5.1.2.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\MultiPurposeAuthSite\packages\System.IdentityModel.Tokens.Jwt.5.1.2\lib\net451\System.IdentityModel.Tokens.Jwt.dll</HintPath>
@@ -155,9 +163,13 @@
   <ItemGroup>
     <Compile Include="Co\Config.cs" />
     <Compile Include="Co\Const.cs" />
-    <Compile Include="Util\CheckRole.cs" />
-    <Compile Include="Util\CustomizedConfirmationProvider.cs" />
-    <Compile Include="Util\OnlySts.cs" />
+    <Compile Include="Data\StopUserStoreException.cs" />
+    <Compile Include="Extensions\OAuth2\OAuth2DataProvider.cs" />
+    <Compile Include="Extensions\OAuth2\OAuth2Helper.cs" />
+    <Compile Include="Extensions\OAuth2\OAuth2RevocationProvider.cs" />
+    <Compile Include="Util\IdP\CheckRole.cs" />
+    <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
+    <Compile Include="Util\Sts\OnlySts.cs" />
     <Compile Include="Data\EnumUserStoreType.cs" />
     <Compile Include="Entity\ApplicationRole.cs" />
     <Compile Include="Entity\ApplicationUser.cs" />
@@ -224,8 +236,33 @@
     </Compile>
     <Compile Include="Network\CreateProxy.cs" />
     <Compile Include="Data\DataAccess.cs" />
-    <Compile Include="Util\GetContentOfLetter.cs" />
+    <Compile Include="Util\IdP\GetContentOfLetter.cs" />
     <Compile Include="Network\WebAPIHelper.cs" />
+    <Compile Include="ViewModels\AccountAgreementViewModel.cs" />
+    <Compile Include="ViewModels\AccountExternalLoginListViewModel.cs" />
+    <Compile Include="ViewModels\AccountForgotPasswordViewModel.cs" />
+    <Compile Include="ViewModels\AccountLoginViewModel.cs" />
+    <Compile Include="ViewModels\AccountRegisterViewModel.cs" />
+    <Compile Include="ViewModels\AccountResetPasswordViewModel.cs" />
+    <Compile Include="ViewModels\AccountSendCodeViewModel.cs" />
+    <Compile Include="ViewModels\AccountVerifyCodeViewModel.cs" />
+    <Compile Include="ViewModels\BaseViewModel.cs" />
+    <Compile Include="ViewModels\ManageAddOAuth2DataViewModel.cs" />
+    <Compile Include="ViewModels\ManageAddPaymentInformationViewModel.cs" />
+    <Compile Include="ViewModels\ManageAddPhoneNumberViewModel.cs" />
+    <Compile Include="ViewModels\ManageAddUnstructuredDataViewModel.cs" />
+    <Compile Include="ViewModels\ManageChangePasswordViewModel.cs" />
+    <Compile Include="ViewModels\ManageChangeUserNameViewModel.cs" />
+    <Compile Include="ViewModels\ManageConfigureTwoFactorViewModel.cs" />
+    <Compile Include="ViewModels\ManageEmailViewModel.cs" />
+    <Compile Include="ViewModels\ManageIndexViewModel.cs" />
+    <Compile Include="ViewModels\ManageLoginsViewModel.cs" />
+    <Compile Include="ViewModels\ManageSetPasswordViewModel.cs" />
+    <Compile Include="ViewModels\ManageVerifyPhoneNumberViewModel.cs" />
+    <Compile Include="ViewModels\OAuth2AuthorizationCodeGrantClientViewModel.cs" />
+    <Compile Include="ViewModels\RolesAdminEditViewModel.cs" />
+    <Compile Include="ViewModels\UsersAdminEditViewModel.cs" />
+    <Compile Include="ViewModels\UsersAdminSearchViewModel.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\AccountController.ja.resx">
@@ -289,6 +326,9 @@
   <ItemGroup>
     <None Include="App.config" />
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Extensions\OIDC\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
