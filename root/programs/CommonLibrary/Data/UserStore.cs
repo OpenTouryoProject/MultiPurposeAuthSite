@@ -99,230 +99,7 @@ namespace MultiPurposeAuthSite.Data
         public UserStore() { }
 
         #endregion
-
-        #region Utility
-
-        #region Log
-
-        /// <summary>GetParametersString</summary>
-        /// <param name="parameters">string[]</param>
-        /// <returns>Parameters string</returns>
-        private static string GetParametersString(ParameterInfo[] parameters)
-        {
-            string s = "";
-
-            if (Config.IsDebug)
-            {
-                s += "(";
-                for (int i = 0; i < parameters.Length; i++)
-                {
-                    s += parameters[i].Name + ", ";
-                }
-                if (s.Length >= 2)
-                {
-                    s = s.Substring(0, s.Length - 2);
-                }
-                s += ")";
-            }
-
-            return s;
-        }
-
-        #endregion
-
-        #region Memory Provider
         
-        /// <summary>ユーザ保存先</summary>
-        public static List<ApplicationUser> _users { get; } = new List<ApplicationUser>();
-
-        /// <summary>ロールの保存先</summary>
-        public static List<ApplicationRole> _roles { get; } = new List<ApplicationRole>();
-
-        /// <summary>ユーザとロールのリレーション</summary>
-        public static List<Tuple<string, string>> _userRoleMap { get; } = new List<Tuple<string, string>>();
-        
-        #endregion
-
-        #region DBMS Provider
-
-        #region メソッド
-
-        #region 初期化
-
-        /// <summary>DBMSの初期化確認メソッド</summary>
-        /// <returns>bool</returns>
-        public static Task<bool> IsDBMSInitialized()
-        {
-            // テスト時の機能のため、
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName + 
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                using (IDbConnection cnn = DataAccess.CreateConnection())
-                {
-                    cnn.Open();
-                    int count = 0;
-
-                    // [Roles] が [Users] に先立って登録されるので。
-                    switch (Config.UserStoreType)
-                    {
-                        case EnumUserStoreType.SqlServer:
-
-                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM [Roles]");
-
-                            break;
-
-                        case EnumUserStoreType.ODPManagedDriver:
-
-                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"Roles\"");
-
-                            break;
-
-                        case EnumUserStoreType.PostgreSQL:
-
-                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"roles\"");
-
-                            break;
-                    }
-
-                    return Task.FromResult((0 < count));
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(false); ;
-        }
-
-        #endregion
-
-        #region データ アクセス
-
-        /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims ）</summary>
-        private void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
-        {
-            // 他テーブルのため、
-            //OnlySts.STSOnly_M();
-            if (OnlySts.STSOnly_P)
-            {
-                // 何もロードしない。
-                return;
-            }
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                IEnumerable<ApplicationRole> roles = null;
-                IEnumerable<UserLoginInfo> userLogins = null;
-                IEnumerable<dynamic> claims = null;
-
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.SqlServer:
-
-                        // Roles
-                        roles = cnn.Query<ApplicationRole>(
-                            "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name " +
-                            "FROM   [UserRoles], [Roles] " +
-                            "WHERE  [UserRoles].[RoleId] = [Roles].[Id] " +
-                            "   AND [UserRoles].[UserId] = @userId", new { userId = user.Id });
-                        user.Roles = roles.ToList();
-
-                        // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
-                            "SELECT [LoginProvider], [ProviderKey] " +
-                            "FROM   [UserLogins] WHERE [UserId] = @userId", new { userId = user.Id });
-                        user.Logins = userLogins.ToList();
-
-                        // Claims
-                        claims = cnn.Query(
-                            "SELECT [Issuer], [ClaimType], [ClaimValue] " +
-                            "FROM   [UserClaims] WHERE [UserId] = @userId", new { userId = user.Id });
-                        user.Claims = new List<Claim>();
-
-                        break;
-
-                    case EnumUserStoreType.ODPManagedDriver:
-
-                        // Roles
-                        roles = cnn.Query<ApplicationRole>(
-                            "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name " +
-                            "FROM   \"UserRoles\", \"Roles\" " +
-                            "WHERE  \"UserRoles\".\"RoleId\" = \"Roles\".\"Id\" " +
-                            "   AND \"UserRoles\".\"UserId\" = :userId", new { userId = user.Id });
-                        user.Roles = roles.ToList();
-
-                        // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
-                            "SELECT \"LoginProvider\", \"ProviderKey\" " +
-                            "FROM   \"UserLogins\" WHERE \"UserId\" = :userId", new { userId = user.Id });
-                        user.Logins = userLogins.ToList();
-
-                        // Claims
-                        claims = cnn.Query(
-                            "SELECT \"Issuer\", \"ClaimType\", \"ClaimValue\" " +
-                            "FROM   \"UserClaims\" WHERE \"UserId\" = :userId", new { userId = user.Id });
-                        user.Claims = new List<Claim>();
-
-                        break;
-
-                    case EnumUserStoreType.PostgreSQL:
-
-                        // Roles
-                        roles = cnn.Query<ApplicationRole>(
-                            "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name " +
-                            "FROM   \"userroles\", \"roles\" " +
-                            "WHERE  \"userroles\".\"roleid\" = \"roles\".\"id\" " +
-                            "   AND \"userroles\".\"userid\" = @userId", new { userId = user.Id });
-                        user.Roles = roles.ToList();
-
-                        // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
-                            "SELECT \"loginprovider\", \"providerkey\" " +
-                            "FROM   \"userlogins\" WHERE \"userid\" = @userId", new { userId = user.Id });
-                        user.Logins = userLogins.ToList();
-
-                        // Claims
-                        claims = cnn.Query(
-                            "SELECT \"issuer\", \"claimtype\", \"claimvalue\" " +
-                            "FROM   \"userclaims\" WHERE \"userid\" = @userId", new { userId = user.Id });
-                        user.Claims = new List<Claim>();
-
-                        break;
-                }
-
-                foreach (dynamic d in claims)
-                {
-                    user.Claims.Add(new Claim(d.ClaimType, d.ClaimValue, null, d.Issuer));
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-        }
-
-        #endregion
-
-        #endregion
-
-        #endregion
-
-        #endregion
-
         #region CRUD(共通)
 
         #region C (Create)
@@ -332,121 +109,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task CreateAsync(ApplicationUser user)
         {
-            // 更新系の機能のため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // 新規ユーザーの追加
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        UserStore._users.Add(user);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "INSERT INTO [Users] ( " +
-                                        "    [Id], [UserName], [PasswordHash], " +
-                                        "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
-                                        "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], " +
-                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate], [PasswordChangeDate])" +
-                                        "    VALUES ( " +
-                                        "        @Id, @UserName, @PasswordHash, " +
-                                        "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
-                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-                                    
-                                    cnn.Execute(
-                                        "INSERT INTO \"Users\" ( " +
-                                        "    \"Id\", \"UserName\", \"PasswordHash\", " +
-                                        "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
-                                        "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", " +
-                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\", \"PasswordChangeDate\")" +
-                                        "    VALUES ( " +
-                                        "        :Id, :UserName, :PasswordHash, " +
-                                        "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
-                                        "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, " +
-                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate, :PasswordChangeDate)",
-                                        new // 拡張メソッドで対策できる。
-                                        {
-                                            Id = user.Id,
-                                            UserName = user.UserName,
-                                            PasswordHash = user.PasswordHash,
-                                            Email = user.Email,
-                                            EmailConfirmed = user.EmailConfirmed ? -1 : 0,
-                                            PhoneNumber = user.PhoneNumber,
-                                            PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
-                                            LockoutEnabled = user.LockoutEnabled ? -1 : 0,
-                                            AccessFailedCount = user.AccessFailedCount,
-                                            LockoutEndDateUtc = user.LockoutEndDateUtc,
-                                            SecurityStamp = user.SecurityStamp,
-                                            TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
-                                            ClientID = user.ClientID,
-                                            PaymentInformation = user.PaymentInformation,
-                                            UnstructuredData = user.UnstructuredData,
-                                            FIDO2PublicKey = user.FIDO2PublicKey,
-                                            CreatedDate = user.CreatedDate,
-                                            PasswordChangeDate = user.PasswordChangeDate
-                                        });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"users\" ( " +
-                                        "    \"id\", \"username\", \"passwordhash\", " +
-                                        "    \"email\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
-                                        "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", " +
-                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\", \"passwordchangedate\")" +
-                                        "    VALUES ( " +
-                                        "        @Id, @UserName, @PasswordHash, " +
-                                        "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
-                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
-
-                                    break;
-                            }
-
-                            // ユーザの関連情報は、このタイミングで追加しない（Roles, Logins, Claims）
-                        }
-
-                        break;
-
-                }
-
-                Logging.MyOperationTrace(string.Format("{0}({1}) was created.", user.Id, user.UserName));
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.CreateAsync(user);
         }
 
         #endregion
@@ -458,99 +121,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByIdAsync(string userId)
         {
-            // 参照系の機能のため、
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            ApplicationUser user = null;
-
-            try
-            {
-                // ユーザを（Id指定で）検索
-
-                // todo: 必要に応じて、ここに、STS専用モードでの実装を行う。
-                if (OnlySts.STSOnly_P)
-                {
-                    #region STS専用モードのテストコード
-
-                    // 既存のユーザストアに接続して、ユーザを返す。
-
-                    // テスト：管理者ユーザを返す。
-                    user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
-                    user.Id = userId;
-                    user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
-                    return Task.FromResult(user);
-
-                    #endregion
-                }
-
-                // 通常のモードでの実装を行う。
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        user = UserStore._users.FirstOrDefault(x => x.Id == userId);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = null;
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * FROM [Users] WHERE [Id] = @userId", new { userId = userId });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * FROM \"Users\" WHERE \"Id\" = :userId", new { userId = userId });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * FROM \"users\" WHERE \"id\" = @userId", new { userId = userId });
-
-                                    break;
-                            }
-
-                            if (users.Count() != 0)
-                            {
-                                user = users.First();
-
-                                // ユーザの関連情報の取得（ Roles, Logins, Claims ）
-                                this.SelectChildTablesOfUser(cnn, user);
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(user);
+            return CmnUserStore.FindByIdAsync(userId);
         }
 
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
@@ -558,101 +129,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByNameAsync(string userName)
         {
-            // 参照系の機能のため、
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            ApplicationUser user = null;
-            IEnumerable<ApplicationUser> users = null;
-
-            try
-            {
-                // ユーザを（ユーザ名指定で）検索
-
-                // todo: 必要に応じて、ここに、STS専用モードでの実装を行う。
-                if (OnlySts.STSOnly_P)
-                {
-                    #region STS専用モードのテストコード
-
-                    // 既存のユーザストアに接続して、ユーザを返す。
-
-                    // テスト：管理者ユーザを返す。
-                    if (userName == Config.AdministratorUID)
-                    {
-                        user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
-                        user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
-                    }
-
-                    #endregion
-                }
-                else
-                {
-                    // 通常のモードでの実装を行う。
-                    switch (Config.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
-
-                            user = UserStore._users.FirstOrDefault(x => x.UserName == userName);
-
-                            break;
-
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.ODPManagedDriver:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
-                            {
-                                cnn.Open();
-
-                                // ユーザの情報の取得
-                                switch (Config.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
-
-                                        users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
-
-                                        break;
-
-                                    case EnumUserStoreType.ODPManagedDriver:
-
-                                        users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
-
-                                        break;
-
-                                    case EnumUserStoreType.PostgreSQL:
-
-                                        users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM \"users\" WHERE \"username\" = :userName", new { userName = userName });
-
-                                        break;
-                                }
-
-                                if (users.Count() != 0)
-                                {
-                                    user = users.First();
-
-                                    // ユーザの関連情報の取得（ Roles, Logins, Claims ）
-                                    this.SelectChildTablesOfUser(cnn, user);
-                                }
-                            }
-
-                            break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(user);
+            return CmnUserStore.FindByNameAsync(userName);
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
@@ -664,140 +141,7 @@ namespace MultiPurposeAuthSite.Data
         {
             get
             {
-                // 管理系の機能のため、
-                OnlySts.STSOnly_M();
-
-                // Debug
-                Logging.MyDebugSQLTrace("★ : " + 
-                    MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                    "." + MethodBase.GetCurrentMethod().Name +
-                    UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-                IEnumerable<ApplicationUser> users = null;
-
-                try
-                {
-                    // ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
-                    string searchConditionOfUsers = (string)HttpContext.Current.Session["SearchConditionOfUsers"];
-                    HttpContext.Current.Session["SearchConditionOfUsers"] = ""; // クリアしないと・・・
-
-                    // （マルチテナント化対応されたテナント）ユーザ一覧を返す。
-                    switch (Config.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
-
-                            IEnumerable<ApplicationUser> _users = UserStore._users;
-                            
-                            // Like
-                            if (!string.IsNullOrEmpty(searchConditionOfUsers))
-                                _users = _users.Where(p => p.UserName.Contains(searchConditionOfUsers));
-
-                            users = _users.ToList();
-
-                            break;
-
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.ODPManagedDriver:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                            string sql = "";
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
-                            {
-                                switch (Config.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
-
-                                        sql = "SELECT TOP {0} * FROM [Users] ";
-
-                                        // Like
-                                        if (!string.IsNullOrEmpty(searchConditionOfUsers))
-                                        {
-                                            if (sql.IndexOf(" WHERE ") == -1)
-                                                sql += " WHERE";
-                                            else
-                                                sql += " AND";
-                                            
-                                            sql += " [UserName] Like CONCAT('%', @searchConditionOfUsers, '%')";
-                                        }
-
-                                        // TOP
-                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
-                                        {
-                                            sql = string.Format(sql, "" + Config.UserListCount);
-                                        }
-                                        else
-                                        {
-                                            sql = string.Format(sql, 100);
-                                        }
-
-                                        break;
-
-                                    case EnumUserStoreType.ODPManagedDriver:
-
-                                        sql = "SELECT * FROM \"Users\" WHERE ROWNUM <= {0}";
-                                        
-                                        // Like
-                                        if (!string.IsNullOrEmpty(searchConditionOfUsers))
-                                            sql += " AND \"UserName\" Like '%' || :searchConditionOfUsers || '%'";
-
-                                        // TOP
-                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
-                                        {
-                                            sql = string.Format(sql, Config.UserListCount);
-                                        }
-                                        else
-                                        {
-                                            sql = string.Format(sql, 100);
-                                        }   
-
-                                        break;
-
-                                    case EnumUserStoreType.PostgreSQL:
-
-                                        sql = "SELECT * FROM \"users\"";
-
-                                        // Like
-                                        if (!string.IsNullOrEmpty(searchConditionOfUsers))
-                                        {
-                                            if (sql.IndexOf(" WHERE ") == -1)
-                                                sql += " WHERE";
-                                            else
-                                                sql += " AND";
-
-                                            sql += " \"username\" Like CONCAT('%', @searchConditionOfUsers, '%')";
-                                        }
-
-                                        // TOP
-                                        sql += " LIMIT {0}";
-                                        if (!string.IsNullOrEmpty(Config.UserListCount.ToString()))
-                                        {
-                                            sql = string.Format(sql, Config.UserListCount);
-                                        }
-                                        else
-                                        {
-                                            sql = string.Format(sql, 100);
-                                        }
-
-                                        break;
-                                }
-
-                                cnn.Open();
-                                users = cnn.Query<ApplicationUser>(sql, new
-                                {
-                                    searchConditionOfUsers = searchConditionOfUsers
-                                });
-                            }
-
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logging.MySQLLogForEx(ex);
-                }
-
-                // IQueryableとして戻す。
-                return users.AsQueryable();
+                return CmnUserStore.Users;
             }
         }
 
@@ -810,157 +154,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task UpdateAsync(ApplicationUser user)
         {
-            // 更新系の機能のため、
-            //OnlySts.STSOnly_M();
-            if (OnlySts.STSOnly_P)
-            {
-                // 何も更新しない。
-                // IUserLockoutStore機能などで使用するため。
-                return Task.FromResult(0);
-            }
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " +
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // MemoryStore同一インスタンス問題。
-                // SerializeできないMemberもあり、DeepCloneもできず。
-
-                //// ユーザー情報を取得
-                //ApplicationUser tgtUser = await this.FindByIdAsync(user.Id);
-
-                //// ユーザー情報を更新
-                //if (tgtUser == null)
-                //{
-                //    // なにもしない（というか何もできない）
-                //}
-                //else
-                //{
-
-                // ユーザー情報を更新
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // MemoryStore同一インスタンス
-
-                        //// 既定の属性
-                        //tgtUser.Id = user.Id;
-                        //tgtUser.UserName = user.UserName;
-                        //tgtUser.PasswordHash = user.PasswordHash;
-                        //tgtUser.Email = user.Email;
-                        //tgtUser.EmailConfirmed = user.EmailConfirmed;
-                        //tgtUser.PhoneNumber = user.PhoneNumber;
-                        //tgtUser.PhoneNumberConfirmed = user.PhoneNumberConfirmed;
-                        //tgtUser.AccessFailedCount = user.AccessFailedCount;
-                        //tgtUser.LockoutEnabled = user.LockoutEnabled;
-                        //tgtUser.LockoutEndDateUtc = user.LockoutEndDateUtc;
-                        //tgtUser.SecurityStamp = user.SecurityStamp;
-                        //tgtUser.TwoFactorEnabled = user.TwoFactorEnabled;
-                        //// Collection
-                        //tgtUser.Roles = user.Roles;
-                        //tgtUser.Logins = user.Logins;
-                        //tgtUser.Claims = user.Claims;
-
-                        //// 追加の属性
-                        //tgtUser.ClientID = user.ClientID;
-                        //tgtUser.PaymentInformation = user.PaymentInformation;
-                        //tgtUser.UnstructuredData = user.UnstructuredData;
-                        //tgtUser.FIDO2PublicKey = user.FIDO2PublicKey;
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザー情報を更新
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "UPDATE [Users] " +
-                                        "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
-                                        "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
-                                        "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
-                                        "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey, [PasswordChangeDate] = @PasswordChangeDate " +
-                                        "WHERE [Id] = @Id", user);
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "UPDATE \"Users\" " +
-                                        "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
-                                        "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
-                                        "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
-                                        "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey, \"PasswordChangeDate\" = :PasswordChangeDate " +
-                                        "WHERE \"Id\" = :Id",
-                                        new // 拡張メソッドで対策できる。
-                                            {
-                                            Id = user.Id,
-                                            UserName = user.UserName,
-                                            PasswordHash = user.PasswordHash,
-                                            Email = user.Email,
-                                            EmailConfirmed = user.EmailConfirmed ? -1 : 0,
-                                            PhoneNumber = user.PhoneNumber,
-                                            PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
-                                            LockoutEnabled = user.LockoutEnabled ? -1 : 0,
-                                            AccessFailedCount = user.AccessFailedCount,
-                                            LockoutEndDateUtc = user.LockoutEndDateUtc,
-                                            SecurityStamp = user.SecurityStamp,
-                                            TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
-                                            ClientID = user.ClientID,
-                                            PaymentInformation = user.PaymentInformation,
-                                            UnstructuredData = user.UnstructuredData,
-                                            FIDO2PublicKey = user.FIDO2PublicKey,
-                                            PasswordChangeDate = user.PasswordChangeDate
-                                        });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                       "UPDATE \"users\" " +
-                                       "SET \"username\" = @UserName, \"passwordhash\" = @PasswordHash, " +
-                                       "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
-                                       "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
-                                       "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey, \"passwordchangedate\" = @PasswordChangeDate " +
-                                       "WHERE \"id\" = @Id", user);
-
-                                    break;
-                            }
-
-                            // ★ 基本的に、以下のプロパティ更新には、プロパティ更新メソッド（UserManager.XXXX[PropertyName]Async）を使用する。
-                            //    この際、ASP.NET Identity Frameworkにより、本メソッド（UserStore.UpdateAsync）が呼び出されることがあるもよう。
-                            //    その際、二重実行により二重登録（制約により例外になる）が起き得るので、以下は、ココに実装しないことにした。
-                            // await this.UpdateRoles(user, tgtUser);    
-                            // await this.UpdateLogins(user, tgtUser);
-                            // await this.UpdateClaims(user, tgtUser);
-                        }
-
-                        break;
-                }
-
-                Logging.MyOperationTrace(string.Format("{0}({1}) was updated.", user.Id, user.UserName));
-                //}
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(0);
+            return CmnUserStore.UpdateAsync(user);
         }
 
         #region ユーザの関連情報の更新（ Roles, Logins, Claims ）
@@ -970,212 +164,7 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="tgtUser">ターゲット</param>
         private Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
         {
-            // 更新系の機能のため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // Rolesの更新
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // tgtUserに含まれないApplicationRoleは削除対象。
-                        IList<ApplicationRole> toRmvRoles = user.Roles.Except(tgtUser.Roles).ToList<ApplicationRole>();
-                        // userに含まれないApplicationRoleは追加対象。
-                        IList<ApplicationRole> toAddRoles = tgtUser.Roles.Except(user.Roles).ToList<ApplicationRole>();
-
-                        foreach (ApplicationRole role in toRmvRoles)
-                        {
-                            tgtUser.Roles.Remove(role);
-                        }
-
-                        foreach (ApplicationRole role in toAddRoles)
-                        {
-                            tgtUser.Roles.Add(role);
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        // ここはSQLが無いので分岐も無い。
-
-                        // .Except(が上手く動かないので手組する。
-
-                        // LINQ・Except　参照型は要注意 | 猫に紙袋かぶせたらぎゃーって鳴いた
-                        // http://nekokan333.blog.fc2.com/blog-entry-373.html?sp
-
-                        // tgtUserに含まれないApplicationRoleは削除対象。
-                        List<string> toRmvRolesName = new List<string>();
-                        foreach (ApplicationRole r1 in user.Roles)
-                        {
-                            // userのロールが、
-                            bool exist = false;
-                            foreach (ApplicationRole r2 in tgtUser.Roles)
-                            {
-                                // tgtUserのロールに、
-                                if (r1.Id == r2.Id)
-                                {
-                                    // 含まれる。
-                                    exist = true;
-                                }
-                                else
-                                {
-                                    // 含まれない。
-                                }
-                            }
-
-                            if (exist)
-                            {
-                                // （userのロールが、）tgtUser（のロール）に（、）含まれる。
-                            }
-                            else
-                            {
-                                // （userのロールが、）tgtUser（のロール）に（、）含まれない。
-                                toRmvRolesName.Add(r1.Name);
-                            }
-                        }
-
-                        // userに含まれないApplicationRoleは追加対象。
-                        List<string> toAddRolesName = new List<string>();
-                        foreach (ApplicationRole r1 in tgtUser.Roles)
-                        {
-                            // tgtUserのロールが、
-                            bool exist = false;
-                            foreach (ApplicationRole r2 in user.Roles)
-                            {
-                                // userのロールに、
-                                if (r1.Id == r2.Id)
-                                {
-                                    // 含まれる。
-                                    exist = true;
-                                }
-                                else
-                                {
-                                    // 含まれない。
-                                }
-                            }
-
-                            if (exist)
-                            {
-                                // （tgtUserのロールが、）user（のロール）に（、）含まれる。
-                            }
-                            else
-                            {
-                                // （tgtUserのロールが、）user（のロール）に（、）含まれない。
-                                toAddRolesName.Add(r1.Name);
-                            }
-                        }
-
-                        // 原子性に問題があるのでやはり修正する。
-
-                        //foreach (string roleName in toRmvRolesName)
-                        //{
-                        //    // 効率悪いが品質的に、this.RemoveFromRoleAsyncを使用する。
-                        //    await this.RemoveFromRoleAsync(user, roleName);
-                        //}
-                        //foreach (string roleName in toAddRolesName)
-                        //{
-                        //    // 効率悪いが品質的に、this.AddToRoleAsyncを使用する。
-                        //    await this.AddToRoleAsync(user, roleName);
-                        //}
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-                            using (IDbTransaction tr = cnn.BeginTransaction())
-                            {
-                                // ロール・マップを削除（ロール情報を取得する。
-                                foreach (string roleName in toRmvRolesName)
-                                {
-                                    switch (Config.UserStoreType)
-                                    {
-                                        case EnumUserStoreType.SqlServer:
-
-                                            cnn.Execute(
-                                                "DELETE FROM [UserRoles] " +
-                                                "WHERE [UserRoles].[UserId] = @UserId " +
-                                                "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.ODPManagedDriver:
-
-                                            cnn.Execute(
-                                                "DELETE FROM \"UserRoles\" " +
-                                                "WHERE \"UserRoles\".\"UserId\" = :UserId " +
-                                                "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.PostgreSQL:
-
-                                            cnn.Execute(
-                                                "DELETE FROM \"userroles\" " +
-                                                "WHERE \"userroles\".\"userid\" = @UserId " +
-                                                "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-                                    }
-                                }
-
-                                // ロール・マップを追加（ロール情報を取得する。
-                                foreach (string roleName in toAddRolesName)
-                                {
-                                    switch (Config.UserStoreType)
-                                    {
-                                        case EnumUserStoreType.SqlServer:
-
-                                            cnn.Execute(
-                                                "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
-                                                "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.ODPManagedDriver:
-
-                                            cnn.Execute(
-                                                "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
-                                                "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-
-                                        case EnumUserStoreType.PostgreSQL:
-
-                                            cnn.Execute(
-                                                "INSERT INTO \"userroles\" (\"userid\", \"roleid\") " +
-                                                "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE \"name\" = @roleName))",
-                                                new { UserId = user.Id, roleName = roleName });
-
-                                            break;
-                                    }
-                                }
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.UpdateRoles(user, tgtUser);
         }
 
         //Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
@@ -1194,95 +183,7 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task DeleteAsync(ApplicationUser user)
         {
-            // 更新系の機能のため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " +
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // AccountControllerのメアド検証の再送で利用するため。
-            // UsersAdminControllerではチェックしている。
-
-            try
-            {
-                // ユーザの論理削除
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // ユーザを削除
-                        UserStore._users.Remove(UserStore._users.First(x => x.Id == user.Id));
-                        // ユーザの関連情報を削除
-                        UserStore._userRoleMap.RemoveAll(x => x.Item1 == user.Id);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-                            using (IDbTransaction tr = cnn.BeginTransaction())
-                            {
-                                switch (Config.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
-
-                                        // ユーザの情報を削除
-                                        cnn.Execute("DELETE FROM [Users] WHERE [Id] = @UserId", new { UserId = user.Id }, tr);
-
-                                        // ユーザの関連情報を削除
-                                        cnn.Execute("DELETE FROM [UserRoles]  WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                        cnn.Execute("DELETE FROM [UserLogins] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-                                        cnn.Execute("DELETE FROM [UserClaims] WHERE [UserId] = @UserId", new { UserId = user.Id }, tr);
-
-                                        break;
-
-                                    case EnumUserStoreType.ODPManagedDriver:
-
-                                        // ユーザの情報を削除
-                                        cnn.Execute("DELETE FROM \"Users\" WHERE \"Id\" = :UserId", new { UserId = user.Id }, tr);
-
-                                        // ユーザの関連情報を削除
-                                        cnn.Execute("DELETE FROM \"UserRoles\"  WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                        cnn.Execute("DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-                                        cnn.Execute("DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId", new { UserId = user.Id }, tr);
-
-                                        break;
-
-                                    case EnumUserStoreType.PostgreSQL:
-
-                                        // ユーザの情報を削除
-                                        cnn.Execute("DELETE FROM \"users\" WHERE \"id\" = @UserId", new { UserId = user.Id }, tr);
-
-                                        // ユーザの関連情報を削除
-                                        cnn.Execute("DELETE FROM \"userroles\"  WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
-                                        cnn.Execute("DELETE FROM \"userlogins\" WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
-                                        cnn.Execute("DELETE FROM \"userclaims\" WHERE \"userid\" = @UserId", new { UserId = user.Id }, tr);
-
-                                        break;
-                                }
-
-                                tr.Commit();
-                            }
-                        }
-
-                        break;
-                }
-
-                Logging.MyOperationTrace(string.Format("{0}({1}) was deleted.", user.Id, user.UserName));
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.DeleteAsync(user);
         }
 
         #endregion
@@ -1298,18 +199,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>真・偽：ユーザがパスワードを持っているか</returns>
         public Task<bool> HasPasswordAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザがパスワードを持っているか
-
-            return Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
+            return CmnUserStore.HasPasswordAsync(user);
         }
 
         /// <summary>ユーザーにハッシュ化されたパスワードを設定</summary>
@@ -1318,19 +208,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetPasswordHashAsync(ApplicationUser user, string passwordHash)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザーにハッシュ化されたパスワードを設定
-            user.PasswordHash = passwordHash;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetPasswordHashAsync(user, passwordHash);
         }
 
         /// <summary>ユーザのパスワードのハッシュを取得</summary>
@@ -1338,18 +216,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>パスワードのハッシュ</returns>
         public Task<string> GetPasswordHashAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザのパスワードのハッシュを取得
-
-            return Task.FromResult(user.PasswordHash);
+            return CmnUserStore.GetPasswordHashAsync(user);
         }
 
         #endregion
@@ -1361,81 +228,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByEmailAsync(string email)
         {
-            // 参照系の機能のため、
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            ApplicationUser user = null;
-
-            try
-            {
-                // ユーザを（email指定で）検索して取得
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        user = UserStore._users.FirstOrDefault(x => x.Email == email);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = null;
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * From [Users] WHERE [Email] = @Email", new { Email = email });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * From \"Users\" WHERE \"Email\" = :Email", new { Email = email });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * From \"users\" WHERE \"email\" = @Email", new { Email = email });
-
-                                    break;
-                            }
-
-                            if (users.Count() != 0)
-                            {
-                                user = users.First();
-
-                                // ユーザの関連情報の取得（ Roles, Logins, Claims ）
-                                this.SelectChildTablesOfUser(cnn, user);
-                            }
-                        }
-                        
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(user);
+            return CmnUserStore.FindByEmailAsync(email);
         }
 
         /// <summary>メアドの設定</summary>
@@ -1444,19 +237,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetEmailAsync(ApplicationUser user, string email)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // メアドの設定
-            user.Email = email;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetEmailAsync(user, email);
         }
 
         /// <summary>メアドの取得</summary>
@@ -1464,18 +245,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>Email</returns>
         public Task<string> GetEmailAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // メアドの取得
-
-            return Task.FromResult(user.Email);
+            return CmnUserStore.GetEmailAsync(user);
         }
 
         /// <summary>メアド確認の設定</summary>
@@ -1484,19 +254,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetEmailConfirmedAsync(ApplicationUser user, bool confirmed)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // メアド確認の設定
-            user.EmailConfirmed = confirmed;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetEmailConfirmedAsync(user, confirmed);
         }
 
         /// <summary>メアド確認の取得</summary>
@@ -1504,18 +262,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>EmailConfirmed</returns>
         public Task<bool> GetEmailConfirmedAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // メアド確認の取得
-
-            return Task.FromResult(user.EmailConfirmed);
+            return CmnUserStore.GetEmailConfirmedAsync(user);
         }
 
         #endregion
@@ -1528,19 +275,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetPhoneNumberAsync(ApplicationUser user, string phoneNumber)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 電話番号の設定
-            user.PhoneNumber = phoneNumber;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetPhoneNumberAsync(user, phoneNumber);
         }
 
         /// <summary>電話番号の取得</summary>
@@ -1548,18 +283,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>phone number</returns>
         public Task<string> GetPhoneNumberAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 電話番号の取得
-
-            return Task.FromResult(user.PhoneNumber);
+            return CmnUserStore.GetPhoneNumberAsync(user);
         }
 
         /// <summary>電話番号確認の設定</summary>
@@ -1568,19 +292,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetPhoneNumberConfirmedAsync(ApplicationUser user, bool confirmed)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 電話番号確認の設定
-            user.PhoneNumberConfirmed = confirmed;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetPhoneNumberConfirmedAsync(user, confirmed);
         }
 
         /// <summary>電話番号確認の取得</summary>
@@ -1588,18 +300,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>phone number is confirmed</returns>
         public Task<bool> GetPhoneNumberConfirmedAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 電話番号確認の取得
-
-            return Task.FromResult(user.PhoneNumberConfirmed);
+            return CmnUserStore.GetPhoneNumberConfirmedAsync(user);
         }
 
         #endregion
@@ -1612,99 +313,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task AddToRoleAsync(ApplicationUser user, string roleName)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // ロールにユーザを追加
-                ApplicationRole role = null;
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // ロール情報を取得する
-                        role = UserStore._roles.FirstOrDefault(x => x.Name == roleName);
-
-                        if (role == null)
-                        {
-                            // 存在しないロール
-                            throw new InvalidOperationException();
-                        }
-                        else
-                        {
-                            // ロール・マップ情報を取得する
-                            Tuple<string, string> userRoleMap = UserStore._userRoleMap.FirstOrDefault(
-                                x => x.Item1 == user.Id && x.Item2 == role.Id);
-
-                            if (userRoleMap != null)
-                            {
-                                // 既に追加されている。
-                            }
-                            else
-                            {
-                                // ロール・マップにユーザとロールに追加
-                                UserStore._userRoleMap.Add(Tuple.Create(user.Id, role.Id));
-                            }
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ロール・マップを追加（ロール情報を取得する。
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
-                                        "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
-                                        new { UserId = user.Id, roleName = roleName });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
-                                        "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
-                                        new { UserId = user.Id, roleName = roleName });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"userroles\" (\"userid\", \"roleid\") " +
-                                        "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE \"name\" = @roleName))",
-                                        new { UserId = user.Id, roleName = roleName });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.AddToRoleAsync(user, roleName);
         }
 
         /// <summary>ユーザがロールに所属するか？</summary>
@@ -1713,22 +322,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>真・偽：ユーザがロールに所属するか</returns>
         public async Task<bool> IsInRoleAsync(ApplicationUser user, string roleName)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザがロールに所属するか？
-
-            // ユーザのロール一覧を返す。
-            IList<string> roles = await this.GetRolesAsync(user);
-
-            // bool (ユーザのロール一覧から、一致するロール名を取得できたら真、できなかったら偽
-            return roles.FirstOrDefault(x => x.ToUpper() == roleName.ToUpper()) != null;
+            return await CmnUserStore.IsInRoleAsync(user, roleName);
         }
 
         /// <summary>ユーザのロール一覧を取得</summary>
@@ -1736,110 +330,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ユーザのロール一覧</returns>
         public Task<IList<string>> GetRolesAsync(ApplicationUser user)
         {
-            // 他テーブルのため、
-            //OnlySts.STSOnly_M();
-            if (OnlySts.STSOnly_P)
-            {
-                // 空の一覧を返す。
-                return Task.FromResult((IList<string>)new List<string>());
-            }
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            IList<string> roleNames = null;
-
-            try
-            {
-                // ユーザのロール一覧を取得
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // UserRoleMapに含まれるuserId = user.Id のTupleに含まれるRole.IdのRole.Nameを一覧する。
-                        roleNames = UserStore._userRoleMap // List<Tuple<string, sting>>
-                                                           // Tuple.Item1 == user.IdのTupleのListを抽出。
-                            .Where(x => x.Item1 == user.Id)
-                            // 結果のTupleのListの中からTuple.Item2（ = Role.Id）の射影を取る。
-                            .Select(x => x.Item2)
-                            // Tuple.Item2の射影の中からRoles.Idと一致するRole(List<ApplicationRole>)のListを抽出して射影。
-                            .Select(x => UserStore._roles.First(y => y.Id == x))
-                            // 結果のApplicationRoleのListのApplicationRole.Nameの射影を取る。
-                            .Select(x => x.Name)
-                            // ApplicationRole.NameのListを射影
-                            .ToArray();
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-                            IEnumerable<ApplicationRole> roles = null;
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT [Roles].[Id] as Id, [Roles].[Name] as Name " +
-                                        "FROM   [Roles], [UserRoles], [Users] " +
-                                        "WHERE  [Roles].[Id] = [UserRoles].[RoleId] " +
-                                        "   AND [UserRoles].[UserId] = [Users].[Id] " +
-                                        "   AND [Users].[Id] = @UserId",
-                                        new { UserId = user.Id });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT \"Roles\".\"Id\" as Id, \"Roles\".\"Name\" as Name " +
-                                        "FROM   \"Roles\", \"UserRoles\", \"Users\" " +
-                                        "WHERE  \"Roles\".\"Id\" = \"UserRoles\".\"RoleId\" " +
-                                        "   AND \"UserRoles\".\"UserId\" = \"Users\".\"Id\" " +
-                                        "   AND \"Users\".\"Id\" = :UserId",
-                                        new { UserId = user.Id });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT \"roles\".\"id\" as id, \"roles\".\"name\" as name " +
-                                        "FROM   \"roles\", \"userroles\", \"users\" " +
-                                        "WHERE  \"roles\".\"id\" = \"userroles\".\"roleid\" " +
-                                        "   AND \"userroles\".\"userid\" = \"users\".\"id\" " +
-                                        "   AND \"users\".\"id\" = @userid",
-                                        new { UserId = user.Id });
-
-                                    break;
-                            }
-                            
-                            List<string> temp = new List<string>();
-                            foreach (ApplicationRole role in roles)
-                            {
-                                temp.Add(role.Name);
-                            }
-                            roleNames = temp.ToArray();
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            // ユーザのロール一覧を返す。
-            return Task.FromResult(roleNames);
+            return CmnUserStore.GetRolesAsync(user);
         }
 
         /// <summary>ユーザをロールから削除</summary>
@@ -1848,98 +339,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " +
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-            
-            try
-            {
-                // ユーザーをロールから削除
-                ApplicationRole role = null;
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // 名称の一致するロールを取得
-                        role = UserStore._roles.FirstOrDefault(x => x.Name == roleName);
-
-                        if (role == null)
-                        {
-                            // なにもしない（というか何もできない）
-                        }
-                        else
-                        {
-                            // UserRoleMapに含まれるTuple.Item1 == user.Id && Tuple.Item2 == role.IdのTupleを返す。
-                            Tuple<string, string> userRoleMap = UserStore._userRoleMap
-                                .FirstOrDefault(x => x.Item1 == user.Id && x.Item2 == role.Id);
-
-                            // ユーザをロールから削除
-                            if (userRoleMap != null)
-                            {
-                                // 取得できたら、Tupleを削除。
-                                UserStore._userRoleMap.Remove(userRoleMap);
-                            }
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ロール・マップを削除（ロール情報を取得する。
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "DELETE FROM [UserRoles] " +
-                                        "WHERE [UserRoles].[UserId] = @UserId " +
-                                        "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
-                                        new { UserId = user.Id, roleName = roleName });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "DELETE FROM \"UserRoles\" " +
-                                        "WHERE \"UserRoles\".\"UserId\" = :UserId " +
-                                        "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
-                                        new { UserId = user.Id, roleName = roleName });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "DELETE FROM \"userroles\" " +
-                                        "WHERE \"userroles\".\"userid\" = @UserId " +
-                                        "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
-                                        new { UserId = user.Id, roleName = roleName });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.RemoveFromRoleAsync(user, roleName);
         }
 
         #endregion
@@ -1956,19 +356,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetSecurityStampAsync(ApplicationUser user, string stamp)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // セキュリティスタンプを設定
-            user.SecurityStamp = stamp;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetSecurityStampAsync(user, stamp);
         }
 
         /// <summary>セキュリティスタンプを取得</summary>
@@ -1976,17 +364,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>SecurityStamp</returns>
         public Task<string> GetSecurityStampAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // セキュリティスタンプを取得
-            return Task.FromResult(user.SecurityStamp);
+            return CmnUserStore.GetSecurityStampAsync(user);
         }
 
         #endregion
@@ -1999,19 +377,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetLockoutEnabledAsync(ApplicationUser user, bool enabled)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザがロックアウト可能かどうかを設定
-            user.LockoutEnabled = enabled;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetLockoutEnabledAsync(user, enabled);
         }
 
         /// <summary>ユーザがロックアウト可能かどうかを取得</summary>
@@ -2019,17 +385,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>真・偽：ユーザがロックアウト可能かどうか</returns>
         public Task<bool> GetLockoutEnabledAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザがロックアウト可能かどうかを取得
-            return Task.FromResult(user.LockoutEnabled);
+            return CmnUserStore.GetLockoutEnabledAsync(user);
         }
 
         /// <summary>サインインに失敗した試行回数を記録</summary>
@@ -2037,19 +393,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>サインインに失敗した試行回数</returns>
         public Task<int> IncrementAccessFailedCountAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // サインインに失敗した試行回数を記録
-            user.AccessFailedCount++;
-
-            return Task.FromResult(user.AccessFailedCount);
+            return CmnUserStore.IncrementAccessFailedCountAsync(user);
         }
 
         /// <summary>失敗したサインインの試行回数を取得</summary>
@@ -2058,17 +402,7 @@ namespace MultiPurposeAuthSite.Data
         /// <remarks>パスワードが確認されるか、アカウントがロックアウトされるたびに、この数は、リセットされる。</remarks>
         public Task<int> GetAccessFailedCountAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 失敗したサインインの試行回数を取得
-            return Task.FromResult(user.AccessFailedCount);
+            return CmnUserStore.GetAccessFailedCountAsync(user);
         }
 
         /// <summary>失敗したサインインの試行回数をリセット</summary>
@@ -2079,19 +413,7 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task ResetAccessFailedCountAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 失敗したサインインの試行回数をリセット
-            user.AccessFailedCount = 0;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.ResetAccessFailedCountAsync(user);
         }
 
         /// <summary>
@@ -2106,22 +428,7 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task SetLockoutEndDateAsync(ApplicationUser user, DateTimeOffset lockoutEnd)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ロックアウト終了日を設定（指定された終了日まで、ユーザをロックアウト）
-
-            // DateTime と DateTimeOffset 間の変換
-            // https://msdn.microsoft.com/ja-jp/library/bb546101.aspx
-            user.LockoutEndDateUtc = lockoutEnd.DateTime;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetLockoutEndDateAsync(user, lockoutEnd);
         }
 
         /// <summary>
@@ -2134,29 +441,7 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task<DateTimeOffset> GetLockoutEndDateAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ロックアウト終了日を取得（指定された終了日まで、ユーザをロックアウト）
-
-            // DateTime と DateTimeOffset 間の変換
-            // https://msdn.microsoft.com/ja-jp/library/bb546101.aspx
-
-            if (user.LockoutEndDateUtc.HasValue)
-            {
-                return Task.FromResult(
-                    (DateTimeOffset)DateTime.SpecifyKind(user.LockoutEndDateUtc.Value, DateTimeKind.Utc));
-            }
-            else
-            {
-                return Task.FromResult(DateTimeOffset.MinValue);
-            }
+            return CmnUserStore.GetLockoutEndDateAsync(user);
         }
 
         #endregion
@@ -2169,19 +454,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 2FAの有効・無効を設定
-            user.TwoFactorEnabled = enabled;
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.SetTwoFactorEnabledAsync(user, enabled);
         }
 
         /// <summary>2FAの有効・無効を取得</summary>
@@ -2189,18 +462,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>真・偽：2FAが有効かどうか</returns>
         public Task<bool> GetTwoFactorEnabledAsync(ApplicationUser user)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // 2FAの有効・無効を取得
-
-            return Task.FromResult(user.TwoFactorEnabled);
+            return CmnUserStore.GetTwoFactorEnabledAsync(user);
         }
 
         #endregion
@@ -2218,70 +480,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task CreateAsync(ApplicationRole role)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // ロールを追加
-                        UserStore._roles.Add(role);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "INSERT INTO [Roles] ( [Id], [Name] ) VALUES ( @Id, @Name )", role);
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"Roles\" ( \"Id\", \"Name\" ) VALUES ( :Id, :Name )", role);
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"roles\" ( \"id\", \"name\" ) VALUES ( @Id, @Name )", role);
-
-                                    break;
-                            }
-
-                        }
-
-                        break;
-                }
-
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnRoleStore.CreateAsync(role);
         }
 
         #endregion
@@ -2293,76 +492,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationRole</returns>
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            ApplicationRole role = null;
-
-            try
-            {
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // ロールを ID から検索
-                        role = UserStore._roles.FirstOrDefault(x => x.Id == roleId);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザの情報の取得
-                            IEnumerable<ApplicationRole> roles = null;
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT * FROM [Roles] WHERE [Id] = @roleId", new { roleId = roleId });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT * FROM \"Roles\" WHERE \"Id\" = :roleId", new { roleId = roleId });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT * FROM \"roles\" WHERE \"id\" = @roleId", new { roleId = roleId });
-
-                                    break;
-                            }
-
-                            if (roles.Count() != 0)
-                            {
-                                role = roles.First();
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(role);
+            return CmnRoleStore.FindByIdAsync(roleId);
         }
 
         /// <summary>ロールを（ロール名指定で）検索</summary>
@@ -2375,77 +505,7 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            ApplicationRole role = null;
-            IEnumerable<ApplicationRole> roles = null;
-            
-            try
-            {
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // ロールを（ロール名指定で）検索
-                        role = UserStore._roles.FirstOrDefault(x => x.Name == roleName);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザの情報の取得
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT * FROM [Roles] WHERE [Name] = @roleName", new { roleName = roleName });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT * FROM \"Roles\" WHERE \"Name\" = :roleName", new { roleName = roleName });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    roles = cnn.Query<ApplicationRole>(
-                                        "SELECT * FROM \"roles\" WHERE \"name\" = @roleName", new { roleName = roleName });
-
-                                    break;
-                            }
-
-                            if (roles.Count() != 0)
-                            {
-                                role = roles.First();
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(role);
+            return CmnRoleStore.FindByNameAsync(roleName);
         }
 
         /// <summary>
@@ -2459,67 +519,7 @@ namespace MultiPurposeAuthSite.Data
         {
             get
             {
-                // 他テーブルのため、
-                // 管理系の機能のため、
-                OnlySts.STSOnly_M();
-
-                // Debug
-                Logging.MyDebugSQLTrace("★ : " + 
-                    MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                    "." + MethodBase.GetCurrentMethod().Name +
-                    UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-                // ロール
-                IEnumerable<ApplicationRole> roles = null;
-
-                try
-                {
-                    // ロール一覧を返す。
-                    switch (Config.UserStoreType)
-                    {
-                        case EnumUserStoreType.Memory:
-
-                            roles = UserStore._roles.ToList();
-
-                            break;
-
-                        case EnumUserStoreType.SqlServer:
-                        case EnumUserStoreType.ODPManagedDriver:
-                        case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                            using (IDbConnection cnn = DataAccess.CreateConnection())
-                            {
-                                cnn.Open();
-
-                                switch (Config.UserStoreType)
-                                {
-                                    case EnumUserStoreType.SqlServer:
-
-                                        roles = cnn.Query<ApplicationRole>("SELECT * FROM [Roles]");
-                                        break;
-
-                                    case EnumUserStoreType.ODPManagedDriver:
-
-                                        roles = cnn.Query<ApplicationRole>("SELECT * FROM \"Roles\"");
-                                        break;
-
-                                    case EnumUserStoreType.PostgreSQL:
-
-                                        roles = cnn.Query<ApplicationRole>("SELECT * FROM \"roles\"");
-                                        break;
-                                }
-                            }
-
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logging.MySQLLogForEx(ex);
-                }
-
-                // IQueryableとして戻す。
-                return roles.AsQueryable();
+                return CmnRoleStore.Roles;
             }
         }
 
@@ -2532,85 +532,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task UpdateAsync(ApplicationRole role)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " +
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-
-            try
-            {
-                // ロールを更新する
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // RolesからIdが同じApplicationRoleを取得する。
-                        ApplicationRole r = UserStore._roles.FirstOrDefault(x => x.Id == role.Id);
-
-                        if (r == null)
-                        {
-                            // ・・・
-                        }
-                        else
-                        {
-                            // ロールを更新（ApplicationRole.Nameを更新
-                            r.Name = role.Name;
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザー情報を更新
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "UPDATE [Roles] SET [Name] = @Name WHERE [Id] = @Id",
-                                        new { Id = role.Id, Name = role.Name });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "UPDATE \"Roles\" SET \"Name\" = :Name WHERE \"Id\" = :Id",
-                                        new { Id = role.Id, Name = role.Name });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "UPDATE \"roles\" SET \"name\" = @Name WHERE \"id\" = @Id",
-                                        new { Id = role.Id, Name = role.Name });
-
-                                    break;
-                            }
-
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnRoleStore.UpdateAsync(role);
         }
 
         #endregion
@@ -2622,125 +544,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task DeleteAsync(ApplicationRole role)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " +
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // ロールを削除する
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // Memory Providerには外部参照制約が無いので自らチェック
-                        Tuple<string, string> userRoleMap =
-                            UserStore._userRoleMap.FirstOrDefault(x => x.Item2 == role.Id);
-
-                        if (userRoleMap == null)
-                        {
-                            // RolesからIdが同じApplicationRoleを取得する。
-                            ApplicationRole r = UserStore._roles.FirstOrDefault(x => x.Id == role.Id);
-
-                            if (r == null)
-                            {
-                                // ・・・
-                            }
-                            else
-                            {
-                                // ロールを削除
-                                UserStore._roles.Remove(r);
-                            }
-                        }
-                        else
-                        {
-                            // 使用されているロールは削除しない。
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザー情報を更新
-                            int cnt = 0;
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    // 外部参照制約に依存しないようにチェック
-                                    cnt = cnn.ExecuteScalar<int>(
-                                        "SELECT COUNT(*) FROM [UserRoles] WHERE [RoleId] = @RoleId", new { RoleId = role.Id });
-
-                                    if (cnt == 0)
-                                    {
-                                        cnn.Execute(
-                                            "DELETE FROM [Roles] WHERE [Id] = @Id", new { Id = role.Id });
-                                    }
-                                    else
-                                    {
-                                        // 使用されているロールは削除しない。
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    // 外部参照制約に依存しないようにチェック
-                                    cnt = cnn.ExecuteScalar<int>(
-                                        "SELECT COUNT(*) FROM \"UserRoles\" WHERE \"RoleId\" = :RoleId", new { RoleId = role.Id });
-
-                                    if (cnt == 0)
-                                    {
-                                        cnn.Execute(
-                                            "DELETE FROM \"Roles\" WHERE \"Id\" = :Id", new { Id = role.Id });
-                                    }
-                                    else
-                                    {
-                                        // 使用されているロールは削除しない。
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    // 外部参照制約に依存しないようにチェック
-                                    cnt = cnn.ExecuteScalar<int>(
-                                        "SELECT COUNT(*) FROM \"userroles\" WHERE \"roleid\" = @RoleId", new { RoleId = role.Id });
-
-                                    if (cnt == 0)
-                                    {
-                                        cnn.Execute(
-                                            "DELETE FROM \"roles\" WHERE \"id\" = @Id", new { Id = role.Id });
-                                    }
-                                    else
-                                    {
-                                        // 使用されているロールは削除しない。
-                                    }
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnRoleStore.DeleteAsync(role);
         }
 
         #endregion
@@ -2757,74 +561,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // ユーザーに外部ログインを追加
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        user.Logins.Add(login);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "INSERT INTO [UserLogins] ([UserId], [LoginProvider], [ProviderKey]) " +
-                                        "VALUES (@UserId, @LoginProvider, @ProviderKey)",
-                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"UserLogins\" (\"UserId\", \"LoginProvider\", \"ProviderKey\") " +
-                                        "VALUES (:UserId, :LoginProvider, :ProviderKey)",
-                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"userlogins\" (\"userid\", \"loginprovider\", \"providerkey\") " +
-                                        "VALUES (@UserId, @LoginProvider, @ProviderKey)",
-                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.AddLoginAsync(user, login);
         }
 
         /// <summary>外部ログインでユーザーを検索</summary>
@@ -2832,112 +569,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindAsync(UserLoginInfo login)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            ApplicationUser user = null;
-
-            try
-            {
-                // 外部ログインでユーザーを検索
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        // LINQ挫折
-                        foreach (ApplicationUser x in UserStore._users)
-                        {
-                            if (x.Logins == null)
-                            {
-                                // null
-                            }
-                            else
-                            {
-                                foreach (UserLoginInfo y in x.Logins)
-                                {
-                                    if (y.LoginProvider == login.LoginProvider
-                                         && y.ProviderKey == login.ProviderKey)
-                                    {
-                                        user = x;
-
-                                        return Task.FromResult(user);
-                                    }
-                                }
-                            }
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            // ユーザの情報の取得
-                            IEnumerable<ApplicationUser> users = null;
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * From [Users], [UserLogins] " + // * でイケるか？
-                                        "WHERE  [Users].[Id] = [UserLogins].[UserId]" +
-                                        "    AND [UserLogins].[LoginProvider] = @LoginProvider" +
-                                        "    AND [UserLogins].[ProviderKey] = @ProviderKey",
-                                        new { LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * From \"Users\", \"UserLogins\" " + // * でイケるか？
-                                        "WHERE  \"Users\".\"Id\" = \"UserLogins\".\"UserId\"" +
-                                        "    AND \"UserLogins\".\"LoginProvider\" = :LoginProvider" +
-                                        "    AND \"UserLogins\".\"ProviderKey\" = :ProviderKey",
-                                        new { LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    users = cnn.Query<ApplicationUser>(
-                                        "SELECT * From \"users\", \"userlogins\" " + // * でイケるか？
-                                        "WHERE  \"users\".\"id\" = \"userlogins\".\"userid\"" +
-                                        "    AND \"userlogins\".\"loginprovider\" = @LoginProvider" +
-                                        "    AND \"userlogins\".\"providerkey\" = @ProviderKey",
-                                        new { LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-                            }
-
-                            if (users.Count() != 0)
-                            {
-                                user = users.First();
-
-                                // ユーザの関連情報の取得（ Roles, Logins, Claims ）
-                                this.SelectChildTablesOfUser(cnn, user);
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(user);
+            return CmnUserStore.FindAsync(login);
         }
 
         /// <summary>ユーザの外部ログイン一覧を取得</summary>
@@ -2945,24 +577,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>IList<UserLoginInfo></returns>>
         public Task<IList<UserLoginInfo>> GetLoginsAsync(ApplicationUser user)
         {
-            // 他テーブルのため、
-            //OnlySts.STSOnly_M();
-            if (OnlySts.STSOnly_P)
-            {
-                return Task.FromResult((IList<UserLoginInfo>)new List<UserLoginInfo>());
-            }
-
-            // ストレージを直接、触らない。
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザの外部ログイン一覧を取得
-
-            return Task.FromResult(user.Logins);
+            return CmnUserStore.GetLoginsAsync(user);
         }
 
         /// <summary>ユーザーから外部ログインを削除</summary>
@@ -2971,78 +586,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // ユーザーから外部ログインを削除
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        for (int i = 0; i < user.Logins.Count; i++)
-                        {
-                            if (user.Logins[i].LoginProvider == login.LoginProvider
-                                && user.Logins[i].ProviderKey == login.ProviderKey)
-                            {
-                                user.Logins.RemoveAt(i);
-                            }
-                        }
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "DELETE FROM [UserLogins] WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [ProviderKey] = @ProviderKey ",
-                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "DELETE FROM \"UserLogins\" WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"ProviderKey\" = :ProviderKey ",
-                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "DELETE FROM \"userlogins\" WHERE \"userid\" = @UserId AND \"loginprovider\" = @LoginProvider AND \"providerkey\" = @ProviderKey ",
-                                        new { UserId = user.Id, LoginProvider = login.LoginProvider, ProviderKey = login.ProviderKey });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.RemoveLoginAsync(user, login);
         }
 
         #endregion
@@ -3055,74 +599,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task AddClaimAsync(ApplicationUser user, Claim claim)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // ユーザに外部ログインのクレームを追加
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        user.Claims.Add(claim);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "INSERT INTO [UserClaims] ([UserId], [Issuer], [ClaimType], [ClaimValue]) " +
-                                        "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
-                                         new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"UserClaims\" (\"Id\", \"UserId\", \"Issuer\", \"ClaimType\", \"ClaimValue\") " +
-                                        "VALUES (TS_UserClaimID.NEXTVAL, :UserId, :Issuer, :ClaimType, :ClaimValue)",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"userclaims\" (\"id\", \"userid\", \"issuer\", \"claimtype\", \"claimvalue\") " +
-                                        "VALUES (@UserId, @Issuer, @ClaimType, @ClaimValue)",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type, ClaimValue = claim.Value });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.AddClaimAsync(user, claim);
         }
 
         /// <summary>ユーザの（外部ログインの）クレーム一覧を取得</summary>
@@ -3130,24 +607,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>IList<Claim></returns>
         public Task<IList<Claim>> GetClaimsAsync(ApplicationUser user)
         {
-            // 他テーブルのため、
-            //OnlySts.STSOnly_M();
-            if (OnlySts.STSOnly_P)
-            {
-                return Task.FromResult((IList<Claim>)new List<Claim>());
-            }
-
-            // ストレージを直接、触らない。
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            // ユーザの（外部ログインの）クレーム一覧を取得
-
-            return Task.FromResult(user.Claims);
+            return CmnUserStore.GetClaimsAsync(user);
         }
 
         /// <summary>ユーザの（外部ログインの）クレームを削除</summary>
@@ -3156,71 +616,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task RemoveClaimAsync(ApplicationUser user, Claim claim)
         {
-            // 他テーブルのため、
-            OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                UserStore.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            try
-            {
-                // ユーザの（外部ログインの）クレームを削除
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-
-                        user.Claims.Remove(claim);
-
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "DELETE FROM [UserClaims] WHERE [UserId] = @UserId AND [Issuer] = @Issuer AND [ClaimType] = @ClaimType",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "DELETE FROM \"UserClaims\" WHERE \"UserId\" = :UserId AND \"Issuer\" = :Issuer AND \"ClaimType\" = :ClaimType",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "DELETE FROM \"userclaims\" WHERE \"userid\" = @UserId AND \"issuer\" = @Issuer AND \"claimtype\" = @ClaimType",
-                                        new { UserId = user.Id, Issuer = claim.Issuer, ClaimType = claim.Type });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logging.MySQLLogForEx(ex);
-            }
-
-            return Task.FromResult(default(object));
+            return CmnUserStore.RemoveClaimAsync(user, claim);
         }
 
         #endregion

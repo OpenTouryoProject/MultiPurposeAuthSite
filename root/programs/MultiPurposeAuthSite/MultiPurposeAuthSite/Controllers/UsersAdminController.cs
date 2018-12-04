@@ -205,14 +205,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> List(UsersAdminSearchViewModel model)
+        public ActionResult List(UsersAdminSearchViewModel model)
         {
             this.Authorize();
 
             // ユーザ一覧表示
-            // マルチテナント化 : ASP.NET Identity上に分割キーを渡すI/Fが無いので已む無くSession。
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-            
+            // ASP.NET Identity上に検索条件を渡すI/Fが無いので已む無くSession。
             Session["SearchConditionOfUsers"] = model.UserNameforSearch; // ユーザ一覧の検索条件
 
             // Usersへのアクセスを非同期化出来ず

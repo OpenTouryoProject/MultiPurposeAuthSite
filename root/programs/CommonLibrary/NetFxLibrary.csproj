@@ -168,7 +168,10 @@
   <ItemGroup>
     <Compile Include="Co\Config.cs" />
     <Compile Include="Co\Const.cs" />
+    <Compile Include="Data\CmnStore.cs" />
+    <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
+    <Compile Include="Data\CmnUserStore.cs" />
     <Compile Include="Extensions\FIDO2\Helper.cs" />
     <Compile Include="Extensions\OAuth2\DataProvider.cs" />
     <Compile Include="Extensions\OAuth2\Helper.cs" />

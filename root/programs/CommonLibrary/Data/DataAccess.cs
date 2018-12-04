@@ -34,13 +34,17 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Log;
 
+using System;
 using System.Data;
 using System.Data.SqlClient;
+using System.Reflection;
+using System.Threading.Tasks;
 #if NETFX
 using Oracle.ManagedDataAccess.Client;
 # endif
 using Npgsql;
 
+using Dapper;
 using StackExchange.Profiling.Data;
 
 using Touryo.Infrastructure.Public.Util;
@@ -50,7 +54,7 @@ namespace MultiPurposeAuthSite.Data
     /// <summary>DataAccessクラス</summary>
     public class DataAccess
     {
-#region DB接続
+        #region DB接続
 
         /// <summary>Connectionオブジェクト生成メソッド</summary>
         /// <returns>IDbConnection</returns>
@@ -83,10 +87,63 @@ namespace MultiPurposeAuthSite.Data
             }
         }
 
-#endregion
+        #endregion
 
-#region その他の接続
-        // ・・・
-#endregion
+        #region 初期化
+
+        /// <summary>DBMSの初期化確認メソッド</summary>
+        /// <returns>bool</returns>
+        public static Task<bool> IsDBMSInitialized()
+        {
+            // テスト時の機能のため、
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace("★ : " +
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            try
+            {
+                using (IDbConnection cnn = DataAccess.CreateConnection())
+                {
+                    cnn.Open();
+                    int count = 0;
+
+                    // [Roles] が [Users] に先立って登録されるので。
+                    switch (Config.UserStoreType)
+                    {
+                        case EnumUserStoreType.SqlServer:
+
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM [Roles]");
+
+                            break;
+
+                        case EnumUserStoreType.ODPManagedDriver:
+
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"Roles\"");
+
+                            break;
+
+                        case EnumUserStoreType.PostgreSQL:
+
+                            count = cnn.ExecuteScalar<int>("SELECT COUNT(*) FROM \"roles\"");
+
+                            break;
+                    }
+
+                    return Task.FromResult((0 < count));
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.MySQLLogForEx(ex);
+            }
+
+            return Task.FromResult(false); ;
+        }
+
+        #endregion
     }
 }

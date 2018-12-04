@@ -31,12 +31,13 @@
 //*  2017/06/14  西野 大介         新規
 //**********************************************************************************
 
-using System;
-using System.Diagnostics;
-using System.Runtime.ExceptionServices;
-
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
+
+using System;
+using System.Reflection;
+using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 
 using Touryo.Infrastructure.Public.Log;
 
@@ -148,5 +149,29 @@ namespace MultiPurposeAuthSite.Log
             }
         }
         #endregion
+        
+        /// <summary>GetParametersString</summary>
+        /// <param name="parameters">string[]</param>
+        /// <returns>Parameters string</returns>
+        public static string GetParametersString(ParameterInfo[] parameters)
+        {
+            string s = "";
+
+            if (Config.IsDebug)
+            {
+                s += "(";
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    s += parameters[i].Name + ", ";
+                }
+                if (s.Length >= 2)
+                {
+                    s = s.Substring(0, s.Length - 2);
+                }
+                s += ")";
+            }
+
+            return s;
+        }
     }
 }
