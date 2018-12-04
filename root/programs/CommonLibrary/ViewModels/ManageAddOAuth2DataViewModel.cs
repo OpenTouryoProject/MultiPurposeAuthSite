@@ -26,8 +26,8 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>OAuth2関連の非構造化データ設定用のVM</summary>
     public class ManageAddOAuth2DataViewModel : BaseViewModel

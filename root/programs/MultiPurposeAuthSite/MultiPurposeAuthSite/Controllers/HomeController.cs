@@ -117,7 +117,7 @@ namespace MultiPurposeAuthSite.Controllers
             Config.OAuth2AuthorizationServerEndpointsRootURI
             + Config.OAuth2AuthorizeEndpoint;
 
-            this.ClientId = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+            this.ClientId = Helper.GetInstance().GetClientIdByName("TestClient");
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
             this.Nonce = GetPassword.Generate(20, 0); // 記号は入れない。
 
@@ -433,17 +433,17 @@ namespace MultiPurposeAuthSite.Controllers
             if (User.Identity.IsAuthenticated)
             {
                 // User Accountの場合、
-                client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+                client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                client_secret = Helper.GetInstance().GetClientSecret(client_id);
             }
             else
             {
                 // Client Accountの場合、
-                client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
-                client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+                client_id = Helper.GetInstance().GetClientIdByName("TestClient");
+                client_secret = Helper.GetInstance().GetClientSecret(client_id);
             }
 
-            string response = await OAuth2Helper.GetInstance()
+            string response = await Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI
                      + Config.OAuth2BearerTokenEndpoint),
@@ -474,19 +474,19 @@ namespace MultiPurposeAuthSite.Controllers
             if (User.Identity.IsAuthenticated)
             {
                 // User Accountの場合、
-                iss = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                iss = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
             }
             else
             {
                 // Client Accountの場合、
-                iss = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
+                iss = Helper.GetInstance().GetClientIdByName("TestClient");
             }
 
             // テストなので秘密鍵は共通とする。
             string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
             privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
 
-            string response = await OAuth2Helper.GetInstance()
+            string response = await Helper.GetInstance()
                 .JwtBearerTokenFlowAsync(new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI
                      + Config.OAuth2BearerTokenEndpoint2),

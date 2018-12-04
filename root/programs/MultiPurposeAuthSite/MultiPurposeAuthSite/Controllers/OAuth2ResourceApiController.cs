@@ -36,9 +36,9 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Extensions.OAuth2;
 
-using MultiPurposeAuthSite.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Text;
@@ -370,7 +370,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (user == null)
             {
                 // Client認証
-                subject = OAuth2Helper.GetInstance().GetClientName(claim_aud.Value);
+                subject = Helper.GetInstance().GetClientName(claim_aud.Value);
             }
             else
             {
@@ -478,7 +478,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                 {
                     // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(clientId))
+                    if (clientSecret == Helper.GetInstance().GetClientSecret(clientId))
                     {
                         // 検証完了
 
@@ -504,7 +504,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     x => x.Type == OAuth2AndOIDCConst.Claim_JwtId).FirstOrDefault<Claim>();
 
                                 // access_token取消
-                                OAuth2RevocationProvider.GetInstance().Create(jti.Value);
+                                RevocationProvider.GetInstance().Create(jti.Value);
                                 return null; // 成功
                             }
                         }
@@ -602,7 +602,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                 {
                     // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(clientId))
+                    if (clientSecret == Helper.GetInstance().GetClientSecret(clientId))
                     {
                         // 検証完了
                         AuthenticationTicket ticket = null;
@@ -757,7 +757,7 @@ namespace MultiPurposeAuthSite.Controllers
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                         assertion.Split('.')[1]), CustomEncode.us_ascii));
 
-                string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
                 pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                 if (!string.IsNullOrEmpty(pubKey))
@@ -775,7 +775,7 @@ namespace MultiPurposeAuthSite.Controllers
                             + Config.OAuth2BearerTokenEndpoint2)
                         {
                             // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
-                            ClaimsIdentity identity = OAuth2Helper.AddClaim(
+                            ClaimsIdentity identity = Helper.AddClaim(
                                 new ClaimsIdentity(OAuthDefaults.AuthenticationType), iss, "", scopes.Split(' '), "");
 
                             AuthenticationProperties prop = new AuthenticationProperties();
@@ -797,7 +797,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ret.Add("expires_in", (long.Parse((string)jobj[OAuth2AndOIDCConst.exp]) - long.Parse((string)jobj[OAuth2AndOIDCConst.iat])).ToString());
 
                             // オペレーション・トレース・ログ出力
-                            string clientName = OAuth2Helper.GetInstance().GetClientName(iss);
+                            string clientName = Helper.GetInstance().GetClientName(iss);
                             Logging.MyOperationTrace(string.Format(
                                 "{0}({1}) passed the 'jwt bearer token flow' by {2}({3}).",
                                 iss, clientName, iss, clientName));
@@ -864,8 +864,8 @@ namespace MultiPurposeAuthSite.Controllers
             Dictionary<string, string> dic = null;
 
             //  client_Idから、client_secretを取得。
-            string client_id = OAuth2Helper.GetInstance().GetClientIdByName("TestClient");
-            string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+            string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
+            string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
             // Hybridは、Implicitのredirect_uriを使用
             string redirect_uri 
@@ -873,13 +873,13 @@ namespace MultiPurposeAuthSite.Controllers
                 + Config.OAuth2ImplicitGrantClient_Account;
 
             // Tokenエンドポイントにアクセス
-            string response = await OAuth2Helper.GetInstance()
+            string response = await Helper.GetInstance()
             .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
             dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
 
             // UserInfoエンドポイントにアクセス
             dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                await OAuth2Helper.GetInstance().GetUserInfoAsync(dic[OAuth2AndOIDCConst.AccessToken]));
+                await Helper.GetInstance().GetUserInfoAsync(dic[OAuth2AndOIDCConst.AccessToken]));
 
             return dic;
         }

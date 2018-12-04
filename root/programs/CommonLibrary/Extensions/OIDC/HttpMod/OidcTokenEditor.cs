@@ -47,7 +47,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter
+namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
 {
     /// <summary>OIDC用のtoken編集処理クラス</summary>
     /// <remarks>

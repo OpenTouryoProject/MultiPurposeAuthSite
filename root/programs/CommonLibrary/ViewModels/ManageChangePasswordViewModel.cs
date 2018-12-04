@@ -21,8 +21,8 @@
 using System.ComponentModel.DataAnnotations;
 using MultiPurposeAuthSite.Co;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>パスワードの変更画面用のVM（テンプレート）</summary>
     public class ManageChangePasswordViewModel : BaseViewModel

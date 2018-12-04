@@ -33,7 +33,10 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
+#if NETFX
 using MultiPurposeAuthSite.Manager;
+#else
+#endif
 using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
@@ -43,9 +46,13 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
+#if NETFX
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
+#else
+using Microsoft.AspNetCore.Authentication;
+#endif
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -55,7 +62,7 @@ using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>AccessTokenFormatJwt</summary>
     public class AccessTokenFormatJwt: ISecureDataFormat<AuthenticationTicket>
@@ -127,7 +134,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
             {
                 // Client認証の場合、aud（client_id）に対応するClient名称
                 authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, 
-                    OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]));
+                    Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]));
             }
             else
             {
@@ -281,13 +288,13 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                 //  ★ "exp": JWT の有効期限（Unix時間）
                 //  ☆ "jti": JWT のID（OAuth Token Revocation）
 
-                DateTime? datetime = OAuth2RevocationProvider.GetInstance().Get((string)authTokenClaimSet[OAuth2AndOIDCConst.jti]);
+                DateTime? datetime = RevocationProvider.GetInstance().Get((string)authTokenClaimSet[OAuth2AndOIDCConst.jti]);
 
                 if (datetime == null)
                 {
                     // authToken.iss, authToken.expの検証
                     if ((string)authTokenClaimSet[OAuth2AndOIDCConst.iss] == Config.OAuth2IssuerId
-                        && OAuth2Helper.GetInstance().GetClientSecret((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]) != null
+                        && Helper.GetInstance().GetClientSecret((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]) != null
                         && long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.exp]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                     {
                         // authToken.subの検証
@@ -310,7 +317,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                                 scopes.Add(s);
                             }
 
-                            OAuth2Helper.AddClaim(identity,
+                            Helper.AddClaim(identity,
                                 (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes,　(string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
 
                             // その他、所定のClaimを追加する。
@@ -335,7 +342,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
 
                             // ClaimとStoreのAudience(aud)に対応するSubject(sub)が一致するかを確認し、一致する場合のみ、認証する。
                             // ※ でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
-                            if ((string)authTokenClaimSet[OAuth2AndOIDCConst.sub] == OAuth2Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]))
+                            if ((string)authTokenClaimSet[OAuth2AndOIDCConst.sub] == Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]))
                             {
                                 // ClaimsIdentityを生成し、
                                 ClaimsIdentity identity = new ClaimsIdentity(DefaultAuthenticationTypes.ExternalBearer);
@@ -350,7 +357,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                                     scopes.Add(s);
                                 }
 
-                                OAuth2Helper.AddClaim(identity,
+                                Helper.AddClaim(identity,
                                     (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
 
                                 // その他、所定のClaimを追加する。

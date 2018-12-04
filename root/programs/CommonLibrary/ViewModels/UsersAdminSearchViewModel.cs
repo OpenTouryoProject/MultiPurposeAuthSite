@@ -25,8 +25,8 @@ using MultiPurposeAuthSite.Co;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>ユーザ管理画面用のVM（テンプレート）</summary>
     public class UsersAdminSearchViewModel : BaseViewModel

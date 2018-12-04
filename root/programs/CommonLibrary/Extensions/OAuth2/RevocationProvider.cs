@@ -46,10 +46,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
     /// OAuth2RevocationProvider
     /// RevocationしたOAuth2のaccess_tokenのjtiを保存する。
     /// </summary>
-    public class OAuth2RevocationProvider
+    public class RevocationProvider
     {
         /// <summary>シングルトン</summary>
-        private static OAuth2RevocationProvider _OAuth2RevocationProvider = new OAuth2RevocationProvider();
+        private static RevocationProvider _OAuth2RevocationProvider = new RevocationProvider();
 
         /// <summary>
         /// OAuth2RevocationProvider
@@ -59,9 +59,9 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         /// <summary>GetInstance</summary>
         /// <returns>OAuth2RevocationProvider</returns>
-        public static OAuth2RevocationProvider GetInstance()
+        public static RevocationProvider GetInstance()
         {
-            return OAuth2RevocationProvider._OAuth2RevocationProvider;
+            return RevocationProvider._OAuth2RevocationProvider;
         }
 
         #region Create
@@ -73,7 +73,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    OAuth2RevocationProvider.OAuth2Revocation.TryAdd(jti, DateTime.Now);
+                    RevocationProvider.OAuth2Revocation.TryAdd(jti, DateTime.Now);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -132,7 +132,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 case EnumUserStoreType.Memory:
 
                     DateTime temp = DateTime.MinValue;
-                    if (OAuth2RevocationProvider.OAuth2Revocation.TryGetValue(jti, out temp))
+                    if (RevocationProvider.OAuth2Revocation.TryGetValue(jti, out temp))
                     {
                         datetime = temp;
                     }

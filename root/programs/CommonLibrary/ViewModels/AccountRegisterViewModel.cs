@@ -22,8 +22,8 @@ using MultiPurposeAuthSite.Co;
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>サインアップ画面用のVM（テンプレート）</summary>
     public class AccountRegisterViewModel : BaseViewModel

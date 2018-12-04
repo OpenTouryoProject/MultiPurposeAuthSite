@@ -27,8 +27,8 @@ using Microsoft.AspNet.Identity;
 using Microsoft.AspNetCore.Identity;
 #endif
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>ManageIndexViewModel</summary>
     public class ManageIndexViewModel : BaseViewModel

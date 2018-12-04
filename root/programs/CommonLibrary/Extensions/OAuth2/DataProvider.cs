@@ -46,10 +46,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
     /// OAuth2DataProvider
     /// OAuth2DataにUnstructuredDataを保存する。
     /// </summary>
-    public class OAuth2DataProvider
+    public class DataProvider
     {
         /// <summary>シングルトン</summary>
-        private static OAuth2DataProvider _OAuth2DataProvider = new OAuth2DataProvider();
+        private static DataProvider _OAuth2DataProvider = new DataProvider();
 
         /// <summary>
         /// OAuth2Data
@@ -59,9 +59,9 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         /// <summary>GetInstance</summary>
         /// <returns>OAuth2DataProvider</returns>
-        public static OAuth2DataProvider GetInstance()
+        public static DataProvider GetInstance()
         {
-            return OAuth2DataProvider._OAuth2DataProvider;
+            return DataProvider._OAuth2DataProvider;
         }
 
         #region Create
@@ -74,7 +74,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    OAuth2DataProvider.OAuth2Data.TryAdd(clientID, unstructuredData);
+                    DataProvider.OAuth2Data.TryAdd(clientID, unstructuredData);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -131,7 +131,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    OAuth2DataProvider.OAuth2Data.TryGetValue(clientID, out unstructuredData);
+                    DataProvider.OAuth2Data.TryGetValue(clientID, out unstructuredData);
 
                     break;
 
@@ -188,8 +188,8 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 case EnumUserStoreType.Memory:
                     // OAuth2DataProvider.OAuth2Data.TryUpdate が使えないので del -> ins にする。
                     string temp = "";
-                    OAuth2DataProvider.OAuth2Data.TryRemove(clientID, out temp);
-                    OAuth2DataProvider.OAuth2Data.TryAdd(clientID, unstructuredData);
+                    DataProvider.OAuth2Data.TryRemove(clientID, out temp);
+                    DataProvider.OAuth2Data.TryAdd(clientID, unstructuredData);
 
                     break;
 
@@ -245,7 +245,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             {
                 case EnumUserStoreType.Memory:
                     string unstructuredData = "";
-                    OAuth2DataProvider.OAuth2Data.TryRemove(clientID, out unstructuredData);
+                    DataProvider.OAuth2Data.TryRemove(clientID, out unstructuredData);
 
                     break;
 

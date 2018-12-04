@@ -34,7 +34,7 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 
-using MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter;
+using MultiPurposeAuthSite.Extensions.OIDC.HttpMod;
 
 using System;
 using System.IO;
@@ -57,7 +57,7 @@ using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>
     /// AuthorizationCodeのProvider

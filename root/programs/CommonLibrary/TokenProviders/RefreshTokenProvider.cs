@@ -42,14 +42,13 @@ using Microsoft.Owin.Security.Infrastructure;
 using Microsoft.Owin.Security.DataHandler.Serializer;
 
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Co;
 
 using Dapper;
 
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>
     /// RefreshTokenのProvider

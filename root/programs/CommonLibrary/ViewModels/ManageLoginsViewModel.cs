@@ -28,8 +28,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Http.Authentication;
 #endif
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>外部ログインの管理画面用のVM</summary>
     public class ManageLoginsViewModel : BaseViewModel

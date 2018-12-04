@@ -20,8 +20,8 @@
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>電話番号の追加画面用のVM（テンプレート）</summary>
     public class ManageAddPhoneNumberViewModel : BaseViewModel

@@ -18,7 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ViewModels;
+using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Manager;

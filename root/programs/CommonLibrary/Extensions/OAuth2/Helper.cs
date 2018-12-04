@@ -31,7 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ViewModels;
+using MultiPurposeAuthSite.ViewModels;
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
@@ -69,12 +69,12 @@ using Touryo.Infrastructure.Framework.Authentication;
 namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
     /// <summary>OAuth2Helper（ライブラリ）</summary>
-    public class OAuth2Helper
+    public class Helper
     {
         #region member variable
 
         /// <summary>Singleton (instance)</summary>
-        private static OAuth2Helper _oAuth2Helper = new OAuth2Helper();
+        private static Helper _oAuth2Helper = new Helper();
 
         /// <summary>クライアント識別子情報</summary>
         private Dictionary<string, Dictionary<string, string>> _oauth2ClientsInfo = null;
@@ -99,7 +99,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         #region constructor
 
         /// <summary>constructor</summary>
-        private OAuth2Helper()
+        private Helper()
         {
             // クライアント識別子情報
             this._oauth2ClientsInfo =
@@ -143,9 +143,9 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         /// <summary>GetInstance</summary>
         /// <returns>OAuthHelper</returns>
-        public static OAuth2Helper GetInstance()
+        public static Helper GetInstance()
         {
-            return OAuth2Helper._oAuth2Helper;
+            return Helper._oAuth2Helper;
         }
 
         #endregion
@@ -401,7 +401,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
@@ -439,7 +439,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // OAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
 
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
@@ -472,7 +472,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
@@ -507,7 +507,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = OAuth2DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);

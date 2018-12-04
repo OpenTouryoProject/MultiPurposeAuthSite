@@ -26,8 +26,8 @@ using System.Web.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 #endif
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>2FA画面でコードの送信用のVM</summary>
     public class AccountSendCodeViewModel : BaseViewModel

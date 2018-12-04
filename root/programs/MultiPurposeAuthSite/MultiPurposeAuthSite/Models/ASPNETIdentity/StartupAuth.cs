@@ -18,6 +18,13 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Network;
+using MultiPurposeAuthSite.TokenProviders;
+
 using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -36,17 +43,8 @@ using Microsoft.Owin.Security.Google;
 using Microsoft.Owin.Security.Facebook;
 using Microsoft.Owin.Security.Twitter;
 
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Co;
-
-using MultiPurposeAuthSite.ASPNETIdentity.TokenProviders;
-
 using Touryo.Infrastructure.Framework.Authentication;
 
-/// <summary>MultiPurposeAuthSite.ASPNETIdentity</summary>
 namespace MultiPurposeAuthSite.ASPNETIdentity
 {
     /// <summary>

@@ -27,7 +27,7 @@ using MultiPurposeAuthSite.Notification;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Extensions.OAuth2;
 
-using MultiPurposeAuthSite.Models.ViewModels;
+using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.ASPNETIdentity.ExternalLoginHelper;
 
 
@@ -213,7 +213,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                string oAuth2Data = OAuth2DataProvider.GetInstance().Get(user.ClientID);
+                string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
@@ -1741,7 +1741,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 課金のテスト処理
                 string ret = (string)JsonConvert.DeserializeObject(
-                    await OAuth2Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
+                    await Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
                     (string)Session[OAuth2AndOIDCConst.AccessToken], "jpy", "1000"));
 
                 if (ret == "OK")
@@ -1999,7 +1999,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddOAuth2DataViewModel model = null;
 
-                string oAuth2Data = OAuth2DataProvider.GetInstance().Get(user.ClientID);
+                string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
 
                 if (!string.IsNullOrEmpty(oAuth2Data))
                 {
@@ -2071,7 +2071,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                OAuth2DataProvider.GetInstance().Update(user.ClientID, unstructuredData);
+                                DataProvider.GetInstance().Update(user.ClientID, unstructuredData);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -2090,8 +2090,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 成功
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) OAuth2DataProvider.GetInstance().Delete(temp);
-                                    OAuth2DataProvider.GetInstance().Create(user.ClientID, unstructuredData);
+                                    if (!string.IsNullOrEmpty(temp)) DataProvider.GetInstance().Delete(temp);
+                                    DataProvider.GetInstance().Create(user.ClientID, unstructuredData);
 
                                     // 再ログイン
                                     await this.ReSignInAsync();
@@ -2156,7 +2156,7 @@ namespace MultiPurposeAuthSite.Controllers
                     + Config.OAuth2AuthorizeEndpoint;
 
                     // client_id
-                    string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
 
                     // redirect_uri
                     string redirect_uri = CustomEncode.UrlEncode2(
@@ -2203,7 +2203,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // OAuth2関連の非構造化データのクリア
-                OAuth2DataProvider.GetInstance().Delete(user.ClientID);
+                DataProvider.GetInstance().Delete(user.ClientID);
 
                 // ユーザーの保存（ClientIDのクリア）
                 //user.ClientID = ""; 一意制約エラーになるので
@@ -2531,8 +2531,8 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+                string client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
                 // stateの検証
                 if (state == (string)Session["get_oauth2_token_state"])
@@ -2548,7 +2548,7 @@ namespace MultiPurposeAuthSite.Controllers
                         + Config.OAuth2AuthorizationCodeGrantClient_Manage;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2Helper.GetInstance()
+                    model.Response = await Helper.GetInstance()
                         .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -2610,10 +2610,10 @@ namespace MultiPurposeAuthSite.Controllers
                     // Tokenエンドポイントにアクセス
 
                     //  client_Idから、client_secretを取得。
-                    string client_id = OAuth2Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                    string client_secret = OAuth2Helper.GetInstance().GetClientSecret(client_id);
+                    string client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                    model.Response = await OAuth2Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                    model.Response = await Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
                         tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 

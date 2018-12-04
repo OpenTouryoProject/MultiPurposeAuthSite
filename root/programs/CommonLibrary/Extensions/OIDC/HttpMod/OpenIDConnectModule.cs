@@ -32,7 +32,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.ASPNETIdentity.TokenProviders;
+using MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.Text.RegularExpressions;
@@ -42,7 +42,7 @@ using System.Web;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
-namespace MultiPurposeAuthSite.ASPNETIdentity.OIDCFilter
+namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
 {
     /// <summary>
     /// OpenIDConnect対応用のHttpModule

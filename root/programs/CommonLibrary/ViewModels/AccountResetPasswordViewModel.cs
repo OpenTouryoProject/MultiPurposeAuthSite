@@ -18,11 +18,12 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using System.ComponentModel.DataAnnotations;
 using MultiPurposeAuthSite.Co;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+using System.ComponentModel.DataAnnotations;
+
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>パスワード・リセット用のVM</summary>
     public class AccountResetPasswordViewModel : BaseViewModel

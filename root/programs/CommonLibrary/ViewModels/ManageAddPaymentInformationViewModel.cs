@@ -20,8 +20,8 @@
 
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>支払元情報設定用のVM</summary>
     public class ManageAddPaymentInformationViewModel : BaseViewModel

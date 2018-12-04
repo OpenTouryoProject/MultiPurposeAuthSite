@@ -21,8 +21,8 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>2FA画面でコードの検証用のVM</summary>
     public class AccountVerifyCodeViewModel : BaseViewModel

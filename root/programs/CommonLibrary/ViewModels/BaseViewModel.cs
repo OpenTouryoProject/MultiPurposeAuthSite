@@ -35,7 +35,7 @@ using System;
 using Touryo.Infrastructure.Business.Util;
 using Touryo.Infrastructure.Framework.Util;
 
-namespace MultiPurposeAuthSite.Models.ViewModels
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>BaseViewModel</summary>
     [Serializable]

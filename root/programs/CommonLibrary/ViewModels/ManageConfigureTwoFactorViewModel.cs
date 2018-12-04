@@ -26,8 +26,8 @@ using System.Web.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 #endif
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>2FA設定画面用のVM（テンプレート）</summary>
     public class ManageConfigureTwoFactorViewModel : BaseViewModel

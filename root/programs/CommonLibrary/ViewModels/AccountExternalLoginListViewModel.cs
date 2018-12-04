@@ -18,8 +18,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-/// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
-namespace MultiPurposeAuthSite.Models.ViewModels
+/// <summary>MultiPurposeAuthSite.ViewModels</summary>
+namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>
     /// 外部ログインList表示用のVM

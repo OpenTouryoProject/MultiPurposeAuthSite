@@ -56,8 +56,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
-/// <summary>MultiPurposeAuthSite.ASPNETIdentity.TokenProviders</summary>
-namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
+namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>
     /// OAuthAuthorizationServerProviderの派生クラス。
@@ -178,7 +177,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                 // redirect_uriの指定が無い。
 
                 // クライアント識別子に対応する事前登録したredirect_uriを取得する。
-                redirect_uri = OAuth2Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+                redirect_uri = Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
                 if (!string.IsNullOrEmpty(redirect_uri))
                 {
@@ -229,7 +228,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                 else
                 {
                     // クライアント識別子に対応する事前登録したredirect_uriに
-                    string preRegisteredUri = OAuth2Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
+                    string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
 
                     //if (redirect_uri.StartsWith(preRegisteredUri))
                     if (redirect_uri == preRegisteredUri)
@@ -295,7 +294,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                     if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
@@ -313,7 +312,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                             CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                                 assertion.Split('.')[1]), CustomEncode.us_ascii));
 
-                        string pubKey = OAuth2Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                        string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
                         pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                         if (!string.IsNullOrEmpty(pubKey))
@@ -361,7 +360,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                     if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
@@ -381,7 +380,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                     if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
@@ -406,7 +405,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                     if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                     {
                         // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == OAuth2Helper.GetInstance().GetClientSecret(context.ClientId))
+                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
                         {
                             // 検証完了
                             context.Validated(clientId);
@@ -470,14 +469,14 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                         ClaimsIdentity identity = await userManager.CreateIdentityAsync(user, OAuthDefaults.AuthenticationType);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
+                        Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
                         // 検証完了
                         context.Validated(identity);
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
-                            user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+                            user.Id, user.UserName, context.ClientId, Helper.GetInstance().GetClientName(context.ClientId)));
                     }
                     catch
                     {
@@ -548,7 +547,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
 
                 // client_idに対応するApplicationUserを取得する。
                 user = await userManager.FindByNameAsync(
-                    OAuth2Helper.GetInstance().GetClientName(context.ClientId));
+                    Helper.GetInstance().GetClientName(context.ClientId));
 
                 // ClaimsIdentity
                 ClaimsIdentity identity = null;
@@ -559,12 +558,12 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                     // ユーザーに対応するClaimsIdentityを生成する。
                     identity = await userManager.CreateIdentityAsync(user, OAuthDefaults.AuthenticationType);
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
+                    identity = Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(
                         string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
-                        user.Id, user.UserName, context.ClientId, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+                        user.Id, user.UserName, context.ClientId, Helper.GetInstance().GetClientName(context.ClientId)));
 
                     // 検証完了
                     context.Validated(identity);
@@ -573,7 +572,7 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                 {
                     // Client Accountの場合、
 
-                    string clientName = OAuth2Helper.GetInstance().GetClientName(context.ClientId);
+                    string clientName = Helper.GetInstance().GetClientName(context.ClientId);
                     if (string.IsNullOrEmpty(clientName))
                     {
                         // 検証失敗
@@ -584,9 +583,9 @@ namespace MultiPurposeAuthSite.ASPNETIdentity.TokenProviders
                         // ClaimsIdentityを自前で生成する。
                         identity = new ClaimsIdentity(context.Options.AuthenticationType);
                         // Name Claimを追加
-                        identity.AddClaim(new Claim(ClaimTypes.Name, OAuth2Helper.GetInstance().GetClientName(context.ClientId)));
+                        identity.AddClaim(new Claim(ClaimTypes.Name, Helper.GetInstance().GetClientName(context.ClientId)));
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        identity = OAuth2Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
+                        identity = Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format(
