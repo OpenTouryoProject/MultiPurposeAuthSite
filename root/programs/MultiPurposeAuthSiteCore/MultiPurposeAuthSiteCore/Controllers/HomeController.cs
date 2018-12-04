@@ -18,13 +18,29 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Models;
+#if NETFX
+using MultiPurposeAuthSite.Entity;
+#else
+using MultiPurposeAuthSite;
+#endif
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Services;
+
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+using System.Security.Claims;
+using System.Diagnostics;
 using System.Threading.Tasks;
+
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using MultiPurposeAuthSite.Models;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MultiPurposeAuthSite.Controllers
 {

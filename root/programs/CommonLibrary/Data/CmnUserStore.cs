@@ -28,11 +28,15 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2017/04/24  西野 大介         新規
+//*  2018/12/04  西野 大介         新規
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+#if NETFX
 using MultiPurposeAuthSite.Entity;
+#else
+using MultiPurposeAuthSite;
+#endif
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.Sts;

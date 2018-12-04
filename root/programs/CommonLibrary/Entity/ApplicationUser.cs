@@ -33,8 +33,13 @@ using Microsoft.AspNetCore.Identity;
 
 using Newtonsoft.Json;
 
+#if NETFX
 /// <summary>MultiPurposeAuthSite.Entity</summary>
 namespace MultiPurposeAuthSite.Entity
+#else
+/// <summary>MultiPurposeAuthSite</summary>
+namespace MultiPurposeAuthSite // ルートでないとダメ？
+#endif
 {
     /// <summary>
     /// You can add profile data for the user by adding more properties to your ApplicationUser class,
@@ -151,6 +156,9 @@ namespace MultiPurposeAuthSite.Entity
         /// Gets or sets the user name ( = Email) .
         /// </summary>
         public string UserName { get; set; }
+
+        /// <summary>Name</summary>
+        public string NormalizedUserName { get; set; }
 
         /// <summary>salted / hashed form of the user password</summary>
         private string _passwordHash = "";

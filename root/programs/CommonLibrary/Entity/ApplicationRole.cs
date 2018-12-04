@@ -25,8 +25,13 @@ using Microsoft.AspNet.Identity;
 using Microsoft.AspNetCore.Identity;
 #endif
 
+#if NETFX
 /// <summary>MultiPurposeAuthSite.Entity</summary>
 namespace MultiPurposeAuthSite.Entity
+#else
+/// <summary>MultiPurposeAuthSite</summary>
+namespace MultiPurposeAuthSite // ルートでないとダメ？
+#endif
 {
     /// <summary>ApplicationRole</summary>
 #if NETFX
@@ -50,6 +55,9 @@ namespace MultiPurposeAuthSite.Entity
 
         /// <summary>Name</summary>
         public string Name { get; set; }
+
+        /// <summary>Name</summary>
+        public string NormalizedName { get; set; }
 
         #endregion
 

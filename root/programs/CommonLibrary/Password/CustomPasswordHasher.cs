@@ -32,11 +32,13 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+#if NETFX
 using MultiPurposeAuthSite.Entity;
 
-#if NETFX
 using Microsoft.AspNet.Identity;
 #else
+using MultiPurposeAuthSite;
+
 using Microsoft.AspNetCore.Identity;
 #endif
 

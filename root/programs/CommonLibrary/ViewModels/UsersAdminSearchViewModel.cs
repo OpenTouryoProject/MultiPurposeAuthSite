@@ -18,7 +18,11 @@
 //*  2017/05/24  西野 大介         新規
 //**********************************************************************************
 
+#if NETFX
 using MultiPurposeAuthSite.Entity;
+#else
+using MultiPurposeAuthSite;
+#endif
 
 using MultiPurposeAuthSite.Co;
 

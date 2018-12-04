@@ -18,18 +18,24 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
+#if NETFX
+using MultiPurposeAuthSite.Entity;
+#else
+using MultiPurposeAuthSite;
+#endif
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Services;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MultiPurposeAuthSite.Models;
-using MultiPurposeAuthSite.Services;
 
 namespace MultiPurposeAuthSite
 {
@@ -48,10 +54,10 @@ namespace MultiPurposeAuthSite
             //services.AddDbContext<ApplicationDbContext>(options =>
             //    options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 
-            services.AddIdentity<ApplicationUser, IdentityRole>()
+            services.AddIdentity<ApplicationUser, ApplicationRole>()
                 //.AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddUserStore<UserStore>()
-                .AddRoleStore<RoleStore>()
+                .AddUserStore<UserStoreCore>()
+                .AddRoleStore<RoleStoreCore>()
                 .AddDefaultTokenProviders();
 
             // Add application services.

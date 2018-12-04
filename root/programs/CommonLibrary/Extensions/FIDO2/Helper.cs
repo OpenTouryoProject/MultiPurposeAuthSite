@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：FIDO2Helper
-//* クラス日本語名  ：FIDO2Helper（ライブラリ）
+//* クラス名        ：FIDO2.Helper
+//* クラス日本語名  ：FIDO2.Helper（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -46,7 +46,7 @@ using Touryo.Infrastructure.Public.Security;
 
 namespace MultiPurposeAuthSite.Extensions.FIDO2
 {
-    /// <summary>FIDO2Helper（ライブラリ）</summary>
+    /// <summary>FIDO2.Helper（ライブラリ）</summary>
     public class Helper
     {
         private string PublicKey = "";
