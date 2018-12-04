@@ -50,7 +50,9 @@ using System.Security.Claims;
 using System.Web;
 using Microsoft.AspNet.Identity;
 #else
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Touryo.Infrastructure.Framework.StdMigration;
 #endif
 
 using Dapper;
@@ -424,8 +426,14 @@ namespace MultiPurposeAuthSite.Data
                 IEnumerable<ApplicationUser> users = null;
 
                 // ASP.NET Identity上に検索条件を渡すI/Fが無いので已む無くSession。
-                string searchConditionOfUsers = (string)HttpContext.Current.Session["SearchConditionOfUsers"];
+                string searchConditionOfUsers = "";
+#if NETFX
+                searchConditionOfUsers = (string)HttpContext.Current.Session["SearchConditionOfUsers"];
                 HttpContext.Current.Session["SearchConditionOfUsers"] = ""; // クリアしないと・・・
+#else
+                searchConditionOfUsers = (string)MyHttpContext.Current.Session.GetString("SearchConditionOfUsers");
+                MyHttpContext.Current.Session.SetString("SearchConditionOfUsers", ""); // クリアしないと・・・
+#endif
 
                 // 検索条件で検索されたユーザ一覧を返す。
                 try
