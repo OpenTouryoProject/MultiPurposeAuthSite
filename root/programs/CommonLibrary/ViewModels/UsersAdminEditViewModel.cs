@@ -22,7 +22,12 @@ using MultiPurposeAuthSite.Co;
 
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+
+#if NETFX
 using System.Web.Mvc;
+#else
+using Microsoft.AspNetCore.Mvc.Rendering;
+#endif
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels

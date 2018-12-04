@@ -18,8 +18,13 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using System.Web.Mvc;
 using System.Collections.Generic;
+
+#if NETFX
+using System.Web.Mvc;
+#else
+using Microsoft.AspNetCore.Mvc.Rendering;
+#endif
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels

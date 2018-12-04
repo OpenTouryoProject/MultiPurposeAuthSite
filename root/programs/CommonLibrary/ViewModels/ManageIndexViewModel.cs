@@ -21,7 +21,11 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
+#if NETFX
 using Microsoft.AspNet.Identity;
+#else
+using Microsoft.AspNetCore.Identity;
+#endif
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels

@@ -5,7 +5,7 @@ VisualStudioVersion = 15.0.28010.2016
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MultiPurposeAuthSiteCore", "MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.csproj", "{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetStdLibrary", "..\CommonLibrary\NetStdLibrary.csproj", "{B4B66E71-1FCB-46E1-844B-DF85B180B780}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetCoreLibrary", "..\CommonLibrary\NetCoreLibrary.csproj", "{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +17,10 @@ Global
 		{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B4B66E71-1FCB-46E1-844B-DF85B180B780}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B4B66E71-1FCB-46E1-844B-DF85B180B780}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B4B66E71-1FCB-46E1-844B-DF85B180B780}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B4B66E71-1FCB-46E1-844B-DF85B180B780}.Release|Any CPU.Build.0 = Release|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

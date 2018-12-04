@@ -34,8 +34,13 @@
 using MultiPurposeAuthSite.Models.ViewModels;
 
 using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Entity;
+#if NETFX
+using MultiPurposeAuthSite.Manager;
+#else
+//・・・
+#endif
+
 using MultiPurposeAuthSite.Network;
 
 using System;
@@ -49,8 +54,13 @@ using System.Net.Http.Headers;
 
 using System.Web;
 
+#if NETFX
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
+#else
+using Microsoft.AspNetCore.Identity;
+#endif
+
 
 using Newtonsoft.Json;
 
@@ -524,10 +534,17 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 }
             }
 
+            ApplicationUser user = null;
+
+#if NETFX
             // UserStoreを検索
             ApplicationUserManager userManager
                 = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            ApplicationUser user = userManager.FindByName(clientName); // 同期版でOK。
+            user = userManager.FindByName(clientName); // 同期版でOK。
+#else
+            // 要検討
+#endif
+
 
             return user.ClientID;
         }

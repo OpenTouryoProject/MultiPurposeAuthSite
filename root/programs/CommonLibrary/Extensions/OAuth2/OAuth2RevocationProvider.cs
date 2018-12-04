@@ -31,8 +31,8 @@
 //*  2017/06/07  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Data;
 
 using System;
 using System.Data;

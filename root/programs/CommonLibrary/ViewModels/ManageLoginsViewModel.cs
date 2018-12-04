@@ -19,8 +19,14 @@
 //**********************************************************************************
 
 using System.Collections.Generic;
+
+#if NETFX
 using Microsoft.AspNet.Identity;
 using Microsoft.Owin.Security;
+#else
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http.Authentication;
+#endif
 
 /// <summary>MultiPurposeAuthSite.Models.ViewModels</summary>
 namespace MultiPurposeAuthSite.Models.ViewModels

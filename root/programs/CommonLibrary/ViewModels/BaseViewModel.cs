@@ -47,8 +47,11 @@ namespace MultiPurposeAuthSite.Models.ViewModels
         {
             get
             {
+#if NETFX
                 MyUserInfo myUserInfo = (MyUserInfo)UserInfoHandle.GetUserInformation();
-
+#else
+                MyUserInfo myUserInfo = UserInfoHandle.GetUserInformation<MyUserInfo>();
+#endif
                 if (myUserInfo == null)
                 {
                     return "anonymous";
