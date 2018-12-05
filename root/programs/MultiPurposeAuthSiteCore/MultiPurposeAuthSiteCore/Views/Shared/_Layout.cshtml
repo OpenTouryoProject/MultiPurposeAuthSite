@@ -8,7 +8,7 @@
 
     //**********************************************************************************
     //* クラス名        ：_Layout
-    //* クラス日本語名  ：_Layout
+    //* クラス日本語名  ：マスタ・ページ相当
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -20,13 +20,27 @@
     //**********************************************************************************
 *@
 
+@* マスタ・ページに相当 *@
+
+@using MultiPurposeAuthSite.Resources
+@using Microsoft.AspNetCore.Identity
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+
+@{
+    bool canShowAdminScreen = false;
+}
+
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - MultiPurposeAuthSite</title>
 
+    @* ScriptTagHelperの属性を指定可能。*@
     <environment include="Development">
         <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.css" />
         <link rel="stylesheet" href="~/css/app/site.css" />
@@ -35,34 +49,76 @@
     <environment exclude="Development">
         <link rel="stylesheet" href="~/css/css.min.css" asp-append-version="true" />
     </environment>
+
+    @RenderSection("HeaderScriptsSection", required: true)
+
+    <script type="text/javascript">
+        // Resolve URL in the javascript
+        var baseUrl = '@Url.Content("~/")'
+    </script>
+
 </head>
-<body>
-    <nav class="navbar navbar-inverse navbar-fixed-top">
-        <div class="container">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <a asp-area="" asp-controller="Home" asp-action="Index" class="navbar-brand">MultiPurposeAuthSite</a>
-            </div>
-            <div class="navbar-collapse collapse">
-                <ul class="nav navbar-nav">
-                    <li><a asp-area="" asp-controller="Home" asp-action="Index">Home</a></li>
-                </ul>
-                @await Html.PartialAsync("_LoginPartial")
+<body onload="Fx_Document_OnLoad();Fx_AdjustStyle();">
+    <div class="page-header row">
+        <div class="col-xs-3" style="padding: 0">
+            <div id="header-logo"><a href="@Url.Action("Index", "Home")"><img alt="logo" src="~/images/touryo/logo.png" /></a></div>
+        </div>
+        <div class="col-xs-6" style="padding: 0">
+            <div id="header-title">
+                @if (SignInManager.IsSignedIn(User))
+                {
+                    @Html.ActionLink(string.Format(SharedViews.LoginPartial, UserManager.GetUserName(User)), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage", @class = "pull-right" })
+                }
             </div>
         </div>
-    </nav>
-    <div class="container body-content">
-        @RenderBody()
-        <hr />
-        <footer>
-            <p>&copy; 2018 - MultiPurposeAuthSite</p>
-        </footer>
+        <div id="header-button" class="col-xs-3">
+            @if (SignInManager.IsSignedIn(User))
+            {
+                @* サインアウトボタンは、ユーザーが認証されている時だけ表示する *@
+                <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Logoff", "Account")';">Sign-out</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-info pull-right" onclick="window.location.href = '@Url.Action("Register", "Account")';">Sign-up</button>
+                <button type="button" class="btn btn-default pull-right" onclick="window.location.href = '@Url.Action("Login", "Account")';">Sign-in</button>
+            }
+        </div>
     </div>
+    <div id="body-bk">
+        <div id="body" class="row">
+            <div class="nav-side-menu col-sm-4 col-md-3">
+                <div class="brand">メニュー</div>
+                <i class="fa fa-bars fa-2x toggle-btn" data-toggle="collapse" data-target="#menu-content"></i>
+                <div class="menu-list">
+                    <ul id="menu-content" class="menu-content collapse out">
+                        <li onclick="window.location.href = '@Url.Action("Index", "Home")';">
+                            <i class="fa fa-arrow-circle-right"></i> メニュートップ
+                        </li>
+                        @if (canShowAdminScreen)
+                        {
+                            <li>
+                                <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
+                            </li>
+                            <li>
+                                <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
+                            </li>
+                        }
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("OAuth Starters", "OAuth2Starters", "Home", null, new { style = "color:peachpuff" })
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div id="contents" class="col-sm-8 col-md-9">
+                @RenderBody()
+            </div>
+        </div>
+    </div>
+    <footer class="footer">
+        <div class="container">
+            <p class="text-muted">Powered by <a target="_blank" href="https://github.com/OpenTouryoProject">OpenTouryo</a></p>
+        </div>
+    </footer>
 
     <environment include="Development">
         <script src="~/lib/jquery/dist/jquery.js"></script>
@@ -78,6 +134,6 @@
         <script src="~/js/footer.min.js" asp-append-version="true"></script>
     </environment>
 
-    @RenderSection("Scripts", required: false)
+    @RenderSection("FooterScriptsSection", required: true)
 </body>
 </html>

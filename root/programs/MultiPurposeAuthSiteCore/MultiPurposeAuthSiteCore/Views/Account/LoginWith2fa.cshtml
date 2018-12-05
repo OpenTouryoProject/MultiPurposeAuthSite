@@ -25,6 +25,11 @@
     ViewData["Title"] = "Two-factor authentication";
 }
 
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
 <h2>@ViewData["Title"]</h2>
 <hr />
 <p>Your login is protected with an authenticator app. Enter your authenticator code below.</p>
@@ -57,6 +62,6 @@
     <a asp-action="LoginWithRecoveryCode" asp-route-returnUrl="@ViewData["ReturnUrl"]">log in with a recovery code</a>.
 </p>
 
-@section Scripts {
+@section FooterScriptsSection{
     @await Html.PartialAsync("_ValidationScriptsPartial")
 }

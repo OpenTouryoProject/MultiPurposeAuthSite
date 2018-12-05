@@ -25,6 +25,11 @@
     ViewData["Title"] = "Recovery code verification";
 }
 
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
 <h2>@ViewData["Title"]</h2>
 <hr />
 <p>
@@ -45,6 +50,6 @@
     </div>
 </div>
 
-@section Scripts {
+@section FooterScriptsSection{
     @await Html.PartialAsync("_ValidationScriptsPartial")
 }

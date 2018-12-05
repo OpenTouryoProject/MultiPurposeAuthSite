@@ -24,6 +24,11 @@
     Layout = "/Views/Shared/_Layout.cshtml";
 }
 
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
 <h2>Manage your account</h2>
 
 <div>
@@ -39,7 +44,7 @@
     </div>
 </div>
 
-@section Scripts {
+@section FooterScriptsSection{
     @RenderSection("Scripts", required: false)
 }
 

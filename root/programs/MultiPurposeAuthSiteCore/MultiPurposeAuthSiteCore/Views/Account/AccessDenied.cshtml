@@ -24,7 +24,17 @@
     ViewData["Title"] = "Access denied";
 }
 
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
 <header>
     <h2 class="text-danger">@ViewData["Title"]</h2>
     <p class="text-danger">You do not have access to this resource.</p>
 </header>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

@@ -18,28 +18,41 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Net.Http;
+
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+
+using Touryo.Infrastructure.Framework.Authentication;
 
 namespace MultiPurposeAuthSite
 {
+    /// <summary>Program</summary>
     public class Program
     {
+        /// <summary>
+        /// Main（エントリポイント）</summary>
+        /// <param name="args">コマンドライン引数</param>
         public static void Main(string[] args)
         {
-            BuildWebHost(args).Run();
+            // OpenID用
+            OAuth2AndOIDCClient.HttpClient = new HttpClient();
+
+            // BuildWebHostが返すIWebHostをRunする。
+            // 呼び出し元スレッドは終了までブロックされる。
+            Program.BuildWebHost(args).Run();
         }
 
-        public static IWebHost BuildWebHost(string[] args) =>
-            WebHost.CreateDefaultBuilder(args)
-                .UseStartup<Startup>()
-                .Build();
+        /// <summary>BuildWebHost</summary>
+        /// <param name="args">コマンドライン引数</param>
+        /// <returns>IWebHost</returns>
+        public static IWebHost BuildWebHost(string[] args)
+        {
+            // WebHost経由で、IWebHost, IWebHostBuilderにアクセスする。
+
+            return WebHost.CreateDefaultBuilder(args) //  IWebHostBuilderを取得する。
+                .UseStartup<Startup>() // IWebHostBuilder.UseStartup<TStartup> メソッドにStartupクラスを指定。
+                .Build(); // IWebHostBuilder.Build メソッドでIWebHostクラスインスタンスを返す。
+        }
     }
 }

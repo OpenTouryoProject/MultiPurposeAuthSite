@@ -25,6 +25,11 @@
     ViewData["Title"] = "Register";
 }
 
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
 <h2>@ViewData["Title"]</h2>
 <h4>Associate your @ViewData["LoginProvider"] account.</h4>
 <hr />
@@ -49,6 +54,6 @@
     </div>
 </div>
 
-@section Scripts {
+@section FooterScriptsSection{
     @await Html.PartialAsync("_ValidationScriptsPartial")
 }

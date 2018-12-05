@@ -24,7 +24,16 @@
     ViewData["Title"] = "Signed out";
 }
 
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
 <h2>@ViewData["Title"]</h2>
 <p>
     You have successfully signed out.
 </p>
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

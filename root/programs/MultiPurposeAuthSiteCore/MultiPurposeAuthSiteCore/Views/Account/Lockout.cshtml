@@ -24,7 +24,16 @@
     ViewData["Title"] = "Locked out";
 }
 
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
 <header>
     <h2 class="text-danger">@ViewData["Title"]</h2>
     <p class="text-danger">This account has been locked out, please try again later.</p>
 </header>
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}
