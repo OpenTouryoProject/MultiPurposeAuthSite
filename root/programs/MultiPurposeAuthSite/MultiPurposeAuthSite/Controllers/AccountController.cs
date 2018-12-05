@@ -26,7 +26,7 @@ using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Notification;
+using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.Extensions.OAuth2;

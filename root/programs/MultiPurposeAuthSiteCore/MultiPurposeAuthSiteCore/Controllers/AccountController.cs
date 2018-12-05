@@ -25,7 +25,7 @@ using MultiPurposeAuthSite;
 #endif
 
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Services;
+using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Models.AccountViewModels;
 
 using System;

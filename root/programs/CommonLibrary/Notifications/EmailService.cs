@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：SmsService
-//* クラス日本語名  ：SmsService（ライブラリ）
+//* クラス名        ：EmailService
+//* クラス日本語名  ：EmailService（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -34,24 +34,22 @@
 using MultiPurposeAuthSite.Co;
 
 using System.Threading.Tasks;
-using System.Diagnostics;
-
 using Microsoft.AspNet.Identity;
 
-using Twilio;
-using Twilio.Types;
-using Twilio.Rest.Api.V2010.Account;
+using System.Net;
+using System.Net.Mail;
+using System.Diagnostics;
 
-/// <summary>MultiPurposeAuthSite.Notification</summary>
-namespace MultiPurposeAuthSite.Notification
+/// <summary>MultiPurposeAuthSite.Notifications</summary>
+namespace MultiPurposeAuthSite.Notifications
 {
-    /// <summary>SmsService</summary>
-    /// <see cref="http://www.asp.net/identity/overview/features-api/two-factor-authentication-using-sms-and-email-with-aspnet-identity"/>
-    public class SmsService : IIdentityMessageService
+    /// <summary>EmailService</summary>
+    public class EmailService : IIdentityMessageService
     {
         /// <summary>
-        /// Plug in your SMS service here to send a text message.
-        /// テキスト メッセージを送信するための SMS サービスをここにプラグインします。</summary>
+        /// Plug in your email service here to send an email.
+        /// 電子メールを送信するには、電子メール サービスをここにプラグインします。
+        /// </summary>
         /// <param name="message">message</param>
         /// <returns>非同期操作</returns>
         public Task SendAsync(IdentityMessage message)
@@ -59,21 +57,31 @@ namespace MultiPurposeAuthSite.Notification
             if (Config.IsDebug)
             {
                 // Debug.WriteLine
-                Debug.WriteLine("< SmsService >");
+                Debug.WriteLine("< EmailService >");
                 Debug.WriteLine("Destination : " + message.Destination);
                 Debug.WriteLine("Subject     : " + message.Subject);
                 Debug.WriteLine("Body        : " + message.Body);
             }
             else
             {
-                TwilioClient.Init(
-                    Config.TwilioAccountSid,
-                    Config.TwilioAuthToken);
+                // Smtp client
+                using (SmtpClient smtp = new SmtpClient())
+                {
+                    // Smtp clientの初期化
+                    smtp.Host = Config.SmtpHostName;
+                    smtp.Port = Config.SmtpPortNo;
+                    smtp.EnableSsl = Config.SmtpSSL;
 
-                MessageResource mr = MessageResource.Create(
-                    to: new PhoneNumber("+" + message.Destination), // "+819074322014"
-                    from: new PhoneNumber(Config.TwilioFromPhoneNumber),
-                    body: message.Body);
+                    // Network credentialの設定
+                    smtp.Credentials = new NetworkCredential(
+                        Config.SmtpAccountUID,
+                        Config.SmtpAccountPWD);
+
+                    // Send e-mail message
+                    smtp.Send(new MailMessage(
+                        Config.SmtpAccountUID,
+                        message.Destination, message.Subject, message.Body));
+                }
             }
 
             return Task.FromResult(0);

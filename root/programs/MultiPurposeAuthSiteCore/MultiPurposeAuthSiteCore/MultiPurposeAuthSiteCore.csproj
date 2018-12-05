@@ -35,6 +35,17 @@
   <ItemGroup>
     <ProjectReference Include="..\..\CommonLibrary\NetCoreLibrary.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="OpenTouryo.Framework">
+      <HintPath>..\..\Frameworks\Infrastructure\Build_netcore20\OpenTouryo.Framework.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenTouryo.Public">
+      <HintPath>..\..\Frameworks\Infrastructure\Build_netcore20\OpenTouryo.Public.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ProjectExtensions><VisualStudio><UserProperties appsettings_1json__JSONSchema="" /></VisualStudio></ProjectExtensions>
   
   <!--Target Name="PreBuild" BeforeTargets="PreBuildEvent">
     <Exec Command="npm run-script build" />

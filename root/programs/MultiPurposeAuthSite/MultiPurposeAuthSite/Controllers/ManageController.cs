@@ -23,7 +23,7 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Notification;
+using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Extensions.OAuth2;
 using MultiPurposeAuthSite.ViewModels;

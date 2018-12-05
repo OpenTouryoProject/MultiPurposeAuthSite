@@ -21,7 +21,7 @@
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Notification;
+using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Co;
 
 using Microsoft.Owin;

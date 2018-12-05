@@ -18,15 +18,14 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
-namespace MultiPurposeAuthSite.Services
+namespace MultiPurposeAuthSite.Notifications
 {
+    /// <summary>IEmailSender</summary>
     public interface IEmailSender
     {
         Task SendEmailAsync(string email, string subject, string message);
+        Task SendEmailConfirmationAsync(string email, string link);
     }
 }

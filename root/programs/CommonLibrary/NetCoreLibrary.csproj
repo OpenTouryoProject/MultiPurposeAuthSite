@@ -25,8 +25,8 @@
 
   <ItemGroup>
     <Compile Remove="Data\UserStore.cs" />
-    <Compile Remove="Notification\EmailService.cs" />
-    <Compile Remove="Notification\SmsService.cs" />
+    <Compile Remove="Notifications\EmailService.cs" />
+    <Compile Remove="Notifications\SmsService.cs" />
     <Compile Remove="Properties\AssemblyInfo.cs" />
     <Compile Remove="TokenProviders\AccessTokenFormatJwt.cs" />
     <Compile Remove="TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
@@ -42,7 +42,6 @@
 
   <ItemGroup>
     <Folder Include="Extensions\OIDC\" />
-    <Folder Include="Notification\" />
     <Folder Include="Properties\" />
     <Folder Include="TokenProviders\" />
   </ItemGroup>

@@ -56,8 +56,19 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>Name</summary>
         public string Name { get; set; }
 
-        /// <summary>Name</summary>
-        public string NormalizedName { get; set; }
+        /// <summary>NormalizedName</summary>
+        public string NormalizedName
+        {
+            set
+            {
+                if (this.Name.ToLower() != value)
+                    this.Name = value;
+            }
+            get
+            {
+                return this.Name.ToLower();
+            }
+        }
 
         #endregion
 

@@ -46,7 +46,6 @@ using System.Linq;
 using System.Collections.Generic;
 
 using System.Reflection;
-using System.Threading.Tasks;
 
 using Dapper;
 
@@ -63,8 +62,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ロールを追加</summary>
         /// <param name="role">ApplicationRole</param>
-        /// <returns>－</returns>
-        public static Task CreateAsync(ApplicationRole role)
+        public static void CreateAsync(ApplicationRole role)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -129,7 +127,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -139,7 +137,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ロールを ID から検索</summary>
         /// <param name="roleId">string</param>
         /// <returns>ApplicationRole</returns>
-        public static Task<ApplicationRole> FindByIdAsync(string roleId)
+        public static ApplicationRole FindByIdAsync(string roleId)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -210,7 +208,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(role);
+            return role;
         }
 
         /// <summary>ロールを（ロール名指定で）検索</summary>
@@ -221,7 +219,7 @@ namespace MultiPurposeAuthSite.Data
         /// ・グローバル ロールを優先して返す。
         /// ・無ければ自テナントを検索して返す。
         /// </remarks>
-        public static Task<ApplicationRole> FindByNameAsync(string roleName)
+        public static ApplicationRole FindByNameAsync(string roleName)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -293,7 +291,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(role);
+            return role;
         }
 
         /// <summary>
@@ -377,8 +375,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ロールを更新する</summary>
         /// <param name="role">ApplicationRole</param>
-        /// <returns>－</returns>
-        public static Task UpdateAsync(ApplicationRole role)
+        public static void UpdateAsync(ApplicationRole role)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -458,7 +455,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -467,8 +464,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ロールを削除する</summary>
         /// <param name="role">ApplicationRole</param>
-        /// <returns>－</returns>
-        public static Task DeleteAsync(ApplicationRole role)
+        public static void DeleteAsync(ApplicationRole role)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -588,7 +584,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion

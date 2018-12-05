@@ -47,7 +47,6 @@ using System.Linq;
 using System.Collections.Generic;
 
 using System.Reflection;
-using System.Threading.Tasks;
 using System.Security.Claims;
 
 #if NETFX
@@ -71,10 +70,10 @@ namespace MultiPurposeAuthSite.Data
 
         #region C (Create)
 
+
         /// <summary>新規ユーザーの追加</summary>
         /// <param name="user">ApplicationUser</param>
-        /// <returns>－</returns>
-        public static Task CreateAsync(ApplicationUser user)
+        public static void CreateAsync(ApplicationUser user)
         {
             // 更新系の機能のため、
             OnlySts.STSOnly_M();
@@ -190,7 +189,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -200,7 +199,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
         /// <returns>ApplicationUser</returns>
-        public static Task<ApplicationUser> FindByIdAsync(string userId)
+        public static ApplicationUser FindByIdAsync(string userId)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -234,7 +233,7 @@ namespace MultiPurposeAuthSite.Data
                     user.PasswordHash = (new CustomPasswordHasher()).HashPassword(user, Config.AdministratorPWD);
 #endif
 
-                    return Task.FromResult(user);
+                    return user;
 
                     #endregion
                 }
@@ -300,13 +299,13 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public static Task<ApplicationUser> FindByNameAsync(string userName)
+        public static ApplicationUser FindByNameAsync(string userName)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -406,7 +405,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
@@ -562,8 +561,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ユーザー情報を更新</summary>
         /// <param name="user">ApplicationUser</param>
-        /// <returns>－</returns>
-        public static Task UpdateAsync(ApplicationUser user)
+        public static void UpdateAsync(ApplicationUser user)
         {
             // 更新系の機能のため、
             //OnlySts.STSOnly_M();
@@ -571,7 +569,7 @@ namespace MultiPurposeAuthSite.Data
             {
                 // 何も更新しない。
                 // IUserLockoutStore機能などで使用するため。
-                return Task.FromResult(0);
+                return;
             }
             // Debug
             Logging.MyDebugSQLTrace("★ : " +
@@ -715,7 +713,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(0);
+            return;
         }
 
         #region ユーザの関連情報の更新（ Roles, Logins, Claims ）
@@ -723,7 +721,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>Rolesの更新</summary>
         /// <param name="user">更新</param>
         /// <param name="tgtUser">ターゲット</param>
-        public static Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
+        public static void UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
         {
             // 更新系の機能のため、
             OnlySts.STSOnly_M();
@@ -930,7 +928,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         //Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
@@ -943,11 +941,10 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ユーザの論理削除</summary>
         /// <param name="user">ApplicationUser</param>
-        /// <returns>－</returns>
         /// <remarks>
         /// 削除するエンティティにマークを付けます
         /// </remarks>
-        public static Task DeleteAsync(ApplicationUser user)
+        public static void DeleteAsync(ApplicationUser user)
         {
             // 更新系の機能のため、
             OnlySts.STSOnly_M();
@@ -1037,7 +1034,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -1051,7 +1048,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザがパスワードを持っているか</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>真・偽：ユーザがパスワードを持っているか</returns>
-        public static Task<bool> HasPasswordAsync(ApplicationUser user)
+        public static bool HasPasswordAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1064,14 +1061,13 @@ namespace MultiPurposeAuthSite.Data
 
             // ユーザがパスワードを持っているか
 
-            return Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
+            return !string.IsNullOrEmpty(user.PasswordHash);
         }
 
         /// <summary>ユーザーにハッシュ化されたパスワードを設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="passwordHash">string</param>
-        /// <returns>－</returns>
-        public static Task SetPasswordHashAsync(ApplicationUser user, string passwordHash)
+        public static void SetPasswordHashAsync(ApplicationUser user, string passwordHash)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1085,13 +1081,13 @@ namespace MultiPurposeAuthSite.Data
             // ユーザーにハッシュ化されたパスワードを設定
             user.PasswordHash = passwordHash;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>ユーザのパスワードのハッシュを取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>パスワードのハッシュ</returns>
-        public static Task<string> GetPasswordHashAsync(ApplicationUser user)
+        public static string GetPasswordHashAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1104,7 +1100,7 @@ namespace MultiPurposeAuthSite.Data
 
             // ユーザのパスワードのハッシュを取得
 
-            return Task.FromResult(user.PasswordHash);
+            return user.PasswordHash;
         }
 
         #endregion
@@ -1114,7 +1110,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザを（email指定で）検索して取得</summary>
         /// <param name="email">string</param>
         /// <returns>ApplicationUser</returns>
-        public static Task<ApplicationUser> FindByEmailAsync(string email)
+        public static ApplicationUser FindByEmailAsync(string email)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -1190,14 +1186,14 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>メアドの設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="email">string</param>
         /// <returns>－</returns>
-        public static Task SetEmailAsync(ApplicationUser user, string email)
+        public static void SetEmailAsync(ApplicationUser user, string email)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1211,13 +1207,13 @@ namespace MultiPurposeAuthSite.Data
             // メアドの設定
             user.Email = email;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>メアドの取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>Email</returns>
-        public static Task<string> GetEmailAsync(ApplicationUser user)
+        public static string GetEmailAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1229,15 +1225,13 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // メアドの取得
-
-            return Task.FromResult(user.Email);
+            return user.Email;
         }
 
         /// <summary>メアド確認の設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="confirmed">bool</param>
-        /// <returns>－</returns>
-        public static Task SetEmailConfirmedAsync(ApplicationUser user, bool confirmed)
+        public static void SetEmailConfirmedAsync(ApplicationUser user, bool confirmed)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1251,13 +1245,13 @@ namespace MultiPurposeAuthSite.Data
             // メアド確認の設定
             user.EmailConfirmed = confirmed;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>メアド確認の取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>EmailConfirmed</returns>
-        public static Task<bool> GetEmailConfirmedAsync(ApplicationUser user)
+        public static bool GetEmailConfirmedAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1269,8 +1263,45 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // メアド確認の取得
+            return user.EmailConfirmed;
+        }
 
-            return Task.FromResult(user.EmailConfirmed);
+        /// <summary>メアドの設定</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="normalizedEmail">string</param>
+        public static void SetNormalizedEmailAsync(ApplicationUser user, string normalizedEmail)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            // Normalizedメアドの設定
+            user.NormalizedEmail = normalizedEmail;
+
+            return;
+        }
+
+        /// <summary>Normalizedメアドの取得</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <returns>NormalizedEmail</returns>
+        public static string GetNormalizedEmailAsync(ApplicationUser user)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            // Normalizedメアドの取得
+            return user.NormalizedEmail;
         }
 
         #endregion
@@ -1280,8 +1311,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>電話番号の設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="phoneNumber">string</param>
-        /// <returns>－</returns>
-        public static Task SetPhoneNumberAsync(ApplicationUser user, string phoneNumber)
+        public static void SetPhoneNumberAsync(ApplicationUser user, string phoneNumber)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1295,13 +1325,13 @@ namespace MultiPurposeAuthSite.Data
             // 電話番号の設定
             user.PhoneNumber = phoneNumber;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>電話番号の取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>phone number</returns>
-        public static Task<string> GetPhoneNumberAsync(ApplicationUser user)
+        public static string GetPhoneNumberAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1313,15 +1343,13 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 電話番号の取得
-
-            return Task.FromResult(user.PhoneNumber);
+            return user.PhoneNumber;
         }
 
         /// <summary>電話番号確認の設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="confirmed">bool</param>
-        /// <returns>－</returns>
-        public static Task SetPhoneNumberConfirmedAsync(ApplicationUser user, bool confirmed)
+        public static void SetPhoneNumberConfirmedAsync(ApplicationUser user, bool confirmed)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1335,13 +1363,13 @@ namespace MultiPurposeAuthSite.Data
             // 電話番号確認の設定
             user.PhoneNumberConfirmed = confirmed;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>電話番号確認の取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>phone number is confirmed</returns>
-        public static Task<bool> GetPhoneNumberConfirmedAsync(ApplicationUser user)
+        public static bool GetPhoneNumberConfirmedAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1354,7 +1382,7 @@ namespace MultiPurposeAuthSite.Data
 
             // 電話番号確認の取得
 
-            return Task.FromResult(user.PhoneNumberConfirmed);
+            return user.PhoneNumberConfirmed;
         }
 
         #endregion
@@ -1364,8 +1392,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ロールにユーザを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">string</param>
-        /// <returns>－</returns>
-        public static Task AddToRoleAsync(ApplicationUser user, string roleName)
+        public static void AddToRoleAsync(ApplicationUser user, string roleName)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -1459,14 +1486,14 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>ユーザがロールに所属するか？</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">ロール名</param>
         /// <returns>真・偽：ユーザがロールに所属するか</returns>
-        public static async Task<bool> IsInRoleAsync(ApplicationUser user, string roleName)
+        public static bool IsInRoleAsync(ApplicationUser user, string roleName)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1480,7 +1507,7 @@ namespace MultiPurposeAuthSite.Data
             // ユーザがロールに所属するか？
 
             // ユーザのロール一覧を返す。
-            IList<string> roles = await CmnUserStore.GetRolesAsync(user);
+            IList<string> roles = CmnUserStore.GetRolesAsync(user);
 
             // bool (ユーザのロール一覧から、一致するロール名を取得できたら真、できなかったら偽
             return roles.FirstOrDefault(x => x.ToUpper() == roleName.ToUpper()) != null;
@@ -1489,14 +1516,14 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザのロール一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ユーザのロール一覧</returns>
-        public static Task<IList<string>> GetRolesAsync(ApplicationUser user)
+        public static IList<string> GetRolesAsync(ApplicationUser user)
         {
             // 他テーブルのため、
             //OnlySts.STSOnly_M();
             if (OnlySts.STSOnly_P)
             {
                 // 空の一覧を返す。
-                return Task.FromResult((IList<string>)new List<string>());
+                return new List<string>();
             }
 
             // Debug
@@ -1594,14 +1621,13 @@ namespace MultiPurposeAuthSite.Data
             }
 
             // ユーザのロール一覧を返す。
-            return Task.FromResult(roleNames);
+            return roleNames;
         }
 
         /// <summary>ユーザをロールから削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">ロール名</param>
-        /// <returns>－</returns>
-        public static Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
+        public static void RemoveFromRoleAsync(ApplicationUser user, string roleName)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -1694,7 +1720,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -1708,8 +1734,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>セキュリティスタンプを設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="stamp">string</param>
-        /// <returns>－</returns>
-        public static Task SetSecurityStampAsync(ApplicationUser user, string stamp)
+        public static void SetSecurityStampAsync(ApplicationUser user, string stamp)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1723,13 +1748,13 @@ namespace MultiPurposeAuthSite.Data
             // セキュリティスタンプを設定
             user.SecurityStamp = stamp;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>セキュリティスタンプを取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>SecurityStamp</returns>
-        public static Task<string> GetSecurityStampAsync(ApplicationUser user)
+        public static string GetSecurityStampAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1741,7 +1766,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // セキュリティスタンプを取得
-            return Task.FromResult(user.SecurityStamp);
+            return user.SecurityStamp;
         }
 
         #endregion
@@ -1751,8 +1776,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザがロックアウト可能かどうかを設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="enabled">真・偽：ユーザがロックアウト可能かどうか</param>
-        /// <returns>－</returns>
-        public static Task SetLockoutEnabledAsync(ApplicationUser user, bool enabled)
+        public static void SetLockoutEnabledAsync(ApplicationUser user, bool enabled)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1766,13 +1790,13 @@ namespace MultiPurposeAuthSite.Data
             // ユーザがロックアウト可能かどうかを設定
             user.LockoutEnabled = enabled;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>ユーザがロックアウト可能かどうかを取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>真・偽：ユーザがロックアウト可能かどうか</returns>
-        public static Task<bool> GetLockoutEnabledAsync(ApplicationUser user)
+        public static bool GetLockoutEnabledAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1784,13 +1808,13 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザがロックアウト可能かどうかを取得
-            return Task.FromResult(user.LockoutEnabled);
+            return user.LockoutEnabled;
         }
 
         /// <summary>サインインに失敗した試行回数を記録</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>サインインに失敗した試行回数</returns>
-        public static Task<int> IncrementAccessFailedCountAsync(ApplicationUser user)
+        public static int IncrementAccessFailedCountAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1804,14 +1828,14 @@ namespace MultiPurposeAuthSite.Data
             // サインインに失敗した試行回数を記録
             user.AccessFailedCount++;
 
-            return Task.FromResult(user.AccessFailedCount);
+            return user.AccessFailedCount;
         }
 
         /// <summary>失敗したサインインの試行回数を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>現在の失敗したサインインの試行回数</returns>
         /// <remarks>パスワードが確認されるか、アカウントがロックアウトされるたびに、この数は、リセットされる。</remarks>
-        public static Task<int> GetAccessFailedCountAsync(ApplicationUser user)
+        public static int GetAccessFailedCountAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1823,16 +1847,15 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // 失敗したサインインの試行回数を取得
-            return Task.FromResult(user.AccessFailedCount);
+            return user.AccessFailedCount;
         }
 
         /// <summary>失敗したサインインの試行回数をリセット</summary>
         /// <param name="user">ApplicationUser</param>
-        /// <returns>－</returns>
         /// <remarks>
         /// 慣例的に、サインインが成功した場合にリセットされる。
         /// </remarks>
-        public static Task ResetAccessFailedCountAsync(ApplicationUser user)
+        public static void ResetAccessFailedCountAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1846,7 +1869,7 @@ namespace MultiPurposeAuthSite.Data
             // 失敗したサインインの試行回数をリセット
             user.AccessFailedCount = 0;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>
@@ -1855,11 +1878,10 @@ namespace MultiPurposeAuthSite.Data
         /// </summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="lockoutEnd">ロックアウト終了日</param>
-        /// <returns>－</returns>
         /// <remarks>
         /// 過去の日付に設定すると、ロックアウトを解除する。
         /// </remarks>
-        public static Task SetLockoutEndDateAsync(ApplicationUser user, DateTimeOffset lockoutEnd)
+        public static void SetLockoutEndDateAsync(ApplicationUser user, DateTimeOffset? lockoutEnd)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1874,9 +1896,16 @@ namespace MultiPurposeAuthSite.Data
 
             // DateTime と DateTimeOffset 間の変換
             // https://msdn.microsoft.com/ja-jp/library/bb546101.aspx
-            user.LockoutEndDateUtc = lockoutEnd.DateTime;
+            if (lockoutEnd.HasValue)
+            {
+                user.LockoutEndDateUtc = lockoutEnd.Value.DateTime;
+            }
+            else
+            {
+                user.LockoutEndDateUtc = null;
+            }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>
@@ -1887,7 +1916,7 @@ namespace MultiPurposeAuthSite.Data
         /// <remarks>
         /// 過去の日付を返すときは既にロックアウトされていない。
         /// </remarks>
-        public static Task<DateTimeOffset> GetLockoutEndDateAsync(ApplicationUser user)
+        public static DateTimeOffset? GetLockoutEndDateAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1905,12 +1934,11 @@ namespace MultiPurposeAuthSite.Data
 
             if (user.LockoutEndDateUtc.HasValue)
             {
-                return Task.FromResult(
-                    (DateTimeOffset)DateTime.SpecifyKind(user.LockoutEndDateUtc.Value, DateTimeKind.Utc));
+                return DateTime.SpecifyKind(user.LockoutEndDateUtc.Value, DateTimeKind.Utc);
             }
             else
             {
-                return Task.FromResult(DateTimeOffset.MinValue);
+                return null;
             }
         }
 
@@ -1921,8 +1949,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>2FAの有効・無効を設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="enabled">真・偽：2FAが有効かどうか</param>
-        /// <returns>－</returns>
-        public static Task SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
+        public static void SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1936,13 +1963,13 @@ namespace MultiPurposeAuthSite.Data
             // 2FAの有効・無効を設定
             user.TwoFactorEnabled = enabled;
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>2FAの有効・無効を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>真・偽：2FAが有効かどうか</returns>
-        public static Task<bool> GetTwoFactorEnabledAsync(ApplicationUser user)
+        public static bool GetTwoFactorEnabledAsync(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1955,20 +1982,19 @@ namespace MultiPurposeAuthSite.Data
 
             // 2FAの有効・無効を取得
 
-            return Task.FromResult(user.TwoFactorEnabled);
+            return user.TwoFactorEnabled;
         }
 
         #endregion
 
-        #region Collection (Roles, Logins, Claims)
+        #region Collection (Logins, Claims)
         
         #region IUserLoginStore
 
         /// <summary>ユーザーに外部ログインを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
-        /// <returns>－</returns>
-        public static Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public static void AddLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2037,13 +2063,13 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>外部ログインでユーザーを検索</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ApplicationUser</returns>
-        public static Task<ApplicationUser> FindAsync(UserLoginInfo login)
+        public static ApplicationUser FindAsync(UserLoginInfo login)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2079,7 +2105,7 @@ namespace MultiPurposeAuthSite.Data
                                     {
                                         user = x;
 
-                                        return Task.FromResult(user);
+                                        return user;
                                     }
                                 }
                             }
@@ -2150,19 +2176,19 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(user);
+            return user;
         }
 
         /// <summary>ユーザの外部ログイン一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>IList<UserLoginInfo></returns>>
-        public static Task<IList<UserLoginInfo>> GetLoginsAsync(ApplicationUser user)
+        public static IList<UserLoginInfo> GetLoginsAsync(ApplicationUser user)
         {
             // 他テーブルのため、
             //OnlySts.STSOnly_M();
             if (OnlySts.STSOnly_P)
             {
-                return Task.FromResult((IList<UserLoginInfo>)new List<UserLoginInfo>());
+                return new List<UserLoginInfo>();
             }
 
             // ストレージを直接、触らない。
@@ -2175,14 +2201,13 @@ namespace MultiPurposeAuthSite.Data
 
             // ユーザの外部ログイン一覧を取得
 
-            return Task.FromResult(user.Logins);
+            return user.Logins;
         }
 
         /// <summary>ユーザーから外部ログインを削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
-        /// <returns>－</returns>
-        public static Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public static void RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2255,7 +2280,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion
@@ -2265,8 +2290,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザに外部ログインのクレームを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
-        /// <returns>－</returns>
-        public static Task AddClaimAsync(ApplicationUser user, Claim claim)
+        public static void AddClaimAsync(ApplicationUser user, Claim claim)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2335,19 +2359,19 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         /// <summary>ユーザの（外部ログインの）クレーム一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>IList<Claim></returns>
-        public static Task<IList<Claim>> GetClaimsAsync(ApplicationUser user)
+        public static IList<Claim> GetClaimsAsync(ApplicationUser user)
         {
             // 他テーブルのため、
             //OnlySts.STSOnly_M();
             if (OnlySts.STSOnly_P)
             {
-                return Task.FromResult((IList<Claim>)new List<Claim>());
+                return new List<Claim>();
             }
 
             // ストレージを直接、触らない。
@@ -2359,15 +2383,13 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザの（外部ログインの）クレーム一覧を取得
-
-            return Task.FromResult(user.Claims);
+            return user.Claims;
         }
 
         /// <summary>ユーザの（外部ログインの）クレームを削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
-        /// <returns>－</returns>
-        public static Task RemoveClaimAsync(ApplicationUser user, Claim claim)
+        public static void RemoveClaimAsync(ApplicationUser user, Claim claim)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2433,7 +2455,7 @@ namespace MultiPurposeAuthSite.Data
                 Logging.MySQLLogForEx(ex);
             }
 
-            return Task.FromResult(default(object));
+            return;
         }
 
         #endregion

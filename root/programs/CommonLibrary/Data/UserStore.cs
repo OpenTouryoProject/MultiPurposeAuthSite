@@ -31,24 +31,15 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Password;
-using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Util.Sts;
 
 using System;
-using System.Data;
 using System.Linq;
 using System.Collections.Generic;
 
-using System.Reflection;
 using System.Threading.Tasks;
 using System.Security.Claims;
 
-using System.Web;
-
-using Dapper;
 using Microsoft.AspNet.Identity;
 
 // --------------------------------------------------
@@ -75,7 +66,6 @@ namespace MultiPurposeAuthSite.Data
     /// UserStoreでApplicationUserを永続化する。
     /// </summary>
     public class UserStore :
-
         IUserStore<ApplicationUser>,
         IUserStore<ApplicationUser, string>,
         IUserPasswordStore<ApplicationUser, string>,
@@ -91,7 +81,6 @@ namespace MultiPurposeAuthSite.Data
         IQueryableUserStore<ApplicationUser, string>,
         IQueryableRoleStore<ApplicationRole, string>,
         IDisposable
-
     {
         #region constructor
 
@@ -109,7 +98,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task CreateAsync(ApplicationUser user)
         {
-            return CmnUserStore.CreateAsync(user);
+            CmnUserStore.CreateAsync(user);
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -121,7 +111,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByIdAsync(string userId)
         {
-            return CmnUserStore.FindByIdAsync(userId);
+            return Task.FromResult(CmnUserStore.FindByIdAsync(userId));
         }
 
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
@@ -129,7 +119,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByNameAsync(string userName)
         {
-            return CmnUserStore.FindByNameAsync(userName);
+            return Task.FromResult(CmnUserStore.FindByNameAsync(userName));
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
@@ -154,7 +144,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task UpdateAsync(ApplicationUser user)
         {
-            return CmnUserStore.UpdateAsync(user);
+            CmnUserStore.UpdateAsync(user);
+            return Task.FromResult(0);
         }
 
         #region ユーザの関連情報の更新（ Roles, Logins, Claims ）
@@ -164,7 +155,8 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="tgtUser">ターゲット</param>
         private Task UpdateRoles(ApplicationUser user, ApplicationUser tgtUser)
         {
-            return CmnUserStore.UpdateRoles(user, tgtUser);
+            CmnUserStore.UpdateRoles(user, tgtUser);
+            return Task.FromResult(0);
         }
 
         //Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
@@ -183,7 +175,8 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task DeleteAsync(ApplicationUser user)
         {
-            return CmnUserStore.DeleteAsync(user);
+            CmnUserStore.DeleteAsync(user);
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -199,7 +192,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>真・偽：ユーザがパスワードを持っているか</returns>
         public Task<bool> HasPasswordAsync(ApplicationUser user)
         {
-            return CmnUserStore.HasPasswordAsync(user);
+            return Task.FromResult(CmnUserStore.HasPasswordAsync(user));
         }
 
         /// <summary>ユーザーにハッシュ化されたパスワードを設定</summary>
@@ -208,7 +201,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetPasswordHashAsync(ApplicationUser user, string passwordHash)
         {
-            return CmnUserStore.SetPasswordHashAsync(user, passwordHash);
+            CmnUserStore.SetPasswordHashAsync(user, passwordHash);
+            return Task.FromResult(0);
         }
 
         /// <summary>ユーザのパスワードのハッシュを取得</summary>
@@ -216,7 +210,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>パスワードのハッシュ</returns>
         public Task<string> GetPasswordHashAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetPasswordHashAsync(user);
+            return Task.FromResult(CmnUserStore.GetPasswordHashAsync(user));
         }
 
         #endregion
@@ -228,7 +222,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindByEmailAsync(string email)
         {
-            return CmnUserStore.FindByEmailAsync(email);
+            return Task.FromResult(CmnUserStore.FindByEmailAsync(email));
         }
 
         /// <summary>メアドの設定</summary>
@@ -237,7 +231,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetEmailAsync(ApplicationUser user, string email)
         {
-            return CmnUserStore.SetEmailAsync(user, email);
+            CmnUserStore.SetEmailAsync(user, email);
+            return Task.FromResult(0);
         }
 
         /// <summary>メアドの取得</summary>
@@ -245,7 +240,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>Email</returns>
         public Task<string> GetEmailAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetEmailAsync(user);
+            return Task.FromResult(CmnUserStore.GetEmailAsync(user));
         }
 
         /// <summary>メアド確認の設定</summary>
@@ -254,7 +249,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetEmailConfirmedAsync(ApplicationUser user, bool confirmed)
         {
-            return CmnUserStore.SetEmailConfirmedAsync(user, confirmed);
+            CmnUserStore.SetEmailConfirmedAsync(user, confirmed);
+            return Task.FromResult(0);
         }
 
         /// <summary>メアド確認の取得</summary>
@@ -262,7 +258,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>EmailConfirmed</returns>
         public Task<bool> GetEmailConfirmedAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetEmailConfirmedAsync(user);
+            return Task.FromResult(CmnUserStore.GetEmailConfirmedAsync(user));
         }
 
         #endregion
@@ -275,7 +271,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetPhoneNumberAsync(ApplicationUser user, string phoneNumber)
         {
-            return CmnUserStore.SetPhoneNumberAsync(user, phoneNumber);
+            CmnUserStore.SetPhoneNumberAsync(user, phoneNumber);
+            return Task.FromResult(0);
         }
 
         /// <summary>電話番号の取得</summary>
@@ -283,7 +280,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>phone number</returns>
         public Task<string> GetPhoneNumberAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetPhoneNumberAsync(user);
+            return Task.FromResult(CmnUserStore.GetPhoneNumberAsync(user));
         }
 
         /// <summary>電話番号確認の設定</summary>
@@ -292,7 +289,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetPhoneNumberConfirmedAsync(ApplicationUser user, bool confirmed)
         {
-            return CmnUserStore.SetPhoneNumberConfirmedAsync(user, confirmed);
+            CmnUserStore.SetPhoneNumberConfirmedAsync(user, confirmed);
+            return Task.FromResult(0);
         }
 
         /// <summary>電話番号確認の取得</summary>
@@ -300,7 +298,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>phone number is confirmed</returns>
         public Task<bool> GetPhoneNumberConfirmedAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetPhoneNumberConfirmedAsync(user);
+            return Task.FromResult(CmnUserStore.GetPhoneNumberConfirmedAsync(user));
         }
 
         #endregion
@@ -313,16 +311,17 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task AddToRoleAsync(ApplicationUser user, string roleName)
         {
-            return CmnUserStore.AddToRoleAsync(user, roleName);
+            CmnUserStore.AddToRoleAsync(user, roleName);
+            return Task.FromResult(0);
         }
 
         /// <summary>ユーザがロールに所属するか？</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">ロール名</param>
         /// <returns>真・偽：ユーザがロールに所属するか</returns>
-        public async Task<bool> IsInRoleAsync(ApplicationUser user, string roleName)
+        public Task<bool> IsInRoleAsync(ApplicationUser user, string roleName)
         {
-            return await CmnUserStore.IsInRoleAsync(user, roleName);
+            return Task.FromResult(CmnUserStore.IsInRoleAsync(user, roleName));
         }
 
         /// <summary>ユーザのロール一覧を取得</summary>
@@ -330,7 +329,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ユーザのロール一覧</returns>
         public Task<IList<string>> GetRolesAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetRolesAsync(user);
+            return Task.FromResult(CmnUserStore.GetRolesAsync(user));
         }
 
         /// <summary>ユーザをロールから削除</summary>
@@ -339,7 +338,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task RemoveFromRoleAsync(ApplicationUser user, string roleName)
         {
-            return CmnUserStore.RemoveFromRoleAsync(user, roleName);
+            CmnUserStore.RemoveFromRoleAsync(user, roleName);
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -356,7 +356,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetSecurityStampAsync(ApplicationUser user, string stamp)
         {
-            return CmnUserStore.SetSecurityStampAsync(user, stamp);
+            CmnUserStore.SetSecurityStampAsync(user, stamp);
+            return Task.FromResult(0);
         }
 
         /// <summary>セキュリティスタンプを取得</summary>
@@ -364,7 +365,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>SecurityStamp</returns>
         public Task<string> GetSecurityStampAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetSecurityStampAsync(user);
+            return Task.FromResult(CmnUserStore.GetSecurityStampAsync(user));
         }
 
         #endregion
@@ -377,7 +378,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetLockoutEnabledAsync(ApplicationUser user, bool enabled)
         {
-            return CmnUserStore.SetLockoutEnabledAsync(user, enabled);
+            CmnUserStore.SetLockoutEnabledAsync(user, enabled);
+            return Task.FromResult(0);
         }
 
         /// <summary>ユーザがロックアウト可能かどうかを取得</summary>
@@ -385,7 +387,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>真・偽：ユーザがロックアウト可能かどうか</returns>
         public Task<bool> GetLockoutEnabledAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetLockoutEnabledAsync(user);
+            return Task.FromResult(CmnUserStore.GetLockoutEnabledAsync(user));
         }
 
         /// <summary>サインインに失敗した試行回数を記録</summary>
@@ -393,7 +395,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>サインインに失敗した試行回数</returns>
         public Task<int> IncrementAccessFailedCountAsync(ApplicationUser user)
         {
-            return CmnUserStore.IncrementAccessFailedCountAsync(user);
+            return Task.FromResult(CmnUserStore.IncrementAccessFailedCountAsync(user));
         }
 
         /// <summary>失敗したサインインの試行回数を取得</summary>
@@ -402,7 +404,7 @@ namespace MultiPurposeAuthSite.Data
         /// <remarks>パスワードが確認されるか、アカウントがロックアウトされるたびに、この数は、リセットされる。</remarks>
         public Task<int> GetAccessFailedCountAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetAccessFailedCountAsync(user);
+            return Task.FromResult(CmnUserStore.GetAccessFailedCountAsync(user));
         }
 
         /// <summary>失敗したサインインの試行回数をリセット</summary>
@@ -413,7 +415,8 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task ResetAccessFailedCountAsync(ApplicationUser user)
         {
-            return CmnUserStore.ResetAccessFailedCountAsync(user);
+            CmnUserStore.ResetAccessFailedCountAsync(user);
+            return Task.FromResult(0);
         }
 
         /// <summary>
@@ -428,7 +431,8 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task SetLockoutEndDateAsync(ApplicationUser user, DateTimeOffset lockoutEnd)
         {
-            return CmnUserStore.SetLockoutEndDateAsync(user, lockoutEnd);
+            CmnUserStore.SetLockoutEndDateAsync(user, lockoutEnd);
+            return Task.FromResult(0);
         }
 
         /// <summary>
@@ -441,7 +445,16 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         public Task<DateTimeOffset> GetLockoutEndDateAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetLockoutEndDateAsync(user);
+            DateTimeOffset? dto = CmnUserStore.GetLockoutEndDateAsync(user);
+
+            if (dto.HasValue)
+            {
+                return Task.FromResult(dto.Value);
+            }
+            else
+            {
+                return Task.FromResult(DateTimeOffset.MinValue);
+            }
         }
 
         #endregion
@@ -454,7 +467,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
         {
-            return CmnUserStore.SetTwoFactorEnabledAsync(user, enabled);
+            CmnUserStore.SetTwoFactorEnabledAsync(user, enabled);
+            return Task.FromResult(0);
         }
 
         /// <summary>2FAの有効・無効を取得</summary>
@@ -462,7 +476,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>真・偽：2FAが有効かどうか</returns>
         public Task<bool> GetTwoFactorEnabledAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetTwoFactorEnabledAsync(user);
+            return Task.FromResult(CmnUserStore.GetTwoFactorEnabledAsync(user));
         }
 
         #endregion
@@ -480,7 +494,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task CreateAsync(ApplicationRole role)
         {
-            return CmnRoleStore.CreateAsync(role);
+            CmnRoleStore.CreateAsync(role);
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -492,7 +507,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationRole</returns>
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByIdAsync(string roleId)
         {
-            return CmnRoleStore.FindByIdAsync(roleId);
+            return Task.FromResult(CmnRoleStore.FindByIdAsync(roleId));
         }
 
         /// <summary>ロールを（ロール名指定で）検索</summary>
@@ -505,7 +520,7 @@ namespace MultiPurposeAuthSite.Data
         /// </remarks>
         Task<ApplicationRole> IRoleStore<ApplicationRole, string>.FindByNameAsync(string roleName)
         {
-            return CmnRoleStore.FindByNameAsync(roleName);
+            return Task.FromResult(CmnRoleStore.FindByNameAsync(roleName));
         }
 
         /// <summary>
@@ -532,7 +547,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task UpdateAsync(ApplicationRole role)
         {
-            return CmnRoleStore.UpdateAsync(role);
+            CmnRoleStore.UpdateAsync(role);
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -544,7 +560,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task DeleteAsync(ApplicationRole role)
         {
-            return CmnRoleStore.DeleteAsync(role);
+            CmnRoleStore.DeleteAsync(role);
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -561,7 +578,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
-            return CmnUserStore.AddLoginAsync(user, login);
+            CmnUserStore.AddLoginAsync(user, login);
+            return Task.FromResult(0);
         }
 
         /// <summary>外部ログインでユーザーを検索</summary>
@@ -569,7 +587,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>ApplicationUser</returns>
         public Task<ApplicationUser> FindAsync(UserLoginInfo login)
         {
-            return CmnUserStore.FindAsync(login);
+            return Task.FromResult(CmnUserStore.FindAsync(login));
         }
 
         /// <summary>ユーザの外部ログイン一覧を取得</summary>
@@ -577,7 +595,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>IList<UserLoginInfo></returns>>
         public Task<IList<UserLoginInfo>> GetLoginsAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetLoginsAsync(user);
+            return Task.FromResult(CmnUserStore.GetLoginsAsync(user));
         }
 
         /// <summary>ユーザーから外部ログインを削除</summary>
@@ -586,7 +604,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
         {
-            return CmnUserStore.RemoveLoginAsync(user, login);
+            CmnUserStore.RemoveLoginAsync(user, login);
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -599,7 +618,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task AddClaimAsync(ApplicationUser user, Claim claim)
         {
-            return CmnUserStore.AddClaimAsync(user, claim);
+            CmnUserStore.AddClaimAsync(user, claim);
+            return Task.FromResult(0);
         }
 
         /// <summary>ユーザの（外部ログインの）クレーム一覧を取得</summary>
@@ -607,7 +627,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>IList<Claim></returns>
         public Task<IList<Claim>> GetClaimsAsync(ApplicationUser user)
         {
-            return CmnUserStore.GetClaimsAsync(user);
+            return Task.FromResult(CmnUserStore.GetClaimsAsync(user));
         }
 
         /// <summary>ユーザの（外部ログインの）クレームを削除</summary>
@@ -616,7 +636,8 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task RemoveClaimAsync(ApplicationUser user, Claim claim)
         {
-            return CmnUserStore.RemoveClaimAsync(user, claim);
+            CmnUserStore.RemoveClaimAsync(user, claim);
+            return Task.FromResult(0);
         }
 
         #endregion

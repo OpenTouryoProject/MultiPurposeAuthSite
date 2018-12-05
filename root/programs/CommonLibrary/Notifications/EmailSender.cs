@@ -18,20 +18,32 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
-namespace MultiPurposeAuthSite.Services
+namespace MultiPurposeAuthSite.Notifications
 {
-    // This class is used by the application to send email for account confirmation and password reset.
-    // For more details see https://go.microsoft.com/fwlink/?LinkID=532713
+    /// <summary>EmailSender</summary>
     public class EmailSender : IEmailSender
     {
+        /// <summary></summary>
+        /// <param name="email"></param>
+        /// <param name="subject"></param>
+        /// <param name="message"></param>
+        /// <returns></returns>
         public Task SendEmailAsync(string email, string subject, string message)
         {
             return Task.CompletedTask;
+        }
+
+        /// <summary></summary>
+        /// <param name="email"></param>
+        /// <param name="link"></param>
+        /// <returns></returns>
+        public Task SendEmailConfirmationAsync(string email, string link)
+        {
+            return this.SendEmailAsync(email, "Confirm your email",
+                $"Please confirm your account by clicking this link: <a href='{HtmlEncoder.Default.Encode(link)}'>link</a>");
         }
     }
 }

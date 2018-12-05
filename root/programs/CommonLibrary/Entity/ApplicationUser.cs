@@ -104,7 +104,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
                 AccessFailedCount = 0,                                              // サインアップ時は、0。
                 //Claims                                                            // サインアップ時は設定しない。
                 //Id                                                                // コンストラクタで自動生成
-                LockoutEnabled = Config.UserLockoutEnabledByDefault,  // Config
+                LockoutEnabled = Config.UserLockoutEnabledByDefault,                // Config
                 LockoutEndDateUtc = null,                                           // DateTimeOffset.MinValue.DateTime,
                                                                                     //Logins                                                            // サインアップ時は設定しない。
                                                                                     //PasswordHash                                                      // PasswordHashは直接設定しない。
@@ -113,7 +113,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
                 PhoneNumberConfirmed = false,                                       // サインアップ時は、false
                 //Roles                                                             // 後でAddToRoleAsyncで登録する。
                 SecurityStamp = "",                                                 // サインアップ時は、空文字列
-                TwoFactorEnabled = Config.TwoFactorEnabled,           // Config
+                TwoFactorEnabled = Config.TwoFactorEnabled,                           // Config
                 UserName = userName                                                 // 入力値（パラメタ）
             };
 
@@ -126,7 +126,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
             else
             {
                 user.Email = "";                                                    // 固定値
-                user.EmailConfirmed = !Config.DisplayAgreementScreen; // 固定値
+                user.EmailConfirmed = !Config.DisplayAgreementScreen;               // 固定値
             }
 
             return user;
@@ -157,8 +157,21 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// </summary>
         public string UserName { get; set; }
 
-        /// <summary>Name</summary>
-        public string NormalizedUserName { get; set; }
+        /// <summary>
+        /// .UserName.ToLower();
+        /// </summary>
+        public string NormalizedUserName
+        {
+            set
+            {
+                if(this.UserName.ToLower() != value)
+                    this.UserName = value;
+            }
+            get
+            {
+                return this.UserName.ToLower();
+            }
+        }
 
         /// <summary>salted / hashed form of the user password</summary>
         private string _passwordHash = "";
@@ -203,6 +216,22 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// Gets or sets a value that indicates whether the email is confirmed.
         /// </summary>
         public bool EmailConfirmed { get; set; }
+
+        /// <summary>
+        /// .Email.ToLower();
+        /// </summary>
+        public string NormalizedEmail
+        {
+            set
+            {
+                if (this.Email.ToLower() != value)
+                    this.Email = value;
+            }
+            get
+            {
+                return this.Email.ToLower();
+            }
+        }
 
         #endregion
 
