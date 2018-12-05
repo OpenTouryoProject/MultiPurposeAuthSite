@@ -31,16 +31,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Co;
-
 using System.Threading.Tasks;
-using System.Diagnostics;
-
 using Microsoft.AspNet.Identity;
-
-using Twilio;
-using Twilio.Types;
-using Twilio.Rest.Api.V2010.Account;
 
 /// <summary>MultiPurposeAuthSite.Notifications</summary>
 namespace MultiPurposeAuthSite.Notifications
@@ -56,27 +48,7 @@ namespace MultiPurposeAuthSite.Notifications
         /// <returns>非同期操作</returns>
         public Task SendAsync(IdentityMessage message)
         {
-            if (Config.IsDebug)
-            {
-                // Debug.WriteLine
-                Debug.WriteLine("< SmsService >");
-                Debug.WriteLine("Destination : " + message.Destination);
-                Debug.WriteLine("Subject     : " + message.Subject);
-                Debug.WriteLine("Body        : " + message.Body);
-            }
-            else
-            {
-                TwilioClient.Init(
-                    Config.TwilioAccountSid,
-                    Config.TwilioAuthToken);
-
-                MessageResource mr = MessageResource.Create(
-                    to: new PhoneNumber("+" + message.Destination), // "+819074322014"
-                    from: new PhoneNumber(Config.TwilioFromPhoneNumber),
-                    body: message.Body);
-            }
-
-            return Task.FromResult(0);
+            return CmnSms.SendAsync(message.Destination, message.Body);
         }
     }
 }

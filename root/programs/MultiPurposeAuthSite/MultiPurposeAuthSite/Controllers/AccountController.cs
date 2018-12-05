@@ -281,22 +281,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                                         // テスト機能でSession["state"]のチェックを止めたので不要になった。
                                         // また、ManageControllerの方はログイン済みアクセスになるので。
-
-                                        //if (Config.IsLockedDownRedirectEndpoint)
-                                        //{
-
+                                        
                                         // AppScan指摘の反映
                                         this.FxSessionAbandon();
                                         // SessionIDの切換にはこのコードが必要である模様。
                                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                         Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
-
-                                        //}
-                                        //else
-                                        //{
-                                        //    // テスト段階ではOAuth2のテスト機能に支障が出るのでSessionをクリアしない。
-                                        //}
-
+                                        
                                         // オペレーション・トレース・ログ出力
                                         Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
 
@@ -462,22 +453,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // テスト機能でSession["state"]のチェックを止めたので不要になった。
                                     // また、ManageControllerの方はログイン済みアクセスになるので。
-
-                                    //if (Config.IsLockedDownRedirectEndpoint)
-                                    //{
-
+                                    
                                     // AppScan指摘の反映
                                     this.FxSessionAbandon();
                                     // SessionIDの切換にはこのコードが必要である模様。
                                     // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                     Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
-
-                                    //}
-                                    //else
-                                    //{
-                                    //    // テスト段階ではOAuth2のテスト機能に支障が出るのでSessionをクリアしない。
-                                    //}
-
+                                    
                                     // オペレーション・トレース・ログ出力
                                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
 

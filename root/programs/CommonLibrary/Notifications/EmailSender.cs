@@ -26,24 +26,14 @@ namespace MultiPurposeAuthSite.Notifications
     /// <summary>EmailSender</summary>
     public class EmailSender : IEmailSender
     {
-        /// <summary></summary>
-        /// <param name="email"></param>
-        /// <param name="subject"></param>
-        /// <param name="message"></param>
-        /// <returns></returns>
-        public Task SendEmailAsync(string email, string subject, string message)
+        /// <summary>SendEmailAsync</summary>
+        /// <param name="destination">string</param>
+        /// <param name="subject">string</param>
+        /// <param name="body">string</param>
+        /// <returns>非同期操作</returns>
+        public Task SendAsync(string destination, string subject, string body)
         {
-            return Task.CompletedTask;
-        }
-
-        /// <summary></summary>
-        /// <param name="email"></param>
-        /// <param name="link"></param>
-        /// <returns></returns>
-        public Task SendEmailConfirmationAsync(string email, string link)
-        {
-            return this.SendEmailAsync(email, "Confirm your email",
-                $"Please confirm your account by clicking this link: <a href='{HtmlEncoder.Default.Encode(link)}'>link</a>");
+            return CmnEmail.SendAsync(destination, subject, body);
         }
     }
 }

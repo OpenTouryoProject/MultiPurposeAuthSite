@@ -1,0 +1,175 @@
+﻿@*
+    //**********************************************************************************
+    //* Copyright (C) 2017 Hitachi Solutions,Ltd.
+    //**********************************************************************************
+
+    #region Apache License
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    // http://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
+    //
+    #endregion
+
+    //**********************************************************************************
+    //* クラス名        ：AddPaymentInformationPAYJP
+    //* クラス日本語名  ：支払元情報の追加用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
+@model ManageAddPaymentInformationViewModel
+@{
+    ViewBag.Title = ManageViews.AddPaymentTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+    <script type="text/javascript" src="https://js.pay.jp/"></script>
+    <script type="text/javascript">
+            Payjp.setPublicKey('@ViewBag.PublishableKey');
+    </script>
+}
+
+<h2>@ViewBag.Title</h2>
+
+@using (Html.BeginForm("AddPaymentInformation", "Manage", FormMethod.Post, new { id = "charge-form", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken();
+
+        <h4>@ManageViews.AddPaymentH4</h4>
+        <hr />
+        @Html.ValidationSummary("", new { @class = "text-danger" })
+
+        <div class="form-row">
+            <span class="charge-errors text-danger"></span>
+        </div>
+
+        <br />
+
+        <div class="form-row">
+            <label>
+                <span>Card Number</span>
+                @*submitされないようにname属性は付与しない！*@
+                <input type="text" id="number" class="number" maxlength="16" placeholder="カード番号">
+            </label>
+        </div>
+
+        <div class="form-row">
+            @*submitされないようにname属性は付与しない！*@
+            <label><span>有効期限 (MM/YYYY)</span></label>
+            <input type="text" id="exp_month" class="exp_month" maxlength="2" placeholder="月">
+            <span> / </span>
+            <input type="text" id="exp_year" class="exp_year" maxlength="4" placeholder="年">
+        </div>
+
+        <div class="form-row">
+            @*submitされないようにname属性は付与しない！*@
+            <label>
+                <span>CVC</span>
+                <input type="text" id="cvc" class="cvc" size="3" placeholder="CVC">
+            </label>
+        </div>
+
+        @Html.HiddenFor(m => m.PaymentInformation)
+
+        <div class="form-group">
+            <div class="col-md-offset-2 col-md-10">
+                <input type="submit" class="submit btn btn-default" value="@ManageViews.AddPaymentSubmit" />
+            </div>
+        </div>
+        }
+
+        @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+        @section FooterScriptsSection{
+            <!-- Footer 部の section -->
+            <script type="text/javascript">
+
+                (function () {
+                    // Submit時のコード
+                    $("#charge-form").submit(function () {
+                        // Disable the submit button to prevent repeated clicks:
+                        // Form内要素の検索
+                        var $form = $('#charge-form');
+                        $form.find('.submit').prop('disabled', true);
+
+                        // カード情報をトークンに変換
+                        var number = $('#number');
+                        var exp_month = $('#exp_month');
+                        var exp_year = $('#exp_year');
+                        var cvc = $('#cvc');
+
+                        //alert("number:" + number.val());
+
+                        var card = {
+                            number: number.val(),
+                            exp_month: exp_month.val(),
+                            exp_year: exp_year.val(),
+                            cvc: cvc.val()
+                        };
+
+                        //alert("card:" + JSON.stringify(card));
+
+                        Payjp.createToken(card, function (s, response) {
+                            if (response.error) {
+                                // 変換失敗
+                                //alert("failed");
+
+                                $form.find('.charge-errors').text(response.error.message);
+                                $form.find('.submit').prop('disabled', false); // Re-enable submission
+                            }
+                            else {
+                                // 変換成功
+                                //alert("succeeded");
+
+                                // ここでremoveするようだが、
+                                //$(".number").removeAttr("name");
+                                //$(".exp_month").removeAttr("name");
+                                //$(".exp_year").removeAttr("name");
+                                //$(".cvc").removeAttr("name");
+                                // （何故か上と要素のとり方が違うのも気になるが）
+                                // そもそもname属性を外すことで対応すべき。
+
+                                // Token
+                                var token = response.id;
+
+                                //alert(token);
+
+                                //// Insert the token ID into the form so it gets submitted to the server:
+                                //form.append($('<input type="hidden" name="payjpToken" />').val(token));
+                                $('input[name=PaymentInformation]').val(token);　// Html.HiddenForに仕掛ける。
+
+                                // Submit the form:
+
+                                $form.get(0).submit();
+                            }
+                        });
+
+                        // Prevent the form from being submitted:
+                        return false;
+                    });
+                })();
+
+            </script>
+        }

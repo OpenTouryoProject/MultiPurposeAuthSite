@@ -157,9 +157,9 @@ namespace MultiPurposeAuthSite
                 {
                     Expiration = TimeSpan.FromDays(1), // 効かない
                     HttpOnly = true,
-                    Name = "mvc_session",
+                    Name = GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName"),
                     Path = "/",
-                    SameSite= SameSiteMode.Strict,
+                    SameSite = SameSiteMode.Strict,
                     SecurePolicy = CookieSecurePolicy.SameAsRequest
                 }
             });
@@ -250,6 +250,8 @@ namespace MultiPurposeAuthSite
                 .AddDefaultTokenProviders();
 
             // Add application services.
+            services.AddTransient<IUserStore<ApplicationUser>, UserStoreCore>();
+            services.AddTransient<IRoleStore<ApplicationRole>, RoleStoreCore>();
             services.AddTransient<IEmailSender, EmailSender>();
             //services.AddTransient<ISmsSender, SmsSender>();
 

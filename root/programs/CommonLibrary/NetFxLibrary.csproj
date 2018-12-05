@@ -182,7 +182,9 @@
     <Compile Include="Extensions\OIDC\HttpMod\OidcTokenEditor.cs" />
     <Compile Include="Extensions\OIDC\HttpMod\OpenIDConnectCodeFilter.cs" />
     <Compile Include="Extensions\OIDC\HttpMod\OpenIDConnectModule.cs" />
+    <Compile Include="Notifications\CmnEmail.cs" />
     <Compile Include="Notifications\EmailService.cs" />
+    <Compile Include="Notifications\CmnSms.cs" />
     <Compile Include="Notifications\SmsService.cs" />
     <Compile Include="TokenProviders\AccessTokenFormatJwt.cs" />
     <Compile Include="TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />

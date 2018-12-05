@@ -14,9 +14,14 @@
     <None Remove="Data\**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Controllers\ManageController.cs" />
+  </ItemGroup>
+
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.All" Version="2.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Extensions" Version="2.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="2.0.3" PrivateAssets="All" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="2.1.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="2.1.1" />
@@ -30,6 +35,42 @@
     <DotNetCliToolReference Include="Microsoft.EntityFrameworkCore.Tools.DotNet" Version="2.0.3" />
     <DotNetCliToolReference Include="Microsoft.Extensions.SecretManager.Tools" Version="2.0.2" />
     <DotNetCliToolReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Tools" Version="2.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Views\Account\Agreement.cshtml" />
+    <None Include="Views\Account\EmailConfirmation.cshtml" />
+    <None Include="Views\Account\ExternalLoginFailure.cshtml" />
+    <None Include="Views\Account\ForgotPassword.cshtml" />
+    <None Include="Views\Account\ForgotPasswordConfirmation.cshtml" />
+    <None Include="Views\Account\Login.cshtml" />
+    <None Include="Views\Account\OAuth2AuthorizationCodeGrantClient.cshtml" />
+    <None Include="Views\Account\OAuth2Authorize.cshtml" />
+    <None Include="Views\Account\OAuth2ImplicitGrantClient.cshtml" />
+    <None Include="Views\Account\Register.cshtml" />
+    <None Include="Views\Account\ResetPassword.cshtml" />
+    <None Include="Views\Account\ResetPasswordConfirmation.cshtml" />
+    <None Include="Views\Account\SendCode.cshtml" />
+    <None Include="Views\Account\VerifyCode.cshtml" />
+    <None Include="Views\Account\VerifyEmailAddress.cshtml" />
+    <None Include="Views\Account\_ExternalLoginsListPartial.cshtml" />
+    <None Include="Views\Manage\AddEmail.cshtml" />
+    <None Include="Views\Manage\AddFIDO2Data.cshtml" />
+    <None Include="Views\Manage\AddOAuth2Data.cshtml" />
+    <None Include="Views\Manage\AddPaymentInformationPAYJP.cshtml" />
+    <None Include="Views\Manage\AddPaymentInformationStripe.cshtml" />
+    <None Include="Views\Manage\AddPhoneNumber.cshtml" />
+    <None Include="Views\Manage\AddUnstructuredData.cshtml" />
+    <None Include="Views\Manage\ChangeEmail.cshtml" />
+    <None Include="Views\Manage\ChangePassword.cshtml" />
+    <None Include="Views\Manage\ChangeUserName.cshtml" />
+    <None Include="Views\Manage\Index.cshtml" />
+    <None Include="Views\Manage\ManageGDPRData.cshtml" />
+    <None Include="Views\Manage\ManageLogins.cshtml" />
+    <None Include="Views\Manage\OAuth2AuthorizationCodeGrantClient.cshtml" />
+    <None Include="Views\Manage\SetPassword.cshtml" />
+    <None Include="Views\Manage\VerifyEmailAddress.cshtml" />
+    <None Include="Views\Manage\VerifyPhoneNumber.cshtml" />
   </ItemGroup>
 
   <ItemGroup>

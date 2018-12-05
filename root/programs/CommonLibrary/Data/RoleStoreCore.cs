@@ -56,7 +56,7 @@ namespace MultiPurposeAuthSite.Data
     /// </summary>
     public class RoleStoreCore : IRoleStore<ApplicationRole>
     {
-        #region #region CRUD(共通)
+        #region CRUD(共通)
 
         #region C (Create)
 
@@ -67,7 +67,9 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> CreateAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new NotImplementedException();
+
+            CmnRoleStore.CreateAsync(role);
+            return Task.FromResult(IdentityResult.Success);
         }
 
         #endregion
@@ -81,7 +83,8 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationRole> FindByIdAsync(string roleId, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new NotImplementedException();
+
+            return Task.FromResult(CmnRoleStore.FindByIdAsync(roleId));
         }
 
         /// <summary>FindByNameAsync</summary>
@@ -91,7 +94,8 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationRole> FindByNameAsync(string normalizedRoleName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new NotImplementedException();
+
+            return Task.FromResult(CmnRoleStore.FindByNameAsync(normalizedRoleName));
         }
 
         #endregion
@@ -105,7 +109,9 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> UpdateAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new NotImplementedException();
+
+            CmnRoleStore.UpdateAsync(role);
+            return Task.FromResult(IdentityResult.Success);
         }
 
         #endregion
@@ -119,7 +125,9 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> DeleteAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new NotImplementedException();
+
+            CmnRoleStore.DeleteAsync(role);
+            return Task.FromResult(IdentityResult.Success);
         }
 
         #endregion
@@ -133,7 +141,11 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="cancellationToken">CancellationToken</param>
         /// <returns></returns>
         public Task<string> GetRoleIdAsync(ApplicationRole role, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(role.Id);
+        }
 
         #region Name
 
@@ -143,19 +155,28 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="cancellationToken">CancellationToken</param>
         /// <returns></returns>
         public Task SetRoleNameAsync(ApplicationRole role, string roleName, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            role.Name = roleName;
+            return Task.FromResult(0);
+        }
 
         /// <summary>GetRoleNameAsync</summary>
         /// <param name="role">ApplicationRole</param>
         /// <param name="cancellationToken">CancellationToken</param>
         /// <returns></returns>
         public Task<string> GetRoleNameAsync(ApplicationRole role, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(role.Name);
+        }
 
         #endregion
 
         #region NormalizedName
-        
+
         /// <summary>SetNormalizedRoleNameAsync</summary>
         /// <param name="role">ApplicationRole</param>
         /// <param name="normalizedName">string</param>
@@ -164,7 +185,9 @@ namespace MultiPurposeAuthSite.Data
         public Task SetNormalizedRoleNameAsync(ApplicationRole role, string normalizedName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new NotImplementedException();
+
+            role.Name = normalizedName;
+            return Task.FromResult(0);
         }
 
         /// <summary>GetNormalizedRoleNameAsync</summary>
@@ -174,7 +197,8 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetNormalizedRoleNameAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw new NotImplementedException();
+
+            return Task.FromResult(role.NormalizedName);
         }
 
         #endregion

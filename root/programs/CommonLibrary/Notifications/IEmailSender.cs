@@ -25,7 +25,6 @@ namespace MultiPurposeAuthSite.Notifications
     /// <summary>IEmailSender</summary>
     public interface IEmailSender
     {
-        Task SendEmailAsync(string email, string subject, string message);
-        Task SendEmailConfirmationAsync(string email, string link);
+        Task SendAsync(string destination, string subject, string body);
     }
 }

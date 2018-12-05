@@ -1,0 +1,79 @@
+﻿@*
+    //**********************************************************************************
+    //* Copyright (C) 2017 Hitachi Solutions,Ltd.
+    //**********************************************************************************
+
+    #region Apache License
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    // http://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
+    //
+    #endregion
+
+    //**********************************************************************************
+    //* クラス名        ：OAuth2Authorize
+    //* クラス日本語名  ：認可の要求用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
+@using Touryo.Infrastructure.Framework.Authentication;
+
+@{
+    ViewBag.Title = AccountViews.OAuth2AuthorizeTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<div class="row">
+    <div class="col-md-8">
+        <h4>@ViewBag.Message</h4>
+        <hr />
+        <form method="POST">
+            @Html.AntiForgeryToken() @*追加*@
+
+            <p>@AccountViews.OAuth2AuthorizeP1 @Html.Label("name", (string)ViewBag.Name)</p>
+            <p>@AccountViews.OAuth2AuthorizeP2</p>
+            <ul>
+                @foreach (string scope in ViewBag.Scopes)
+                {
+                    <li>@Html.Label(OAuth2AndOIDCConst.scope, scope)</li>
+                }
+            </ul>
+            <p>
+                <input class="btn btn-default" type="submit" name="submit.Grant" value="@AccountViews.OAuth2AuthorizeGrantButton" />
+                <input class="btn btn-default" type="submit" name="submit.Login" value="@AccountViews.OAuth2AuthorizeSIDUButton" />
+            </p>
+        </form>
+    </div>
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

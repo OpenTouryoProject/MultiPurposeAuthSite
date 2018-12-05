@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：EmailService
-//* クラス日本語名  ：EmailService（ライブラリ）
+//* クラス名        ：CmnSms
+//* クラス日本語名  ：CmnSms（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -28,27 +28,50 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2017/04/24  西野 大介         新規
+//*  2018/12/05  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System.Threading.Tasks;
-using Microsoft.AspNet.Identity;
+using System.Diagnostics;
+
+using Twilio;
+using Twilio.Types;
+using Twilio.Rest.Api.V2010.Account;
 
 /// <summary>MultiPurposeAuthSite.Notifications</summary>
 namespace MultiPurposeAuthSite.Notifications
 {
-    /// <summary>EmailService</summary>
-    public class EmailService : IIdentityMessageService
+    /// <summary>CmnSms</summary>
+    public class CmnSms
     {
-        /// <summary>
-        /// Plug in your email service here to send an email.
-        /// 電子メールを送信するには、電子メール サービスをここにプラグインします。
-        /// </summary>
-        /// <param name="message">message</param>
+        /// <summary>SMS送信</summary>
+        /// <param name="destination">string</param>
+        /// <param name="body">string</param>
         /// <returns>非同期操作</returns>
-        public Task SendAsync(IdentityMessage message)
+        public static Task SendAsync(string destination, string body)
         {
-            return CmnEmail.SendAsync(message.Destination, message.Subject, message.Body);
+            if (Config.IsDebug)
+            {
+                // Debug.WriteLine
+                Debug.WriteLine("< SmsService >");
+                Debug.WriteLine("Destination : " + destination);
+                Debug.WriteLine("Body        : " + body);
+            }
+            else
+            {
+                TwilioClient.Init(
+                    Config.TwilioAccountSid,
+                    Config.TwilioAuthToken);
+
+                MessageResource mr = MessageResource.Create(
+                    to: new PhoneNumber("+" + destination), // "+819074322014"
+                    from: new PhoneNumber(Config.TwilioFromPhoneNumber),
+                    body: body);
+            }
+
+            return Task.FromResult(0);
         }
     }
 }

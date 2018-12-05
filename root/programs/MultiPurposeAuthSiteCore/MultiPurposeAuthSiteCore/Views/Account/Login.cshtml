@@ -8,7 +8,7 @@
 
     //**********************************************************************************
     //* クラス名        ：Login
-    //* クラス日本語名  ：Login
+    //* クラス日本語名  ：サインイン用のView
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -16,19 +16,19 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2018/11/30  西野 大介         新規
+    //*  2017/04/24  西野 大介         新規
     //**********************************************************************************
 *@
 
-@using System.Collections.Generic
-@using System.Linq
-@using Microsoft.AspNetCore.Http
-@using Microsoft.AspNetCore.Http.Authentication
-@model LoginViewModel
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
+@model AccountLoginViewModel
 @inject SignInManager<ApplicationUser> SignInManager
 
 @{
-    ViewData["Title"] = "Log in";
+    ViewBag.Title = AccountViews.LoginTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -36,79 +36,215 @@
     <!-- Head 部の section -->
 }
 
-<h2>@ViewData["Title"]</h2>
+<h2>@ViewBag.Title</h2>
 <div class="row">
-    <div class="col-md-4">
-        <section>
-            <form asp-route-returnurl="@ViewData["ReturnUrl"]" method="post">
-                <h4>Use a local account to log in.</h4>
-                <hr />
-                <div asp-validation-summary="All" class="text-danger"></div>
-                <div class="form-group">
-                    <label asp-for="Email"></label>
-                    <input asp-for="Email" class="form-control" />
-                    <span asp-validation-for="Email" class="text-danger"></span>
-                </div>
-                <div class="form-group">
-                    <label asp-for="Password"></label>
-                    <input asp-for="Password" class="form-control" />
-                    <span asp-validation-for="Password" class="text-danger"></span>
-                </div>
-                <div class="form-group">
-                    <div class="checkbox">
-                        <label asp-for="RememberMe">
-                            <input asp-for="RememberMe" />
-                            @Html.DisplayNameFor(m => m.RememberMe)
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <button type="submit" class="btn btn-default">Log in</button>
-                </div>
-                <div class="form-group">
-                    <p>
-                        <a asp-action="ForgotPassword">Forgot your password?</a>
-                    </p>
-                    <p>
-                        <a asp-action="Register" asp-route-returnurl="@ViewData["ReturnUrl"]">Register as a new user?</a>
-                    </p>
-                </div>
-            </form>
-        </section>
-    </div>
-    <div class="col-md-6 col-md-offset-2">
-        <section>
-            <h4>Use another service to log in.</h4>
-            <hr />
-            @{
-                var loginProviders = (await SignInManager.GetExternalAuthenticationSchemesAsync()).ToList();
-                if (loginProviders.Count == 0)
+    <div class="col-md-8">
+        <h4>@AccountViews.LoginH4</h4>
+        <hr />
+        <section id="loginForm">
+            @using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            {
+            @Html.AntiForgeryToken()
+            @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+            @Html.HiddenFor(m => m.ReturnUrl)
+
+                if (Config.RequireUniqueEmail)
                 {
-                    <div>
-                        <p>
-                            There are no external authentication services configured. See <a href="https://go.microsoft.com/fwlink/?LinkID=532715">this article</a>
-                            for details on setting up this ASP.NET application to support logging in via external services.
-                        </p>
-                    </div>
+            <div class="form-group">
+                @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
+                <div class="col-md-10">
+                    @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+                    @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
+                </div>
+            </div>
                 }
                 else
                 {
-                    <form asp-action="ExternalLogin" asp-route-returnurl="@ViewData["ReturnUrl"]" method="post" class="form-horizontal">
-                        <div>
-                            <p>
-                                @foreach (var provider in loginProviders)
-                                {
-                                    <button type="submit" class="btn btn-default" name="provider" value="@provider.Name" title="Log in using your @provider.DisplayName account">@provider.Name</button>
-                                }
-                            </p>
-                        </div>
-                    </form>
+            <div class="form-group">
+                @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
+                <div class="col-md-10">
+                    @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+                    @Html.ValidationMessageFor(m => m.Name, "", new { @class = "text-danger" })
+                </div>
+            </div>
                 }
+
+            <div class="form-group">
+                @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
+                <div class="col-md-10">
+                    @Html.PasswordFor(m => m.Password, new { @class = "form-control" })
+                    @Html.ValidationMessageFor(m => m.Password, "", new { @class = "text-danger" })
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-md-offset-2 col-md-10">
+                    <div class="checkbox">
+                        @Html.CheckBoxFor(m => m.RememberMe)
+                        @Html.LabelFor(m => m.RememberMe)
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-md-offset-2 col-md-10">
+                    <button id="normal_signin" name="submitButton" value="normal_signin" type="button" class="btn btn-default">@AccountViews.LoginSubmit</button>
+                </div>
+            </div>
+            <p>@Html.ActionLink(AccountViews.LoginRegisterActionLink, "Register")</p>
+            <p>
+                @*Enable this once you have account confirmation enabled for password reset functionality*@
+                @*これを有効にする前に、パスワード リセット機能に対するアカウント確認を有効にしてください。*@
+                @Html.ActionLink(AccountViews.LoginForgotPasswordActionLink, "ForgotPassword")
+            </p>
+
+            @Html.HiddenFor(m => m.Fido2UserId)
+            @Html.HiddenFor(m => m.Fido2Signature)
+            @Html.HiddenFor(m => m.Fido2AuthenticatorData)
+            @Html.HiddenFor(m => m.Fido2ClientData)
+
+            <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
             }
         </section>
     </div>
+    <div class="col-md-4">
+
+        @if (Config.CanEditExtLogin)
+{
+        <div class="sample-box-1">
+            @*ここに外部ログインを実装*@
+            @AccountViews.ExternalLogins
+            <section id="socialLoginForm">
+                @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
+            </section>
+        </div>
+}
+
+        <div class="sample-box-1">
+            @*ここにIDフェデレーションを実装*@
+            @AccountViews.IdFederationLogin
+            <section>
+                <button id="id_federation_signin" name="submitButton" value="id_federation_signin" type="button" class="btn btn-default">@AccountViews.IdFederationLoginSubmit</button>
+            </section>
+        </div>
+
+        @if (Config.CanEditFIDO2Data)
+{
+        <div class="sample-box-1">
+            @*ここにFIDO2を実装*@
+            @AccountViews.FIDO2Login
+            <section>
+                <button id="fido2_signin" name="submitButton" value="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
+            </section>
+        </div>
+}
+    </div>
 </div>
 
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
-    @await Html.PartialAsync("_ValidationScriptsPartial")
+    <!-- Footer 部の section -->
+    <script>
+        $(function () {
+            $("#normal_signin").on("click", function () {
+                // button name
+                $("#submitButtonName").val(this.value);
+                // submit
+                $("#LoginForm").submit();
+            });
+        });
+    </script>
+
+    <script>
+        // Id federationLogin
+        $(function () {
+            $("#id_federation_signin").on("click", function () {
+                // button name
+                $("#submitButtonName").val(this.value);
+                // submit
+                $("#LoginForm").submit();
+            });
+        });
+    </script>
+
+    <script>
+        // FIDO2
+        const credAlgorithm = "RSASSA-PKCS1-v1_5";
+
+        $(function () {
+
+            $("#fido2_signin").on("click", function () {
+                // button name
+                $("#submitButtonName").val(this.value);
+
+                var challenge = '@Model.Fido2Challenge';
+                var id = localStorage["credentialId"];
+                var allowList =
+                    [
+                        {
+                            type: 'ScopedCred',
+                            id: id
+                        }
+                    ];
+
+                //var timeout = {};
+                //var ext = {};
+
+                navigator.authentication.getAssertion(challenge, { allowList })
+                    .then(function (result) {
+
+                        //return verifyMSFidoSignature(
+                        //    result.clientData,
+                        //    result.authenticatorData,
+                        //    result.signature,
+                        //    localStorage["publicKey"]);
+
+                        // properties
+                        $("#Fido2UserId").val(localStorage["userId"]);
+                        $("#Fido2Signature").val(result.signature);
+                        $("#Fido2AuthenticatorData").val(result.authenticatorData);
+                        $("#Fido2ClientData").val(result.clientData);
+
+                        // submit
+                        $("#LoginForm").submit();
+                    });
+
+                //.then(function(result) {
+                //    alert("ID=" + id + "\r\n" + result);
+                //})
+                //.catch(function(err) {
+                //    alert(err);
+                //});
+            });
+        });
+
+        /*
+        function parseBase64(s) {
+            s = s.replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, '');
+            return new Uint8Array(Array.prototype.map.call(atob(s), function (c) { return c.charCodeAt(0) }));
+        }
+
+        function concatUint8Array(a1, a2) {
+            var d = new Uint8Array(a1.length + a2.length);
+            d.set(a1);
+            d.set(a2, a1.length);
+            return d;
+        }
+
+        function verifyMSFidoSignature(clientData, authenticatorData, signature, publicKey) {
+            var hash;
+            // the server would have to validate that the clientData contained the same challenge
+            // that was generated on the server for the getAssertion call
+            return crypto.subtle.digest("SHA-256", parseBase64(clientData))
+            .then(function (h) {
+                hash = new Uint8Array(h);
+                return crypto.subtle.importKey("jwk", JSON.parse(publicKey), credAlgorithm, false, ["verify"]);
+            })
+            .then(function (key) {
+                return crypto.subtle.verify(
+                    { name: credAlgorithm, hash: { name: "SHA-256" } },
+                    key, parseBase64(signature), concatUint8Array(parseBase64(authenticatorData), hash));
+            });
+        }
+        */
+
+    </script>
 }
