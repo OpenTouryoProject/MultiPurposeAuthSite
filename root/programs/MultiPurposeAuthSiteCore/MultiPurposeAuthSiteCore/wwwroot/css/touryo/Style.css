@@ -91,7 +91,7 @@
 /* ボディの定義 */
 #body-bk{
     margin           : 0;
-    /*padding-top    : 100px;                  /* 上にヘッダー分の余白を取る */
+    padding-top      : 100px;                  /* 上にヘッダー分の余白を取る */
     width            : 100%;                   /* 横幅 100% */
     height           : 100%;                   /* 縦幅 100px */
 }
