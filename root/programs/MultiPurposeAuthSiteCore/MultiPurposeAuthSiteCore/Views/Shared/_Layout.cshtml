@@ -94,18 +94,24 @@
                         <li onclick="window.location.href = '@Url.Action("Index", "Home")';">
                             <i class="fa fa-arrow-circle-right"></i> メニュートップ
                         </li>
-                        @if (canShowAdminScreen)
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("OAuth Starters", "OAuth2Starters", "Home", null, new { style = "color:peachpuff" })
+                        </li>
+                        @if (SignInManager.IsSignedIn(User))
                         {
+                            <li>
+                                <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("Scroll", "Scroll", "Home", null, new { style = "color:peachpuff" })
+                            </li>
+                            if (canShowAdminScreen)
+                            {
                             <li>
                                 <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
                             </li>
                             <li>
                                 <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
                             </li>
+                            }
                         }
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("OAuth Starters", "OAuth2Starters", "Home", null, new { style = "color:peachpuff" })
-                        </li>
                     </ul>
                 </div>
             </div>

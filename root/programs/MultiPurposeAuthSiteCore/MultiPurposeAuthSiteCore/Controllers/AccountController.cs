@@ -42,12 +42,18 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using Touryo.Infrastructure.Business.Presentation;
+using Touryo.Infrastructure.Framework.StdMigration;
+using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Public.Str;
+
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>AccountController</summary>
     [Authorize]
     [Route("[controller]/[action]")]
-    public class AccountController : Controller
+    public class AccountController : MyBaseMVControllerCore
     {
         /// <summary>UserManager</summary>
         private readonly UserManager<ApplicationUser> _userManager;

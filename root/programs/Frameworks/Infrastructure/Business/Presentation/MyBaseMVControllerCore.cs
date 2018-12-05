@@ -37,7 +37,7 @@ using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Primitives;
 
@@ -223,7 +223,8 @@ namespace Touryo.Infrastructure.Business.Presentation
                 {
                     AuthenticateResult authenticateInfo =
                         await AuthenticationHttpContextExtensions.AuthenticateAsync(
-                            MyHttpContext.Current, CookieAuthenticationDefaults.AuthenticationScheme);
+                            MyHttpContext.Current, IdentityConstants.ApplicationScheme);
+                    //CookieAuthenticationDefaults.AuthenticationScheme); // ★ Scheme変更
 
                     //await MyHttpContext.Current.Authentication.GetAuthenticateInfoAsync(
                     //    CookieAuthenticationDefaults.AuthenticationScheme); // 古い

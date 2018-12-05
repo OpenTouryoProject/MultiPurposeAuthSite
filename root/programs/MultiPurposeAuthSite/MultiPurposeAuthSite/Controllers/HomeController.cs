@@ -38,6 +38,7 @@ using Touryo.Infrastructure.Public.Str;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>HomeController</summary>
+    [Authorize]
     public class HomeController : MyBaseMVController
     {
         #region Action Method
@@ -47,7 +48,18 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult Index()
+        {
+            return View();
+        }
+
+        /// <summary>
+        /// GET: Home/Scroll
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult Scroll()
         {
             return View();
         }
@@ -182,6 +194,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>OAuthStarters</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult OAuth2Starters()
         {
             return View();
@@ -194,6 +207,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Authorization Code Flow</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult AuthorizationCode()
         {
             this.Init();
@@ -207,6 +221,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Authorization Code Flow (form_post)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult AuthorizationCode_FormPost()
         {
             this.Init();
@@ -225,6 +240,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Authorization Code Flow (OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult AuthorizationCode_OIDC()
         {
             this.Init();
@@ -239,6 +255,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Authorization Code Flow (OIDC, form_post)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult AuthorizationCode_OIDC_FormPost()
         {
             this.Init();
@@ -258,6 +275,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Authorization Code Flow (PKCE plain)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult AuthorizationCode_PKCE_Plain()
         {
             this.Init();
@@ -275,6 +293,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult AuthorizationCode_PKCE_S256()
         {
             this.Init();
@@ -296,6 +315,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Authorization Code Flow (FAPI1)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult FAPI1AuthorizationCode()
         {
             this.Init();
@@ -317,6 +337,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Implicit Flow</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult Implicit()
         {
             this.Init();
@@ -334,6 +355,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Implicit Flow 'id_token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult Implicit_OIDC1()
         {
             this.Init();
@@ -348,6 +370,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Implicit Flow 'id_token token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult Implicit_OIDC2()
         {
             this.Init();
@@ -369,6 +392,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Hybrid Flow 'code id_token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult Hybrid_OIDC1()
         {
             this.Init();
@@ -382,6 +406,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Hybrid Flow 'code token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult Hybrid_OIDC2()
         {
             this.Init();
@@ -395,6 +420,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>Test Hybrid Flow 'code id_token token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public ActionResult Hybrid_OIDC3()
         {
             this.Init();
@@ -420,6 +446,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>TestClientCredentialsFlow</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult> TestClientCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
@@ -462,6 +489,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>TestJWTBearerTokenFlow</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Token2エンドポイントにアクセス
