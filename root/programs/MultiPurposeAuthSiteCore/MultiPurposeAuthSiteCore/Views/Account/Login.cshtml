@@ -42,14 +42,14 @@
         <h4>@AccountViews.LoginH4</h4>
         <hr />
         <section id="loginForm">
-            @using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-            {
+@using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
             @Html.AntiForgeryToken()
             @Html.ValidationSummary(true, "", new { @class = "text-danger" })
             @Html.HiddenFor(m => m.ReturnUrl)
 
-                if (Config.RequireUniqueEmail)
-                {
+    if (Config.RequireUniqueEmail)
+    {
             <div class="form-group">
                 @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
                 <div class="col-md-10">
@@ -57,9 +57,9 @@
                     @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
                 </div>
             </div>
-                }
-                else
-                {
+    }
+    else
+    {
             <div class="form-group">
                 @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
                 <div class="col-md-10">
@@ -67,7 +67,7 @@
                     @Html.ValidationMessageFor(m => m.Name, "", new { @class = "text-danger" })
                 </div>
             </div>
-                }
+    }
 
             <div class="form-group">
                 @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
@@ -102,13 +102,13 @@
             @Html.HiddenFor(m => m.Fido2ClientData)
 
             <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
-            }
+}
         </section>
     </div>
     <div class="col-md-4">
 
-        @if (Config.CanEditExtLogin)
-{
+@if (Config.CanEditExtLogin)
+{/*
         <div class="sample-box-1">
             @*ここに外部ログインを実装*@
             @AccountViews.ExternalLogins
@@ -116,7 +116,7 @@
                 @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
             </section>
         </div>
-}
+*/}
 
         <div class="sample-box-1">
             @*ここにIDフェデレーションを実装*@
@@ -126,7 +126,7 @@
             </section>
         </div>
 
-        @if (Config.CanEditFIDO2Data)
+@if (Config.CanEditFIDO2Data)
 {
         <div class="sample-box-1">
             @*ここにFIDO2を実装*@
