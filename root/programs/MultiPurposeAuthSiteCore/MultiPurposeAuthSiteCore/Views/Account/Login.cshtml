@@ -108,7 +108,7 @@
     <div class="col-md-4">
 
 @if (Config.CanEditExtLogin)
-{/*
+{
         <div class="sample-box-1">
             @*ここに外部ログインを実装*@
             @AccountViews.ExternalLogins
@@ -116,7 +116,7 @@
                 @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
             </section>
         </div>
-*/}
+}
 
         <div class="sample-box-1">
             @*ここにIDフェデレーションを実装*@

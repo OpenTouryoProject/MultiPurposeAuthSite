@@ -337,7 +337,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         lockoutOnFailure: Config.UserLockoutEnabledByDefault);            // ロックアウト
 
                                 // SignInStatus
-                                if (result == Microsoft.AspNetCore.Identity.SignInResult.Success)
+                                if (result.Succeeded)// == SignInResult.Success)
                                 {
                                     // サインイン成功
 
@@ -364,12 +364,12 @@ namespace MultiPurposeAuthSite.Controllers
                                         return RedirectToAction("Index", "Home");
                                     }
                                 }
-                                else if (result == Microsoft.AspNetCore.Identity.SignInResult.LockedOut)
+                                else if (result.IsLockedOut)// == SignInResult.LockedOut)
                                 {
                                     // ロックアウト
                                     return View("Lockout");
                                 }
-                                else if (result == Microsoft.AspNetCore.Identity.SignInResult.TwoFactorRequired)
+                                else if (result.RequiresTwoFactor)// == SignInResult.TwoFactorRequired)
                                 {
                                     // EmailConfirmedとは別の2FAが必要。
 
@@ -381,7 +381,7 @@ namespace MultiPurposeAuthSite.Controllers
                                                 RememberMe = model.RememberMe // アカウント記憶
                                         });
                                 }
-                                else if (result == Microsoft.AspNetCore.Identity.SignInResult.Failed)
+                                else if (result.IsNotAllowed)// == SignInResult.Failed)
                                 {
                                     // サインイン失敗
                                 }
@@ -1069,6 +1069,374 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region パスワードの失念・変更プロセス
+
+        #region パスワードの失念
+
+        /// <summary>
+        /// ForgotPassword画面（初期表示）
+        /// GET: /Account/ForgotPassword
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult ForgotPassword()
+        {
+            // ForgotPassword画面（初期表示）
+            return View();
+        }
+
+        /// <summary>
+        /// ForgotPassword画面（メールの送信）
+        /// POST: /Account/ForgotPassword
+        /// </summary>
+        /// <param name="model">ForgotPasswordViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ForgotPassword(AccountForgotPasswordViewModel model)
+        {
+            // AccountForgotPasswordViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // AccountForgotPasswordViewModelの検証に成功
+
+                // ユーザの取得（サインインできないので、User.Identity.GetUserId()は使用不可能）
+                ApplicationUser user = await UserManager.FindByEmailAsync(model.Email);
+
+                // 補足 : EmailConfirmedされて無くても、PasswordResetを可能にした。
+                // 理由 : EmailConfirmed前にForgotPasswordすると、復帰する方法がなくなるので。
+                if (user == null) // || !(await UserManager.IsEmailConfirmedAsync(user.Id)))
+                {
+                    // ユーザが取得できなかった場合。
+
+                    // Security的な意味で
+                    //  - ユーザーが存在しないことや
+                    //  - E-mail未確認であることを
+                    // （UI経由で）公開しない。
+                }
+                else
+                {
+                    // ユーザが取得できた場合。
+
+                    // パスワード リセット用のメールを送信
+                    this.SendConfirmEmailForPasswordReset(user);
+
+                    // "パスワードの失念の確認"画面を表示 
+                    return View("ForgotPasswordConfirmation");
+                }
+            }
+            else
+            {
+                // AccountForgotPasswordViewModelの検証に失敗
+            }
+
+            // 再表示
+            return View(model);
+        }
+
+        #endregion
+
+        // → 「パスワードの失念」から遷移
+
+        #region パスワード・リセット
+
+        /// <summary>
+        /// パスワード・リセット画面（メールからのリンクで初期表示）
+        /// GET: /Account/ResetPassword
+        /// </summary>
+        /// <param name="userId">string</param>
+        /// <param name="code">string</param>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> ResetPassword(string userId, string code)
+        {
+            if (string.IsNullOrWhiteSpace(userId)
+                || string.IsNullOrWhiteSpace(code))
+            {
+                // パラメタが無い場合はエラー
+                return View("Error");
+            }
+            else
+            {
+                ApplicationUser user = await UserManager.FindByIdAsync(userId);
+
+                // User情報をResetPassword画面に表示することも可能。
+
+                return View(new AccountResetPasswordViewModel
+                {
+                    UserId = user.Id,
+                    Email = user.Email,
+                    Code = code
+                });
+            }
+        }
+
+        /// <summary>
+        /// パスワード・リセット画面でリセット
+        /// POST: /Account/ResetPassword
+        /// </summary>
+        /// <param name="model">ResetPasswordViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ResetPassword(AccountResetPasswordViewModel model)
+        {
+            // AccountResetPasswordViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // AccountResetPasswordViewModelの検証に成功
+
+                // パスワードのリセット
+                ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+                IdentityResult result = await UserManager.ResetPasswordAsync(user, model.Code, model.Password);
+
+                // 結果の確認
+                if (result.Succeeded)
+                {
+                    // パスワードのリセットの成功
+
+                    // メールの送信
+                    this.SendPasswordResetCompletedEmail(user);
+
+                    // オペレーション・トレース・ログ出力
+                    Logging.MyOperationTrace(string.Format("{0}({1}) has reset own password.", user.Id, user.UserName));
+
+                    // "パスワードのリセットの確認"画面を表示 
+                    return View("ResetPasswordConfirmation");
+                }
+                else
+                {
+                    // パスワードのリセットの失敗
+
+                    // 結果のエラー情報を追加
+                    this.AddErrors(result);
+                }
+
+            }
+            else
+            {
+                // ResetPasswordViewModelの検証に失敗
+            }
+
+            // 再表示
+            return View(model);
+        }
+
+        #endregion
+
+        #endregion
+
+        #region 2FA (2 要素認証)
+
+        #region 2FA画面のコード送信
+
+        /// <summary>
+        /// 2FA画面のコード送信画面（初期表示）
+        /// GET: /Account/SendCode
+        /// </summary>
+        /// <param name="returnUrl">戻り先のURL</param>
+        /// <param name="rememberMe">アカウント記憶</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> SendCode(string returnUrl, bool rememberMe)
+        {
+            // 検証されたアカウントのUIDを取得
+            ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+            if (user == null)
+            {
+                // user == null
+
+                // エラー
+                return View("Error");
+            }
+            else
+            {
+                // user != null
+
+                // UIDから、2FAのプロバイダを取得する。
+                IList<string> userFactors = await UserManager.GetValidTwoFactorProvidersAsync(user);
+
+                // 2FAのプロバイダの一覧を取得する
+                List<SelectListItem> factorOptions = userFactors.Select(
+                    purpose => new SelectListItem { Text = purpose, Value = purpose }).ToList();
+
+                // 2FA画面のコード送信画面に遷移
+                return View(new AccountSendCodeViewModel
+                {
+                    Providers = factorOptions,  // 2FAのプロバイダの一覧
+                    ReturnUrl = returnUrl,      // 戻り先のURL
+                    RememberMe = rememberMe     // アカウント記憶
+                });
+            }
+        }
+
+        /// <summary>
+        /// 2FA画面のコード送信画面でコード送信
+        /// POST: /Account/SendCode
+        /// </summary>
+        /// <param name="model">SendCodeViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        // 
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> SendCode(AccountSendCodeViewModel model)
+        {
+            // AccountSendCodeViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // AccountSendCodeViewModelの検証に成功
+
+                // 検証されたアカウントのUIDを取得
+                ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+                // Generate the token and send it
+                // トークンを生成して送信します。
+                string code = await UserManager.GenerateTwoFactorTokenAsync(user, model.SelectedProvider);
+                if (!string.IsNullOrEmpty(code))
+                {
+                    // 成功
+
+                    // 2FA画面でコードの検証用のViewへ
+                    return RedirectToAction("VerifyCode", new
+                    {
+                        Provider = model.SelectedProvider,  // 2FAプロバイダ
+                        ReturnUrl = model.ReturnUrl,        // 戻り先のURL
+                        RememberMe = model.RememberMe,      // アカウント記憶
+                        RememberBrowser = true              // ブラウザ記憶(2FA)
+                    });
+                }
+                else
+                {
+                    // 失敗
+                }
+            }
+            else
+            {
+                // AccountSendCodeViewModelの検証に失敗
+            }
+
+            // 再表示
+            return View();
+        }
+
+        #endregion
+
+        #region 2FA画面のコード検証
+
+        /// <summary>
+        /// 2FA画面のコード検証（初期表示）
+        /// GET: /Account/VerifyCode
+        /// </summary>
+        /// <param name="provider">2FAプロバイダ</param>
+        /// <param name="returnUrl">戻り先のURL</param>
+        /// <param name="rememberMe">アカウント記憶</param>
+        /// <param name="rememberBrowser">ブラウザ記憶(2FA)</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> VerifyCode(string provider, string returnUrl, bool rememberMe, bool rememberBrowser)
+        {
+            // 検証されたアカウントのUIDを取得
+            ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+            if (user == null)
+            {
+                // エラー画面
+                return View("Error");
+            }
+            else
+            {
+                // 2FA画面のコード検証（初期表示）
+                return View(
+                    new AccountVerifyCodeViewModel
+                    {
+                        Provider = provider,                    // 2FAプロバイダ
+                        ReturnUrl = returnUrl,                  // 戻り先のURL
+                        RememberMe = rememberMe,                // アカウント記憶
+                        RememberBrowser = rememberBrowser       // ブラウザ記憶(2FA)
+                    });
+            }
+        }
+
+        /// <summary>
+        /// 2FA画面のコード検証
+        /// POST: /Account/VerifyCode
+        /// </summary>
+        /// <param name="model">VerifyCodeViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> VerifyCode(AccountVerifyCodeViewModel model)
+        {
+            // AccountVerifyCodeViewModelの検証
+            if (ModelState.IsValid)
+            {
+                // AccountVerifyCodeViewModelの検証に成功
+
+                // The following code protects for brute force attacks against the two factor codes. 
+                // If a user enters incorrect codes for a specified amount of time then the user account will be locked out for a specified amount of time. 
+                // You can configure the account lockout settings in IdentityConfig( = ApplicationSignInManager, ApplicationUserManager, SmsService, EmailService)
+
+                // 次のコードは、2FAコードに対するブルートフォース攻撃から保護します。
+                // 指定時間の間にコード入力の誤りが指定の回数に達すると、アカウントは、指定時間の間ロックアウトされる。
+                // IdentityConfig.cs(ApplicationUserManager.Create)でアカウントロックアウトの設定を行うことができる。
+                Microsoft.AspNetCore.Identity.SignInResult result = await SignInManager.TwoFactorSignInAsync(
+                    provider: model.Provider,                                  // 2FAプロバイダ
+                    code: model.Code,                                          // 2FAコ－ド
+                    isPersistent: model.RememberBrowser, // model.RememberMe,  // アカウント記憶 ( ・・・仕様として解り難いので、RememberBrowserを使用 )
+                    rememberClient: model.RememberBrowser                      // ブラウザ記憶(2FA)
+                    );
+
+                // SignInStatus
+                if (result.Succeeded)
+                {
+                    // サインイン成功
+
+                    // AppScan指摘の反映
+                    this.FxSessionAbandon();
+                    // SessionIDの切換にはこのコードが必要である模様。
+                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                    Response.Cookies.Set(this.SessionCookieName, "");
+
+                    //// オペレーション・トレース・ログ出力 できない（User.Identity.GetUserId() == null
+                    //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    //Logging.MyOperationTrace(string.Format("{0}({1}) did 2fa sign in.", user.Id, user.UserName));
+
+                    return RedirectToLocal(model.ReturnUrl);
+                }
+                else if (result.IsLockedOut)
+                {
+                    // ロックアウト
+                    return View("Lockout");
+                }
+                else if (result.IsNotAllowed)
+                {
+                    // サインイン失敗
+                    // その他 "無効なコード。"
+                    ModelState.AddModelError("", Resources.AccountController.InvalidCode);
+                }
+            }
+            else
+            {
+                // VerifyCodeViewModelの検証に失敗
+            }
+
+            // 再表示
+            return View(model);
+        }
+
+        #endregion      
+
+        #endregion
+
         #region Helper
 
         #region Controller → View
@@ -1329,124 +1697,8 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region
+        #region hoge
         /*
-        /// <summary>Login（ポストバック）</summary>
-        /// <param name="model">LoginViewModel</param>
-        /// <param name="returnUrl">string</param>
-        /// <returns>IActionResultを非同期的に返す。</returns>
-        [HttpPost]
-        [AllowAnonymous]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Login(LoginViewModel model, string returnUrl = null)
-        {
-            ViewData["ReturnUrl"] = returnUrl;
-
-            // ViewModel検証
-            if (ModelState.IsValid)
-            {
-                // This doesn't count login failures towards account lockout
-                // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-                // アカウントのロックアウトに対するログイン失敗をカウントしません
-                // パスワードの失敗を有効にしてアカウントのロックアウトをトリガーするには、lockoutOnFailure：trueを設定します。
-                var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
-                if (result.Succeeded)
-                {
-                    _logger.LogInformation("User logged in.");
-                    return RedirectToLocal(returnUrl);
-                }
-                if (result.RequiresTwoFactor)
-                {
-                    return RedirectToAction(nameof(LoginWith2fa), new { returnUrl, model.RememberMe });
-                }
-                if (result.IsLockedOut)
-                {
-                    _logger.LogWarning("User account locked out.");
-                    return RedirectToAction(nameof(Lockout));
-                }
-                else
-                {
-                    ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                    return View(model);
-                }
-            }
-
-            // If we got this far, something failed, redisplay form
-            return View(model);
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<IActionResult> LoginWith2fa(bool rememberMe, string returnUrl = null)
-        {
-            // Ensure the user has gone through the username & password screen first
-            var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
-
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load two-factor authentication user.");
-            }
-
-            var model = new LoginWith2faViewModel { RememberMe = rememberMe };
-            ViewData["ReturnUrl"] = returnUrl;
-
-            return View(model);
-        }
-
-        [HttpPost]
-        [AllowAnonymous]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> LoginWith2fa(LoginWith2faViewModel model, bool rememberMe, string returnUrl = null)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{UserManager.GetUserId(User)}'.");
-            }
-
-            var authenticatorCode = model.TwoFactorCode.Replace(" ", string.Empty).Replace("-", string.Empty);
-
-            var result = await _signInManager.TwoFactorAuthenticatorSignInAsync(authenticatorCode, rememberMe, model.RememberMachine);
-
-            if (result.Succeeded)
-            {
-                _logger.LogInformation("User with ID {UserId} logged in with 2fa.", user.Id);
-                return RedirectToLocal(returnUrl);
-            }
-            else if (result.IsLockedOut)
-            {
-                _logger.LogWarning("User with ID {UserId} account locked out.", user.Id);
-                return RedirectToAction(nameof(Lockout));
-            }
-            else
-            {
-                _logger.LogWarning("Invalid authenticator code entered for user with ID {UserId}.", user.Id);
-                ModelState.AddModelError(string.Empty, "Invalid authenticator code.");
-                return View();
-            }
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<IActionResult> LoginWithRecoveryCode(string returnUrl = null)
-        {
-            // Ensure the user has gone through the username & password screen first
-            var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load two-factor authentication user.");
-            }
-
-            ViewData["ReturnUrl"] = returnUrl;
-
-            return View();
-        }
-
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
@@ -1484,60 +1736,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return View();
             }
         }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult Lockout()
-        {
-            return View();
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult Register(string returnUrl = null)
-        {
-            ViewData["ReturnUrl"] = returnUrl;
-            return View();
-        }
-
-        [HttpPost]
-        [AllowAnonymous]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Register(RegisterViewModel model, string returnUrl = null)
-        {
-            ViewData["ReturnUrl"] = returnUrl;
-            if (ModelState.IsValid)
-            {
-                var user = new ApplicationUser { UserName = model.Email, Email = model.Email };
-                var result = await UserManager.CreateAsync(user, model.Password);
-                if (result.Succeeded)
-                {
-                    _logger.LogInformation("User created a new account with password.");
-
-                    var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-                    var callbackUrl = Url.EmailConfirmationLink(user.Id.ToString(), code, Request.Scheme);
-                    await _emailSender.SendEmailConfirmationAsync(model.Email, callbackUrl);
-
-                    await _signInManager.SignInAsync(user, isPersistent: false);
-                    _logger.LogInformation("User created a new account with password.");
-                    return RedirectToLocal(returnUrl);
-                }
-                AddErrors(result);
-            }
-
-            // If we got this far, something failed, redisplay form
-            return View(model);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Logout()
-        {
-            await _signInManager.SignOutAsync();
-            _logger.LogInformation("User logged out.");
-            return RedirectToAction(nameof(HomeController.Index), "Home");
-        }
-
+        
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
@@ -1615,114 +1814,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             ViewData["ReturnUrl"] = returnUrl;
             return View(nameof(ExternalLogin), model);
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<IActionResult> ConfirmEmail(string userId, string code)
-        {
-            if (userId == null || code == null)
-            {
-                return RedirectToAction(nameof(HomeController.Index), "Home");
-            }
-            var user = await UserManager.FindByIdAsync(userId);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{userId}'.");
-            }
-            var result = await UserManager.ConfirmEmailAsync(user, code);
-            return View(result.Succeeded ? "ConfirmEmail" : "Error");
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult ForgotPassword()
-        {
-            return View();
-        }
-
-        [HttpPost]
-        [AllowAnonymous]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
-        {
-            if (ModelState.IsValid)
-            {
-                var user = await UserManager.FindByEmailAsync(model.Email);
-                if (user == null || !(await UserManager.IsEmailConfirmedAsync(user)))
-                {
-                    // Don't reveal that the user does not exist or is not confirmed
-                    return RedirectToAction(nameof(ForgotPasswordConfirmation));
-                }
-
-                // For more information on how to enable account confirmation and password reset please
-                // visit https://go.microsoft.com/fwlink/?LinkID=532713
-                var code = await UserManager.GeneratePasswordResetTokenAsync(user);
-                var callbackUrl = Url.ResetPasswordCallbackLink(user.Id.ToString(), code, Request.Scheme);
-                await _emailSender.SendEmailAsync(model.Email, "Reset Password",
-                   $"Please reset your password by clicking here: <a href='{callbackUrl}'>link</a>");
-                return RedirectToAction(nameof(ForgotPasswordConfirmation));
-            }
-
-            // If we got this far, something failed, redisplay form
-            return View(model);
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult ForgotPasswordConfirmation()
-        {
-            return View();
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult ResetPassword(string code = null)
-        {
-            if (code == null)
-            {
-                throw new ApplicationException("A code must be supplied for password reset.");
-            }
-            var model = new ResetPasswordViewModel { Code = code };
-            return View(model);
-        }
-
-        [HttpPost]
-        [AllowAnonymous]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-            var user = await UserManager.FindByEmailAsync(model.Email);
-            if (user == null)
-            {
-                // Don't reveal that the user does not exist
-                return RedirectToAction(nameof(ResetPasswordConfirmation));
-            }
-            var result = await UserManager.ResetPasswordAsync(user, model.Code, model.Password);
-            if (result.Succeeded)
-            {
-                return RedirectToAction(nameof(ResetPasswordConfirmation));
-            }
-            AddErrors(result);
-            return View();
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public IActionResult ResetPasswordConfirmation()
-        {
-            return View();
-        }
-
-
-        [HttpGet]
-        public IActionResult AccessDenied()
-        {
-            return View();
         }
         */
         #endregion
