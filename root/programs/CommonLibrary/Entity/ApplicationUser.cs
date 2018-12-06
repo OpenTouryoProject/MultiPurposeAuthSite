@@ -138,7 +138,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
         #region properties
 
-        #region Original properties
+        #region Properties from Identity2 or earlier.
 
         #region UserInfo
 
@@ -309,6 +309,13 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         public IList<Claim> Claims { get; set; }
 
         #endregion
+
+        #endregion
+
+        #region Properties after Identity 3.
+
+        /// <summary>AuthenticatorKey</summary>
+        public string AuthenticatorKey { get; set; }
 
         #endregion
 

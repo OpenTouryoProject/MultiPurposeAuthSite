@@ -62,7 +62,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ロールを追加</summary>
         /// <param name="role">ApplicationRole</param>
-        public static void CreateAsync(ApplicationRole role)
+        public static void Create(ApplicationRole role)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -137,7 +137,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ロールを ID から検索</summary>
         /// <param name="roleId">string</param>
         /// <returns>ApplicationRole</returns>
-        public static ApplicationRole FindByIdAsync(string roleId)
+        public static ApplicationRole FindById(string roleId)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -219,7 +219,7 @@ namespace MultiPurposeAuthSite.Data
         /// ・グローバル ロールを優先して返す。
         /// ・無ければ自テナントを検索して返す。
         /// </remarks>
-        public static ApplicationRole FindByNameAsync(string roleName)
+        public static ApplicationRole FindByName(string roleName)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -375,7 +375,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ロールを更新する</summary>
         /// <param name="role">ApplicationRole</param>
-        public static void UpdateAsync(ApplicationRole role)
+        public static void Update(ApplicationRole role)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -464,7 +464,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ロールを削除する</summary>
         /// <param name="role">ApplicationRole</param>
-        public static void DeleteAsync(ApplicationRole role)
+        public static void Delete(ApplicationRole role)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();

@@ -447,7 +447,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (result.Succeeded)
                     {
                         // 再ログイン
-                        if (await this.ReSignInAsync())
+                        if (await this.ReSignInAsync(user.Id))
                         {
                             // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format(
@@ -535,7 +535,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 成功
 
                         // 再ログイン
-                        await this.ReSignInAsync();
+                        await this.ReSignInAsync(user.Id);
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) has set own local password.", user.Id, user.UserName));
@@ -614,7 +614,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 成功
 
                         // 再ログイン
-                        await this.ReSignInAsync();
+                        await this.ReSignInAsync(user.Id);
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) has changed own password.", user.Id, user.UserName));
@@ -934,7 +934,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // メアド検証の成功
 
                                 // 再ログイン
-                                if (await this.ReSignInAsync())
+                                if (await this.ReSignInAsync(user.Id))
                                 {
                                     // 再ログインに成功
                                     if (Config.RequireUniqueEmail)
@@ -1017,7 +1017,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // E-mail削除の成功
 
                     // 再ログイン
-                    if (await this.ReSignInAsync())
+                    if (await this.ReSignInAsync(user.Id))
                     {
                         // 再ログインに成功
                         return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveEmailSuccess });
@@ -1174,7 +1174,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 成功
 
                         // 再ログイン
-                        await this.ReSignInAsync();
+                        await this.ReSignInAsync(user.Id);
 
                         // Index - AddPhoneSuccess
                         return RedirectToAction("Index", new { Message = EnumManageMessageId.AddPhoneSuccess });
@@ -1228,7 +1228,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 電話番号削除の成功
 
                     // 再ログイン
-                    if (await this.ReSignInAsync())
+                    if (await this.ReSignInAsync(user.Id))
                     {
                         // 再ログインに成功
                         return RedirectToAction("Index", new { Message = EnumManageMessageId.RemovePhoneSuccess });
@@ -1257,6 +1257,68 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region 2FAの有効化・無効化
+
+        /// <summary>
+        /// 2FAの有効化
+        /// POST: /Manage/EnableTwoFactorAuthentication
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> EnableTwoFactorAuthentication()
+        {
+            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+            if (Config.CanEdit2FA
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // 2FAの有効化
+                await UserManager.SetTwoFactorEnabledAsync(user, true);
+
+                // 再ログイン
+                await this.ReSignInAsync(user.Id);
+
+                return RedirectToAction("Index", "Manage");
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// 2FAの無効化
+        /// POST: /Manage/DisableTwoFactorAuthentication
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> DisableTwoFactorAuthentication()
+        {
+            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+            if (Config.CanEdit2FA
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // 2FAの無効化
+                await UserManager.SetTwoFactorEnabledAsync(user, false);
+
+                // 再ログイン
+                await this.ReSignInAsync(user.Id);
+
+                return RedirectToAction("Index", "Manage");
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region Helper
@@ -1268,10 +1330,10 @@ namespace MultiPurposeAuthSite.Controllers
         /// Cookie再設定 or SecurityStamp対応
         /// </summary>
         /// <returns>Task</returns>
-        private async Task<bool> ReSignInAsync()
+        private async Task<bool> ReSignInAsync(string userId)
         {
             // 認証されたユーザを取得
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.FindByIdAsync(userId);
 
             // ユーザの確認
             if (user != null)

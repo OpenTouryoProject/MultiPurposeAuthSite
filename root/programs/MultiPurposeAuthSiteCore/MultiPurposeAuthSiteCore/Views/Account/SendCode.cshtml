@@ -36,7 +36,7 @@
 
 <h2>@ViewBag.Title</h2>
 
-@using (Html.BeginForm("SendCode", "Account", new { ReturnUrl = Model.ReturnUrl }, FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" })) {
+@using (Html.BeginForm("SendCode", "Account", new { ReturnUrl = Model.ReturnUrl }, FormMethod.Post, true, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" })) {
     @Html.AntiForgeryToken()
     @Html.Hidden("rememberMe", @Model.RememberMe)
     <h4>@AccountViews.SendCodeH4</h4>

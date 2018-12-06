@@ -70,10 +70,9 @@ namespace MultiPurposeAuthSite.Data
 
         #region C (Create)
 
-
         /// <summary>新規ユーザーの追加</summary>
         /// <param name="user">ApplicationUser</param>
-        public static void CreateAsync(ApplicationUser user)
+        public static void Create(ApplicationUser user)
         {
             // 更新系の機能のため、
             OnlySts.STSOnly_M();
@@ -199,7 +198,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザを（Id指定で）検索</summary>
         /// <param name="userId">string</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser FindByIdAsync(string userId)
+        public static ApplicationUser FindById(string userId)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -305,7 +304,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザを（ユーザ名指定で）検索</summary>
         /// <param name="userName">string</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser FindByNameAsync(string userName)
+        public static ApplicationUser FindByName(string userName)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -561,7 +560,7 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>ユーザー情報を更新</summary>
         /// <param name="user">ApplicationUser</param>
-        public static void UpdateAsync(ApplicationUser user)
+        public static void Update(ApplicationUser user)
         {
             // 更新系の機能のため、
             //OnlySts.STSOnly_M();
@@ -581,17 +580,6 @@ namespace MultiPurposeAuthSite.Data
             {
                 // MemoryStore同一インスタンス問題。
                 // SerializeできないMemberもあり、DeepCloneもできず。
-
-                //// ユーザー情報を取得
-                //ApplicationUser tgtUser = await this.FindByIdAsync(user.Id);
-
-                //// ユーザー情報を更新
-                //if (tgtUser == null)
-                //{
-                //    // なにもしない（というか何もできない）
-                //}
-                //else
-                //{
 
                 // ユーザー情報を更新
                 switch (Config.UserStoreType)
@@ -833,13 +821,13 @@ namespace MultiPurposeAuthSite.Data
 
                         //foreach (string roleName in toRmvRolesName)
                         //{
-                        //    // 効率悪いが品質的に、this.RemoveFromRoleAsyncを使用する。
-                        //    await this.RemoveFromRoleAsync(user, roleName);
+                        //    // 効率悪いが品質的に、RemoveFromRole使用する。
+                        //    await RemoveFromRole(user, roleName);
                         //}
                         //foreach (string roleName in toAddRolesName)
                         //{
-                        //    // 効率悪いが品質的に、this.AddToRoleAsyncを使用する。
-                        //    await this.AddToRoleAsync(user, roleName);
+                        //    // 効率悪いが品質的に、AddToRoleを使用する。
+                        //    await AddToRole(user, roleName);
                         //}
 
                         using (IDbConnection cnn = DataAccess.CreateConnection())
@@ -944,7 +932,7 @@ namespace MultiPurposeAuthSite.Data
         /// <remarks>
         /// 削除するエンティティにマークを付けます
         /// </remarks>
-        public static void DeleteAsync(ApplicationUser user)
+        public static void Delete(ApplicationUser user)
         {
             // 更新系の機能のため、
             OnlySts.STSOnly_M();
@@ -1048,7 +1036,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザがパスワードを持っているか</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>真・偽：ユーザがパスワードを持っているか</returns>
-        public static bool HasPasswordAsync(ApplicationUser user)
+        public static bool HasPassword(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1060,14 +1048,13 @@ namespace MultiPurposeAuthSite.Data
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
             // ユーザがパスワードを持っているか
-
             return !string.IsNullOrEmpty(user.PasswordHash);
         }
 
         /// <summary>ユーザーにハッシュ化されたパスワードを設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="passwordHash">string</param>
-        public static void SetPasswordHashAsync(ApplicationUser user, string passwordHash)
+        public static void SetPasswordHash(ApplicationUser user, string passwordHash)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1087,7 +1074,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザのパスワードのハッシュを取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>パスワードのハッシュ</returns>
-        public static string GetPasswordHashAsync(ApplicationUser user)
+        public static string GetPasswordHash(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1110,7 +1097,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザを（email指定で）検索して取得</summary>
         /// <param name="email">string</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser FindByEmailAsync(string email)
+        public static ApplicationUser FindByEmail(string email)
         {
             // 参照系の機能のため、
             //OnlySts.STSOnly_M();
@@ -1193,7 +1180,7 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="user">ApplicationUser</param>
         /// <param name="email">string</param>
         /// <returns>－</returns>
-        public static void SetEmailAsync(ApplicationUser user, string email)
+        public static void SetEmail(ApplicationUser user, string email)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1213,7 +1200,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>メアドの取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>Email</returns>
-        public static string GetEmailAsync(ApplicationUser user)
+        public static string GetEmail(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1231,7 +1218,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>メアド確認の設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="confirmed">bool</param>
-        public static void SetEmailConfirmedAsync(ApplicationUser user, bool confirmed)
+        public static void SetEmailConfirmed(ApplicationUser user, bool confirmed)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1251,7 +1238,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>メアド確認の取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>EmailConfirmed</returns>
-        public static bool GetEmailConfirmedAsync(ApplicationUser user)
+        public static bool GetEmailConfirmed(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1269,7 +1256,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>メアドの設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="normalizedEmail">string</param>
-        public static void SetNormalizedEmailAsync(ApplicationUser user, string normalizedEmail)
+        public static void SetNormalizedEmail(ApplicationUser user, string normalizedEmail)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1289,7 +1276,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>Normalizedメアドの取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>NormalizedEmail</returns>
-        public static string GetNormalizedEmailAsync(ApplicationUser user)
+        public static string GetNormalizedEmail(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1311,7 +1298,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>電話番号の設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="phoneNumber">string</param>
-        public static void SetPhoneNumberAsync(ApplicationUser user, string phoneNumber)
+        public static void SetPhoneNumber(ApplicationUser user, string phoneNumber)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1331,7 +1318,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>電話番号の取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>phone number</returns>
-        public static string GetPhoneNumberAsync(ApplicationUser user)
+        public static string GetPhoneNumber(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1349,7 +1336,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>電話番号確認の設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="confirmed">bool</param>
-        public static void SetPhoneNumberConfirmedAsync(ApplicationUser user, bool confirmed)
+        public static void SetPhoneNumberConfirmed(ApplicationUser user, bool confirmed)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1369,7 +1356,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>電話番号確認の取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>phone number is confirmed</returns>
-        public static bool GetPhoneNumberConfirmedAsync(ApplicationUser user)
+        public static bool GetPhoneNumberConfirmed(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1392,7 +1379,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ロールにユーザを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">string</param>
-        public static void AddToRoleAsync(ApplicationUser user, string roleName)
+        public static void AddToRole(ApplicationUser user, string roleName)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -1493,7 +1480,7 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">ロール名</param>
         /// <returns>真・偽：ユーザがロールに所属するか</returns>
-        public static bool IsInRoleAsync(ApplicationUser user, string roleName)
+        public static bool IsInRole(ApplicationUser user, string roleName)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1507,7 +1494,7 @@ namespace MultiPurposeAuthSite.Data
             // ユーザがロールに所属するか？
 
             // ユーザのロール一覧を返す。
-            IList<string> roles = CmnUserStore.GetRolesAsync(user);
+            IList<string> roles = CmnUserStore.GetRoles(user);
 
             // bool (ユーザのロール一覧から、一致するロール名を取得できたら真、できなかったら偽
             return roles.FirstOrDefault(x => x.ToUpper() == roleName.ToUpper()) != null;
@@ -1516,7 +1503,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザのロール一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ユーザのロール一覧</returns>
-        public static IList<string> GetRolesAsync(ApplicationUser user)
+        public static IList<string> GetRoles(ApplicationUser user)
         {
             // 他テーブルのため、
             //OnlySts.STSOnly_M();
@@ -1627,7 +1614,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザをロールから削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="roleName">ロール名</param>
-        public static void RemoveFromRoleAsync(ApplicationUser user, string roleName)
+        public static void RemoveFromRole(ApplicationUser user, string roleName)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -1734,7 +1721,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>セキュリティスタンプを設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="stamp">string</param>
-        public static void SetSecurityStampAsync(ApplicationUser user, string stamp)
+        public static void SetSecurityStamp(ApplicationUser user, string stamp)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1754,7 +1741,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>セキュリティスタンプを取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>SecurityStamp</returns>
-        public static string GetSecurityStampAsync(ApplicationUser user)
+        public static string GetSecurityStamp(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1776,7 +1763,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザがロックアウト可能かどうかを設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="enabled">真・偽：ユーザがロックアウト可能かどうか</param>
-        public static void SetLockoutEnabledAsync(ApplicationUser user, bool enabled)
+        public static void SetLockoutEnabled(ApplicationUser user, bool enabled)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1796,7 +1783,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザがロックアウト可能かどうかを取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>真・偽：ユーザがロックアウト可能かどうか</returns>
-        public static bool GetLockoutEnabledAsync(ApplicationUser user)
+        public static bool GetLockoutEnabled(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1814,7 +1801,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>サインインに失敗した試行回数を記録</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>サインインに失敗した試行回数</returns>
-        public static int IncrementAccessFailedCountAsync(ApplicationUser user)
+        public static int IncrementAccessFailedCount(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1835,7 +1822,7 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="user">ApplicationUser</param>
         /// <returns>現在の失敗したサインインの試行回数</returns>
         /// <remarks>パスワードが確認されるか、アカウントがロックアウトされるたびに、この数は、リセットされる。</remarks>
-        public static int GetAccessFailedCountAsync(ApplicationUser user)
+        public static int GetAccessFailedCount(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1855,7 +1842,7 @@ namespace MultiPurposeAuthSite.Data
         /// <remarks>
         /// 慣例的に、サインインが成功した場合にリセットされる。
         /// </remarks>
-        public static void ResetAccessFailedCountAsync(ApplicationUser user)
+        public static void ResetAccessFailedCount(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1881,7 +1868,7 @@ namespace MultiPurposeAuthSite.Data
         /// <remarks>
         /// 過去の日付に設定すると、ロックアウトを解除する。
         /// </remarks>
-        public static void SetLockoutEndDateAsync(ApplicationUser user, DateTimeOffset? lockoutEnd)
+        public static void SetLockoutEndDate(ApplicationUser user, DateTimeOffset? lockoutEnd)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1916,7 +1903,7 @@ namespace MultiPurposeAuthSite.Data
         /// <remarks>
         /// 過去の日付を返すときは既にロックアウトされていない。
         /// </remarks>
-        public static DateTimeOffset? GetLockoutEndDateAsync(ApplicationUser user)
+        public static DateTimeOffset? GetLockoutEndDate(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1944,12 +1931,14 @@ namespace MultiPurposeAuthSite.Data
 
         #endregion
 
+        #region IUserTwoFactor...
+
         #region IUserTwoFactorStore
 
         /// <summary>2FAの有効・無効を設定</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="enabled">真・偽：2FAが有効かどうか</param>
-        public static void SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled)
+        public static void SetTwoFactorEnabled(ApplicationUser user, bool enabled)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1969,7 +1958,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>2FAの有効・無効を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>真・偽：2FAが有効かどうか</returns>
-        public static bool GetTwoFactorEnabledAsync(ApplicationUser user)
+        public static bool GetTwoFactorEnabled(ApplicationUser user)
         {
             // ストレージを直接、触らない。
             //OnlySts.STSOnly_M();
@@ -1987,14 +1976,57 @@ namespace MultiPurposeAuthSite.Data
 
         #endregion
 
+        #region UserAuthenticatorKeyStore
+
+        /// <summary>SetAuthenticatorKey</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="key">string</param>
+        public static void SetAuthenticatorKey(ApplicationUser user, string key)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            user.AuthenticatorKey = key;
+
+            return;
+        }
+
+        /// <summary>GetAuthenticatorKey</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>key string</returns>
+        public static string GetAuthenticatorKey(ApplicationUser user)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            return user.AuthenticatorKey;
+        }
+
+        #endregion 
+
+        #endregion
+
         #region Collection (Logins, Claims)
-        
+
         #region IUserLoginStore
 
         /// <summary>ユーザーに外部ログインを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
-        public static void AddLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public static void AddLogin(ApplicationUser user, UserLoginInfo login)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2069,7 +2101,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>外部ログインでユーザーを検索</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser FindAsync(UserLoginInfo login)
+        public static ApplicationUser Find(UserLoginInfo login)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2182,7 +2214,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザの外部ログイン一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>IList<UserLoginInfo></returns>>
-        public static IList<UserLoginInfo> GetLoginsAsync(ApplicationUser user)
+        public static IList<UserLoginInfo> GetLogins(ApplicationUser user)
         {
             // 他テーブルのため、
             //OnlySts.STSOnly_M();
@@ -2207,7 +2239,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザーから外部ログインを削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="login">UserLoginInfo</param>
-        public static void RemoveLoginAsync(ApplicationUser user, UserLoginInfo login)
+        public static void RemoveLogin(ApplicationUser user, UserLoginInfo login)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2290,7 +2322,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザに外部ログインのクレームを追加</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
-        public static void AddClaimAsync(ApplicationUser user, Claim claim)
+        public static void AddClaim(ApplicationUser user, Claim claim)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();
@@ -2365,7 +2397,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザの（外部ログインの）クレーム一覧を取得</summary>
         /// <param name="user">ApplicationUser</param>
         /// <returns>IList<Claim></returns>
-        public static IList<Claim> GetClaimsAsync(ApplicationUser user)
+        public static IList<Claim> GetClaims(ApplicationUser user)
         {
             // 他テーブルのため、
             //OnlySts.STSOnly_M();
@@ -2389,7 +2421,7 @@ namespace MultiPurposeAuthSite.Data
         /// <summary>ユーザの（外部ログインの）クレームを削除</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="claim">Claim</param>
-        public static void RemoveClaimAsync(ApplicationUser user, Claim claim)
+        public static void RemoveClaim(ApplicationUser user, Claim claim)
         {
             // 他テーブルのため、
             OnlySts.STSOnly_M();

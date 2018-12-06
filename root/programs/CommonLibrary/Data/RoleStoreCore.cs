@@ -68,7 +68,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnRoleStore.CreateAsync(role);
+            CmnRoleStore.Create(role);
             return Task.FromResult(IdentityResult.Success);
         }
 
@@ -84,7 +84,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnRoleStore.FindByIdAsync(roleId));
+            return Task.FromResult(CmnRoleStore.FindById(roleId));
         }
 
         /// <summary>FindByNameAsync</summary>
@@ -95,7 +95,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnRoleStore.FindByNameAsync(normalizedRoleName));
+            return Task.FromResult(CmnRoleStore.FindByName(normalizedRoleName));
         }
 
         #endregion
@@ -110,7 +110,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnRoleStore.UpdateAsync(role);
+            CmnRoleStore.Update(role);
             return Task.FromResult(IdentityResult.Success);
         }
 
@@ -126,7 +126,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnRoleStore.DeleteAsync(role);
+            CmnRoleStore.Delete(role);
             return Task.FromResult(IdentityResult.Success);
         }
 

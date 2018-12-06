@@ -63,6 +63,7 @@ using Microsoft.AspNetCore.Identity;
 // 済 IUserLockoutStore
 // IUserTwoFactor...
 // - IUserTwoFactorStore
+// - IUserAuthenticatorKeyStore
 // - IUserTwoFactorTokenProvider
 // - IUserTwoFactorRecoveryCodeStore
 // 済 IUserLoginStore
@@ -89,7 +90,8 @@ namespace MultiPurposeAuthSite.Data
         IUserRoleStore<ApplicationUser>,
         IUserSecurityStampStore<ApplicationUser>,
         IUserLockoutStore<ApplicationUser>,
-        //IUserTwoFactor...,
+        IUserTwoFactorStore<ApplicationUser>,
+        IUserAuthenticatorKeyStore<ApplicationUser>,
         IUserLoginStore<ApplicationUser>,
         IUserClaimStore<ApplicationUser>
     {
@@ -121,7 +123,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.FindByIdAsync(userId));
+            return Task.FromResult(CmnUserStore.FindById(userId));
         }
 
         /// <summary>FindByNameAsync</summary>
@@ -132,7 +134,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.FindByNameAsync(normalizedUserName)); // UserName or NormalizedUserName ?
+            return Task.FromResult(CmnUserStore.FindByName(normalizedUserName)); // UserName or NormalizedUserName ?
         }
 
         #endregion
@@ -147,7 +149,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.UpdateAsync(user);
+            CmnUserStore.Update(user);
             return Task.FromResult(IdentityResult.Success);
         }
 
@@ -163,7 +165,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.DeleteAsync(user);
+            CmnUserStore.Delete(user);
             return Task.FromResult(IdentityResult.Success);
         }
 
@@ -250,7 +252,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>bool</returns>
         public Task<bool> HasPasswordAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
-            return Task.FromResult(CmnUserStore.HasPasswordAsync(user));
+            return Task.FromResult(CmnUserStore.HasPassword(user));
         }
 
         /// <summary>SetPasswordHashAsync</summary>
@@ -262,7 +264,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetPasswordHashAsync(user, passwordHash);
+            CmnUserStore.SetPasswordHash(user, passwordHash);
             return Task.FromResult(0);
         }
 
@@ -274,7 +276,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetPasswordHashAsync(user));
+            return Task.FromResult(CmnUserStore.GetPasswordHash(user));
         }
 
         #endregion
@@ -289,7 +291,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.FindByEmailAsync(normalizedEmail));
+            return Task.FromResult(CmnUserStore.FindByEmail(normalizedEmail));
         }
 
         /// <summary>SetEmailAsync</summary>
@@ -301,7 +303,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetEmailAsync(user, email);
+            CmnUserStore.SetEmail(user, email);
             return Task.FromResult(0);
         }
 
@@ -313,7 +315,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetEmailAsync(user));
+            return Task.FromResult(CmnUserStore.GetEmail(user));
         }
 
         /// <summary>SetEmailConfirmedAsync</summary>
@@ -325,7 +327,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetEmailConfirmedAsync(user, confirmed);
+            CmnUserStore.SetEmailConfirmed(user, confirmed);
             return Task.FromResult(0);
         }
 
@@ -337,7 +339,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetEmailConfirmedAsync(user));
+            return Task.FromResult(CmnUserStore.GetEmailConfirmed(user));
         }
 
         /// <summary>SetNormalizedEmailAsync</summary>
@@ -349,7 +351,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetNormalizedEmailAsync(user, normalizedEmail);
+            CmnUserStore.SetNormalizedEmail(user, normalizedEmail);
             return Task.FromResult(0);
         }
 
@@ -361,7 +363,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetNormalizedEmailAsync(user));
+            return Task.FromResult(CmnUserStore.GetNormalizedEmail(user));
         }
 
 
@@ -378,7 +380,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetPhoneNumberAsync(user, phoneNumber);
+            CmnUserStore.SetPhoneNumber(user, phoneNumber);
             return Task.FromResult(0);
         }
 
@@ -390,7 +392,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetPhoneNumberAsync(user));
+            return Task.FromResult(CmnUserStore.GetPhoneNumber(user));
         }
 
         /// <summary>SetPhoneNumberConfirmedAsync</summary>
@@ -402,7 +404,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetPhoneNumberConfirmedAsync(user, confirmed);
+            CmnUserStore.SetPhoneNumberConfirmed(user, confirmed);
             return Task.FromResult(0);
         }
 
@@ -414,7 +416,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetPhoneNumberConfirmedAsync(user));
+            return Task.FromResult(CmnUserStore.GetPhoneNumberConfirmed(user));
         }
 
         #endregion
@@ -430,7 +432,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.AddToRoleAsync(user, roleName);
+            CmnUserStore.AddToRole(user, roleName);
             return Task.FromResult(0);
         }
 
@@ -443,7 +445,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.IsInRoleAsync(user, roleName));
+            return Task.FromResult(CmnUserStore.IsInRole(user, roleName));
         }
 
         /// <summary>GetUsersInRoleAsync</summary>
@@ -465,7 +467,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetRolesAsync(user));
+            return Task.FromResult(CmnUserStore.GetRoles(user));
         }
 
         /// <summary>RemoveFromRoleAsync</summary>
@@ -477,7 +479,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.RemoveFromRoleAsync(user, roleName);
+            CmnUserStore.RemoveFromRole(user, roleName);
             return Task.FromResult(0);
         }
 
@@ -498,7 +500,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetSecurityStampAsync(user, stamp);
+            CmnUserStore.SetSecurityStamp(user, stamp);
             return Task.FromResult(0);
         }
 
@@ -510,7 +512,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetSecurityStampAsync(user));
+            return Task.FromResult(CmnUserStore.GetSecurityStamp(user));
         }
 
         #endregion
@@ -526,7 +528,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetLockoutEnabledAsync(user, enabled);
+            CmnUserStore.SetLockoutEnabled(user, enabled);
             return Task.FromResult(0);
         }
 
@@ -538,7 +540,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetLockoutEnabledAsync(user));
+            return Task.FromResult(CmnUserStore.GetLockoutEnabled(user));
         }
                 
         /// <summary>IncrementAccessFailedCountAsync</summary>
@@ -549,7 +551,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.IncrementAccessFailedCountAsync(user));
+            return Task.FromResult(CmnUserStore.IncrementAccessFailedCount(user));
         }
 
         /// <summary>GetAccessFailedCountAsync</summary>
@@ -560,7 +562,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetAccessFailedCountAsync(user));
+            return Task.FromResult(CmnUserStore.GetAccessFailedCount(user));
         }
 
         /// <summary>ResetAccessFailedCountAsync</summary>
@@ -571,7 +573,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.ResetAccessFailedCountAsync(user);
+            CmnUserStore.ResetAccessFailedCount(user);
             return Task.FromResult(0);
         }
 
@@ -584,7 +586,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.SetLockoutEndDateAsync(user, lockoutEnd);
+            CmnUserStore.SetLockoutEndDate(user, lockoutEnd);
             return Task.FromResult(0);
         }
 
@@ -596,15 +598,68 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetLockoutEndDateAsync(user));
+            return Task.FromResult(CmnUserStore.GetLockoutEndDate(user));
         }
 
         #endregion
 
-        #region IUserTwoFactor（大幅強化）
+        #region IUserTwoFactor...
 
         #region IUserTwoFactorStore
+
+        /// <summary>SetTwoFactorEnabledAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="enabled">bool</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            CmnUserStore.SetTwoFactorEnabled(user, enabled);
+            return Task.FromResult(0);
+        }
+
+        /// <summary>GetTwoFactorEnabledAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>bool</returns>
+        public Task<bool> GetTwoFactorEnabledAsync(ApplicationUser user, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(CmnUserStore.GetTwoFactorEnabled(user));
+        }
+
         #endregion
+
+        #region UserAuthenticatorKeyStore
+
+        /// <summary>SetAuthenticatorKeyAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="key">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task SetAuthenticatorKeyAsync(ApplicationUser user, string key, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            CmnUserStore.SetAuthenticatorKey(user, key);
+            return Task.FromResult(0);
+        }
+
+        /// <summary>GetAuthenticatorKeyAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>key string</returns>
+        public Task<string> GetAuthenticatorKeyAsync(ApplicationUser user, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            return Task.FromResult(CmnUserStore.GetAuthenticatorKey(user));
+        }
+
+        #endregion 
 
         #region IUserTwoFactorTokenProvider
         #endregion
@@ -629,7 +684,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.AddLoginAsync(user, login);
+            CmnUserStore.AddLogin(user, login);
             return Task.FromResult(0);
         }
 
@@ -642,7 +697,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.FindAsync(new UserLoginInfo(loginProvider, providerKey, "")));
+            return Task.FromResult(CmnUserStore.Find(new UserLoginInfo(loginProvider, providerKey, "")));
         }
 
         /// <summary>GetLoginsAsync</summary>
@@ -653,7 +708,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetLoginsAsync(user));
+            return Task.FromResult(CmnUserStore.GetLogins(user));
         }
 
         /// <summary>RemoveLoginAsync</summary>
@@ -666,7 +721,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            CmnUserStore.RemoveLoginAsync(user, new UserLoginInfo(loginProvider, providerKey, ""));
+            CmnUserStore.RemoveLogin(user, new UserLoginInfo(loginProvider, providerKey, ""));
             return Task.FromResult(0);
         }
 
@@ -685,7 +740,7 @@ namespace MultiPurposeAuthSite.Data
 
             foreach (Claim claim in claims)
             {
-                CmnUserStore.AddClaimAsync(user, claim);
+                CmnUserStore.AddClaim(user, claim);
             }
             return Task.FromResult(0);
         }
@@ -698,7 +753,7 @@ namespace MultiPurposeAuthSite.Data
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.FromResult(CmnUserStore.GetClaimsAsync(user));
+            return Task.FromResult(CmnUserStore.GetClaims(user));
         }
 
         /// <summary>GetUsersForClaimAsync</summary>
@@ -736,7 +791,7 @@ namespace MultiPurposeAuthSite.Data
 
             foreach (Claim claim in claims)
             {
-                CmnUserStore.RemoveClaimAsync(user, claim);
+                CmnUserStore.RemoveClaim(user, claim);
             }
             return Task.FromResult(0);
         }

@@ -87,6 +87,8 @@ namespace MultiPurposeAuthSite.Controllers
         #region Else
         /// <summary>IEmailSender</summary>
         private IEmailSender _emailSender = null;
+        /// <summary>ISmsSender</summary>
+        private ISmsSender _smsSender = null;
         /// <summary>ILogger</summary>
         private ILogger _logger = null;
         #endregion
@@ -99,12 +101,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="roleManager">RoleManager</param>
         /// <param name="signInManager">SignInManager</param>
         /// <param name="emailSender">IEmailSender</param>
+        /// <param name="smsSender">ISmsSender</param>
         /// <param name="logger">ILogger</param>
         public AccountController(
             UserManager<ApplicationUser> userManager,
             RoleManager<ApplicationRole> roleManager,
             SignInManager<ApplicationUser> signInManager,
             IEmailSender emailSender,
+            ISmsSender smsSender,
             ILogger<AccountController> logger)
         {
             // UserManager
@@ -115,6 +119,8 @@ namespace MultiPurposeAuthSite.Controllers
             this._signInManager = signInManager;
             // IEmailSender
             this._emailSender = emailSender;
+            // ISmsSender
+            this._smsSender = smsSender;
             // ILogger
             this._logger = logger;
         }
@@ -172,6 +178,15 @@ namespace MultiPurposeAuthSite.Controllers
             get
             {
                 return this._emailSender;
+            }
+        }
+
+        /// <summary>ISmsSender</summary>
+        private ISmsSender SmsSender
+        {
+            get
+            {
+                return this._smsSender;
             }
         }
 
@@ -1302,6 +1317,18 @@ namespace MultiPurposeAuthSite.Controllers
                 // Generate the token and send it
                 // トークンを生成して送信します。
                 string code = await UserManager.GenerateTwoFactorTokenAsync(user, model.SelectedProvider);
+
+                // Identity2.0 では、GenerateTwoFactorTokenAsyncの中で
+                // 自動送信されていたが3.0では手動送信に変更された模様。
+                if (model.SelectedProvider == "Email")
+                {
+                    await EmailSender.SendAsync(user.Email, "Two factor authentication code", code);
+                }
+                else
+                {
+                    await SmsSender.SendAsync(user.PhoneNumber, code);
+                }
+
                 if (!string.IsNullOrEmpty(code))
                 {
                     // 成功
