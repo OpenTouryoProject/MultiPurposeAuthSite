@@ -25,7 +25,7 @@ using Microsoft.AspNet.Identity;
 using Microsoft.Owin.Security;
 #else
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Http.Authentication;
+using Microsoft.AspNetCore.Authentication;
 #endif
 
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>
@@ -38,7 +38,10 @@ namespace MultiPurposeAuthSite.ViewModels
         public IList<UserLoginInfo> CurrentLogins { get; set; }
 
         /// <summary>OtherLogins</summary>
+#if NETFX
         public IList<AuthenticationDescription> OtherLogins { get; set; }
-
+#else
+        public IList<AuthenticationScheme> OtherLogins { get; set; }
+#endif
     }
 }

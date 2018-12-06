@@ -269,6 +269,7 @@
     <Compile Include="ViewModels\AccountSendCodeViewModel.cs" />
     <Compile Include="ViewModels\AccountVerifyCodeViewModel.cs" />
     <Compile Include="ViewModels\BaseViewModel.cs" />
+    <Compile Include="ViewModels\ErrorViewModel.cs" />
     <Compile Include="ViewModels\ManageAddOAuth2DataViewModel.cs" />
     <Compile Include="ViewModels\ManageAddPaymentInformationViewModel.cs" />
     <Compile Include="ViewModels\ManageAddPhoneNumberViewModel.cs" />

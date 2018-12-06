@@ -174,6 +174,9 @@ namespace MultiPurposeAuthSite
             // 静的ファイルをパイプラインに追加
             app.UseStaticFiles();
 
+            // エラー画面
+            app.UseExceptionHandler("/Home/Error");
+
             // Identity
             app.UseAuthentication();
 
@@ -186,7 +189,7 @@ namespace MultiPurposeAuthSite
             });
 
             // UseCorsでAllowAllOriginsを指定。
-            //app.UseCors("AllowAllOrigins");
+            app.UseCors("AllowAllOrigins");
 
             #endregion
         }

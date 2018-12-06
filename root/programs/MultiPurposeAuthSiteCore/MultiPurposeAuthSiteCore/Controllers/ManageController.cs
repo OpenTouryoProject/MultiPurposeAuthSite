@@ -32,11 +32,12 @@ using MultiPurposeAuthSite.Extensions.OAuth2;
 using FIDO2 = MultiPurposeAuthSite.Extensions.FIDO2;
 
 using System;
-using System.Linq;
-using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.RegularExpressions;
+using System.Linq;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1316,6 +1317,1384 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
         }
+
+        #endregion
+
+        #region (External) Logins
+
+        /// <summary>
+        /// 外部ログイン管理画面（初期表示）
+        /// GET: /Manage/ManageLogins
+        /// </summary>
+        /// <param name="message">ManageMessageId</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> ManageLogins(EnumManageMessageId? message)
+        {
+            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+            if (Config.CanEditExtLogin
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // 色々な結果メッセージの設定
+                ViewBag.StatusMessage =
+                    message == EnumManageMessageId.Error ? Resources.ManageController.Error
+                    : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
+                    : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
+                    : "";
+
+                // 全ての外部ログイン情報
+                IEnumerable<AuthenticationScheme> loginProviders = await SignInManager.GetExternalAuthenticationSchemesAsync();
+
+                // 現在の認証ユーザが外部ログイン済みの外部ログイン情報を取得
+                IList<UserLoginInfo> userLogins = await UserManager.GetLoginsAsync(user);
+
+                // 現在の認証ユーザが未ログインの外部ログイン情報を取得
+                IList<AuthenticationScheme> otherLogins = new List<AuthenticationScheme>();
+
+                foreach (AuthenticationScheme auth in loginProviders)
+                {
+                    bool flg = true;
+                    foreach (UserLoginInfo ul in userLogins)
+                    {
+                        if (auth.DisplayName == ul.ProviderDisplayName)
+                        {
+                            flg = false;
+                        }
+                    }
+
+                    // userLoginsに存在しないものだけ追加
+                    if (flg) otherLogins.Add(auth);
+                }
+
+                // 削除ボタンを表示するかしないか。
+                // 通常ログインがあるか、外部ログイン・カウントが１以上ある場合に表示する。
+                ViewBag.ShowRemoveButton = user.PasswordHash != null || userLogins.Count > 1;
+
+                // 表示
+                return View(new ManageLoginsViewModel
+                {
+                    CurrentLogins = userLogins,
+                    OtherLogins = otherLogins
+                });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// 外部ログイン削除
+        /// POST: /Manage/RemoveLogin
+        /// </summary>
+        /// <param name="loginProvider">loginProvider</param>
+        /// <param name="providerKey">providerKey</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey)
+        {
+            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+            if (Config.CanEditExtLogin
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // メッセージ列挙型
+                EnumManageMessageId? message;
+
+                IdentityResult result = null;
+
+                // クレームを削除
+                // Memory Provider使用の時
+                // 「コレクションが変更されました。列挙操作は実行されない可能性があります。」
+                // 問題で若干冗長なコードに。
+                List<Claim> lc = new List<Claim>();
+                foreach (Claim c in user.Claims)
+                {
+                    if (c.Issuer == loginProvider)
+                    {
+                        lc.Add(c);
+                    }
+                }
+                foreach (Claim c in lc)
+                {
+                    result = await UserManager.RemoveClaimAsync(user, c);
+                }
+
+                // ログインを削除
+                result = await UserManager.RemoveLoginAsync(user, loginProvider, providerKey);
+
+                // 結果の確認
+                if (result.Succeeded)
+                {
+                    // ログイン削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync(user.Id))
+                    {
+                        // 再ログインに成功
+                        message = EnumManageMessageId.RemoveExternalLoginSuccess;
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                        message = EnumManageMessageId.Error;
+                    }
+                }
+                else
+                {
+                    // ログイン削除の失敗
+                    message = EnumManageMessageId.Error;
+                }
+
+                // ログイン管理画面（ログイン削除結果
+                return RedirectToAction("ManageLogins", new { Message = message });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// 外部ログイン（リダイレクト）の開始
+        /// POST: /Manage/ExternalLogin
+        /// </summary>
+        /// <param name="provider">string</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ExternalLogin(string provider)
+        {
+            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+            if (Config.CanEditExtLogin
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // Request a redirect to the external login provider
+                string redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Manage");
+                AuthenticationProperties properties = SignInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
+                return this.Challenge(properties, provider);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// 外部LoginのCallback（ExternalLoginCallback）
+        /// Redirect後、外部Login providerに着信し、そこで、
+        /// URL fragmentを切捨てCookieに認証Claim情報を設定、
+        /// その後、ココにRedirectされ、認証Claim情報を使用してSign-Inする。
+        /// （外部Login providerからRedirectで戻る先のURLのAction method）
+        /// GET: /Manage/ExternalLoginCallback
+        /// </summary>
+        /// <param name="returnUrl">string</param>
+        /// <param name="remoteError">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> ExternalLoginCallback(string returnUrl, string remoteError = null)
+        {
+            if (!string.IsNullOrEmpty(remoteError))
+            {
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (Config.CanEditExtLogin
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // AccountControllerはサインアップかどうかを判定して処理する必要がある。
+                // ManageControllerは判定不要だが、サインイン後なので、uidが一致する必要がある。
+
+                // asp.net mvc - MVC 5 Owin Facebook Auth results in Null Reference Exception - Stack Overflow
+                // http://stackoverflow.com/questions/19564479/mvc-5-owin-facebook-auth-results-in-null-reference-exception
+
+                //// ログイン プロバイダーが公開している認証済みユーザーに関する情報を受け取る。
+                //AuthenticateResult authenticateResult = await AuthenticationManager.AuthenticateAsync(DefaultAuthenticationTypes.ExternalCookie);
+                // 外部ログイン・プロバイダからユーザに関する情報を取得する。
+                ExternalLoginInfo externalLoginInfo = await SignInManager.GetExternalLoginInfoAsync();
+                if (externalLoginInfo == null)
+                {
+                    return RedirectToAction(nameof(Index));
+                }
+
+                ApplicationUser user = null;
+                IdentityResult idResult = null;
+
+                // ログイン情報を受け取れた場合、クレーム情報を分析
+                ClaimsIdentity identity = externalLoginInfo.Principal.Identities.First();
+
+                // ID情報とe-mail, name情報は必須
+                Claim idClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+                Claim emailClaim = identity.FindFirst(ClaimTypes.Email);
+                Claim nameClaim = identity.FindFirst(ClaimTypes.Name);
+
+                // 外部ログインで取得するクレームを標準化する。
+                // ・・・
+                // ・・・
+                // ・・・
+
+                if (idClaim != null)
+                {
+                    // クレーム情報（ID情報とe-mail, name情報）を抽出
+                    string id = idClaim.Value;
+                    string name = nameClaim.Value;
+                    string email = emailClaim.Value;
+
+                    string uid = "";
+                    if (Config.RequireUniqueEmail)
+                    {
+                        uid = email;
+                    }
+                    else
+                    {
+                        uid = name;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(email)
+                        && !string.IsNullOrWhiteSpace(name))
+                    {
+                        // クレーム情報（e-mail, name情報）を取得できた。
+
+                        // 既存の外部ログインを確認する。
+                        user = await UserManager.FindByLoginAsync(
+                            externalLoginInfo.LoginProvider,
+                            externalLoginInfo.ProviderKey);
+
+                        if (user != null)
+                        {
+                            // 既存の外部ログインがある場合。
+
+                            // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
+                            idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
+                            idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                            idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
+                            idResult = await UserManager.AddClaimAsync(user, nameClaim);
+
+                            //// SignInAsyncより、ExternalSignInAsyncが適切。
+
+                            // ManageControllerではサインイン済みなので、何もしない。
+                            return RedirectToAction("ManageLogins");
+                        }
+                        else
+                        {
+                            // 既存の外部ログインがない。
+
+                            // ManageControllerではサインアップ・サインイン
+                            // 済みなので、外部ログインの追加のみ行なう。
+                            user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                            // uid（e-mail or name情報）が一致している必要がある。
+                            //   Manage（サインイン済み）なので、
+                            //   RequireUniqueEmail == false時のname and e-mailまでの一致は不要。
+                            if (user.NormalizedUserName == uid) // ★ これでイイのか？
+                            {
+                                // uid（e-mail, name情報）が一致している。
+
+                                // 外部ログイン（ = UserLoginInfo ）の追加
+                                idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+
+                                // クレーム（emailClaim, nameClaim, etc.）の追加
+                                if (idResult.Succeeded)
+                                {
+                                    idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                    // ・・・
+                                    // ・・・
+                                    // ・・・
+                                }
+
+                                // 上記の結果の確認
+                                if (idResult.Succeeded)
+                                {
+                                    // 外部ログインの追加に成功した場合 → サインイン
+
+                                    // SignInAsync、ExternalSignInAsync
+                                    // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                                    await SignInManager.SignInAsync(
+                                        user,
+                                        isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
+                                        //rememberBrowser: true); // rememberBrowser は true 固定
+
+                                    // リダイレクト
+                                    return RedirectToAction("ManageLogins");
+                                }
+                                else
+                                {
+                                    // 外部ログインの追加に失敗した場合
+
+                                    // 結果のエラー情報を追加
+                                    this.AddErrors(idResult);
+                                }
+                            }
+                            else
+                            {
+                                // uid（e-mail, name情報）が一致していない。
+                                // 外部ログインのアカウントを間違えている。
+                                return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
+
+                            } // else処理済
+                        } // else処理済
+                    } // クレーム情報（e-mail, name情報）を取得できなかった。
+                } // クレーム情報（ID情報）を取得できなかった。
+
+                // ログイン情報を受け取れなかった場合や、その他の問題が在った場合。
+                return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.Error });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #region Payment Information
+
+        #region Create
+
+        /// <summary>
+        /// 支払元情報の追加画面（初期表示）
+        /// GET: /Manage/AddPaymentInformation
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult AddPaymentInformation()
+        {
+            if (Config.CanEditPayment
+                && Config.EnableEditingOfUserAttribute)
+            {
+                if (Config.EnableStripe)
+                {
+                    ViewBag.PublishableKey = Config.Stripe_PK;
+                    return View("AddPaymentInformationStripe");
+                }
+                else if (Config.EnablePAYJP)
+                {
+                    ViewBag.PublishableKey = Config.PAYJP_PK;
+                    return View("AddPaymentInformationPAYJP");
+                }
+                else
+                {
+                    throw new NotSupportedException("Payment service is not enabled.");
+                }
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// 支払元情報の追加画面（支払元情報設定）
+        /// POST: /Manage/AddPaymentInformation
+        /// </summary>
+        /// <param name="model">ManageAddPaymentInformationViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddPaymentInformation(ManageAddPaymentInformationViewModel model)
+        {
+            if (Config.CanEditPayment
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ManageAddPaymentInformationViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // ManageAddPaymentInformationViewModelの検証に成功
+                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                    if (user != null)
+                    {
+                        // ユーザを取得できた。
+
+                        // TokenからClientIDに変換する。
+                        JObject jobj = await WebAPIHelper.GetInstance().CreateaOnlinePaymentCustomerAsync(user.Email, model.PaymentInformation);
+
+                        // 支払元情報（ClientID）の設定
+                        user.PaymentInformation = (string)jobj["id"];
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            // 成功
+
+                            // 再ログイン
+                            await this.ReSignInAsync(user.Id);
+
+                            // Index - SetPasswordSuccess
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddPaymentInformationSuccess });
+                        }
+                        else
+                        {
+                            // 失敗
+                            this.AddErrors(result);
+                        }
+                    }
+                    else
+                    {
+                        // ユーザを取得できなかった。
+                    }
+                }
+                else
+                {
+                    // ManageAddPaymentInformationViewModelの検証に失敗
+                }
+
+                // 再表示
+                if (Config.EnableStripe)
+                {
+                    ViewBag.PublishableKey = Config.Stripe_PK;
+                    return View("AddPaymentInformationStripe");
+                }
+                else if (Config.EnablePAYJP)
+                {
+                    ViewBag.PublishableKey = Config.PAYJP_PK;
+                    return View("AddPaymentInformationPAYJP");
+                }
+                else
+                {
+                    throw new NotSupportedException("Payment service is not enabled.");
+                }
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #region Charge
+
+        /// <summary>
+        /// 課金
+        /// POST: /Manage/ChargeByPaymentInformation
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ChargeByPaymentInformation()
+        {
+            if (Config.CanEditPayment
+                && Config.EnableEditingOfUserAttribute
+                && Config.IsDebug)
+            {
+                // 課金のテスト処理
+                string ret = (string)JsonConvert.DeserializeObject(
+                    await Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
+                    (string)HttpContext.Session.GetString(OAuth2AndOIDCConst.AccessToken), "jpy", "1000"));
+
+                if (ret == "OK")
+                {
+                    // 元の画面に戻る
+                    return RedirectToAction("Index");
+                }
+                else { }
+            }
+            else { }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// 支払元情報の削除
+        /// POST: /Manage/RemovePaymentInformation
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemovePaymentInformation()
+        {
+            if (Config.CanEditPayment
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                // 支払元情報のクリア
+                user.PaymentInformation = "";
+                // ユーザーの保存
+                IdentityResult result = await UserManager.UpdateAsync(user);
+
+                // 結果の確認
+                if (result.Succeeded)
+                {
+                    // 支払元情報 削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync(user.Id))
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemovePaymentInformationSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
+                }
+                else
+                {
+                    // 支払元情報 削除の失敗
+                }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Unstructured Data
+
+        #region Create
+
+        /// <summary>
+        /// 非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddUnstructuredData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> AddUnstructuredData()
+        {
+            if (Config.CanEditUnstructuredData
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                ManageAddUnstructuredDataViewModel model = null;
+
+                if (string.IsNullOrEmpty(user.UnstructuredData))
+                {
+                    model = new ManageAddUnstructuredDataViewModel();
+                }
+                else
+                {
+                    model = JsonConvert.DeserializeObject<ManageAddUnstructuredDataViewModel>(user.UnstructuredData);
+                }
+
+                return View(model);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// 非構造化データの追加・編集画面（非構造化データ設定）
+        /// POST: /Manage/AddUnstructuredData
+        /// </summary>
+        /// <param name="model">ManageAddUnstructuredDataViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddUnstructuredData(ManageAddUnstructuredDataViewModel model)
+        {
+            // 二重送信防止機能のテスト
+            // System.Threading.Thread.Sleep(5000);
+
+            if (Config.CanEditUnstructuredData
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ManageAddUnstructuredDataViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // ManageAddUnstructuredDataViewModelの検証に成功
+
+                    // ユーザの検索
+                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                    if (user != null)
+                    {
+                        // ユーザを取得できた。
+                        user.UnstructuredData = JsonConvert.SerializeObject(model);
+
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            // 成功
+
+                            // 再ログイン
+                            await this.ReSignInAsync(user.Id);
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddUnstructuredDataSuccess });
+                        }
+                        else
+                        {
+                            // 失敗
+                            this.AddErrors(result);
+                        }
+                    }
+                    else
+                    {
+                        // ユーザを取得できなかった。
+                    }
+                }
+                else
+                {
+                    // ManageAddUnstructuredDataViewModelの検証に失敗
+                }
+
+                // 再表示
+                return View(model);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// 非構造化データの削除
+        /// POST: /Manage/RemoveUnstructuredData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveUnstructuredData()
+        {
+            if (Config.CanEditUnstructuredData
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                // 非構造化データのクリア
+                user.UnstructuredData = "";
+                // ユーザーの保存
+                IdentityResult result = await UserManager.UpdateAsync(user);
+
+                // 結果の確認
+                if (result.Succeeded)
+                {
+                    // 支払元情報 削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync(user.Id))
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveUnstructuredDataSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
+                }
+                else
+                {
+                    // 非構造化データ 削除の失敗
+                }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region OAuth2 Data
+
+        #region Create
+
+        /// <summary>
+        /// OAuth2関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddOAuth2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
+        public async Task<ActionResult> AddOAuth2Data()
+        {
+            if (Config.CanEditOAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                ManageAddOAuth2DataViewModel model = null;
+
+                string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
+
+                if (!string.IsNullOrEmpty(oAuth2Data))
+                {
+                    model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                    if (string.IsNullOrEmpty(model.ClientID))
+                    {
+                        // 空（userから取得
+                        model.ClientID = user.ClientID;
+                    }
+                    else
+                    {
+                        // 既（user側が先に更新されることは無い。
+                    }
+                }
+                else
+                {
+                    // 初期
+                    model = new ManageAddOAuth2DataViewModel();
+                }
+
+                return View(model);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// OAuth2関連の非構造化データの追加・編集画面（OAuth2関連の非構造化データ設定）
+        /// POST: /Manage/AddOAuth2Data
+        /// </summary>
+        /// <param name="model">ManageAddOAuth2DataViewModel</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
+        public async Task<ActionResult> AddOAuth2Data(ManageAddOAuth2DataViewModel model)
+        {
+            if (Config.CanEditOAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ManageAddOAuth2DataViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // ManageAddOAuth2DataViewModelの検証に成功
+                    if (!string.IsNullOrEmpty(Request.Form["submit.ClientID"]))
+                    {
+                        ModelState.Clear();
+                        model.ClientID = Guid.NewGuid().ToString("N");
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form["submit.ClientSecret"]))
+                    {
+                        ModelState.Clear();
+                        model.ClientSecret = GetPassword.Base64UrlSecret(32);
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form["submit.Add"]))
+                    {
+                        // ユーザの検索
+                        ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                        if (user != null)
+                        {
+                            // ユーザを取得できた。
+                            model.ClientName = user.UserName; // ClientNameはUser入力ではない。
+                            string unstructuredData = JsonConvert.SerializeObject(model);
+
+                            if (user.ClientID == model.ClientID)
+                            {
+                                // ClientIDに変更がない場合、更新操作
+                                DataProvider.GetInstance().Update(user.ClientID, unstructuredData);
+
+                                // 再ログイン
+                                await this.ReSignInAsync(user.Id);
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
+                            }
+                            else
+                            {
+                                // ClientIDに変更がある場合、ユーザーを保存してから、
+                                string temp = user.ClientID;
+                                user.ClientID = model.ClientID;
+                                IdentityResult result = await UserManager.UpdateAsync(user);
+
+                                // 結果の確認
+                                if (result.Succeeded)
+                                {
+                                    // 成功
+
+                                    // 追加操作（Memory Provider があるので del -> ins にする。）
+                                    if (!string.IsNullOrEmpty(temp)) DataProvider.GetInstance().Delete(temp);
+                                    DataProvider.GetInstance().Create(user.ClientID, unstructuredData);
+
+                                    // 再ログイン
+                                    await this.ReSignInAsync(user.Id);
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
+                                }
+                                else
+                                {
+                                    // 失敗
+                                    this.AddErrors(result);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // ユーザを取得できなかった。
+                        }
+                    }
+                    else
+                    {
+                        // 不明なSubmit
+                    }
+                }
+                else
+                {
+                    // ManageAddOAuth2DataViewModelの検証に失敗
+                }
+
+                // 再表示
+                return View(model);
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #region Get token
+
+        /// <summary>
+        /// OAuth2アクセストークンの取得
+        /// POST: /Manage/GetOAuth2Token
+        /// </summary>
+        /// <param name="model">ManageIndexViewModel</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
+        public ActionResult GetOAuth2Token(ManageIndexViewModel model)
+        {
+            if (Config.CanEditOAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // OAuth2AuthorizationCodeGrantClientViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // 認可エンドポイント
+                    string oAuthAuthorizeEndpoint =
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + Config.OAuth2AuthorizeEndpoint;
+
+                    // client_id
+                    string client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+
+                    // redirect_uri
+                    string redirect_uri = CustomEncode.UrlEncode2(
+                        Config.OAuth2ClientEndpointsRootURI
+                        + Config.OAuth2AuthorizationCodeGrantClient_Manage);
+
+                    // state (nonce) // 記号は入れない。
+                    string state = GetPassword.Generate(10, 0);
+                    HttpContext.Session.SetString("get_oauth2_token_state", state);
+
+                    return Redirect(
+                        oAuthAuthorizeEndpoint +
+                        "?client_id=" + client_id +
+                        "&response_type=code" +
+                        "&redirect_uri=" + redirect_uri +
+                        "&scope=" + model.Scopes +
+                        "&state=" + state +
+                        "&response_mode=form_post");
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// OAuth2関連の非構造化データの削除
+        /// POST: /Manage/RemoveOAuth2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
+        public async Task<ActionResult> RemoveOAuth2Data()
+        {
+            if (Config.CanEditOAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                // OAuth2関連の非構造化データのクリア
+                DataProvider.GetInstance().Delete(user.ClientID);
+
+                // ユーザーの保存（ClientIDのクリア）
+                //user.ClientID = ""; 一意制約エラーになるので
+                IdentityResult result = await UserManager.UpdateAsync(user);
+
+                // 結果の確認
+                if (result.Succeeded)
+                {
+                    // 削除の成功
+
+                    // 再ログイン
+                    if (await this.ReSignInAsync(user.Id))
+                    {
+                        // 再ログインに成功
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveOAuth2DataSuccess });
+                    }
+                    else
+                    {
+                        // 再ログインに失敗
+                    }
+                }
+                else
+                {
+                    // 削除の失敗
+                }
+
+                // Index - Error
+                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region FIDO2 Data
+
+        #region Create
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddFIDO2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> AddFIDO2Data()
+        {
+            if (Config.CanEditFIDO2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                ViewBag.UserId = user.Id;
+                ViewBag.UserName = user.UserName;
+                ViewBag.AttestationChallenge = GetPassword.Generate(22, 0);
+
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの追加・編集画面（FIDO2関連の非構造化データ設定）
+        /// POST: /Manage/AddFIDO2Data
+        /// </summary>
+        /// <param name="fido2UserId">string</param>
+        /// <param name="fido2Publickey">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> AddFIDO2Data(
+            string fido2UserId, string fido2Publickey)
+        {
+            if (Config.CanEditFIDO2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                if (user != null)
+                {
+                    // ユーザを取得できた。
+                    //if (user.Id == credentialId)
+                    if (user.UserName == fido2UserId)
+                    {
+                        // 公開鍵を保存
+                        user.FIDO2PublicKey = fido2Publickey;
+
+                        // ユーザーの保存
+                        IdentityResult result = await UserManager.UpdateAsync(user);
+
+                        // 結果の確認
+                        if (result.Succeeded)
+                        {
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddFIDO2DataSuccess });
+                        }
+                    }
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
+        #region Delete
+
+        /// <summary>
+        /// FIDO2関連の非構造化データの削除
+        /// POST: /Manage/RemoveFIDO2Data
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RemoveFIDO2Data()
+        {
+            if (Config.CanEditFIDO2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                if (user != null)
+                {
+                    // ユーザを取得できた
+
+                    // 公開鍵をクリア
+                    user.FIDO2PublicKey = null;
+
+                    // ユーザーの保存
+                    IdentityResult result = await UserManager.UpdateAsync(user);
+
+                    // 結果の確認
+                    if (result.Succeeded)
+                    {
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveFIDO2DataSuccess });
+                    }
+                }
+            }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
+        #endregion
+
+        #region GDPR
+
+        /// <summary>
+        /// GDPR対策処理
+        /// GET: /Manage/ManageGdprData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public ActionResult ManageGdprData()
+        {
+            if (Config.CanUseGdprFunction)
+            //&& Config.EnableEditingOfUserAttribute)
+            {
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// GDPR対策のユーザデータ照会処理
+        /// POST: /Manage/ReferGdprPersonalData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> ReferGdprPersonalData()
+        {
+            if (Config.CanUseGdprFunction)
+            //&& Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    using (StreamWriter streamWriter = new StreamWriter(ms, Encoding.GetEncoding(CustomEncode.UTF_8)))
+                    {
+                        streamWriter.WriteLine(JsonConvert.SerializeObject(user));
+                        streamWriter.Flush();
+                    }
+
+                    return File(ms.ToArray(), "application/json", "user.json");
+                }
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// GDPR対策のユーザデータ削除処理
+        /// POST: /Manage/DeleteGdprPersonalData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> DeleteGdprPersonalData()
+        {
+            if (Config.CanUseGdprFunction)
+            //&& Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+
+                #region データ消去
+                // 既定の属性
+                //user.Id = "";
+                user.UserName = user.Id;
+                user.PasswordHash = "";
+                user.Email = user.Id + "@yyy.com";
+                user.EmailConfirmed = false;
+                user.PhoneNumber = user.Id;
+                user.PhoneNumberConfirmed = false;
+                user.AccessFailedCount = 0;
+                user.LockoutEnabled = false;
+                user.LockoutEndDateUtc = DateTime.MaxValue;
+                //user.SecurityStamp = user.SecurityStamp;
+                user.TwoFactorEnabled = false;
+                // Collection
+                //user.Roles = null;
+                //user.Logins = null;
+                //user.Claims = null;
+
+                // 追加の属性
+                user.ClientID = user.Id;
+                user.PaymentInformation = "";
+                user.UnstructuredData = "";
+                user.FIDO2PublicKey = "";
+                //user.CreatedDate = ;
+                //user.PasswordChangeDate = 
+                #endregion
+
+                // ユーザ・データの削除
+                IdentityResult result = null;
+
+                foreach (UserLoginInfo l in user.Logins)
+                {
+                    result = await UserManager.RemoveLoginAsync(user, l.LoginProvider, l.ProviderKey);
+                }
+                user.Logins = null;
+
+                foreach (Claim c in user.Claims)
+                {
+                    result = await UserManager.RemoveClaimAsync(user, c);
+                }
+                user.Claims = null;
+
+                result = await UserManager.UpdateAsync(user);
+
+                if (result.Succeeded)
+                {
+                    // サインアウト（Cookieの削除）
+                    await SignInManager.SignOutAsync();
+                    //// オペレーション・トレース・ログ出力
+                    //Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
+
+                    // リダイレクト "Index", "Home"へ
+                    return RedirectToAction("Index", "Home");
+                }
+                else { }
+            }
+            else { }
+
+            // エラー画面
+            return View("Error");
+        }
+
+        #endregion
+
+        #region Client (Redirectエンドポイント)
+
+        #region Authorization Codeグラント種別
+
+        /// <summary>
+        /// Authorization Codeグラント種別のClientエンドポイント
+        /// 認可レスポンス（仲介コード）を受け取って処理する。
+        /// ・仲介コードを使用してAccess Token・Refresh Tokenを取得
+        /// </summary>
+        /// <param name="code">仲介コード</param>
+        /// <param name="state">state</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
+        /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
+        [HttpPost]
+        //[ValidateAntiForgeryToken] // response_mode=form_postで実装しているためハズす。
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
+        {
+            if (Config.CanEditOAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // Tokenエンドポイントにアクセス
+                Uri tokenEndpointUri = new Uri(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + Config.OAuth2BearerTokenEndpoint);
+
+                // 結果を格納する変数。
+                Dictionary<string, string> dic = null;
+                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
+                {
+                    Code = code
+                };
+
+                //  client_Idから、client_secretを取得。
+                string client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+
+                // stateの検証
+                if (state == (string)HttpContext.Session.GetString("get_oauth2_token_state"))
+                {
+                    // state正常
+                    HttpContext.Session.SetString("get_oauth2_token_state", ""); // 誤動作防止
+
+                    #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
+
+                    // 仲介コードからAccess Tokenを取得する。
+                    string redirect_uri
+                        = Config.OAuth2ClientEndpointsRootURI
+                        + Config.OAuth2AuthorizationCodeGrantClient_Manage;
+
+                    // Tokenエンドポイントにアクセス
+                    model.Response = await Helper.GetInstance()
+                        .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
+                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+
+                    #endregion
+
+                    // 余談：OpenID Connectであれば、ここで id_token 検証。
+
+                    // 結果の表示
+                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
+
+                    // 課金処理で使用する。
+                    HttpContext.Session.SetString(OAuth2AndOIDCConst.AccessToken, model.AccessToken);
+                }
+                else
+                {
+                    // state異常
+                }
+
+                // 画面の表示。
+                return View(model);
+            }
+            else
+            {
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// Tokenを使った処理のテストコード
+        /// ・Refresh Tokenを使用してAccess Tokenを更新
+        /// ・Access Tokenを使用してResourceServerのWebAPIにアクセス
+        /// </summary>
+        /// <param name="accessToken"></param>
+        /// <param name="refreshToken"></param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
+        {
+            if (Config.CanEditOAuth2Data
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // OAuthAuthorizationCodeGrantClientViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    // 結果を格納する変数。
+                    Dictionary<string, string> dic = null;
+
+                    #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
+
+                    Uri tokenEndpointUri = new Uri(
+                        Config.OAuth2AuthorizationServerEndpointsRootURI
+                        + Config.OAuth2BearerTokenEndpoint);
+
+                    // Tokenエンドポイントにアクセス
+
+                    //  client_Idから、client_secretを取得。
+                    string client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+
+                    model.Response = await Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                        tokenEndpointUri, client_id, client_secret, model.RefreshToken);
+                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+
+                    // 結果の表示
+                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken] ?? "";
+                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+                    model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
+
+                    // 課金処理で使用する。
+                    HttpContext.Session.SetString(OAuth2AndOIDCConst.AccessToken, model.AccessToken);
+
+                    #endregion
+                }
+
+                // 画面の表示。
+                ModelState.Clear();
+                return View("OAuth2AuthorizationCodeGrantClient", model);
+            }
+            else
+            {
+                return View("Error");
+            }
+        }
+
+        #endregion
 
         #endregion
 

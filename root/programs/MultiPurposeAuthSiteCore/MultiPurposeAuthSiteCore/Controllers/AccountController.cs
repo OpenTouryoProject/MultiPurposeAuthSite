@@ -1550,9 +1550,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (idClaim != null)
             {
-                // UserLoginInfoの生成
-                //UserLoginInfo login = new UserLoginInfo(idClaim.Issuer, idClaim.Value);
-
                 // クレーム情報（ID情報とe-mail, name情報）を抽出
                 string id = idClaim.Value;
                 string name = nameClaim.Value;
@@ -1662,9 +1659,6 @@ namespace MultiPurposeAuthSite.Controllers
                                     isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
                                     //rememberBrowser: true); // rememberBrowser は true 固定
 
-                                //// この外部ログイン・プロバイダでサインイン
-                                //signInStatus = await SignInManager.ExternalSignInAsync(
-
                                 // AppScan指摘の反映
                                 this.FxSessionAbandon();
                                 // SessionIDの切換にはこのコードが必要である模様。
@@ -1692,11 +1686,6 @@ namespace MultiPurposeAuthSite.Controllers
                             // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
                             ViewBag.ReturnUrl = returnUrl;
                             ViewBag.LoginProvider = externalLoginInfo.LoginProvider;
-
-                            //// メアドを返さないので、ExternalLoginConfirmationで
-                            //// メアドを手入力して外部ログインと関連付けを行なう。
-                            ////return View("ExternalLoginConfirmation");
-                            //return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
 
                             // 外部ログイン プロバイダのユーザー情報でユーザを作成
                             // uid = 連携先メアドの場合、E-mail confirmationはしない（true）。
@@ -1739,10 +1728,7 @@ namespace MultiPurposeAuthSite.Controllers
                                        user: user,
                                        isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
                                        //rememberBrowser: true); // rememberBrowser は true 固定
-
-                                    //// この外部ログイン・プロバイダでサインイン
-                                    // signInStatus = await SignInManager.ExternalSignInAsync(
-
+                                       
                                     // AppScan指摘の反映
                                     this.FxSessionAbandon();
                                     // SessionIDの切換にはこのコードが必要である模様。

@@ -24,9 +24,12 @@
 @using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.ViewModels
 
-@using Microsoft.Owin.Security
+@using System.Collections.Generic
+@using Microsoft.AspNetCore.Authentication
 
 @model ManageLoginsViewModel
+@inject SignInManager<ApplicationUser> SignInManager
+
 @{
     ViewBag.Title = ManageViews.ManageLoginsTitle;
 }
@@ -40,8 +43,9 @@
 
 <p class="text-success">@ViewBag.StatusMessage</p>
 @{
-    var loginProviders = Context.GetOwinContext().Authentication.GetExternalAuthenticationTypes();
-    if (loginProviders.Count() == 0) {
+    List<AuthenticationScheme> loginProviders = (await SignInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+    if (loginProviders.Count() == 0)
+    {
         <div>
             <p>
                 @ManageViews.ManageLoginsNoExternalAuthSvc
@@ -101,12 +105,12 @@
                 <h4>@ManageViews.ManageLoginsNonRegistered</h4>
                 <hr />
                 <div id="socialLoginList">
-                <p>
-                    @foreach (AuthenticationDescription p in Model.OtherLogins)
-                    {
-                        <button type="submit" class="btn btn-default" id="@p.AuthenticationType" name="provider" value="@p.AuthenticationType" title="@string.Format(ManageViews.ManageLoginsAddButtonTitle, p.Caption)">@p.AuthenticationType</button>
-                    }
-                </p>
+                    <p>
+                        @foreach (AuthenticationScheme p in Model.OtherLogins)
+                        {
+                            <button type="submit" class="btn btn-default" name="provider" value="@p.Name" title="@string.Format(AccountViews.ExternalLoginsListPartialSubmit, p.DisplayName)">@p.DisplayName</button>
+                        }
+                    </p>
                 </div>
             }
         }
