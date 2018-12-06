@@ -26,8 +26,8 @@ using MultiPurposeAuthSite;
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
-//using MultiPurposeAuthSite.Models.AccountViewModels;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util;
@@ -55,6 +55,9 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
@@ -1215,7 +1218,6 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果のエラー情報を追加
                     this.AddErrors(result);
                 }
-
             }
             else
             {
@@ -1434,6 +1436,324 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion      
+
+        #endregion
+
+        #region 外部ログイン
+
+        /// <summary>
+        /// 外部Login（Redirect）の開始
+        /// POST: /Account/ExternalLogin
+        /// </summary>
+        /// <param name="provider">string</param>
+        /// <param name="returnUrl">string</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public ActionResult ExternalLogin(string provider, string returnUrl)
+        {
+            // Request a redirect to the external login provider
+            string redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Account", new { returnUrl });
+            AuthenticationProperties properties = SignInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
+            return this.Challenge(properties, provider);
+        }
+
+        #region ExternalLoginCallback
+
+        /// <summary>
+        /// 外部LoginのCallback（ExternalLoginCallback）
+        /// Redirect後、外部Login providerに着信し、そこで、
+        /// URL fragmentを切捨てCookieに認証Claim情報を設定、
+        /// その後、ココにRedirectされ、認証Claim情報を使用してSign-Inする。
+        /// （外部Login providerからRedirectで戻る先のURLのAction method）
+        /// GET: /Account/ExternalLoginCallback
+        /// </summary>
+        /// <param name="returnUrl">string</param>
+        /// <param name="remoteError">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> ExternalLoginCallback(string returnUrl, string remoteError = null)
+        {
+            if (!string.IsNullOrEmpty(remoteError))
+            {
+                return RedirectToAction(nameof(Login));
+            }
+
+            // ManageControllerはサインイン後なので、uidが一致する必要がある。
+            // AccountControllerはサインイン前なので、uidの一致は不要だが、
+            // サインアップかどうかを判定して処理する必要がある。
+
+            // asp.net mvc - MVC 5 Owin Facebook Auth results in Null Reference Exception - Stack Overflow
+            // http://stackoverflow.com/questions/19564479/mvc-5-owin-facebook-auth-results-in-null-reference-exception
+
+            //// ログイン プロバイダーが公開している認証済みユーザーに関する情報を受け取る。
+            //AuthenticateResult authenticateResult = await AuthenticationManager.AuthenticateAsync(DefaultAuthenticationTypes.ExternalCookie);
+            // 外部ログイン・プロバイダからユーザに関する情報を取得する。
+            ExternalLoginInfo externalLoginInfo = await SignInManager.GetExternalLoginInfoAsync();
+            if (externalLoginInfo == null)
+            {
+                return RedirectToAction(nameof(Login));
+            }
+
+            IdentityResult idResult = null;
+            Microsoft.AspNetCore.Identity.SignInResult siResult = null;
+
+            // Sign in the user with this external login provider if the user already has a login.
+            //siResult = await SignInManager.ExternalLoginSignInAsync(
+            //    externalLoginInfo.LoginProvider, externalLoginInfo.ProviderKey,
+            //    isPersistent: false, bypassTwoFactor: true);
+            //if (siResult.Succeeded)
+            //{
+
+            // ログイン情報を受け取れた場合、クレーム情報を分析
+            ClaimsIdentity identity = externalLoginInfo.Principal.Identities.First();
+
+            // ID情報とe-mail, name情報は必須
+            Claim idClaim = identity.FindFirst(ClaimTypes.NameIdentifier);
+            Claim emailClaim = identity.FindFirst(ClaimTypes.Email);
+            Claim nameClaim = identity.FindFirst(ClaimTypes.Name);
+
+            // 外部ログインで取得するクレームを標準化する。
+            // ・・・
+            // ・・・
+            // ・・・
+
+            if (idClaim != null)
+            {
+                // UserLoginInfoの生成
+                //UserLoginInfo login = new UserLoginInfo(idClaim.Issuer, idClaim.Value);
+
+                // クレーム情報（ID情報とe-mail, name情報）を抽出
+                string id = idClaim.Value;
+                string name = nameClaim.Value;
+                string email = emailClaim.Value;
+                
+                string uid = "";
+                if (Config.RequireUniqueEmail)
+                {
+                    uid = email;
+                }
+                else
+                {
+                    uid = name;
+                }
+
+                if (!string.IsNullOrWhiteSpace(email)
+                    && !string.IsNullOrWhiteSpace(name))
+                {
+                    // クレーム情報（e-mail, name情報）を取得できた。
+                    
+                    // 既存の外部ログインを確認する。
+                    ApplicationUser user = await UserManager.FindByLoginAsync(
+                        externalLoginInfo.LoginProvider,
+                        externalLoginInfo.ProviderKey);
+
+                    if (user != null)
+                    {
+                        // 既存の外部ログインがある場合。
+
+                        // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
+                        idResult = await UserManager.RemoveClaimAsync(user, emailClaim); // del-ins
+                        idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                        idResult = await UserManager.RemoveClaimAsync(user, nameClaim); // del-ins
+                        idResult = await UserManager.AddClaimAsync(user, nameClaim);
+
+                        // SignInAsyncより、ExternalSignInAsyncが適切。
+
+                        //// 通常のサインイン
+                        //await SignInManager.SignInAsync(
+
+                        // 既存の外部ログイン・プロバイダでサインイン
+                        siResult = await SignInManager.ExternalLoginSignInAsync(
+                            externalLoginInfo.LoginProvider, externalLoginInfo.ProviderKey,
+                            isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
+
+                        // AppScan指摘の反映
+                        this.FxSessionAbandon();
+                        // SessionIDの切換にはこのコードが必要である模様。
+                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                        Response.Cookies.Set(this.SessionCookieName, "");
+
+                        // オペレーション・トレース・ログ出力
+                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+
+                        return RedirectToLocal(returnUrl);
+                    }
+                    else
+                    {
+                        // 既存の外部ログインがない。
+
+                        // AccountControllerで、ユーザーが既に外部ログインしていない場合は、
+                        // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
+
+                        // サインアップ済みの可能性を探る
+                        user = await UserManager.FindByNameAsync(uid);
+
+                        if (user != null)
+                        {
+                            // サインアップ済み → 外部ログイン追加だけで済む
+
+                            // 外部ログイン（ = UserLoginInfo ）の追加
+                            if (Config.RequireUniqueEmail)
+                            {
+                                idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+                            }
+                            else
+                            {
+                                if (email == user.Email)
+                                {
+                                    // メアドも一致
+                                    idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+                                }
+                                else
+                                {
+                                    // メアド不一致
+                                    idResult = new IdentityResult();
+                                }
+                            }
+
+                            // クレーム（emailClaim, nameClaim, etc.）の追加
+                            if (idResult.Succeeded)
+                            {
+                                idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                                idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                // ・・・
+                                // ・・・
+                                // ・・・
+                            }
+
+                            // 上記の結果の確認
+                            if (idResult.Succeeded)
+                            {
+                                // SignInAsync、ExternalSignInAsync
+                                // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                                await SignInManager.SignInAsync(
+                                    user,
+                                    isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
+                                    //rememberBrowser: true); // rememberBrowser は true 固定
+
+                                //// この外部ログイン・プロバイダでサインイン
+                                //signInStatus = await SignInManager.ExternalSignInAsync(
+
+                                // AppScan指摘の反映
+                                this.FxSessionAbandon();
+                                // SessionIDの切換にはこのコードが必要である模様。
+                                // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                Response.Cookies.Set(this.SessionCookieName, "");
+
+                                // オペレーション・トレース・ログ出力
+                                Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+
+                                // リダイレクト
+                                return RedirectToLocal(returnUrl);
+                            }
+                            else
+                            {
+                                // 外部ログインの追加に失敗した場合
+
+                                // 結果のエラー情報を追加
+                                this.AddErrors(idResult);
+                            }
+                        }
+                        else
+                        {
+                            // サインアップ済みでない → サインアップから行なう。
+                            // If the user does not have an account, then prompt the user to create an account
+                            // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
+                            ViewBag.ReturnUrl = returnUrl;
+                            ViewBag.LoginProvider = externalLoginInfo.LoginProvider;
+
+                            //// メアドを返さないので、ExternalLoginConfirmationで
+                            //// メアドを手入力して外部ログインと関連付けを行なう。
+                            ////return View("ExternalLoginConfirmation");
+                            //return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
+
+                            // 外部ログイン プロバイダのユーザー情報でユーザを作成
+                            // uid = 連携先メアドの場合、E-mail confirmationはしない（true）。
+                            user = ApplicationUser.CreateUser(uid, true);
+
+                            // サインアップ時のみ、メアドも追加
+                            //（RequireUniqueEmail = false時を想定）
+                            user.Email = email;
+                            user.EmailConfirmed = true;
+
+                            // ユーザの新規作成（パスワードは不要）
+                            idResult = await UserManager.CreateAsync(user);
+
+                            // 結果の確認
+                            if (idResult.Succeeded)
+                            {
+                                // ユーザの新規作成が成功した場合
+
+                                // 外部ログイン（ = idClaim）の追加
+                                idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+
+                                // クレーム（emailClaim, nameClaim, etc.）の追加
+                                if (idResult.Succeeded)
+                                {
+                                    idResult = await UserManager.AddClaimAsync(user, emailClaim);
+                                    idResult = await UserManager.AddClaimAsync(user, nameClaim);
+                                    // ・・・
+                                    // ・・・
+                                    // ・・・
+                                }
+
+                                // 結果の確認
+                                if (idResult.Succeeded)
+                                {
+                                    // 外部ログインの追加に成功した場合 → サインイン
+
+                                    // SignInAsync、ExternalSignInAsync
+                                    // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                                    await SignInManager.SignInAsync(
+                                       user: user,
+                                       isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
+                                       //rememberBrowser: true); // rememberBrowser は true 固定
+
+                                    //// この外部ログイン・プロバイダでサインイン
+                                    // signInStatus = await SignInManager.ExternalSignInAsync(
+
+                                    // AppScan指摘の反映
+                                    this.FxSessionAbandon();
+                                    // SessionIDの切換にはこのコードが必要である模様。
+                                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+                                    Response.Cookies.Set(this.SessionCookieName, "");
+
+                                    // オペレーション・トレース・ログ出力
+                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
+
+                                    // リダイレクト
+                                    return RedirectToLocal(returnUrl);
+                                }
+                                else
+                                {
+                                    // 外部ログインの追加に失敗した場合
+
+                                    // 結果のエラー情報を追加
+                                    this.AddErrors(idResult);
+                                }
+                            }
+                            else
+                            {
+                                // ユーザの新規作成が失敗した場合
+
+                                // 結果のエラー情報を追加
+                                this.AddErrors(idResult);
+                            } // else処理済
+                        } // else処理済
+                    } // else処理済
+                    
+                } // クレーム情報（e-mail, name情報）を取得できなかった。
+            } // クレーム情報（ID情報）を取得できなかった。
+            //} // ログイン情報を取得できなかった。
+
+            // ログイン情報を受け取れなかった場合や、その他の問題が在った場合。
+            return View("ExternalLoginFailure");
+        }
+
+        #endregion
 
         #endregion
 
@@ -1735,85 +2055,6 @@ namespace MultiPurposeAuthSite.Controllers
                 ModelState.AddModelError(string.Empty, "Invalid recovery code entered.");
                 return View();
             }
-        }
-        
-        [HttpPost]
-        [AllowAnonymous]
-        [ValidateAntiForgeryToken]
-        public IActionResult ExternalLogin(string provider, string returnUrl = null)
-        {
-            // Request a redirect to the external login provider.
-            var redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Account", new { returnUrl });
-            var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
-            return Challenge(properties, provider);
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<IActionResult> ExternalLoginCallback(string returnUrl = null, string remoteError = null)
-        {
-            if (remoteError != null)
-            {
-                ErrorMessage = $"Error from external provider: {remoteError}";
-                return RedirectToAction(nameof(Login));
-            }
-            var info = await _signInManager.GetExternalLoginInfoAsync();
-            if (info == null)
-            {
-                return RedirectToAction(nameof(Login));
-            }
-
-            // Sign in the user with this external login provider if the user already has a login.
-            var result = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: false, bypassTwoFactor: true);
-            if (result.Succeeded)
-            {
-                _logger.LogInformation("User logged in with {Name} provider.", info.LoginProvider);
-                return RedirectToLocal(returnUrl);
-            }
-            if (result.IsLockedOut)
-            {
-                return RedirectToAction(nameof(Lockout));
-            }
-            else
-            {
-                // If the user does not have an account, then ask the user to create an account.
-                ViewData["ReturnUrl"] = returnUrl;
-                ViewData["LoginProvider"] = info.LoginProvider;
-                var email = info.Principal.FindFirstValue(ClaimTypes.Email);
-                return View("ExternalLogin", new ExternalLoginViewModel { Email = email });
-            }
-        }
-
-        [HttpPost]
-        [AllowAnonymous]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ExternalLoginConfirmation(ExternalLoginViewModel model, string returnUrl = null)
-        {
-            if (ModelState.IsValid)
-            {
-                // Get the information about the user from the external login provider
-                var info = await _signInManager.GetExternalLoginInfoAsync();
-                if (info == null)
-                {
-                    throw new ApplicationException("Error loading external login information during confirmation.");
-                }
-                var user = new ApplicationUser { UserName = model.Email, Email = model.Email };
-                var result = await UserManager.CreateAsync(user);
-                if (result.Succeeded)
-                {
-                    result = await UserManager.AddLoginAsync(user, info);
-                    if (result.Succeeded)
-                    {
-                        await _signInManager.SignInAsync(user, isPersistent: false);
-                        _logger.LogInformation("User created an account using {Name} provider.", info.LoginProvider);
-                        return RedirectToLocal(returnUrl);
-                    }
-                }
-                AddErrors(result);
-            }
-
-            ViewData["ReturnUrl"] = returnUrl;
-            return View(nameof(ExternalLogin), model);
         }
         */
         #endregion

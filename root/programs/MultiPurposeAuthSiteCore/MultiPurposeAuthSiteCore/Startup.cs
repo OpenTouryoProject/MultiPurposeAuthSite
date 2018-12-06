@@ -18,6 +18,7 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Notifications;
 
@@ -28,9 +29,10 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.CookiePolicy;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -144,7 +146,8 @@ namespace MultiPurposeAuthSite
             app.UseCookiePolicy(new CookiePolicyOptions()
             {
                 HttpOnly = HttpOnlyPolicy.Always,
-                MinimumSameSitePolicy = SameSiteMode.Strict,
+                // https://github.com/aspnet/Security/issues/1822
+                MinimumSameSitePolicy = SameSiteMode.None, //SameSiteMode.Strict,
                 //Secure= CookieSecurePolicy.Always
             });
 
@@ -248,7 +251,7 @@ namespace MultiPurposeAuthSite
                 .AddUserStore<UserStoreCore>()
                 .AddRoleStore<RoleStoreCore>()
                 .AddDefaultTokenProviders();
-
+            
             // Add application services.
             services.AddTransient<IUserStore<ApplicationUser>, UserStoreCore>();
             services.AddTransient<IRoleStore<ApplicationRole>, RoleStoreCore>();
@@ -257,7 +260,76 @@ namespace MultiPurposeAuthSite
 
             services.AddMvc();
 
-            //// Forms認証
+            #region ASP.NET Core Identity認証
+
+            // ConfigureApplicationCookie
+            services.ConfigureApplicationCookie(options =>
+            {
+                options.LoginPath = "/MultiPurposeAuthSite/Account/Login";
+                options.LogoutPath = "/MultiPurposeAuthSite/Account/LogOff";
+            });
+
+            // AddAuthentication
+            services.AddAuthentication()
+
+            #region Cookie
+
+                .AddCookie(options =>
+                {
+                    // https://community.auth0.com/t/asp-net-core-2-intermittent-correlation-failed-errors/11918/18
+                    options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
+                })
+
+            #endregion
+
+            #region 2FA
+
+            #endregion
+
+            #region 外部ログイン
+                .AddMicrosoftAccount(options =>
+                {
+                    if (Config.MicrosoftAccountAuthentication)
+                    {
+                        options.ClientId = Config.MicrosoftAccountAuthenticationClientId;
+                        options.ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret;
+                    }
+                })
+                .AddGoogle(options =>
+                {
+                    if (Config.GoogleAuthentication)
+                    {
+                        options.ClientId = Config.GoogleAuthenticationClientId;
+                        options.ClientSecret = Config.GoogleAuthenticationClientSecret;
+                    }
+                })
+                .AddFacebook(options =>
+                {
+                    if (Config.FacebookAuthentication)
+                    {
+                        options.AppId = Config.FacebookAuthenticationClientId;
+                        options.AppSecret = Config.FacebookAuthenticationClientSecret;
+                    }
+                });
+                //.AddTwitter(options =>
+                //{
+                //    if (Config.TwitterAuthentication)
+                //    {
+                //        options.ConsumerKey = Config.TwitterAuthenticationClientId;
+                //        options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
+                //    }
+                //});
+            #endregion
+
+            #region OAuth2 / OIDC
+
+            // スクラッチ実装
+
+            #endregion
+
+            #endregion
+
+            #region Forms認証
             //services.AddAuthentication(options =>
             //{
             //    options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -275,6 +347,7 @@ namespace MultiPurposeAuthSite
             //    options.Cookie.HttpOnly = true;
             //    //options.DataProtectionProvider = DataProtectionProvider.Create(new DirectoryInfo(@"C:\artifacts"));
             //});
+            #endregion
 
             #endregion
         }
