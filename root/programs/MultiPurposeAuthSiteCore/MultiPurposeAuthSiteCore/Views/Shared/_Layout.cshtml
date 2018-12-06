@@ -22,14 +22,30 @@
 
 @* マスタ・ページに相当 *@
 
+@using MultiPurposeAuthSite.Co
 @using MultiPurposeAuthSite.Resources
 @using Microsoft.AspNetCore.Identity
 
-@inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
 
 @{
+    IList<string> roles = null;
     bool canShowAdminScreen = false;
+
+    if (User.Identity.IsAuthenticated)
+    {
+        ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+        if (user == null)
+        {
+            roles = new List<string>();
+        }
+        else
+        {
+            roles = await UserManager.GetRolesAsync(user);
+        }
+        canShowAdminScreen = (roles.Where(x => x == Const.Role_SystemAdmin).Any());
+    }
 }
 
 <!DOCTYPE html>
@@ -104,12 +120,12 @@
                             </li>
                             if (canShowAdminScreen)
                             {
-                            <li>
-                                <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
-                            </li>
-                            <li>
-                                <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
-                            </li>
+                                <li>
+                                    <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
+                                </li>
+                                <li>
+                                    <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
+                                </li>
                             }
                         }
                     </ul>

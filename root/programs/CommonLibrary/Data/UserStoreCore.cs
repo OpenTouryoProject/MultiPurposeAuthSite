@@ -88,6 +88,7 @@ namespace MultiPurposeAuthSite.Data
         IUserPhoneNumberStore<ApplicationUser>,
         IUserRoleStore<ApplicationUser>,
         IUserSecurityStampStore<ApplicationUser>,
+        IUserLockoutStore<ApplicationUser>,
         //IUserTwoFactor...,
         IUserLoginStore<ApplicationUser>,
         IUserClaimStore<ApplicationUser>

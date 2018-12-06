@@ -268,10 +268,10 @@ namespace MultiPurposeAuthSite.Controllers
                                 // EmailConfirmed == true の場合、
                                 // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
                                 SignInStatus result = await SignInManager.PasswordSignInAsync(
-                                                        userName: uid,                                                    // アカウント(UID)
-                                                        password: model.Password,                                         // アカウント(PWD)
-                                                        isPersistent: model.RememberMe,                                   // アカウント記憶
-                                                        shouldLockout: Config.UserLockoutEnabledByDefault); // ロックアウト
+                                    userName: uid,                                      // アカウント(UID)
+                                    password: model.Password,                           // アカウント(PWD)
+                                    isPersistent: model.RememberMe,                     // アカウント記憶
+                                    shouldLockout: Config.UserLockoutEnabledByDefault); // ロックアウト
 
                                 // SignInStatus
                                 switch (result)

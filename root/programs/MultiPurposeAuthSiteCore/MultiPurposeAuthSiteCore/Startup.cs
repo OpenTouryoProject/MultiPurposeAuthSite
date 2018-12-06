@@ -256,74 +256,117 @@ namespace MultiPurposeAuthSite
             services.AddTransient<IUserStore<ApplicationUser>, UserStoreCore>();
             services.AddTransient<IRoleStore<ApplicationRole>, RoleStoreCore>();
             services.AddTransient<IEmailSender, EmailSender>();
-            //services.AddTransient<ISmsSender, SmsSender>();
+            services.AddTransient<ISmsSender, SmsSender>();
 
             services.AddMvc();
 
             #region ASP.NET Core Identity認証
 
-            // ConfigureApplicationCookie
-            services.ConfigureApplicationCookie(options =>
-            {
-                options.LoginPath = "/MultiPurposeAuthSite/Account/Login";
-                options.LogoutPath = "/MultiPurposeAuthSite/Account/LogOff";
-            });
+            #region IdentityOptions
 
-            // AddAuthentication
-            services.AddAuthentication()
+            Action<IdentityOptions> IdentityOptionsConf = new Action<IdentityOptions>(idOptions =>
+                {
+                    // ユーザー
+                    // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#user
+                    //idOptions.SignIn.AllowedUserNameCharacters = false;
+                    idOptions.User.RequireUniqueEmail = Config.RequireUniqueEmail;
 
-            #region Cookie
+                    // サインイン
+                    // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#sign-in
+                    idOptions.SignIn.RequireConfirmedEmail = false;
+                    idOptions.SignIn.RequireConfirmedPhoneNumber = false;
 
-                .AddCookie(options =>
+                    // パスワード検証（8文字以上の大文字・小文字、数値、記号
+                    // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#password
+                    idOptions.Password.RequiredLength = Config.RequiredLength;
+                    idOptions.Password.RequireNonAlphanumeric = Config.RequireNonLetterOrDigit;
+                    idOptions.Password.RequireDigit = Config.RequireDigit;
+                    idOptions.Password.RequireLowercase = Config.RequireLowercase;
+                    idOptions.Password.RequireUppercase = Config.RequireUppercase;
+
+                    // ユーザ ロックアウト
+                    // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#lockout
+                    idOptions.Lockout.DefaultLockoutTimeSpan = Config.DefaultAccountLockoutTimeSpanFromSeconds;
+                    idOptions.Lockout.MaxFailedAccessAttempts = Config.MaxFailedAccessAttemptsBeforeLockout;
+                    idOptions.Lockout.AllowedForNewUsers = Config.UserLockoutEnabledByDefault;
+
+                    // 二ヨウ素認証
+
+                    // トークン
+                    // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#tokens
+                    //idOptions.Tokens...
+
+                });
+
+            services.Configure<IdentityOptions>(IdentityOptionsConf);
+            
+            #endregion
+
+            #region AuthOptions
+
+            AuthenticationBuilder authenticationBuilder = services.AddAuthentication();
+
+            #region AuthCookie
+
+            authenticationBuilder.AddCookie(options =>
                 {
                     // https://community.auth0.com/t/asp-net-core-2-intermittent-correlation-failed-errors/11918/18
                     options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
-                })
 
-            #endregion
-
-            #region 2FA
+                    options.LoginPath = "/MultiPurposeAuthSite/Account/Login";
+                    options.LogoutPath = "/MultiPurposeAuthSite/Account/LogOff";
+                    //options.AccessDeniedPath = "/Identity/Account/AccessDenied";
+                    //options.Cookie.Name = "YourAppCookieName";
+                    //options.Cookie.HttpOnly = true;
+                    //options.ExpireTimeSpan = TimeSpan.FromMinutes(60);
+                    // ReturnUrlParameter requires 
+                    //using Microsoft.AspNetCore.Authentication.Cookies;
+                    //options.ReturnUrlParameter = CookieAuthenticationDefaults.ReturnUrlParameter;
+                    //options.SlidingExpiration = true;
+                });
 
             #endregion
 
             #region 外部ログイン
-                .AddMicrosoftAccount(options =>
+            if (Config.MicrosoftAccountAuthentication)
+            {
+                authenticationBuilder.AddMicrosoftAccount(options =>
                 {
-                    if (Config.MicrosoftAccountAuthentication)
-                    {
-                        options.ClientId = Config.MicrosoftAccountAuthenticationClientId;
-                        options.ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret;
-                    }
-                })
-                .AddGoogle(options =>
-                {
-                    if (Config.GoogleAuthentication)
-                    {
-                        options.ClientId = Config.GoogleAuthenticationClientId;
-                        options.ClientSecret = Config.GoogleAuthenticationClientSecret;
-                    }
-                })
-                .AddFacebook(options =>
-                {
-                    if (Config.FacebookAuthentication)
-                    {
-                        options.AppId = Config.FacebookAuthenticationClientId;
-                        options.AppSecret = Config.FacebookAuthenticationClientSecret;
-                    }
+                    options.ClientId = Config.MicrosoftAccountAuthenticationClientId;
+                    options.ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret;
                 });
-                //.AddTwitter(options =>
-                //{
-                //    if (Config.TwitterAuthentication)
-                //    {
-                //        options.ConsumerKey = Config.TwitterAuthenticationClientId;
-                //        options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
-                //    }
-                //});
+            }
+            if (Config.GoogleAuthentication)
+            {
+                authenticationBuilder.AddGoogle(options =>
+                {
+                    options.ClientId = Config.GoogleAuthenticationClientId;
+                    options.ClientSecret = Config.GoogleAuthenticationClientSecret;
+                });
+            }
+            if (Config.FacebookAuthentication)
+            {
+                authenticationBuilder.AddFacebook(options =>
+                {
+                    options.AppId = Config.FacebookAuthenticationClientId;
+                    options.AppSecret = Config.FacebookAuthenticationClientSecret;
+                });
+            }
+            if (Config.TwitterAuthentication)
+            {
+                authenticationBuilder.AddTwitter(options =>
+                {
+                    options.ConsumerKey = Config.TwitterAuthenticationClientId;
+                    options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
+                });
+            }
             #endregion
 
             #region OAuth2 / OIDC
 
             // スクラッチ実装
+
+            #endregion
 
             #endregion
 

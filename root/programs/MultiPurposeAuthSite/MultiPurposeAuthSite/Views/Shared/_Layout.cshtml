@@ -39,26 +39,17 @@
 
     if (User.Identity.IsAuthenticated)
     {
-        if (Session["Roles"] == null)
+        Manager.ApplicationUserManager userManager
+            = HttpContext.Current.GetOwinContext().GetUserManager<Manager.ApplicationUserManager>();
+        ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
+        if (user == null)
         {
-            Manager.ApplicationUserManager userManager
-                = HttpContext.Current.GetOwinContext().GetUserManager<Manager.ApplicationUserManager>();
-            ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
-            if (user == null)
-            {
-                roles = new List<string>();
-            }
-            else
-            {
-                roles = userManager.GetRoles(user.Id); // 同期版でOK。
-            }
+            roles = new List<string>();
         }
         else
         {
-            roles = (IList<string>)Session["Roles"];
+            roles = userManager.GetRoles(user.Id); // 同期版でOK。
         }
-
-
         canShowAdminScreen = (roles.Where(x => x == Const.Role_SystemAdmin).Any());
     }
 
