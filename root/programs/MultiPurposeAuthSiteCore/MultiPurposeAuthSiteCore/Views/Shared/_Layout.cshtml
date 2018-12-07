@@ -35,7 +35,7 @@
 
     if (User.Identity.IsAuthenticated)
     {
-        ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+        ApplicationUser user = await UserManager.GetUserAsync(User);
         if (user == null)
         {
             roles = new List<string>();

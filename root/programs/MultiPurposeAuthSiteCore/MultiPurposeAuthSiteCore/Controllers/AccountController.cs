@@ -397,7 +397,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         "SendCode", new
                                         {
                                             ReturnUrl = model.ReturnUrl,  // 戻り先のURL
-                                                RememberMe = model.RememberMe // アカウント記憶
+                                            RememberMe = model.RememberMe // アカウント記憶
                                         });
                                 }
                                 else if (result.IsNotAllowed)// == SignInResult.Failed)
@@ -621,7 +621,7 @@ namespace MultiPurposeAuthSite.Controllers
                 await SignInManager.SignOutAsync(); // DefaultAuthenticationTypes.ApplicationCookie);
 
                 // オペレーション・トレース・ログ出力
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
                 Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
             }
 
@@ -2078,7 +2078,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 仲介コードを発行
 
                     // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
                         user.Id, user.UserName, client_id, Helper.GetInstance().GetClientName(client_id)));
 
@@ -2107,7 +2107,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // Access Tokenを発行
 
                     // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
                     Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
                             user.Id, user.UserName, client_id, Helper.GetInstance().GetClientName(client_id)));
                 }
@@ -2164,7 +2164,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // 仲介コードを発行
 
                 // オペレーション・トレース・ログ出力
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
                 Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
                         user.Id, user.UserName, client_id, Helper.GetInstance().GetClientName(client_id)));
 
@@ -2625,8 +2625,7 @@ namespace MultiPurposeAuthSite.Controllers
             // URLの生成
             callbackUrl = this.Url.Action(
                     "EmailConfirmation", "Account",
-                    new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme 
-                );
+                    new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme);
 
             // E-mailの送信
             string subject = GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm);

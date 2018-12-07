@@ -319,7 +319,7 @@ namespace MultiPurposeAuthSite.Controllers
                 : "";
 
                 // ユーザの取得
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // モデルの生成
                 string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
@@ -375,7 +375,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
                 return View(new ManageChangeUserNameViewModel { UserNameForEdit = user.UserName });
             }
             else
@@ -411,7 +411,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
                     {
                         // パスワードのチェック
-                        user = await UserManager.FindByNameAsync(User.Identity.Name);
+                        user = await UserManager.GetUserAsync(User);
                         signInResult = await SignInManager.PasswordSignInAsync(
                             userName: user.UserName,                                          // アカウント(UID)
                             password: model.Password,                                         // アカウント(PWD)
@@ -437,7 +437,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
 
                     // ユーザの取得
-                    user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    user = await UserManager.GetUserAsync(User);
                     string oldUserName = user.UserName;
 
                     // UserNameの更新
@@ -525,7 +525,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageSetPasswordViewModelの検証に成功
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
 
                     // パスワード設定
                     IdentityResult result = await UserManager.AddPasswordAsync(user, model.NewPassword);
@@ -604,7 +604,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageChangePasswordViewModelの検証に成功
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
 
                     // パスワード変更
                     IdentityResult result = await UserManager.ChangePasswordAsync(user, model.OldPassword, model.NewPassword);
@@ -691,7 +691,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageEmailViewModelの検証に成功
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
 
                     // Passwordチェック
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
@@ -769,7 +769,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
                 return View(new ManageEmailViewModel { Email = user.Email });
             }
             else
@@ -797,7 +797,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageEmailViewModelの検証に成功
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
 
                     // Passwordチェック
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
@@ -893,7 +893,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEditEmail
                 && Config.EnableEditingOfUserAttribute)
@@ -1003,7 +1003,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveEmail()
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (!Config.RequireUniqueEmail
                 && Config.CanEditEmail
@@ -1083,7 +1083,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddPhoneNumber(ManageAddPhoneNumberViewModel model)
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEditPhone
                 && Config.EnableEditingOfUserAttribute)
@@ -1156,7 +1156,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> VerifyPhoneNumber(ManageVerifyPhoneNumberViewModel model)
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEditPhone
                 && Config.EnableEditingOfUserAttribute)
@@ -1216,7 +1216,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemovePhoneNumber()
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEditPhone && Config.EnableEditingOfUserAttribute)
             {
@@ -1269,7 +1269,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> EnableTwoFactorAuthentication()
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEdit2FA
                 && Config.EnableEditingOfUserAttribute)
@@ -1298,7 +1298,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> DisableTwoFactorAuthentication()
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEdit2FA
                 && Config.EnableEditingOfUserAttribute)
@@ -1331,7 +1331,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ManageLogins(EnumManageMessageId? message)
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEditExtLogin
                 && Config.EnableEditingOfUserAttribute)
@@ -1396,7 +1396,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey)
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEditExtLogin
                 && Config.EnableEditingOfUserAttribute)
@@ -1469,7 +1469,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ExternalLogin(string provider)
         {
-            ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+            ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (Config.CanEditExtLogin
                 && Config.EnableEditingOfUserAttribute)
@@ -1587,7 +1587,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // ManageControllerではサインアップ・サインイン
                             // 済みなので、外部ログインの追加のみ行なう。
-                            user = await UserManager.FindByNameAsync(User.Identity.Name);
+                            user = await UserManager.GetUserAsync(User);
 
                             // uid（e-mail or name情報）が一致している必要がある。
                             //   Manage（サインイン済み）なので、
@@ -1709,7 +1709,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageAddPaymentInformationViewModelの検証に成功
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
 
                     if (user != null)
                     {
@@ -1825,7 +1825,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // 支払元情報のクリア
                 user.PaymentInformation = "";
@@ -1883,7 +1883,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 ManageAddUnstructuredDataViewModel model = null;
 
@@ -1927,7 +1927,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ManageAddUnstructuredDataViewModelの検証に成功
 
                     // ユーザの検索
-                    ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                    ApplicationUser user = await UserManager.GetUserAsync(User);
 
                     if (user != null)
                     {
@@ -1989,7 +1989,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // 非構造化データのクリア
                 user.UnstructuredData = "";
@@ -2048,7 +2048,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 ManageAddOAuth2DataViewModel model = null;
 
@@ -2113,7 +2113,7 @@ namespace MultiPurposeAuthSite.Controllers
                     else if (!string.IsNullOrEmpty(Request.Form["submit.Add"]))
                     {
                         // ユーザの検索
-                        ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                        ApplicationUser user = await UserManager.GetUserAsync(User);
 
                         if (user != null)
                         {
@@ -2253,7 +2253,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // OAuth2関連の非構造化データのクリア
                 DataProvider.GetInstance().Delete(user.ClientID);
@@ -2313,7 +2313,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 ViewBag.UserId = user.Id;
                 ViewBag.UserName = user.UserName;
@@ -2344,7 +2344,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 if (user != null)
                 {
@@ -2388,7 +2388,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 if (user != null)
                 {
@@ -2451,7 +2451,7 @@ namespace MultiPurposeAuthSite.Controllers
             //&& Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 using (MemoryStream ms = new MemoryStream())
                 {
@@ -2484,7 +2484,7 @@ namespace MultiPurposeAuthSite.Controllers
             //&& Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(User.Identity.Name);
+                ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 #region データ消去
                 // 既定の属性
@@ -2788,259 +2788,9 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        // https://github.com/OpenTouryoProject/SampleProgram/blob/master/ASPNET/AuthN_AuthZ/ASPNETIdentity/ASPNETIdentity31Sample/Controllers/ManageController.cs
+        // https://github.com/OpenTouryoProject/SampleProgram/tree/master/ASPNET/AuthN_AuthZ/ASPNETIdentity/ASPNETIdentity32Sample/Areas/Identity/Pages/Account/Manage
         /*
-        
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Index(IndexViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var email = user.Email;
-            if (model.Email != email)
-            {
-                var setEmailResult = await _userManager.SetEmailAsync(user, model.Email);
-                if (!setEmailResult.Succeeded)
-                {
-                    throw new ApplicationException($"Unexpected error occurred setting email for user with ID '{user.Id}'.");
-                }
-            }
-
-            var phoneNumber = user.PhoneNumber;
-            if (model.PhoneNumber != phoneNumber)
-            {
-                var setPhoneResult = await _userManager.SetPhoneNumberAsync(user, model.PhoneNumber);
-                if (!setPhoneResult.Succeeded)
-                {
-                    throw new ApplicationException($"Unexpected error occurred setting phone number for user with ID '{user.Id}'.");
-                }
-            }
-
-            StatusMessage = "Your profile has been updated";
-            return RedirectToAction(nameof(Index));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SendVerificationEmail(IndexViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var callbackUrl = Url.EmailConfirmationLink(user.Id.ToString(), code, Request.Scheme);
-            var email = user.Email;
-            await _emailSender.SendEmailConfirmationAsync(email, callbackUrl);
-
-            StatusMessage = "Verification email sent. Please check your email.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> ChangePassword()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var hasPassword = await _userManager.HasPasswordAsync(user);
-            if (!hasPassword)
-            {
-                return RedirectToAction(nameof(SetPassword));
-            }
-
-            var model = new ChangePasswordViewModel { StatusMessage = StatusMessage };
-            return View(model);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var changePasswordResult = await _userManager.ChangePasswordAsync(user, model.OldPassword, model.NewPassword);
-            if (!changePasswordResult.Succeeded)
-            {
-                AddErrors(changePasswordResult);
-                return View(model);
-            }
-
-            await _signInManager.SignInAsync(user, isPersistent: false);
-            _logger.LogInformation("User changed their password successfully.");
-            StatusMessage = "Your password has been changed.";
-
-            return RedirectToAction(nameof(ChangePassword));
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> SetPassword()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var hasPassword = await _userManager.HasPasswordAsync(user);
-
-            if (hasPassword)
-            {
-                return RedirectToAction(nameof(ChangePassword));
-            }
-
-            var model = new SetPasswordViewModel { StatusMessage = StatusMessage };
-            return View(model);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SetPassword(SetPasswordViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var addPasswordResult = await _userManager.AddPasswordAsync(user, model.NewPassword);
-            if (!addPasswordResult.Succeeded)
-            {
-                AddErrors(addPasswordResult);
-                return View(model);
-            }
-
-            await _signInManager.SignInAsync(user, isPersistent: false);
-            StatusMessage = "Your password has been set.";
-
-            return RedirectToAction(nameof(SetPassword));
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> ExternalLogins()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var model = new ExternalLoginsViewModel { CurrentLogins = await _userManager.GetLoginsAsync(user) };
-            model.OtherLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync())
-                .Where(auth => model.CurrentLogins.All(ul => auth.Name != ul.LoginProvider))
-                .ToList();
-            model.ShowRemoveButton = await _userManager.HasPasswordAsync(user) || model.CurrentLogins.Count > 1;
-            model.StatusMessage = StatusMessage;
-
-            return View(model);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> LinkLogin(string provider)
-        {
-            // Clear the existing external cookie to ensure a clean login process
-            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
-
-            // Request a redirect to the external login provider to link a login for the current user
-            var redirectUrl = Url.Action(nameof(LinkLoginCallback));
-            var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl, _userManager.GetUserId(User));
-            return new ChallengeResult(provider, properties);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> LinkLoginCallback()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var info = await _signInManager.GetExternalLoginInfoAsync(user.Id.ToString());
-            if (info == null)
-            {
-                throw new ApplicationException($"Unexpected error occurred loading external login info for user with ID '{user.Id}'.");
-            }
-
-            var result = await _userManager.AddLoginAsync(user, info);
-            if (!result.Succeeded)
-            {
-                throw new ApplicationException($"Unexpected error occurred adding external login for user with ID '{user.Id}'.");
-            }
-
-            // Clear the existing external cookie to ensure a clean login process
-            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
-
-            StatusMessage = "The external login was added.";
-            return RedirectToAction(nameof(ExternalLogins));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> RemoveLogin(RemoveLoginViewModel model)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var result = await _userManager.RemoveLoginAsync(user, model.LoginProvider, model.ProviderKey);
-            if (!result.Succeeded)
-            {
-                throw new ApplicationException($"Unexpected error occurred removing external login for user with ID '{user.Id}'.");
-            }
-
-            await _signInManager.SignInAsync(user, isPersistent: false);
-            StatusMessage = "The external login was removed.";
-            return RedirectToAction(nameof(ExternalLogins));
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> TwoFactorAuthentication()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var model = new TwoFactorAuthenticationViewModel
-            {
                 HasAuthenticator = await _userManager.GetAuthenticatorKeyAsync(user) != null,
                 Is2faEnabled = user.TwoFactorEnabled,
                 RecoveryCodesLeft = await _userManager.CountRecoveryCodesAsync(user),
@@ -3048,59 +2798,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View(model);
         }
-
-        [HttpGet]
-        public async Task<IActionResult> Disable2faWarning()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            if (!user.TwoFactorEnabled)
-            {
-                throw new ApplicationException($"Unexpected error occured disabling 2FA for user with ID '{user.Id}'.");
-            }
-
-            return View(nameof(Disable2fa));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Disable2fa()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var disable2faResult = await _userManager.SetTwoFactorEnabledAsync(user, false);
-            if (!disable2faResult.Succeeded)
-            {
-                throw new ApplicationException($"Unexpected error occured disabling 2FA for user with ID '{user.Id}'.");
-            }
-
-            _logger.LogInformation("User with ID {UserId} has disabled 2fa.", user.Id);
-            return RedirectToAction(nameof(TwoFactorAuthentication));
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> EnableAuthenticator()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
-            }
-
-            var model = new EnableAuthenticatorViewModel();
-            await LoadSharedKeyAndQrCodeUriAsync(user, model);
-
-            return View(model);
-        }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EnableAuthenticator(EnableAuthenticatorViewModel model)
