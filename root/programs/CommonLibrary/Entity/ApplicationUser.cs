@@ -164,7 +164,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         {
             set
             {
-                if(this.UserName.ToLower() != value)
+                if (this.UserName.ToLower() != value)
                     this.UserName = value;
             }
             get
@@ -312,13 +312,23 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
         #endregion
 
+#if NETFX
+#else
+        // 要DBスキーマ拡張
         #region Properties after Identity 3.
 
         /// <summary>AuthenticatorKey</summary>
         public string AuthenticatorKey { get; set; }
 
+        #region Collection (private set)
+
+        /// <summary>Tokens</summary>
+        public IList<IdentityUserToken<string>> Tokens { get; set; }
+
         #endregion
 
+        #endregion
+#endif
         #region Additional properties
 
         /// <summary>

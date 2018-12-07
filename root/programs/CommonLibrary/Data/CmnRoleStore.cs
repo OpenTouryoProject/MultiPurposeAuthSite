@@ -52,7 +52,7 @@ using Dapper;
 namespace MultiPurposeAuthSite.Data
 {
     /// <summary>BaseRoleStore</summary>
-    public class CmnRoleStore
+    public class CmnRoleStore : CmnStore
     {
         #region IRoleStore
 
@@ -80,7 +80,7 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // ロールを追加
-                        CmnStore.Roles.Add(role);
+                        CmnStore._roles.Add(role);
 
                         break;
 
@@ -157,7 +157,7 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // ロールを ID から検索
-                        role = CmnStore.Roles.FirstOrDefault(x => x.Id == roleId);
+                        role = CmnStore._roles.FirstOrDefault(x => x.Id == roleId);
 
                         break;
 
@@ -240,7 +240,7 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // ロールを（ロール名指定で）検索
-                        role = CmnStore.Roles.FirstOrDefault(x => x.Name == roleName);
+                        role = CmnStore._roles.FirstOrDefault(x => x.Name == roleName);
 
                         break;
 
@@ -325,7 +325,7 @@ namespace MultiPurposeAuthSite.Data
                     {
                         case EnumUserStoreType.Memory:
 
-                            roles = CmnStore.Roles.ToList();
+                            roles = CmnStore._roles.ToList();
 
                             break;
 
@@ -395,7 +395,7 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // RolesからIdが同じApplicationRoleを取得する。
-                        ApplicationRole r = CmnStore.Roles.FirstOrDefault(x => x.Id == role.Id);
+                        ApplicationRole r = CmnStore._roles.FirstOrDefault(x => x.Id == role.Id);
 
                         if (r == null)
                         {
@@ -484,12 +484,12 @@ namespace MultiPurposeAuthSite.Data
 
                         // Memory Providerには外部参照制約が無いので自らチェック
                         Tuple<string, string> userRoleMap =
-                            CmnStore.UserRoleMap.FirstOrDefault(x => x.Item2 == role.Id);
+                            CmnStore._userRoleMap.FirstOrDefault(x => x.Item2 == role.Id);
 
                         if (userRoleMap == null)
                         {
                             // RolesからIdが同じApplicationRoleを取得する。
-                            ApplicationRole r = CmnStore.Roles.FirstOrDefault(x => x.Id == role.Id);
+                            ApplicationRole r = CmnStore._roles.FirstOrDefault(x => x.Id == role.Id);
 
                             if (r == null)
                             {
@@ -498,7 +498,7 @@ namespace MultiPurposeAuthSite.Data
                             else
                             {
                                 // ロールを削除
-                                CmnStore.Roles.Remove(r);
+                                CmnStore._roles.Remove(r);
                             }
                         }
                         else

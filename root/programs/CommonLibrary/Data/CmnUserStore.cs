@@ -64,7 +64,7 @@ using Dapper;
 namespace MultiPurposeAuthSite.Data
 {
     /// <summary>BaseUserStore</summary>
-    public class CmnUserStore
+    public class CmnUserStore : CmnStore
     {
         #region CRUD(共通)
 
@@ -78,7 +78,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -90,7 +90,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        CmnStore.Users.Add(user);
+                        CmnStore._users.Add(user);
 
                         break;
 
@@ -121,7 +121,7 @@ namespace MultiPurposeAuthSite.Data
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
-                                    
+
                                     cnn.Execute(
                                         "INSERT INTO \"Users\" ( " +
                                         "    \"Id\", \"UserName\", \"PasswordHash\", " +
@@ -204,7 +204,7 @@ namespace MultiPurposeAuthSite.Data
             //OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -242,7 +242,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        user = CmnStore.Users.FirstOrDefault(x => x.Id == userId);
+                        user = CmnStore._users.FirstOrDefault(x => x.Id == userId);
 
                         break;
 
@@ -310,7 +310,7 @@ namespace MultiPurposeAuthSite.Data
             //OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -349,7 +349,7 @@ namespace MultiPurposeAuthSite.Data
                     {
                         case EnumUserStoreType.Memory:
 
-                            user = CmnStore.Users.FirstOrDefault(x => x.UserName == userName);
+                            user = CmnStore._users.FirstOrDefault(x => x.UserName == userName);
 
                             break;
 
@@ -420,7 +420,7 @@ namespace MultiPurposeAuthSite.Data
                 OnlySts.STSOnly_M();
 
                 // Debug
-                Logging.MyDebugSQLTrace("★ : " + 
+                Logging.MyDebugSQLTrace("★ : " +
                     MethodBase.GetCurrentMethod().DeclaringType.FullName +
                     "." + MethodBase.GetCurrentMethod().Name +
                     Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -444,7 +444,7 @@ namespace MultiPurposeAuthSite.Data
                     {
                         case EnumUserStoreType.Memory:
 
-                            IEnumerable<ApplicationUser> _users = CmnStore.Users;
+                            IEnumerable<ApplicationUser> _users = CmnStore._users;
                             users = _users.ToList();
 
                             break;
@@ -501,7 +501,7 @@ namespace MultiPurposeAuthSite.Data
                                         else
                                         {
                                             sql = string.Format(sql, 100);
-                                        }   
+                                        }
 
                                         break;
 
@@ -647,7 +647,7 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey, \"PasswordChangeDate\" = :PasswordChangeDate " +
                                         "WHERE \"Id\" = :Id",
                                         new // 拡張メソッドで対策できる。
-                                            {
+                                        {
                                             Id = user.Id,
                                             UserName = user.UserName,
                                             PasswordHash = user.PasswordHash,
@@ -715,7 +715,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -954,9 +954,9 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // ユーザを削除
-                        CmnStore.Users.Remove(CmnStore.Users.First(x => x.Id == user.Id));
+                        CmnStore._users.Remove(CmnStore._users.First(x => x.Id == user.Id));
                         // ユーザの関連情報を削除
-                        CmnStore.UserRoleMap.RemoveAll(x => x.Item1 == user.Id);
+                        CmnStore._userRoleMap.RemoveAll(x => x.Item1 == user.Id);
 
                         break;
 
@@ -1103,7 +1103,7 @@ namespace MultiPurposeAuthSite.Data
             //OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1117,7 +1117,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        user = CmnStore.Users.FirstOrDefault(x => x.Email == email);
+                        user = CmnStore._users.FirstOrDefault(x => x.Email == email);
 
                         break;
 
@@ -1164,7 +1164,7 @@ namespace MultiPurposeAuthSite.Data
                                 CmnStore.SelectChildTablesOfUser(cnn, user);
                             }
                         }
-                        
+
                         break;
                 }
             }
@@ -1385,7 +1385,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1399,7 +1399,7 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // ロール情報を取得する
-                        role = CmnStore.Roles.FirstOrDefault(x => x.Name == roleName);
+                        role = CmnStore._roles.FirstOrDefault(x => x.Name == roleName);
 
                         if (role == null)
                         {
@@ -1409,7 +1409,7 @@ namespace MultiPurposeAuthSite.Data
                         else
                         {
                             // ロール・マップ情報を取得する
-                            Tuple<string, string> userRoleMap = CmnStore.UserRoleMap.FirstOrDefault(
+                            Tuple<string, string> userRoleMap = CmnStore._userRoleMap.FirstOrDefault(
                                 x => x.Item1 == user.Id && x.Item2 == role.Id);
 
                             if (userRoleMap != null)
@@ -1419,7 +1419,7 @@ namespace MultiPurposeAuthSite.Data
                             else
                             {
                                 // ロール・マップにユーザとロールに追加
-                                CmnStore.UserRoleMap.Add(Tuple.Create(user.Id, role.Id));
+                                CmnStore._userRoleMap.Add(Tuple.Create(user.Id, role.Id));
                             }
                         }
 
@@ -1514,7 +1514,7 @@ namespace MultiPurposeAuthSite.Data
             }
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -1529,13 +1529,13 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // UserRoleMapに含まれるuserId = user.Id のTupleに含まれるRole.IdのRole.Nameを一覧する。
-                        roleNames = CmnStore.UserRoleMap // List<Tuple<string, sting>>
-                                                           // Tuple.Item1 == user.IdのTupleのListを抽出。
+                        roleNames = CmnStore._userRoleMap // List<Tuple<string, sting>>
+                                                         // Tuple.Item1 == user.IdのTupleのListを抽出。
                             .Where(x => x.Item1 == user.Id)
                             // 結果のTupleのListの中からTuple.Item2（ = Role.Id）の射影を取る。
                             .Select(x => x.Item2)
                             // Tuple.Item2の射影の中からRoles.Idと一致するRole(List<ApplicationRole>)のListを抽出して射影。
-                            .Select(x => CmnStore.Roles.First(y => y.Id == x))
+                            .Select(x => CmnStore._roles.First(y => y.Id == x))
                             // 結果のApplicationRoleのListのApplicationRole.Nameの射影を取る。
                             .Select(x => x.Name)
                             // ApplicationRole.NameのListを射影
@@ -1590,7 +1590,7 @@ namespace MultiPurposeAuthSite.Data
 
                                     break;
                             }
-                            
+
                             List<string> temp = new List<string>();
                             foreach (ApplicationRole role in roles)
                             {
@@ -1624,7 +1624,7 @@ namespace MultiPurposeAuthSite.Data
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-            
+
             try
             {
                 // ユーザーをロールから削除
@@ -1634,7 +1634,7 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // 名称の一致するロールを取得
-                        role = CmnStore.Roles.FirstOrDefault(x => x.Name == roleName);
+                        role = CmnStore._roles.FirstOrDefault(x => x.Name == roleName);
 
                         if (role == null)
                         {
@@ -1643,14 +1643,14 @@ namespace MultiPurposeAuthSite.Data
                         else
                         {
                             // UserRoleMapに含まれるTuple.Item1 == user.Id && Tuple.Item2 == role.IdのTupleを返す。
-                            Tuple<string, string> userRoleMap = CmnStore.UserRoleMap
+                            Tuple<string, string> userRoleMap = CmnStore._userRoleMap
                                 .FirstOrDefault(x => x.Item1 == user.Id && x.Item2 == role.Id);
 
                             // ユーザをロールから削除
                             if (userRoleMap != null)
                             {
                                 // 取得できたら、Tupleを削除。
-                                CmnStore.UserRoleMap.Remove(userRoleMap);
+                                CmnStore._userRoleMap.Remove(userRoleMap);
                             }
                         }
 
@@ -1976,6 +1976,8 @@ namespace MultiPurposeAuthSite.Data
 
         #endregion
 
+#if NETFX
+#else
         #region UserAuthenticatorKeyStore
 
         /// <summary>SetAuthenticatorKey</summary>
@@ -2015,7 +2017,8 @@ namespace MultiPurposeAuthSite.Data
             return user.AuthenticatorKey;
         }
 
-        #endregion 
+        #endregion
+#endif
 
         #endregion
 
@@ -2032,7 +2035,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2107,7 +2110,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2122,7 +2125,7 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // LINQ挫折
-                        foreach (ApplicationUser x in CmnStore.Users)
+                        foreach (ApplicationUser x in CmnStore._users)
                         {
                             if (x.Logins == null)
                             {
@@ -2245,7 +2248,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2328,7 +2331,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
@@ -2427,7 +2430,7 @@ namespace MultiPurposeAuthSite.Data
             OnlySts.STSOnly_M();
 
             // Debug
-            Logging.MyDebugSQLTrace("★ : " + 
+            Logging.MyDebugSQLTrace("★ : " +
                 MethodBase.GetCurrentMethod().DeclaringType.FullName +
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));

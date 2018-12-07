@@ -38,6 +38,7 @@ using MultiPurposeAuthSite;
 #endif
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading;
@@ -51,30 +52,42 @@ using Microsoft.AspNetCore.Identity;
 
 // ASP.NET Core Identity 用のカスタム ストレージ プロバイダー | Microsoft Docs
 // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-custom-storage-providers?view=aspnetcore-2.2
+// at master · aspnet/Identity
+// - UserStoreBase.cs
+//   https://github.com/aspnet/Identity/blob/master/src/Stores/UserStoreBase.cs
+// - EF/UserStore.cs
+//   https://github.com/aspnet/Identity/blob/master/src/EF/UserStore.cs#L96
 
-// <<ユーザ属性>>
-// 済 IUserPasswordStore
-// 済 IUserEmailStore
-// 済 IUserPhoneNumberStore
-// 済 IUserRoleStore
+// << 基本 >>
+// - 済 IUserStore
+// - 済 IQueryableUserStore
 
-// <<ログイン属性>>
-// 済 IUserSecurityStampStore
-// 済 IUserLockoutStore
-// IUserTwoFactor...
-// - IUserTwoFactorStore
-// - IUserAuthenticatorKeyStore
+// << ユーザ属性 >>
+// - 済 IUserPasswordStore
+// - 済 IUserEmailStore
+// - 済 IUserPhoneNumberStore
+// - 済 IUserRoleStore
+
+// << ログイン属性 >>
+// - 済 IUserSecurityStampStore
+// - 済 IUserLockoutStore
+// - 済IUserTwoFactor...
+//   - SMS
+//     - 済 IUserTwoFactorStore
+//     - 済 IUserAuthenticatorKeyStore
+//   - TOTP（新）
+//     済 IUserAuthenticationTokenStore
+//     済 IUserTwoFactorRecoveryCodeStore
+// - 済 IUserLoginStore
+// - 済 IUserClaimStore
+
+// << その他、UserStore以外 >>
+// - IUserValidator
+//   UserValidatorが継承。
+// - IUserClaimsPrincipalFactory
+//   UserClaimsPrincipalFactoryが継承。
 // - IUserTwoFactorTokenProvider
-// - IUserTwoFactorRecoveryCodeStore
-// 済 IUserLoginStore
-// 済 IUserClaimStore
-
-// <<その他、追加>>
-// IUserValidator
-// IQueryableUserStore
-// IUserAuthenticationTokenStore
-// IUserAuthenticatorKeyStore
-// IUserClaimsPrincipalFactory
+//   TotpSecurityStampBasedTokenProviderが継承。
 
 /// <summary>MultiPurposeAuthSite.Data</summary>
 namespace MultiPurposeAuthSite.Data
@@ -84,6 +97,7 @@ namespace MultiPurposeAuthSite.Data
     /// </summary>
     public class UserStoreCore :
         IUserStore<ApplicationUser>,
+        IQueryableUserStore<ApplicationUser>,
         IUserPasswordStore<ApplicationUser>,
         IUserEmailStore<ApplicationUser>,
         IUserPhoneNumberStore<ApplicationUser>,
@@ -106,8 +120,9 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> CreateAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
-            CmnStore.Users.Add(user);
+            CmnUserStore.Create(user);
             return Task.FromResult(IdentityResult.Success);
         }
 
@@ -122,6 +137,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationUser> FindByIdAsync(string userId, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.FindById(userId));
         }
@@ -133,8 +149,15 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.FindByName(normalizedUserName)); // UserName or NormalizedUserName ?
+        }
+
+        /// <summary>Users</summary>
+        public IQueryable<ApplicationUser> Users
+        {
+            get { return CmnUserStore.Users; }
         }
 
         #endregion
@@ -148,6 +171,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> UpdateAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.Update(user);
             return Task.FromResult(IdentityResult.Success);
@@ -164,6 +188,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> DeleteAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.Delete(user);
             return Task.FromResult(IdentityResult.Success);
@@ -182,6 +207,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetUserIdAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(user.Id);
         }
@@ -196,6 +222,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetUserNameAsync(ApplicationUser user, string userName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             user.UserName = userName;
             return Task.FromResult(0);
@@ -208,6 +235,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetUserNameAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(user.UserName);
         }
@@ -223,6 +251,9 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public Task SetNormalizedUserNameAsync(ApplicationUser user, string normalizedName, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
             user.NormalizedUserName = normalizedName;
             return Task.FromResult(0);
         }
@@ -234,6 +265,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetNormalizedUserNameAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(user.NormalizedUserName);
         }
@@ -252,6 +284,9 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>bool</returns>
         public Task<bool> HasPasswordAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
             return Task.FromResult(CmnUserStore.HasPassword(user));
         }
 
@@ -263,6 +298,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetPasswordHashAsync(ApplicationUser user, string passwordHash, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetPasswordHash(user, passwordHash);
             return Task.FromResult(0);
@@ -275,6 +311,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetPasswordHashAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetPasswordHash(user));
         }
@@ -290,6 +327,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationUser> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.FindByEmail(normalizedEmail));
         }
@@ -302,6 +340,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetEmailAsync(ApplicationUser user, string email, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetEmail(user, email);
             return Task.FromResult(0);
@@ -314,6 +353,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetEmailAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetEmail(user));
         }
@@ -326,6 +366,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetEmailConfirmedAsync(ApplicationUser user, bool confirmed, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetEmailConfirmed(user, confirmed);
             return Task.FromResult(0);
@@ -338,6 +379,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<bool> GetEmailConfirmedAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetEmailConfirmed(user));
         }
@@ -350,6 +392,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetNormalizedEmailAsync(ApplicationUser user, string normalizedEmail, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetNormalizedEmail(user, normalizedEmail);
             return Task.FromResult(0);
@@ -362,10 +405,10 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetNormalizedEmailAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetNormalizedEmail(user));
         }
-
 
         #endregion
 
@@ -379,6 +422,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetPhoneNumberAsync(ApplicationUser user, string phoneNumber, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetPhoneNumber(user, phoneNumber);
             return Task.FromResult(0);
@@ -391,6 +435,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetPhoneNumberAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetPhoneNumber(user));
         }
@@ -403,6 +448,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetPhoneNumberConfirmedAsync(ApplicationUser user, bool confirmed, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetPhoneNumberConfirmed(user, confirmed);
             return Task.FromResult(0);
@@ -415,6 +461,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<bool> GetPhoneNumberConfirmedAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetPhoneNumberConfirmed(user));
         }
@@ -431,6 +478,7 @@ namespace MultiPurposeAuthSite.Data
         public Task AddToRoleAsync(ApplicationUser user, string roleName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.AddToRole(user, roleName);
             return Task.FromResult(0);
@@ -444,6 +492,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<bool> IsInRoleAsync(ApplicationUser user, string roleName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.IsInRole(user, roleName));
         }
@@ -455,6 +504,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IList<ApplicationUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             throw new NotImplementedException();
         }
@@ -466,6 +516,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IList<string>> GetRolesAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetRoles(user));
         }
@@ -478,6 +529,7 @@ namespace MultiPurposeAuthSite.Data
         public Task RemoveFromRoleAsync(ApplicationUser user, string roleName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.RemoveFromRole(user, roleName);
             return Task.FromResult(0);
@@ -499,6 +551,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetSecurityStampAsync(ApplicationUser user, string stamp, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetSecurityStamp(user, stamp);
             return Task.FromResult(0);
@@ -511,6 +564,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetSecurityStampAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetSecurityStamp(user));
         }
@@ -527,6 +581,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetLockoutEnabledAsync(ApplicationUser user, bool enabled, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetLockoutEnabled(user, enabled);
             return Task.FromResult(0);
@@ -539,10 +594,11 @@ namespace MultiPurposeAuthSite.Data
         public Task<bool> GetLockoutEnabledAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetLockoutEnabled(user));
         }
-                
+
         /// <summary>IncrementAccessFailedCountAsync</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="cancellationToken">CancellationToken</param>
@@ -550,6 +606,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<int> IncrementAccessFailedCountAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.IncrementAccessFailedCount(user));
         }
@@ -572,6 +629,7 @@ namespace MultiPurposeAuthSite.Data
         public Task ResetAccessFailedCountAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.ResetAccessFailedCount(user);
             return Task.FromResult(0);
@@ -585,6 +643,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetLockoutEndDateAsync(ApplicationUser user, DateTimeOffset? lockoutEnd, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetLockoutEndDate(user, lockoutEnd);
             return Task.FromResult(0);
@@ -597,6 +656,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<DateTimeOffset?> GetLockoutEndDateAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetLockoutEndDate(user));
         }
@@ -604,6 +664,8 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 
         #region IUserTwoFactor...
+
+        #region SMS
 
         #region IUserTwoFactorStore
 
@@ -615,6 +677,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetTwoFactorEnabledAsync(ApplicationUser user, bool enabled, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetTwoFactorEnabled(user, enabled);
             return Task.FromResult(0);
@@ -627,6 +690,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<bool> GetTwoFactorEnabledAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetTwoFactorEnabled(user));
         }
@@ -643,6 +707,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetAuthenticatorKeyAsync(ApplicationUser user, string key, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.SetAuthenticatorKey(user, key);
             return Task.FromResult(0);
@@ -655,16 +720,206 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetAuthenticatorKeyAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            
+            this.ThrowIfDisposed();
+
             return Task.FromResult(CmnUserStore.GetAuthenticatorKey(user));
         }
 
-        #endregion 
+        #endregion
 
-        #region IUserTwoFactorTokenProvider
+        #endregion
+
+        #region TOTP
+
+        #region Prerequisite private methods
+
+        /// <summary>CreateUserToken</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="value">string</param>
+        /// <returns>IdentityUserToken(string)</returns>
+        private IdentityUserToken<string> CreateUserToken(ApplicationUser user, string loginProvider, string name, string value)
+        {
+            return new IdentityUserToken<string>
+            {
+                UserId = user.Id,
+                LoginProvider = loginProvider,
+                Name = name,
+                Value = value
+            };
+        }
+
+        /// <summary>AddUserTokenAsync</summary>
+        /// <param name="token">IdentityUserToken(string)</param>
+        /// <returns>－</returns>
+        private void AddUserTokenAsync(IdentityUserToken<string> token)
+        {
+            CmnUserStore.FindById(token.UserId).Tokens.Add(token);
+            return;
+        }
+
+        /// <summary>FindTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>IdentityUserToken(string)</returns>
+        private IdentityUserToken<string> FindTokenAsync(ApplicationUser user, string loginProvider, string name, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            IdentityUserToken<string> token = user.Tokens.FirstOrDefault(
+                t => (t.LoginProvider == loginProvider && t.Name == name));
+
+            return token;
+        }
+
+        /// <summary>RemoveUserTokenAsync</summary>
+        /// <param name="token">IdentityUserToken(string)</param>
+        /// <returns>－</returns>
+        private Task RemoveUserTokenAsync(IdentityUserToken<string> token)
+        {
+            CmnUserStore.FindById(token.UserId).Tokens.Remove(token);
+            return Task.FromResult(0);
+        }
+
+        #endregion
+
+        #region IUserAuthenticationTokenStore
+
+        /// <summary>SetTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="value">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task SetTokenAsync(ApplicationUser user, string loginProvider, string name, string value, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+
+            IdentityUserToken<string> token = FindTokenAsync(user, loginProvider, name, cancellationToken);
+
+            if (token == null)
+            {
+                AddUserTokenAsync(CreateUserToken(user, loginProvider, name, value));
+            }
+            else
+            {
+                token.Value = value;
+            }
+
+            return Task.FromResult(0);
+        }
+
+        /// <summary>GetTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task<string> GetTokenAsync(ApplicationUser user, string loginProvider, string name, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+
+            IdentityUserToken<string> token = FindTokenAsync(user, loginProvider, name, cancellationToken);
+            return Task.FromResult(token?.Value);
+        }
+
+        /// <summary>RemoveTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task RemoveTokenAsync(ApplicationUser user, string loginProvider, string name, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ThrowIfDisposed();
+
+            IdentityUserToken<string> token = FindTokenAsync(user, loginProvider, name, cancellationToken);
+
+            if (token != null)
+            {
+                RemoveUserTokenAsync(token);
+            }
+
+            return Task.FromResult(0);
+        }
+
         #endregion
 
         #region IUserTwoFactorRecoveryCodeStore
+
+        /// <summary>InternalLoginProvider</summary>
+        private readonly string InternalLoginProvider = "[AspNetUserStore]";
+        /// <summary>AuthenticatorKeyTokenName</summary>
+        private readonly string AuthenticatorKeyTokenName = "AuthenticatorKey";
+        /// <summary>RecoveryCodeTokenName</summary>
+        private readonly string RecoveryCodeTokenName = "RecoveryCodes";
+
+        /// <summary>CountCodesAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>int</returns>
+        public async Task<int> CountCodesAsync(ApplicationUser user, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            string mergedCodes = await GetTokenAsync(user, this.InternalLoginProvider, this.RecoveryCodeTokenName, cancellationToken) ?? "";
+
+            if (string.IsNullOrEmpty(mergedCodes))
+            {
+                return mergedCodes.Split(';').Length;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        /// <summary>ReplaceCodesAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="recoveryCodes">IEnumerable(string)</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>The new recovery codes for the user.</returns>
+        public Task ReplaceCodesAsync(ApplicationUser user, IEnumerable<string> recoveryCodes, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            string mergedCodes = string.Join(";", recoveryCodes);
+            return SetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, mergedCodes, cancellationToken);
+        }
+
+        /// <summary>RedeemCodeAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="code">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>bool</returns>
+        public async Task<bool> RedeemCodeAsync(ApplicationUser user, string code, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            string mergedCodes = await GetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, cancellationToken) ?? "";
+            string[] splitCodes = mergedCodes.Split(';');
+            if (splitCodes.Contains(code))
+            {
+                List<string> updatedCodes = new List<string>(splitCodes.Where(s => s != code));
+                await ReplaceCodesAsync(user, updatedCodes, cancellationToken);
+                return true;
+            }
+            return false;
+        }
+
+        #endregion
+
         #endregion
 
         #endregion
@@ -683,6 +938,7 @@ namespace MultiPurposeAuthSite.Data
         public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.AddLogin(user, login);
             return Task.FromResult(0);
@@ -696,6 +952,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationUser> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.Find(new UserLoginInfo(loginProvider, providerKey, "")));
         }
@@ -720,6 +977,7 @@ namespace MultiPurposeAuthSite.Data
         public Task RemoveLoginAsync(ApplicationUser user, string loginProvider, string providerKey, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnUserStore.RemoveLogin(user, new UserLoginInfo(loginProvider, providerKey, ""));
             return Task.FromResult(0);
@@ -737,6 +995,7 @@ namespace MultiPurposeAuthSite.Data
         public Task AddClaimsAsync(ApplicationUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             foreach (Claim claim in claims)
             {
@@ -752,6 +1011,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IList<Claim>> GetClaimsAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnUserStore.GetClaims(user));
         }
@@ -776,6 +1036,7 @@ namespace MultiPurposeAuthSite.Data
         public Task ReplaceClaimAsync(ApplicationUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             throw new NotImplementedException();
         }
@@ -788,6 +1049,7 @@ namespace MultiPurposeAuthSite.Data
         public Task RemoveClaimsAsync(ApplicationUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             foreach (Claim claim in claims)
             {
@@ -801,7 +1063,25 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 
         #region IDisposable
-        public void Dispose() { }
+
+        /// <summary>_disposed</summary>
+        private bool _disposed;
+
+        /// <summary>Dispose the store</summary>
+        public void Dispose()
+        {
+            this._disposed = true;
+        }
+
+        /// <summary>Throws if this class has been disposed.</summary>
+        protected void ThrowIfDisposed()
+        {
+            if (this._disposed)
+            {
+                throw new ObjectDisposedException(GetType().Name);
+            }
+        }
+        
         #endregion
     }
 }

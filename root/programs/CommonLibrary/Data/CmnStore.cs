@@ -64,13 +64,13 @@ namespace MultiPurposeAuthSite.Data
         #region Memory
 
         /// <summary>ユーザ保存先</summary>
-        public static List<ApplicationUser> Users { get; } = new List<ApplicationUser>();
+        protected static List<ApplicationUser> _users { get; } = new List<ApplicationUser>();
 
         /// <summary>ロールの保存先</summary>
-        public static List<ApplicationRole> Roles { get; } = new List<ApplicationRole>();
+        protected static List<ApplicationRole> _roles { get; } = new List<ApplicationRole>();
 
         /// <summary>ユーザとロールのリレーション</summary>
-        public static List<Tuple<string, string>> UserRoleMap { get; } = new List<Tuple<string, string>>();
+        protected static List<Tuple<string, string>> _userRoleMap { get; } = new List<Tuple<string, string>>();
 
         #endregion
 

@@ -123,10 +123,6 @@ namespace MultiPurposeAuthSite.Data
         }
 
         /// <summary>ユーザ一覧を返す。</summary>
-        /// <remarks>
-        /// ★ マルチテナント化対応を施した
-        /// （場合によってはページングも必要になる）
-        /// </remarks>
         public IQueryable<ApplicationUser> Users
         {
             get

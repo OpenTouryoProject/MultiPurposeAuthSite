@@ -67,6 +67,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> CreateAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnRoleStore.Create(role);
             return Task.FromResult(IdentityResult.Success);
@@ -83,6 +84,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationRole> FindByIdAsync(string roleId, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnRoleStore.FindById(roleId));
         }
@@ -94,6 +96,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<ApplicationRole> FindByNameAsync(string normalizedRoleName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(CmnRoleStore.FindByName(normalizedRoleName));
         }
@@ -109,6 +112,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> UpdateAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnRoleStore.Update(role);
             return Task.FromResult(IdentityResult.Success);
@@ -125,6 +129,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<IdentityResult> DeleteAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             CmnRoleStore.Delete(role);
             return Task.FromResult(IdentityResult.Success);
@@ -143,6 +148,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetRoleIdAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(role.Id);
         }
@@ -157,6 +163,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetRoleNameAsync(ApplicationRole role, string roleName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             role.Name = roleName;
             return Task.FromResult(0);
@@ -169,6 +176,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetRoleNameAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(role.Name);
         }
@@ -185,6 +193,7 @@ namespace MultiPurposeAuthSite.Data
         public Task SetNormalizedRoleNameAsync(ApplicationRole role, string normalizedName, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             role.Name = normalizedName;
             return Task.FromResult(0);
@@ -197,6 +206,7 @@ namespace MultiPurposeAuthSite.Data
         public Task<string> GetNormalizedRoleNameAsync(ApplicationRole role, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
 
             return Task.FromResult(role.NormalizedName);
         }
@@ -206,7 +216,25 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 
         #region IDisposable
-        public void Dispose() { }
+
+        /// <summary>_disposed</summary>
+        private bool _disposed;
+
+        /// <summary>Dispose the store</summary>
+        public void Dispose()
+        {
+            this._disposed = true;
+        }
+
+        /// <summary>Throws if this class has been disposed.</summary>
+        protected void ThrowIfDisposed()
+        {
+            if (this._disposed)
+            {
+                throw new ObjectDisposedException(GetType().Name);
+            }
+        }
+
         #endregion
     }
 }
