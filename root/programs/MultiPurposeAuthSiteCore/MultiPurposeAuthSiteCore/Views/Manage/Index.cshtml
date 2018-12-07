@@ -20,10 +20,6 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Co
-@using MultiPurposeAuthSite.Resources
-@using MultiPurposeAuthSite.ViewModels
-
 @using Microsoft.AspNetCore.Http
 @using Microsoft.AspNetCore.Http.Extensions
 
@@ -186,9 +182,11 @@
             @if (Config.CanEdit2FA)
             {
                 // 2要素認証の変更が許可されている場合。
+
+                // 2要素認証(SMS
                 <dt>@ManageViews.IndexTwoFactorAuth :</dt>
                 <dd>
-                    @if (Model.TwoFactor)
+                    @if (Model.TwoFactorSMS)
                     {
                         using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
@@ -207,6 +205,17 @@
                                 @ManageViews.IndexTwoFactorAuthDisableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabledButton" class="btn btn-link" />]
                             </text>
                         }
+                    }
+                </dd>
+
+                // 2要素認証(TOTP
+                <dt>TOTP :</dt>
+                <dd>
+                    @Html.ActionLink("EnableAuthenticator", "EnableAuthenticator")
+
+                    @if (Model.TwoFactorTOTP)
+                    {
+                        @Html.ActionLink("ResetAuthenticator", "ResetAuthenticator")
                     }
                 </dd>
             }

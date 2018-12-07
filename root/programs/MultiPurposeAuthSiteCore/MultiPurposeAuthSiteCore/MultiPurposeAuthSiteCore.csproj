@@ -88,5 +88,11 @@
       <HintPath>..\..\Frameworks\Infrastructure\Build_netcore20\netcoreapp2.0\OpenTouryo.Public.dll</HintPath>
     </Reference>
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="Views\Manage\EnableAuthenticator.cshtml">
+      <Pack>$(IncludeRazorContentInPack)</Pack>
+    </Content>
+  </ItemGroup>
   
 </Project>

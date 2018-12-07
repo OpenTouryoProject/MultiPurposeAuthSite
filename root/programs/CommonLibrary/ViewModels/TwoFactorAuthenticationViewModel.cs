@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：LoginWithRecoveryCodeViewModel
-//* クラス日本語名  ：LoginWithRecoveryCodeViewModel
+//* クラス名        ：ManageTwoFactorAuthenticationViewModel
+//* クラス日本語名  ：ManageTwoFactorAuthenticationViewModel
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -18,19 +18,14 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace MultiPurposeAuthSite.Models.AccountViewModels
+namespace MultiPurposeAuthSite.ViewModels
 {
-    public class LoginWithRecoveryCodeViewModel
+    public class ManageTwoFactorAuthenticationViewModel
     {
-        [Required]
-        [DataType(DataType.Text)]
-        [Display(Name = "Recovery Code")]
-        public string RecoveryCode { get; set; }
+        public bool HasAuthenticator { get; set; }
+
+        public int RecoveryCodesLeft { get; set; }
+
+        public bool Is2faEnabled { get; set; }
     }
 }

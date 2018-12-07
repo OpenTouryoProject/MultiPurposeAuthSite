@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：ResetPasswordViewModel
-//* クラス日本語名  ：ResetPasswordViewModel
+//* クラス名        ：AccountLoginWith2faViewModel
+//* クラス日本語名  ：AccountLoginWith2faViewModel
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -18,30 +18,21 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
 
-namespace MultiPurposeAuthSite.Models.AccountViewModels
+namespace MultiPurposeAuthSite.ViewModels
 {
-    public class ResetPasswordViewModel
+    public class AccountLoginWith2faViewModel
     {
         [Required]
-        [EmailAddress]
-        public string Email { get; set; }
+        [StringLength(7, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [DataType(DataType.Text)]
+        [Display(Name = "Authenticator code")]
+        public string TwoFactorCode { get; set; }
 
-        [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
-        [DataType(DataType.Password)]
-        public string Password { get; set; }
+        [Display(Name = "Remember this machine")]
+        public bool RememberMachine { get; set; }
 
-        [DataType(DataType.Password)]
-        [Display(Name = "Confirm password")]
-        [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
-        public string ConfirmPassword { get; set; }
-
-        public string Code { get; set; }
+        public bool RememberMe { get; set; }
     }
 }

@@ -106,6 +106,8 @@ namespace MultiPurposeAuthSite.Data
         IUserLockoutStore<ApplicationUser>,
         IUserTwoFactorStore<ApplicationUser>,
         IUserAuthenticatorKeyStore<ApplicationUser>,
+        IUserAuthenticationTokenStore<ApplicationUser>,
+        IUserTwoFactorRecoveryCodeStore<ApplicationUser>,
         IUserLoginStore<ApplicationUser>,
         IUserClaimStore<ApplicationUser>
     {
@@ -731,62 +733,6 @@ namespace MultiPurposeAuthSite.Data
 
         #region TOTP
 
-        #region Prerequisite private methods
-
-        /// <summary>CreateUserToken</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="name">string</param>
-        /// <param name="value">string</param>
-        /// <returns>IdentityUserToken(string)</returns>
-        private IdentityUserToken<string> CreateUserToken(ApplicationUser user, string loginProvider, string name, string value)
-        {
-            return new IdentityUserToken<string>
-            {
-                UserId = user.Id,
-                LoginProvider = loginProvider,
-                Name = name,
-                Value = value
-            };
-        }
-
-        /// <summary>AddUserTokenAsync</summary>
-        /// <param name="token">IdentityUserToken(string)</param>
-        /// <returns>－</returns>
-        private void AddUserTokenAsync(IdentityUserToken<string> token)
-        {
-            CmnUserStore.FindById(token.UserId).Tokens.Add(token);
-            return;
-        }
-
-        /// <summary>FindTokenAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="name">string</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>IdentityUserToken(string)</returns>
-        private IdentityUserToken<string> FindTokenAsync(ApplicationUser user, string loginProvider, string name, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            IdentityUserToken<string> token = user.Tokens.FirstOrDefault(
-                t => (t.LoginProvider == loginProvider && t.Name == name));
-
-            return token;
-        }
-
-        /// <summary>RemoveUserTokenAsync</summary>
-        /// <param name="token">IdentityUserToken(string)</param>
-        /// <returns>－</returns>
-        private Task RemoveUserTokenAsync(IdentityUserToken<string> token)
-        {
-            CmnUserStore.FindById(token.UserId).Tokens.Remove(token);
-            return Task.FromResult(0);
-        }
-
-        #endregion
-
         #region IUserAuthenticationTokenStore
 
         /// <summary>SetTokenAsync</summary>
@@ -801,17 +747,7 @@ namespace MultiPurposeAuthSite.Data
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
 
-            IdentityUserToken<string> token = FindTokenAsync(user, loginProvider, name, cancellationToken);
-
-            if (token == null)
-            {
-                AddUserTokenAsync(CreateUserToken(user, loginProvider, name, value));
-            }
-            else
-            {
-                token.Value = value;
-            }
-
+            CmnUserStore.SetToken(user, loginProvider, name, value);
             return Task.FromResult(0);
         }
 
@@ -826,8 +762,8 @@ namespace MultiPurposeAuthSite.Data
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
 
-            IdentityUserToken<string> token = FindTokenAsync(user, loginProvider, name, cancellationToken);
-            return Task.FromResult(token?.Value);
+            string token = CmnUserStore.GetToken(user, loginProvider, name);
+            return Task.FromResult(token);
         }
 
         /// <summary>RemoveTokenAsync</summary>
@@ -841,13 +777,7 @@ namespace MultiPurposeAuthSite.Data
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
 
-            IdentityUserToken<string> token = FindTokenAsync(user, loginProvider, name, cancellationToken);
-
-            if (token != null)
-            {
-                RemoveUserTokenAsync(token);
-            }
-
+            CmnUserStore.RemoveToken(user, loginProvider, name);
             return Task.FromResult(0);
         }
 
@@ -855,32 +785,16 @@ namespace MultiPurposeAuthSite.Data
 
         #region IUserTwoFactorRecoveryCodeStore
 
-        /// <summary>InternalLoginProvider</summary>
-        private readonly string InternalLoginProvider = "[AspNetUserStore]";
-        /// <summary>AuthenticatorKeyTokenName</summary>
-        private readonly string AuthenticatorKeyTokenName = "AuthenticatorKey";
-        /// <summary>RecoveryCodeTokenName</summary>
-        private readonly string RecoveryCodeTokenName = "RecoveryCodes";
-
         /// <summary>CountCodesAsync</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="cancellationToken">CancellationToken</param>
         /// <returns>int</returns>
-        public async Task<int> CountCodesAsync(ApplicationUser user, CancellationToken cancellationToken)
+        public Task<int> CountCodesAsync(ApplicationUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             this.ThrowIfDisposed();
 
-            string mergedCodes = await GetTokenAsync(user, this.InternalLoginProvider, this.RecoveryCodeTokenName, cancellationToken) ?? "";
-
-            if (string.IsNullOrEmpty(mergedCodes))
-            {
-                return mergedCodes.Split(';').Length;
-            }
-            else
-            {
-                return 0;
-            }
+            return Task.FromResult(CmnUserStore.CountCodes(user));
         }
 
         /// <summary>ReplaceCodesAsync</summary>
@@ -893,8 +807,8 @@ namespace MultiPurposeAuthSite.Data
             cancellationToken.ThrowIfCancellationRequested();
             this.ThrowIfDisposed();
 
-            string mergedCodes = string.Join(";", recoveryCodes);
-            return SetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, mergedCodes, cancellationToken);
+            CmnUserStore.ReplaceCodes(user, recoveryCodes);
+            return Task.FromResult(0);
         }
 
         /// <summary>RedeemCodeAsync</summary>
@@ -902,20 +816,12 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="code">string</param>
         /// <param name="cancellationToken">CancellationToken</param>
         /// <returns>bool</returns>
-        public async Task<bool> RedeemCodeAsync(ApplicationUser user, string code, CancellationToken cancellationToken)
+        public Task<bool> RedeemCodeAsync(ApplicationUser user, string code, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             this.ThrowIfDisposed();
 
-            string mergedCodes = await GetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, cancellationToken) ?? "";
-            string[] splitCodes = mergedCodes.Split(';');
-            if (splitCodes.Contains(code))
-            {
-                List<string> updatedCodes = new List<string>(splitCodes.Where(s => s != code));
-                await ReplaceCodesAsync(user, updatedCodes, cancellationToken);
-                return true;
-            }
-            return false;
+            return Task.FromResult(CmnUserStore.RedeemCode(user, code));
         }
 
         #endregion

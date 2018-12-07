@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：SetPasswordViewModel
-//* クラス日本語名  ：SetPasswordViewModel
+//* クラス名        ：ShowRecoveryCodesViewModel
+//* クラス日本語名  ：ShowRecoveryCodesViewModel
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -18,27 +18,10 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace MultiPurposeAuthSite.Models.ManageViewModels
+namespace MultiPurposeAuthSite.ViewModels
 {
-    public class SetPasswordViewModel
+    public class ManageShowRecoveryCodesViewModel
     {
-        [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
-        [DataType(DataType.Password)]
-        [Display(Name = "New password")]
-        public string NewPassword { get; set; }
-
-        [DataType(DataType.Password)]
-        [Display(Name = "Confirm new password")]
-        [Compare("NewPassword", ErrorMessage = "The new password and confirmation password do not match.")]
-        public string ConfirmPassword { get; set; }
-
-        public string StatusMessage { get; set; }
+        public string[] RecoveryCodes { get; set; }
     }
 }

@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：ExternalLogin
-    //* クラス日本語名  ：ExternalLogin
+    //* クラス名        ：GenerateRecoveryCodes
+    //* クラス日本語名  ：GenerateRecoveryCodes
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -20,9 +20,8 @@
     //**********************************************************************************
 *@
 
-@model ExternalLoginViewModel
 @{
-    ViewData["Title"] = "Register";
+    ViewData["Title"] = "Generate two-factor authentication (2FA) recovery codes";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -31,29 +30,28 @@
 }
 
 <h2>@ViewData["Title"]</h2>
-<h4>Associate your @ViewData["LoginProvider"] account.</h4>
-<hr />
 
-<p class="text-info">
-    You've successfully authenticated with <strong>@ViewData["LoginProvider"]</strong>.
-    Please enter an email address for this site below and click the Register button to finish
-    logging in.
-</p>
-
-<div class="row">
-    <div class="col-md-4">
-        <form asp-action="ExternalLoginConfirmation" asp-route-returnurl="@ViewData["ReturnUrl"]" method="post">
-            <div asp-validation-summary="All" class="text-danger"></div>
-            <div class="form-group">
-                <label asp-for="Email"></label>
-                <input asp-for="Email" class="form-control" />
-                <span asp-validation-for="Email" class="text-danger"></span>
-            </div>
-            <button type="submit" class="btn btn-default">Register</button>
-        </form>
-    </div>
+<div class="alert alert-warning" role="alert">
+    <p>
+        <span class="glyphicon glyphicon-warning-sign"></span>
+        <strong>This action generates new recovery codes.</strong>
+    </p>
+    <p>
+        If you lose your device and don't have the recovery codes you will lose access to your account.
+    </p>
+    <p>
+        Generating new recovery codes does not change the keys used in authenticator apps. If you wish to change the key
+        used in an authenticator app you should <a asp-action="ResetAuthenticatorWarning">reset your authenticator keys.</a>
+    </p>
 </div>
 
+<div>
+    <form asp-action="GenerateRecoveryCodes" method="post" class="form-group">
+        <button class="btn btn-danger" type="submit">Generate Recovery Codes</button>
+    </form>
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
-    @await Html.PartialAsync("_ValidationScriptsPartial")
+    <!-- Footer 部の section -->
 }

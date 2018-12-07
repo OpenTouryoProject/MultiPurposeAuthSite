@@ -89,8 +89,6 @@ namespace MultiPurposeAuthSite.Controllers
         private IEmailSender _emailSender = null;
         /// <summary>ISmsSender</summary>
         private ISmsSender _smsSender = null;
-        /// <summary>ILogger</summary>
-        private ILogger _logger = null;
         #endregion
 
         #endregion
@@ -102,14 +100,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="signInManager">SignInManager</param>
         /// <param name="emailSender">IEmailSender</param>
         /// <param name="smsSender">ISmsSender</param>
-        /// <param name="logger">ILogger</param>
         public AccountController(
             UserManager<ApplicationUser> userManager,
             RoleManager<ApplicationRole> roleManager,
             SignInManager<ApplicationUser> signInManager,
             IEmailSender emailSender,
-            ISmsSender smsSender,
-            ILogger<AccountController> logger)
+            ISmsSender smsSender)
         {
             // UserManager
             this._userManager = userManager;
@@ -121,8 +117,6 @@ namespace MultiPurposeAuthSite.Controllers
             this._emailSender = emailSender;
             // ISmsSender
             this._smsSender = smsSender;
-            // ILogger
-            this._logger = logger;
         }
         #endregion
 
@@ -187,15 +181,6 @@ namespace MultiPurposeAuthSite.Controllers
             get
             {
                 return this._smsSender;
-            }
-        }
-
-        /// <summary>ILogger</summary>
-        private ILogger Logger
-        {
-            get
-            {
-                return this._logger;
             }
         }
 

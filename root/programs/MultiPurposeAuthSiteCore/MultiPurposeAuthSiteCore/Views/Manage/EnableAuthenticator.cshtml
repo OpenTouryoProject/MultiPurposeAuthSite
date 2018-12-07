@@ -8,7 +8,7 @@
 
     //**********************************************************************************
     //* クラス名        ：EnableAuthenticator
-    //* クラス日本語名  ：EnableAuthenticator
+    //* クラス日本語名  ：EnableAuthenticatorのView
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -16,17 +16,25 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2018/11/30  西野 大介         新規
+    //*  2018/12/07  西野 大介         新規
     //**********************************************************************************
 *@
 
-@model EnableAuthenticatorViewModel
+@model ManageEnableAuthenticatorViewModel
 @{
-    ViewData["Title"] = "Enable authenticator";
-    ViewData.AddActivePage(ManageNavPages.TwoFactorAuthentication);
+    ViewBag.Title = AccountViews.VerifyEmailAddressTitle; @*流用のため*@
 }
 
-<h4>@ViewData["Title"]</h4>
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<p class="text-info">
+    @AccountViews.VerifyEmailAddressP @*流用のため*@
+</p>
+
 <div>
     <p>To use an authenticator app go through the following steps:</p>
     <ol class="list">
@@ -43,7 +51,6 @@
         </li>
         <li>
             <p>Scan the QR Code or enter this key <kbd>@Model.SharedKey</kbd> into your two factor authenticator app. Spaces and casing do not matter.</p>
-            <div class="alert alert-info">To enable QR code generation please read our <a href="https://go.microsoft.com/fwlink/?Linkid=852423">documentation</a>.</div>
             <div id="qrCode"></div>
             <div id="qrCodeData" data-url="@Model.AuthenticatorUri"></div>
         </li>
@@ -69,6 +76,16 @@
     </ol>
 </div>
 
-@section Scripts {
-    @await Html.PartialAsync("_ValidationScriptsPartial")
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+    <script type="text/javascript" src="~/js/qrcode.js"></script>
+    <script type="text/javascript">
+        new QRCode(document.getElementById("qrCode"),
+            {
+                text: "@Html.Raw(Model.AuthenticatorUri)",
+                width: 150,
+                height: 150
+            });
+    </script>
 }

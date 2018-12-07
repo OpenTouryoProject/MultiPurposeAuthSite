@@ -46,8 +46,16 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>PhoneNumber（電話番号）</summary>
         public string PhoneNumber { get; set; }
 
+#if NETFX
         /// <summary>TwoFactorAuthentication(2FA)</summary>
         public bool TwoFactor { get; set; }
+#else
+        /// <summary>SMS TwoFactorAuthentication(2FA)</summary>
+        public bool TwoFactorSMS { get; set; }
+
+        /// <summary>TOTP TwoFactorAuthentication(2FA)</summary>
+        public bool TwoFactorTOTP { get; set; }
+#endif
 
         /// <summary>HasPaymentInformation（支払元情報の有無）</summary>
         public bool HasPaymentInformation { get; set; }

@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：Lockout
-    //* クラス日本語名  ：Lockout
+    //* クラス名        ：ResetAuthenticator
+    //* クラス日本語名  ：ResetAuthenticator
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -21,7 +21,7 @@
 *@
 
 @{
-    ViewData["Title"] = "Locked out";
+    ViewData["Title"] = "Reset authenticator key";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -29,11 +29,24 @@
     <!-- Head 部の section -->
 }
 
-<header>
-    <h2 class="text-danger">@ViewData["Title"]</h2>
-    <p class="text-danger">This account has been locked out, please try again later.</p>
-</header>
+<h4>@ViewData["Title"]</h4>
+<div class="alert alert-warning" role="alert">
+    <p>
+        <span class="glyphicon glyphicon-warning-sign"></span>
+        <strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
+    </p>
+    <p>
+        This process disables 2FA until you verify your authenticator app and will also reset your 2FA recovery codes.
+        If you do not complete your authenticator app configuration you may lose access to your account.
+    </p>
+</div>
+<div>
+    <form asp-action="ResetAuthenticator" method="post" class="form-group">
+        <button class="btn btn-danger" type="submit">Reset authenticator key</button>
+    </form>
+</div>
 
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
 }
