@@ -1903,7 +1903,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-
         #region ID連携
 
         /// <summary>
@@ -2762,7 +2761,7 @@ namespace MultiPurposeAuthSite.Controllers
             // E-mailの送信
             string subject = GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm);
             string body = GetContentOfLetter.Get("EmailConfirmationMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm_msg);
-            await EmailSender.SendAsync(user.Id, subject, string.Format(body, callbackUrl, user.UserName));
+            await EmailSender.SendAsync(user.Email, subject, string.Format(body, callbackUrl, user.UserName));
         }
 
         /// <summary>
@@ -2785,8 +2784,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // E-mailの送信
             await EmailSender.SendAsync(
-                    user.Id,
-                    GetContentOfLetter.Get("PasswordResetTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset),
+                    user.Email, GetContentOfLetter.Get("PasswordResetTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset),
                     string.Format(GetContentOfLetter.Get("PasswordResetMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset_msg), callbackUrl));
         }
 
@@ -2802,7 +2800,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             // アカウント登録の完了メールを送信
             await EmailSender.SendAsync(
-                GetContentOfLetter.Get("RegistationWasCompletedEmailTitle", CustomEncode.UTF_8, ""), user.Email,
+                user.Email, GetContentOfLetter.Get("RegistationWasCompletedEmailTitle", CustomEncode.UTF_8, ""), 
                 string.Format(GetContentOfLetter.Get("RegistationWasCompletedEmailMsg", CustomEncode.UTF_8, ""), user.UserName));
         }
 
@@ -2814,7 +2812,7 @@ namespace MultiPurposeAuthSite.Controllers
         {
             // パスワード リセット用のメールを送信
             await EmailSender.SendAsync(
-                GetContentOfLetter.Get("PasswordResetWasCompletedEmailTitle", CustomEncode.UTF_8, ""), user.Email,
+                user.Email, GetContentOfLetter.Get("PasswordResetWasCompletedEmailTitle", CustomEncode.UTF_8, ""),
                 string.Format(GetContentOfLetter.Get("PasswordResetWasCompletedEmailMsg", CustomEncode.UTF_8, ""), user.UserName));
         }
 

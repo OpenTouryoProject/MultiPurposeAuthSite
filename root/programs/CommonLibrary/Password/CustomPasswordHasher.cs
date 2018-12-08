@@ -54,7 +54,7 @@ namespace MultiPurposeAuthSite.Password
 #if NETFX
     public class CustomPasswordHasher : IPasswordHasher
 #else
-    public class CustomPasswordHasher : IPasswordHasher<ApplicationUser>
+    public class CustomPasswordHasher<TUser> : PasswordHasher<TUser> where TUser : class
 #endif
     {
         /// <summary>
@@ -68,7 +68,7 @@ namespace MultiPurposeAuthSite.Password
         /// <param name="user">ApplicationUser</param>
         /// <param name="password">password</param>
         /// <returns>hashedPassword</returns>
-        public string HashPassword(ApplicationUser user, string password)
+        public override string HashPassword(TUser user, string password)
 #endif
         {
             //// $0$ バージョン
@@ -92,6 +92,7 @@ namespace MultiPurposeAuthSite.Password
             return "$0$" + "." + password;
         }
 
+#if NETFX
         /// <summary>Version 1</summary>
         /// <param name="password">password</param>
         /// <returns>hashPassword</returns>
@@ -107,6 +108,7 @@ namespace MultiPurposeAuthSite.Password
                     Config.StretchCount    // stretch count
                 );
         }
+#endif
 
         /// <summary>Version 2</summary>
         /// <param name="password">password</param>
@@ -117,7 +119,7 @@ namespace MultiPurposeAuthSite.Password
             return "$2$" + "." +
                 GetPasswordHashV2.GetSaltedPassword(
                     password,                            // password
-                    EnumKeyedHashAlgorithm.MACTripleDES, // algorithm
+                    EnumKeyedHashAlgorithm.HMACSHA512,   // algorithm
                     GetPassword.Generate(10, 3),         // key(pwd)
                     10,                                  // salt length
                     Config.StretchCount    // stretch count
@@ -140,8 +142,8 @@ namespace MultiPurposeAuthSite.Password
         /// <param name="hashedPassword">hashedPassword</param>
         /// <param name="providedPassword">providedPassword</param>
         /// <returns>検証結果</returns>
-        public PasswordVerificationResult VerifyHashedPassword(
-            ApplicationUser user, string hashedPassword, string providedPassword)
+        public override PasswordVerificationResult VerifyHashedPassword(
+            TUser user, string hashedPassword, string providedPassword)
 #endif  
         {
             if (string.IsNullOrEmpty(hashedPassword))
@@ -156,11 +158,13 @@ namespace MultiPurposeAuthSite.Password
                 {
                     return this.V0VerifyHashAlgorithm(hashedPassword, providedPassword);
                 }
+#if NETFX
                 else if (hashedPassword.IndexOf("$1$") == 0)
                 {
                     return this.V1VerifyHashAlgorithm(hashedPassword, providedPassword);
                 }
-                else  if (hashedPassword.IndexOf("$2$") == 0)
+#endif
+                else if (hashedPassword.IndexOf("$2$") == 0)
                 {
                     return this.V2VerifyHashAlgorithm(hashedPassword, providedPassword);
                 }
@@ -171,7 +175,7 @@ namespace MultiPurposeAuthSite.Password
             }
         }
 
-        #region Verify Hash AlgorithmのVersion管理
+#region Verify Hash AlgorithmのVersion管理
         
         /// <summary>テスト用 Version 0</summary>
         /// <param name="hashedPassword">hashedPassword</param>
@@ -190,6 +194,7 @@ namespace MultiPurposeAuthSite.Password
             }
         }
 
+#if NETFX
         /// <summary>Version 1</summary>
         /// <param name="hashedPassword">hashedPassword</param>
         /// <param name="providedPassword">providedPassword</param>
@@ -209,6 +214,7 @@ namespace MultiPurposeAuthSite.Password
                 return PasswordVerificationResult.Failed;
             }
         }
+#endif
 
         /// <summary>Version 2</summary>
         /// <param name="hashedPassword">hashedPassword</param>
@@ -219,7 +225,7 @@ namespace MultiPurposeAuthSite.Password
         {   
             if(GetPasswordHashV2.EqualSaltedPassword(
                 providedPassword,
-                EnumKeyedHashAlgorithm.MACTripleDES,
+                EnumKeyedHashAlgorithm.HMACSHA512,
                 hashedPassword.Substring(4)))
             {
                 return PasswordVerificationResult.Success;
@@ -230,6 +236,6 @@ namespace MultiPurposeAuthSite.Password
             }
         }
 
-        #endregion
+#endregion
     }
 }

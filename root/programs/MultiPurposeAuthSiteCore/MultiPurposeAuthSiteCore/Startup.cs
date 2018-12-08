@@ -20,6 +20,7 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Notifications;
 
 using System;
@@ -249,6 +250,10 @@ namespace MultiPurposeAuthSite
             //    options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 
             // Identity
+
+            // must be added before AddIdentity()
+            services.AddScoped<IPasswordHasher<ApplicationUser>, CustomPasswordHasher<ApplicationUser>>();
+
             services.AddIdentity<ApplicationUser, ApplicationRole>()
                 //.AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddUserStore<UserStoreCore>()

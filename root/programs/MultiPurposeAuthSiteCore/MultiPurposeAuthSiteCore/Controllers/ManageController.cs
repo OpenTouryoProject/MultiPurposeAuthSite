@@ -2952,7 +2952,7 @@ namespace MultiPurposeAuthSite.Controllers
                     new { userId = uid, code = code }, protocol: HttpContext.Request.Scheme
                 );
 
-            await EmailSender.SendAsync(Resources.AccountController.SendEmail_emailconfirm, email,
+            await EmailSender.SendAsync(email, Resources.AccountController.SendEmail_emailconfirm,
                 string.Format(Resources.AccountController.SendEmail_emailconfirm_msg, callbackUrl));
         }
 
@@ -2963,7 +2963,7 @@ namespace MultiPurposeAuthSite.Controllers
         private async void SendChangeCompletedEmail(ApplicationUser user)
         {
             // アカウント登録の完了メールを送信
-            await EmailSender.SendAsync(GetContentOfLetter.Get("AccountChangeWasCompletedEmailTitle", CustomEncode.UTF_8, ""), user.Email,
+            await EmailSender.SendAsync(user.Email, GetContentOfLetter.Get("AccountChangeWasCompletedEmailTitle", CustomEncode.UTF_8, ""),
                 string.Format(GetContentOfLetter.Get("AccountChangeWasCompletedEmailMsg", CustomEncode.UTF_8, ""), user.UserName));
         }
 

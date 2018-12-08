@@ -229,7 +229,7 @@ namespace MultiPurposeAuthSite.Data
 #if NETFX
                     user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
 #else
-                    user.PasswordHash = (new CustomPasswordHasher()).HashPassword(user, Config.AdministratorPWD);
+                    user.PasswordHash = (new CustomPasswordHasher<ApplicationUser>()).HashPassword(user, Config.AdministratorPWD);
 #endif
 
                     return user;
@@ -336,7 +336,7 @@ namespace MultiPurposeAuthSite.Data
 #if NETFX
                         user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
 #else
-                        user.PasswordHash = (new CustomPasswordHasher()).HashPassword(user, Config.AdministratorPWD);
+                        user.PasswordHash = (new CustomPasswordHasher<ApplicationUser>()).HashPassword(user, Config.AdministratorPWD);
 #endif
                     }
 

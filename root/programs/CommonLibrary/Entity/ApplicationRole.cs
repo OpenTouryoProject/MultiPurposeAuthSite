@@ -56,19 +56,12 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>Name</summary>
         public string Name { get; set; }
 
-        /// <summary>NormalizedName</summary>
-        public string NormalizedName
-        {
-            set
-            {
-                if (this.Name.ToLower() != value)
-                    this.Name = value;
-            }
-            get
-            {
-                return this.Name.ToLower();
-            }
-        }
+        /// <summary>
+        /// NormalizedName
+        /// Nameを大文字化した値が自動的にセットされる。
+        /// これをUserStoreに登録しておけば、検索し易くなる。
+        /// </summary>
+        public string NormalizedName { get; set; }
 
         #endregion
 

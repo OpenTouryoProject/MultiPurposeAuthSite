@@ -158,20 +158,11 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         public string UserName { get; set; }
 
         /// <summary>
-        /// .UserName.ToLower();
+        /// NormalizedUserName
+        /// UserNameを大文字化した値が自動的にセットされる。
+        /// これをUserStoreに登録しておけば、検索し易くなる。
         /// </summary>
-        public string NormalizedUserName
-        {
-            set
-            {
-                if (this.UserName.ToLower() != value)
-                    this.UserName = value;
-            }
-            get
-            {
-                return this.UserName.ToLower();
-            }
-        }
+        public string NormalizedUserName { get; set; }
 
         /// <summary>salted / hashed form of the user password</summary>
         private string _passwordHash = "";
@@ -218,20 +209,11 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         public bool EmailConfirmed { get; set; }
 
         /// <summary>
-        /// .Email.ToLower();
+        /// NormalizedEmail
+        /// Emailを大文字化した値が自動的にセットされる。
+        /// これをUserStoreに登録しておけば、検索し易くなる。
         /// </summary>
-        public string NormalizedEmail
-        {
-            set
-            {
-                if (this.Email.ToLower() != value)
-                    this.Email = value;
-            }
-            get
-            {
-                return this.Email.ToLower();
-            }
-        }
+        public string NormalizedEmail { get; set; }
 
         #endregion
 
