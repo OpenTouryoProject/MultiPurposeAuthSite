@@ -378,12 +378,23 @@ namespace MultiPurposeAuthSite.Controllers
                                     // EmailConfirmedとは別の2FAが必要。
 
                                     // 検証を求める（2FAなど）。
-                                    return this.RedirectToAction(
-                                        "SendCode", new
-                                        {
-                                            ReturnUrl = model.ReturnUrl,  // 戻り先のURL
-                                            RememberMe = model.RememberMe // アカウント記憶
-                                        });
+                                    if (user.Tokens == null)
+                                    {
+                                        // Email, SMS
+                                        return this.RedirectToAction(
+                                            "SendCode", new
+                                            {
+                                                ReturnUrl = model.ReturnUrl,  // 戻り先のURL
+                                                RememberMe = model.RememberMe // アカウント記憶
+                                            });
+                                    }
+                                    else
+                                    {
+                                        // TOTP
+                                        return this.RedirectToAction(
+                                            nameof(LoginWithTwoFactorAuthenticator),
+                                            new { model.ReturnUrl, model.RememberMe });
+                                    }
                                 }
                                 else if (result.IsNotAllowed)// == SignInResult.Failed)
                                 {
@@ -1235,6 +1246,8 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 2FA (2 要素認証)
 
+        #region Email, SMS
+
         #region 2FA画面のコード送信
 
         /// <summary>
@@ -1448,7 +1461,141 @@ namespace MultiPurposeAuthSite.Controllers
             return View(model);
         }
 
-        #endregion      
+        #endregion
+
+        #endregion
+
+        #region TOTP
+
+        #region With authenticator
+
+        /// <summary>LoginWithTwoFactorAuthenticator</summary>
+        /// <param name="rememberMe">bool</param>
+        /// <param name="returnUrl">string</param>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult LoginWithTwoFactorAuthenticator(bool rememberMe, string returnUrl = null)
+        {
+            //// Ensure the user has gone through the username & password screen first
+            //var user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+            AccountLoginWithTwoFactorAuthenticatorViewModel model 
+                = new AccountLoginWithTwoFactorAuthenticatorViewModel { RememberMe = rememberMe };
+
+            ViewData["ReturnUrl"] = returnUrl;
+
+            return View(model);
+        }
+
+        /// <summary>LoginWithTwoFactorAuthenticator</summary>
+        /// <param name="model">AccountLoginWithTwoFactorAuthenticatorViewModel</param>
+        /// <param name="rememberMe">bool</param>
+        /// <param name="returnUrl">string</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> LoginWithTwoFactorAuthenticator(
+            AccountLoginWithTwoFactorAuthenticatorViewModel model,
+            bool rememberMe, string returnUrl = null)
+        {
+            if (ModelState.IsValid)
+            {
+                //// Ensure the user has gone through the username & password screen first
+                //var user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+                Microsoft.AspNetCore.Identity.SignInResult result
+                    = await SignInManager.TwoFactorAuthenticatorSignInAsync(
+                        model.TwoFactorCode.Replace(" ", string.Empty).Replace("-", string.Empty),
+                        rememberMe, model.RememberMachine);
+
+                if (result.Succeeded)
+                {
+                    //_logger.LogInformation("User with ID {UserId} logged in with 2fa.", user.Id);
+                    return RedirectToLocal(returnUrl);
+                }
+                else if (result.IsLockedOut)
+                {
+                    //_logger.LogWarning("User with ID {UserId} account locked out.", user.Id);
+                    return RedirectToAction("Lockout");
+                }
+                else
+                {
+                    //_logger.LogWarning("Invalid authenticator code entered for user with ID {UserId}.", user.Id);
+                    ModelState.AddModelError(string.Empty, "Invalid authenticator code.");
+                    return View();
+                }
+            }
+            else
+            {
+                return View(model);
+            }
+        }
+
+        #endregion
+
+        #region With recovery code
+
+        /// <summary>LoginWithTwoFactorAuthenticatorRecoveryCode</summary>
+        /// <param name="returnUrl">string</param>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult LoginWithTwoFactorAuthenticatorRecoveryCode(string returnUrl = null)
+        {
+            //// Ensure the user has gone through the username & password screen first
+            //var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+
+            ViewData["ReturnUrl"] = returnUrl;
+            return View();
+        }
+
+        /// <summary>LoginWithTwoFactorAuthenticatorRecoveryCode</summary>
+        /// <param name="model">AccountLoginWithTwoFactorAuthenticatorRecoveryCodeViewModel</param>
+        /// <param name="returnUrl">string</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LoginWithTwoFactorAuthenticatorRecoveryCode(
+            AccountLoginWithTwoFactorAuthenticatorRecoveryCodeViewModel model, string returnUrl = null)
+        {
+            if (ModelState.IsValid)
+            {
+                //// Ensure the user has gone through the username & password screen first
+                //var user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+                Microsoft.AspNetCore.Identity.SignInResult result
+                    = await SignInManager.TwoFactorRecoveryCodeSignInAsync(
+                        model.RecoveryCode.Replace(" ", string.Empty));
+
+                if (result.Succeeded)
+                {
+                    //_logger.LogInformation("User with ID {UserId} logged in with a recovery code.", user.Id);
+                    return RedirectToLocal(returnUrl);
+                }
+                if (result.IsLockedOut)
+                {
+                    //_logger.LogWarning("User with ID {UserId} account locked out.", user.Id);
+                    return RedirectToAction("Lockout");
+                }
+                else
+                {
+                    //_logger.LogWarning("Invalid recovery code entered for user with ID {UserId}", user.Id);
+                    ModelState.AddModelError(string.Empty, "Invalid recovery code entered.");
+                    return View();
+                }
+            }
+            else
+            {
+                return View(model);
+            }
+        }
+
+        #endregion
+
+        #endregion
 
         #endregion
 

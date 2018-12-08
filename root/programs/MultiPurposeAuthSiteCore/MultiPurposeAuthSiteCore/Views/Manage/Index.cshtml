@@ -183,10 +183,10 @@
             {
                 // 2要素認証の変更が許可されている場合。
 
-                // 2要素認証(SMS
+                // 2要素認証(Email, SMS
                 <dt>@ManageViews.IndexTwoFactorAuth :</dt>
                 <dd>
-                    @if (Model.TwoFactorSMS)
+                    @if (Model.TwoFactor)
                     {
                         using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
@@ -211,11 +211,15 @@
                 // 2要素認証(TOTP
                 <dt>TOTP :</dt>
                 <dd>
-                    @Html.ActionLink("EnableAuthenticator", "EnableAuthenticator")
-
-                    @if (Model.TwoFactorTOTP)
+                    @if (Model.TwoFactor)
                     {
-                        @Html.ActionLink("ResetAuthenticator", "ResetAuthenticator")
+                        @Html.ActionLink("Enable2FAAuthenticator", "EnableTwoFactorAuthenticator")<br />
+
+                        @if (Model.TwoFactorTOTP)
+                        {
+                            @Html.ActionLink("Manage2FAAuthenticator", "ManageTwoFactorAuthenticator")<br />
+                            @Html.ActionLink("Reset2FAAuthenticator", "ResetTwoFactorAuthenticator")
+                        }
                     }
                 </dd>
             }

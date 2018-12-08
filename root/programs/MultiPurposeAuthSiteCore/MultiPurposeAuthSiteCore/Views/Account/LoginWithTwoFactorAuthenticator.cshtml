@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：LoginWith2fa
-    //* クラス日本語名  ：LoginWith2fa
+    //* クラス名        ：LoginWithTwoFactorAuthenticator
+    //* クラス日本語名  ：LoginWithTwoFactorAuthenticator
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -20,9 +20,9 @@
     //**********************************************************************************
 *@
 
-@model AccountLoginWith2faViewModel
+@model AccountLoginWithTwoFactorAuthenticatorViewModel
 @{
-    ViewData["Title"] = "Two-factor authentication";
+    ViewBag.Title = "Two-factor authentication";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -30,7 +30,7 @@
     <!-- Head 部の section -->
 }
 
-<h2>@ViewData["Title"]</h2>
+<h2>@ViewBag.Title</h2>
 <hr />
 <p>Your login is protected with an authenticator app. Enter your authenticator code below.</p>
 <div class="row">
@@ -59,9 +59,10 @@
 </div>
 <p>
     Don't have access to your authenticator device? You can
-    <a asp-action="LoginWithRecoveryCode" asp-route-returnUrl="@ViewData["ReturnUrl"]">log in with a recovery code</a>.
+    <a asp-action="LoginWithTwoFactorAuthenticatorRecoveryCode" asp-route-returnUrl="@ViewData["ReturnUrl"]">log in with a recovery code</a>.
 </p>
 
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
-    @await Html.PartialAsync("_ValidationScriptsPartial")
+    <!-- Footer 部の section -->
 }

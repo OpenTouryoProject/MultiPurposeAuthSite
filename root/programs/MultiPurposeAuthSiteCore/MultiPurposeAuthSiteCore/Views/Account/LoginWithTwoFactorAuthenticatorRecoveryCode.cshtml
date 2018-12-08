@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：LoginWithRecoveryCode
-    //* クラス日本語名  ：LoginWithRecoveryCode
+    //* クラス名        ：LoginWithTwoFactorAuthenticatorRecoveryCode
+    //* クラス日本語名  ：LoginWithTwoFactorAuthenticatorRecoveryCode
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -20,9 +20,9 @@
     //**********************************************************************************
 *@
 
-@model AccountLoginWithRecoveryCodeViewModel
+@model AccountLoginWithTwoFactorAuthenticatorRecoveryCodeViewModel
 @{
-    ViewData["Title"] = "Recovery code verification";
+    ViewBag.Title = "Recovery code verification";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -30,7 +30,7 @@
     <!-- Head 部の section -->
 }
 
-<h2>@ViewData["Title"]</h2>
+<h2>@ViewBag.Title</h2>
 <hr />
 <p>
     You have requested to login with a recovery code. This login will not be remembered until you provide
@@ -50,6 +50,7 @@
     </div>
 </div>
 
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
-    @await Html.PartialAsync("_ValidationScriptsPartial")
+    <!-- Footer 部の section -->
 }

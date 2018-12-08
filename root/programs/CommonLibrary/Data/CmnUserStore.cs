@@ -2193,11 +2193,11 @@ namespace MultiPurposeAuthSite.Data
 
             if (string.IsNullOrEmpty(mergedCodes))
             {
-                return mergedCodes.Split(';').Length;
+                return 0;
             }
             else
             {
-                return 0;
+                return mergedCodes.Split(';').Length; 
             }
         }
 

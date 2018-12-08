@@ -327,9 +327,10 @@ namespace MultiPurposeAuthSite.Controllers
                     Email = user.Email,
                     // 電話番号
                     PhoneNumber = user.PhoneNumber,
-                    // SMS 2FA
-                    TwoFactorSMS = user.TwoFactorEnabled,
-                    // TOTP 2FA
+                    // 2FA
+                    // Email, SMS
+                    TwoFactor = user.TwoFactorEnabled,
+                    // TOTP
                     TwoFactorTOTP = !string.IsNullOrEmpty(authenticatorKey),
                     // 支払元情報
                     HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
@@ -749,7 +750,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Update (Edit/Change)
+        #region Update
 
         /// <summary>
         /// E-mailの編集画面（初期表示）
@@ -1255,7 +1256,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 2FA
 
-        #region 2FA(SMS)の有効化・無効化
+        #region 2FAの有効化・無効化
 
         /// <summary>
         /// 2FAの有効化
@@ -1319,84 +1320,78 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 2FA(TOTP)の有効化・無効化
 
-        /// <summary>EnableAuthenticator（初期表示）</summary>
+        #region EnableTwoFactorAuthenticator
+
+        /// <summary>EnableTwoFactorAuthenticator（初期表示）</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public async Task<ActionResult> EnableAuthenticator()
+        public async Task<ActionResult> EnableTwoFactorAuthenticator()
         {
-            // QRコード生成
             ApplicationUser user = await UserManager.GetUserAsync(User);
-            ManageEnableAuthenticatorViewModel model 
-                = new ManageEnableAuthenticatorViewModel();
+
+            // QRコード生成
+            ManageEnableTwoFactorAuthenticatorViewModel model 
+                = new ManageEnableTwoFactorAuthenticatorViewModel();
 
             await LoadSharedKeyAndQrCodeUriAsync(user, model);
 
             return View(model);
         }
 
-        /// <summary>EnableAuthenticator</summary>
-        /// <param name="model">ManageEnableAuthenticatorViewModel</param>
+        /// <summary>EnableTwoFactorAuthenticator</summary>
+        /// <param name="model">ManageEnableTwoFactorAuthenticatorViewModel</param>
         /// <returns>IActionResult</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> EnableAuthenticator(ManageEnableAuthenticatorViewModel model)
+        public async Task<ActionResult> EnableTwoFactorAuthenticator(ManageEnableTwoFactorAuthenticatorViewModel model)
         {
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
-            try
+            if (ModelState.IsValid)
             {
-                if (ModelState.IsValid)
+                // トークン検証
+                bool is2faTokenValid = await UserManager.VerifyTwoFactorTokenAsync(
+                    user, UserManager.Options.Tokens.AuthenticatorTokenProvider,
+                    model.Code.Replace(" ", string.Empty).Replace("-", string.Empty));
+
+                if (is2faTokenValid)
                 {
-                    string verificationCode = model.Code.Replace(" ", string.Empty).Replace("-", string.Empty);
+                    // valid
+                    Logging.MyOperationTrace(string.Format(
+                        "User with ID {0} has enabled 2FA with an authenticator app.", user.Id));
 
-                    // トークン検証
-                    bool is2faTokenValid = await UserManager.VerifyTwoFactorTokenAsync(
-                        user, UserManager.Options.Tokens.AuthenticatorTokenProvider, verificationCode);
+                    IEnumerable<string> recoveryCodes = await UserManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
+                    TempData[RecoveryCodesKey] = recoveryCodes.ToArray();
 
-                    if (is2faTokenValid)
-                    {
-                        // valid
-                        await UserManager.SetTwoFactorEnabledAsync(user, true);
-                        //Logger.LogInformation("User with ID {UserId} has enabled 2FA with an authenticator app.", user.Id);
-                        IEnumerable<string> recoveryCodes = await UserManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
-                        TempData[RecoveryCodesKey] = recoveryCodes.ToArray();
-
-                        return RedirectToAction(nameof(ShowRecoveryCodes));
-                    }
-                    else
-                    {
-                        // invalid
-                        ModelState.AddModelError("Code", "Verification code is invalid.");
-                        await LoadSharedKeyAndQrCodeUriAsync(user, model);
-                        return View(model);
-                    }
+                    return RedirectToAction(nameof(ShowTwoFactorAuthenticatorRecoveryCodes));
                 }
                 else
                 {
-                    // リトライ
+                    // invalid
+                    ModelState.AddModelError("Code", "Verification code is invalid.");
                     await LoadSharedKeyAndQrCodeUriAsync(user, model);
                     return View(model);
                 }
             }
-            catch(Exception ex)
+            else
             {
-                WriteLine.OutPutDebugAndConsole(ex.ToString());
-                // エラー画面
-                return View("Error");
+                // リトライ
+                await LoadSharedKeyAndQrCodeUriAsync(user, model);
+                return View(model);
             }
         }
 
-        /// <summary>ShowRecoveryCodes（初期表示）</summary>
+        /// <summary>ShowTwoFactorAuthenticatorRecoveryCodes（初期表示）</summary>
         /// <returns>IActionResult</returns>
         [HttpGet]
-        public ActionResult ShowRecoveryCodes()
+        public ActionResult ShowTwoFactorAuthenticatorRecoveryCodes()
         {
             string[] recoveryCodes = (string[])TempData[RecoveryCodesKey];
 
             if (recoveryCodes != null)
             {
-                ManageShowRecoveryCodesViewModel model
-                = new ManageShowRecoveryCodesViewModel { RecoveryCodes = recoveryCodes };
+                ManageShowTwoFactorAuthenticatorRecoveryCodesViewModel model
+                = new ManageShowTwoFactorAuthenticatorRecoveryCodesViewModel { RecoveryCodes = recoveryCodes };
 
                 return View(model); 
             }
@@ -1406,59 +1401,94 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
-        /// <summary>ResetAuthenticator（初期表示）</summary>
+        #endregion
+
+        #region ManageTwoFactorAuthenticator
+
+        /// <summary>ManageTwoFactorAuthenticator</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public async Task<ActionResult> ManageTwoFactorAuthenticator()
+        {
+            ApplicationUser user = await UserManager.GetUserAsync(User);
+
+            ManageTwoFactorAuthenticationViewModel model
+                = new ManageTwoFactorAuthenticationViewModel
+            {
+                Is2faEnabled = user.TwoFactorEnabled,
+                HasAuthenticator = !string.IsNullOrEmpty(await UserManager.GetAuthenticatorKeyAsync(user)),
+                RecoveryCodesLeft = await UserManager.CountRecoveryCodesAsync(user),
+            };
+
+            return View(model);
+        }
+
+        #endregion
+
+        #region ResetTwoFactorAuthenticator
+
+        /// <summary>ResetTwoFactorAuthenticator（初期表示）</summary>
         /// <returns>IActionResult</returns>
         [HttpGet]
-        public ActionResult ResetAuthenticator()
+        public ActionResult ResetTwoFactorAuthenticator()
         {
             return View();
         }
 
-        /// <summary>ResetAuthenticator</summary>
+        /// <summary>ResetTwoFactorAuthenticator</summary>
         /// <returns>ActionResult</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> ResetAuthenticator(string x)
+        public async Task<ActionResult> ResetTwoFactorAuthenticator(string x)
         {
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
             //await UserManager.SetTwoFactorEnabledAsync(user, false); // これ要る？
             // 確かにAuthenticatorKeyはRollingする（が、nullにはならない）。
             //await UserManager.ResetAuthenticatorKeyAsync(user);
+
+            // 自前で、AuthenticatorKeyとTokensを、nullクリアする
             user.Tokens = null;
             user.AuthenticatorKey = null;
             await UserManager.UpdateAsync(user);
-            //Logger.LogInformation("User with id '{UserId}' has reset their authentication app key.", user.Id);
+
+            Logging.MyOperationTrace(string.Format(
+                            "User with id '{0}' has reset their authentication app key.", user.Id));
 
             return RedirectToAction(nameof(Index));
         }
 
-        /// <summary>GenerateRecoveryCodes（初期表示）</summary>
+        #endregion
+
+        #region TwoFactorAuthenticatorRecoveryCodes
+
+        /// <summary>GenerateTwoFactorAuthenticatorRecoveryCodes（初期表示）</summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
-        public ActionResult GenerateRecoveryCodes()
+        public ActionResult GenerateTwoFactorAuthenticatorRecoveryCodes()
         {
             return View();
         }
 
-        /// <summary>GenerateRecoveryCodes</summary>
+        /// <summary>GenerateTwoFactorAuthenticatorRecoveryCodes</summary>
         /// <param name="s">dummy</param>
         /// <returns>ActionResult</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> GenerateRecoveryCodes(string s)
+        public async Task<ActionResult> GenerateTwoFactorAuthenticatorRecoveryCodes(string s)
         {
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
             if (user.TwoFactorEnabled)
             {
                 IEnumerable<string> recoveryCodes = await UserManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
-                //Logger.LogInformation("User with ID {UserId} has generated new 2FA recovery codes.", user.Id);
+                Logging.MyOperationTrace(string.Format(
+                            "User with ID {0} has generated new 2FA recovery codes.", user.Id));
 
-                ManageShowRecoveryCodesViewModel model
-                    = new ManageShowRecoveryCodesViewModel { RecoveryCodes = recoveryCodes.ToArray() };
+                ManageShowTwoFactorAuthenticatorRecoveryCodesViewModel model
+                    = new ManageShowTwoFactorAuthenticatorRecoveryCodesViewModel { RecoveryCodes = recoveryCodes.ToArray() };
 
-                return View("ShowRecoveryCodes", model);
+                return View("ShowTwoFactorAuthenticatorRecoveryCodes", model);
             }
             else
             {
@@ -1466,6 +1496,8 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }            
         }
+
+        #endregion
 
         #endregion
 
@@ -2937,8 +2969,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #endregion
-
         #region 2FA(TOTP)
 
         /// <summary>FormatKey</summary>
@@ -2980,7 +3010,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="user">ApplicationUser</param>
         /// <param name="model">EnableAuthenticatorViewModel</param>
         /// <returns>－</returns>
-        private async Task LoadSharedKeyAndQrCodeUriAsync(ApplicationUser user, ManageEnableAuthenticatorViewModel model)
+        private async Task LoadSharedKeyAndQrCodeUriAsync(ApplicationUser user, ManageEnableTwoFactorAuthenticatorViewModel model)
         {
             string unformattedKey = await UserManager.GetAuthenticatorKeyAsync(user);
             if (string.IsNullOrEmpty(unformattedKey))
@@ -2992,6 +3022,8 @@ namespace MultiPurposeAuthSite.Controllers
             model.SharedKey = FormatKey(unformattedKey);
             model.AuthenticatorUri = GenerateQrCodeUri(user.Email, unformattedKey);
         }
+
+        #endregion
 
         #endregion
     }

@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：AccountLoginWithRecoveryCodeViewModel
-//* クラス日本語名  ：AccountLoginWithRecoveryCodeViewModel
+//* クラス名        ：ManageEnableTwoFactorAuthenticatorViewModel
+//* クラス日本語名  ：ManageEnableTwoFactorAuthenticatorViewModel
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -19,14 +19,22 @@
 //**********************************************************************************
 
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace MultiPurposeAuthSite.ViewModels
 {
-    public class AccountLoginWithRecoveryCodeViewModel
+    public class ManageEnableTwoFactorAuthenticatorViewModel
     {
         [Required]
+        [StringLength(7, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
         [DataType(DataType.Text)]
-        [Display(Name = "Recovery Code")]
-        public string RecoveryCode { get; set; }
+        [Display(Name = "Verification Code")]
+        public string Code { get; set; }
+
+        [BindNever]
+        public string SharedKey { get; set; }
+
+        [BindNever]
+        public string AuthenticatorUri { get; set; }
     }
 }

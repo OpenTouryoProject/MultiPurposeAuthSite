@@ -90,7 +90,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="Views\Manage\EnableAuthenticator.cshtml">
+    <Content Update="Views\Manage\EnableTwoFactorAuthenticator.cshtml">
       <Pack>$(IncludeRazorContentInPack)</Pack>
     </Content>
   </ItemGroup>

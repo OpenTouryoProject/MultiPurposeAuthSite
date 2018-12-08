@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：ShowRecoveryCodes
-    //* クラス日本語名  ：ShowRecoveryCodes
+    //* クラス名        ：ResetTwoFactorAuthenticator
+    //* クラス日本語名  ：ResetTwoFactorAuthenticator
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -20,9 +20,8 @@
     //**********************************************************************************
 *@
 
-@model ManageShowRecoveryCodesViewModel
 @{
-    ViewData["Title"] = "Recovery codes";
+    ViewBag.Title = "Reset Two-factor authenticator";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -30,23 +29,21 @@
     <!-- Head 部の section -->
 }
 
-<h4>@ViewData["Title"]</h4>
+<h4>@ViewBag.Title</h4>
 <div class="alert alert-warning" role="alert">
     <p>
         <span class="glyphicon glyphicon-warning-sign"></span>
-        <strong>Put these codes in a safe place.</strong>
+        <strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
     </p>
     <p>
-        If you lose your device and don't have the recovery codes you will lose access to your account.
+        This process disables 2FA until you verify your authenticator app and will also reset your 2FA recovery codes.
+        If you do not complete your authenticator app configuration you may lose access to your account.
     </p>
 </div>
-<div class="row">
-    <div class="col-md-12">
-        @for (var row = 0; row < Model.RecoveryCodes.Length; row += 2)
-        {
-            <code>@Model.RecoveryCodes[row]</code><text>&nbsp;</text><code>@Model.RecoveryCodes[row + 1]</code><br />
-        }
-    </div>
+<div>
+    <form asp-action="ResetTwoFactorAuthenticator" method="post" class="form-group">
+        <button class="btn btn-danger" type="submit">Reset authenticator key</button>
+    </form>
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

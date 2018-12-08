@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：ResetAuthenticator
-    //* クラス日本語名  ：ResetAuthenticator
+    //* クラス名        ：GenerateTwoFactorAuthenticatorRecoveryCodes
+    //* クラス日本語名  ：GenerateTwoFactorAuthenticatorRecoveryCodes
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -21,7 +21,7 @@
 *@
 
 @{
-    ViewData["Title"] = "Reset authenticator key";
+    ViewBag.Title = "Generate Two-factor authenticator recovery codes";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -29,20 +29,25 @@
     <!-- Head 部の section -->
 }
 
-<h4>@ViewData["Title"]</h4>
+<h2>@ViewBag.Title</h2>
+
 <div class="alert alert-warning" role="alert">
     <p>
         <span class="glyphicon glyphicon-warning-sign"></span>
-        <strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
+        <strong>This action generates new recovery codes.</strong>
     </p>
     <p>
-        This process disables 2FA until you verify your authenticator app and will also reset your 2FA recovery codes.
-        If you do not complete your authenticator app configuration you may lose access to your account.
+        If you lose your device and don't have the recovery codes you will lose access to your account.
+    </p>
+    <p>
+        Generating new recovery codes does not change the keys used in authenticator apps. If you wish to change the key
+        used in an authenticator app you should <a asp-action="ResetAuthenticatorWarning">reset your authenticator keys.</a>
     </p>
 </div>
+
 <div>
-    <form asp-action="ResetAuthenticator" method="post" class="form-group">
-        <button class="btn btn-danger" type="submit">Reset authenticator key</button>
+    <form asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes" method="post" class="form-group">
+        <button class="btn btn-danger" type="submit">Generate Recovery Codes</button>
     </form>
 </div>
 
