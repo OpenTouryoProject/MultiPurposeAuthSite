@@ -162,7 +162,21 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// UserNameを大文字化した値が自動的にセットされる。
         /// これをUserStoreに登録しておけば、検索し易くなる。
         /// </summary>
-        public string NormalizedUserName { get; set; }
+        public string NormalizedUserName
+        {
+#if NETFX
+            set
+            {
+                // 捨て
+            }
+            get
+            {
+                return this.UserName.ToUpper();
+            }
+#else
+            set; get;
+#endif
+        }
 
         /// <summary>salted / hashed form of the user password</summary>
         private string _passwordHash = "";
@@ -213,7 +227,21 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// Emailを大文字化した値が自動的にセットされる。
         /// これをUserStoreに登録しておけば、検索し易くなる。
         /// </summary>
-        public string NormalizedEmail { get; set; }
+        public string NormalizedEmail
+        {
+#if NETFX
+            set
+            {
+                // 捨て
+            }
+            get
+            {
+                return this.Email.ToUpper();
+            }
+#else
+            set; get;
+#endif
+        }
 
         #endregion
 
@@ -294,8 +322,6 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
         #endregion
 
-#if NETFX
-#else
         // 要DBスキーマ拡張
         #region Properties after Identity 3.
 
@@ -304,13 +330,14 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
         #region Collection (private set)
 
+#if NETFX
+#else
         /// <summary>Totp Tokens</summary>
         public IList<IdentityUserToken<string>> TotpTokens { get; set; }
-
-        #endregion
-
-        #endregion
 #endif
+        #endregion
+
+        #endregion
 
         #region Additional properties
 

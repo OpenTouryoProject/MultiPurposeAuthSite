@@ -18,9 +18,9 @@ GO
 CREATE TABLE [Users](              -- Users
     [Id] [nvarchar](38) NOT NULL,            -- PK, guid
     [UserName] [nvarchar](256) NOT NULL,
-    [NormalizedUserName] [nvarchar](256) NULL,
+    [NormalizedUserName] [nvarchar](256) NOT NULL,
     [Email] [nvarchar](256) NULL,
-    [NormalizedEmail] [nvarchar](256) NULL,
+    [NormalizedEmail] [nvarchar](256) NOT NULL,
     [EmailConfirmed] [bit] NOT NULL,
     [PasswordHash] [nvarchar](max) NULL,
     [SecurityStamp] [nvarchar](max) NULL,
@@ -45,7 +45,7 @@ CREATE TABLE [Users](              -- Users
 CREATE TABLE [Roles](              -- Roles
     [Id] [nvarchar](38) NOT NULL,            -- PK, guid
     [Name] [nvarchar](256) NOT NULL,
-    [NormalizedName] [nvarchar](256) NULL,
+    [NormalizedName] [nvarchar](256) NOT NULL,
     CONSTRAINT [PK.Roles] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

@@ -1506,16 +1506,6 @@ namespace MultiPurposeAuthSite.Controllers
                                 result = await UserManager.RemoveClaimAsync(user.Id, nameClaim); // del-ins
                                 result = await UserManager.AddClaimAsync(user.Id, nameClaim);
 
-                                //// SignInAsyncより、ExternalSignInAsyncが適切。
-
-                                ////// 通常のサインイン
-                                ////await SignInManager.SignInAsync(
-
-                                //// 既存の外部ログイン・プロバイダでサインイン
-                                //signInStatus = await SignInManager.ExternalSignInAsync(
-                                //                     loginInfo: externalLoginInfo,
-                                //                     isPersistent: false); // 外部ログインの Cookie 永続化は常に false.
-
                                 // ManageControllerではサインイン済みなので、何もしない。
                                 return RedirectToAction("ManageLogins");
                             }
@@ -1561,9 +1551,6 @@ namespace MultiPurposeAuthSite.Controllers
                                             isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
                                             rememberBrowser: true); // rememberBrowser は true 固定
 
-                                        //// この外部ログイン・プロバイダでサインイン
-                                        //signInStatus = await SignInManager.ExternalSignInAsync(
-
                                         // リダイレクト
                                         return RedirectToAction("ManageLogins");
                                     }
@@ -1579,7 +1566,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 {
                                     // uid（e-mail, name情報）が一致していない。
                                     // 外部ログインのアカウントを間違えている。
-                                    return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
+                                    return RedirectToAction("ManageLogins", 
+                                        new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
 
                                 } // else処理済
                             } // else処理済

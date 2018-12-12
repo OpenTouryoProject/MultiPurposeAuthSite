@@ -76,7 +76,7 @@ namespace MultiPurposeAuthSite.Data
 
         #region DBMS
 
-        /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims ）</summary>
+        /// <summary>ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）</summary>
         public static void SelectChildTablesOfUser(IDbConnection cnn, ApplicationUser user)
         {
             // 他テーブルのため、
@@ -98,9 +98,15 @@ namespace MultiPurposeAuthSite.Data
                 IEnumerable<ApplicationRole> roles = null;
                 IEnumerable<UserLoginInfo> userLogins = null;
                 IEnumerable<dynamic> claims = null;
-
+#if NETFX
+#else
+                IEnumerable<dynamic> tokens = null;
+#endif
                 switch (Config.UserStoreType)
                 {
+                    //case EnumUserStoreType.Memory:
+                    //    DBMSストアの時だけ。
+
                     case EnumUserStoreType.SqlServer:
 
                         // Roles
@@ -122,6 +128,15 @@ namespace MultiPurposeAuthSite.Data
                             "SELECT [Issuer], [ClaimType], [ClaimValue] " +
                             "FROM   [UserClaims] WHERE [UserId] = @userId", new { userId = user.Id });
                         user.Claims = new List<Claim>();
+
+#if NETFX
+#else
+                        // TotpTokens
+                        tokens = cnn.Query(
+                            "SELECT [LoginProvider], [Name], [Value] " +
+                            "FROM   [TotpTokens] WHERE [UserId] = @userId", new { userId = user.Id });
+                        user.TotpTokens = new List<IdentityUserToken<string>>();
+#endif
 
                         break;
 
@@ -147,6 +162,15 @@ namespace MultiPurposeAuthSite.Data
                             "FROM   \"UserClaims\" WHERE \"UserId\" = :userId", new { userId = user.Id });
                         user.Claims = new List<Claim>();
 
+#if NETFX
+#else
+                        // TotpTokens
+                        tokens = cnn.Query(
+                            "SELECT \"LoginProvider\", \"Name\", \"Value\" " +
+                            "FROM   \"TotpTokens\" WHERE \"UserId\" = :userId", new { userId = user.Id });
+                        user.TotpTokens = new List<IdentityUserToken<string>>();
+#endif
+
                         break;
 
                     case EnumUserStoreType.PostgreSQL:
@@ -171,13 +195,40 @@ namespace MultiPurposeAuthSite.Data
                             "FROM   \"userclaims\" WHERE \"userid\" = @userId", new { userId = user.Id });
                         user.Claims = new List<Claim>();
 
+#if NETFX
+#else
+                        // TotpTokens
+                        tokens = cnn.Query(
+                            "SELECT \"loginprovider\", \"name\", \"value\" " +
+                            "FROM   \"totptokens\" WHERE \"userid\" = @userId", new { userId = user.Id });
+                        user.TotpTokens = new List<IdentityUserToken<string>>();
+#endif
+
                         break;
                 }
 
+                // PostgreSQL処理できる（大文字・小文字）？
+
                 foreach (dynamic d in claims)
                 {
-                    user.Claims.Add(new Claim(d.ClaimType, d.ClaimValue, null, d.Issuer));
+                    user.Claims.Add(new Claim(
+                        d.ClaimType, d.ClaimValue, null, d.Issuer));
                 }
+
+#if NETFX
+#else
+                foreach (dynamic d in tokens)
+                {
+                    user.TotpTokens.Add(new IdentityUserToken<string>()
+                    {
+                        UserId = user.Id,
+                        LoginProvider = d.LoginProvider,
+                        Name = d.Name,
+                        Value = d.Value
+                    });
+                }
+#endif
+
             }
             catch (Exception ex)
             {
@@ -185,6 +236,6 @@ namespace MultiPurposeAuthSite.Data
             }
         }
         
-        #endregion
+#endregion
     }
 }

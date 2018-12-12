@@ -37,7 +37,7 @@ using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Primitives;
 
@@ -134,7 +134,7 @@ namespace Touryo.Infrastructure.Business.Presentation
             // -------------------------------------------------------------
 
             // 認証ユーザ情報をメンバにロードする --------------------------
-            await this.GetUserInfo();
+            await this.GetUserInfoAsync();
             // -------------------------------------------------------------
 
             // 権限チェック ------------------------------------------------
@@ -206,7 +206,7 @@ namespace Touryo.Infrastructure.Business.Presentation
         #region 情報取得用
 
         /// <summary>ユーザ情報を取得する</summary>
-        private async Task GetUserInfo()
+        private async Task GetUserInfoAsync()
         {
             // セッションステートレス対応
             if (MyHttpContext.Current.Session == null)
@@ -223,8 +223,7 @@ namespace Touryo.Infrastructure.Business.Presentation
                 {
                     AuthenticateResult authenticateInfo =
                         await AuthenticationHttpContextExtensions.AuthenticateAsync(
-                            MyHttpContext.Current, IdentityConstants.ApplicationScheme);
-                    //CookieAuthenticationDefaults.AuthenticationScheme); // ★ Scheme変更
+                            MyHttpContext.Current, CookieAuthenticationDefaults.AuthenticationScheme);
 
                     //await MyHttpContext.Current.Authentication.GetAuthenticateInfoAsync(
                     //    CookieAuthenticationDefaults.AuthenticationScheme); // 古い

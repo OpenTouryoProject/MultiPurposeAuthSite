@@ -39,6 +39,8 @@ namespace MultiPurposeAuthSite
         {
             // デフォルトで HandleError アクションフィルタを全てのコントローラへ適用するようになっている。
             filters.Add(new HandleErrorAttribute());
+            // https://forums.asp.net/t/2125704.aspx?Authorize+attribute+not+working
+            filters.Add(new AuthorizeAttribute());
 
             //// OutputCache アクションフィルタ
             //// 全てのページを 60 秒間キャッシュする

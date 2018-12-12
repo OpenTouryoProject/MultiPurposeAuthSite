@@ -97,21 +97,21 @@ namespace MultiPurposeAuthSite.Data
                                 case EnumUserStoreType.SqlServer:
 
                                     cnn.Execute(
-                                        "INSERT INTO [Roles] ( [Id], [Name] ) VALUES ( @Id, @Name )", role);
+                                        "INSERT INTO [Roles] ( [Id], [Name], [NormalizedName] ) VALUES ( @Id, @Name, @NormalizedName )", role);
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"Roles\" ( \"Id\", \"Name\" ) VALUES ( :Id, :Name )", role);
+                                        "INSERT INTO \"Roles\" ( \"Id\", \"Name\", \"NormalizedName\" ) VALUES ( :Id, :Name, :NormalizedName )", role);
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"roles\" ( \"id\", \"name\" ) VALUES ( @Id, @Name )", role);
+                                        "INSERT INTO \"roles\" ( \"id\", \"name\", \"normalizedname\" ) VALUES ( @Id, @Name, @NormalizedName )", role);
 
                                     break;
                             }
@@ -259,24 +259,33 @@ namespace MultiPurposeAuthSite.Data
                             switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
-
+#if NETFX
                                     roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM [Roles] WHERE [Name] = @roleName", new { roleName = roleName });
-
+#else
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM [Roles] WHERE [NormalizedName] = @roleName", new { roleName = roleName });
+#endif
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
-
+#if NETFX
                                     roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM \"Roles\" WHERE \"Name\" = :roleName", new { roleName = roleName });
-
+#else
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM \"Roles\" WHERE \"NormalizedName\" = :roleName", new { roleName = roleName });
+#endif
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
-
+#if NETFX
                                     roles = cnn.Query<ApplicationRole>(
                                         "SELECT * FROM \"roles\" WHERE \"name\" = @roleName", new { roleName = roleName });
-
+#else
+                                    roles = cnn.Query<ApplicationRole>(
+                                        "SELECT * FROM \"roles\" WHERE \"normalizedname\" = @roleName", new { roleName = roleName });
+#endif
                                     break;
                             }
 

@@ -3,6 +3,7 @@ SELECT * FROM "Users";
 SELECT * FROM "UserRoles";
 SELECT * FROM "UserLogins";
 SELECT * FROM "UserClaims";
+SELECT * FROM "TotpTokens";
 SELECT * FROM "AuthenticationCodeDictionary";
 SELECT * FROM "RefreshTokenDictionary";
 SELECT * FROM "CustomizedConfirmation";

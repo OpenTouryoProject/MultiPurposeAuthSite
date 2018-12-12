@@ -61,7 +61,21 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// Nameを大文字化した値が自動的にセットされる。
         /// これをUserStoreに登録しておけば、検索し易くなる。
         /// </summary>
-        public string NormalizedName { get; set; }
+        public string NormalizedName
+        {
+#if NETFX
+            set
+            {
+                // 捨て
+            }
+            get
+            {
+                return this.Name.ToUpper();
+            }
+#else
+            set; get;
+#endif
+        }
 
         #endregion
 

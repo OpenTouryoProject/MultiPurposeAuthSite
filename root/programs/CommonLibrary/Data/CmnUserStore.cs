@@ -108,14 +108,14 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "INSERT INTO [Users] ( " +
-                                        "    [Id], [UserName], [PasswordHash], " +
-                                        "    [Email], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
-                                        "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], " +
+                                        "    [Id], [UserName], [NormalizedUserName], [PasswordHash], " +
+                                        "    [Email], [NormalizedEmail], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
+                                        "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], [TotpAuthenticatorKey], " +
                                         "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate], [PasswordChangeDate])" +
                                         "    VALUES ( " +
-                                        "        @Id, @UserName, @PasswordHash, " +
-                                        "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
-                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
+                                        "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
+                                        "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
+                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
                                         "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
@@ -124,21 +124,23 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "INSERT INTO \"Users\" ( " +
-                                        "    \"Id\", \"UserName\", \"PasswordHash\", " +
-                                        "    \"Email\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
-                                        "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", " +
+                                        "    \"Id\", \"UserName\", \"NormalizedUserName\", \"PasswordHash\", " +
+                                        "    \"Email\", \"NormalizedEmail\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
+                                        "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", \"TotpAuthenticatorKey\", " +
                                         "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\", \"PasswordChangeDate\")" +
                                         "    VALUES ( " +
-                                        "        :Id, :UserName, :PasswordHash, " +
-                                        "        :Email, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
-                                        "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, " +
+                                        "        :Id, :UserName, :NormalizedUserName, :PasswordHash, " +
+                                        "        :Email, :NormalizedEmail, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
+                                        "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, :TotpAuthenticatorKey, " +
                                         "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate, :PasswordChangeDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
                                             UserName = user.UserName,
+                                            NormalizedUserName = user.NormalizedUserName,
                                             PasswordHash = user.PasswordHash,
                                             Email = user.Email,
+                                            NormalizedEmail = user.NormalizedEmail,
                                             EmailConfirmed = user.EmailConfirmed ? -1 : 0,
                                             PhoneNumber = user.PhoneNumber,
                                             PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
@@ -147,6 +149,7 @@ namespace MultiPurposeAuthSite.Data
                                             LockoutEndDateUtc = user.LockoutEndDateUtc,
                                             SecurityStamp = user.SecurityStamp,
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
+                                            TotpAuthenticatorKey = user.TotpAuthenticatorKey,
                                             ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
@@ -161,14 +164,14 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "INSERT INTO \"users\" ( " +
-                                        "    \"id\", \"username\", \"passwordhash\", " +
-                                        "    \"email\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
-                                        "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", " +
+                                        "    \"id\", \"username\", \"normalizedusername\", \"passwordhash\", " +
+                                        "    \"email\", \"normalizedemail\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
+                                        "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", \"totpauthenticatorkey\", " +
                                         "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\", \"passwordchangedate\")" +
                                         "    VALUES ( " +
-                                        "        @Id, @UserName, @PasswordHash, " +
-                                        "        @Email, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
-                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, " +
+                                        "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
+                                        "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
+                                        "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
                                         "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
@@ -285,7 +288,7 @@ namespace MultiPurposeAuthSite.Data
                             {
                                 user = users.First();
 
-                                // ユーザの関連情報の取得（ Roles, Logins, Claims ）
+                                // ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）
                                 CmnStore.SelectChildTablesOfUser(cnn, user);
                             }
                         }
@@ -369,24 +372,33 @@ namespace MultiPurposeAuthSite.Data
                                 switch (Config.UserStoreType)
                                 {
                                     case EnumUserStoreType.SqlServer:
-
+#if NETFX
                                         users = cnn.Query<ApplicationUser>(
                                             "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
-
+#else
+                                        users = cnn.Query<ApplicationUser>(
+                                            "SELECT * FROM [Users] WHERE [NormalizedUserName] = @userName", new { userName = userName });
+#endif
                                         break;
 
                                     case EnumUserStoreType.ODPManagedDriver:
-
+#if NETFX
                                         users = cnn.Query<ApplicationUser>(
                                             "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
-
+#else
+                                        users = cnn.Query<ApplicationUser>(
+                                            "SELECT * FROM \"Users\" WHERE \"NormalizedUserName\" = :userName", new { userName = userName });
+#endif
                                         break;
 
                                     case EnumUserStoreType.PostgreSQL:
-
+#if NETFX
                                         users = cnn.Query<ApplicationUser>(
                                             "SELECT * FROM \"users\" WHERE \"username\" = :userName", new { userName = userName });
-
+#else
+                                        users = cnn.Query<ApplicationUser>(
+                                            "SELECT * FROM \"users\" WHERE \"normalizedusername\" = :userName", new { userName = userName });
+#endif
                                         break;
                                 }
 
@@ -394,7 +406,7 @@ namespace MultiPurposeAuthSite.Data
                                 {
                                     user = users.First();
 
-                                    // ユーザの関連情報の取得（ Roles, Logins, Claims ）
+                                    // ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）
                                     CmnStore.SelectChildTablesOfUser(cnn, user);
                                 }
                             }
@@ -590,31 +602,7 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        // MemoryStore同一インスタンス
-
-                        //// 既定の属性
-                        //tgtUser.Id = user.Id;
-                        //tgtUser.UserName = user.UserName;
-                        //tgtUser.PasswordHash = user.PasswordHash;
-                        //tgtUser.Email = user.Email;
-                        //tgtUser.EmailConfirmed = user.EmailConfirmed;
-                        //tgtUser.PhoneNumber = user.PhoneNumber;
-                        //tgtUser.PhoneNumberConfirmed = user.PhoneNumberConfirmed;
-                        //tgtUser.AccessFailedCount = user.AccessFailedCount;
-                        //tgtUser.LockoutEnabled = user.LockoutEnabled;
-                        //tgtUser.LockoutEndDateUtc = user.LockoutEndDateUtc;
-                        //tgtUser.SecurityStamp = user.SecurityStamp;
-                        //tgtUser.TwoFactorEnabled = user.TwoFactorEnabled;
-                        //// Collection
-                        //tgtUser.Roles = user.Roles;
-                        //tgtUser.Logins = user.Logins;
-                        //tgtUser.Claims = user.Claims;
-
-                        //// 追加の属性
-                        //tgtUser.ClientID = user.ClientID;
-                        //tgtUser.PaymentInformation = user.PaymentInformation;
-                        //tgtUser.UnstructuredData = user.UnstructuredData;
-                        //tgtUser.FIDO2PublicKey = user.FIDO2PublicKey;
+                        // MemoryStore同一インスタンスなので何もしない。
 
                         break;
 
@@ -633,9 +621,10 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "UPDATE [Users] " +
-                                        "SET [UserName] = @UserName, [PasswordHash] = @PasswordHash, " +
-                                        "    [Email] = @Email, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
-                                        "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, " +
+                                        "SET [UserName] = @UserName, [NormalizedUserName] = @NormalizedUserName, [PasswordHash] = @PasswordHash, " +
+                                        "    [Email] = @Email, [NormalizedEmail] = @NormalizedEmail, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
+                                        "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
+                                        "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
                                         "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey, [PasswordChangeDate] = @PasswordChangeDate " +
                                         "WHERE [Id] = @Id", user);
 
@@ -645,17 +634,20 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "UPDATE \"Users\" " +
-                                        "SET \"UserName\" = :UserName, \"PasswordHash\" = :PasswordHash, " +
-                                        "    \"Email\" = :Email, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
-                                        "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, " +
+                                        "SET \"UserName\" = :UserName, \"NormalizedUserName\" = :NormalizedUserName, \"PasswordHash\" = :PasswordHash, " +
+                                        "    \"Email\" = :Email, \"NormalizedEmail\" = :NormalizedEmail, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
+                                        "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
+                                        "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
                                         "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey, \"PasswordChangeDate\" = :PasswordChangeDate " +
                                         "WHERE \"Id\" = :Id",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
                                             UserName = user.UserName,
+                                            NormalizedUserName = user.NormalizedUserName,
                                             PasswordHash = user.PasswordHash,
                                             Email = user.Email,
+                                            NormalizedEmail = user.NormalizedEmail,
                                             EmailConfirmed = user.EmailConfirmed ? -1 : 0,
                                             PhoneNumber = user.PhoneNumber,
                                             PhoneNumberConfirmed = user.PhoneNumberConfirmed ? -1 : 0,
@@ -664,10 +656,12 @@ namespace MultiPurposeAuthSite.Data
                                             LockoutEndDateUtc = user.LockoutEndDateUtc,
                                             SecurityStamp = user.SecurityStamp,
                                             TwoFactorEnabled = user.TwoFactorEnabled ? -1 : 0,
+                                            TotpAuthenticatorKey = user.TotpAuthenticatorKey,
                                             ClientID = user.ClientID,
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
                                             FIDO2PublicKey = user.FIDO2PublicKey,
+                                            //CreatedDate = user.CreatedDate,
                                             PasswordChangeDate = user.PasswordChangeDate
                                         });
 
@@ -677,9 +671,10 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                        "UPDATE \"users\" " +
-                                       "SET \"username\" = @UserName, \"passwordhash\" = @PasswordHash, " +
-                                       "    \"email\" = @Email, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
-                                       "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, " +
+                                       "SET \"username\" = @UserName, \"normalizedusername\" = @NormalizedUserName, \"passwordhash\" = @PasswordHash, " +
+                                       "    \"email\" = @Email, \"normalizedemail\" = @NormalizedEmail, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
+                                       "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
+                                       "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
                                        "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey, \"passwordchangedate\" = @PasswordChangeDate " +
                                        "WHERE \"id\" = @Id", user);
 
@@ -1091,7 +1086,14 @@ namespace MultiPurposeAuthSite.Data
 
             // ユーザのパスワードのハッシュを取得
 
-            return user.PasswordHash;
+            if (string.IsNullOrEmpty(user.PasswordHash))
+            {
+                return null;
+            }
+            else
+            {
+                return user.PasswordHash;
+            }
         }
 
         #endregion
@@ -1104,7 +1106,7 @@ namespace MultiPurposeAuthSite.Data
         public static ApplicationUser FindByEmail(string email)
         {
             // 参照系の機能のため、
-            //OnlySts.STSOnly_M();
+            OnlySts.STSOnly_M();
 
             // Debug
             Logging.MyDebugSQLTrace("★ : " +
@@ -1143,24 +1145,33 @@ namespace MultiPurposeAuthSite.Data
                             switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
-
+#if NETFX
                                     users = cnn.Query<ApplicationUser>(
                                         "SELECT * From [Users] WHERE [Email] = @Email", new { Email = email });
-
+#else
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From [Users] WHERE [NormalizedEmail] = @Email", new { Email = email });
+#endif
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
-
+#if NETFX
                                     users = cnn.Query<ApplicationUser>(
                                         "SELECT * From \"Users\" WHERE \"Email\" = :Email", new { Email = email });
-
+#else
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From \"Users\" WHERE \"NormalizedEmail\" = :Email", new { Email = email });
+#endif
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
-
+#if NETFX
                                     users = cnn.Query<ApplicationUser>(
                                         "SELECT * From \"users\" WHERE \"email\" = @Email", new { Email = email });
-
+#else
+                                    users = cnn.Query<ApplicationUser>(
+                                        "SELECT * From \"users\" WHERE \"normalizedemail\" = @Email", new { Email = email });
+#endif
                                     break;
                             }
 
@@ -1168,7 +1179,7 @@ namespace MultiPurposeAuthSite.Data
                             {
                                 user = users.First();
 
-                                // ユーザの関連情報の取得（ Roles, Logins, Claims ）
+                                // ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）
                                 CmnStore.SelectChildTablesOfUser(cnn, user);
                             }
                         }
@@ -1940,9 +1951,7 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 
         #region IUserTwoFactor...
-
-        #region SMS
-
+        
         #region IUserTwoFactorStore
 
         /// <summary>2FAの有効・無効を設定</summary>
@@ -2030,246 +2039,17 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 #endif
 
-        #endregion
-
-#if NETFX
-#else
-        #region TOTP
-
-        #region Prerequisite private methods
-
-        /// <summary>CreateUserToken</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="name">string</param>
-        /// <param name="value">string</param>
-        /// <returns>IdentityUserToken(string)</returns>
-        private static IdentityUserToken<string> CreateUserToken(ApplicationUser user, string loginProvider, string name, string value)
-        {
-            return new IdentityUserToken<string>
-            {
-                UserId = user.Id,
-                LoginProvider = loginProvider,
-                Name = name,
-                Value = value
-            };
-        }
-
-        /// <summary>AddUserTokenAsync</summary>
-        /// <param name="token">IdentityUserToken(string)</param>
-        /// <returns>－</returns>
-        private static void AddUserToken(IdentityUserToken<string> token)
-        {
-            ApplicationUser user = CmnUserStore.FindById(token.UserId);
-
-            if (user.TotpTokens == null)
-            {
-                user.TotpTokens = new List<IdentityUserToken<string>>();
-            }
-
-            user.TotpTokens.Add(token);
-        }
-
-        /// <summary>FindTokenAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="name">string</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>IdentityUserToken(string)</returns>
-        private static IdentityUserToken<string> FindToken(ApplicationUser user, string loginProvider, string name)
-        {
-            if (user.TotpTokens == null)
-            {
-                return null;
-            }
-            else
-            {
-                IdentityUserToken<string> token = user.TotpTokens.FirstOrDefault(
-                    t => (t.LoginProvider == loginProvider && t.Name == name));
-                return token;
-            }
-        }
-
-        /// <summary>RemoveUserTokenAsync</summary>
-        /// <param name="token">IdentityUserToken(string)</param>
-        /// <returns>－</returns>
-        public static void RemoveUserTokenAsync(IdentityUserToken<string> token)
-        {
-            CmnUserStore.FindById(token.UserId).TotpTokens.Remove(token);
-            return;
-        }
-
-        #endregion
-
-        #region IUserAuthenticationTokenStore
-
-        /// <summary>SetTokenAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="name">string</param>
-        /// <param name="value">string</param>
-        public static void SetToken(ApplicationUser user, string loginProvider, string name, string value)
-        {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            IdentityUserToken<string> token = CmnUserStore.FindToken(user, loginProvider, name);
-
-            if (token == null)
-            {
-                CmnUserStore.AddUserToken(CmnUserStore.CreateUserToken(user, loginProvider, name, value));
-            }
-            else
-            {
-                token.Value = value;
-            }
-
-            return;
-        }
-
-        /// <summary>GetTokenAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="name">string</param>
-        /// <returns>Token</returns>
-        public static string GetToken(ApplicationUser user, string loginProvider, string name)
-        {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            IdentityUserToken<string> token = CmnUserStore.FindToken(user, loginProvider, name);
-            return token?.Value;
-        }
-
-        /// <summary>RemoveTokenAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="name">string</param>
-        public static void RemoveToken(ApplicationUser user, string loginProvider, string name)
-        {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            IdentityUserToken<string> token = CmnUserStore.FindToken(user, loginProvider, name);
-
-            if (token != null)
-            {
-                RemoveUserTokenAsync(token);
-            }
-
-            return;
-        }
-
-        #endregion
-
-        #region IUserTwoFactorRecoveryCodeStore
-
-        /// <summary>CountCodesAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>int</returns>
-        public static int CountCodes(ApplicationUser user)
-        {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            string mergedCodes = CmnUserStore.GetToken(user, CmnUserStore.InternalLoginProvider, CmnUserStore.RecoveryCodeTokenName) ?? "";
-
-            if (string.IsNullOrEmpty(mergedCodes))
-            {
-                return 0;
-            }
-            else
-            {
-                return mergedCodes.Split(';').Length;
-            }
-        }
-
-        /// <summary>InternalLoginProvider</summary>
-        private static readonly string InternalLoginProvider = "[AspNetUserStore]";
-        /// <summary>AuthenticatorKeyTokenName</summary>
-        private static readonly string AuthenticatorKeyTokenName = "AuthenticatorKey";
-        /// <summary>RecoveryCodeTokenName</summary>
-        private static readonly string RecoveryCodeTokenName = "RecoveryCodes";
-
-        /// <summary>ReplaceCodesAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="recoveryCodes">IEnumerable(string)</param>
-        public static void ReplaceCodes(ApplicationUser user, IEnumerable<string> recoveryCodes)
-        {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            string mergedCodes = string.Join(";", recoveryCodes);
-            CmnUserStore.SetToken(user, CmnUserStore.InternalLoginProvider, CmnUserStore.RecoveryCodeTokenName, mergedCodes);
-        }
-
-        /// <summary>RedeemCodeAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="code">string</param>
-        /// <returns>bool</returns>
-        public static bool RedeemCode(ApplicationUser user, string code)
-        {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
-
-            // Debug
-            Logging.MyDebugSQLTrace(
-                MethodBase.GetCurrentMethod().DeclaringType.FullName +
-                "." + MethodBase.GetCurrentMethod().Name +
-                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
-
-            string mergedCodes = CmnUserStore.GetToken(user, InternalLoginProvider, RecoveryCodeTokenName) ?? "";
-            string[] splitCodes = mergedCodes.Split(';');
-            if (splitCodes.Contains(code))
-            {
-                List<string> updatedCodes = new List<string>(splitCodes.Where(s => s != code));
-                CmnUserStore.ReplaceCodes(user, updatedCodes);
-                return true;
-            }
-            return false;
-        }
+        // 以下は、Collection (TotpTokens)に実装。
+        // - IUserAuthenticationTokenStore
+        // - IUserTwoFactorRecoveryCodeStore
 
         #endregion
 
         #endregion
-#endif
 
-        #endregion
+        #region Collection
 
-        #region Collection (Logins, Claims)
-
-        #region IUserLoginStore
+        #region Logins: IUserLoginStore
 
         /// <summary>ユーザーに外部ログインを追加</summary>
         /// <param name="user">ApplicationUser</param>
@@ -2443,7 +2223,7 @@ namespace MultiPurposeAuthSite.Data
                             {
                                 user = users.First();
 
-                                // ユーザの関連情報の取得（ Roles, Logins, Claims ）
+                                // ユーザの関連情報の取得（ Roles, Logins, Claims, TotpTokens ）
                                 CmnStore.SelectChildTablesOfUser(cnn, user);
                             }
                         }
@@ -2565,7 +2345,7 @@ namespace MultiPurposeAuthSite.Data
 
         #endregion
 
-        #region IUserClaimStore
+        #region Claims: IUserClaimStore
 
         /// <summary>ユーザに外部ログインのクレームを追加</summary>
         /// <param name="user">ApplicationUser</param>
@@ -2739,6 +2519,311 @@ namespace MultiPurposeAuthSite.Data
         }
 
         #endregion
+
+        #region TotpTokens: IUser...
+
+#if NETFX
+#else
+        #region Prerequisite private methods(CRUD)
+
+        /// <summary>CreateTotpToken</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="value">string</param>
+        /// <returns>IdentityUserToken(string)</returns>
+        private static IdentityUserToken<string> CreateTotpToken(ApplicationUser user, string loginProvider, string name, string value)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            return new IdentityUserToken<string>
+            {
+                UserId = user.Id,
+                LoginProvider = loginProvider,
+                Name = name,
+                Value = value
+            };
+        }
+
+        /// <summary>AddTotpTokenAsync</summary>
+        /// <param name="token">IdentityUserToken(string)</param>
+        /// <returns>－</returns>
+        private static void AddTotpToken(IdentityUserToken<string> token)
+        {
+            // 更新系の機能のため、
+            OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace("★ : " +
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            try
+            {
+                switch (Config.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        ApplicationUser user = CmnUserStore.FindById(token.UserId);
+
+                        if (user.TotpTokens == null)
+                        {
+                            user.TotpTokens = new List<IdentityUserToken<string>>();
+                        }
+
+                        user.TotpTokens.Add(token);
+
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            // ユーザの情報の取得
+                            IEnumerable<ApplicationUser> users = null;
+
+                            switch (Config.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "INSERT INTO [TotpTokens] ([LoginProvider], [Name], [Value]) VALUES (@LoginProvider, @Name, @Value)",
+                                        new { LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "INSERT INTO \"TotpTokens\" (\"LoginProvider\", \"Name\", \"Value\") VALUES (:LoginProvider, :Name, :Value)",
+                                        new { LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    users = cnn.Query<ApplicationUser>(
+                                        "INSERT INTO \"totptokens\" (\"loginprovider\", \"name\", \"value\") VALUES (@LoginProvider, @Name, @Value)",
+                                        new { LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.MySQLLogForEx(ex);
+            }
+
+            return;
+        }
+
+        /// <summary>FindTotpToken</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>IdentityUserToken(string)</returns>
+        private static IdentityUserToken<string> FindTotpToken(ApplicationUser user, string loginProvider, string name)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            if (user.TotpTokens == null)
+            {
+                return null;
+            }
+            else
+            {
+                IdentityUserToken<string> token = user.TotpTokens.FirstOrDefault(
+                    t => (t.LoginProvider == loginProvider && t.Name == name));
+                return token;
+            }
+        }
+
+        /// <summary>RemoveTotpTokenAsync</summary>
+        /// <param name="token">IdentityUserToken(string)</param>
+        /// <returns>－</returns>
+        public static void RemoveTotpToken(IdentityUserToken<string> token)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            CmnUserStore.FindById(token.UserId).TotpTokens.Remove(token);
+            return;
+        }
+
+        #endregion
+
+        #region IUserAuthenticationTokenStore
+
+        /// <summary>SetTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <param name="value">string</param>
+        public static void SetToken(ApplicationUser user, string loginProvider, string name, string value)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            IdentityUserToken<string> token = CmnUserStore.FindTotpToken(user, loginProvider, name);
+
+            if (token == null)
+            {
+                CmnUserStore.AddTotpToken(CmnUserStore.CreateTotpToken(user, loginProvider, name, value));
+            }
+            else
+            {
+                token.Value = value;
+            }
+
+            return;
+        }
+
+        /// <summary>GetTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        /// <returns>Token</returns>
+        public static string GetToken(ApplicationUser user, string loginProvider, string name)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            IdentityUserToken<string> token = CmnUserStore.FindTotpToken(user, loginProvider, name);
+            return token?.Value;
+        }
+
+        /// <summary>RemoveTokenAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="name">string</param>
+        public static void RemoveToken(ApplicationUser user, string loginProvider, string name)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            IdentityUserToken<string> token = CmnUserStore.FindTotpToken(user, loginProvider, name);
+
+            if (token != null)
+            {
+                CmnUserStore.RemoveTotpToken(token);
+            }
+
+            return;
+        }
+
+        #endregion
+
+        #region IUserTwoFactorRecoveryCodeStore
+
+        /// <summary>InternalLoginProvider</summary>
+        private static readonly string InternalLoginProvider = "[AspNetUserStore]";
+        ///// <summary>AuthenticatorKeyTokenName</summary>
+        //private static readonly string AuthenticatorKeyTokenName = "AuthenticatorKey";
+        /// <summary>RecoveryCodeTokenName</summary>
+        private static readonly string RecoveryCodeTokenName = "RecoveryCodes";
+
+        /// <summary>CountCodesAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>int</returns>
+        public static int CountCodes(ApplicationUser user)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            string mergedCodes = CmnUserStore.GetToken(user, CmnUserStore.InternalLoginProvider, CmnUserStore.RecoveryCodeTokenName) ?? "";
+
+            if (string.IsNullOrEmpty(mergedCodes))
+            {
+                return 0;
+            }
+            else
+            {
+                return mergedCodes.Split(';').Length;
+            }
+        }
+
+        /// <summary>ReplaceCodesAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="recoveryCodes">IEnumerable(string)</param>
+        public static void ReplaceCodes(ApplicationUser user, IEnumerable<string> recoveryCodes)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            string mergedCodes = string.Join(";", recoveryCodes);
+            CmnUserStore.SetToken(user, CmnUserStore.InternalLoginProvider, CmnUserStore.RecoveryCodeTokenName, mergedCodes);
+        }
+
+        /// <summary>RedeemCodeAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="code">string</param>
+        /// <returns>bool</returns>
+        public static bool RedeemCode(ApplicationUser user, string code)
+        {
+            // ストレージを直接、触らない。
+            //OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace(
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            string mergedCodes = CmnUserStore.GetToken(user, InternalLoginProvider, RecoveryCodeTokenName) ?? "";
+            string[] splitCodes = mergedCodes.Split(';');
+            if (splitCodes.Contains(code))
+            {
+                List<string> updatedCodes = new List<string>(splitCodes.Where(s => s != code));
+                CmnUserStore.ReplaceCodes(user, updatedCodes);
+                return true;
+            }
+            return false;
+        }
+
+        #endregion
+#endif
 
         #endregion
 

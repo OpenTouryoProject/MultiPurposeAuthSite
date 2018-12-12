@@ -57,11 +57,16 @@ namespace MultiPurposeAuthSite.Co
         public const int MaxLengthOfPassword = 100;
 
         #endregion
-        
+
         #region Roles
 
         /// <summary>SystemAdministrator or Administratorのrole</summary>
-        public const string Role_SystemAdminOrAdmin = "SystemAdmin, Admin";
+        public const string Role_SystemAdminOrAdmin
+            = Role_SystemAdmin + ", " + Role_Admin;
+
+        /// <summary>SystemAdministrator or Administrator or Userのrole</summary>
+        public const string Role_SystemAdminOrAdminOrUser
+            = Role_SystemAdmin + ", " + Role_Admin + ", " + Role_User;
 
         /// <summary>SystemAdministratorのrole</summary>
         public const string Role_SystemAdmin = "SystemAdmin";

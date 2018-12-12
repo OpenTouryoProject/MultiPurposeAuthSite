@@ -8,9 +8,9 @@
 CREATE TABLE "Users"(              -- Users
     "Id" NVARCHAR2(38) NOT NULL,             -- PK, guid
     "UserName" NVARCHAR2(256) NOT NULL,
-    "UserName" NVARCHAR2(256) NULL,
+    "NormalizedUserName" NVARCHAR2(256) NOT NULL,
     "Email" NVARCHAR2(256) NULL,
-    "Email" NVARCHAR2(256) NULL,
+    "NormalizedEmail" NVARCHAR2(256) NOT NULL,
     "EmailConfirmed" NUMBER(3) NOT NULL,
     "PasswordHash" NVARCHAR2(2000) NULL,
     "SecurityStamp" NVARCHAR2(2000) NULL,
@@ -20,7 +20,7 @@ CREATE TABLE "Users"(              -- Users
     "LockoutEndDateUtc" TIMESTAMP NULL,
     "LockoutEnabled" NUMBER(3) NOT NULL,
     "AccessFailedCount" NUMBER(10) NOT NULL,
-    "Email" NVARCHAR2(256) NULL,
+    "TotpAuthenticatorKey" NVARCHAR2(256) NULL,
     -- 追加の情報
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
@@ -34,7 +34,7 @@ CREATE TABLE "Users"(              -- Users
 CREATE TABLE "Roles"(              -- Roles
     "Id" NVARCHAR2(38) NOT NULL,             -- PK, guid
     "Name" NVARCHAR2(256) NOT NULL,
-    "NormalizedName" NVARCHAR2(256) NULL,
+    "NormalizedName" NVARCHAR2(256) NOT NULL,
     CONSTRAINT "PK.Roles" PRIMARY KEY ("Id")
 );
 

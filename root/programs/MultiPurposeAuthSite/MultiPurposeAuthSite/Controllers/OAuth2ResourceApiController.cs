@@ -62,6 +62,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
+using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.Presentation;
 using Touryo.Infrastructure.Public.IO;
@@ -80,6 +81,7 @@ namespace MultiPurposeAuthSite.Controllers
         methods: "*",
         // 
         SupportsCredentials = true)]
+    [MyBaseAsyncApiController()]
     public class OAuth2ResourceApiController : ApiController
     {
         #region constructor
@@ -115,7 +117,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>HttpResponseMessage</returns>
         [HttpGet]
         [Route(".well-known/openid-configuration")]
-        //[Authorize]
         public HttpResponseMessage OpenIDConfig()
         {
             Dictionary<string, object> OpenIDConfig = new Dictionary<string, object>();
@@ -331,7 +332,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>HttpResponseMessage</returns>
         [HttpGet]
         [Route("jwkcerts")]
-        //[Authorize]
         public HttpResponseMessage JwksUri()
         {   
             return new HttpResponseMessage()
@@ -354,23 +354,23 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>Dictionary(string, object)</returns>
         [HttpGet]
         [Route("userinfo")] // OpenID Connectライクなインターフェイスに変更した。
-        [Authorize]
         public async Task<Dictionary<string, object>> GetUserClaims()
         {
-            // Claim情報を参照する。
-            // iss, aud, expのチェックは、AccessTokenFormatJwt.Unprotectで実施済。
-            ClaimsIdentity id = (ClaimsIdentity)User.Identity;
-            Claim claim_aud = id.FindFirst(OAuth2AndOIDCConst.Claim_Audience);
+            // Claimを取得する。
+            string userName, roles, scopes, ipAddress;
+            MyBaseAsyncApiController.GetClaims(out userName, out roles, out scopes, out ipAddress);
             
             // ユーザ認証を行なう。
-            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+            ApplicationUser user = await UserManager.FindByNameAsync(userName);
             
             string subject = "";
 
             if (user == null)
             {
                 // Client認証
-                subject = Helper.GetInstance().GetClientName(claim_aud.Value);
+                subject = Helper.GetInstance().GetClientName(
+                    MyBaseAsyncApiController.GetClaimsIdentity()
+                    .FindFirst(OAuth2AndOIDCConst.Claim_Audience).Value);
             }
             else
             {
@@ -382,15 +382,15 @@ namespace MultiPurposeAuthSite.Controllers
             userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, subject);
 
             // Scope
-            IEnumerable<Claim> claimScope = id.FindAll(OAuth2AndOIDCConst.Claim_Scopes).AsEnumerable();
+            string[] aryScope = scopes.Split(',');
 
             // scope値によって、返す値を変更する。
-            foreach (Claim scope in claimScope)
+            foreach (string scope in aryScope)
             {
                 if (user != null)
                 {
                     // user == null では NG な Resource（Resource Owner の Resource）
-                    switch (scope.Value.ToLower())
+                    switch (scope.ToLower())
                     {
                         #region OpenID Connect
 
@@ -449,7 +449,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
         [Route("revoke")]
-        //[Authorize]
         public Dictionary<string, string> RevokeToken(FormDataCollection formData)
         {
             // 戻り値（エラー）
@@ -570,7 +569,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
         [Route("introspect")]
-        //[Authorize]
         public Dictionary<string, string> IntrospectToken(FormDataCollection formData)
         {
             // 戻り値
@@ -736,9 +734,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
         [Route("OAuth2BearerToken2")]
-        //[Authorize]
         public Dictionary<string, string> OAuth2BearerToken2(FormDataCollection formData)
-        {
+        {   
             // 戻り値
             // ・正常
             Dictionary<string, string> ret = new Dictionary<string, string>();
@@ -849,7 +846,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
         [Route("TestHybridFlow")]
-        //[Authorize]
         public async Task<Dictionary<string, string>> TestHybridFlow(FormDataCollection formData)
         {
             // 変数
@@ -899,9 +895,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>string</returns>
         [HttpPost]
         [Route("TestChageToUser")]
-        [Authorize]
         public async Task<string> TestChageToUser(FormDataCollection formData)
         {
+            // Claimを取得する。
+            string userName, roles, scopes, ipAddress;
+            MyBaseAsyncApiController.GetClaims(out userName, out roles, out scopes, out ipAddress);
+
             // 変数
             string currency = formData["currency"];
             string amount = formData["amount"];
@@ -911,9 +910,10 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.IsDebug)
             {
                 // ユーザの検索
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                ApplicationUser user = await UserManager.FindByNameAsync(userName);
                 // 課金のテスト処理
-                JObject jobj = await WebAPIHelper.GetInstance().ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, currency, amount);
+                JObject jobj = await WebAPIHelper.GetInstance()
+                    .ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, currency, amount);
 
                 return "OK";
             }

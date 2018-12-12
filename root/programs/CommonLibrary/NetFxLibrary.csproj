@@ -186,10 +186,10 @@
     <Compile Include="Notifications\EmailService.cs" />
     <Compile Include="Notifications\CmnSms.cs" />
     <Compile Include="Notifications\SmsService.cs" />
-    <Compile Include="TokenProviders\AccessTokenFormatJwt.cs" />
-    <Compile Include="TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
-    <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
-    <Compile Include="TokenProviders\RefreshTokenProvider.cs" />
+    <Compile Include="TokenProviders\Oasp\AccessTokenFormatJwt.cs" />
+    <Compile Include="TokenProviders\Oasp\ApplicationOAuthBearerTokenProvider.cs" />
+    <Compile Include="TokenProviders\Oasp\AuthorizationCodeProvider.cs" />
+    <Compile Include="TokenProviders\Oasp\RefreshTokenProvider.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
@@ -350,6 +350,8 @@
     <None Include="App.config" />
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="TokenProviders\Cmn\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

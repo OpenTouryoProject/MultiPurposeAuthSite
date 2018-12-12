@@ -1836,6 +1836,10 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // ユーザの新規作成が成功した場合
 
+                                // ロールに追加。
+                                await this.UserManager.AddToRoleAsync(user, Const.Role_User);
+                                await this.UserManager.AddToRoleAsync(user, Const.Role_Admin);
+
                                 // 外部ログイン（ = idClaim）の追加
                                 idResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
 

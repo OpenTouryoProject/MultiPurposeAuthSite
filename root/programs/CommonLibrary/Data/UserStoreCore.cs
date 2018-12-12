@@ -179,6 +179,9 @@ namespace MultiPurposeAuthSite.Data
             return Task.FromResult(IdentityResult.Success);
         }
 
+        // Roles, Logins, Claims, TotpTokensは、Del-Insで対応するため、
+        // UpdateRoles, UpdateLogins, UpdateClaims, UpdateTotpTokensのメソッドは不要
+
         #endregion
 
         #region D (Delete)
@@ -667,8 +670,6 @@ namespace MultiPurposeAuthSite.Data
 
         #region IUserTwoFactor...
 
-        #region SMS
-
         #region IUserTwoFactorStore
 
         /// <summary>SetTwoFactorEnabledAsync</summary>
@@ -729,9 +730,149 @@ namespace MultiPurposeAuthSite.Data
 
         #endregion
 
+        // 以下は、Collection (TotpTokens)に実装。
+        // - IUserAuthenticationTokenStore
+        // - IUserTwoFactorRecoveryCodeStore
+
         #endregion
 
-        #region TOTP
+        #endregion
+
+        #region Collection
+
+        #region Logins: IUserLoginStore
+
+        /// <summary>AddLoginAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="login">UserLoginInfo</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            CmnUserStore.AddLogin(user, login);
+            return Task.FromResult(0);
+        }
+
+        /// <summary>FindByLoginAsync</summary>
+        /// <param name="loginProvider">string</param>
+        /// <param name="providerKey">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns></returns>
+        public Task<ApplicationUser> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            return Task.FromResult(CmnUserStore.Find(new UserLoginInfo(loginProvider, providerKey, "")));
+        }
+
+        /// <summary>GetLoginsAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>IList(UserLoginInfo)</returns>
+        public Task<IList<UserLoginInfo>> GetLoginsAsync(ApplicationUser user, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Task.FromResult(CmnUserStore.GetLogins(user));
+        }
+
+        /// <summary>RemoveLoginAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="loginProvider">string</param>
+        /// <param name="providerKey">string</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task RemoveLoginAsync(ApplicationUser user, string loginProvider, string providerKey, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            CmnUserStore.RemoveLogin(user, new UserLoginInfo(loginProvider, providerKey, ""));
+            return Task.FromResult(0);
+        }
+
+        #endregion
+
+        #region Claims: IUserClaimStore
+
+        /// <summary></summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="claims"></param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task AddClaimsAsync(ApplicationUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            foreach (Claim claim in claims)
+            {
+                CmnUserStore.AddClaim(user, claim);
+            }
+            return Task.FromResult(0);
+        }
+
+        /// <summary>GetClaimsAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>Claims</returns>
+        public Task<IList<Claim>> GetClaimsAsync(ApplicationUser user, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            return Task.FromResult(CmnUserStore.GetClaims(user));
+        }
+
+        /// <summary>GetUsersForClaimAsync</summary>
+        /// <param name="claim">Claim</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>Users</returns>
+        public Task<IList<ApplicationUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            throw new NotImplementedException();
+        }
+
+        /// <summary>ReplaceClaimAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="claim">Claim</param>
+        /// <param name="newClaim">Claim</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task ReplaceClaimAsync(ApplicationUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            throw new NotImplementedException();
+        }
+
+        /// <summary>RemoveClaimsAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="claims">IEnumerable(Claim)</param>
+        /// <param name="cancellationToken">CancellationToken</param>
+        /// <returns>－</returns>
+        public Task RemoveClaimsAsync(ApplicationUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            this.ThrowIfDisposed();
+
+            foreach (Claim claim in claims)
+            {
+                CmnUserStore.RemoveClaim(user, claim);
+            }
+            return Task.FromResult(0);
+        }
+
+        #endregion
+
+        #region TotpTokens: IUser...
 
         #region IUserAuthenticationTokenStore
 
@@ -825,144 +966,6 @@ namespace MultiPurposeAuthSite.Data
         }
 
         #endregion
-
-        #endregion
-
-        #endregion
-
-        #endregion
-
-        #region Collection (Logins, Claims)
-
-        #region IUserLoginStore
-
-        /// <summary>AddLoginAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="login">UserLoginInfo</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>－</returns>
-        public Task AddLoginAsync(ApplicationUser user, UserLoginInfo login, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            CmnUserStore.AddLogin(user, login);
-            return Task.FromResult(0);
-        }
-
-        /// <summary>FindByLoginAsync</summary>
-        /// <param name="loginProvider">string</param>
-        /// <param name="providerKey">string</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns></returns>
-        public Task<ApplicationUser> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            return Task.FromResult(CmnUserStore.Find(new UserLoginInfo(loginProvider, providerKey, "")));
-        }
-
-        /// <summary>GetLoginsAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>IList(UserLoginInfo)</returns>
-        public Task<IList<UserLoginInfo>> GetLoginsAsync(ApplicationUser user, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            return Task.FromResult(CmnUserStore.GetLogins(user));
-        }
-
-        /// <summary>RemoveLoginAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="loginProvider">string</param>
-        /// <param name="providerKey">string</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>－</returns>
-        public Task RemoveLoginAsync(ApplicationUser user, string loginProvider, string providerKey, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            CmnUserStore.RemoveLogin(user, new UserLoginInfo(loginProvider, providerKey, ""));
-            return Task.FromResult(0);
-        }
-
-        #endregion
-
-        #region IUserClaimStore
-
-        /// <summary></summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="claims"></param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>－</returns>
-        public Task AddClaimsAsync(ApplicationUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            foreach (Claim claim in claims)
-            {
-                CmnUserStore.AddClaim(user, claim);
-            }
-            return Task.FromResult(0);
-        }
-
-        /// <summary>GetClaimsAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>Claims</returns>
-        public Task<IList<Claim>> GetClaimsAsync(ApplicationUser user, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            return Task.FromResult(CmnUserStore.GetClaims(user));
-        }
-
-        /// <summary>GetUsersForClaimAsync</summary>
-        /// <param name="claim">Claim</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>Users</returns>
-        public Task<IList<ApplicationUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            throw new NotImplementedException();
-        }
-
-        /// <summary>ReplaceClaimAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="claim">Claim</param>
-        /// <param name="newClaim">Claim</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>－</returns>
-        public Task ReplaceClaimAsync(ApplicationUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            throw new NotImplementedException();
-        }
-
-        /// <summary>RemoveClaimsAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="claims">IEnumerable(Claim)</param>
-        /// <param name="cancellationToken">CancellationToken</param>
-        /// <returns>－</returns>
-        public Task RemoveClaimsAsync(ApplicationUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            this.ThrowIfDisposed();
-
-            foreach (Claim claim in claims)
-            {
-                CmnUserStore.RemoveClaim(user, claim);
-            }
-            return Task.FromResult(0);
-        }
 
         #endregion
 

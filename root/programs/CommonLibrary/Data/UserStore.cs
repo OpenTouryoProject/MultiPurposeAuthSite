@@ -155,7 +155,7 @@ namespace MultiPurposeAuthSite.Data
             return Task.FromResult(0);
         }
 
-        //Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
+        // Logins, ClaimsはDel-Insで対応するため、UpdateLogins, UpdateClaimsのメソッドは不要
 
         #endregion
 

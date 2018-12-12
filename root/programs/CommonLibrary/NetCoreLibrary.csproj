@@ -17,10 +17,13 @@
   <ItemGroup>
     <Compile Remove="Extensions\OIDC\HttpMod\**" />
     <Compile Remove="Manager\**" />
+    <Compile Remove="TokenProviders\Oasp\**" />
     <EmbeddedResource Remove="Extensions\OIDC\HttpMod\**" />
     <EmbeddedResource Remove="Manager\**" />
+    <EmbeddedResource Remove="TokenProviders\Oasp\**" />
     <None Remove="Extensions\OIDC\HttpMod\**" />
     <None Remove="Manager\**" />
+    <None Remove="TokenProviders\Oasp\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,10 +31,6 @@
     <Compile Remove="Notifications\EmailService.cs" />
     <Compile Remove="Notifications\SmsService.cs" />
     <Compile Remove="Properties\AssemblyInfo.cs" />
-    <Compile Remove="TokenProviders\AccessTokenFormatJwt.cs" />
-    <Compile Remove="TokenProviders\ApplicationOAuthBearerTokenProvider.cs" />
-    <Compile Remove="TokenProviders\AuthorizationCodeProvider.cs" />
-    <Compile Remove="TokenProviders\RefreshTokenProvider.cs" />
     <Compile Remove="Util\IdP\ExternalLoginStarter.cs" />
   </ItemGroup>
 
@@ -43,7 +42,7 @@
   <ItemGroup>
     <Folder Include="Extensions\OIDC\" />
     <Folder Include="Properties\" />
-    <Folder Include="TokenProviders\" />
+    <Folder Include="TokenProviders\Cmn\" />
   </ItemGroup>
 
   <ItemGroup>

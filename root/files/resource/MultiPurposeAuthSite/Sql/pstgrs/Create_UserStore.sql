@@ -3,9 +3,9 @@
 CREATE TABLE Users(                -- Users
     Id varchar(38) NOT NULL,                 -- PK, guid
     UserName varchar(256) NOT NULL,
-    NormalizedUserName varchar(256) NULL,
+    NormalizedUserName varchar(256) NOT NULL,
     Email varchar(256) NULL,
-    NormalizedEmail varchar(256) NULL,
+    NormalizedEmail varchar(256) NOT NULL,
     EmailConfirmed boolean NOT NULL,
     PasswordHash varchar(2000) NULL,
     SecurityStamp varchar(2000) NULL,
@@ -29,7 +29,7 @@ CREATE TABLE Users(                -- Users
 CREATE TABLE Roles(                -- Roles
     Id varchar(38) NOT NULL,                 -- PK, guid
     Name varchar(256) NOT NULL,
-    NormalizedName varchar(256) NULL,
+    NormalizedName varchar(256) NOT NULL,
     CONSTRAINT PK_Roles PRIMARY KEY (Id)
 );
 

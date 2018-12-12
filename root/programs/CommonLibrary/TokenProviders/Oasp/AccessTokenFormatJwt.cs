@@ -313,6 +313,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 scopes.Add(s);
                             }
 
+                            // もろもろのClaimの設定
                             Helper.AddClaim(identity,
                                 (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes,　(string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
 
