@@ -239,8 +239,11 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
-                        // ロールを（ロール名指定で）検索
+#if NETFX
                         role = CmnStore._roles.FirstOrDefault(x => x.Name == roleName);
+#else
+                        role = CmnStore._roles.FirstOrDefault(x => x.NormalizedName == roleName);
+#endif
 
                         break;
 

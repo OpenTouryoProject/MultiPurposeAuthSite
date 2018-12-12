@@ -378,7 +378,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     // EmailConfirmedとは別の2FAが必要。
 
                                     // 検証を求める（2FAなど）。
-                                    if (user.Tokens == null)
+                                    if (user.TotpTokens == null)
                                     {
                                         // Email, SMS
                                         return this.RedirectToAction(

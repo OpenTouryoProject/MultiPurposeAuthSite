@@ -299,18 +299,19 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         // 要DBスキーマ拡張
         #region Properties after Identity 3.
 
-        /// <summary>AuthenticatorKey</summary>
-        public string AuthenticatorKey { get; set; }
+        /// <summary>Totp AuthenticatorKey</summary>
+        public string TotpAuthenticatorKey { get; set; }
 
         #region Collection (private set)
 
-        /// <summary>Tokens</summary>
-        public IList<IdentityUserToken<string>> Tokens { get; set; }
+        /// <summary>Totp Tokens</summary>
+        public IList<IdentityUserToken<string>> TotpTokens { get; set; }
 
         #endregion
 
         #endregion
 #endif
+
         #region Additional properties
 
         /// <summary>

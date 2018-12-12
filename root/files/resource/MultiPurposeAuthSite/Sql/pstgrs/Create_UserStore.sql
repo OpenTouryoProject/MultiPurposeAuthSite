@@ -3,7 +3,9 @@
 CREATE TABLE Users(                -- Users
     Id varchar(38) NOT NULL,                 -- PK, guid
     UserName varchar(256) NOT NULL,
+    NormalizedUserName varchar(256) NULL,
     Email varchar(256) NULL,
+    NormalizedEmail varchar(256) NULL,
     EmailConfirmed boolean NOT NULL,
     PasswordHash varchar(2000) NULL,
     SecurityStamp varchar(2000) NULL,
@@ -13,6 +15,7 @@ CREATE TABLE Users(                -- Users
     LockoutEndDateUtc timestamp NULL,
     LockoutEnabled boolean NOT NULL,
     AccessFailedCount integer NOT NULL,
+    TotpAuthenticatorKey varchar(256) NULL,
     -- 追加の情報
     ClientID varchar(256) NOT NULL,
     PaymentInformation varchar(256) NULL,
@@ -26,6 +29,7 @@ CREATE TABLE Users(                -- Users
 CREATE TABLE Roles(                -- Roles
     Id varchar(38) NOT NULL,                 -- PK, guid
     Name varchar(256) NOT NULL,
+    NormalizedName varchar(256) NULL,
     CONSTRAINT PK_Roles PRIMARY KEY (Id)
 );
 
@@ -37,23 +41,34 @@ CREATE TABLE UserRoles(            -- 関連エンティティ (Users *--- UserR
         RoleId)
 );
 
-CREATE TABLE UserLogins(           -- Users ---* UserLogins
-    UserId varchar(38) NOT NULL,             -- PK, guid
-    LoginProvider varchar(128) NOT NULL,     -- PK
-    ProviderKey varchar(128) NOT NULL,       -- PK
+CREATE TABLE UserLogins(       -- Users ---* UserLogins
+    UserId varchar(38) NOT NULL,             -- PK
+    LoginProvider varchar(128) NOT NULL,     -- *PK
+    ProviderKey varchar(128) NOT NULL,       -- *PK
     CONSTRAINT PK_UserLogins PRIMARY KEY (
         UserId,
         LoginProvider,
         ProviderKey)
 );
 
-CREATE TABLE UserClaims(           -- Users ---* UserClaims
+CREATE TABLE UserClaims(       -- Users ---* UserClaims
     Id serial NOT NULL,                      -- PK (キー長に問題があるためId intを使用)
-    UserId varchar(38) NOT NULL,                -- *PK, guid
-    Issuer varchar(128) NOT NULL,               -- *PK(LoginProvider) *PK(実質的に複合主キー)
+    UserId varchar(38) NOT NULL,             -- *PK
+    Issuer varchar(128) NOT NULL,            -- *PK
     ClaimType varchar(1024) NULL,
     ClaimValue varchar(1024) NULL,
     CONSTRAINT PK_UserClaims PRIMARY KEY (Id)
+);
+
+CREATE TABLE TotpTokens(       -- Users ---* TotpTokens
+    UserId varchar(38) NOT NULL,             -- PK
+    LoginProvider varchar(128) NOT NULL,     -- *PK
+    Name varchar(128) NOT NULL,              -- *PK
+    Value varchar(128) NULL,
+    CONSTRAINT PK_TotpTokens PRIMARY KEY (
+        UserId,
+        LoginProvider,
+        Name)
 );
 
 CREATE TABLE AuthenticationCodeDictionary(
@@ -92,9 +107,12 @@ CREATE TABLE OAuth2Revocation(
 -- INDEX
 ---- Users
 CREATE UNIQUE INDEX UserNameIndex ON Users (UserName);
+CREATE UNIQUE INDEX NormalizedUserNameIndex ON Users (NormalizedUserName);
+CREATE UNIQUE INDEX NormalizedEmailNameIndex ON Users (NormalizedEmail);
 CREATE UNIQUE INDEX ClientIDIndex ON Users (ClientID);
 ---- Roles
 CREATE UNIQUE INDEX RoleNameIndex ON Roles (Name);
+CREATE UNIQUE INDEX NormalizedNameIndex ON Roles (NormalizedName);
 ---- UserRoles
 CREATE INDEX IX_UserRoles_UserId ON UserRoles (UserId);
 CREATE INDEX IX_UserRoles_RoleId ON UserRoles (RoleId);
@@ -102,6 +120,8 @@ CREATE INDEX IX_UserRoles_RoleId ON UserRoles (RoleId);
 CREATE INDEX IX_UserLogins_UserId ON UserLogins (UserId);
 ---- UserClaims
 CREATE INDEX IX_UserClaims_UserId ON UserClaims (UserId);
+---- TotpTokens
+CREATE INDEX IX_TotpTokens_UserId ON TotpTokens (UserId);
 
 -- CONSTRAINT
 ---- UserRoles
@@ -111,5 +131,7 @@ ALTER TABLE UserRoles ADD CONSTRAINT FK_UserRoles_Roles_RoleId FOREIGN KEY(RoleI
 ALTER TABLE UserLogins ADD CONSTRAINT FK_UserLogins_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- UserClaims
 ALTER TABLE UserClaims ADD CONSTRAINT FK_UserClaims_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
+---- TotpTokens
+ALTER TABLE TotpTokens ADD CONSTRAINT FK_TotpTokens_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- OAuth2Data
 ALTER TABLE OAuth2Data ADD CONSTRAINT FK_OAuth2Data_Users_ClientID FOREIGN KEY(ClientID) REFERENCES Users (ClientID) ON DELETE CASCADE;

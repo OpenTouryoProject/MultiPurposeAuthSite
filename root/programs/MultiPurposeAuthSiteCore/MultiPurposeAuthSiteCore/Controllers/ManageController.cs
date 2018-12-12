@@ -316,7 +316,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // モデルの生成
                 string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
 
-                string authenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
+                string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
                     // パスワード
@@ -331,7 +331,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // Email, SMS
                     TwoFactor = user.TwoFactorEnabled,
                     // TOTP
-                    TwoFactorTOTP = !string.IsNullOrEmpty(authenticatorKey),
+                    TwoFactorTOTP = !string.IsNullOrEmpty(totpAuthenticatorKey),
                     // 支払元情報
                     HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
                     // 非構造化データ
@@ -1448,8 +1448,8 @@ namespace MultiPurposeAuthSite.Controllers
             //await UserManager.ResetAuthenticatorKeyAsync(user);
 
             // 自前で、AuthenticatorKeyとTokensを、nullクリアする
-            user.Tokens = null;
-            user.AuthenticatorKey = null;
+            user.TotpTokens = null;
+            user.TotpAuthenticatorKey = null;
             await UserManager.UpdateAsync(user);
 
             Logging.MyOperationTrace(string.Format(
@@ -2971,6 +2971,23 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 2FA(TOTP)
 
+        /// <summary>LoadSharedKeyAndQrCodeUriAsync</summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="model">EnableAuthenticatorViewModel</param>
+        /// <returns>－</returns>
+        private async Task LoadSharedKeyAndQrCodeUriAsync(ApplicationUser user, ManageEnableTwoFactorAuthenticatorViewModel model)
+        {
+            string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
+            if (string.IsNullOrEmpty(totpAuthenticatorKey))
+            {
+                await UserManager.ResetAuthenticatorKeyAsync(user);
+                totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
+            }
+
+            model.SharedKey = this.FormatKey(totpAuthenticatorKey);
+            model.AuthenticatorUri = this.GenerateQrCodeUri(user.Email, totpAuthenticatorKey);
+        }
+
         /// <summary>FormatKey</summary>
         /// <param name="unformattedKey">string</param>
         /// <returns>FormatKey</returns>
@@ -3004,23 +3021,6 @@ namespace MultiPurposeAuthSite.Controllers
                 UrlEncoder.Encode("MultiPurposeAuthSite"),
                 UrlEncoder.Encode(email),
                 unformattedKey);
-        }
-
-        /// <summary>LoadSharedKeyAndQrCodeUriAsync</summary>
-        /// <param name="user">ApplicationUser</param>
-        /// <param name="model">EnableAuthenticatorViewModel</param>
-        /// <returns>－</returns>
-        private async Task LoadSharedKeyAndQrCodeUriAsync(ApplicationUser user, ManageEnableTwoFactorAuthenticatorViewModel model)
-        {
-            string unformattedKey = await UserManager.GetAuthenticatorKeyAsync(user);
-            if (string.IsNullOrEmpty(unformattedKey))
-            {
-                await UserManager.ResetAuthenticatorKeyAsync(user);
-                unformattedKey = await UserManager.GetAuthenticatorKeyAsync(user);
-            }
-
-            model.SharedKey = FormatKey(unformattedKey);
-            model.AuthenticatorUri = GenerateQrCodeUri(user.Email, unformattedKey);
         }
 
         #endregion

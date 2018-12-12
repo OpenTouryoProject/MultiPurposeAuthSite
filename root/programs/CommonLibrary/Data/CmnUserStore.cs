@@ -349,7 +349,11 @@ namespace MultiPurposeAuthSite.Data
                     {
                         case EnumUserStoreType.Memory:
 
+#if NETFX
                             user = CmnStore._users.FirstOrDefault(x => x.UserName == userName);
+#else
+                            user = CmnStore._users.FirstOrDefault(x => x.NormalizedUserName == userName);
+#endif
 
                             break;
 
@@ -1117,7 +1121,11 @@ namespace MultiPurposeAuthSite.Data
                 {
                     case EnumUserStoreType.Memory:
 
+#if NETFX
                         user = CmnStore._users.FirstOrDefault(x => x.Email == email);
+#else
+                        user = CmnStore._users.FirstOrDefault(x => x.NormalizedEmail == email);
+#endif
 
                         break;
 
@@ -1996,7 +2004,7 @@ namespace MultiPurposeAuthSite.Data
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
-            user.AuthenticatorKey = key;
+            user.TotpAuthenticatorKey = key;
 
             return;
         }
@@ -2016,7 +2024,7 @@ namespace MultiPurposeAuthSite.Data
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
-            return user.AuthenticatorKey;
+            return user.TotpAuthenticatorKey;
         }
 
         #endregion
@@ -2054,12 +2062,12 @@ namespace MultiPurposeAuthSite.Data
         {
             ApplicationUser user = CmnUserStore.FindById(token.UserId);
 
-            if (user.Tokens == null)
+            if (user.TotpTokens == null)
             {
-                user.Tokens = new List<IdentityUserToken<string>>();
+                user.TotpTokens = new List<IdentityUserToken<string>>();
             }
 
-            user.Tokens.Add(token);
+            user.TotpTokens.Add(token);
         }
 
         /// <summary>FindTokenAsync</summary>
@@ -2070,13 +2078,13 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>IdentityUserToken(string)</returns>
         private static IdentityUserToken<string> FindToken(ApplicationUser user, string loginProvider, string name)
         {
-            if (user.Tokens == null)
+            if (user.TotpTokens == null)
             {
                 return null;
             }
             else
             {
-                IdentityUserToken<string> token = user.Tokens.FirstOrDefault(
+                IdentityUserToken<string> token = user.TotpTokens.FirstOrDefault(
                     t => (t.LoginProvider == loginProvider && t.Name == name));
                 return token;
             }
@@ -2087,7 +2095,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public static void RemoveUserTokenAsync(IdentityUserToken<string> token)
         {
-            CmnUserStore.FindById(token.UserId).Tokens.Remove(token);
+            CmnUserStore.FindById(token.UserId).TotpTokens.Remove(token);
             return;
         }
 
@@ -2173,7 +2181,7 @@ namespace MultiPurposeAuthSite.Data
         #endregion
 
         #region IUserTwoFactorRecoveryCodeStore
-        
+
         /// <summary>CountCodesAsync</summary>
         /// <param name="user">ApplicationUser</param>
         /// <param name="cancellationToken">CancellationToken</param>
@@ -2197,7 +2205,7 @@ namespace MultiPurposeAuthSite.Data
             }
             else
             {
-                return mergedCodes.Split(';').Length; 
+                return mergedCodes.Split(';').Length;
             }
         }
 
