@@ -96,7 +96,7 @@ namespace MultiPurposeAuthSite.Data
             try
             {
                 IEnumerable<ApplicationRole> roles = null;
-                IEnumerable<UserLoginInfo> userLogins = null;
+                IEnumerable<dynamic> userLogins = null;
                 IEnumerable<dynamic> claims = null;
 #if NETFX
 #else
@@ -118,10 +118,10 @@ namespace MultiPurposeAuthSite.Data
                         user.Roles = roles.ToList();
 
                         // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
+                        userLogins = cnn.Query(
                             "SELECT [LoginProvider], [ProviderKey] " +
                             "FROM   [UserLogins] WHERE [UserId] = @userId", new { userId = user.Id });
-                        user.Logins = userLogins.ToList();
+                        user.Logins = new List<UserLoginInfo>();
 
                         // Claims
                         claims = cnn.Query(
@@ -151,10 +151,10 @@ namespace MultiPurposeAuthSite.Data
                         user.Roles = roles.ToList();
 
                         // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
+                        userLogins = cnn.Query(
                             "SELECT \"LoginProvider\", \"ProviderKey\" " +
                             "FROM   \"UserLogins\" WHERE \"UserId\" = :userId", new { userId = user.Id });
-                        user.Logins = userLogins.ToList();
+                        user.Logins = new List<UserLoginInfo>();
 
                         // Claims
                         claims = cnn.Query(
@@ -184,10 +184,10 @@ namespace MultiPurposeAuthSite.Data
                         user.Roles = roles.ToList();
 
                         // Logins
-                        userLogins = cnn.Query<UserLoginInfo>(
+                        userLogins = cnn.Query(
                             "SELECT \"loginprovider\", \"providerkey\" " +
                             "FROM   \"userlogins\" WHERE \"userid\" = @userId", new { userId = user.Id });
-                        user.Logins = userLogins.ToList();
+                        user.Logins = new List<UserLoginInfo>();
 
                         // Claims
                         claims = cnn.Query(
@@ -216,7 +216,18 @@ namespace MultiPurposeAuthSite.Data
                 }
 
 #if NETFX
+                foreach (dynamic d in userLogins)
+                {
+                    user.Logins.Add(new UserLoginInfo(
+                        d.LoginProvider, d.ProviderKey));
+                }
 #else
+                foreach (dynamic d in userLogins)
+                {
+                    user.Logins.Add(new UserLoginInfo(
+                        d.LoginProvider, d.ProviderKey, ""));
+                }
+
                 foreach (dynamic d in tokens)
                 {
                     user.TotpTokens.Add(new IdentityUserToken<string>()

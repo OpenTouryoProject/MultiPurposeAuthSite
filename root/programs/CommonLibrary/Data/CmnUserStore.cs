@@ -2551,7 +2551,7 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         private static void AddTotpToken(IdentityUserToken<string> token)
         {
-            // 更新系の機能のため、
+            // 他テーブルのため、
             OnlySts.STSOnly_M();
 
             // Debug
@@ -2592,24 +2592,27 @@ namespace MultiPurposeAuthSite.Data
                                 case EnumUserStoreType.SqlServer:
 
                                     users = cnn.Query<ApplicationUser>(
-                                        "INSERT INTO [TotpTokens] ([LoginProvider], [Name], [Value]) VALUES (@LoginProvider, @Name, @Value)",
-                                        new { LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
+                                        "INSERT INTO [TotpTokens] ([UserId], [LoginProvider], [Name], [Value]) " +
+                                        "  VALUES (@UserId, @LoginProvider, @Name, @Value)",
+                                        new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     users = cnn.Query<ApplicationUser>(
-                                        "INSERT INTO \"TotpTokens\" (\"LoginProvider\", \"Name\", \"Value\") VALUES (:LoginProvider, :Name, :Value)",
-                                        new { LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
+                                        "INSERT INTO \"TotpTokens\" (\"UserId\", \"LoginProvider\", \"Name\", \"Value\") " +
+                                        "  VALUES (:UserId, :LoginProvider, :Name, :Value)",
+                                        new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
                                     users = cnn.Query<ApplicationUser>(
-                                        "INSERT INTO \"totptokens\" (\"loginprovider\", \"name\", \"value\") VALUES (@LoginProvider, @Name, @Value)",
-                                        new { LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
+                                        "INSERT INTO \"totptokens\" (\"userid\", \"loginprovider\", \"name\", \"value\") " +
+                                        "  VALUES (@UserId, @LoginProvider, @Name, @Value)",
+                                        new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, Value = token.Value, });
 
                                     break;
                             }
@@ -2634,19 +2637,92 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>IdentityUserToken(string)</returns>
         private static IdentityUserToken<string> FindTotpToken(ApplicationUser user, string loginProvider, string name)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
 
-            if (user.TotpTokens == null)
+            // Debug
+            Logging.MyDebugSQLTrace("★ : " +
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            try
             {
-                return null;
+                switch (Config.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        if (user.TotpTokens == null)
+                        {
+                            return null;
+                        }
+                        else
+                        {
+                            IdentityUserToken<string> token = user.TotpTokens.FirstOrDefault(
+                                t => (t.LoginProvider == loginProvider && t.Name == name));
+                            return token;
+                        }
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            IEnumerable<string> values = null;
+
+                            switch (Config.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    values = cnn.Query<string>(
+                                        "SELECT [Value] FROM [TotpTokens] " +
+                                        "  WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [Name] = @Name",
+                                        new { UserId = user.Id, LoginProvider = loginProvider, Name = name, });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    values = cnn.Query<string>(
+                                        "SELECT \"Value\" FROM \"TotpTokens\" " +
+                                        "  WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"Name\" = :Name",
+                                        new { UserId = user.Id, LoginProvider = loginProvider, Name = name, });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    values = cnn.Query<string>(
+                                        "SELECT \"value\" FROM \"totptokens\" " +
+                                        "  WHERE \"userid\" = @UserId AND \"loginprovider\" = @LoginProvider AND \"name\" = @Name",
+                                        new { UserId = user.Id, LoginProvider = loginProvider, Name = name, });
+
+                                    break;
+                            }
+
+                            if (values.Count() != 0)
+                            {
+                                return new IdentityUserToken<string>()
+                                {
+                                    UserId = user.Id,
+                                    LoginProvider = loginProvider,
+                                    Name = name,
+                                    Value = values.First()
+                                };
+                            }
+                        }
+
+                        break;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                IdentityUserToken<string> token = user.TotpTokens.FirstOrDefault(
-                    t => (t.LoginProvider == loginProvider && t.Name == name));
-                return token;
+                Logging.MySQLLogForEx(ex);
             }
+
+            return null;
         }
 
         /// <summary>RemoveTotpTokenAsync</summary>
@@ -2654,10 +2730,70 @@ namespace MultiPurposeAuthSite.Data
         /// <returns>－</returns>
         public static void RemoveTotpToken(IdentityUserToken<string> token)
         {
-            // ストレージを直接、触らない。
-            //OnlySts.STSOnly_M();
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
 
-            CmnUserStore.FindById(token.UserId).TotpTokens.Remove(token);
+            // Debug
+            Logging.MyDebugSQLTrace("★ : " +
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            try
+            {
+                switch (Config.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        CmnUserStore.FindById(token.UserId).TotpTokens.Remove(token);
+                        break;
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            switch (Config.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    cnn.Execute(
+                                        "DELETE FROM [TotpTokens] " +
+                                        "       WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [Name] = @Name",
+                                        new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"TotpTokens\" " +
+                                        "       WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"Name\" = :Name",
+                                        new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    cnn.Execute(
+                                        "DELETE FROM \"totptokens\" " +
+                                        "       WHERE \"userid\" = @UserId AND \"loginprovider\" = @LoginProvider AND \"name\" = @Name",
+                                        new { UserId = token.UserId, LoginProvider = token.LoginProvider, Name = token.Name, });
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.MySQLLogForEx(ex);
+            }
+
             return;
         }
 
