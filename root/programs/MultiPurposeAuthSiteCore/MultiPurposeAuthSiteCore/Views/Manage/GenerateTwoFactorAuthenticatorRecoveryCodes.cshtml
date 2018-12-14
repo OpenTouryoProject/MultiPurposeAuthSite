@@ -21,7 +21,7 @@
 *@
 
 @{
-    ViewBag.Title = "Generate Two-factor authenticator recovery codes";
+    ViewBag.Title = ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -34,20 +34,19 @@
 <div class="alert alert-warning" role="alert">
     <p>
         <span class="glyphicon glyphicon-warning-sign"></span>
-        <strong>This action generates new recovery codes.</strong>
+        <strong>@ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesH</strong>
     </p>
     <p>
-        If you lose your device and don't have the recovery codes you will lose access to your account.
+        @ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesP1
     </p>
     <p>
-        Generating new recovery codes does not change the keys used in authenticator apps. If you wish to change the key
-        used in an authenticator app you should <a asp-action="ResetAuthenticatorWarning">reset your authenticator keys.</a>
+        <a asp-action="ResetAuthenticatorWarning">@ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesP2</a>
     </p>
 </div>
 
 <div>
     <form asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes" method="post" class="form-group">
-        <button class="btn btn-danger" type="submit">Generate Recovery Codes</button>
+        <button class="btn btn-danger" type="submit">@ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesSubmit</button>
     </form>
 </div>
 

@@ -19,7 +19,7 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class AccountViews {
@@ -47,7 +47,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   厳密に型指定されたこのリソース クラスを使用して、すべての検索リソースに対し、
+        ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
@@ -300,6 +300,51 @@ namespace MultiPurposeAuthSite.Resources {
         public static string LoginTitle {
             get {
                 return ResourceManager.GetString("LoginTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your login is protected with an authenticator app. Enter your authenticator code below. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LoginWithTwoFactorAuthenticatorP1 {
+            get {
+                return ResourceManager.GetString("LoginWithTwoFactorAuthenticatorP1", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Don&apos;t have access to your authenticator device? You can log in with a recovery code. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LoginWithTwoFactorAuthenticatorP2 {
+            get {
+                return ResourceManager.GetString("LoginWithTwoFactorAuthenticatorP2", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   You have requested to login with a recovery code. This login will not be remembered until you provide an authenticator app code at login or disable 2FA and login again. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LoginWithTwoFactorAuthenticatorRecoveryCodeP {
+            get {
+                return ResourceManager.GetString("LoginWithTwoFactorAuthenticatorRecoveryCodeP", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Recovery code verification に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LoginWithTwoFactorAuthenticatorRecoveryCodeTitle {
+            get {
+                return ResourceManager.GetString("LoginWithTwoFactorAuthenticatorRecoveryCodeTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   TOTP Two-factor authentication に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string LoginWithTwoFactorAuthenticatorTitle {
+            get {
+                return ResourceManager.GetString("LoginWithTwoFactorAuthenticatorTitle", resourceCulture);
             }
         }
         

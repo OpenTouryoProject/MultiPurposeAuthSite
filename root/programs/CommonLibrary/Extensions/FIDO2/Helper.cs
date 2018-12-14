@@ -93,11 +93,11 @@ namespace MultiPurposeAuthSite.Extensions.FIDO2
                 // Challengeの一致
 
                 // Load public key
-                RSACryptoServiceProvider rsaCryptoServiceProvider =
-                    (RSACryptoServiceProvider)RsaPublicKeyConverter.JwkToProvider(this.PublicKey);
-                
+                RSA rsa =
+                    RsaPublicKeyConverter.JwkToProvider(this.PublicKey);
+
                 // VerifyData
-                ret = rsaCryptoServiceProvider.VerifyData(
+                ret = rsa.VerifyData(
                     data, signatureBytes,
                     HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 

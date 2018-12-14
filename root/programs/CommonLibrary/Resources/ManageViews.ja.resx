@@ -375,4 +375,85 @@
   <data name="DeleteGdprPersonalDataSubmit" xml:space="preserve">
     <value>GDPR 個人情報データ削除</value>
   </data>
+  <data name="EnableTwoFactorAuthenticatorGenCode" xml:space="preserve">
+    <value>上記のQRコードをスキャンしたり、上記のキーを入力すると、認証器アプリがあなたに一意のコードを提供します。 下の確認ボックスにコードを入力してください。</value>
+  </data>
+  <data name="EnableTwoFactorAuthenticatorH" xml:space="preserve">
+    <value>認証器アプリを使用するには、次の手順を実行します。：</value>
+  </data>
+  <data name="EnableTwoFactorAuthenticatorP" xml:space="preserve">
+    <value>Microsoft Authenticatorのような認証器アプリをダウンロードする。</value>
+  </data>
+  <data name="EnableTwoFactorAuthenticatorQRCode" xml:space="preserve">
+    <value>あなたの認証器アプリで、QRコードをスキャンするか、このキー「{0}」を入力してください。 スペースとケーシングは関係ありません。</value>
+  </data>
+  <data name="EnableTwoFactorAuthenticatorSubmit" xml:space="preserve">
+    <value>確認</value>
+  </data>
+  <data name="EnableTwoFactorAuthenticatorTitle" xml:space="preserve">
+    <value>TOTP二要素認証器を有効にする</value>
+  </data>
+  <data name="GenerateTwoFactorAuthenticatorRecoveryCodesH" xml:space="preserve">
+    <value>この操作により、新しいリカバリコードが生成されます。</value>
+  </data>
+  <data name="GenerateTwoFactorAuthenticatorRecoveryCodesP1" xml:space="preserve">
+    <value>デバイスを紛失し、リカバリコードがない場合は、自分のアカウントにアクセスできなくなります。</value>
+  </data>
+  <data name="GenerateTwoFactorAuthenticatorRecoveryCodesP2" xml:space="preserve">
+    <value>新しいリカバリコードを生成しても、認証器アプリで使用されるキーは変更されません。 認証器アプリで使用するキーを変更する場合は、認証器キーをリセットする必要があります。</value>
+  </data>
+  <data name="GenerateTwoFactorAuthenticatorRecoveryCodesSubmit" xml:space="preserve">
+    <value>リカバリコードの生成</value>
+  </data>
+  <data name="GenerateTwoFactorAuthenticatorRecoveryCodesTitle" xml:space="preserve">
+    <value>TOTP二要素認証器のリカバリコードを生成する</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorAppH" xml:space="preserve">
+    <value>認証器アプリ</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorCodesLeft0H" xml:space="preserve">
+    <value>リカバリーコードは残っていません。</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorCodesLeft1H" xml:space="preserve">
+    <value>リカバリーコードが1つ残っています。</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorCodesLeft2H" xml:space="preserve">
+    <value>{0}個のリカバリコードが残っています。</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorSubmitAAA" xml:space="preserve">
+    <value>認証器アプリの追加</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorSubmitCAA" xml:space="preserve">
+    <value>認証器アプリの設定</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorSubmitRAA" xml:space="preserve">
+    <value>認証器アプリのリセット</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorSubmitRRC" xml:space="preserve">
+    <value>リカバリコードをリセット</value>
+  </data>
+  <data name="ManageTwoFactorAuthenticatorTitle" xml:space="preserve">
+    <value>TOTP二要素認証器の管理</value>
+  </data>
+  <data name="ResetTwoFactorAuthenticatorH" xml:space="preserve">
+    <value>認証器キーをリセットすると、認証器アプリは再構成するまで機能しません。</value>
+  </data>
+  <data name="ResetTwoFactorAuthenticatorP" xml:space="preserve">
+    <value>このプロセスでは、認証器アプリを確認して二要素認証のリカバリコードをリセットするまで二要素認証を無効にします。 認証器アプリの設定を完了しないと、アカウントにアクセスできなくなる可能性があります。</value>
+  </data>
+  <data name="ResetTwoFactorAuthenticatorSubmit" xml:space="preserve">
+    <value>認証器キーをリセットする。</value>
+  </data>
+  <data name="ResetTwoFactorAuthenticatorTitle" xml:space="preserve">
+    <value>TOTP二要素認証器のリセット</value>
+  </data>
+  <data name="ShowTwoFactorAuthenticatorRecoveryCodesH" xml:space="preserve">
+    <value>これらのコードを安全な場所に保管してください。</value>
+  </data>
+  <data name="ShowTwoFactorAuthenticatorRecoveryCodesP" xml:space="preserve">
+    <value>デバイスを紛失し、リカバリコードがない場合は、自分のアカウントにアクセスできなくなります。</value>
+  </data>
+  <data name="ShowTwoFactorAuthenticatorRecoveryCodesTitle" xml:space="preserve">
+    <value>TOTP二要素認証のリカバリコード管理</value>
+  </data>
 </root>

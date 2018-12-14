@@ -22,7 +22,8 @@ rem --------------------------------------------------
 set CURRENTDIR=%cd%
 cd "MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore"
 if exist "node_modules" rd /s /q "node_modules"
-call npm install
+call RestoreLib1.bat
+call RestoreLib2.bat
 cd %CURRENTDIR%
 
 dotnet restore "MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.sln"

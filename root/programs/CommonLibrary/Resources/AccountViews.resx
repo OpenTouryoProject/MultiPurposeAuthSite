@@ -198,6 +198,21 @@
   <data name="LoginTitle" xml:space="preserve">
     <value>Sign-in</value>
   </data>
+  <data name="LoginWithTwoFactorAuthenticatorP1" xml:space="preserve">
+    <value>Your login is protected with an authenticator app. Enter your authenticator code below.</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorP2" xml:space="preserve">
+    <value>Don't have access to your authenticator device? You can log in with a recovery code.</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorRecoveryCodeP" xml:space="preserve">
+    <value>You have requested to login with a recovery code. This login will not be remembered until you provide an authenticator app code at login or disable 2FA and login again.</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorRecoveryCodeTitle" xml:space="preserve">
+    <value>Recovery code verification</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorTitle" xml:space="preserve">
+    <value>TOTP Two-factor authentication</value>
+  </data>
   <data name="OAuth2AuthorizeGrantButton" xml:space="preserve">
     <value>Grant</value>
   </data>

@@ -22,7 +22,7 @@
 
 @model ManageShowTwoFactorAuthenticatorRecoveryCodesViewModel
 @{
-    ViewBag.Title = "Manage Two-factor authenticator recovery codes";
+    ViewBag.Title = ManageViews.ShowTwoFactorAuthenticatorRecoveryCodesTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -30,14 +30,14 @@
     <!-- Head 部の section -->
 }
 
-<h4>@ViewBag.Title</h4>
+<h2>@ViewBag.Title</h2>
 <div class="alert alert-warning" role="alert">
     <p>
         <span class="glyphicon glyphicon-warning-sign"></span>
-        <strong>Put these codes in a safe place.</strong>
+        <strong>@ManageViews.ShowTwoFactorAuthenticatorRecoveryCodesH</strong>
     </p>
     <p>
-        If you lose your device and don't have the recovery codes you will lose access to your account.
+        @ManageViews.ShowTwoFactorAuthenticatorRecoveryCodesP
     </p>
 </div>
 <div class="row">

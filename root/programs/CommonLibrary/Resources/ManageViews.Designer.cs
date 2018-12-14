@@ -19,7 +19,7 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class ManageViews {
@@ -47,7 +47,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   厳密に型指定されたこのリソース クラスを使用して、すべての検索リソースに対し、
+        ///   すべてについて、現在のスレッドの CurrentUICulture プロパティをオーバーライドします
         ///   現在のスレッドの CurrentUICulture プロパティをオーバーライドします。
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
@@ -309,6 +309,105 @@ namespace MultiPurposeAuthSite.Resources {
         public static string DeleteGdprPersonalDataSubmit {
             get {
                 return ResourceManager.GetString("DeleteGdprPersonalDataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Once you have scanned the QR code or input the key above, your two factor authentication app will provide you with a unique code. Enter the code in the confirmation box below. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableTwoFactorAuthenticatorGenCode {
+            get {
+                return ResourceManager.GetString("EnableTwoFactorAuthenticatorGenCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   To use an authenticator app go through the following steps: に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableTwoFactorAuthenticatorH {
+            get {
+                return ResourceManager.GetString("EnableTwoFactorAuthenticatorH", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Download a two-factor authenticator app like Microsoft Authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableTwoFactorAuthenticatorP {
+            get {
+                return ResourceManager.GetString("EnableTwoFactorAuthenticatorP", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Scan the QR Code or enter this key [{0}] into your two factor authenticator app. Spaces and casing do not matter. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableTwoFactorAuthenticatorQRCode {
+            get {
+                return ResourceManager.GetString("EnableTwoFactorAuthenticatorQRCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Verify に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableTwoFactorAuthenticatorSubmit {
+            get {
+                return ResourceManager.GetString("EnableTwoFactorAuthenticatorSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Enable TOTP Two-factor authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableTwoFactorAuthenticatorTitle {
+            get {
+                return ResourceManager.GetString("EnableTwoFactorAuthenticatorTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   This action generates new recovery codes. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string GenerateTwoFactorAuthenticatorRecoveryCodesH {
+            get {
+                return ResourceManager.GetString("GenerateTwoFactorAuthenticatorRecoveryCodesH", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   If you lose your device and don&apos;t have the recovery codes you will lose access to your account. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string GenerateTwoFactorAuthenticatorRecoveryCodesP1 {
+            get {
+                return ResourceManager.GetString("GenerateTwoFactorAuthenticatorRecoveryCodesP1", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Generating new recovery codes does not change the keys used in authenticator apps. If you wish to change the key used in an authenticator app you should reset your authenticator keys. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string GenerateTwoFactorAuthenticatorRecoveryCodesP2 {
+            get {
+                return ResourceManager.GetString("GenerateTwoFactorAuthenticatorRecoveryCodesP2", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Generate Recovery Codes に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string GenerateTwoFactorAuthenticatorRecoveryCodesSubmit {
+            get {
+                return ResourceManager.GetString("GenerateTwoFactorAuthenticatorRecoveryCodesSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Generate TOTP Two-factor authenticator recovery codes に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string GenerateTwoFactorAuthenticatorRecoveryCodesTitle {
+            get {
+                return ResourceManager.GetString("GenerateTwoFactorAuthenticatorRecoveryCodesTitle", resourceCulture);
             }
         }
         
@@ -754,11 +853,128 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Authenticator app に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorAppH {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorAppH", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   You have no recovery codes left. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorCodesLeft0H {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorCodesLeft0H", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   You have 1 recovery code left. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorCodesLeft1H {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorCodesLeft1H", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   You have {0} recovery codes left. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorCodesLeft3H {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorCodesLeft3H", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add authenticator app に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorSubmitAAA {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorSubmitAAA", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Configure authenticator app に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorSubmitCAA {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorSubmitCAA", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Reset authenticator app に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorSubmitRAA {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorSubmitRAA", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Reset recovery codes に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorSubmitRRC {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorSubmitRRC", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Manage TOTP Two-factor authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ManageTwoFactorAuthenticatorTitle {
+            get {
+                return ResourceManager.GetString("ManageTwoFactorAuthenticatorTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Refer your GDPR personal data に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ReferGdprPersonalDataSubmit {
             get {
                 return ResourceManager.GetString("ReferGdprPersonalDataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   If you reset your authenticator key your authenticator app will not work until you reconfigure it. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResetTwoFactorAuthenticatorH {
+            get {
+                return ResourceManager.GetString("ResetTwoFactorAuthenticatorH", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   This process disables 2FA until you verify your authenticator app and will also reset your 2FA recovery codes. If you do not complete your authenticator app configuration you may lose access to your account. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResetTwoFactorAuthenticatorP {
+            get {
+                return ResourceManager.GetString("ResetTwoFactorAuthenticatorP", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Reset authenticator key に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResetTwoFactorAuthenticatorSubmit {
+            get {
+                return ResourceManager.GetString("ResetTwoFactorAuthenticatorSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Reset TOTP Two-factor authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResetTwoFactorAuthenticatorTitle {
+            get {
+                return ResourceManager.GetString("ResetTwoFactorAuthenticatorTitle", resourceCulture);
             }
         }
         
@@ -795,6 +1011,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string SetPasswordTitle {
             get {
                 return ResourceManager.GetString("SetPasswordTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Put these codes in a safe place. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ShowTwoFactorAuthenticatorRecoveryCodesH {
+            get {
+                return ResourceManager.GetString("ShowTwoFactorAuthenticatorRecoveryCodesH", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   If you lose your device and don&apos;t have the recovery codes you will lose access to your account. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ShowTwoFactorAuthenticatorRecoveryCodesP {
+            get {
+                return ResourceManager.GetString("ShowTwoFactorAuthenticatorRecoveryCodesP", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Manage TOTP Two-factor authenticator recovery codes に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ShowTwoFactorAuthenticatorRecoveryCodesTitle {
+            get {
+                return ResourceManager.GetString("ShowTwoFactorAuthenticatorRecoveryCodesTitle", resourceCulture);
             }
         }
         

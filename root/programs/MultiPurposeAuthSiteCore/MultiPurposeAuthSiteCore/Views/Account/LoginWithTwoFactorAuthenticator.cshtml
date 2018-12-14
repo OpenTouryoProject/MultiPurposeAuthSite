@@ -22,7 +22,7 @@
 
 @model AccountLoginWithTwoFactorAuthenticatorViewModel
 @{
-    ViewBag.Title = "Two-factor authentication";
+    ViewBag.Title = AccountViews.LoginWithTwoFactorAuthenticatorTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -32,7 +32,7 @@
 
 <h2>@ViewBag.Title</h2>
 <hr />
-<p>Your login is protected with an authenticator app. Enter your authenticator code below.</p>
+<p>@AccountViews.LoginWithTwoFactorAuthenticatorP1</p>
 <div class="row">
     <div class="col-md-4">
         <form method="post" asp-route-returnUrl="@ViewData["ReturnUrl"]">
@@ -52,14 +52,13 @@
                 </div>
             </div>
             <div class="form-group">
-                <button type="submit" class="btn btn-default">Log in</button>
+                <button type="submit" class="btn btn-default">@AccountViews.LoginSubmit</button>
             </div>
         </form>
     </div>
 </div>
-<p>
-    Don't have access to your authenticator device? You can
-    <a asp-action="LoginWithTwoFactorAuthenticatorRecoveryCode" asp-route-returnUrl="@ViewData["ReturnUrl"]">log in with a recovery code</a>.
+<p> 
+    <a asp-action="LoginWithTwoFactorAuthenticatorRecoveryCode" asp-route-returnUrl="@ViewData["ReturnUrl"]">@AccountViews.LoginWithTwoFactorAuthenticatorP2</a>
 </p>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

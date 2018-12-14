@@ -39,11 +39,6 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Co
-@using MultiPurposeAuthSite.Entity
-@using MultiPurposeAuthSite.Resources
-@using MultiPurposeAuthSite.ViewModels
-
 @{
     ViewBag.Title = "OAuth2ClientAuthenticationFlow";
 }
@@ -64,10 +59,9 @@
     </div>
 </div>
 
-@Scripts.Render("~/bundles/multiauthsite")
-
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
+    <script src="~/js/oauthimplicit.js"></script>
     <script type="text/javascript">
 
         var fragment = "";

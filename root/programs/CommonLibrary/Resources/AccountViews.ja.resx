@@ -198,6 +198,21 @@
   <data name="LoginTitle" xml:space="preserve">
     <value>サインイン</value>
   </data>
+  <data name="LoginWithTwoFactorAuthenticatorP1" xml:space="preserve">
+    <value>あなたのログインは認証器アプリで保護されています。 以下に認証コードを入力してください。</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorP2" xml:space="preserve">
+    <value>デバイスにアクセスできない場合、リカバリコードでログインできます。</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorRecoveryCodeP" xml:space="preserve">
+    <value>リカバリコードを使用してログインします。 このログインは、ログイン時に認証コードを提供するか、二要素認証を無効にして再度ログインするまで記憶されません。</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorRecoveryCodeTitle" xml:space="preserve">
+    <value>リカバリコード検証</value>
+  </data>
+  <data name="LoginWithTwoFactorAuthenticatorTitle" xml:space="preserve">
+    <value>TOTP二要素認証</value>
+  </data>
   <data name="OAuth2AuthorizeGrantButton" xml:space="preserve">
     <value>権限を付与</value>
   </data>

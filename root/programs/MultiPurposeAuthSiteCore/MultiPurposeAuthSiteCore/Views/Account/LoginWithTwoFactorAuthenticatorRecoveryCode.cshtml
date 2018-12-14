@@ -22,7 +22,7 @@
 
 @model AccountLoginWithTwoFactorAuthenticatorRecoveryCodeViewModel
 @{
-    ViewBag.Title = "Recovery code verification";
+    ViewBag.Title = AccountViews.LoginWithTwoFactorAuthenticatorRecoveryCodeTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -33,8 +33,7 @@
 <h2>@ViewBag.Title</h2>
 <hr />
 <p>
-    You have requested to login with a recovery code. This login will not be remembered until you provide
-    an authenticator app code at login or disable 2FA and login again.
+    @AccountViews.LoginWithTwoFactorAuthenticatorRecoveryCodeP
 </p>
 <div class="row">
     <div class="col-md-4">
@@ -45,7 +44,7 @@
                 <input asp-for="RecoveryCode" class="form-control" autocomplete="off" />
                 <span asp-validation-for="RecoveryCode" class="text-danger"></span>
             </div>
-            <button type="submit" class="btn btn-default">Log in</button>
+            <button type="submit" class="btn btn-default">@AccountViews.LoginSubmit</button>
         </form>
     </div>
 </div>

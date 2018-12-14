@@ -22,7 +22,7 @@
 
 @model ManageEnableTwoFactorAuthenticatorViewModel
 @{
-    ViewBag.Title = "Enable Two-factor authenticator";
+    ViewBag.Title = ManageViews.EnableTwoFactorAuthenticatorTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -31,16 +31,12 @@
 }
 
 <h2>@ViewBag.Title</h2>
-<p class="text-info">
-    @AccountViews.VerifyEmailAddressP @*流用のため*@
-</p>
-
 <div>
-    <p>To use an authenticator app go through the following steps:</p>
+    <p>@ManageViews.EnableTwoFactorAuthenticatorH</p>
     <ol class="list">
         <li>
             <p>
-                Download a two-factor authenticator app like Microsoft Authenticator for
+                @ManageViews.EnableTwoFactorAuthenticatorP for
                 <a href="https://go.microsoft.com/fwlink/?Linkid=825071">Windows Phone</a>,
                 <a href="https://go.microsoft.com/fwlink/?Linkid=825072">Android</a> and
                 <a href="https://go.microsoft.com/fwlink/?Linkid=825073">iOS</a> or
@@ -50,15 +46,12 @@
             </p>
         </li>
         <li>
-            <p>Scan the QR Code or enter this key <kbd>@Model.SharedKey</kbd> into your two factor authenticator app. Spaces and casing do not matter.</p>
+            <p>@string.Format(ManageViews.EnableTwoFactorAuthenticatorQRCode, @Model.SharedKey)</p>
             <div id="qrCode"></div>
             <div id="qrCodeData" data-url="@Model.AuthenticatorUri"></div>
         </li>
         <li>
-            <p>
-                Once you have scanned the QR code or input the key above, your two factor authentication app will provide you
-                with a unique code. Enter the code in the confirmation box below.
-            </p>
+            <p>@ManageViews.EnableTwoFactorAuthenticatorGenCode</p>
             <div class="row">
                 <div class="col-md-6">
                     <form method="post">
@@ -67,7 +60,7 @@
                             <input asp-for="Code" class="form-control" autocomplete="off" />
                             <span asp-validation-for="Code" class="text-danger"></span>
                         </div>
-                        <button type="submit" class="btn btn-default">Verify</button>
+                        <button type="submit" class="btn btn-default">@ManageViews.EnableTwoFactorAuthenticatorSubmit</button>
                         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                     </form>
                 </div>

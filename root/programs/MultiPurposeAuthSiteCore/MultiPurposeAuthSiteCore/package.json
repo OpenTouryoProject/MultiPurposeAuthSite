@@ -1,7 +1,7 @@
 {
-  "name": "mvc_sample",
+  "name": "MultiPurposeAuthSiteCore",
   "version": "1.0.0",
-  "description": "Sample of Core MVC",
+  "description": "Multi Purpose Auth Site Core",
   "private": true,
   "main": "gruntfile.js",
   "scripts": {

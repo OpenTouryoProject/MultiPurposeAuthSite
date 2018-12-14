@@ -37,81 +37,81 @@
         <h4>@AccountViews.LoginH4</h4>
         <hr />
         <section id="loginForm">
-@using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-{
-            @Html.AntiForgeryToken()
-            @Html.ValidationSummary(true, "", new { @class = "text-danger" })
-            @Html.HiddenFor(m => m.ReturnUrl)
+            @using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            {
+                @Html.AntiForgeryToken()
+                @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+                @Html.HiddenFor(m => m.ReturnUrl)
 
-    if (Config.RequireUniqueEmail)
-    {
-            <div class="form-group">
-                @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
-                <div class="col-md-10">
-                    @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
-                    @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
-                </div>
-            </div>
-    }
-    else
-    {
-            <div class="form-group">
-                @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
-                <div class="col-md-10">
-                    @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
-                    @Html.ValidationMessageFor(m => m.Name, "", new { @class = "text-danger" })
-                </div>
-            </div>
-    }
+                if (Config.RequireUniqueEmail)
+                {
+                    <div class="form-group">
+                        @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
+                        <div class="col-md-10">
+                            @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+                            @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
+                        <div class="col-md-10">
+                            @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+                            @Html.ValidationMessageFor(m => m.Name, "", new { @class = "text-danger" })
+                        </div>
+                    </div>
+                }
 
-            <div class="form-group">
-                @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
-                <div class="col-md-10">
-                    @Html.PasswordFor(m => m.Password, new { @class = "form-control" })
-                    @Html.ValidationMessageFor(m => m.Password, "", new { @class = "text-danger" })
-                </div>
-            </div>
-            <div class="form-group">
-                <div class="col-md-offset-2 col-md-10">
-                    <div class="checkbox">
-                        @Html.CheckBoxFor(m => m.RememberMe)
-                        @Html.LabelFor(m => m.RememberMe)
+                <div class="form-group">
+                    @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
+                    <div class="col-md-10">
+                        @Html.PasswordFor(m => m.Password, new { @class = "form-control" })
+                        @Html.ValidationMessageFor(m => m.Password, "", new { @class = "text-danger" })
                     </div>
                 </div>
-            </div>
-            <div class="form-group">
-                <div class="col-md-offset-2 col-md-10">
-                    <button id="normal_signin" name="submitButton" value="normal_signin" type="button" class="btn btn-default">@AccountViews.LoginSubmit</button>
+                <div class="form-group">
+                    <div class="col-md-offset-2 col-md-10">
+                        <div class="checkbox">
+                            @Html.CheckBoxFor(m => m.RememberMe)
+                            @Html.LabelFor(m => m.RememberMe)
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <p>@Html.ActionLink(AccountViews.LoginRegisterActionLink, "Register")</p>
-            <p>
-                @*Enable this once you have account confirmation enabled for password reset functionality*@
-                @*これを有効にする前に、パスワード リセット機能に対するアカウント確認を有効にしてください。*@
-                @Html.ActionLink(AccountViews.LoginForgotPasswordActionLink, "ForgotPassword")
-            </p>
+                <div class="form-group">
+                    <div class="col-md-offset-2 col-md-10">
+                        <button id="normal_signin" name="submitButton" value="normal_signin" type="button" class="btn btn-default">@AccountViews.LoginSubmit</button>
+                    </div>
+                </div>
+                <p>@Html.ActionLink(AccountViews.LoginRegisterActionLink, "Register")</p>
+                <p>
+                    @*Enable this once you have account confirmation enabled for password reset functionality*@
+                    @*これを有効にする前に、パスワード リセット機能に対するアカウント確認を有効にしてください。*@
+                    @Html.ActionLink(AccountViews.LoginForgotPasswordActionLink, "ForgotPassword")
+                </p>
 
-            @Html.HiddenFor(m => m.Fido2UserId)
-            @Html.HiddenFor(m => m.Fido2Signature)
-            @Html.HiddenFor(m => m.Fido2AuthenticatorData)
-            @Html.HiddenFor(m => m.Fido2ClientData)
+                @Html.HiddenFor(m => m.Fido2UserId)
+                @Html.HiddenFor(m => m.Fido2Signature)
+                @Html.HiddenFor(m => m.Fido2AuthenticatorData)
+                @Html.HiddenFor(m => m.Fido2ClientData)
 
-            <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
-}
+                <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
+            }
         </section>
     </div>
     <div class="col-md-4">
 
-@if (Config.CanEditExtLogin)
-{
-        <div class="sample-box-1">
-            @*ここに外部ログインを実装*@
-            @AccountViews.ExternalLogins
-            <section id="socialLoginForm">
-                @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
-            </section>
-        </div>
-}
+        @if (Config.CanEditExtLogin)
+        {
+            <div class="sample-box-1">
+                @*ここに外部ログインを実装*@
+                @AccountViews.ExternalLogins
+                <section id="socialLoginForm">
+                    @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
+                </section>
+            </div>
+        }
 
         <div class="sample-box-1">
             @*ここにIDフェデレーションを実装*@
@@ -121,22 +121,23 @@
             </section>
         </div>
 
-@if (Config.CanEditFIDO2Data)
-{
-        <div class="sample-box-1">
-            @*ここにFIDO2を実装*@
-            @AccountViews.FIDO2Login
-            <section>
-                <button id="fido2_signin" name="submitButton" value="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
-            </section>
-        </div>
-}
+        @if (Config.CanEditFIDO2Data)
+        {
+            <div class="sample-box-1">
+                @*ここにFIDO2を実装*@
+                @AccountViews.FIDO2Login
+                <section>
+                    <button id="fido2_signin" name="submitButton" value="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
+                </section>
+            </div>
+        }
     </div>
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
+    <script src="~/js/webauthn.js"></script>
     <script>
         $(function () {
             $("#normal_signin").on("click", function () {

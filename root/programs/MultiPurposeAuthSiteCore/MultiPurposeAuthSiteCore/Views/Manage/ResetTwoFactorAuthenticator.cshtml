@@ -21,7 +21,7 @@
 *@
 
 @{
-    ViewBag.Title = "Reset Two-factor authenticator";
+    ViewBag.Title = ManageViews.ResetTwoFactorAuthenticatorTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -29,20 +29,19 @@
     <!-- Head 部の section -->
 }
 
-<h4>@ViewBag.Title</h4>
+<h2>@ViewBag.Title</h2>
 <div class="alert alert-warning" role="alert">
     <p>
         <span class="glyphicon glyphicon-warning-sign"></span>
-        <strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
+        <strong>@ManageViews.ResetTwoFactorAuthenticatorH</strong>
     </p>
     <p>
-        This process disables 2FA until you verify your authenticator app and will also reset your 2FA recovery codes.
-        If you do not complete your authenticator app configuration you may lose access to your account.
+        @ManageViews.ResetTwoFactorAuthenticatorP
     </p>
 </div>
 <div>
     <form asp-action="ResetTwoFactorAuthenticator" method="post" class="form-group">
-        <button class="btn btn-danger" type="submit">Reset authenticator key</button>
+        <button class="btn btn-danger" type="submit">@ManageViews.ResetTwoFactorAuthenticatorSubmit</button>
     </form>
 </div>
 
