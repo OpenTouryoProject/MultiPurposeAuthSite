@@ -2020,7 +2020,6 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>GetAuthenticatorKey</summary>
         /// <param name="user">ApplicationUser</param>
-        /// <param name="cancellationToken">CancellationToken</param>
         /// <returns>key string</returns>
         public static string GetAuthenticatorKey(ApplicationUser user)
         {
@@ -2562,19 +2561,19 @@ namespace MultiPurposeAuthSite.Data
 
             try
             {
+                ApplicationUser user = CmnUserStore.FindById(token.UserId);
+
+                if (user.TotpTokens == null)
+                {
+                    user.TotpTokens = new List<IdentityUserToken<string>>();
+                }
+
+                user.TotpTokens.Add(token);
+
                 switch (Config.UserStoreType)
                 {
-                    case EnumUserStoreType.Memory:
-                        ApplicationUser user = CmnUserStore.FindById(token.UserId);
-
-                        if (user.TotpTokens == null)
-                        {
-                            user.TotpTokens = new List<IdentityUserToken<string>>();
-                        }
-
-                        user.TotpTokens.Add(token);
-
-                        break;
+                    //case EnumUserStoreType.Memory:
+                    //    break;
 
                     case EnumUserStoreType.SqlServer:
                     case EnumUserStoreType.ODPManagedDriver:
@@ -2633,7 +2632,6 @@ namespace MultiPurposeAuthSite.Data
         /// <param name="user">ApplicationUser</param>
         /// <param name="loginProvider">string</param>
         /// <param name="name">string</param>
-        /// <param name="cancellationToken">CancellationToken</param>
         /// <returns>IdentityUserToken(string)</returns>
         private static IdentityUserToken<string> FindTotpToken(ApplicationUser user, string loginProvider, string name)
         {
@@ -2704,13 +2702,23 @@ namespace MultiPurposeAuthSite.Data
 
                             if (values.Count() != 0)
                             {
-                                return new IdentityUserToken<string>()
+                                IdentityUserToken<string> token 
+                                    = new IdentityUserToken<string>()
+                                    {
+                                        UserId = user.Id,
+                                        LoginProvider = loginProvider,
+                                        Name = name,
+                                        Value = values.First()
+                                    };
+
+                                if (user.TotpTokens == null)
                                 {
-                                    UserId = user.Id,
-                                    LoginProvider = loginProvider,
-                                    Name = name,
-                                    Value = values.First()
-                                };
+                                    user.TotpTokens = new List<IdentityUserToken<string>>();
+                                }
+
+                                user.TotpTokens.Add(token);
+
+                                return token;
                             }
                         }
 
@@ -2723,6 +2731,99 @@ namespace MultiPurposeAuthSite.Data
             }
 
             return null;
+        }
+
+        /// <summary>UpdateTotpToken</summary>
+        /// <param name="token">IdentityUserToken(string)</param>
+        private static void UpdateTotpToken(IdentityUserToken<string> token)
+        {
+            // 他テーブルのため、
+            OnlySts.STSOnly_M();
+
+            // Debug
+            Logging.MyDebugSQLTrace("★ : " +
+                MethodBase.GetCurrentMethod().DeclaringType.FullName +
+                "." + MethodBase.GetCurrentMethod().Name +
+                Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
+
+            try
+            {
+                switch (Config.UserStoreType)
+                {
+                    case EnumUserStoreType.Memory:
+                        // なにもしない（更新済みのため
+
+                    case EnumUserStoreType.SqlServer:
+                    case EnumUserStoreType.ODPManagedDriver:
+                    case EnumUserStoreType.PostgreSQL: // DMBMS Provider
+
+                        using (IDbConnection cnn = DataAccess.CreateConnection())
+                        {
+                            cnn.Open();
+
+                            IEnumerable<string> values = null;
+
+                            switch (Config.UserStoreType)
+                            {
+                                case EnumUserStoreType.SqlServer:
+
+                                    values = cnn.Query<string>(
+                                        "UPDATE [TotpTokens] " +
+                                        "  SET [Value] = @Value " +
+                                        "  WHERE [UserId] = @UserId AND [LoginProvider] = @LoginProvider AND [Name] = @Name",
+                                        new
+                                        {
+                                            UserId = token.UserId,
+                                            LoginProvider = token.LoginProvider,
+                                            Name = token.Name,
+                                            Value = token.Value
+                                        });
+
+                                    break;
+
+                                case EnumUserStoreType.ODPManagedDriver:
+
+                                    values = cnn.Query<string>(
+                                        "UPDATE \"TotpTokens\" " +
+                                        "  SET \"Value\" = :Value " +
+                                        "  WHERE \"UserId\" = :UserId AND \"LoginProvider\" = :LoginProvider AND \"Name\" = :Name",
+                                        new
+                                        {
+                                            UserId = token.UserId,
+                                            LoginProvider = token.LoginProvider,
+                                            Name = token.Name,
+                                            Value = token.Value
+                                        });
+
+                                    break;
+
+                                case EnumUserStoreType.PostgreSQL:
+
+                                    values = cnn.Query<string>(
+                                        "UPDATE \"totptokens\" " +
+                                        "  SET \"value\" = @Value " +
+                                        "  WHERE \"userid\" = @UserId AND \"loginprovider\" = @LoginProvider AND \"name\" = @Name",
+                                        new
+                                        {
+                                            UserId = token.UserId,
+                                            LoginProvider = token.LoginProvider,
+                                            Name = token.Name,
+                                            Value = token.Value
+                                        });
+
+                                    break;
+                            }
+                        }
+
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.MySQLLogForEx(ex);
+            }
+
+            return;
         }
 
         /// <summary>RemoveTotpTokenAsync</summary>
@@ -2817,15 +2918,20 @@ namespace MultiPurposeAuthSite.Data
                 "." + MethodBase.GetCurrentMethod().Name +
                 Logging.GetParametersString(MethodBase.GetCurrentMethod().GetParameters()));
 
+            // DBMSからロードする場合は、userと関連付ける。
             IdentityUserToken<string> token = CmnUserStore.FindTotpToken(user, loginProvider, name);
 
             if (token == null)
             {
-                CmnUserStore.AddTotpToken(CmnUserStore.CreateTotpToken(user, loginProvider, name, value));
+                
+                CmnUserStore.AddTotpToken( // (2) Memory and DBMS
+                    CmnUserStore.CreateTotpToken( // (1) Memory only
+                        user, loginProvider, name, value));
             }
             else
             {
-                token.Value = value;
+                token.Value = value; // (1) tokenを更新 (Memory)
+                CmnUserStore.UpdateTotpToken(token); // (2) DBMS only
             }
 
             return;
@@ -2889,7 +2995,6 @@ namespace MultiPurposeAuthSite.Data
 
         /// <summary>CountCodesAsync</summary>
         /// <param name="user">ApplicationUser</param>
-        /// <param name="cancellationToken">CancellationToken</param>
         /// <returns>int</returns>
         public static int CountCodes(ApplicationUser user)
         {
@@ -2951,6 +3056,7 @@ namespace MultiPurposeAuthSite.Data
             string[] splitCodes = mergedCodes.Split(';');
             if (splitCodes.Contains(code))
             {
+                // ココで使用されたRecoveryCodeが削除される。
                 List<string> updatedCodes = new List<string>(splitCodes.Where(s => s != code));
                 CmnUserStore.ReplaceCodes(user, updatedCodes);
                 return true;

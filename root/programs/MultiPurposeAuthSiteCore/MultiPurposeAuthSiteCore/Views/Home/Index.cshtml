@@ -21,7 +21,7 @@
 *@
 
 @{
-    ViewData["Title"] = MultiPurposeAuthSite.Resources.AccountViews.Agreement;
+    ViewBag.Title = "Menu";
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -29,7 +29,7 @@
     <!-- Head 部の section -->
 }
 
-<h2>@ViewData["Title"]</h2>
+<h2>@ViewBag.Title</h2>
 
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
