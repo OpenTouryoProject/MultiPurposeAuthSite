@@ -772,8 +772,23 @@ namespace MultiPurposeAuthSite.Controllers
                             + Config.OAuth2BearerTokenEndpoint2)
                         {
                             // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
-                            ClaimsIdentity identity = Helper.AddClaim(
-                                new ClaimsIdentity(OAuthDefaults.AuthenticationType), iss, "", scopes.Split(' '), "");
+                            ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
+
+                            bool isResourceOwner = false;
+                            string sub = Helper.GetInstance().GetClientName(iss, out isResourceOwner);
+
+                            // Name Claimを追加
+                            if (isResourceOwner)
+                            {
+                                identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+                            }
+                            else
+                            {
+                                identity.AddClaim(new Claim(ClaimTypes.Name, ""));
+                            }
+
+                            // ClaimsIdentityに、その他、所定のClaimを追加する。
+                            identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
 
                             AuthenticationProperties prop = new AuthenticationProperties();
                             prop.IssuedUtc = DateTimeOffset.UtcNow;

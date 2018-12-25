@@ -76,6 +76,28 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region エラー処理
+
+        /// <summary>SetError</summary>
+        /// <param name="context">BaseValidatingClientContext</param>
+        /// <param name="err">string</param>
+        /// <param name="errDescription">string</param>
+        private void SetError(BaseValidatingClientContext context, string err, string errDescription)
+        {
+            context.SetError(err, errDescription);
+        }
+
+        /// <summary>SetError</summary>
+        /// <param name="context">BaseValidatingTicketContext(OAuthAuthorizationServerOptions)</param>
+        /// <param name="err">string</param>
+        /// <param name="errDescription">string</param>
+        private void SetError(BaseValidatingTicketContext<OAuthAuthorizationServerOptions> context, string err, string errDescription)
+        {
+            context.SetError(err, errDescription);
+        }
+
+        #endregion
+
         #region (1) ValidateClientRedirectUriのオーバーライド
 
         /// <summary>
@@ -90,163 +112,26 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn385496.aspx"/>
         public override Task ValidateClientRedirectUri(OAuthValidateClientRedirectUriContext context)
         {
-            // context.Validatedに事前登録したRedirectエンドポイントを指定して呼び出し、contextを検証完了に設定する。
-            // ・ 検証完了にしなければ要求はそれ以上先には進まない。
-            // ・ RFC上の記載で、RedirectEndpointのURIは、AbsoluteUriである必要があるとの記載あり。
-            //    ASP.NET IdentityのチェックでAbsoluteUriである必要があるとの記載あり形式でないと弾かれる。
-
-            #region response_type
-
-            string response_type = context.Request.Query.Get("response_type");
-
-            // OIDC Implicit, Hybridの場合、書き換え
-            if (Config.EnableOpenIDConnect)
-            {
-                if (response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
-                {
-                    // OIDC Implicit, Hybridの場合、書き換え
-                    // Authorization Code Flowの場合は、codeなので書き換え不要。
-                    // ※ この変数は、使用するredirect_uriを決定するだめダケに利用される。
-                    response_type = OAuth2AndOIDCConst.ImplicitResponseType;
-
-                    // OIDC Implicit Flow、Hybrid Flowのパラメタチェック
-
-                    // nonceパラメタ 必須
-                    string nonce = context.Request.Query.Get(OAuth2AndOIDCConst.nonce);
-                    if (string.IsNullOrEmpty(nonce))
-                    {
-                        //throw new NotSupportedException("there was no nonce in query.");
-                        context.SetError(
-                            "server_error",
-                            "there was no nonce in query.");
-                        return Task.FromResult(0);
-                    }
-
-                    // scopeパラメタ 必須
-                    string scope = context.Request.Query.Get(OAuth2AndOIDCConst.scope);
-                    if (scope.IndexOf(OAuth2AndOIDCConst.Scope_Openid) == -1)
-                    {
-                        //throw new NotSupportedException("there was no openid in scope of query.");
-                        context.SetError(
-                            "server_error",
-                            "there was no openid in scope of query.");
-                        return Task.FromResult(0);
-                    }
-                }
-            }
-
-            if (!string.IsNullOrEmpty(response_type))
-            {
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                {
-                    if (!Config.EnableAuthorizationCodeGrantType)
-                    {
-                        //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
-                        context.SetError(
-                            "server_error",
-                            Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
-                        return Task.FromResult(0);
-                    }
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
-                {
-                    if (!Config.EnableImplicitGrantType)
-                    {
-                        //throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
-                        context.SetError(
-                            "server_error",
-                            Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType);
-                        return Task.FromResult(0);
-                    }
-                }
-            }
-
-            #endregion
-
-            #region redirect_uri
-
+            string client_id = context.ClientId;
             string redirect_uri = context.RedirectUri;
+            string response_type = context.Request.Query.Get(OAuth2AndOIDCConst.response_type); // OIDC拡張
+            string scope = context.Request.Query.Get(OAuth2AndOIDCConst.scope); // OIDC拡張
+            string nonce = context.Request.Query.Get(OAuth2AndOIDCConst.nonce); // OIDC拡張
 
-            // redirect_uriのチェック
-            if (string.IsNullOrEmpty(redirect_uri))
+            string valid = "";
+            string err = "";
+            string errDescription = "";
+
+            if (CmnEndpoints.ValidateClientRedirectUri(
+                client_id, redirect_uri, response_type, scope, nonce,
+                out valid, out err, out errDescription))
             {
-                // redirect_uriの指定が無い。
-
-                // クライアント識別子に対応する事前登録したredirect_uriを取得する。
-                redirect_uri = Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
-
-                if (!string.IsNullOrEmpty(redirect_uri))
-                {
-                    // 事前登録されている。
-                    if (redirect_uri.ToLower() == "test_self_code")
-                    {
-                        // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                        context.Validated(
-                            Config.OAuth2ClientEndpointsRootURI
-                            + Config.OAuth2AuthorizationCodeGrantClient_Account);
-                    }
-                    else if (redirect_uri.ToLower() == "test_self_token")
-                    {
-                        // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
-                        context.Validated(
-                            Config.OAuth2ClientEndpointsRootURI
-                            + Config.OAuth2ImplicitGrantClient_Account);
-                    }
-                    else if (redirect_uri.ToLower() == "id_federation_code")
-                    {
-                        // ID連携時のエンドポイント
-                        context.Validated(Config.IdFederationRedirectEndPoint);
-                    }
-                    else
-                    {
-                        // 事前登録した、redirect_uriをそのまま使用する。
-                        context.Validated(redirect_uri);
-                    }
-                }
-                else
-                {
-                    // 事前登録されていない。
-                }
+                context.Validated(valid);
             }
             else
             {
-                // redirect_uriの指定が有る。
-
-                // 指定されたredirect_uriを使用する場合は、チェックが必要になる。
-                if (
-                    // self_code : Authorization Codeグラント種別
-                    redirect_uri == (Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage)
-                )
-                {
-                    // 不特定多数のクライアント識別子に許可されたredirect_uri
-                    context.Validated(redirect_uri);
-                }
-                else
-                {
-                    // クライアント識別子に対応する事前登録したredirect_uriに
-                    string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(context.ClientId, response_type);
-
-                    //if (redirect_uri.StartsWith(preRegisteredUri))
-                    if (redirect_uri == preRegisteredUri)
-                    {
-                        // 完全一致する場合。
-                        context.Validated(redirect_uri);
-                    }
-                    else
-                    {
-                        // 完全一致しない場合。
-                        context.SetError(
-                            "server_error",
-                            Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri);
-                    }
-                }
+                this.SetError(context, err, errDescription);
             }
-
-            #endregion
 
             // 結果を返す。
             return Task.FromResult(0);
@@ -268,160 +153,28 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn385497.aspx"/>
         public override Task ValidateClientAuthentication(OAuthValidateClientAuthenticationContext context)
         {
-            // クライアント識別子
-            string clientId = "";
-            string clientSecret = "";
+            string grant_type = context.Parameters[OAuth2AndOIDCConst.grant_type];
+            string assertion = context.Parameters[OAuth2AndOIDCConst.assertion];
+            string client_id = "";
+            string client_secret = "";
 
-            // ・context.Validated を呼び出し、contextを検証完了に設定する。
-            // ・検証完了にしなければ要求はそれ以上先には進まない。
-            //context.Validated(clientId);
+            string valid = "";
+            string err = "";
+            string errDescription = "";
 
-            #region クライアント認証を行なう。
+            bool ret = context.TryGetBasicCredentials(out client_id, out client_secret);
 
-            if (string.IsNullOrEmpty(context.Parameters[OAuth2AndOIDCConst.grant_type]))
+            if (CmnEndpoints.ValidateClientAuthentication(
+                grant_type, assertion, client_id, client_secret,
+                out valid, out err, out errDescription))
             {
-                // 指定なし。
-                // 検証未完
-            }
-            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
-            {
-                #region Authorization Codeグラント種別
-
-                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
-                if (context.TryGetBasicCredentials(out clientId, out clientSecret))
-                {
-                    // 通常のクライアント認証
-                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
-                    {
-                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
-                        {
-                            // 検証完了
-                            context.Validated(clientId);
-                        }
-                    }
-                }
-                else
-                {
-                    // その他のクライアント認証の可能性
-                    string assertion = context.Parameters.Get(OAuth2AndOIDCConst.assertion);
-                    if (!string.IsNullOrEmpty(assertion))
-                    {
-                        // JWT client assertion
-                        Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                                assertion.Split('.')[1]), CustomEncode.us_ascii));
-
-                        string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
-                        pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                        if (!string.IsNullOrEmpty(pubKey))
-                        {
-                            string iss = "";
-                            string aud = "";
-                            string scopes = "";
-                            JObject jobj = null;
-
-                            if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
-                                assertion, out iss, out aud, out scopes, out jobj, pubKey))
-                            {
-                                // aud 検証
-                                if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
-                                    + Config.OAuth2BearerTokenEndpoint)
-                                {
-                                    // 検証完了
-                                    context.Validated(iss);
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // クライアント認証なしエラー
-                    }
-                }
-
-                #endregion
-            }
-            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
-            {
-                #region Resource Owner Password Credentialsグラント種別
-
-                #region 参考
-                // Simple OAuth Server: Implementing a Simple OAuth Server with Katana
-                // OAuth Authorization Server Components (Part 1) - Tugberk Ugurlu's Blog
-                // http://www.tugberkugurlu.com/archive/simple-oauth-server-implementing-a-simple-oauth-server-with-katana-oauth-authorization-server-components-part-1
-                // ・・・ 基本認証を使用する既存のクライアントを認証してOAuthに移行する。
-                #endregion
-
-                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
-                if (context.TryGetBasicCredentials(out clientId, out clientSecret))
-                {
-                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
-                    {
-                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
-                        {
-                            // 検証完了
-                            context.Validated(clientId);
-                        }
-                    }
-                }
-
-                #endregion
-            }
-            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
-            {
-                #region Client Credentialsグラント種別
-
-                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
-                if (context.TryGetBasicCredentials(out clientId, out clientSecret))
-                {
-                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
-                    {
-                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
-                        {
-                            // 検証完了
-                            context.Validated(clientId);
-                        }
-                    }
-                }
-
-                #endregion
-            }
-            else if (context.Parameters[OAuth2AndOIDCConst.grant_type].ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
-            {
-                #region RefreshToken
-
-                if (!Config.EnableRefreshToken)
-                {
-                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
-                }
-
-                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
-                if (context.TryGetBasicCredentials(out clientId, out clientSecret))
-                {
-                    if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
-                    {
-                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (clientSecret == Helper.GetInstance().GetClientSecret(context.ClientId))
-                        {
-                            // 検証完了
-                            context.Validated(clientId);
-                        }
-                    }
-                }
-
-                #endregion
+                context.Validated(valid);
             }
             else
             {
-                // 不明な値
-                // 検証未完
+                this.SetError(context, err, errDescription);
             }
 
-            #endregion
 
             // 結果を返す。
             return Task.FromResult(0);
@@ -440,78 +193,31 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="context">OAuthGrantResourceOwnerCredentialsContext</param>
         /// <returns>Task</returns>
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn343587.aspx"/>
-        public override async Task GrantResourceOwnerCredentials(OAuthGrantResourceOwnerCredentialsContext context)
+        public override Task GrantResourceOwnerCredentials(OAuthGrantResourceOwnerCredentialsContext context)
         {
-            if (!Config.EnableResourceOwnerPasswordCredentialsGrantType)
+            string userName = context.UserName;
+            string password = context.Password;
+            string client_id = context.ClientId;
+            IList<string> scope = context.Scope;
+
+            string err = "";
+            string errDescription = "";
+
+            // ClaimsIdentityを自前で生成する。
+            ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
+
+            if (CmnEndpoints.GrantResourceOwnerCredentials(
+                userName, password, client_id, scope, identity, out err, out errDescription))
+            {   
+                context.Validated(identity);
+            }
+            else
             {
-                throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableResourceOwnerCredentialsGrantType);
+                this.SetError(context, err, errDescription);
             }
 
-            // この実装は、ValidateClientAuthenticationの続きで、ClientのOAuth権限を確認する。
-            // 権限がある場合、Resource Owner Password Credentialsグラント種別の処理フローを継続する。
-
-            try
-            {
-                // ApplicationUser を取得する。
-                ApplicationUserManager userManager
-                    = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-
-                // username=ユーザ名&password=パスワードとして送付されたクレデンシャルを検証する。
-                ApplicationUser user = await userManager.FindAsync(context.UserName, context.Password);
-
-                if (user != null)
-                {
-                    // ユーザーが見つかった場合。
-
-                    try
-                    {
-                        // ユーザーに対応するClaimsIdentityを生成する。
-                        ClaimsIdentity identity = await userManager.CreateIdentityAsync(user, OAuthDefaults.AuthenticationType);
-
-                        // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
-
-                        // 検証完了
-                        context.Validated(identity);
-
-                        // オペレーション・トレース・ログ出力
-                        Logging.MyOperationTrace(string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
-                            user.Id, user.UserName, context.ClientId, Helper.GetInstance().GetClientName(context.ClientId)));
-                    }
-                    catch
-                    {
-                        // ClaimManagerIdentityは、UserManagerで作成できませんでした。
-                        context.SetError(
-                            "server_error",
-                             Resources.ApplicationOAuthBearerTokenProvider.server_error2);
-
-                        // 拒否
-                        context.Rejected();
-                    }
-                }
-                else
-                {
-                    // ユーザーが見つからなかった場合。
-
-                    // Resources Ownerの資格情報が無効であるか、Resources Ownerが存在しません。
-                    context.SetError(
-                        "access_denied",
-                        Resources.ApplicationOAuthBearerTokenProvider.access_denied);
-
-                    // 拒否
-                    context.Rejected();
-                }
-            }
-            catch
-            {
-                // ユーザーを取得できませんでした。
-                context.SetError(
-                    "server_error",
-                    Resources.ApplicationOAuthBearerTokenProvider.server_error1);
-
-                // 拒否
-                context.Rejected();
-            }
+            // 結果を返す。
+            return Task.FromResult(0);
         }
 
         #endregion
@@ -527,85 +233,29 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="context">OAuthGrantClientCredentialsContext</param>
         /// <returns>Task</returns>
         /// <see cref="https://msdn.microsoft.com/ja-jp/library/dn343586.aspx"/>
-        public override async Task GrantClientCredentials(OAuthGrantClientCredentialsContext context)
+        public override Task GrantClientCredentials(OAuthGrantClientCredentialsContext context)
         {
-            if (!Config.EnableClientCredentialsGrantType)
+            string client_id = context.ClientId;
+            IList<string> scope = context.Scope;
+
+            string err = "";
+            string errDescription = "";
+
+            // ClaimsIdentityを自前で生成する。
+            ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
+
+            if (CmnEndpoints.GrantClientCredentials(
+                client_id, scope, identity, out err, out errDescription))
             {
-                throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
+                context.Validated(identity);
+            }
+            else
+            {
+                this.SetError(context, err, errDescription);
             }
 
-            // ASP.Net MVC: Creating an OAuth client credentials grant type token endpoint
-            // http://www.hackered.co.uk/articles/asp-net-mvc-creating-an-oauth-client-credentials-grant-type-token-endpoint
-            // WEB API 2 OAuth Client Credentials Authentication, How to add additional parameters? - Stack Overflow
-            // http://stackoverflow.com/questions/29132031/web-api-2-oauth-client-credentials-authentication-how-to-add-additional-paramet
-
-            try
-            {
-                ApplicationUser user = null;
-                ApplicationUserManager userManager
-                    = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-
-                // client_idに対応するApplicationUserを取得する。
-                user = await userManager.FindByNameAsync(
-                    Helper.GetInstance().GetClientName(context.ClientId));
-
-                // ClaimsIdentity
-                ClaimsIdentity identity = null;
-                if (user != null)
-                {
-                    // User Accountの場合、
-                    
-                    // ユーザーに対応するClaimsIdentityを生成する。
-                    identity = await userManager.CreateIdentityAsync(user, OAuthDefaults.AuthenticationType);
-                    // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    identity = Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
-
-                    // オペレーション・トレース・ログ出力
-                    Logging.MyOperationTrace(
-                        string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
-                        user.Id, user.UserName, context.ClientId, Helper.GetInstance().GetClientName(context.ClientId)));
-
-                    // 検証完了
-                    context.Validated(identity);
-                }
-                else
-                {
-                    // Client Accountの場合、
-
-                    string clientName = Helper.GetInstance().GetClientName(context.ClientId);
-                    if (string.IsNullOrEmpty(clientName))
-                    {
-                        // 検証失敗
-                        context.Rejected();
-                    }
-                    else
-                    {
-                        // ClaimsIdentityを自前で生成する。
-                        identity = new ClaimsIdentity(context.Options.AuthenticationType);
-                        // Name Claimを追加
-                        identity.AddClaim(new Claim(ClaimTypes.Name, Helper.GetInstance().GetClientName(context.ClientId)));
-                        // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        identity = Helper.AddClaim(identity, context.ClientId, "", context.Scope, "");
-
-                        // オペレーション・トレース・ログ出力
-                        Logging.MyOperationTrace(string.Format(
-                            "Passed the 'client credentials flow' by {0}({1}).", context.ClientId, clientName));
-
-                        // 検証完了
-                        context.Validated(identity);
-                    }
-                }   
-            }
-            catch
-            {
-                // ユーザーを取得できませんでした。
-                context.SetError(
-                    "server_error",
-                    Resources.ApplicationOAuthBearerTokenProvider.server_error1);
-
-                // 拒否
-                context.Rejected();
-            }
+            // 結果を返す。
+            return Task.FromResult(0);
         }
 
         #endregion

@@ -44,7 +44,6 @@ using System.Web;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Claims;
-using System.Security.Cryptography.X509Certificates;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -71,152 +70,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>JWT文字列</returns>
         public string Protect(AuthenticationTicket ticket)
         {
-            string json = "";
-            //string jws = "";
-            
             // チェック
             if (ticket == null)
             {
                 throw new ArgumentNullException("ticket");
             }
 
-            ApplicationUserManager userManager
-                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-
-            ApplicationUser user = null;
-
-            if (ticket.Identity.Name == null)
-            {
-                // Client認証の場合、
-                user = null;
-            }
-            else
-            {
-                // Resource Owner認証の場合、
-                user = userManager.FindByName(ticket.Identity.Name); // 同期版でOK。
-            }
-
-            #region ClaimSetの生成
-
-            Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
-            List<string> scopes = new List<string>();
-            List<string> roles = new List<string>();
-
-            foreach (Claim c in ticket.Identity.Claims)
-            {
-                if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
-                {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, c.Value);
-                }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
-                {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, c.Value);
-                }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
-                {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, c.Value);
-                }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Scopes)
-                {
-                    scopes.Add(c.Value);
-                }
-                else if (c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                {
-                    roles.Add(c.Value);
-                }
-            }
-
-            if (ticket.Identity.Name == null)
-            {
-                // Client認証の場合、aud（client_id）に対応するClient名称
-                authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, 
-                    Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]));
-            }
-            else
-            {
-                // Resource Owner認証の場合、Resource Ownerの名称
-                authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, ticket.Identity.Name);
-            }
-
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
-
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
-
-            // scope値によって、返す値を変更する。
-            foreach (string scope in scopes)
-            {
-                if (user != null)
-                {
-                    // user == null では NG な Resource（Resource Owner の Resource）
-                    switch (scope.ToLower())
-                    {
-                        #region OpenID Connect
-
-                        case OAuth2AndOIDCConst.Scope_Profile:
-                            // ・・・
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Email:
-                            authTokenClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
-                            authTokenClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Phone:
-                            authTokenClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
-                            authTokenClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed.ToString());
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Address:
-                            // ・・・
-                            break;
-
-                        #endregion
-
-                        #region Else
-
-                        case OAuth2AndOIDCConst.Scope_UserID:
-                            authTokenClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Roles:
-                            authTokenClaimSet.Add(
-                                OAuth2AndOIDCConst.Scope_Roles,
-                                userManager.GetRolesAsync(user.Id).Result);
-                            break;
-
-                            #endregion
-                    }
-                }
-                else
-                {
-                    // user == null でも OK な Resource
-                }
-            }
-            
-            json = JsonConvert.SerializeObject(authTokenClaimSet);
-
-            #endregion
-
-            #region JWS化
-
-            JWS_RS256_X509 jwsRS256 = null;
-
-            // JWT_RS256_X509
-            jwsRS256 = new JWS_RS256_X509(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-            // JWSHeaderのセット
-            // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
-            Dictionary<string, string> jwk =
-                JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword));
-
-            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
-
-            // 署名
-            return jwsRS256.Create(json);
-
-            #endregion
+            return CmnAccessToken.Protect(ticket.Identity.Name, ticket.Identity.Claims, 
+                ticket.Properties.ExpiresUtc.Value, ticket.Properties.IssuedUtc.Value);
         }
 
         /// <summary>Unprotect</summary>

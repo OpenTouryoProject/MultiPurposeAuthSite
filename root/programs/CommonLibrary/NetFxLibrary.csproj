@@ -188,6 +188,8 @@
     <Compile Include="Notifications\EmailService.cs" />
     <Compile Include="Notifications\CmnSms.cs" />
     <Compile Include="Notifications\SmsService.cs" />
+    <Compile Include="TokenProviders\Cmn\CmnEndpoints.cs" />
+    <Compile Include="TokenProviders\Cmn\CmnAccessToken.cs" />
     <Compile Include="TokenProviders\Oasp\AccessTokenFormatJwt.cs" />
     <Compile Include="TokenProviders\Oasp\ApplicationOAuthBearerTokenProvider.cs" />
     <Compile Include="TokenProviders\Oasp\AuthorizationCodeProvider.cs" />
@@ -352,9 +354,7 @@
     <None Include="App.config" />
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="TokenProviders\Cmn\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
