@@ -54,7 +54,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 throw new ArgumentNullException("ticket");
             }
 
-            return CmnAccessToken.Protect(ticket.Identity.Name, ticket.Identity.Claims, 
+            return CmnAccessToken.CreateAccessTokenFromClaims(ticket.Identity.Name, ticket.Identity.Claims, 
                 ticket.Properties.ExpiresUtc.Value, ticket.Properties.IssuedUtc.Value);
         }
 

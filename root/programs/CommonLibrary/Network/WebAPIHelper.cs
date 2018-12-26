@@ -261,14 +261,6 @@ namespace MultiPurposeAuthSite.Network
             // HttpResponseMessage
             httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
             return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
-
-            //ServicePointManager.Expect100Continue = false;
-            //HttpWebRequest request = (HttpWebRequest)WebRequest.Create(resource_url);
-            //request.Method = "GET";
-            //request.Headers.Add(OAuth2AndOIDCConst.HttpHeader_Authorization, authHeader);
-            //WebResponse response = request.GetResponse();
-            //return JsonConvert.DeserializeObject<Dictionary<string, string>>(
-            //    new StreamReader(response.GetResponseStream()).ReadToEnd());
         }
 
         #endregion

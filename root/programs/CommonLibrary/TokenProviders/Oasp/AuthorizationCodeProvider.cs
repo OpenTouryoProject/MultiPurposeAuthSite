@@ -103,8 +103,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             temp.Add("ticket", context.SerializeTicket());
 
             // 有効期限が無効なtokenのペイロードだけ作成
-            string access_token_payload = ExtOIDC.OidcTokenEditor.
-                CreateAccessTokenPayloadFromIdentity(
+            string access_token_payload = CmnAccessToken.CreateAccessTokenPayloadForCode(
                     context.Ticket.Identity,
                     context.Ticket.Properties.IssuedUtc.Value);
 

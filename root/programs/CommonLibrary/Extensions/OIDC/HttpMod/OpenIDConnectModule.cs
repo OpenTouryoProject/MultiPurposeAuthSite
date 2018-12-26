@@ -166,8 +166,7 @@ namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
 
             string path = context.Request.Url.AbsolutePath;
 
-            if (path.IndexOf(Config.OAuth2BearerTokenEndpoint2) == -1
-                && path.IndexOf(Config.OAuth2BearerTokenEndpoint) != -1)
+            if (path.IndexOf(Config.OAuth2BearerTokenEndpoint) != -1)
             {
                 if (context.Request.Form[OAuth2AndOIDCConst.grant_type] == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {

@@ -1122,21 +1122,6 @@ namespace MultiPurposeAuthSite.Co
 
         #region OAuth2拡張
 
-        #region Token2
-
-        /// <summary>
-        /// JWT bearer token flow用のTokenエンドポイント
-        /// </summary>
-        public static string OAuth2BearerTokenEndpoint2
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2BearerTokenEndpoint2");
-            }
-        }
-
-        #endregion
-
         #region WebAPI
 
         /// <summary>

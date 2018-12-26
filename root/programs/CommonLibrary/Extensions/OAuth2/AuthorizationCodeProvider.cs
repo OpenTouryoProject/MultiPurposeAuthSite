@@ -34,8 +34,7 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 
-using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
-using ExtOIDC = MultiPurposeAuthSite.Extensions.OIDC;
+using MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.Data;
@@ -46,6 +45,7 @@ using System.Security.Claims;
 
 using Dapper;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
@@ -64,19 +64,17 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         #region Create
 
-
         /// <summary>CreateAuthenticationCode</summary>
         /// <param name="identity">ClaimsIdentity</param>
         /// <returns>code</returns>
-        public static string CreateAuthenticationCode(ClaimsIdentity identity, NameValueCollection queryString)
+        public static string Create(ClaimsIdentity identity, NameValueCollection queryString)
         {
             string code = Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n");
 
             Dictionary<string, string> temp = new Dictionary<string, string>();
 
             // 有効期限が無効なtokenのペイロードだけ作成
-            string access_token_payload = ExtOIDC.OidcTokenEditor.
-                CreateAccessTokenPayloadFromIdentity(identity, DateTimeOffset.Now);
+            string access_token_payload = CmnAccessToken.CreateAccessTokenPayloadForCode(identity, DateTimeOffset.Now);
             temp.Add("access_token_payload", access_token_payload);
 
             // OAuth PKCE 対応
@@ -85,16 +83,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
             // 新しいCodeのticketをストアに保存
             string jsonString = JsonConvert.SerializeObject(temp);
-            ExtOAuth2.AuthorizationCodeProvider.Create(code, jsonString);
 
-            return code;
-        }
-
-        /// <summary>Create</summary>
-        /// <param name="code">string</param>
-        /// <param name="jsonString">string</param>
-        public static void Create(string code, string jsonString)
-        {
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
@@ -139,6 +128,8 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                     break;
             }
+
+            return code;
         }
 
         #endregion
@@ -226,17 +217,17 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             // null チェック
             if (string.IsNullOrEmpty(value)) { return ""; }
 
-            Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
+            JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
 
             bool isPKCE = !string.IsNullOrEmpty(code_verifier);
             
             if (!isPKCE)
             {
                 // 通常のアクセストークン・リクエスト
-                if (string.IsNullOrEmpty(temp[OAuth2AndOIDCConst.code_challenge]))
+                if (string.IsNullOrEmpty((string)jobj[OAuth2AndOIDCConst.code_challenge]))
                 {
                     // Authorization Codeのcode
-                    return temp["ticket"];
+                    return (string)jobj["access_token_payload"];
                 }
                 else
                 {
@@ -247,28 +238,28 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             else
             {
                 // OAuth PKCEのアクセストークン・リクエスト
-                if (!string.IsNullOrEmpty(temp[OAuth2AndOIDCConst.code_challenge]) && !string.IsNullOrEmpty(code_verifier))
+                if (!string.IsNullOrEmpty((string)jobj[OAuth2AndOIDCConst.code_challenge]) && !string.IsNullOrEmpty(code_verifier))
                 {
-                    if (temp[OAuth2AndOIDCConst.code_challenge_method].ToLower() == OAuth2AndOIDCConst.PKCE_plain)
+                    if (((string)jobj[OAuth2AndOIDCConst.code_challenge_method]).ToLower() == OAuth2AndOIDCConst.PKCE_plain)
                     {
                         // plain
-                        if (temp[OAuth2AndOIDCConst.code_challenge] == code_verifier)
+                        if ((string)jobj[OAuth2AndOIDCConst.code_challenge] == code_verifier)
                         {
                             // 検証成功
-                            return temp["ticket"];
+                            return (string)jobj["access_token_payload"];
                         }
                         else
                         {
                             // 検証失敗
                         }
                     }
-                    else if (temp[OAuth2AndOIDCConst.code_challenge_method].ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
+                    else if (((string)jobj[OAuth2AndOIDCConst.code_challenge_method]).ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
                     {
                         // S256
-                        if (temp[OAuth2AndOIDCConst.code_challenge] == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
+                        if ((string)jobj[OAuth2AndOIDCConst.code_challenge] == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
                         {
                             // 検証成功
-                            return temp["ticket"];
+                            return (string)jobj["access_token_payload"];
                         }
                         else
                         {
@@ -344,11 +335,6 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
-
-            //// AuthenticationTicketを生成して返す。
-            //return new AuthenticationTicket(
-            //    (ClaimsIdentity)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["claims"])),
-            //    new AuthenticationProperties((IDictionary<string, string>)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["properties"]))));
 
             return temp["access_token_payload"];
         }

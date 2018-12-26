@@ -2034,7 +2034,7 @@ namespace MultiPurposeAuthSite.Controllers
                         ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                         // Codeの生成
-                        string code = ExtOAuth2.AuthorizationCodeProvider.CreateAuthenticationCode(identity, Request.QueryString);
+                        string code = ExtOAuth2.AuthorizationCodeProvider.Create(identity, Request.QueryString);
 
                         // オペレーション・トレース・ログ出力
                         ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -2067,7 +2067,7 @@ namespace MultiPurposeAuthSite.Controllers
                         ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                         // AccessTokenの生成
-                        string access_token = CmnAccessToken.Protect(identity.Name, identity.Claims, 
+                        string access_token = CmnAccessToken.CreateAccessTokenFromClaims(identity.Name, identity.Claims, 
                             DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes), DateTimeOffset.Now);
 
                         // オペレーション・トレース・ログ出力
@@ -2076,7 +2076,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
 
                         // RedirectエンドポイントへRedirect
-                        return new RedirectResult(valid + string.Format("#access_token={0}&state={1}", access_token, state));
+                        return new RedirectResult(valid + string.Format(
+                            "#access_token={0}&state={1}&token_type={2}&expires_in={3}",
+                            access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
                     }
                 }
                 else
@@ -2143,7 +2145,7 @@ namespace MultiPurposeAuthSite.Controllers
                     ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                     // Codeの生成
-                    string code = ExtOAuth2.AuthorizationCodeProvider.CreateAuthenticationCode(identity, Request.QueryString);
+                    string code = ExtOAuth2.AuthorizationCodeProvider.Create(identity, Request.QueryString);
 
                     // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());

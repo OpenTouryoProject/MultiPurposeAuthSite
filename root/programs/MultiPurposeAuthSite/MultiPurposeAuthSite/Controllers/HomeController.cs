@@ -492,9 +492,8 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
-            // Token2エンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint2;
+            // Tokenエンドポイントにアクセス
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint;
 
             // ClientNameから、client_id(iss)を取得。
             string iss = "";
@@ -514,12 +513,10 @@ namespace MultiPurposeAuthSite.Controllers
             string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
             privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
 
-            string response = await Helper.GetInstance()
-                .JwtBearerTokenFlowAsync(new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint2),
-                     JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                         iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
+            string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
+                new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint),
+                JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(iss, aud,
+                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes, privateKey));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
