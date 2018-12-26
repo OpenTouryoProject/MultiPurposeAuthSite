@@ -320,6 +320,18 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region /userinfo
 
+        /// <summary>TokenEndPoint</summary>
+        /// <returns>Dictionary(string, string)</returns>
+        [HttpPost]
+        public Dictionary<string, string> TokenEndpoint()
+        {
+            return null;
+        }
+
+        #endregion
+
+        #region /userinfo
+
         /// <summary>
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
         /// GET: /userinfo

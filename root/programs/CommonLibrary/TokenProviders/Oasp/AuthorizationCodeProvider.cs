@@ -34,7 +34,7 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
-using MultiPurposeAuthSite.Extensions.OIDC.HttpMod;
+using ExtOIDC = MultiPurposeAuthSite.Extensions.OIDC;
 
 using System;
 using System.IO;
@@ -94,7 +94,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="context">AuthenticationTokenCreateContext</param>
         private void CreateAuthenticationCode(AuthenticationTokenCreateContext context)
         {
-            string tokenId = Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n");
+            string code = Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n");
 
             Dictionary<string, string> temp = new Dictionary<string, string>();
             NameValueCollection queryString = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
@@ -103,7 +103,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             temp.Add("ticket", context.SerializeTicket());
 
             // 有効期限が無効なtokenのペイロードだけ作成
-            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayloadFromAuthenticationTicket(context.Ticket);
+            string access_token_payload = ExtOIDC.OidcTokenEditor.
+                CreateAccessTokenPayloadFromIdentity(
+                    context.Ticket.Identity,
+                    context.Ticket.Properties.IssuedUtc.Value);
+
             temp.Add("access_token_payload", access_token_payload);
 
             // OAuth PKCE 対応
@@ -119,9 +123,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 新しいCodeのticketをストアに保存
             string jsonString = JsonConvert.SerializeObject(temp);
-            ExtOAuth2.AuthorizationCodeProvider.CreateAuthenticationCode(tokenId, jsonString);
+            ExtOAuth2.AuthorizationCodeProvider.Create(code, jsonString);
 
-            context.SetToken(tokenId);
+            context.SetToken(code);
         }
 
         #endregion
@@ -165,8 +169,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // CodeのTicketを受け取り、ストアから削除する。
-            context.DeserializeTicket(ExtOAuth2.AuthorizationCodeProvider.
-                ReceiveAuthenticationCode(context.Token, code_verifier));
+            context.DeserializeTicket(ExtOAuth2.AuthorizationCodeProvider.Receive(context.Token, code_verifier));
         }
 
         /// <summary>VerifyCodeVerifier</summary>

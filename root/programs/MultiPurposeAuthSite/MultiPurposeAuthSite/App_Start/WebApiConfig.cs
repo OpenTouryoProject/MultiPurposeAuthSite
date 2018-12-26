@@ -18,6 +18,8 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+
 using System.Web.Http;
 using Microsoft.Owin.Security.OAuth;
 using Newtonsoft.Json.Serialization;
@@ -62,6 +64,12 @@ namespace MultiPurposeAuthSite
                 name: "DefaultApi",
                 routeTemplate: "api/{controller}/{action}/{id}",
                 defaults: new { id = RouteParameter.Optional }
+            );
+
+            config.Routes.MapHttpRoute(
+                name: "TokenEndpoint",
+                routeTemplate: Config.OAuth2BearerTokenEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2EndpointApi", action = "TokenEndpoint" }
             );
 
             //// トレース機能を有効化します。

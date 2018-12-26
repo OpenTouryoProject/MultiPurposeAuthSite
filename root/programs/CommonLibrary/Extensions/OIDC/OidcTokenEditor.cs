@@ -34,20 +34,16 @@
 using MultiPurposeAuthSite.Co;
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
 
-using Microsoft.Owin.Security;
-
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Security;
 
-namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
+namespace MultiPurposeAuthSite.Extensions.OIDC
 {
     /// <summary>OIDC用のtoken編集処理クラス</summary>
     /// <remarks>
@@ -69,24 +65,23 @@ namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
         /// CreateAccessTokenPayload
         ///   Hybrid Flow対応（access_token_payloadを処理）
         /// </summary>
-        /// <param name="ticket">AuthenticationTicket</param>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="issuedUtc">DateTimeOffset</param>
         /// <returns>Jwt AccessTokenのPayload部</returns>
-        /// <remarks>
-        /// Hybrid Flow対応なので、scopeを制限してもイイ。
-        /// </remarks>
-        public static string CreateAccessTokenPayloadFromAuthenticationTicket(AuthenticationTicket ticket)
+        /// <remarks>Hybrid Flow対応なので、scopeを制限してもイイ。</remarks>
+        public static string CreateAccessTokenPayloadFromIdentity(ClaimsIdentity identity, DateTimeOffset issuedUtc)
         {
             // チェック
-            if (ticket == null)
+            if (identity == null || issuedUtc == null)
             {
-                throw new ArgumentNullException("ticket");
+                throw new ArgumentNullException();
             }
 
             Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
             List<string> scopes = new List<string>();
             List<string> roles = new List<string>();
 
-            foreach (Claim c in ticket.Identity.Claims)
+            foreach (Claim c in identity.Claims)
             {
                 if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
                 {
@@ -111,7 +106,7 @@ namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
             }
 
             // Resource Owner認証の場合、Resource Ownerの名称
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, ticket.Identity.Name);
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, identity.Name);
 
             #region authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ・・・
 
@@ -124,7 +119,7 @@ namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
             #endregion
 
             authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, ticket.Properties.IssuedUtc.Value.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, issuedUtc.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
 
             // ★ Hybrid Flow対応なので、scopeを制限してもイイ。

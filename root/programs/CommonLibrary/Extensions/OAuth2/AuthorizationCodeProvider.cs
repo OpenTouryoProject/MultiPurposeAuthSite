@@ -34,10 +34,15 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 
+using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
+using ExtOIDC = MultiPurposeAuthSite.Extensions.OIDC;
+
 using System;
 using System.Data;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Collections.Specialized;
+using System.Security.Claims;
 
 using Dapper;
 using Newtonsoft.Json;
@@ -59,10 +64,36 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         #region Create
 
+
         /// <summary>CreateAuthenticationCode</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <returns>code</returns>
+        public static string CreateAuthenticationCode(ClaimsIdentity identity, NameValueCollection queryString)
+        {
+            string code = Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n");
+
+            Dictionary<string, string> temp = new Dictionary<string, string>();
+
+            // 有効期限が無効なtokenのペイロードだけ作成
+            string access_token_payload = ExtOIDC.OidcTokenEditor.
+                CreateAccessTokenPayloadFromIdentity(identity, DateTimeOffset.Now);
+            temp.Add("access_token_payload", access_token_payload);
+
+            // OAuth PKCE 対応
+            temp.Add(OAuth2AndOIDCConst.code_challenge, queryString[OAuth2AndOIDCConst.code_challenge]);
+            temp.Add(OAuth2AndOIDCConst.code_challenge_method, queryString[OAuth2AndOIDCConst.code_challenge_method]);
+
+            // 新しいCodeのticketをストアに保存
+            string jsonString = JsonConvert.SerializeObject(temp);
+            ExtOAuth2.AuthorizationCodeProvider.Create(code, jsonString);
+
+            return code;
+        }
+
+        /// <summary>Create</summary>
         /// <param name="code">string</param>
         /// <param name="jsonString">string</param>
-        public static void CreateAuthenticationCode(string code, string jsonString)
+        public static void Create(string code, string jsonString)
         {
             switch (Config.UserStoreType)
             {
@@ -114,11 +145,11 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         #region Receive
 
-        /// <summary>ReceiveAuthenticationCode</summary>
+        /// <summary>Receive</summary>
         /// <param name="code">string</param>
         /// <param name="code_verifier">string</param>
         /// <returns>ticket</returns>
-        public static string ReceiveAuthenticationCode(string code, string code_verifier)
+        public static string Receive(string code, string code_verifier)
         {
             string value = "";
             string ticket = "";

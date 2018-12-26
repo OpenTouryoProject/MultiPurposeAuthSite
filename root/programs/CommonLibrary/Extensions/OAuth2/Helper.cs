@@ -78,7 +78,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         private static Helper _oAuth2Helper = new Helper();
 
         /// <summary>クライアント識別子情報</summary>
-        private Dictionary<string, Dictionary<string, string>> _oauth2ClientsInfo = null;
+        private readonly Dictionary<string, Dictionary<string, string>> _oauth2ClientsInfo = null;
 
         /// <summary>
         /// OAuth Server
@@ -105,6 +105,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             // クライアント識別子情報
             this._oauth2ClientsInfo =
                 JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(Config.OAuth2ClientsInformation);
+
             // OAuth ServerにアクセスするためのHttpClient
             this._oAuth2HttpClient = HttpClientBuilder(EnumProxyType.Intranet);
 
@@ -395,9 +396,9 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <returns>client_secret</returns>
         public string GetClientSecret(string client_id)
         {
-            bool isResourceOwner = false;
-            return this.GetClientSecret(client_id, out isResourceOwner);
+            return this.GetClientSecret(client_id, out bool isResourceOwner);
         }
+
         /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="isResourceOwner">bool</param>
@@ -434,9 +435,8 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <param name="response_type">response_type</param>
         /// <returns>redirect_uri</returns>
         public string GetClientsRedirectUri(string client_id, string response_type)
-        {
-            bool isResourceOwner = false;
-            return this.GetClientsRedirectUri(client_id, response_type, out isResourceOwner);
+        {   
+            return this.GetClientsRedirectUri(client_id, response_type, out bool isResourceOwner);
         }
 
         /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
@@ -493,8 +493,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <returns>jwt_assertion_publickey</returns>
         public string GetJwtAssertionPublickey(string client_id)
         {
-            bool isResourceOwner = false;
-            return this.GetJwtAssertionPublickey(client_id, out isResourceOwner);
+            return this.GetJwtAssertionPublickey(client_id, out bool isResourceOwner);
         }
 
         /// <summary>client_idからjwt_assertion_publickeyを取得する（Client認証で使用する）。</summary>
@@ -538,9 +537,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <returns>client_name</returns>
         public string GetClientName(string client_id)
         {
-            bool isResourceOwner = false;
-            return this.GetClientName(client_id, out isResourceOwner);
-
+            return this.GetClientName(client_id, out bool isResourceOwner);
         }
 
         /// <summary>client_idからclient_nameを取得する。</summary>
@@ -579,8 +576,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <returns>指定したclientNameのclientId</returns>
         public string GetClientIdByName(string clientName)
         {
-            bool isResourceOwner = false;
-            return this.GetClientIdByName(clientName, out isResourceOwner);
+            return this.GetClientIdByName(clientName, out bool isResourceOwner);
         }
 
         /// <summary>clientNameからclientIdを取得</summary>

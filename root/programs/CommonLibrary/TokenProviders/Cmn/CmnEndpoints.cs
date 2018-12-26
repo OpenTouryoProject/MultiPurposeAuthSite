@@ -279,13 +279,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                         if (!string.IsNullOrEmpty(pubKey))
                         {
-                            string iss = "";
-                            string aud = "";
-                            string scopes = "";
-                            JObject jobj = null;
-
                             if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
-                                assertion, out iss, out aud, out scopes, out jobj, pubKey))
+                                assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                             {
                                 // aud 検証
                                 if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
@@ -476,8 +471,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // client_idに対応するApplicationUserを取得する。
-            bool isResourceOwner = false;
-            string sub = Helper.GetInstance().GetClientName(client_id, out isResourceOwner);
+            string sub = Helper.GetInstance().GetClientName(client_id, out bool isResourceOwner);
 
             if (isResourceOwner)
             {

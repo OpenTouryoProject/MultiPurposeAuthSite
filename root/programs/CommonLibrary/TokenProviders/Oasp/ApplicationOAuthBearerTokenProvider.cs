@@ -99,14 +99,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             string response_type = context.Request.Query.Get(OAuth2AndOIDCConst.response_type); // OIDC拡張
             string scope = context.Request.Query.Get(OAuth2AndOIDCConst.scope); // OIDC拡張
             string nonce = context.Request.Query.Get(OAuth2AndOIDCConst.nonce); // OIDC拡張
-
-            string valid = "";
-            string err = "";
-            string errDescription = "";
-
+            
             if (CmnEndpoints.ValidateClientRedirectUri(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out valid, out err, out errDescription))
+                out string valid, out string err, out string errDescription))
             {
                 context.Validated(valid);
             }
@@ -140,15 +136,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id = "";
             string client_secret = "";
 
-            string valid = "";
-            string err = "";
-            string errDescription = "";
-
             bool ret = context.TryGetBasicCredentials(out client_id, out client_secret);
 
             if (CmnEndpoints.ValidateClientAuthentication(
                 grant_type, assertion, client_id, client_secret,
-                out valid, out err, out errDescription))
+                out string valid, out string err, out string errDescription))
             {
                 context.Validated(valid);
             }
@@ -182,14 +174,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id = context.ClientId;
             IList<string> scope = context.Scope;
 
-            string err = "";
-            string errDescription = "";
-
             // ClaimsIdentityを自前で生成する。
             ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
 
             if (CmnEndpoints.GrantResourceOwnerCredentials(
-                userName, password, client_id, scope, identity, out err, out errDescription))
+                userName, password, client_id, scope, identity, out string err, out string errDescription))
             {   
                 context.Validated(identity);
             }
@@ -219,15 +208,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             string client_id = context.ClientId;
             IList<string> scope = context.Scope;
-
-            string err = "";
-            string errDescription = "";
-
+            
             // ClaimsIdentityを自前で生成する。
             ClaimsIdentity identity = new ClaimsIdentity(context.Options.AuthenticationType);
 
             if (CmnEndpoints.GrantClientCredentials(
-                client_id, scope, identity, out err, out errDescription))
+                client_id, scope, identity, out string err, out string errDescription))
             {
                 context.Validated(identity);
             }

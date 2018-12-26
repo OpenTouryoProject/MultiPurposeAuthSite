@@ -29,8 +29,9 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
-using MultiPurposeAuthSite.Extensions.OAuth2;
-using FIDO2 = MultiPurposeAuthSite.Extensions.FIDO2;
+using MultiPurposeAuthSite.TokenProviders;
+using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
+using ExtFIDO2 = MultiPurposeAuthSite.Extensions.FIDO2;
 
 using System;
 using System.Collections.Generic;
@@ -432,7 +433,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 //Debug.WriteLine("authenticatorData: " + model.Fido2AuthenticatorData);
                                 //Debug.WriteLine("signature: " + model.Fido2Signature);
 
-                                FIDO2.Helper fido2Helper = new FIDO2.Helper(user.FIDO2PublicKey, fido2Challenge);
+                                ExtFIDO2.Helper fido2Helper = new ExtFIDO2.Helper(user.FIDO2PublicKey, fido2Challenge);
                                 if (fido2Helper.ValidateSignature(
                                     model.Fido2ClientData, model.Fido2AuthenticatorData, model.Fido2Signature))
                                 {
@@ -1764,8 +1765,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string redirect_uri = Config.IdFederationRedirectEndPoint;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await Helper.GetInstance()
-                        .GetAccessTokenByCodeAsync(
+                    model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
                              new Uri(Config.IdFederationTokenEndPoint),
                             client_id, client_secret, redirect_uri, code, "");
 
@@ -1977,107 +1977,116 @@ namespace MultiPurposeAuthSite.Controllers
         ///  　の処理を行ない、 RedirectエンドポイントへRedirect。
         ///  redirect_uriは使用しない。
         ///  </summary>
-        /// <param name="response_type">response_type（必須）</param>
         /// <param name="client_id">client_id（必須）</param>
+        /// <param name="redirect_uri">redirect_uri（任意）</param>
+        /// <param name="response_type">response_type（必須）</param>
         /// <param name="scope">scope（任意）</param>
         /// <param name="state">state（推奨）</param>
         /// <param name="nonce">nonce（OIDC）</param>
         /// <param name="prompt">認可画面の扱い</param>
-        /// <param name="code_challenge">OAuth PKCE</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public async Task<ActionResult> OAuth2Authorize(string response_type, string client_id, string scope, string state,
-            string nonce, string prompt, // OpenID Connect
-            string code_challenge, string code_challenge_method) // OAuth PKCE
+        public async Task<ActionResult> OAuth2Authorize(
+            string client_id, string redirect_uri, string response_type, string scope, string state,
+            string nonce, string prompt) // OpenID Connect
+            // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
         {
-            // Cookie認証チケットからClaimsIdentityを取得しておく。
-            AuthenticateResult ticket = this.AuthenticationManager
-                .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
-            ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
-
-            // scopeパラメタ
-            string[] scopes = (scope ?? "").Split(' ');
-
-            if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+            if (CmnEndpoints.ValidateClientRedirectUri(
+                client_id, redirect_uri, response_type, scope, nonce,
+                out string valid, out string err, out string errDescription))
             {
-                // Authorization Codeグラント種別（仲介コードの発行）
-                ViewBag.Name = identity.Name;
-                ViewBag.Scopes = scopes;
+                // Cookie認証チケットからClaimsIdentityを取得しておく。
+                AuthenticateResult ticket = this.AuthenticationManager
+                    .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
+                ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
 
-                // 認証の場合、余計なscopeをfilterする。
-                bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
+                // scopeパラメタ
+                string[] scopes = (scope ?? "").Split(' ');
 
-                if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
-
-                if (isAuth                           // OAuth2 拡張仕様
-                    || prompt.ToLower() == "none")   // OIDC   RFC仕様
-                    // OIDC Hybrid Flowはresponse_type=codeに書換、識別できないので、prompt=noneを設定。
+                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
-                    // 認可画面をスキップ
+                    // Authorization Codeグラント種別（仲介コードの発行）
+                    ViewBag.Name = identity.Name;
+                    ViewBag.Scopes = scopes;
 
-                    // アクセス要求を保存して、仲介コードを発行する。
-                    identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
+                    // 認証の場合、余計なscopeをfilterする。
+                    bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
 
-                    // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    // ただし、認可画面をスキップする場合は、scopeをフィルタする。
-                    if (isAuth)
+                    if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
+
+                    if (isAuth                           // OAuth2 拡張仕様
+                        || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                                                         // OIDC Hybrid Flowはresponse_type=codeに書換、識別できないので、prompt=noneを設定。
                     {
-                        scopes = Helper.FilterClaimAtAuth(scopes).ToArray();
+                        // 認可画面をスキップ
+
+                        // アクセス要求を保存して、仲介コードを発行する。
+                        identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
+
+                        // ClaimsIdentityに、その他、所定のClaimを追加する。
+                        // ただし、認可画面をスキップする場合は、scopeをフィルタする。
+                        if (isAuth)
+                        {
+                            scopes = ExtOAuth2.Helper.FilterClaimAtAuth(scopes).ToArray();
+                        }
+
+                        ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
+
+                        // Codeの生成
+                        string code = ExtOAuth2.AuthorizationCodeProvider.CreateAuthenticationCode(identity, Request.QueryString);
+
+                        // オペレーション・トレース・ログ出力
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
+                            user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
+
+                        // RedirectエンドポイントへRedirect
+                        return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
                     }
+                    else
+                    {
+                        // アクセス要求の許可/拒否を訪ねるViewを表示
+                        return View();
+                    }
+                }
+                else if ((response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType))
+                {
+                    // Implicitグラント種別（Access Tokenの発行）
+                    if (scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth))
+                    {
+                        // authの場合、Implicitグラント種別はNGとする。
+                    }
+                    else
+                    {
+                        // アクセス要求の許可
+                        identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
+                        //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
-                    Helper.AddClaim(identity, client_id, state, scopes, nonce);
+                        // ClaimsIdentityに、その他、所定のClaimを追加する。
+                        ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
-                    // ClaimsIdentityでサインインして、仲介コードを発行
-                    this.AuthenticationManager.SignIn(identity);
+                        // AccessTokenの生成
+                        string access_token = CmnAccessToken.Protect(identity.Name, identity.Claims, 
+                            DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes), DateTimeOffset.Now);
 
-                    // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of auth by {2}({3}).",
-                        user.Id, user.UserName, client_id, Helper.GetInstance().GetClientName(client_id)));
+                        // オペレーション・トレース・ログ出力
+                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                        Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
+                                user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
 
-                    // RedirectエンドポイントへRedirect
-                    return new EmptyResult();
+                        // RedirectエンドポイントへRedirect
+                        return new RedirectResult(valid + string.Format("#access_token={0}&state={1}", access_token, state));
+                    }
                 }
                 else
                 {
-                    // アクセス要求の許可/拒否を訪ねるViewを表示
-                    return View();
+                    // 不正なResponseType
                 }
-            }
-            else if ((response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType))
-                    // OIDC Implicit Flowはresponse_type=tokenに書換、識別できないので、prompt=noneを設定。
-            {
-                // Implicitグラント種別（Access Tokenの発行）
-                if (scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth))
-                {
-                    // authの場合、Implicitグラント種別はNGとする。
-                }
-                else
-                {
-                    // アクセス要求の許可
-                    identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
-
-                    // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    Helper.AddClaim(identity, client_id, state, scopes, nonce);
-
-                    // ClaimsIdentityでサインインして、Access Tokenを発行
-                    AuthenticationManager.SignIn(identity);
-
-                    // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of token by {2}({3}).",
-                            user.Id, user.UserName, client_id, Helper.GetInstance().GetClientName(client_id)));
-                }
-
-                // RedirectエンドポイントへRedirect
-                return new EmptyResult();
             }
             else
             {
-                // ・・・
+                // 不正なRequest
             }
 
             // 再表示
@@ -2090,6 +2099,8 @@ namespace MultiPurposeAuthSite.Controllers
         ///  ※ パラメタは、認可レスポンスのURL中に残っているものを使用。
         ///  </summary>
         /// <param name="client_id">client_id（必須）</param>
+        /// <param name="redirect_uri">redirect_uri（任意）</param>
+        /// <param name="response_type">response_type（必須）</param>
         /// <param name="scope">scope（任意）</param>
         /// <param name="state">state（推奨）</param>
         /// <param name="nonce">nonce（OIDC）</param>
@@ -2097,48 +2108,59 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuth2Authorize(string client_id, string scope, string state, string nonce)
+        public async Task<ActionResult> OAuth2Authorize(
+            string client_id, string redirect_uri, string response_type, string scope, string state,
+            string nonce) // OpenID Connect
         {
-            // Cookie認証チケットからClaimsIdentityを取得しておく。
-            AuthenticateResult ticket = this.AuthenticationManager
+            if (CmnEndpoints.ValidateClientRedirectUri(
+                client_id, redirect_uri, response_type, scope, nonce,
+                out string valid, out string err, out string errDescription))
+            {
+                // Cookie認証チケットからClaimsIdentityを取得しておく。
+                AuthenticateResult ticket = this.AuthenticationManager
                 .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
-            ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
+                ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
 
-            // 次に、アクセス要求を保存して、仲介コードを発行する。
+                // 次に、アクセス要求を保存して、仲介コードを発行する。
 
-            // scopeパラメタ
-            string[] scopes = (scope ?? "").Split(' ');
+                // scopeパラメタ
+                string[] scopes = (scope ?? "").Split(' ');
 
-            if (!string.IsNullOrEmpty(Request.Form.Get("submit.Login")))
-            {
-                // 別のアカウントでログイン
-                //（サインアウトしてリダイレクト）
-                this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
-                return new RedirectResult(Request.RawUrl);
-            }
-            else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
-            {
-                // アクセス要求を保存して、仲介コードを発行する。
-                identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
-                //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
+                if (!string.IsNullOrEmpty(Request.Form.Get("submit.Login")))
+                {
+                    // 別のアカウントでログイン
+                    //（サインアウトしてリダイレクト）
+                    this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+                    return new RedirectResult(Request.RawUrl);
+                }
+                else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
+                {
+                    // アクセス要求を保存して、仲介コードを発行する。
+                    identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
+                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
-                // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, state, scopes, nonce);
+                    // ClaimsIdentityに、その他、所定のClaimを追加する。
+                    ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
-                // ClaimsIdentityでサインインして、仲介コードを発行
-                this.AuthenticationManager.SignIn(identity);
+                    // Codeの生成
+                    string code = ExtOAuth2.AuthorizationCodeProvider.CreateAuthenticationCode(identity, Request.QueryString);
 
-                // オペレーション・トレース・ログ出力
-                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
-                        user.Id, user.UserName, client_id, Helper.GetInstance().GetClientName(client_id)));
+                    // オペレーション・トレース・ログ出力
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
+                            user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
 
-                // RedirectエンドポイントへRedirect
-                return new EmptyResult();
+                    // RedirectエンドポイントへRedirect
+                    return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                }
+                else
+                {
+                    // 不正な操作
+                }
             }
             else
             {
-                // ・・・
+                // 不正なRequest
             }
 
             // 再表示
@@ -2211,8 +2233,8 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-                string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+                string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
@@ -2233,14 +2255,14 @@ namespace MultiPurposeAuthSite.Controllers
                         if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                         {
                             // 通常
-                            model.Response = await Helper.GetInstance()
+                            model.Response = await ExtOAuth2.Helper.GetInstance()
                                 .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                 client_id, client_secret, redirect_uri, code);
                         }
                         else
                         {
                             // PKCE
-                            model.Response = await Helper.GetInstance()
+                            model.Response = await ExtOAuth2.Helper.GetInstance()
                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                client_id, client_secret, redirect_uri,
                                code, code_verifier_InSessionOrCookie);
@@ -2258,13 +2280,13 @@ namespace MultiPurposeAuthSite.Controllers
                         string iss = "";
 
                         // Client Accountのみ
-                        iss = Helper.GetInstance().GetClientIdByName("TestClient");
+                        iss = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
 
                         // テストなので秘密鍵は共通とする。
                         string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
                         privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
 
-                        model.Response = await Helper.GetInstance().GetAccessTokenByCodeAsync(
+                        model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
                             tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
                                 iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
                     }
@@ -2297,10 +2319,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                 if (!string.IsNullOrEmpty(model.AccessToken))
                 {
-                    List<string> out_roles = null;
-                    List<string> out_scopes = null;
-
-                    if (!AccessToken.Verify(model.AccessToken, out out_sub, out out_roles, out out_scopes, out out_jobj))
+                    if (!AccessToken.Verify(model.AccessToken,
+                        out out_sub, out List<string> out_roles, out List<string> out_scopes, out out_jobj))
                     {
                         throw new Exception("AccessToken検証エラー");
                     }
@@ -2308,9 +2328,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 if (!string.IsNullOrEmpty(model.IdToken))
                 {
-                    string out_nonce = "";
-
-                    if(!IdToken.Verify(model.IdToken, model.AccessToken, code, state, out out_sub, out out_nonce, out out_jobj)
+                    
+                    if(!IdToken.Verify(
+                        model.IdToken, model.AccessToken, code, state,
+                        out out_sub, out string out_nonce, out out_jobj)
                         && out_nonce == nonce_InSessionOrCookie)
                     {
                         throw new Exception("IdToken検証エラー");
@@ -2355,7 +2376,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
                     {
                         // UserInfoエンドポイントにアクセス
-                        model.Response = await Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
+                        model.Response = await ExtOAuth2.Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
                     }
                     else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
                     {
@@ -2368,10 +2389,10 @@ namespace MultiPurposeAuthSite.Controllers
                         // Tokenエンドポイントにアクセス
 
                         //  client_Idから、client_secretを取得。
-                        string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Helper.GetInstance().
+                        model.Response = await ExtOAuth2.Helper.GetInstance().
                             UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
@@ -2418,10 +2439,10 @@ namespace MultiPurposeAuthSite.Controllers
                         // Revokeエンドポイントにアクセス
 
                         //  client_Idから、client_secretを取得。
-                        string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Helper.GetInstance().RevokeTokenAsync(
+                        model.Response = await ExtOAuth2.Helper.GetInstance().RevokeTokenAsync(
                             revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -2454,10 +2475,10 @@ namespace MultiPurposeAuthSite.Controllers
                         // Introspectエンドポイントにアクセス
 
                         //  client_Idから、client_secretを取得。
-                        string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await Helper.GetInstance().IntrospectTokenAsync(
+                        model.Response = await ExtOAuth2.Helper.GetInstance().IntrospectTokenAsync(
                             introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
