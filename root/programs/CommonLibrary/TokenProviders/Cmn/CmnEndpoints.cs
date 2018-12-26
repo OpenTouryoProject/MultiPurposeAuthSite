@@ -32,7 +32,11 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+#if NETFX
 using MultiPurposeAuthSite.Entity;
+#else
+using MultiPurposeAuthSite;
+#endif
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;

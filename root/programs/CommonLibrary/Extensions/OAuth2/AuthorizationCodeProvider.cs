@@ -33,16 +33,11 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
-using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
-using System.IO;
 using System.Data;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Threading.Tasks;
-
-using Microsoft.Owin.Security.Infrastructure;
 
 using Dapper;
 using Newtonsoft.Json;

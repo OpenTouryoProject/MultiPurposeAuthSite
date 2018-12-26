@@ -44,6 +44,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.AspNetCore.Mvc.Cors.Internal;
 
 using Touryo.Infrastructure.Framework.StdMigration;
+using Touryo.Infrastructure.Framework.Util;
 using Touryo.Infrastructure.Public.Util;
 
 namespace MultiPurposeAuthSite
@@ -118,9 +119,15 @@ namespace MultiPurposeAuthSite
                 // Developmentモードの場合
 
                 // 開発用エラー画面
-                app.UseDeveloperExceptionPage();
-                app.UseDatabaseErrorPage();
-                
+                //app.UseDeveloperExceptionPage();
+                //app.UseDatabaseErrorPage();
+
+                // https://forums.asp.net/t/2114176.aspx?app+UseDeveloperExceptionPage+not+working
+                // UseDeveloperExceptionPageとUseIdentity、併用できない？
+                // UseStatusCodePagesWithRedirects＋自作開発用エラー画面？
+                app.UseStatusCodePagesWithRedirects(
+                    GetConfigParameter.GetConfigValue(FxLiteral.ERROR_SCREEN_PATH));
+
                 // 簡易ログ出力
                 loggerFactory.AddConsole(Configuration.GetSection("Logging"));
                 loggerFactory.AddDebug();
