@@ -21,6 +21,8 @@
 //**********************************************************************************
 //* クラス名        ：RefreshTokenProvider
 //* クラス日本語名  ：RefreshTokenProvider（ライブラリ）
+//*                   --------------------------------------------------
+//*                   Instance methodが必要なため singleton。
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -31,20 +33,15 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
+using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
+
 using System;
-using System.Data;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Infrastructure;
 using Microsoft.Owin.Security.DataHandler.Serializer;
-
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Co;
-
-using Dapper;
 
 using Touryo.Infrastructure.Public.Security;
 
@@ -62,19 +59,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>シングルトン</summary>
         private static RefreshTokenProvider _RefreshTokenProvider = new RefreshTokenProvider();
 
-        /// <summary>
-        /// _refreshTokens
-        /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
-        /// </summary>
-        private static ConcurrentDictionary<string, AuthenticationTicket>
-            RefreshTokens = new ConcurrentDictionary<string, AuthenticationTicket>();
-        
         /// <summary>GetInstance</summary>
         /// <returns>RefreshTokenProvider</returns>
         public static RefreshTokenProvider GetInstance()
         {
             return RefreshTokenProvider._RefreshTokenProvider;
         }
+
+        #region instance
 
         #region Create
 
@@ -94,10 +86,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="context"></param>
         private void CreateRefreshToken(AuthenticationTokenCreateContext context)
         {
-            // context.SetToken(context.SerializeTicket());
-
-            // --------------------------------------------------
-
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
@@ -112,61 +100,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     ExpiresUtc = DateTime.UtcNow.Add(Config.OAuth2RefreshTokenExpireTimeSpanFromDays) // System.TimeSpan.FromSeconds(20)) // Debug時  
                 };
 
-                // AuthenticationTicket.IdentityのClaimsIdentity値を含む有効期限付きの新しいAuthenticationTicketを作成する。
+                // AuthenticationTicket.IdentityのClaimsIdentity値を含む
+                // 有効期限付きの新しいAuthenticationTicketを作成する。
                 AuthenticationTicket refreshTokenTicket = new AuthenticationTicket(context.Ticket.Identity, refreshTokenProperties);
 
-                // 新しいrefreshTokenTicketをConcurrentDictionaryに保存
-                // consider storing only the hash of the handle.
-
                 TicketSerializer serializer = new TicketSerializer();
-                byte[] bytes = serializer.Serialize(refreshTokenTicket);
 
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryAdd(token, refreshTokenTicket);
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    cnn.Execute(
-                                        "INSERT INTO [RefreshTokenDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = token, Value = bytes, CreatedDate = DateTime.Now });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
-                                        new { Key = token, Value = bytes, CreatedDate = DateTime.Now });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    cnn.Execute(
-                                        "INSERT INTO \"refreshtokendictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = token, Value = bytes, CreatedDate = DateTime.Now });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-
-                context.SetToken(token);
+                // 新しいrefreshTokenTicketをConcurrentDictionaryに保存
+                // consider storing only the hash of the handle.                
+                context.SetToken(ExtOAuth2.RefreshTokenProvider.
+                    Create(serializer.Serialize(refreshTokenTicket)));
             }
             else
             {
@@ -197,93 +140,22 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="context">AuthenticationTokenReceiveContext</param>
         private void ReceiveRefreshToken(AuthenticationTokenReceiveContext context)
         {
-            //context.DeserializeTicket(context.Token);
-
-            // --------------------------------------------------
-
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
-                
-                AuthenticationTicket ticket;
+
+                // AuthenticationTicketを受け取り、ストアから削除する。
                 TicketSerializer serializer = new TicketSerializer();
-
-                IEnumerable<byte[]> values = null;
-                List<byte[]> list = null;
-
-                switch (Config.UserStoreType)
+                
+                byte[] temp = ExtOAuth2.RefreshTokenProvider.Receive(context.Token);
+                if (temp == null)
                 {
-                    case EnumUserStoreType.Memory:
-                        if (RefreshTokenProvider.RefreshTokens.TryRemove(context.Token, out ticket))
-                        {
-                            context.SetTicket(ticket);
-                        }
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    values = cnn.Query<byte[]>(
-                                        "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        ticket = serializer.Deserialize(values.AsList()[0]);
-                                        context.SetTicket(ticket);
-
-                                        cnn.Execute(
-                                            "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = context.Token });
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    values = cnn.Query<byte[]>(
-                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        ticket = serializer.Deserialize(values.AsList()[0]);
-                                        context.SetTicket(ticket);
-
-                                        cnn.Execute(
-                                            "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    values = cnn.Query<byte[]>(
-                                       "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        ticket = serializer.Deserialize(values.AsList()[0]);
-                                        context.SetTicket(ticket);
-
-                                        cnn.Execute(
-                                            "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
-                                    }
-
-                                    break;
-                            }
-                        }
-
-                        break;
+                    // == null
+                }
+                else
+                {
+                    // != null
+                    context.SetTicket(serializer.Deserialize(temp));
                 }
             }
             else
@@ -294,91 +166,41 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #endregion
+
+        #region static
+
         #region Reference
 
         /// <summary>（インスタンス化不要な直接的な）参照</summary>
-        /// <param name="key">string</param>
+        /// <param name="tokenId">string</param>
         /// <returns>AuthenticationTicket</returns>
         /// <remarks>OAuth 2.0 Token Introspectionのサポートのために必要</remarks>
-        public static AuthenticationTicket ReferDirectly(string key)
+        public static AuthenticationTicket ReferDirectly(string tokenId)
         {
-            AuthenticationTicket ticket = null;
-
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
 
+                // AuthenticationTicketを参照する。
                 TicketSerializer serializer = new TicketSerializer();
-
-                IEnumerable<byte[]> values = null;
-                List<byte[]> list = null;
-
-                switch (Config.UserStoreType)
+                byte[] temp = ExtOAuth2.RefreshTokenProvider.Refer(tokenId);
+                if (temp == null)
                 {
-                    case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryGetValue(key, out ticket);
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    values = cnn.Query<byte[]>(
-                                        "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        ticket = serializer.Deserialize(values.AsList()[0]);
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    values = cnn.Query<byte[]>(
-                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        ticket = serializer.Deserialize(values.AsList()[0]);
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    values = cnn.Query<byte[]>(
-                                      "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        ticket = serializer.Deserialize(values.AsList()[0]);
-                                    }
-
-                                    break;
-                            }
-                        }
-
-                        break;
+                    // == null
+                    return null;
+                }
+                else
+                {
+                    // != null
+                    return serializer.Deserialize(temp);
                 }
             }
             else
             {
                 // EnableRefreshToken == false
+                return null;
             }
-
-            return ticket;
         }
 
         #endregion
@@ -386,75 +208,24 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region Delete
 
         /// <summary>（インスタンス化不要な直接的な）削除</summary>
-        /// <param name="key">string</param>
+        /// <param name="tokenId">string</param>
         /// <returns>削除できたか否か</returns>
         /// <remarks>OAuth 2.0 Token Revocationサポート</remarks>
-        public static bool DeleteDirectly(string key)
+        public static bool DeleteDirectly(string tokenId)
         {
-            int ret = 0;
-
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
-
-                AuthenticationTicket ticket;
-
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-                        if (RefreshTokenProvider.RefreshTokens.TryRemove(key, out ticket))
-                        {
-                            // 1 refresh : 1 access なので、単に捨てればOK。
-                            ret = 1;
-                        }
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    // 1 refresh : 1 access なので、単に捨てればOK。
-                                    ret = cnn.Execute(
-                                        "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = key });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    // 1 refresh : 1 access なので、単に捨てればOK。
-                                    ret = cnn.Execute(
-                                        "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = key });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    // 1 refresh : 1 access なので、単に捨てればOK。
-                                    ret = cnn.Execute(
-                                        "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = key });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
+                return ExtOAuth2.RefreshTokenProvider.Delete(tokenId);
             }
             else
             {
                 // EnableRefreshToken == false
+                return false;
             }
-
-            return !(ret == 0);
         }
+
+        #endregion
 
         #endregion
     }

@@ -66,7 +66,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             string json = "";
 
             #region ClaimSetの生成
-
+            
             Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
             List<string> scopes = new List<string>();
             List<string> roles = new List<string>();
@@ -244,7 +244,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     //  ★ "exp": JWT の有効期限（Unix時間）
                     //  ☆ "jti": JWT のID（OAuth Token Revocation）
 
-                    DateTime? datetime = RevocationProvider.GetInstance().Get((string)authTokenClaimSet[OAuth2AndOIDCConst.jti]);
+                    DateTime? datetime = RevocationProvider.Get((string)authTokenClaimSet[OAuth2AndOIDCConst.jti]);
 
                     if (datetime == null)
                     {

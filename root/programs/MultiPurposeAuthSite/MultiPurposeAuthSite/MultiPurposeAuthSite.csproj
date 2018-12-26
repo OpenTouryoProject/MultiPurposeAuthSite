@@ -251,7 +251,7 @@
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ManageController.cs" />
     <Compile Include="Controllers\OAuth2EndpointApiController.cs" />
-    <Compile Include="Controllers\OAuth2ResourceServerColler.cs" />
+    <Compile Include="Controllers\OAuth2ResourceServerController.cs" />
     <Compile Include="Controllers\PingController.cs" />
     <Compile Include="Controllers\RolesAdminController.cs" />
     <Compile Include="Controllers\UsersAdminController.cs" />

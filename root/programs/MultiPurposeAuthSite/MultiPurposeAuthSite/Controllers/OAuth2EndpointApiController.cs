@@ -37,7 +37,7 @@ using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Log;
 
 using MultiPurposeAuthSite.TokenProviders;
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Text;
@@ -349,7 +349,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (user == null)
                     {
                         // Client認証
-                        subject = Helper.GetInstance().GetClientName(
+                        subject = ExtOAuth2.Helper.GetInstance().GetClientName(
                             MyBaseAsyncApiController.GetClaimsIdentity()
                             .FindFirst(OAuth2AndOIDCConst.Claim_Audience).Value);
                     }
@@ -467,7 +467,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                 {
                     // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == Helper.GetInstance().GetClientSecret(clientId))
+                    if (clientSecret == ExtOAuth2.Helper.GetInstance().GetClientSecret(clientId))
                     {
                         // 検証完了
 
@@ -484,7 +484,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     x => x.Type == OAuth2AndOIDCConst.Claim_JwtId).FirstOrDefault<Claim>();
 
                                 // access_token取消
-                                RevocationProvider.GetInstance().Create(jti.Value);
+                                ExtOAuth2.RevocationProvider.Create(jti.Value);
                                 return null; // 成功
                             }
                             else
@@ -585,7 +585,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                 {
                     // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == Helper.GetInstance().GetClientSecret(clientId))
+                    if (clientSecret == ExtOAuth2.Helper.GetInstance().GetClientSecret(clientId))
                     {
                         // 検証完了
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
@@ -734,7 +734,7 @@ namespace MultiPurposeAuthSite.Controllers
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                         assertion.Split('.')[1]), CustomEncode.us_ascii));
 
-                string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                string pubKey = ExtOAuth2.Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
                 pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                 if (!string.IsNullOrEmpty(pubKey))
@@ -755,7 +755,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
 
                             bool isResourceOwner = false;
-                            string sub = Helper.GetInstance().GetClientName(iss, out isResourceOwner);
+                            string sub = ExtOAuth2.Helper.GetInstance().GetClientName(iss, out isResourceOwner);
 
                             // Name Claimを追加
                             if (isResourceOwner)
@@ -768,7 +768,7 @@ namespace MultiPurposeAuthSite.Controllers
                             }
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
+                            identity = ExtOAuth2.Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
 
                             AuthenticationProperties prop = new AuthenticationProperties();
                             prop.IssuedUtc = DateTimeOffset.UtcNow;
@@ -791,7 +791,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ret.Add("expires_in", (long.Parse((string)jobj[OAuth2AndOIDCConst.exp]) - long.Parse((string)jobj[OAuth2AndOIDCConst.iat])).ToString());
 
                             // オペレーション・トレース・ログ出力
-                            string clientName = Helper.GetInstance().GetClientName(iss);
+                            string clientName = ExtOAuth2.Helper.GetInstance().GetClientName(iss);
                             Logging.MyOperationTrace(string.Format(
                                 "{0}({1}) passed the 'jwt bearer token flow' by {2}({3}).",
                                 iss, clientName, iss, clientName));

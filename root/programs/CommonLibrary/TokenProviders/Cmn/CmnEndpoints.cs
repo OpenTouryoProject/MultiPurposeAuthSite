@@ -42,11 +42,6 @@ using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 
-using System.Web;
-
-using Microsoft.Owin.Security.OAuth;
-using Microsoft.AspNet.Identity.Owin;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 

@@ -48,27 +48,17 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
     /// </summary>
     public class RevocationProvider
     {
-        /// <summary>シングルトン</summary>
-        private static RevocationProvider _OAuth2RevocationProvider = new RevocationProvider();
-
         /// <summary>
         /// OAuth2RevocationProvider
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
         private static ConcurrentDictionary<string, DateTime> OAuth2Revocation = new ConcurrentDictionary<string, DateTime>();
 
-        /// <summary>GetInstance</summary>
-        /// <returns>OAuth2RevocationProvider</returns>
-        public static RevocationProvider GetInstance()
-        {
-            return RevocationProvider._OAuth2RevocationProvider;
-        }
-
         #region Create
 
         /// <summary>Create</summary>
         /// <param name="jti">string</param>
-        public void Create(string jti)
+        public static void Create(string jti)
         {
             switch (Config.UserStoreType)
             {
@@ -123,7 +113,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <summary>Get</summary>
         /// <param name="jti">string</param>
         /// <returns>DateTime?</returns>
-        public DateTime? Get(string jti)
+        public static DateTime? Get(string jti)
         {
             DateTime? datetime = null;
 
