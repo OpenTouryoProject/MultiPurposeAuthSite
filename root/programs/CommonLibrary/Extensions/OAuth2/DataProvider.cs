@@ -21,9 +21,6 @@
 //**********************************************************************************
 //* クラス名        ：OAuth2.DataProvider
 //* クラス日本語名  ：OAuth2.DataProvider（ライブラリ）
-//*                   --------------------------------------------------
-//*                   IUserに無いUserStore系の拡張はこちらに実装する。
-//*                   Singletonなのは、MemoryStoreに対応するため。
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -51,28 +48,18 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
     /// </summary>
     public class DataProvider
     {
-        /// <summary>シングルトン</summary>
-        private static DataProvider _OAuth2DataProvider = new DataProvider();
-
         /// <summary>
         /// OAuth2Data
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
         private static ConcurrentDictionary<string, string> OAuth2Data = new ConcurrentDictionary<string, string>();
 
-        /// <summary>GetInstance</summary>
-        /// <returns>OAuth2DataProvider</returns>
-        public static DataProvider GetInstance()
-        {
-            return DataProvider._OAuth2DataProvider;
-        }
-
         #region Create
 
         /// <summary>Create</summary>
         /// <param name="clientID">string</param>
         /// <param name="unstructuredData">string</param>
-        public void Create(string clientID, string unstructuredData)
+        public static void Create(string clientID, string unstructuredData)
         {
             switch (Config.UserStoreType)
             {
@@ -127,7 +114,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <summary>Get</summary>
         /// <param name="clientID">string</param>
         /// <returns>unstructuredData</returns>
-        public string Get(string clientID)
+        public static string Get(string clientID)
         {
             string unstructuredData = "";
 
@@ -184,7 +171,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <summary>Update</summary>
         /// <param name="clientID">string</param>
         /// <param name="unstructuredData">string</param>
-        public void Update(string clientID, string unstructuredData)
+        public static void Update(string clientID, string unstructuredData)
         {
             switch (Config.UserStoreType)
             {
@@ -242,7 +229,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         /// <summary>Delete</summary>
         /// <param name="clientID">string</param>
-        public void Delete(string clientID)
+        public static void Delete(string clientID)
         {
             switch (Config.UserStoreType)
             {

@@ -90,7 +90,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // EnableRefreshToken == true
 
-                string token = GetPassword.Base64UrlSecret(128); // Guid.NewGuid().ToString();
+                string tokenId = GetPassword.Base64UrlSecret(128); // Guid.NewGuid().ToString();
 
                 // copy properties and set the desired lifetime of refresh token.
                 AuthenticationProperties refreshTokenProperties = new AuthenticationProperties(context.Ticket.Properties.Dictionary)
@@ -106,10 +106,10 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 TicketSerializer serializer = new TicketSerializer();
 
-                // 新しいrefreshTokenTicketをConcurrentDictionaryに保存
-                // consider storing only the hash of the handle.                
-                context.SetToken(ExtOAuth2.RefreshTokenProvider.
-                    Create(serializer.Serialize(refreshTokenTicket)));
+                // 新しいRefreshTokenのAuthenticationTicketをストアに保存         
+                ExtOAuth2.RefreshTokenProvider.Create(tokenId, serializer.Serialize(refreshTokenTicket));
+
+                context.SetToken(tokenId);
             }
             else
             {
@@ -144,7 +144,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // EnableRefreshToken == true
 
-                // AuthenticationTicketを受け取り、ストアから削除する。
+                // RefreshTokenのAuthenticationTicketを受け取り、ストアから削除する。
                 TicketSerializer serializer = new TicketSerializer();
                 
                 byte[] temp = ExtOAuth2.RefreshTokenProvider.Receive(context.Token);
@@ -182,7 +182,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // EnableRefreshToken == true
 
-                // AuthenticationTicketを参照する。
+                // ストアのRefreshTokenのAuthenticationTicketを参照する。
                 TicketSerializer serializer = new TicketSerializer();
                 byte[] temp = ExtOAuth2.RefreshTokenProvider.Refer(tokenId);
                 if (temp == null)
@@ -216,6 +216,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
+
+                // RefreshTokenのAuthenticationTicketをストアから削除する。
                 return ExtOAuth2.RefreshTokenProvider.Delete(tokenId);
             }
             else

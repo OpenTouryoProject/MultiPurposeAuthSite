@@ -58,19 +58,17 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         #region Create
 
         /// <summary>Create</summary>
-        /// <param name="AuthenticationTicket">byte[]</param>
+        /// <param name="authenticationTicket">byte[]</param>
         /// <returns>token id</returns>
-        public static string Create(byte[] AuthenticationTicket)
+        public static void Create(string tokenId, byte[] authenticationTicket)
         {
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
-                string token = GetPassword.Base64UrlSecret(128); // Guid.NewGuid().ToString();
-
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryAdd(token, AuthenticationTicket);
+                        RefreshTokenProvider.RefreshTokens.TryAdd(tokenId, authenticationTicket);
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -87,7 +85,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                     cnn.Execute(
                                         "INSERT INTO [RefreshTokenDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = token, Value = AuthenticationTicket, CreatedDate = DateTime.Now });
+                                        new { Key = tokenId, Value = authenticationTicket, CreatedDate = DateTime.Now });
 
                                     break;
 
@@ -95,7 +93,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                     cnn.Execute(
                                         "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
-                                        new { Key = token, Value = AuthenticationTicket, CreatedDate = DateTime.Now });
+                                        new { Key = tokenId, Value = authenticationTicket, CreatedDate = DateTime.Now });
 
                                     break;
 
@@ -103,7 +101,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                     cnn.Execute(
                                         "INSERT INTO \"refreshtokendictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = token, Value = AuthenticationTicket, CreatedDate = DateTime.Now });
+                                        new { Key = tokenId, Value = authenticationTicket, CreatedDate = DateTime.Now });
 
                                     break;
                             }
@@ -111,13 +109,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                         break;
                 }
-
-                return token;
             }
             else
             {
                 // EnableRefreshToken == false
-                return "";
             }
         }
 

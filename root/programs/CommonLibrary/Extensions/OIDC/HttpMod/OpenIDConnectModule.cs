@@ -33,6 +33,7 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.TokenProviders;
+using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Text.RegularExpressions;
@@ -515,7 +516,7 @@ namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
                             if (this.RewritedResponseTypeFrom_CodeIdToken)
                             {
                                 // id_tokenを取得
-                                string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
+                                string access_token_payload = ExtOAuth2.AuthorizationCodeProvider.GetAccessTokenPayload(code);
 
                                 // c_hash, s_hashを付与
                                 id_token = IdToken.ChangeToIdTokenFromAccessToken(
@@ -529,7 +530,7 @@ namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
                             else if (this.RewritedResponseTypeFrom_CodeToken)
                             {
                                 // access_tokenを取得
-                                string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
+                                string access_token_payload = ExtOAuth2.AuthorizationCodeProvider.GetAccessTokenPayload(code);
                                 access_token = OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in);
 
                                 fragment = "#access_token={0}&token_type=Bearer&code={1}&expires_in={2}&state={3}";
@@ -538,7 +539,7 @@ namespace MultiPurposeAuthSite.Extensions.OIDC.HttpMod
                             else if (this.RewritedResponseTypeFrom_CodeIdTokenToken)
                             {
                                 // id_token, access_tokenを取得
-                                string access_token_payload = AuthorizationCodeProvider.GetInstance().GetAccessTokenPayload(code);
+                                string access_token_payload = ExtOAuth2.AuthorizationCodeProvider.GetAccessTokenPayload(code);
                                 access_token = OidcTokenEditor.ProtectFromAccessTokenPayload(access_token_payload, expires_in);
 
                                 // at_hash, c_hash, s_hashを付与

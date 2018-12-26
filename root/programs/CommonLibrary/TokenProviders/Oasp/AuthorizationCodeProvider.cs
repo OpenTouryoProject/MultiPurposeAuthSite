@@ -33,23 +33,18 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
-
+using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
 using MultiPurposeAuthSite.Extensions.OIDC.HttpMod;
 
 using System;
 using System.IO;
-using System.Text;
 using System.Data;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Collections.Specialized;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 using System.Web;
 
-using Microsoft.Owin;
-using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Infrastructure;
 
 using Dapper;
@@ -71,13 +66,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>シングルトン</summary>
         private static AuthorizationCodeProvider _AuthorizationCodeProvider = new AuthorizationCodeProvider();
         
-        /// <summary>
-        /// _authenticationCodes
-        /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
-        /// </summary>
-        private readonly ConcurrentDictionary<string, string>
-                    _authenticationCodes = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
-
         /// <summary>GetInstance</summary>
         /// <returns>AuthorizationCodeProvider</returns>
         public static AuthorizationCodeProvider GetInstance()
@@ -106,7 +94,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="context">AuthenticationTokenCreateContext</param>
         private void CreateAuthenticationCode(AuthenticationTokenCreateContext context)
         {
-            context.SetToken(Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n"));
+            string tokenId = Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n");
 
             Dictionary<string, string> temp = new Dictionary<string, string>();
             NameValueCollection queryString = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
@@ -128,53 +116,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             // サイズ大き過ぎるので根本の方式を修正。
             //temp.Add("claims",  CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Identity)));
             //temp.Add("properties", CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Properties.Dictionary)));
-            
-            string value = JsonConvert.SerializeObject(temp);
 
-            switch (Config.UserStoreType)
-            {
-                case EnumUserStoreType.Memory:
-                    _authenticationCodes[context.Token] = value;
-                    break;
+            // 新しいCodeのticketをストアに保存
+            string jsonString = JsonConvert.SerializeObject(temp);
+            ExtOAuth2.AuthorizationCodeProvider.CreateAuthenticationCode(tokenId, jsonString);
 
-                case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.ODPManagedDriver:
-                case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
-
-                        switch (Config.UserStoreType)
-                        {
-                            case EnumUserStoreType.SqlServer:
-
-                                cnn.Execute(
-                                    "INSERT INTO [AuthenticationCodeDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
-                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
-
-                                break;
-
-                            case EnumUserStoreType.ODPManagedDriver:
-
-                                cnn.Execute(
-                                    "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
-                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
-
-                                break;
-
-                            case EnumUserStoreType.PostgreSQL:
-
-                                cnn.Execute(
-                                    "INSERT INTO \"authenticationcodedictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
-                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
-
-                                break;
-                        }
-                    }
-
-                    break;
-            }
+            context.SetToken(tokenId);
         }
 
         #endregion
@@ -217,66 +164,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
-            string value = "";
-            switch (Config.UserStoreType)
-            {
-                case EnumUserStoreType.Memory:
-                    if (_authenticationCodes.TryRemove(context.Token, out value))
-                    {
-                        context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
-                    }
-                    break;
-
-                case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.ODPManagedDriver:
-                case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
-
-                        switch (Config.UserStoreType)
-                        {
-                            case EnumUserStoreType.SqlServer:
-
-                                value = cnn.ExecuteScalar<string>(
-                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
-
-                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
-
-                                cnn.Execute(
-                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
-
-                                break;
-
-                            case EnumUserStoreType.ODPManagedDriver:
-
-                                value = cnn.ExecuteScalar<string>(
-                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
-
-                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
-
-                                cnn.Execute(
-                                    "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
-
-                                break;
-
-                            case EnumUserStoreType.PostgreSQL:
-
-                                value = cnn.ExecuteScalar<string>(
-                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
-
-                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
-
-                                cnn.Execute(
-                                    "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
-
-                                break;
-                        }
-                    }
-
-                    break;
-            }
+            // CodeのTicketを受け取り、ストアから削除する。
+            context.DeserializeTicket(ExtOAuth2.AuthorizationCodeProvider.
+                ReceiveAuthenticationCode(context.Token, code_verifier));
         }
 
         /// <summary>VerifyCodeVerifier</summary>
@@ -288,7 +178,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             // null チェック
             if (string.IsNullOrEmpty(value)) { return ""; }
 
-            Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
+            Dictionary<string, string> temp = 
+                JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
             bool isPKCE = (code_verifier != null);
             
@@ -349,72 +240,6 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 return null;
             }
-        }
-
-        #endregion
-
-        #region Hybrid Flow対応
-
-        /// <summary>
-        /// Hybrid Flow対応
-        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
-        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道。
-        /// </summary>
-        /// <param name="code">code</param>
-        /// <returns>Jwt AccessTokenのPayload部</returns>
-        public string GetAccessTokenPayload(string code)
-        {
-            string value = "";
-
-            switch (Config.UserStoreType)
-            {
-                case EnumUserStoreType.Memory:
-                    if (_authenticationCodes.TryGetValue(code, out value))
-                    {
-                    }
-                    break;
-
-                case EnumUserStoreType.SqlServer:
-                case EnumUserStoreType.ODPManagedDriver:
-                case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                    using (IDbConnection cnn = DataAccess.CreateConnection())
-                    {
-                        cnn.Open();
-
-                        switch (Config.UserStoreType)
-                        {
-                            case EnumUserStoreType.SqlServer:
-
-                                value = cnn.ExecuteScalar<string>(
-                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
-                                break;
-
-                            case EnumUserStoreType.ODPManagedDriver:
-
-                                value = cnn.ExecuteScalar<string>(
-                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
-                                break;
-
-                            case EnumUserStoreType.PostgreSQL:
-
-                                value = cnn.ExecuteScalar<string>(
-                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
-                                break;
-                        }
-                    }
-
-                    break;
-            }
-
-            Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
-
-            //// AuthenticationTicketを生成して返す。
-            //return new AuthenticationTicket(
-            //    (ClaimsIdentity)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["claims"])),
-            //    new AuthenticationProperties((IDictionary<string, string>)BinarySerialize.BytesToObject(CustomEncode.FromBase64String(temp["properties"]))));
-
-            return temp["access_token_payload"];
         }
 
         #endregion

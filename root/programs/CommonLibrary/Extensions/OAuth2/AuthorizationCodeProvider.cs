@@ -21,9 +21,6 @@
 //**********************************************************************************
 //* クラス名        ：AuthorizationCodeProvider
 //* クラス日本語名  ：AuthorizationCodeProvider（ライブラリ）
-//*                   --------------------------------------------------
-//*                   IUserに無いUserStore系の拡張はこちらに実装する。
-//*                   Singletonなのは、MemoryStoreに対応するため。
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -36,23 +33,15 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
-
-using MultiPurposeAuthSite.Extensions.OIDC.HttpMod;
+using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.IO;
-using System.Text;
 using System.Data;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using System.Collections.Specialized;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
-using System.Web;
-
-using Microsoft.Owin;
-using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Infrastructure;
 
 using Dapper;
@@ -66,73 +55,24 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
     /// </summary>
     public class AuthorizationCodeProvider
     {
-        /// <summary>シングルトン</summary>
-        private static AuthorizationCodeProvider _AuthorizationCodeProvider = new AuthorizationCodeProvider();
-        
         /// <summary>
-        /// _authenticationCodes
+        /// AuthenticationCodes
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private readonly ConcurrentDictionary<string, string>
-                    _authenticationCodes = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
-
-        /// <summary>GetInstance</summary>
-        /// <returns>AuthorizationCodeProvider</returns>
-        public static AuthorizationCodeProvider GetInstance()
-        {
-            return AuthorizationCodeProvider._AuthorizationCodeProvider;
-        }
+        private static ConcurrentDictionary<string, string>
+                    AuthenticationCodes = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
 
         #region Create
 
-        /// <summary>Create</summary>
-        /// <param name="context">AuthenticationTokenCreateContext</param>
-        public void Create(AuthenticationTokenCreateContext context)
-        {
-            this.CreateAuthenticationCode(context);
-        }
-
-        /// <summary>CreateAsync</summary>
-        /// <param name="context">AuthenticationTokenCreateContext</param>
-        /// <returns>Task</returns>
-        public Task CreateAsync(AuthenticationTokenCreateContext context)
-        {
-            return Task.Factory.StartNew(() => this.CreateAuthenticationCode(context));
-        }
-
         /// <summary>CreateAuthenticationCode</summary>
-        /// <param name="context">AuthenticationTokenCreateContext</param>
-        private void CreateAuthenticationCode(AuthenticationTokenCreateContext context)
+        /// <param name="code">string</param>
+        /// <param name="jsonString">string</param>
+        public static void CreateAuthenticationCode(string code, string jsonString)
         {
-            context.SetToken(Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n"));
-
-            Dictionary<string, string> temp = new Dictionary<string, string>();
-            NameValueCollection queryString = HttpUtility.ParseQueryString(context.Request.QueryString.Value);
-
-            // 標準（標準方式は、今のところ、残しておく）
-            temp.Add("ticket", context.SerializeTicket());
-
-            // 有効期限が無効なtokenのペイロードだけ作成
-            string access_token_payload = OidcTokenEditor.CreateAccessTokenPayloadFromAuthenticationTicket(context.Ticket);
-            temp.Add("access_token_payload", access_token_payload);
-
-            // OAuth PKCE 対応
-            temp.Add(OAuth2AndOIDCConst.code_challenge, queryString[OAuth2AndOIDCConst.code_challenge]);
-            temp.Add(OAuth2AndOIDCConst.code_challenge_method, queryString[OAuth2AndOIDCConst.code_challenge_method]);
-
-            // Hybrid Flow対応
-            //   OAuthAuthorizationServerHandler経由での呼び出しができず、
-            //   AuthenticationTokenXXXXContextを取得できないため、抜け道。
-            // サイズ大き過ぎるので根本の方式を修正。
-            //temp.Add("claims",  CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Identity)));
-            //temp.Add("properties", CustomEncode.ToBase64String(BinarySerialize.ObjectToBytes(context.Ticket.Properties.Dictionary)));
-            
-            string value = JsonConvert.SerializeObject(temp);
-
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    _authenticationCodes[context.Token] = value;
+                    AuthorizationCodeProvider.AuthenticationCodes[code] = jsonString;
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -149,7 +89,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                 cnn.Execute(
                                     "INSERT INTO [AuthenticationCodeDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
-                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
+                                    new { Key = code, Value = jsonString, CreatedDate = DateTime.Now });
 
                                 break;
 
@@ -157,7 +97,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                 cnn.Execute(
                                     "INSERT INTO \"AuthenticationCodeDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
-                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
+                                    new { Key = code, Value = jsonString, CreatedDate = DateTime.Now });
 
                                 break;
 
@@ -165,7 +105,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                 cnn.Execute(
                                     "INSERT INTO \"authenticationcodedictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
-                                    new { Key = context.Token, Value = value, CreatedDate = DateTime.Now });
+                                    new { Key = code, Value = jsonString, CreatedDate = DateTime.Now });
 
                                 break;
                         }
@@ -179,49 +119,21 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         #region Receive
 
-        /// <summary>Receive</summary>
-        /// <param name="context">AuthenticationTokenReceiveContext</param>
-        public void Receive(AuthenticationTokenReceiveContext context)
-        {
-            this.ReceiveAuthenticationCode(context);
-        }
-
-        /// <summary>ReceiveAsync</summary>
-        /// <param name="context">AuthenticationTokenReceiveContext</param>
-        /// <returns>Task</returns>
-        public Task ReceiveAsync(AuthenticationTokenReceiveContext context)
-        {
-            return Task.Factory.StartNew(() => this.ReceiveAuthenticationCode(context));
-        }
-
         /// <summary>ReceiveAuthenticationCode</summary>
-        /// <param name="context">AuthenticationTokenReceiveContext</param>
-        private void ReceiveAuthenticationCode(AuthenticationTokenReceiveContext context)
+        /// <param name="code">string</param>
+        /// <param name="code_verifier">string</param>
+        /// <returns>ticket</returns>
+        public static string ReceiveAuthenticationCode(string code, string code_verifier)
         {
-            context.Request.Body.Position = 0;
-
-            string code_verifier = null;
-            string body = new StreamReader(context.Request.Body).ReadToEnd();
-
-            if (body.IndexOf("code_verifier=") != -1)
-            {
-                string[] forms = body.Split('&');
-                foreach (string form in forms)
-                {
-                    if (form.StartsWith("code_verifier="))
-                    {
-                        code_verifier = form.Split('=')[1];
-                    }
-                }
-            }
-
             string value = "";
+            string ticket = "";
+
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    if (_authenticationCodes.TryRemove(context.Token, out value))
+                    if (AuthorizationCodeProvider.AuthenticationCodes.TryRemove(code, out value))
                     {
-                        context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
+                        ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
                     }
                     break;
 
@@ -238,36 +150,36 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.SqlServer:
 
                                 value = cnn.ExecuteScalar<string>(
-                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
 
-                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
+                                ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
 
                                 cnn.Execute(
-                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = context.Token });
+                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 value = cnn.ExecuteScalar<string>(
-                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
 
-                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
+                                ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
 
                                 cnn.Execute(
-                                    "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = context.Token });
+                                    "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
                                 value = cnn.ExecuteScalar<string>(
-                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
 
-                                context.DeserializeTicket(this.VerifyCodeVerifier(value, code_verifier));
+                                ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
 
                                 cnn.Execute(
-                                    "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = context.Token });
+                                    "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
 
                                 break;
                         }
@@ -275,20 +187,22 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                     break;
             }
+
+            return ticket;
         }
 
         /// <summary>VerifyCodeVerifier</summary>
         /// <param name="value">string</param>
         /// <param name="code_verifier">string</param>
         /// <returns>ticket</returns>
-        private string VerifyCodeVerifier(string value, string code_verifier)
+        private static string VerifyCodeVerifier(string value, string code_verifier)
         {
             // null チェック
             if (string.IsNullOrEmpty(value)) { return ""; }
 
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 
-            bool isPKCE = (code_verifier != null);
+            bool isPKCE = !string.IsNullOrEmpty(code_verifier);
             
             if (!isPKCE)
             {
@@ -360,16 +274,14 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// </summary>
         /// <param name="code">code</param>
         /// <returns>Jwt AccessTokenのPayload部</returns>
-        public string GetAccessTokenPayload(string code)
+        public static string GetAccessTokenPayload(string code)
         {
             string value = "";
 
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    if (_authenticationCodes.TryGetValue(code, out value))
-                    {
-                    }
+                    AuthorizationCodeProvider.AuthenticationCodes.TryGetValue(code, out value);
                     break;
 
                 case EnumUserStoreType.SqlServer:

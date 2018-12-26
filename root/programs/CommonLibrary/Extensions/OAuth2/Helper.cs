@@ -414,7 +414,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 isResourceOwner = true;
@@ -464,7 +464,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // OAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
 
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
@@ -513,7 +513,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 isResourceOwner = true;
@@ -559,7 +559,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
                 isResourceOwner = true;
