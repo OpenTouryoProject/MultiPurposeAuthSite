@@ -115,7 +115,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             temp.Add("ticket", context.SerializeTicket());
 
             // 有効期限が無効なtokenのペイロードだけ作成
-            AccessTokenFormatJwt accessTokenFormatJwt = new AccessTokenFormatJwt();
             string access_token_payload = OidcTokenEditor.CreateAccessTokenPayloadFromAuthenticationTicket(context.Ticket);
             temp.Add("access_token_payload", access_token_payload);
 

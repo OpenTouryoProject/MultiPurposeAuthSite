@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuth2ResourceApiController
-//* クラス日本語名  ：OAuth2ResourceServerのApiController
+//* クラス名        ：OAuth2EndpointApiController
+//* クラス日本語名  ：OAuth2EndpointのApiController
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -33,8 +33,7 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Manager;
-using MultiPurposeAuthSite.Network;
+using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Log;
 
 using MultiPurposeAuthSite.TokenProviders;
@@ -55,8 +54,6 @@ using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.OAuth;
-using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -81,33 +78,8 @@ namespace MultiPurposeAuthSite.Controllers
         methods: "*",
         // 
         SupportsCredentials = true)]
-    [MyBaseAsyncApiController()]
-    public class OAuth2ResourceApiController : ApiController
+    public class OAuth2EndpointApiController : ApiController
     {
-        #region constructor
-
-        /// <summary>constructor</summary>
-        public OAuth2ResourceApiController()
-        {
-        }
-
-        #endregion
-
-        #region property (GetOwinContext)
-
-        /// <summary>ApplicationUserManager</summary>
-        private ApplicationUserManager UserManager
-        {
-            get
-            {
-                return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            }
-        }
-
-        #endregion
-
-        #region WebAPI
-
         #region /.well-known/openid-configuration
 
         /// <summary>
@@ -356,82 +328,87 @@ namespace MultiPurposeAuthSite.Controllers
         [Route("userinfo")] // OpenID Connectライクなインターフェイスに変更した。
         public async Task<Dictionary<string, object>> GetUserClaims()
         {
-            // Claimを取得する。
-            string userName, roles, scopes, ipAddress;
-            MyBaseAsyncApiController.GetClaims(out userName, out roles, out scopes, out ipAddress);
-            
-            // ユーザ認証を行なう。
-            ApplicationUser user = await UserManager.FindByNameAsync(userName);
-            
-            string subject = "";
+            string authHeader = HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization];
+            string[] temp = authHeader.Split(' ');
 
-            if (user == null)
+            if (temp[0] == OAuth2AndOIDCConst.Bearer)
             {
-                // Client認証
-                subject = Helper.GetInstance().GetClientName(
-                    MyBaseAsyncApiController.GetClaimsIdentity()
-                    .FindFirst(OAuth2AndOIDCConst.Claim_Audience).Value);
-            }
-            else
-            {
-                // Resource Owner認証
-                subject = user.UserName;
-            }
-
-            Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
-            userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, subject);
-
-            // Scope
-            string[] aryScope = scopes.Split(',');
-
-            // scope値によって、返す値を変更する。
-            foreach (string scope in aryScope)
-            {
-                if (user != null)
+                ClaimsIdentity identity = new ClaimsIdentity();
+                if (!CmnAccessToken.Unprotect(temp[1], identity))
                 {
-                    // user == null では NG な Resource（Resource Owner の Resource）
-                    switch (scope.ToLower())
+                    ApplicationUser user = CmnUserStore.FindByName(identity.Name);
+
+                    string subject = "";
+                    if (user == null)
                     {
-                        #region OpenID Connect
-
-                        case OAuth2AndOIDCConst.Scope_Profile:
-                            // ・・・
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Email:
-                            userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
-                            userinfoClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Phone:
-                            userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
-                            userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed.ToString());
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Address:
-                            // ・・・
-                            break;
-
-                        #endregion
-
-                        #region Else
-
-                        case OAuth2AndOIDCConst.Scope_UserID:
-                            userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
-                            break;
-                        case OAuth2AndOIDCConst.Scope_Roles:
-                            userinfoClaimSet.Add(
-                                OAuth2AndOIDCConst.Scope_Roles,
-                                await UserManager.GetRolesAsync(user.Id));
-                            break;
-
-                            #endregion
+                        // Client認証
+                        subject = Helper.GetInstance().GetClientName(
+                            MyBaseAsyncApiController.GetClaimsIdentity()
+                            .FindFirst(OAuth2AndOIDCConst.Claim_Audience).Value);
                     }
-                }
-                else
-                {
-                    // user == null でも OK な Resource
+                    else
+                    {
+                        // Resource Owner認証
+                        subject = user.UserName;
+                    }
+
+                    Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
+                    userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, subject);
+
+                    // Scope
+                    Claim scopes = identity.Claims.Where(
+                                    x => x.Type == OAuth2AndOIDCConst.Claim_Scopes).FirstOrDefault<Claim>();
+
+                    string[] aryScope = scopes.Value.Split(' ');
+
+                    // scope値によって、返す値を変更する。
+                    foreach (string scope in aryScope)
+                    {
+                        if (user != null)
+                        {
+                            switch (scope.ToLower())
+                            {
+                                #region OpenID Connect
+
+                                case OAuth2AndOIDCConst.Scope_Profile:
+                                    // ・・・
+                                    break;
+                                case OAuth2AndOIDCConst.Scope_Email:
+                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
+                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
+                                    break;
+                                case OAuth2AndOIDCConst.Scope_Phone:
+                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
+                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed.ToString());
+                                    break;
+                                case OAuth2AndOIDCConst.Scope_Address:
+                                    // ・・・
+                                    break;
+
+                                #endregion
+
+                                #region Else
+
+                                case OAuth2AndOIDCConst.Scope_UserID:
+                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
+                                    break;
+                                case OAuth2AndOIDCConst.Scope_Roles:
+                                    userinfoClaimSet.Add(
+                                        OAuth2AndOIDCConst.Scope_Roles,
+                                        CmnUserStore.GetRoles(user));
+                                    break;
+
+                                    #endregion
+                            }
+                        }
+                    }
+
+                    return userinfoClaimSet;
+
                 }
             }
 
-            return userinfoClaimSet;
+            return null;
         }
 
         #endregion
@@ -483,11 +460,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
-                            // 検証
-                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            AuthenticationTicket ticket = verifier.Unprotect(token);
+                            //// 検証
+                            //AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
+                            //AuthenticationTicket ticket = verifier.Unprotect(token);
 
-                            if (ticket == null)
+                            ClaimsIdentity identity = new ClaimsIdentity();
+                            if (!CmnAccessToken.Unprotect(token, identity))
                             {
                                 // 検証失敗
                                 // 検証エラー
@@ -499,7 +477,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // 検証成功
 
                                 // jtiの取り出し
-                                Claim jti = ticket.Identity.Claims.Where(
+                                Claim jti = identity.Claims.Where(
                                     x => x.Type == OAuth2AndOIDCConst.Claim_JwtId).FirstOrDefault<Claim>();
 
                                 // access_token取消
@@ -603,15 +581,14 @@ namespace MultiPurposeAuthSite.Controllers
                     if (clientSecret == Helper.GetInstance().GetClientSecret(clientId))
                     {
                         // 検証完了
-                        AuthenticationTicket ticket = null;
-
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
-                            // 検証
-                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            ticket = verifier.Unprotect(token);
+                            //// 検証
+                            //AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
+                            //ticket = verifier.Unprotect(token);
 
-                            if (ticket == null)
+                            ClaimsIdentity identity = new ClaimsIdentity();
+                            if (!CmnAccessToken.Unprotect(token, identity))
                             {
                                 // 検証失敗
                                 // 検証エラー
@@ -626,7 +603,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
 
                                 string scopes = "";
-                                foreach (Claim claim in ticket.Identity.Claims)
+                                foreach (Claim claim in identity.Claims)
                                 {
                                     if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
                                     {
@@ -650,7 +627,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
                         {
                             // refresh_token参照
-                            ticket = RefreshTokenProvider.ReferDirectly(token);
+                            AuthenticationTicket ticket = RefreshTokenProvider.ReferDirectly(token);
 
                             if (ticket == null)
                             {
@@ -798,8 +775,13 @@ namespace MultiPurposeAuthSite.Controllers
                             ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
 
                             // access_token
-                            AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            string access_token = verifier.Protect(new AuthenticationTicket(identity, prop));
+                            //AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
+                            //string access_token = verifier.Protect(new AuthenticationTicket(identity, prop));
+
+                            string access_token = CmnAccessToken.Protect(
+                                identity.Name, identity.Claims, 
+                                prop.ExpiresUtc.Value, prop.IssuedUtc.Value);
+
                             ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);
                             
                             // expires_in
@@ -846,101 +828,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             return err; // 失敗
         }
-
-        #endregion
-
-        #region Test
-
-        #region Hybrid Flow
-
-        /// <summary>
-        /// Hybrid Flowのテスト用エンドポイント
-        /// POST: /TestHybridFlow
-        /// </summary>
-        /// <param name="formData">code</param>
-        /// <returns>Dictionary(string, string)</returns>
-        [HttpPost]
-        [Route("TestHybridFlow")]
-        public async Task<Dictionary<string, string>> TestHybridFlow(FormDataCollection formData)
-        {
-            // 変数
-            string code = formData[OAuth2AndOIDCConst.code];
-
-            // Tokenエンドポイントにアクセス
-            Uri tokenEndpointUri = new Uri(
-            Config.OAuth2AuthorizationServerEndpointsRootURI
-            + Config.OAuth2BearerTokenEndpoint);
-
-            // 結果を格納する変数。
-            Dictionary<string, string> dic = null;
-
-            //  client_Idから、client_secretを取得。
-            string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-            string client_secret = Helper.GetInstance().GetClientSecret(client_id);
-
-            // Hybridは、Implicitのredirect_uriを使用
-            string redirect_uri 
-                = Config.OAuth2ClientEndpointsRootURI
-                + Config.OAuth2ImplicitGrantClient_Account;
-
-            // Tokenエンドポイントにアクセス
-            string response = await Helper.GetInstance()
-            .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
-            dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
-
-            // UserInfoエンドポイントにアクセス
-            dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                await Helper.GetInstance().GetUserInfoAsync(dic[OAuth2AndOIDCConst.AccessToken]));
-
-            return dic;
-        }
-
-        #endregion
-
-        #region Chage
-
-        /// <summary>
-        /// 課金テスト用エンドポイント
-        /// POST: /TestChageToUser
-        /// </summary>
-        /// <param name="formData">
-        /// - currency
-        /// - amount
-        /// </param>
-        /// <returns>string</returns>
-        [HttpPost]
-        [Route("TestChageToUser")]
-        public async Task<string> TestChageToUser(FormDataCollection formData)
-        {
-            // Claimを取得する。
-            string userName, roles, scopes, ipAddress;
-            MyBaseAsyncApiController.GetClaims(out userName, out roles, out scopes, out ipAddress);
-
-            // 変数
-            string currency = formData["currency"];
-            string amount = formData["amount"];
-
-            if (Config.CanEditPayment
-                && Config.EnableEditingOfUserAttribute
-                && Config.IsDebug)
-            {
-                // ユーザの検索
-                ApplicationUser user = await UserManager.FindByNameAsync(userName);
-                // 課金のテスト処理
-                JObject jobj = await WebAPIHelper.GetInstance()
-                    .ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, currency, amount);
-
-                return "OK";
-            }
-            else
-            {
-                return "NG";
-            }
-        }
-
-        #endregion
-
-        #endregion
 
         #endregion
     }
