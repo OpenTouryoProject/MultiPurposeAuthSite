@@ -499,7 +499,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
                         {
                             // refresh_token取消
-                            if (RefreshTokenProvider.DeleteDirectly(token))
+                            if (ExtOAuth2.RefreshTokenProvider.Delete(token))
                             {
                                 // 取り消し成功
                                 return null; // 成功
@@ -630,6 +630,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
                         {
+                            /*
                             // refresh_token参照
                             AuthenticationTicket ticket = RefreshTokenProvider.ReferDirectly(token);
 
@@ -668,6 +669,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 return ret; // 成功
                             }
+                            */
                         }
                         else
                         {
@@ -740,13 +742,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                 if (!string.IsNullOrEmpty(pubKey))
                 {
-                    string iss = "";
-                    string aud = "";
-                    string scopes = "";
-                    JObject jobj = null;
-
                     if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
-                        assertion, out iss, out aud, out scopes, out jobj, pubKey))
+                        assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
                         if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
@@ -755,8 +752,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // ここからは、JwtAssertionではなく、JwtTokenを作るので、属性設定に注意。
                             ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
 
-                            bool isResourceOwner = false;
-                            string sub = ExtOAuth2.Helper.GetInstance().GetClientName(iss, out isResourceOwner);
+                            string sub = ExtOAuth2.Helper.GetInstance().GetClientName(iss, out bool isResourceOwner);
 
                             // Name Claimを追加
                             if (isResourceOwner)

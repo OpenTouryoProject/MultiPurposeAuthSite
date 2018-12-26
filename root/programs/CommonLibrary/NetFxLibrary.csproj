@@ -182,20 +182,12 @@
     <Compile Include="Extensions\OAuth2\Helper.cs" />
     <Compile Include="Extensions\OAuth2\RefreshTokenProvider.cs" />
     <Compile Include="Extensions\OAuth2\RevocationProvider.cs" />
-    <Compile Include="Extensions\OIDC\HttpMod\ClientCredentialsFilter.cs" />
-    <Compile Include="Extensions\OIDC\HttpMod\OidcTokenEditor.cs" />
-    <Compile Include="Extensions\OIDC\HttpMod\OpenIDConnectCodeFilter.cs" />
-    <Compile Include="Extensions\OIDC\HttpMod\OpenIDConnectModule.cs" />
     <Compile Include="Notifications\CmnEmail.cs" />
     <Compile Include="Notifications\EmailService.cs" />
     <Compile Include="Notifications\CmnSms.cs" />
     <Compile Include="Notifications\SmsService.cs" />
     <Compile Include="TokenProviders\Cmn\CmnEndpoints.cs" />
     <Compile Include="TokenProviders\Cmn\CmnAccessToken.cs" />
-    <Compile Include="TokenProviders\Oasp\AccessTokenFormatJwt.cs" />
-    <Compile Include="TokenProviders\Oasp\ApplicationOAuthBearerTokenProvider.cs" />
-    <Compile Include="TokenProviders\Oasp\AuthorizationCodeProvider.cs" />
-    <Compile Include="TokenProviders\Oasp\RefreshTokenProvider.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
@@ -356,7 +348,9 @@
     <None Include="App.config" />
     <None Include="packages.config" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Extensions\OIDC\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>

@@ -388,7 +388,7 @@ namespace MultiPurposeAuthSite
                 // UseOAuthAuthorizationServerとUseOAuthBearerTokensの違いが不明だが、
                 // UseOAuthAuthorizationServerだとOAuthBearerTokenEndpointPathが動かない。
 
-                #region UseOAuthAuthorizationServer
+                #region UseOAuthAuthorizationServer(不使用)
 
                 /*
                 // --------------------------------------------------
@@ -425,7 +425,7 @@ namespace MultiPurposeAuthSite
 
                 #endregion
 
-                #region UseOAuthBearerAuthentication
+                #region UseOAuthBearerAuthentication(不使用)
 
                 // --------------------------------------------------
                 // Resource Server単品を実装する際のメソッドであるもよう。
@@ -438,8 +438,8 @@ namespace MultiPurposeAuthSite
 
                 #endregion
 
-                #region UseOAuthBearerTokens
-
+                #region UseOAuthBearerTokens(使用停止)
+                /*
                 // --------------------------------------------------
                 // OAuth Bearer Tokenを使用可能に設定する。
                 // --------------------------------------------------
@@ -539,7 +539,7 @@ namespace MultiPurposeAuthSite
 
                 // UseOAuthBearerTokensにOAuthAuthorizationServerOptionsを設定
                 app.UseOAuthBearerTokens(oAuthAuthorizationServerOptions);
-
+                */
                 #endregion
             }
 
