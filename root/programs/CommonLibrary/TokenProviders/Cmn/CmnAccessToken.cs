@@ -188,11 +188,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="jwt">JWT文字列</param>
         public static bool Unprotect(string jwt, ClaimsIdentity identity)
         {
-            if (string.IsNullOrEmpty(jwt) || identity == null)
-            {
-                return false;
-            }
-            else
+            if (!(string.IsNullOrEmpty(jwt) || identity == null))
             {
                 // 検証
                 JWS_RS256 jwsRS256 = null;
@@ -264,24 +260,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             if (user != null)
                             {
                                 // User Accountの場合
-
-                                // aud、scopes、nonceなどのClaimを追加する。
-                                List<string> scopes = new List<string>();
-                                foreach (string s in (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes])
-                                {
-                                    scopes.Add(s);
-                                }
-
-                                // もろもろのClaimの設定
-                                Helper.AddClaim(identity,
-                                    (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
-
-                                // その他、所定のClaimを追加する。
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
-                                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
-
+                                CmnAccessToken.AddClaims(authTokenClaimSet, identity);
                                 return true;
                             }
                             else
@@ -293,26 +272,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 if ((string)authTokenClaimSet[OAuth2AndOIDCConst.sub]
                                     == Helper.GetInstance().GetClientName((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]))
                                 {
-                                    // sub（client_idに対応するclient_name）Claimを設定する。
-                                    identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet[OAuth2AndOIDCConst.sub]));
-
-                                    // aud、scopes、nonceなどのClaimを追加する。
-                                    List<string> scopes = new List<string>();
-                                    foreach (string s in (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes])
-                                    {
-                                        scopes.Add(s);
-                                    }
-
-                                    // もろもろのClaimの設定
-                                    Helper.AddClaim(identity,
-                                        (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
-
-                                    // その他、所定のClaimを追加する。
-                                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
-                                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
-                                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
-                                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
-
+                                    CmnAccessToken.AddClaims(authTokenClaimSet, identity);
                                     return true;
                                 }
                             }
@@ -331,9 +291,41 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // JWT署名検証の失敗
                 }
-
-                return false;
             }
+            else
+            {
+                // 引数に問題
+            }
+
+            return false;
+        }
+
+        /// <summary>AddClaims</summary>
+        /// <param name="authTokenClaimSet"></param>
+        /// <param name="identity"></param>
+        private static void AddClaims(
+            Dictionary<string, object> authTokenClaimSet,
+            ClaimsIdentity identity)
+        {
+            // sub（client_idに対応するclient_name）Claimを設定する。
+            identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet[OAuth2AndOIDCConst.sub]));
+            
+            // aud、scopes、nonceなどのClaimを追加する。
+            List<string> scopes = new List<string>();
+            foreach (string s in (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes])
+            {
+                scopes.Add(s);
+            }
+
+            // もろもろのClaimの設定
+            Helper.AddClaim(identity,
+                (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
+
+            // その他、所定のClaimを追加する。
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
         }
     }
 }

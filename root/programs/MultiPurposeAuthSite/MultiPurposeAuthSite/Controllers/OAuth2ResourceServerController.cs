@@ -19,7 +19,7 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuth2ResourceServerColler
+//* クラス名        ：OAuth2ResourceServerController
 //* クラス日本語名  ：OAuth2ResourceServerのApiController
 //*
 //* 作成日時        ：－
@@ -66,7 +66,7 @@ namespace MultiPurposeAuthSite.Controllers
         // 
         SupportsCredentials = true)]
     [MyBaseAsyncApiController()]
-    public class OAuth2ResourceServerColler : ApiController
+    public class OAuth2ResourceServerController : ApiController
     {
         #region Hybrid Flow
 

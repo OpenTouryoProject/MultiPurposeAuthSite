@@ -328,13 +328,20 @@ namespace MultiPurposeAuthSite.Controllers
         [Route("userinfo")] // OpenID Connectライクなインターフェイスに変更した。
         public async Task<Dictionary<string, object>> GetUserClaims()
         {
+            // 戻り値（エラー）
+            Dictionary<string, object> err = new Dictionary<string, object>();
+
+            // 変数
+            string[] temp = null;
+            
+            // クライアント認証
             string authHeader = HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization];
-            string[] temp = authHeader.Split(' ');
+            temp = authHeader.Split(' ');
 
             if (temp[0] == OAuth2AndOIDCConst.Bearer)
             {
                 ClaimsIdentity identity = new ClaimsIdentity();
-                if (!CmnAccessToken.Unprotect(temp[1], identity))
+                if (CmnAccessToken.Unprotect(temp[1], identity))
                 {
                     ApplicationUser user = CmnUserStore.FindByName(identity.Name);
 
@@ -356,14 +363,12 @@ namespace MultiPurposeAuthSite.Controllers
                     userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, subject);
 
                     // Scope
-                    Claim scopes = identity.Claims.Where(
-                                    x => x.Type == OAuth2AndOIDCConst.Claim_Scopes).FirstOrDefault<Claim>();
-
-                    string[] aryScope = scopes.Value.Split(' ');
+                    IEnumerable<Claim> scopes = identity.Claims.Where(x => x.Type == OAuth2AndOIDCConst.Claim_Scopes);
 
                     // scope値によって、返す値を変更する。
-                    foreach (string scope in aryScope)
+                    foreach (Claim claim in scopes)
                     {
+                        string scope = claim.Value;
                         if (user != null)
                         {
                             switch (scope.ToLower())
@@ -406,9 +411,20 @@ namespace MultiPurposeAuthSite.Controllers
                     return userinfoClaimSet;
 
                 }
+                else
+                {
+                    err.Add("error", "invalid_request");
+                    err.Add("error_description", "invalid token");
+                }
+            }
+            else
+            {
+                // クライアント認証エラー（ヘッダ不正
+                err.Add("error", "invalid_request");
+                err.Add("error_description", "Invalid authentication header");
             }
 
-            return null;
+            return err; // 失敗
         }
 
         #endregion
@@ -437,10 +453,7 @@ namespace MultiPurposeAuthSite.Controllers
             string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
 
             // クライアント認証
-
-            // クライアント識別子
             string authHeader = HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization];
-            
             temp = authHeader.Split(' ');
 
             if (temp[0] == OAuth2AndOIDCConst.Basic)
@@ -461,18 +474,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
                             //// 検証
-                            //AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            //AuthenticationTicket ticket = verifier.Unprotect(token);
-
                             ClaimsIdentity identity = new ClaimsIdentity();
-                            if (!CmnAccessToken.Unprotect(token, identity))
-                            {
-                                // 検証失敗
-                                // 検証エラー
-                                err.Add("error", "invalid_request");
-                                err.Add("error_description", "invalid token");
-                            }
-                            else
+                            if (CmnAccessToken.Unprotect(token, identity))
                             {
                                 // 検証成功
 
@@ -483,6 +486,13 @@ namespace MultiPurposeAuthSite.Controllers
                                 // access_token取消
                                 RevocationProvider.GetInstance().Create(jti.Value);
                                 return null; // 成功
+                            }
+                            else
+                            {
+                                // 検証失敗
+                                // 検証エラー
+                                err.Add("error", "invalid_request");
+                                err.Add("error_description", "invalid token");
                             }
                         }
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
@@ -561,10 +571,7 @@ namespace MultiPurposeAuthSite.Controllers
             string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
 
             // クライアント認証
-
-            // クライアント識別子
             string authHeader = HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization];
-
             temp = authHeader.Split(' ');
 
             if (temp[0] == OAuth2AndOIDCConst.Basic)
@@ -583,19 +590,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // 検証完了
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
-                            //// 検証
-                            //AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            //ticket = verifier.Unprotect(token);
-
                             ClaimsIdentity identity = new ClaimsIdentity();
-                            if (!CmnAccessToken.Unprotect(token, identity))
-                            {
-                                // 検証失敗
-                                // 検証エラー
-                                err.Add("error", "invalid_request");
-                                err.Add("error_description", "invalid token");
-                            }
-                            else
+                            if (CmnAccessToken.Unprotect(token, identity))
                             {
                                 // 検証成功
                                 // メタデータの返却
@@ -622,6 +618,13 @@ namespace MultiPurposeAuthSite.Controllers
                                     OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
 
                                 return ret; // 成功
+                            }
+                            else
+                            {
+                                // 検証失敗
+                                // 検証エラー
+                                err.Add("error", "invalid_request");
+                                err.Add("error_description", "invalid token");
                             }
                         }
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
@@ -775,9 +778,6 @@ namespace MultiPurposeAuthSite.Controllers
                             ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
 
                             // access_token
-                            //AccessTokenFormatJwt verifier = new AccessTokenFormatJwt();
-                            //string access_token = verifier.Protect(new AuthenticationTicket(identity, prop));
-
                             string access_token = CmnAccessToken.Protect(
                                 identity.Name, identity.Claims, 
                                 prop.ExpiresUtc.Value, prop.IssuedUtc.Value);
