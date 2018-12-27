@@ -456,7 +456,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 {
                     return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
                 }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
                 }

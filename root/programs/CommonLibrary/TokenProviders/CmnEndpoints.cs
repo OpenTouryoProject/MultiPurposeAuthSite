@@ -63,8 +63,6 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// <summary>CmnEndpoints</summary>
     public class CmnEndpoints
     {
-        #region Validate
-
         #region ValidateClientRedirectUri
 
         /// <summary>ValidateClientRedirectUri</summary>
@@ -298,15 +296,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
             }
-            
-            else
-            {
-                // 不明な値
-                // 検証未完
-            }
         }
-
-        #endregion
 
         #region Token
 
@@ -418,10 +408,10 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region GrantAuthorizationCodeCredentials
+        #region GrantRefreshTokenCredentials
 
         /// <summary>
-        /// GrantAuthorizationCodeCredentials
+        /// GrantRefreshTokenCredentials
         /// Authorization Codeグラント種別
         /// </summary>
         /// <param name="grant_type">string</param>
@@ -722,6 +712,48 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #endregion
+
+        #region 共通
+
+        #region CreateAuthenticationResponse
+
+        /// <summary>CreateAuthenticationResponseForHybridFlow</summary>
+        /// <param name="access_token">code</param>
+        /// <param name="access_token">string</param>
+        /// <param name="refresh_token">string</param>
+        public static void CreateAuthenticationResponseForHybridFlow(string code, out string access_token, out string id_token)
+        {
+            access_token = "";
+            id_token = "";
+
+            string tokenPayload = AuthorizationCodeProvider.GetAccessTokenPayload(code);
+
+            // ★ 必要に応じて、scopeを調整する。
+
+            // access_token
+            access_token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload,
+                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+
+            JObject jObj = (JObject)JsonConvert.DeserializeObject(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                                access_token.Split('.')[1]), CustomEncode.us_ascii));
+
+            // id_token
+            JArray jAry = (JArray)jObj["scopes"];
+            foreach (string s in jAry)
+            {
+                if (s == OAuth2AndOIDCConst.Scope_Openid)
+                {
+                    id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                        access_token, "", "", // c_hash, s_hash は /token で生成不可
+                        HashClaimType.None, Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+                }
+            }
+        }
+
+        #endregion
+
         #region CreateAccessTokenResponse
 
         /// <summary>CreateAccessTokenResponse</summary>
@@ -744,14 +776,29 @@ namespace MultiPurposeAuthSite.TokenProviders
                 ret.Add(OAuth2AndOIDCConst.RefreshToken, refresh_token);
             }
 
-            // expires_in
-            JObject jobj = (JObject)JsonConvert.DeserializeObject(
-                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                    access_token.Split('.')[1]), CustomEncode.us_ascii));
+            JObject jObj = (JObject)JsonConvert.DeserializeObject(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                                access_token.Split('.')[1]), CustomEncode.us_ascii));
 
-            ret.Add("expires_in",
-                (long.Parse((string)jobj[OAuth2AndOIDCConst.exp])
-                - long.Parse((string)jobj[OAuth2AndOIDCConst.iat])).ToString());
+            // id_token
+            JArray jAry = (JArray)jObj["scopes"];
+            foreach (string s in jAry)
+            {
+                if (s == OAuth2AndOIDCConst.Scope_Openid)
+                {
+                    string id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                        access_token, "", "", // c_hash, s_hash は /token で生成不可
+                        HashClaimType.None, Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+
+                    if (!string.IsNullOrEmpty(id_token))
+                    {
+                        ret.Add(OAuth2AndOIDCConst.IDToken, id_token);
+                    }
+                }
+            }
+
+            // expires_in
+            ret.Add("expires_in", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
 
             return ret;
         }
