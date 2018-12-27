@@ -719,10 +719,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region CreateAuthenticationResponse
 
         /// <summary>CreateAuthenticationResponseForHybridFlow</summary>
-        /// <param name="access_token">code</param>
+        /// <param name="code">string</param>
+        /// <param name="state">string</param>
         /// <param name="access_token">string</param>
         /// <param name="refresh_token">string</param>
-        public static void CreateAuthenticationResponseForHybridFlow(string code, out string access_token, out string id_token)
+        public static void CreateAuthenticationResponseForHybridFlow(string code, string state, out string access_token, out string id_token)
         {
             access_token = "";
             id_token = "";
@@ -746,8 +747,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (s == OAuth2AndOIDCConst.Scope_Openid)
                 {
                     id_token = IdToken.ChangeToIdTokenFromAccessToken(
-                        access_token, "", "", // c_hash, s_hash は /token で生成不可
-                        HashClaimType.None, Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+                        access_token, code, state, // at_hash, c_hash, s_hash
+                        HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
+                        Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
                 }
             }
         }

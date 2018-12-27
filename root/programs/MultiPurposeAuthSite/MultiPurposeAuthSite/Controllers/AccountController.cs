@@ -2134,7 +2134,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // Tokenの生成
                     CmnEndpoints.CreateAuthenticationResponseForHybridFlow(
-                        code, out string access_token, out string id_token);
+                        code, state, out string access_token, out string id_token);
 
                     // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -2147,7 +2147,8 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType:
                             return new RedirectResult(valid + string.Format(
                                 "#code={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
-                                code, access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                                code, access_token, state, "bearer",
+                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
                         case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType:
                             return new RedirectResult(valid + string.Format(
                                 "#code={0}&id_token={1}", code, id_token));
