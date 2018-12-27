@@ -46,6 +46,12 @@ using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 
+#if NETFX
+using Microsoft.Owin.Security;
+#else
+
+# endif
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -54,65 +60,67 @@ using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
-    /// <summary>ApplicationOAuthBearerTokenProviderからの切り出し</summary>
+    /// <summary>CmnEndpoints</summary>
     public class CmnEndpoints
     {
-        #region (1) ValidateClientRedirectUriのオーバーライド
+        #region Validate
 
-        /// <summary>ApplicationOAuthBearerTokenProvider.ValidateClientRedirectUri</summary>
+        #region ValidateClientRedirectUri
+
+        /// <summary>ValidateClientRedirectUri</summary>
         /// <param name="client_id">string</param>
         /// <param name="redirect_uri">string</param>
         /// <param name="response_type">string</param>
         /// <param name="scope">string</param>
         /// <param name="nonce">string</param>
-        /// <param name="Validated">string</param>
+        /// <param name="valid_redirect_uri">string</param>
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
         /// <returns>成功 or 失敗</returns>
         public static bool ValidateClientRedirectUri(
             string client_id, string redirect_uri, string response_type, string scope, string nonce,
-            out string valid, out string err, out string errDescription)
+            out string valid_redirect_uri, out string err, out string errDescription)
         {
-            valid = "";
+            valid_redirect_uri = "";
             err = "";
             errDescription = "";
 
             #region response_type
 
-            // OIDC Implicit, Hybridの場合、書き換え
-            if (Config.EnableOpenIDConnect)
+            // OIDCチェック
+            if (scope.IndexOf(OAuth2AndOIDCConst.Scope_Openid) != -1) // トリガはscope=openid
             {
+                // OIDC有効
+                if (!Config.EnableOpenIDConnect)
+                {
+                    err = "server_error";
+                    errDescription = "OIDC is not enabled.";
+                    return false;
+                }
+                // nonceパラメタ 必須
+                if (string.IsNullOrEmpty(nonce))
+                {
+                    err = "server_error";
+                    errDescription = "There was no nonce in query.";
+                    return false;
+                }
+            }
+            else
+            {
+                // response_typeチェック
                 if (response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
-                    // OIDC Implicit, Hybridの場合、書き換え
-                    // Authorization Code Flowの場合は、codeなので書き換え不要。
-                    // ※ この変数は、使用するredirect_uriを決定するだめダケに利用される。
-                    response_type = OAuth2AndOIDCConst.ImplicitResponseType;
-
-                    // OIDC Implicit Flow、Hybrid Flowのパラメタチェック
-
-                    // nonceパラメタ 必須
-                    if (string.IsNullOrEmpty(nonce))
-                    {
-                        err = "server_error";
-                        errDescription = "there was no nonce in query.";
-                        return false;
-                    }
-
-                    // scopeパラメタ 必須
-                    if (scope.IndexOf(OAuth2AndOIDCConst.Scope_Openid) == -1)
-                    {   
-                        err = "server_error";
-                        errDescription = "there was no openid in scope of query.";
-                        return false;
-                    }
+                    err = "server_error";
+                    errDescription = "This response_type is valid only for oidc.";
+                    return false;
                 }
             }
 
+            // response_typeチェック
             if (!string.IsNullOrEmpty(response_type))
             {
                 if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
@@ -133,8 +141,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         return false;
                     }
                 }
+                else
+                {
+                    // OIDCはチェック済み
+                }
             }
-        
+
             #endregion
 
             #region redirect_uri
@@ -153,26 +165,24 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (redirect_uri.ToLower() == "test_self_code")
                     {
                         // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                        valid = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
+                        valid_redirect_uri = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
                     }
                     else if (redirect_uri.ToLower() == "test_self_token")
                     {
                         // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
-                        valid = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
+                        valid_redirect_uri = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
                     }
                     else if (redirect_uri.ToLower() == "id_federation_code")
                     {
                         // ID連携時のエンドポイント
-                        valid = Config.IdFederationRedirectEndPoint;
+                        valid_redirect_uri = Config.IdFederationRedirectEndPoint;
                     }
                     else
                     {
                         // 事前登録した、redirect_uriをそのまま使用する。
-                        valid = redirect_uri;
+                        valid_redirect_uri = redirect_uri;
                     }
 
-                    err = "";
-                    errDescription = "";
                     return true;
                 }
             }
@@ -186,7 +196,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     redirect_uri == (Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage))
                 {
                     // 不特定多数のクライアント識別子に許可されたredirect_uri
-                    valid = redirect_uri;
+                    valid_redirect_uri = redirect_uri;
                     return true;
                 }
                 else
@@ -198,14 +208,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (redirect_uri == preRegisteredUri)
                     {
                         // 完全一致する場合。
-                        valid = redirect_uri;
+                        valid_redirect_uri = redirect_uri;
                         return true;
                     }
                     else
                     {
                         // 完全一致しない場合。
                         err = "server_error";
-                        errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri;                        
+                        errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri;
                         return false;
                     }
                 }
@@ -219,87 +229,27 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region (2) ValidateClientAuthenticationのオーバーライド
+        #region ValidateClientAuthentication
 
-        /// <summary>ApplicationOAuthBearerTokenProvider.ValidateClientAuthentication</summary>
+        /// <summary>ValidateClientAuthentication</summary>
         /// <param name="grant_type">string</param>
         /// <param name="assertion">string</param>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
-        /// <param name="valid">string</param>
+        /// <param name="valid_client_id">string</param>
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
         /// <returns>成功 or 失敗</returns>
-        public static  bool ValidateClientAuthentication(
-            string grant_type, string assertion,  string client_id, string client_secret,
-            out string valid, out string err, out string errDescription)
+        public static bool ValidateClientAuthentication(
+            string grant_type, string assertion, string client_id, string client_secret,
+            out string valid_client_id, out string err, out string errDescription)
         {
-            valid = "";
+            valid_client_id = "";
             err = "";
             errDescription = "";
 
-            #region クライアント認証を行なう。
-
-            if (string.IsNullOrEmpty(grant_type))
-            {
-                // 指定なし。
-                // 検証未完
-            }
-            else if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
-            {
-                #region Authorization Codeグラント種別
-
-                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
-                if (!string.IsNullOrEmpty(client_secret))
-                {
-                    // 通常のクライアント認証
-                    if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
-                    {
-                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                        {
-                            // 検証完了
-                            valid = client_id;
-                            return true;
-                        }
-                    }
-                }
-                else
-                {
-                    // その他のクライアント認証の可能性
-                    if (!string.IsNullOrEmpty(assertion))
-                    {
-                        // JWT client assertion
-                        Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                                assertion.Split('.')[1]), CustomEncode.us_ascii));
-
-                        string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
-                        pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                        if (!string.IsNullOrEmpty(pubKey))
-                        {
-                            if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
-                                assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
-                            {
-                                // aud 検証
-                                if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
-                                    + Config.OAuth2BearerTokenEndpoint)
-                                {
-                                    // 検証完了
-                                    valid = iss;
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // クライアント認証なしエラー
-                    }
-                }
-
-                #endregion
+            if (true) {
+                return true;
             }
             else if (grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
             {
@@ -321,7 +271,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                         {
                             // 検証完了
-                            valid = client_id;
+                            valid_client_id = client_id;
                             return true;
                         }
                     }
@@ -342,7 +292,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                         {
                             // 検証完了
-                            valid = client_id;
+                            valid_client_id = client_id;
                             return true;
                         }
                     }
@@ -368,7 +318,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                         {
                             // 検証完了
-                            valid = client_id;
+                            valid_client_id = client_id;
                             return true;
                         }
                     }
@@ -383,16 +333,107 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             #endregion
+        }
 
-            // 結果を返す。
+        #endregion
+
+        #region Token
+
+        #region GrantAuthorizationCodeCredentials
+
+        /// <summary>
+        /// GrantAuthorizationCodeCredentials
+        /// Authorization Codeグラント種別
+        /// </summary>
+        /// <param name="grant_type">string</param>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="assertion">string</param>
+        /// <param name="code">string</param>
+        /// <param name="code_verifier">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="err">Dictionary(string, string)</param>
+        /// <returns>成否</returns>
+        public static bool GrantAuthorizationCodeCredentials(
+            string grant_type, string client_id, string client_secret, string assertion,
+            string code, string code_verifier, string redirect_uri,
+            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+            err = new Dictionary<string, string>();
+
+            #region 認証
+            bool authned = false;
+            if (Config.EnableAuthorizationCodeGrantType &&
+                grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
+            {
+                if (!string.IsNullOrEmpty(client_secret))
+                {
+                    // client_id & client_secret
+                    if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
+                    {
+                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                        if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
+                        {
+                            authned = true;
+                        }
+                    }
+                }
+                else if (!string.IsNullOrEmpty(assertion))
+                {
+                    // assertion
+                    Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                        CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                            assertion.Split('.')[1]), CustomEncode.us_ascii));
+
+                    string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                    pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                    if (!string.IsNullOrEmpty(pubKey))
+                    {
+                        if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+                            assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
+                        {
+                            // aud 検証
+                            if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
+                                + Config.OAuth2BearerTokenEndpoint)
+                            {
+                                authned = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            #endregion
+
+            if (authned)
+            {
+                // access_token
+                string access_token = CmnAccessToken.ProtectFromPayloadForCode(
+                    AuthorizationCodeProvider.Receive(code, redirect_uri, code_verifier),
+                    DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+
+                //// オペレーション・トレース・ログ出力
+                //Logging.MyOperationTrace(string.Format(
+                //    "{0}({1}) passed the '{2} flow' by {0}({1}).",
+                //    user.Id, user.UserName, grant_type));
+
+                ret = CmnEndpoints.CreateAccessTokenResponse(
+                    access_token, Config.EnableRefreshToken);
+
+                return true; 
+            }
+
             return false;
         }
 
         #endregion
 
-        #region (3) GrantResourceOwnerCredentialsのオーバーライド
+        #region GrantResourceOwnerCredentials
 
-        /// <summary>ApplicationOAuthBearerTokenProvider.GrantResourceOwnerCredentials</summary>
+        /// <summary>GrantResourceOwnerCredentials</summary>
         /// <param name="userName">string</param>
         /// <param name="password">string</param>
         /// <param name="client_id">string</param>
@@ -450,9 +491,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region (4) GrantClientCredentialsのオーバーライド
+        #region GrantClientCredentials
 
-        /// <summary>ApplicationOAuthBearerTokenProvider.GrantClientCredentials</summary>
+        /// <summary>GrantClientCredentials</summary>
         /// <param name="client_id">string</param>
         /// <param name="scope">IList(string)</param>
         /// <param name="identity">ClaimsIdentity</param>
@@ -470,7 +511,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
             }
 
-            // client_idに対応するApplicationUserを取得する。
+            // client_idに対応するsubを取得する。
             string sub = Helper.GetInstance().GetClientName(client_id, out bool isResourceOwner);
 
             if (isResourceOwner)
@@ -505,8 +546,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
                 else
                 {
-                    // Name Claimを追加（空文字列とする）
-                    identity.AddClaim(new Claim(ClaimTypes.Name, ""));
+                    // Name Claimを追加
+                    identity.AddClaim(new Claim(ClaimTypes.Name, sub));
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity = Helper.AddClaim(identity, client_id, "", scope, "");
@@ -520,6 +561,137 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
         }
+
+        #endregion
+
+        #region GrantJwtBearerTokenCredentials
+
+        /// <summary>GrantJwtBearerTokenCredentials</summary>
+
+        /// <summary>
+        /// GrantJwtBearerTokenCredentials
+        /// Authorization Codeグラント種別
+        /// </summary>
+        /// <param name="grant_type">string</param>
+        /// <param name="assertion">string</param>
+        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="err">Dictionary(string, string)</param>
+        /// <returns>成否</returns>
+        public static bool GrantJwtBearerTokenCredentials(
+            string grant_type, string assertion,
+            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+            err = new Dictionary<string, string>();
+
+            if (Config.EnableJwtBearerTokenFlowGrantType &&
+                grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
+            {
+                Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                        assertion.Split('.')[1]), CustomEncode.us_ascii));
+
+                string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                if (!string.IsNullOrEmpty(pubKey))
+                {
+                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+                        assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
+                    {
+                        // aud 検証
+                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint)
+                        {
+                            // JwtTokenを作る
+
+                            // issに対応するsubを取得する。
+                            string sub = Helper.GetInstance().GetClientName(iss, out bool isResourceOwner);
+
+                            // ClaimsIdentityにClaimを追加する。
+                            ClaimsIdentity identity = new ClaimsIdentity(OAuth2AndOIDCConst.Bearer);
+                            identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+                            identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
+
+                            AuthenticationProperties prop = new AuthenticationProperties();
+                            prop.IssuedUtc = DateTimeOffset.UtcNow;
+                            prop.ExpiresUtc = DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes);
+
+                            // access_token
+                            string access_token = CmnAccessToken.CreateFromClaims(
+                                identity.Name, identity.Claims,
+                                prop.ExpiresUtc.Value, prop.IssuedUtc.Value);
+
+                            // オペレーション・トレース・ログ出力
+                            string clientName = Helper.GetInstance().GetClientName(iss);
+                            Logging.MyOperationTrace(string.Format(
+                                "{0}({1}) passed the 'jwt bearer token flow' by {2}({3}).",
+                                iss, clientName, iss, clientName));
+
+                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, false);
+                            return true;
+                        }
+                        else
+                        {
+                            // クライアント認証エラー（Credential（aud）不正
+                            err.Add("error", "invalid_client");
+                            err.Add("error_description", "Invalid credential");
+                        }
+                    }
+                    else
+                    {
+                        // クライアント認証エラー（Credential（署名）不正
+                        err.Add("error", "invalid_client");
+                        err.Add("error_description", "Invalid credential");
+                    }
+                }
+                else
+                {
+                    // クライアント認証エラー（Credential（iss or pubKey）不正
+                    err.Add("error", "invalid_client");
+                    err.Add("error_description", "Invalid credential");
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region CreateAccessTokenResponse
+
+        /// <summary>CreateAccessTokenResponse</summary>
+        /// <param name="AccessToken">string</param>
+        /// <param name="reqRefreshToken">bool</param>
+        private static Dictionary<string, string> CreateAccessTokenResponse(string AccessToken, bool reqRefreshToken)
+        {
+            Dictionary<string, string> ret = new Dictionary<string, string>();
+
+            // token_type
+            ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
+
+            // access_token
+            ret.Add(OAuth2AndOIDCConst.AccessToken, AccessToken);
+
+            // refresh_token
+            if (reqRefreshToken)
+            {
+                string RefreshToken = "";
+                ret.Add(OAuth2AndOIDCConst.RefreshToken, RefreshToken);
+            }
+
+            // expires_in
+            JObject jobj = (JObject)JsonConvert.DeserializeObject(
+                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                    AccessToken.Split('.')[1]), CustomEncode.us_ascii));
+
+            ret.Add("expires_in",
+                (long.Parse((string)jobj[OAuth2AndOIDCConst.exp])
+                - long.Parse((string)jobj[OAuth2AndOIDCConst.iat])).ToString());
+
+            return ret;
+        }
+
+        #endregion
 
         #endregion
     }

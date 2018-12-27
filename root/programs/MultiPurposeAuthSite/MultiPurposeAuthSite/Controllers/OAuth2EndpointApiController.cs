@@ -38,7 +38,7 @@ using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Log;
 
 using MultiPurposeAuthSite.TokenProviders;
-using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Text;
@@ -54,7 +54,6 @@ using System.Net.Http;
 using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
-using Microsoft.Owin.Security.OAuth;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -332,154 +331,49 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public Dictionary<string, string> OAuth2BearerToken(FormDataCollection formData)
         {
-            JObject jobj = null;
+            Dictionary<string, string> ret = null;
+            Dictionary<string, string> err = null;
 
-            // 戻り値
-            // ・正常
-            Dictionary<string, string> ret = new Dictionary<string, string>();
-            // ・異常
-            Dictionary<string, string> err = new Dictionary<string, string>();
+            string clientId = "";
+            string clientSecret = "";
+            string grant_type = "";
+            string assertion = "";
 
-            // 変数
-            string grant_type = formData[OAuth2AndOIDCConst.grant_type];
-            string assertion = formData[OAuth2AndOIDCConst.assertion];
+            AuthenticationHeader.GetCredentials(
+                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
 
-            if (Config.EnableJwtBearerTokenFlowGrantType &&
-                grant_type == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
+            if (temp.Length == 2)
             {
-                Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                        assertion.Split('.')[1]), CustomEncode.us_ascii));
+                clientId = temp[0];
+                clientSecret = temp[1];
+            }
 
-                string pubKey = ExtOAuth2.Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+            grant_type = formData[OAuth2AndOIDCConst.grant_type];
+            assertion = formData[OAuth2AndOIDCConst.assertion];
 
-                if (!string.IsNullOrEmpty(pubKey))
+            string code = formData[OAuth2AndOIDCConst.code];
+            string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
+            string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
+
+            if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
+            {
+                if (CmnEndpoints.GrantAuthorizationCodeCredentials(
+                    grant_type, clientId, clientSecret, assertion,
+                    code, code_verifier, redirect_uri, out ret, out err))
                 {
-                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
-                        assertion, out string iss, out string aud, out string scopes, out jobj, pubKey))
-                    {
-                        // aud 検証
-                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint)
-                        {
-                            // JwtTokenを作る
-
-                            // ClaimsIdentityにClaimを追加する。
-                            ClaimsIdentity identity = new ClaimsIdentity(OAuthDefaults.AuthenticationType);
-                            identity.AddClaim(new Claim(ClaimTypes.Name, ""));
-                            identity = ExtOAuth2.Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
-
-                            AuthenticationProperties prop = new AuthenticationProperties();
-                            prop.IssuedUtc = DateTimeOffset.UtcNow;
-                            prop.ExpiresUtc = DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes);
-
-                            // token_type
-                            ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
-
-                            // access_token
-                            string access_token = CmnAccessToken.CreateAccessTokenFromClaims(
-                                identity.Name, identity.Claims,
-                                prop.ExpiresUtc.Value, prop.IssuedUtc.Value);
-
-                            ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);
-
-                            // expires_in
-                            jobj = (JObject)JsonConvert.DeserializeObject(
-                                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                                    access_token.Split('.')[1]), CustomEncode.us_ascii));
-
-                            ret.Add("expires_in",
-                                (long.Parse((string)jobj[OAuth2AndOIDCConst.exp])
-                                - long.Parse((string)jobj[OAuth2AndOIDCConst.iat])).ToString());
-
-                            // オペレーション・トレース・ログ出力
-                            string clientName = ExtOAuth2.Helper.GetInstance().GetClientName(iss);
-                            Logging.MyOperationTrace(string.Format(
-                                "{0}({1}) passed the 'jwt bearer token flow' by {2}({3}).",
-                                iss, clientName, iss, clientName));
-
-                            return ret; // 成功
-                        }
-                        else
-                        {
-                            // クライアント認証エラー（Credential（aud）不正
-                            err.Add("error", "invalid_client");
-                            err.Add("error_description", "Invalid credential");
-                        }
-                    }
-                    else
-                    {
-                        // クライアント認証エラー（Credential（署名）不正
-                        err.Add("error", "invalid_client");
-                        err.Add("error_description", "Invalid credential");
-                    }
+                    return ret;
                 }
-                else
+            }
+            else if (grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
+            {
+                if (CmnEndpoints.GrantJwtBearerTokenCredentials(
+                    grant_type, assertion, out ret, out err))
                 {
-                    // クライアント認証エラー（Credential（iss or pubKey）不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    return ret;
                 }
             }
             else
-            {
-                // クライアント認証
-                AuthenticationHeader.GetCredentials(
-                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
-
-                if (temp.Length == 2)
-                {
-                    string clientId = temp[0];
-                    string clientSecret = temp[1];
-
-                    if (CmnEndpoints.ValidateClientAuthentication(
-                        grant_type, assertion, clientId, clientSecret,
-                        out string valid, out string _err, out string errDescription))
-                    {
-                        // 変数
-                        string code = formData[OAuth2AndOIDCConst.code];
-                        string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
-                        string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
-
-                        // token_type
-                        ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
-
-                        // access_token
-                        string access_token = CmnAccessToken.ProtectFromAccessTokenPayload(
-                            ExtOAuth2.AuthorizationCodeProvider.Receive(code, code_verifier),
-                            DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
-                        
-                        ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);
-
-                        // expires_in
-                        jobj = (JObject)JsonConvert.DeserializeObject(
-                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                                access_token.Split('.')[1]), CustomEncode.us_ascii));
-
-                        ret.Add("expires_in",
-                            (long.Parse((string)jobj[OAuth2AndOIDCConst.exp])
-                            - long.Parse((string)jobj[OAuth2AndOIDCConst.iat])).ToString());
-
-                        //// オペレーション・トレース・ログ出力
-                        //Logging.MyOperationTrace(string.Format(
-                        //    "{0}({1}) passed the '{2} flow' by {0}({1}).",
-                        //    user.Id, user.UserName, grant_type));
-
-                        return ret; // 成功
-                    }
-                    else
-                    {
-                        // ValidateClientAuthentication
-                        err.Add("error", _err);
-                        err.Add("error_description", errDescription);
-                    }
-                }
-                else
-                {
-                    // クライアント認証エラー（Credential（iss or pubKey）不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
-                }
+            {   
             }
 
             return err; // 失敗
@@ -507,27 +401,24 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (temp.Length == 1)
             {
-                ClaimsIdentity identity = new ClaimsIdentity();
-                if (CmnAccessToken.VerifyAccessToken(temp[0], identity))
+                if (CmnAccessToken.VerifyAccessToken(temp[0], out ClaimsIdentity identity))
                 {
                     ApplicationUser user = CmnUserStore.FindByName(identity.Name);
 
-                    string subject = "";
+                    string sub = "";
                     if (user == null)
                     {
                         // Client認証
-                        subject = ExtOAuth2.Helper.GetInstance().GetClientName(
-                            MyBaseAsyncApiController.GetClaimsIdentity()
-                            .FindFirst(OAuth2AndOIDCConst.Claim_Audience).Value);
+                        sub = identity.Name;
                     }
                     else
                     {
                         // Resource Owner認証
-                        subject = user.UserName;
+                        sub = user.UserName;
                     }
 
                     Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
-                    userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, subject);
+                    userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, sub);
 
                     // Scope
                     IEnumerable<Claim> scopes = identity.Claims.Where(x => x.Type == OAuth2AndOIDCConst.Claim_Scopes);
@@ -630,15 +521,14 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                 {
                     // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == ExtOAuth2.Helper.GetInstance().GetClientSecret(clientId))
+                    if (clientSecret == Helper.GetInstance().GetClientSecret(clientId))
                     {
                         // 検証完了
 
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
                             //// 検証
-                            ClaimsIdentity identity = new ClaimsIdentity();
-                            if (CmnAccessToken.VerifyAccessToken(token, identity))
+                            if (CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
                             {
                                 // 検証成功
 
@@ -647,7 +537,7 @@ namespace MultiPurposeAuthSite.Controllers
                                     x => x.Type == OAuth2AndOIDCConst.Claim_JwtId).FirstOrDefault<Claim>();
 
                                 // access_token取消
-                                ExtOAuth2.RevocationProvider.Create(jti.Value);
+                                RevocationProvider.Create(jti.Value);
                                 return null; // 成功
                             }
                             else
@@ -661,7 +551,7 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
                         {
                             // refresh_token取消
-                            if (ExtOAuth2.RefreshTokenProvider.Delete(token))
+                            if (RefreshTokenProvider.Delete(token))
                             {
                                 // 取り消し成功
                                 return null; // 成功
@@ -744,13 +634,12 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!(string.IsNullOrEmpty(clientId) && string.IsNullOrEmpty(clientSecret)))
                 {
                     // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                    if (clientSecret == ExtOAuth2.Helper.GetInstance().GetClientSecret(clientId))
+                    if (clientSecret == Helper.GetInstance().GetClientSecret(clientId))
                     {
                         // 検証完了
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
-                            ClaimsIdentity identity = new ClaimsIdentity();
-                            if (CmnAccessToken.VerifyAccessToken(token, identity))
+                            if (CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
                             {
                                 // 検証成功
                                 // メタデータの返却

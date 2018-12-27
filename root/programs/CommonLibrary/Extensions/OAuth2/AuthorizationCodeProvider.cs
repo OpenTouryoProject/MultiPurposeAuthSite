@@ -74,8 +74,11 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             Dictionary<string, string> temp = new Dictionary<string, string>();
 
             // 有効期限が無効なtokenのペイロードだけ作成
-            string access_token_payload = CmnAccessToken.CreateAccessTokenPayloadForCode(identity, DateTimeOffset.Now);
+            string access_token_payload = CmnAccessToken.CreatePayloadForCode(identity, DateTimeOffset.Now);
             temp.Add("access_token_payload", access_token_payload);
+
+            // redirect_uri 対応
+            temp.Add(OAuth2AndOIDCConst.redirect_uri, queryString[OAuth2AndOIDCConst.redirect_uri]);
 
             // OAuth PKCE 対応
             temp.Add(OAuth2AndOIDCConst.code_challenge, queryString[OAuth2AndOIDCConst.code_challenge]);
@@ -138,20 +141,18 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         /// <summary>Receive</summary>
         /// <param name="code">string</param>
+        /// <param name="redirect_uri">string</param>
         /// <param name="code_verifier">string</param>
-        /// <returns>ticket</returns>
-        public static string Receive(string code, string code_verifier)
+        /// <returns>PayloadForCode</returns>
+        public static string Receive(string code, string redirect_uri, string code_verifier)
         {
             string value = "";
-            string ticket = "";
+            string payload = "";
 
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    if (AuthorizationCodeProvider.AuthenticationCodes.TryRemove(code, out value))
-                    {
-                        ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
-                    }
+                    if (AuthorizationCodeProvider.AuthenticationCodes.TryRemove(code, out value)) { }
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -169,8 +170,6 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                                 value = cnn.ExecuteScalar<string>(
                                   "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
 
-                                ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
-
                                 cnn.Execute(
                                     "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
 
@@ -180,8 +179,6 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                 value = cnn.ExecuteScalar<string>(
                                     "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
-
-                                ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
 
                                 cnn.Execute(
                                     "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
@@ -193,8 +190,6 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                                 value = cnn.ExecuteScalar<string>(
                                     "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
 
-                                ticket = AuthorizationCodeProvider.VerifyCodeVerifier(value, code_verifier);
-
                                 cnn.Execute(
                                     "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
 
@@ -205,34 +200,33 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                     break;
             }
 
-            return ticket;
-        }
-
-        /// <summary>VerifyCodeVerifier</summary>
-        /// <param name="value">string</param>
-        /// <param name="code_verifier">string</param>
-        /// <returns>ticket</returns>
-        private static string VerifyCodeVerifier(string value, string code_verifier)
-        {
-            // null チェック
-            if (string.IsNullOrEmpty(value)) { return ""; }
-
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
+            string _redirect_uri = (string)jobj[OAuth2AndOIDCConst.redirect_uri];
 
-            bool isPKCE = !string.IsNullOrEmpty(code_verifier);
-            
-            if (!isPKCE)
+            if (string.IsNullOrEmpty(_redirect_uri))
+            {
+                // 指定なし（継続）
+            }
+            else
+            {
+                // 指定あり
+                if (_redirect_uri == redirect_uri)
+                {
+                    // 一致（継続）
+                }
+                else
+                {
+                    // 不一致（中断）
+                    return "";
+                }
+            }
+
+            if (string.IsNullOrEmpty(code_verifier))
             {
                 // 通常のアクセストークン・リクエスト
                 if (string.IsNullOrEmpty((string)jobj[OAuth2AndOIDCConst.code_challenge]))
                 {
-                    // Authorization Codeのcode
-                    return (string)jobj["access_token_payload"];
-                }
-                else
-                {
-                    // OAuth PKCEのcode（要 code_verifier）
-                    return "";
+                    payload = (string)jobj["access_token_payload"];
                 }
             }
             else
@@ -246,11 +240,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                         if ((string)jobj[OAuth2AndOIDCConst.code_challenge] == code_verifier)
                         {
                             // 検証成功
-                            return (string)jobj["access_token_payload"];
-                        }
-                        else
-                        {
-                            // 検証失敗
+                            payload = (string)jobj["access_token_payload"];
                         }
                     }
                     else if (((string)jobj[OAuth2AndOIDCConst.code_challenge_method]).ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
@@ -259,36 +249,20 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                         if ((string)jobj[OAuth2AndOIDCConst.code_challenge] == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
                         {
                             // 検証成功
-                            return (string)jobj["access_token_payload"];
-                        }
-                        else
-                        {
-                            // 検証失敗
+                            payload = (string)jobj["access_token_payload"];
                         }
                     }
-                    else
-                    {
-                        // パラメタ不正
-                    }
                 }
-                else
-                {
-                    // パラメタ不正
-                }
-
-                return null;
             }
+
+            return payload;
         }
 
         #endregion
 
         #region Hybrid Flow対応
 
-        /// <summary>
-        /// Hybrid Flow対応
-        ///   OAuthAuthorizationServerHandler経由での呼び出しができず、
-        ///   AuthenticationTokenXXXXContextを取得できないため、抜け道。
-        /// </summary>
+        /// <summary>GetAccessTokenPayload</summary>
         /// <param name="code">code</param>
         /// <returns>Jwt AccessTokenのPayload部</returns>
         public static string GetAccessTokenPayload(string code)

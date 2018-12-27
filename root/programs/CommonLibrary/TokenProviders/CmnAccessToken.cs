@@ -59,15 +59,18 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// <summary>CmnAccessToken</summary>
     public class CmnAccessToken
     {
+        #region Create
+
         #region Claims経由
 
-        /// <summary>CreateAccessTokenFromClaims</summary>
+        /// <summary>CreateFromClaims</summary>
         /// <param name="userName">string</param>
         /// <param name="claims">IEnumerable(Claim)</param>
         /// <param name="ExpiresUtc">DateTimeOffset</param>
         /// <param name="IssuedUtc">DateTimeOffset</param>
         /// <returns>JWT文字列</returns>
-        public static string CreateAccessTokenFromClaims(string userName, IEnumerable<Claim> claims, DateTimeOffset expiresUtc, DateTimeOffset issuedUtc)
+        public static string CreateFromClaims(
+            string userName, IEnumerable<Claim> claims, DateTimeOffset expiresUtc, DateTimeOffset issuedUtc)
         {
             string json = "";
 
@@ -190,11 +193,121 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
         }
 
-        /// <summary>VerifyAccessToken</summary>
-        /// <param name="jwt">JWT文字列</param>
-        public static bool VerifyAccessToken(string jwt, ClaimsIdentity identity)
+        #endregion
+
+        #region Code経由
+
+        /// <summary>CreatePayloadForCode</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="issuedUtc">DateTimeOffset</param>
+        /// <returns>Jwt AccessTokenのPayload部</returns>
+        public static string CreatePayloadForCode(ClaimsIdentity identity, DateTimeOffset issuedUtc)
         {
-            if (!(string.IsNullOrEmpty(jwt) || identity == null))
+            // チェック
+            if (identity == null || issuedUtc == null)
+            {
+                throw new ArgumentNullException();
+            }
+
+            Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
+            List<string> scopes = new List<string>();
+            List<string> roles = new List<string>();
+
+            foreach (Claim c in identity.Claims)
+            {
+                if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
+                {
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, c.Value);
+                }
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
+                {
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, c.Value);
+                }
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
+                {
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, c.Value);
+                }
+                else if (c.Type == OAuth2AndOIDCConst.Claim_Scopes)
+                {
+                    scopes.Add(c.Value);
+                }
+                else if (c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                {
+                    roles.Add(c.Value);
+                }
+            }
+
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, identity.Name);
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
+
+            // この時点では空にしておく。
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, "");
+
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, issuedUtc.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
+
+            return JsonConvert.SerializeObject(authTokenClaimSet);
+        }
+
+        /// <summary>ProtectFromPayloadForCode</summary>
+        /// <param name="access_token_payload">AccessTokenのPayload</param>
+        /// <param name="expiresUtc">DateTimeOffset</param>
+        /// <returns>AccessToken</returns>
+        public static string ProtectFromPayloadForCode(string access_token_payload, DateTimeOffset expiresUtc)
+        {
+            string json = "";
+
+            #region JSON編集
+
+            // access_token_payloadのDictionary化
+            Dictionary<string, object> payload =
+                JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
+
+            payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
+            payload[OAuth2AndOIDCConst.scopes] = payload[OAuth2AndOIDCConst.scopes];
+
+            json = JsonConvert.SerializeObject(payload);
+
+            #endregion
+
+            #region JWS化
+
+            JWS_RS256_X509 jwsRS256 = null;
+
+            // 署名
+            jwsRS256 = new JWS_RS256_X509(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+
+            // JWSHeaderのセット
+            // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
+            Dictionary<string, string> jwk =
+                JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                    RsaPublicKeyConverter.X509PfxToJwk(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword));
+
+            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
+            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+
+            return jwsRS256.Create(json);
+
+            #endregion
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Verify
+
+        /// <summary>Verify</summary>
+        /// <param name="jwt">string</param>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <returns>検証結果</returns>
+        public static bool VerifyAccessToken(string jwt, out ClaimsIdentity identity)
+        {
+            identity = new ClaimsIdentity();
+
+            if (!string.IsNullOrEmpty(jwt))
             {
                 // 検証
                 JWS_RS256 jwsRS256 = null;
@@ -242,13 +355,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string[] temp = jwt.Split('.');
                     string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
                     Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-
-                    // 以下の検証処理
-                    //  ★ "iss": accounts.google.com的な,
-                    //  ★ "aud": client_id（クライアント識別子）
-                    //  ★ "sub": ユーザーの一意識別子（uname, email）
-                    //  ★ "exp": JWT の有効期限（Unix時間）
-                    //  ☆ "jti": JWT のID（OAuth Token Revocation）
 
                     DateTime? datetime = RevocationProvider.Get((string)authTokenClaimSet[OAuth2AndOIDCConst.jti]);
 
@@ -315,7 +421,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             // sub（client_idに対応するclient_name）Claimを設定する。
             identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet[OAuth2AndOIDCConst.sub]));
-            
+
             // aud、scopes、nonceなどのClaimを追加する。
             List<string> scopes = new List<string>();
             foreach (string s in (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes])
@@ -332,125 +438,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
             identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
             identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
-        }
-
-        #endregion
-
-        #region Code経由
-
-        /// <summary>CreateAccessTokenPayloadForCode</summary>
-        /// <param name="identity">ClaimsIdentity</param>
-        /// <param name="issuedUtc">DateTimeOffset</param>
-        /// <returns>Jwt AccessTokenのPayload部</returns>
-        public static string CreateAccessTokenPayloadForCode(ClaimsIdentity identity, DateTimeOffset issuedUtc)
-        {
-            // チェック
-            if (identity == null || issuedUtc == null)
-            {
-                throw new ArgumentNullException();
-            }
-
-            Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
-            List<string> scopes = new List<string>();
-            List<string> roles = new List<string>();
-
-            foreach (Claim c in identity.Claims)
-            {
-                if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
-                {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, c.Value);
-                }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
-                {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, c.Value);
-                }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
-                {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, c.Value);
-                }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Scopes)
-                {
-                    scopes.Add(c.Value);
-                }
-                else if (c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                {
-                    roles.Add(c.Value);
-                }
-            }
-
-            // Resource Owner認証の場合、Resource Ownerの名称
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, identity.Name);
-
-            #region authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ・・・
-
-            // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
-            //authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-
-            // この時点では空にしておく。
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, "");
-
-            #endregion
-
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, issuedUtc.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
-
-            // ★ Hybrid Flow対応なので、scopeを制限してもイイ。
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
-
-            // scope値によって、返す値を変更する。
-            // ココでは返さない（別途ユーザ取得処理を実装してもイイ）。
-
-            return JsonConvert.SerializeObject(authTokenClaimSet);
-        }
-
-        /// <summary>ProtectFromAccessTokenPayload</summary>
-        /// <param name="access_token_payload">AccessTokenのPayload</param>
-        /// <param name="expiresUtc">DateTimeOffset</param>
-        /// <returns>AccessToken</returns>
-        public static string ProtectFromAccessTokenPayload(string access_token_payload, DateTimeOffset expiresUtc)
-        {
-            string json = "";
-
-            // ticketの値を使用(これは、codeのexpっぽい。300秒になっているのでNG。)
-            //authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, ticket.Properties.ExpiresUtc.Value.ToUnixTimeSeconds().ToString());
-            //authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, DateTimeOffset.Now.AddSeconds(customExp).ToUnixTimeSeconds().ToString());
-
-            #region JSON編集
-
-            // access_token_payloadのDictionary化
-            Dictionary<string, object> payload =
-                JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
-
-            // ★ customExpの値を使用する。
-            payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
-            // ★ Hybrid Flow対応なので、scopeを制限してもイイ。
-            payload[OAuth2AndOIDCConst.scopes] = payload[OAuth2AndOIDCConst.scopes];
-
-            json = JsonConvert.SerializeObject(payload);
-
-            #endregion
-
-            #region JWS化
-
-            JWS_RS256_X509 jwsRS256 = null;
-
-            // 署名
-            jwsRS256 = new JWS_RS256_X509(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-            // JWSHeaderのセット
-            // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
-            Dictionary<string, string> jwk =
-                JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword));
-
-            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
-
-            return jwsRS256.Create(json);
-
-            #endregion
         }
 
         #endregion

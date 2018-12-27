@@ -40,10 +40,11 @@ namespace MultiPurposeAuthSite
         /// </summary>
         public static void Register(HttpConfiguration config)
         {
-            // Web API configuration and services
-            // 「Bearer Token」認証のみを使用するように、Web API を設定。
-            config.SuppressDefaultHostAuthentication();
-            config.Filters.Add(new HostAuthenticationFilter(OAuthDefaults.AuthenticationType));
+            // ↓使用しない。
+            //// Web API configuration and services
+            //// 「Bearer Token」認証のみを使用するように、Web API を設定。
+            //config.SuppressDefaultHostAuthentication();
+            //config.Filters.Add(new HostAuthenticationFilter(OAuthDefaults.AuthenticationType));
 
             // JSON を既定にして、CamelCaseを使用 (JSON.NET)
             config.Formatters.Remove(config.Formatters.XmlFormatter);

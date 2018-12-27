@@ -1950,47 +1950,24 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Authorize（認可エンドポイント）
 
-        #region 認可エンドポイントでサインインして、EmptyResultを返した後のRedirect先について。
-
-        // この後のRedirect先をdebug proxyにかけて分析した所、
-        // --------------------------------------------------
-        // HTTP / 1.1 302 Found
-        // Location: http://localhost:nnnnn/・・・/#access_token=・・・
-        // --------------------------------------------------
-        // と言う感じで、RedirectエンドポイントへのRedirect処理になっていた。
-
-        // Redirect先のURLは、
-        // facebook - Setting the redirect_uri in Asp.Net Identity - Stack Overflow
-        // http://stackoverflow.com/questions/20693082/setting-the-redirect-uri-in-asp-net-identity
-        // の情報からして、
-
-        // ApplicationOAuthProvider.ValidateClientRedirectUri() メソッドの中の
-        // OAuthValidateClientRedirectUriContext.Validated(String redirectUri) メソッドで設定されている模様。
-
-        #endregion
-
-        /// <summary>
-        ///  認可エンドポイントで認可リクエストを受け取って処理する。
-        ///  ・Authorization Codeグラント種別（仲介コードの発行）
-        ///  　の処理を行ない、 権限付与画面の確認画面を表示する。
-        ///  ・Implicitグラント種別（Access Tokenの発行）
-        ///  　の処理を行ない、 RedirectエンドポイントへRedirect。
-        ///  redirect_uriは使用しない。
-        ///  </summary>
-        /// <param name="client_id">client_id（必須）</param>
-        /// <param name="redirect_uri">redirect_uri（任意）</param>
-        /// <param name="response_type">response_type（必須）</param>
-        /// <param name="scope">scope（任意）</param>
-        /// <param name="state">state（推奨）</param>
-        /// <param name="nonce">nonce（OIDC）</param>
-        /// <param name="prompt">認可画面の扱い</param>
+        /// <summary>認可エンドポイント</summary>
+        /// <param name="client_id">string（必須）</param>
+        /// <param name="redirect_uri">string（任意）</param>
+        /// <param name="response_type">string（必須）</param>
+        /// <param name="response_mode">string（任意）</param>
+        /// <param name="scope">string（任意）</param>
+        /// <param name="state">string（推奨）</param>
+        /// <param name="nonce">string（OIDC）</param>
+        /// <param name="prompt">string（OIDC）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
         public async Task<ActionResult> OAuth2Authorize(
-            string client_id, string redirect_uri, string response_type, string scope, string state,
+            string client_id, string redirect_uri,
+            string response_type, string response_mode,
+            string scope, string state,
             string nonce, string prompt) // OpenID Connect
-            // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
+                          // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
         {
             if (CmnEndpoints.ValidateClientRedirectUri(
                 client_id, redirect_uri, response_type, scope, nonce,
@@ -2022,7 +1999,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 認可画面をスキップ
 
                         // アクセス要求を保存して、仲介コードを発行する。
-                        identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
+                        identity = new ClaimsIdentity(identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
                         // ただし、認可画面をスキップする場合は、scopeをフィルタする。
@@ -2042,7 +2019,33 @@ namespace MultiPurposeAuthSite.Controllers
                             user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
 
                         // RedirectエンドポイントへRedirect
-                        return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                        if (string.IsNullOrEmpty(response_mode) ||
+                            response_mode.ToLower() == OAuth2AndOIDCConst.query)
+                        {
+                            return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
+                        {
+                            // form_postに必要な、HTTP response message body
+                            string body =
+                                "<html>" +
+                                "  <body onload=\"javascript: document.forms[0].submit()\">" +
+                                "    <form method=\"post\" action =\"{0}\">" +
+                                "      <input type=\"hidden\" name =\"code\" value =\"{1}\"/>" +
+                                "      <input type=\"hidden\" name =\"state\"  value =\"{2}\"/>" +
+                                "    </form>" +
+                                "  </body>" +
+                                "</html>";
+
+                            // bodyに組み込んで
+                            body = string.Format(body, valid, code, state);
+
+                            return this.Content(body);
+                        }
+                        else
+                        {
+                            // 不正な操作
+                        }
                     }
                     else
                     {
@@ -2060,14 +2063,14 @@ namespace MultiPurposeAuthSite.Controllers
                     else
                     {
                         // アクセス要求の許可
-                        identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
+                        identity = new ClaimsIdentity(identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
                         //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                         // ClaimsIdentityに、その他、所定のClaimを追加する。
                         ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                         // AccessTokenの生成
-                        string access_token = CmnAccessToken.CreateAccessTokenFromClaims(identity.Name, identity.Claims, 
+                        string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims, 
                             DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes), DateTimeOffset.Now);
 
                         // オペレーション・トレース・ログ出力
@@ -2096,22 +2099,26 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>
-        ///  Authorization Codeグラント種別の権限付与画面の結果を受け取り、
-        ///  仲介コードを発行してRedirectエンドポイントへRedirect。
-        ///  ※ パラメタは、認可レスポンスのURL中に残っているものを使用。
-        ///  </summary>
-        /// <param name="client_id">client_id（必須）</param>
-        /// <param name="redirect_uri">redirect_uri（任意）</param>
-        /// <param name="response_type">response_type（必須）</param>
-        /// <param name="scope">scope（任意）</param>
-        /// <param name="state">state（推奨）</param>
-        /// <param name="nonce">nonce（OIDC）</param>
+        /// 認可エンドポイント
+        /// Authorization Codeグラント種別の権限付与画面の結果を受け取り、
+        /// 仲介コードを発行してRedirectエンドポイントへRedirect。
+        /// ※ パラメタは、認可レスポンスのURL中に残っているものを使用。
+        /// </summary>
+        /// <param name="client_id">string（必須）</param>
+        /// <param name="redirect_uri">string（任意）</param>
+        /// <param name="response_type">string（必須）</param>
+        /// <param name="response_mode">string（任意）</param>
+        /// <param name="scope">string（任意）</param>
+        /// <param name="state">string（推奨）</param>
+        /// <param name="nonce">string（OIDC）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuth2Authorize(
-            string client_id, string redirect_uri, string response_type, string scope, string state,
+            string client_id, string redirect_uri,
+            string response_type, string response_mode,
+            string scope, string state,
             string nonce) // OpenID Connect
         {
             if (CmnEndpoints.ValidateClientRedirectUri(
@@ -2138,7 +2145,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
                 {
                     // アクセス要求を保存して、仲介コードを発行する。
-                    identity = new ClaimsIdentity(identity.Claims, OAuthDefaults.AuthenticationType, identity.NameClaimType, identity.RoleClaimType);
+                    identity = new ClaimsIdentity(identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
                     //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
@@ -2153,7 +2160,33 @@ namespace MultiPurposeAuthSite.Controllers
                             user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
 
                     // RedirectエンドポイントへRedirect
-                    return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                    if (string.IsNullOrEmpty(response_mode) ||
+                        response_mode.ToLower() == OAuth2AndOIDCConst.query)
+                    {
+                        return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                    }
+                    else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
+                    {
+                        // form_postに必要な、HTTP response message body
+                        string body =
+                            "<html>" +
+                            "  <body onload=\"javascript: document.forms[0].submit()\">" +
+                            "    <form method=\"post\" action =\"{0}\">" +
+                            "      <input type=\"hidden\" name =\"code\" value =\"{1}\"/>" +
+                            "      <input type=\"hidden\" name =\"state\"  value =\"{2}\"/>" +
+                            "    </form>" +
+                            "  </body>" +
+                            "</html>";
+
+                        // bodyに組み込んで
+                        body = string.Format(body, valid, code, state);
+
+                        return this.Content(body);
+                    }
+                    else
+                    {
+                        // 不正な操作
+                    }
                 }
                 else
                 {
