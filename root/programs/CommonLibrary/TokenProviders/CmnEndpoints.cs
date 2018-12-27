@@ -229,8 +229,6 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region ValidateClientAuthentication
-
         /// <summary>ValidateClientAuthentication</summary>
         /// <param name="grant_type">string</param>
         /// <param name="assertion">string</param>
@@ -300,39 +298,12 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
             }
-            else if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
-            {
-                #region RefreshToken
-
-                if (!Config.EnableRefreshToken)
-                {
-                    throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
-                }
-
-                // "client_id" および "client_secret"を基本認証の認証ヘッダから取得
-                if (!string.IsNullOrEmpty(client_secret))
-                {
-                    if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
-                    {
-                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                        if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                        {
-                            // 検証完了
-                            valid_client_id = client_id;
-                            return true;
-                        }
-                    }
-                }
-
-                #endregion
-            }
+            
             else
             {
                 // 不明な値
                 // 検証未完
             }
-
-            #endregion
         }
 
         #endregion
@@ -363,10 +334,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             ret = null;
             err = new Dictionary<string, string>();
 
+            if (!Config.EnableAuthorizationCodeGrantType)
+            {
+                throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+            }
+
             #region 認証
+
             bool authned = false;
-            if (Config.EnableAuthorizationCodeGrantType &&
-                grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
+            if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
             {
                 if (!string.IsNullOrEmpty(client_secret))
                 {
@@ -397,7 +373,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         {
                             // aud 検証
                             if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
-                                + Config.OAuth2BearerTokenEndpoint)
+                                + Config.OAuth2TokenEndpoint)
                             {
                                 authned = true;
                             }
@@ -408,23 +384,117 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #endregion
 
+            #region 発行
+
             if (authned)
             {
+                string tokenPayload = AuthorizationCodeProvider.Receive(code, redirect_uri, code_verifier);
+
                 // access_token
-                string access_token = CmnAccessToken.ProtectFromPayloadForCode(
-                    AuthorizationCodeProvider.Receive(code, redirect_uri, code_verifier),
+                string access_token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+
+                // refresh_token
+                string refresh_token = "";
+                if (Config.EnableRefreshToken)
+                {
+                    refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                }
 
                 //// オペレーション・トレース・ログ出力
                 //Logging.MyOperationTrace(string.Format(
                 //    "{0}({1}) passed the '{2} flow' by {0}({1}).",
                 //    user.Id, user.UserName, grant_type));
 
-                ret = CmnEndpoints.CreateAccessTokenResponse(
-                    access_token, Config.EnableRefreshToken);
+                ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
 
                 return true; 
             }
+
+            #endregion
+
+            return false;
+        }
+
+        #endregion
+
+        #region GrantAuthorizationCodeCredentials
+
+        /// <summary>
+        /// GrantAuthorizationCodeCredentials
+        /// Authorization Codeグラント種別
+        /// </summary>
+        /// <param name="grant_type">string</param>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="tokenId">string</param>
+        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="err">Dictionary(string, string)</param>
+        /// <returns>成否</returns>
+        public static bool GrantRefreshTokenCredentials(
+            string grant_type, string client_id, string client_secret, string tokenId,
+            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+            err = new Dictionary<string, string>();
+
+            if (!Config.EnableRefreshToken)
+            {
+                throw new NotSupportedException(Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
+            }
+
+            #region 認証
+
+            bool authned = false;
+            if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
+            {
+                if (!string.IsNullOrEmpty(client_secret))
+                {
+                    // client_id & client_secret
+                    if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
+                    {
+                        // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
+                        if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
+                        {
+                            // 検証完了
+                            authned = true;
+                        }
+                    }
+                }
+            }
+
+            #endregion
+
+            #region 発行
+
+            if (authned)
+            {
+                string tokenPayload = RefreshTokenProvider.Receive(tokenId);
+
+                if (!string.IsNullOrEmpty(tokenPayload))
+                {
+                    // access_token
+                    string access_token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload,
+                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+
+                    string refresh_token = "";
+                    if (Config.EnableRefreshToken)
+                    {
+                        refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                    }
+
+                    //// オペレーション・トレース・ログ出力
+                    //Logging.MyOperationTrace(string.Format(
+                    //    "{0}({1}) passed the '{2} flow' by {0}({1}).",
+                    //    user.Id, user.UserName, grant_type));
+
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
+
+                    return true;
+                }
+            }
+
+            #endregion
 
             return false;
         }
@@ -600,7 +670,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
-                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint)
+                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                         {
                             // JwtTokenを作る
 
@@ -612,14 +682,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, sub));
                             identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
 
-                            AuthenticationProperties prop = new AuthenticationProperties();
-                            prop.IssuedUtc = DateTimeOffset.UtcNow;
-                            prop.ExpiresUtc = DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes);
-
                             // access_token
-                            string access_token = CmnAccessToken.CreateFromClaims(
-                                identity.Name, identity.Claims,
-                                prop.ExpiresUtc.Value, prop.IssuedUtc.Value);
+                            string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                             // オペレーション・トレース・ログ出力
                             string clientName = Helper.GetInstance().GetClientName(iss);
@@ -627,7 +692,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 "{0}({1}) passed the 'jwt bearer token flow' by {2}({3}).",
                                 iss, clientName, iss, clientName));
 
-                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, false);
+                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
                             return true;
                         }
                         else
@@ -660,9 +725,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region CreateAccessTokenResponse
 
         /// <summary>CreateAccessTokenResponse</summary>
-        /// <param name="AccessToken">string</param>
-        /// <param name="reqRefreshToken">bool</param>
-        private static Dictionary<string, string> CreateAccessTokenResponse(string AccessToken, bool reqRefreshToken)
+        /// <param name="access_token">string</param>
+        /// <param name="refresh_token">string</param>
+        /// <returns>Dictionary(string, string)</returns>
+        private static Dictionary<string, string> CreateAccessTokenResponse(string access_token, string refresh_token)
         {
             Dictionary<string, string> ret = new Dictionary<string, string>();
 
@@ -670,19 +736,18 @@ namespace MultiPurposeAuthSite.TokenProviders
             ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
 
             // access_token
-            ret.Add(OAuth2AndOIDCConst.AccessToken, AccessToken);
+            ret.Add(OAuth2AndOIDCConst.AccessToken, access_token);
 
             // refresh_token
-            if (reqRefreshToken)
+            if (!string.IsNullOrEmpty(refresh_token))
             {
-                string RefreshToken = "";
-                ret.Add(OAuth2AndOIDCConst.RefreshToken, RefreshToken);
+                ret.Add(OAuth2AndOIDCConst.RefreshToken, refresh_token);
             }
 
             // expires_in
             JObject jobj = (JObject)JsonConvert.DeserializeObject(
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                    AccessToken.Split('.')[1]), CustomEncode.us_ascii));
+                    access_token.Split('.')[1]), CustomEncode.us_ascii));
 
             ret.Add("expires_in",
                 (long.Parse((string)jobj[OAuth2AndOIDCConst.exp])

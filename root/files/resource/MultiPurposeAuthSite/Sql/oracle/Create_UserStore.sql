@@ -78,7 +78,7 @@ CREATE TABLE "AuthenticationCodeDictionary"(
 
 CREATE TABLE "RefreshTokenDictionary"(
     "Key" NVARCHAR2(256) NOT NULL,           -- PK
-    "Value" RAW(1024) NOT NULL,              -- RefreshToken
+    "Value" NVARCHAR2(2000) NOT NULL,        -- RefreshToken
     "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.RefreshTokenDictionary" PRIMARY KEY ("Key")
 );

@@ -2505,8 +2505,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + Config.OAuth2BearerTokenEndpoint);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -2589,8 +2588,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                     Uri tokenEndpointUri = new Uri(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + Config.OAuth2BearerTokenEndpoint);
+                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                     // Tokenエンドポイントにアクセス
 

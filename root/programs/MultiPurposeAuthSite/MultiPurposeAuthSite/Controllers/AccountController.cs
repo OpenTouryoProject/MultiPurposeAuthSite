@@ -2011,7 +2011,7 @@ namespace MultiPurposeAuthSite.Controllers
                         ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                         // Codeの生成
-                        string code = ExtOAuth2.AuthorizationCodeProvider.Create(identity, Request.QueryString);
+                        string code = AuthorizationCodeProvider.Create(identity, Request.QueryString);
 
                         // オペレーション・トレース・ログ出力
                         ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -2023,6 +2023,10 @@ namespace MultiPurposeAuthSite.Controllers
                             response_mode.ToLower() == OAuth2AndOIDCConst.query)
                         {
                             return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCConst.fragment)
+                        {
+                            return new RedirectResult(valid + string.Format("#code={0}&state={1}", code, state));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
                         {
@@ -2071,7 +2075,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // AccessTokenの生成
                         string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims, 
-                            DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes), DateTimeOffset.Now);
+                            DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes));
 
                         // オペレーション・トレース・ログ出力
                         ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -2152,7 +2156,7 @@ namespace MultiPurposeAuthSite.Controllers
                     ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                     // Codeの生成
-                    string code = ExtOAuth2.AuthorizationCodeProvider.Create(identity, Request.QueryString);
+                    string code = AuthorizationCodeProvider.Create(identity, Request.QueryString);
 
                     // オペレーション・トレース・ログ出力
                     ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -2164,6 +2168,10 @@ namespace MultiPurposeAuthSite.Controllers
                         response_mode.ToLower() == OAuth2AndOIDCConst.query)
                     {
                         return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                    }
+                    else if (response_mode.ToLower() == OAuth2AndOIDCConst.fragment)
+                    {
+                        return new RedirectResult(valid + string.Format("#code={0}&state={1}", code, state));
                     }
                     else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
                     {
@@ -2256,8 +2264,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                Config.OAuth2AuthorizationServerEndpointsRootURI
-                + Config.OAuth2BearerTokenEndpoint);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -2308,8 +2315,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // FAPI1
 
                         // Tokenエンドポイントにアクセス
-                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
-                                 + Config.OAuth2BearerTokenEndpoint;
+                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
                         // ClientNameから、client_id(iss)を取得。
                         string iss = "";
@@ -2418,8 +2424,7 @@ namespace MultiPurposeAuthSite.Controllers
                         #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                         Uri tokenEndpointUri = new Uri(
-                            Config.OAuth2AuthorizationServerEndpointsRootURI
-                            + Config.OAuth2BearerTokenEndpoint);
+                            Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                         // Tokenエンドポイントにアクセス
 
@@ -2468,8 +2473,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         Uri revokeTokenEndpointUri = new Uri(
-                            Config.OAuth2AuthorizationServerEndpointsRootURI
-                            + Config.OAuth2RevokeTokenWebAPI);
+                            Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint);
 
                         // Revokeエンドポイントにアクセス
 
@@ -2504,8 +2508,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         Uri introspectTokenEndpointUri = new Uri(
-                            Config.OAuth2AuthorizationServerEndpointsRootURI
-                            + Config.OAuth2IntrospectTokenWebAPI);
+                            Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint);
 
                         // Introspectエンドポイントにアクセス
 

@@ -481,7 +481,7 @@ namespace MultiPurposeAuthSite
                         #region  Implicitグラント種別を除く全てのグラント種別の共通設定
 
                         // ・OAuth Bearer Token の Token Endpoint
-                        TokenEndpointPath = new PathString(Config.OAuth2BearerTokenEndpoint),
+                        TokenEndpointPath = new PathString(Config.OAuth2TokenEndpoint),
 
                         #endregion
 

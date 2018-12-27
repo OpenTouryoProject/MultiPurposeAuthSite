@@ -450,8 +450,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestClientCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint;
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id, client_secretを取得。
             string client_id = "";
@@ -472,9 +471,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint),
-                     client_id, client_secret, Const.StandardScopes);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
+                    client_id, client_secret, Const.StandardScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
@@ -493,7 +491,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Tokenエンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint;
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id(iss)を取得。
             string iss = "";
@@ -514,7 +512,7 @@ namespace MultiPurposeAuthSite.Controllers
             privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
-                new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint),
+                new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
                 JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(iss, aud,
                 Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes, privateKey));
 

@@ -1108,13 +1108,13 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// OAuth2のBearerTokenのTokenエンドポイント 
+        /// OAuth2のTokenエンドポイント 
         /// </summary>
-        public static string OAuth2BearerTokenEndpoint
+        public static string OAuth2TokenEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("OAuth2BearerTokenEndpoint");
+                return GetConfigParameter.GetConfigValue("OAuth2TokenEndpoint");
             }
         }
 
@@ -1125,35 +1125,35 @@ namespace MultiPurposeAuthSite.Co
         #region WebAPI
 
         /// <summary>
-        /// OAuth2/OIDCで認可したユーザ情報のClaimを発行するWebAPI
+        /// OAuth2/OIDCのUserInfoエンドポイント 
         /// </summary>
-        public static string OAuth2GetUserClaimsWebAPI
+        public static string OAuth2UserInfoEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("OAuth2GetUserClaimsWebAPI");
+                return GetConfigParameter.GetConfigValue("OAuth2UserInfoEndpoint");
             }
         }
 
         /// <summary>
-        /// OAuth2で認可したTokenを無効化するWebAPI
+        /// OAuth2のRevokeエンドポイント 
         /// </summary>
-        public static string OAuth2RevokeTokenWebAPI
+        public static string OAuth2RevokeTokenEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("OAuth2RevokeTokenWebAPI");
+                return GetConfigParameter.GetConfigValue("OAuth2RevokeTokenEndpoint");
             }
         }
 
         /// <summary>
-        /// OAuth2で認可したTokenのメタデータを返すWebAPI
+        /// OAuth2のIntrospectエンドポイント 
         /// </summary>
-        public static string OAuth2IntrospectTokenWebAPI
+        public static string OAuth2IntrospectTokenEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("OAuth2IntrospectTokenWebAPI");
+                return GetConfigParameter.GetConfigValue("OAuth2IntrospectTokenEndpoint");
             }
         }
 

@@ -68,9 +68,9 @@ namespace MultiPurposeAuthSite
             );
 
             config.Routes.MapHttpRoute(
-                name: "OAuth2BearerToken",
-                routeTemplate: Config.OAuth2BearerTokenEndpoint.Substring(1), // 先頭の[/]を削除
-                defaults: new { controller = "OAuth2EndpointApi", action = "OAuth2BearerToken" }
+                name: "OAuth2Token",
+                routeTemplate: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2EndpointApi", action = "OAuth2Token" }
             );
 
             //// トレース機能を有効化します。

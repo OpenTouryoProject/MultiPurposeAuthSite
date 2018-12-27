@@ -34,8 +34,6 @@
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 
-using MultiPurposeAuthSite.TokenProviders;
-
 using System;
 using System.Data;
 using System.Collections.Generic;
@@ -49,10 +47,9 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.TokenProviders
 {
-    /// <summary>
-    /// </summary>
+    /// <summary>AccessTokenのpayloadを一時保存する。</summary>
     public class AuthorizationCodeProvider
     {
         /// <summary>

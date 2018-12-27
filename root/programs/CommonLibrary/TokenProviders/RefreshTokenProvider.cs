@@ -41,34 +41,34 @@ using MultiPurposeAuthSite.Co;
 
 using Dapper;
 
-using Touryo.Infrastructure.Public.Security;
-
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.TokenProviders
 {
-    /// <summary>SerializeTicket一時保存する。</summary>
+    /// <summary>RefreshTokenのpayloadを一時保存する。</summary>
     public class RefreshTokenProvider
     {
         /// <summary>
-        /// _refreshTokens
+        /// RefreshTokens
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, byte[]>
-            RefreshTokens = new ConcurrentDictionary<string, byte[]>();
+        private static ConcurrentDictionary<string, string>
+            RefreshTokens = new ConcurrentDictionary<string, string>();
 
         #region Create
 
         /// <summary>Create</summary>
-        /// <param name="authenticationTicket">byte[]</param>
+        /// <param name="payload">string</param>
         /// <returns>token id</returns>
-        public static void Create(string tokenId, byte[] authenticationTicket)
+        public static string Create(string payload)
         {
+            string tokenId = Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n");
+
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryAdd(tokenId, authenticationTicket);
+                        RefreshTokenProvider.RefreshTokens.TryAdd(tokenId, payload);
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -85,7 +85,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                     cnn.Execute(
                                         "INSERT INTO [RefreshTokenDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = tokenId, Value = authenticationTicket, CreatedDate = DateTime.Now });
+                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now });
 
                                     break;
 
@@ -93,7 +93,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                     cnn.Execute(
                                         "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
-                                        new { Key = tokenId, Value = authenticationTicket, CreatedDate = DateTime.Now });
+                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now });
 
                                     break;
 
@@ -101,7 +101,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                     cnn.Execute(
                                         "INSERT INTO \"refreshtokendictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = tokenId, Value = authenticationTicket, CreatedDate = DateTime.Now });
+                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now });
 
                                     break;
                             }
@@ -114,6 +114,8 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             {
                 // EnableRefreshToken == false
             }
+
+            return tokenId;
         }
 
         #endregion
@@ -122,20 +124,20 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         /// <summary>Receive</summary>
         /// <param name="tokenId">string</param>
-        /// <returns>AuthenticationTicket</returns>
-        public static byte[] Receive(string tokenId)
+        /// <returns>payload</returns>
+        public static string Receive(string tokenId)
         {
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
-                byte[] ticket = null;
-                IEnumerable<byte[]> values = null;
-                List<byte[]> list = null;
+                string payload = null;
+                IEnumerable<string> values = null;
+                List<string> list = null;
 
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out ticket);
+                        RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out payload);
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -150,13 +152,13 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    values = cnn.Query<byte[]>(
+                                    values = cnn.Query<string>(
                                         "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = tokenId });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
                                     {
-                                        ticket = values.AsList()[0];
+                                        payload = values.AsList()[0];
 
                                         cnn.Execute(
                                             "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = tokenId });
@@ -166,13 +168,13 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
-                                    values = cnn.Query<byte[]>(
+                                    values = cnn.Query<string>(
                                         "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = tokenId });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
                                     {
-                                        ticket = values.AsList()[0];
+                                        payload = values.AsList()[0];
 
                                         cnn.Execute(
                                             "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = tokenId });
@@ -182,13 +184,13 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    values = cnn.Query<byte[]>(
+                                    values = cnn.Query<string>(
                                        "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = tokenId });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
                                     {
-                                        ticket = values.AsList()[0];
+                                        payload = values.AsList()[0];
 
                                         cnn.Execute(
                                             "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = tokenId });
@@ -201,7 +203,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                         break;
                 }
 
-                return ticket;
+                return payload;
             }
             else
             {
@@ -216,21 +218,21 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         /// <summary>Reference</summary>
         /// <param name="tokenId">string</param>
-        /// <returns>AuthenticationTicket</returns>
+        /// <returns>payload</returns>
         /// <remarks>OAuth 2.0 Token Introspectionのサポートのために必要</remarks>
-        public static byte[] Refer(string tokenId)
+        public static string Refer(string tokenId)
         {
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
-                byte[] ticket = null;
-                IEnumerable<byte[]> values = null;
-                List<byte[]> list = null;
+                string payload = null;
+                IEnumerable<string> values = null;
+                List<string> list = null;
 
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out ticket);
+                        RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out payload);
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -245,39 +247,39 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    values = cnn.Query<byte[]>(
+                                    values = cnn.Query<string>(
                                         "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = tokenId });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
                                     {
-                                        ticket = values.AsList()[0];
+                                        payload = values.AsList()[0];
                                     }
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
-                                    values = cnn.Query<byte[]>(
+                                    values = cnn.Query<string>(
                                         "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = tokenId });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
                                     {
-                                        ticket = values.AsList()[0];
+                                        payload = values.AsList()[0];
                                     }
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    values = cnn.Query<byte[]>(
+                                    values = cnn.Query<string>(
                                       "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = tokenId });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
                                     {
-                                        ticket = values.AsList()[0];
+                                        payload = values.AsList()[0];
                                     }
 
                                     break;
@@ -287,7 +289,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                         break;
                 }
 
-                return ticket;
+                return payload;
             }
             else
             {
@@ -311,12 +313,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             if (Config.EnableRefreshToken)
             {
                 // EnableRefreshToken == true
-                byte[] ticket;
+                string payload = null;
 
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        if (RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out ticket))
+                        if (RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out payload))
                         {
                             // 1 refresh : 1 access なので、単に捨てればOK。
                             ret = 1;

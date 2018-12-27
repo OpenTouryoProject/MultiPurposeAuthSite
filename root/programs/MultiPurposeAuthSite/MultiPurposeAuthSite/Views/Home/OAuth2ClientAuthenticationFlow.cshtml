@@ -56,7 +56,7 @@
 <h2>@ViewBag.Title.</h2>
 <div class="row">
     <div class="col-md-8">
-        <p><a class="btn btn-default" href="#" id="OAuth2GetUserClaimsWebAPI" url="@(Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2GetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-default" href="#" id="OAuth2UserInfoEndpoint" url="@(Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint)">Get user claims</a></p>
         <br />
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
@@ -108,9 +108,9 @@
             // ResourceServerのWebAPIにアクセスする。
             token = '@ViewBag.AccessToken';
 
-            // OAuth2GetUserClaimsWebAPI
-            $('#OAuth2GetUserClaimsWebAPI').on('click', function () {
-                CallOAuthAPI($('#OAuth2GetUserClaimsWebAPI').attr("url"), 'get', null)
+            // OAuth2UserInfoEndpoint
+            $('#OAuth2UserInfoEndpoint').on('click', function () {
+                CallOAuthAPI($('#OAuth2UserInfoEndpoint').attr("url"), 'get', null);
             });
 
         });

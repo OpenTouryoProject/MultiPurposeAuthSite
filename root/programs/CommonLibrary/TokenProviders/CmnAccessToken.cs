@@ -67,10 +67,9 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="userName">string</param>
         /// <param name="claims">IEnumerable(Claim)</param>
         /// <param name="ExpiresUtc">DateTimeOffset</param>
-        /// <param name="IssuedUtc">DateTimeOffset</param>
         /// <returns>JWT文字列</returns>
         public static string CreateFromClaims(
-            string userName, IEnumerable<Claim> claims, DateTimeOffset expiresUtc, DateTimeOffset issuedUtc)
+            string userName, IEnumerable<Claim> claims, DateTimeOffset expiresUtc)
         {
             string json = "";
 
@@ -120,7 +119,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, expiresUtc.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, issuedUtc.ToUnixTimeSeconds().ToString());
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
 
             authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
@@ -242,10 +241,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // この時点では空にしておく。
             authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, "");
-
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, issuedUtc.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, "");
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, "");
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, "");
 
             return JsonConvert.SerializeObject(authTokenClaimSet);
         }
@@ -264,8 +262,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             Dictionary<string, object> payload =
                 JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
 
-            payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
             payload[OAuth2AndOIDCConst.scopes] = payload[OAuth2AndOIDCConst.scopes];
+
+            payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
+            payload[OAuth2AndOIDCConst.nbf] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
+            payload[OAuth2AndOIDCConst.iat] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
+            payload[OAuth2AndOIDCConst.jti] = Guid.NewGuid().ToString("N");
 
             json = JsonConvert.SerializeObject(payload);
 

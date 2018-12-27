@@ -101,10 +101,10 @@ namespace MultiPurposeAuthSite.Controllers
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2AuthorizeEndpoint);
 
             OpenIDConfig.Add("token_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2BearerTokenEndpoint);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
             OpenIDConfig.Add("userinfo_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2GetUserClaimsWebAPI);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
 
             #endregion
 
@@ -243,7 +243,7 @@ namespace MultiPurposeAuthSite.Controllers
             #region revocation
 
             OpenIDConfig.Add("revocation_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenWebAPI
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint
             });
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
@@ -255,7 +255,7 @@ namespace MultiPurposeAuthSite.Controllers
             #region revocation
 
             OpenIDConfig.Add("introspection_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenWebAPI
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint
             });
 
             OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
@@ -318,18 +318,13 @@ namespace MultiPurposeAuthSite.Controllers
         #region /token
 
         /// <summary>
-        /// JWT bearer token authorizationグラント種別のTokenエンドポイント
-        /// POST: /OAuth2BearerToken
+        /// Tokenエンドポイント
+        /// POST: /OAuth2Token
         /// </summary>
-        /// <param name="formData">
-        /// grant_type 
-        /// - urn:ietf:params:oauth:grant-type:jwt-bearer
-        /// - 
-        /// assertion  = jwt_assertion
-        /// </param>
+        /// <param name="formData">FormDataCollection</param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        public Dictionary<string, string> OAuth2BearerToken(FormDataCollection formData)
+        public Dictionary<string, string> OAuth2Token(FormDataCollection formData)
         {
             Dictionary<string, string> ret = null;
             Dictionary<string, string> err = null;
@@ -352,14 +347,23 @@ namespace MultiPurposeAuthSite.Controllers
             assertion = formData[OAuth2AndOIDCConst.assertion];
 
             string code = formData[OAuth2AndOIDCConst.code];
-            string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
             string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
+            string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
+            string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
 
             if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
             {
                 if (CmnEndpoints.GrantAuthorizationCodeCredentials(
                     grant_type, clientId, clientSecret, assertion,
                     code, code_verifier, redirect_uri, out ret, out err))
+                {
+                    return ret;
+                }
+            }
+            if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
+            {
+                if (CmnEndpoints.GrantRefreshTokenCredentials(
+                    grant_type, clientId, clientSecret, refresh_token, out ret, out err))
                 {
                     return ret;
                 }
@@ -639,90 +643,64 @@ namespace MultiPurposeAuthSite.Controllers
                         // 検証完了
                         if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
                         {
-                            if (CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
-                            {
-                                // 検証成功
-                                // メタデータの返却
-                                ret.Add("active", "true");
-                                ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
-
-                                string scopes = "";
-                                foreach (Claim claim in identity.Claims)
-                                {
-                                    if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
-                                    {
-                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
-                                        {
-                                            scopes += claim.Value + " ";
-                                        }
-                                        else
-                                        {
-                                            ret.Add(claim.Type.Substring(
-                                                OAuth2AndOIDCConst.Claim_Base.Length), claim.Value);
-                                        }
-                                    }
-                                }
-                                ret.Add(OAuth2AndOIDCConst.Claim_Scopes.Substring(
-                                    OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
-
-                                return ret; // 成功
-                            }
-                            else
-                            {
-                                // 検証失敗
-                                // 検証エラー
-                                err.Add("error", "invalid_request");
-                                err.Add("error_description", "invalid token");
-                            }
+                            // ↓に続く
                         }
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
-                        {
-                            /*
-                            // refresh_token参照
-                            AuthenticationTicket ticket = RefreshTokenProvider.ReferDirectly(token);
-
-                            if (ticket == null)
+                        {   
+                            string tokenPayload = RefreshTokenProvider.Refer(token);
+                            if (!string.IsNullOrEmpty(tokenPayload))
                             {
-                                // 検証失敗
-                                // 検証エラー
-                                err.Add("error", "invalid_request");
-                                err.Add("error_description", "invalid token");
+                                token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload, DateTimeOffset.Now);
                             }
                             else
                             {
-                                // 検証成功
-                                // メタデータの返却
-                                ret.Add("active", "true");
-                                ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
-
-                                string scopes = "";
-                                foreach (Claim claim in ticket.Identity.Claims)
-                                {
-                                    if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
-                                    {
-                                        if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
-                                        {
-                                            scopes += claim.Value + " ";
-                                        }
-                                        else
-                                        {
-                                            ret.Add(claim.Type.Substring(
-                                                OAuth2AndOIDCConst.Claim_Base.Length), claim.Value);
-                                        }
-                                    }
-                                }
-                                ret.Add(OAuth2AndOIDCConst.Claim_Scopes.Substring(
-                                    OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
-
-                                return ret; // 成功
+                                token = "";
                             }
-                            */
+                            // ↓に続く
                         }
                         else
                         {
                             // token_type_hint パラメタ・エラー
                             err.Add("error", "invalid_request");
                             err.Add("error_description", "invalid token_type_hint");
+                        }
+
+                        // AccessToken化して共通処理
+                        if (!string.IsNullOrEmpty(token)
+                            && CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
+                        {
+                            // 検証成功
+                            // メタデータの返却
+                            ret.Add("active", "true");
+                            ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
+
+                            string scopes = "";
+                            foreach (Claim claim in identity.Claims)
+                            {
+                                if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
+                                {
+                                    if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
+                                    {
+                                        scopes += claim.Value + " ";
+                                    }
+                                    else
+                                    {
+                                        ret.Add(claim.Type.Substring(
+                                            OAuth2AndOIDCConst.Claim_Base.Length), claim.Value);
+                                    }
+                                }
+                            }
+                            ret.Add(OAuth2AndOIDCConst.Claim_Scopes.Substring(
+                                OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
+
+                            return ret; // 成功
+                        }
+                        else
+                        {
+                            // 検証失敗
+                            // 検証エラー
+                            err.Add("error", "invalid_request");
+                            err.Add("error_description", "invalid token");
                         }
                     }
                     else

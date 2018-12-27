@@ -280,8 +280,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri userInfoUri = new Uri(
-                Config.OAuth2ResourceServerEndpointsRootURI
-                + Config.OAuth2GetUserClaimsWebAPI);
+                Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
 
             return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
         }
