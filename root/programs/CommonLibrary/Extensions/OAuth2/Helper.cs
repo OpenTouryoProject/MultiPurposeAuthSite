@@ -244,6 +244,24 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         }
 
         /// <summary>
+        /// Resource Owner Password Credentials Grant
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="username">string</param>
+        /// <param name="password">string</param>
+        /// <param name="scopes">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> ResourceOwnerPasswordCredentialsGrantAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret,
+            string username, string password, string scopes)
+        {
+            return await OAuth2AndOIDCClient.ResourceOwnerPasswordCredentialsGrantAsync(
+                tokenEndpointUri, client_id, client_secret, username, password, scopes);
+        }
+
+        /// <summary>
         /// Client Credentials Grant
         /// </summary>
         /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>

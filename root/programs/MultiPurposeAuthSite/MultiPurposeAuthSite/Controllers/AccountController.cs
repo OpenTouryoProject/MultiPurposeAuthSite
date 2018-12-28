@@ -1951,6 +1951,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region Authorize（認可エンドポイント）
 
         /// <summary>認可エンドポイント</summary>
+        /// <param name="grant_type">string（必須）</param>
         /// <param name="client_id">string（必須）</param>
         /// <param name="redirect_uri">string（任意）</param>
         /// <param name="response_type">string（必須）</param>
@@ -1963,15 +1964,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
         public async Task<ActionResult> OAuth2Authorize(
-            string client_id, string redirect_uri,
+            string grant_type, string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
             string nonce, string prompt) // OpenID Connect
-                                         // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
+            // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
         {
             if (CmnEndpoints.ValidateClientRedirectUri(
-                client_id, redirect_uri, response_type, scope, nonce,
-                out string valid, out string err, out string errDescription))
+                grant_type, client_id, redirect_uri, response_type, scope, nonce,
+                out string valid_redirect_uri, out string err, out string errDescription))
             {
                 // Cookie認証チケットからClaimsIdentityを取得しておく。
                 AuthenticateResult ticket = this.AuthenticationManager
@@ -1997,17 +1998,17 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 認可画面をスキップ
 
-                        // アクセス要求を保存して、仲介コードを発行する。
+                        // ClaimsIdentityを生成
                         identity = new ClaimsIdentity(
                             identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
-                        // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        // ただし、認可画面をスキップする場合は、scopeをフィルタする。
+                        // ★ 必要に応じてスコープのフィルタ
                         if (isAuth)
                         {
                             scopes = ExtOAuth2.Helper.FilterClaimAtAuth(scopes).ToArray();
                         }
 
+                        // ClaimsIdentityに、その他、所定のClaimを追加する。
                         ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                         // Codeの生成
@@ -2022,11 +2023,11 @@ namespace MultiPurposeAuthSite.Controllers
                         if (string.IsNullOrEmpty(response_mode) ||
                             response_mode.ToLower() == OAuth2AndOIDCConst.query)
                         {
-                            return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                            return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCConst.fragment)
                         {
-                            return new RedirectResult(valid + string.Format("#code={0}&state={1}", code, state));
+                            return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
                         {
@@ -2042,7 +2043,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 "</html>";
 
                             // bodyに組み込んで
-                            body = string.Format(body, valid, code, state);
+                            body = string.Format(body, valid_redirect_uri, code, state);
 
                             return this.Content(body);
                         }
@@ -2053,7 +2054,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else
                     {
-                        // アクセス要求の許可/拒否を訪ねるViewを表示
+                        // 認可画面を表示
                         return View();
                     }
                 }
@@ -2063,9 +2064,8 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // OAuth2/OIDC Implicit
 
-                    // アクセス要求の許可
+                    // ClaimsIdentityを生成
                     identity = new ClaimsIdentity(identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
@@ -2103,14 +2103,14 @@ namespace MultiPurposeAuthSite.Controllers
                     switch (response_type)
                     {
                         case OAuth2AndOIDCConst.ImplicitResponseType:
-                            return new RedirectResult(valid + string.Format(
+                            return new RedirectResult(valid_redirect_uri + string.Format(
                                 "#access_token={0}&state={1}&token_type={2}&expires_in={3}",
                                 access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
                         case OAuth2AndOIDCConst.OidcImplicit1_ResponseType:
-                            return new RedirectResult(valid + string.Format(
+                            return new RedirectResult(valid_redirect_uri + string.Format(
                                 "#id_token={0}&state={1}", id_token, state));
                         case OAuth2AndOIDCConst.OidcImplicit2_ResponseType:
-                            return new RedirectResult(valid + string.Format(
+                            return new RedirectResult(valid_redirect_uri + string.Format(
                                 "#id_token={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
                                 id_token, access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
                         default:
@@ -2127,6 +2127,7 @@ namespace MultiPurposeAuthSite.Controllers
                     identity = new ClaimsIdentity(
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
+                    // ClaimsIdentityに、その他、所定のClaimを追加する。
                     ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                     // Codeの生成
@@ -2145,15 +2146,15 @@ namespace MultiPurposeAuthSite.Controllers
                     switch (response_type)
                     {
                         case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType:
-                            return new RedirectResult(valid + string.Format(
+                            return new RedirectResult(valid_redirect_uri + string.Format(
                                 "#code={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
                                 code, access_token, state, "bearer",
                                 Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
                         case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType:
-                            return new RedirectResult(valid + string.Format(
+                            return new RedirectResult(valid_redirect_uri + string.Format(
                                 "#code={0}&id_token={1}", code, id_token));
                         case OAuth2AndOIDCConst.OidcHybrid3_ResponseType:
-                            return new RedirectResult(valid + string.Format(
+                            return new RedirectResult(valid_redirect_uri + string.Format(
                                 "#code={0}&access_token={1}&id_token={2}&state={3}&token_type={4}&expires_in={5}",
                                 code, access_token, id_token, state, "bearer",
                                 Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
@@ -2181,6 +2182,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 仲介コードを発行してRedirectエンドポイントへRedirect。
         /// ※ パラメタは、認可レスポンスのURL中に残っているものを使用。
         /// </summary>
+        /// <param name="grant_type">string（必須）</param>
         /// <param name="client_id">string（必須）</param>
         /// <param name="redirect_uri">string（任意）</param>
         /// <param name="response_type">string（必須）</param>
@@ -2193,14 +2195,14 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuth2Authorize(
-            string client_id, string redirect_uri,
+            string grant_type, string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
             string nonce) // OpenID Connect
         {
             if (CmnEndpoints.ValidateClientRedirectUri(
-                client_id, redirect_uri, response_type, scope, nonce,
-                out string valid, out string err, out string errDescription))
+                grant_type, client_id, redirect_uri, response_type, scope, nonce,
+                out string valid_redirect_uri, out string err, out string errDescription))
             {
                 // Cookie認証チケットからClaimsIdentityを取得しておく。
                 AuthenticateResult ticket = this.AuthenticationManager
@@ -2240,11 +2242,11 @@ namespace MultiPurposeAuthSite.Controllers
                     if (string.IsNullOrEmpty(response_mode) ||
                         response_mode.ToLower() == OAuth2AndOIDCConst.query)
                     {
-                        return new RedirectResult(valid + string.Format("?code={0}&state={1}", code, state));
+                        return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                     }
                     else if (response_mode.ToLower() == OAuth2AndOIDCConst.fragment)
                     {
-                        return new RedirectResult(valid + string.Format("#code={0}&state={1}", code, state));
+                        return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                     }
                     else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
                     {
@@ -2260,7 +2262,7 @@ namespace MultiPurposeAuthSite.Controllers
                             "</html>";
 
                         // bodyに組み込んで
-                        body = string.Format(body, valid, code, state);
+                        body = string.Format(body, valid_redirect_uri, code, state);
 
                         return this.Content(body);
                     }

@@ -346,13 +346,12 @@ namespace MultiPurposeAuthSite.Controllers
             grant_type = formData[OAuth2AndOIDCConst.grant_type];
             assertion = formData[OAuth2AndOIDCConst.assertion];
 
-            string code = formData[OAuth2AndOIDCConst.code];
-            string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
-            string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
-            string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
-
             if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
             {
+                string code = formData[OAuth2AndOIDCConst.code];
+                string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
+                string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
+
                 if (CmnEndpoints.GrantAuthorizationCodeCredentials(
                     grant_type, clientId, clientSecret, assertion,
                     code, code_verifier, redirect_uri, out ret, out err))
@@ -362,8 +361,29 @@ namespace MultiPurposeAuthSite.Controllers
             }
             if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
             {
+                string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
                 if (CmnEndpoints.GrantRefreshTokenCredentials(
                     grant_type, clientId, clientSecret, refresh_token, out ret, out err))
+                {
+                    return ret;
+                }
+            }
+            if (grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
+            {
+                string username = formData["username"];
+                string password = formData["password"];
+                string scope = formData[OAuth2AndOIDCConst.scope];
+                if (CmnEndpoints.GrantResourceOwnerCredentials(
+                    grant_type, clientId, clientSecret, username, password, scope, out ret, out err))
+                {
+                    return ret;
+                }
+            }
+            if (grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
+            {
+                string scope = formData[OAuth2AndOIDCConst.scope];
+                if (CmnEndpoints.GrantClientCredentials(
+                    grant_type, clientId, clientSecret, scope, out ret, out err))
                 {
                     return ret;
                 }
@@ -377,7 +397,9 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
             else
-            {   
+            {
+                err.Add("error", "invalid_grant_type");
+                err.Add("error_description", "Invalid grant_type");
             }
 
             return err; // 失敗

@@ -439,7 +439,38 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Client Authentication Flow
+        #region Another Flow
+
+        #region Resource Owner Password Credentials Flow
+
+        /// <summary>TestResourceOwnerPasswordCredentialsFlow</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> TestResourceOwnerPasswordCredentialsFlow()
+        {
+            // Tokenエンドポイントにアクセス
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+
+            // ClientNameから、client_id, client_secretを取得。
+            string client_id = "";
+            string client_secret = "";
+
+            client_id = Helper.GetInstance().GetClientIdByName("TestClient");
+            client_secret = Helper.GetInstance().GetClientSecret(client_id);
+
+            string response = await Helper.GetInstance()
+                .ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
+                    client_id, client_secret, Config.AdministratorUID, Config.AdministratorPWD, Const.StandardScopes);
+
+            ViewBag.Response = response;
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
+
+            return View("OAuth2ClientAuthenticationFlow");
+        }
+
+        #endregion
 
         #region Client Credentials Flow
 
