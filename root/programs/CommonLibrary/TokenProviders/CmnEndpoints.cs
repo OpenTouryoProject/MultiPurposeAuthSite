@@ -304,8 +304,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                             {
                                 // aud 検証
-                                if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI
-                                    + Config.OAuth2TokenEndpoint)
+                                if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                                 {
                                     authned = true;
                                 }

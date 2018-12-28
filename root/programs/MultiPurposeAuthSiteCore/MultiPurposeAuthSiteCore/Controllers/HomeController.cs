@@ -470,8 +470,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestClientCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint;
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id, client_secretを取得。
             string client_id = "";
@@ -492,9 +491,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint),
-                     client_id, client_secret, Const.StandardScopes);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
+                    client_id, client_secret, Const.StandardScopes);
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
@@ -513,8 +511,7 @@ namespace MultiPurposeAuthSite.Controllers
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Token2エンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint2;
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id(iss)を取得。
             string iss = "";
@@ -536,10 +533,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await Helper.GetInstance()
                 .JwtBearerTokenFlowAsync(new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                     + Config.OAuth2BearerTokenEndpoint2),
-                     JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                         iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
+                    JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
+                        iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
