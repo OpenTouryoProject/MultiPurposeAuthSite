@@ -18,7 +18,6 @@
 //*  2018/11/30  西野 大介         新規
 //**********************************************************************************
 
-using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
 namespace MultiPurposeAuthSite.Notifications

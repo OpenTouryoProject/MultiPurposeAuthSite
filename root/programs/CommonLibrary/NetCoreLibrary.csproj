@@ -15,15 +15,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Extensions\OIDC\HttpMod\**" />
     <Compile Remove="Manager\**" />
-    <Compile Remove="TokenProviders\Oasp\**" />
-    <EmbeddedResource Remove="Extensions\OIDC\HttpMod\**" />
     <EmbeddedResource Remove="Manager\**" />
-    <EmbeddedResource Remove="TokenProviders\Oasp\**" />
-    <None Remove="Extensions\OIDC\HttpMod\**" />
     <None Remove="Manager\**" />
-    <None Remove="TokenProviders\Oasp\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,9 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Extensions\OIDC\" />
     <Folder Include="Properties\" />
-    <Folder Include="TokenProviders\Cmn\" />
   </ItemGroup>
 
   <ItemGroup>

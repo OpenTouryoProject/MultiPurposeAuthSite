@@ -49,7 +49,7 @@ using System.Security.Claims;
 #if NETFX
 using Microsoft.AspNet.Identity;
 #else
-
+using Microsoft.AspNetCore.Identity;
 # endif
 
 using Newtonsoft.Json;
@@ -513,7 +513,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 #if NETFX
                         PasswordVerificationResult pvRet = (new CustomPasswordHasher()).VerifyHashedPassword(user.PasswordHash, password);
 #else
-                        PasswordVerificationResult pvRet = (new CustomPasswordHasher<ApplicationUser>()).VerifyHashedPassword(user.PasswordHash, password);
+                        PasswordVerificationResult pvRet = (new CustomPasswordHasher<ApplicationUser>()).VerifyHashedPassword(user, user.PasswordHash, password);
 #endif
                         if (pvRet.HasFlag(PasswordVerificationResult.Success))
                         {

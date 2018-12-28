@@ -32,7 +32,6 @@
 //**********************************************************************************
 
 using System;
-using System.Configuration;
 
 using MultiPurposeAuthSite.Data;
 
