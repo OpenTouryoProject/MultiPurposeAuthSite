@@ -179,30 +179,30 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // nonce
-            HttpContext.Session.SetString("test_nonce", this.State);
+            HttpContext.Session.SetString("test_nonce", this.Nonce);
             if (requestCookies.Get("test_nonce") == null)
             {
-                responseCookies.Set("test_nonce", this.State);
+                responseCookies.Set("test_nonce", this.Nonce);
             }
             else
             {
                 if (string.IsNullOrEmpty(requestCookies.Get("test_nonce")))
                 {
-                    responseCookies.Set("test_nonce", this.State);
+                    responseCookies.Set("test_nonce", this.Nonce);
                 }
             }
 
             // code_verifier
-            HttpContext.Session.SetString("test_code_verifier", this.State);
+            HttpContext.Session.SetString("test_code_verifier", this.CodeVerifier);
             if (requestCookies.Get("test_code_verifier") == null)
             {
-                responseCookies.Set("test_code_verifier", this.State);
+                responseCookies.Set("test_code_verifier", this.CodeVerifier);
             }
             else
             {
                 if (string.IsNullOrEmpty(requestCookies.Get("test_code_verifier")))
                 {
-                    responseCookies.Set("test_code_verifier", this.State);
+                    responseCookies.Set("test_code_verifier", this.CodeVerifier);
                 }
             }
         }
@@ -459,7 +459,38 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Client Authentication Flow
+        #region Another Flow
+
+        #region Resource Owner Password Credentials Flow
+
+        /// <summary>TestResourceOwnerPasswordCredentialsFlow</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> TestResourceOwnerPasswordCredentialsFlow()
+        {
+            // Tokenエンドポイントにアクセス
+            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+
+            // ClientNameから、client_id, client_secretを取得。
+            string client_id = "";
+            string client_secret = "";
+
+            client_id = Helper.GetInstance().GetClientIdByName("TestClient");
+            client_secret = Helper.GetInstance().GetClientSecret(client_id);
+
+            string response = await Helper.GetInstance()
+                .ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
+                    client_id, client_secret, Config.AdministratorUID, Config.AdministratorPWD, Const.StandardScopes);
+
+            ViewBag.Response = response;
+            ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
+
+            return View("OAuth2ClientAuthenticationFlow");
+        }
+
+        #endregion
 
         #region Client Credentials Flow
 
@@ -510,7 +541,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> TestJWTBearerTokenFlow()
         {
-            // Token2エンドポイントにアクセス
+            // Tokenエンドポイントにアクセス
             string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id(iss)を取得。
@@ -531,11 +562,10 @@ namespace MultiPurposeAuthSite.Controllers
             string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
             privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
 
-            string response = await Helper.GetInstance()
-                .JwtBearerTokenFlowAsync(new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                    JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                        iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
+            string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
+                new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
+                JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(iss, aud,
+                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes, privateKey));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];

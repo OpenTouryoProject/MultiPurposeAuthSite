@@ -31,9 +31,16 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using System;
-
 using MultiPurposeAuthSite.Data;
+
+using System;
+using System.Collections.Generic;
+
+#if NETFX
+using Newtonsoft.Json;
+#else
+using Microsoft.Extensions.Configuration;
+#endif
 
 using Touryo.Infrastructure.Public.Util;
 
@@ -1216,11 +1223,17 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>
         /// OAuth2のClientのInformation
         /// </summary>
-        public static string OAuth2ClientsInformation
+        public static Dictionary<string, Dictionary<string, string>> OAuth2ClientsInformation
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("OAuth2ClientsInformation");
+#if NETFX
+                return JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(
+                    GetConfigParameter.GetConfigValue("OAuth2ClientsInformation"));
+#else
+                IConfigurationSection section = GetConfigParameter.GetConfigSection("OAuth2ClientsInformation");
+                return section.Get<Dictionary<string, Dictionary<string, string>>>();
+#endif
             }
         }
 

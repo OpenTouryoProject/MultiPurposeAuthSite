@@ -88,14 +88,17 @@ namespace MultiPurposeAuthSite.TokenProviders
             #region grant_type
 
             // grant_typeチェック
-            if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType
-                || grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType
-                || grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType
-                || grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
+            if (!string.IsNullOrEmpty(grant_type))
             {
-                err = "server_error";
-                errDescription = "This grant_type is valid in here.";
-                return false;
+                if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType
+                    || grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType
+                    || grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType
+                    || grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
+                {
+                    err = "server_error";
+                    errDescription = "This grant_type is valid in here.";
+                    return false;
+                }
             }
 
             #endregion

@@ -192,6 +192,16 @@ namespace MultiPurposeAuthSite
             app.UseMvc(routes =>
             {
                 routes.MapRoute(
+                   name: "OAuth2Authorize",
+                   template: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
+                   defaults: new { controller = "Account", action = "OAuth2Authorize" });
+
+                routes.MapRoute(
+                    name: "OAuth2Token",
+                    template: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2EndpointApi", action = "OAuth2Token" });
+
+                routes.MapRoute(
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
@@ -305,7 +315,7 @@ namespace MultiPurposeAuthSite
                     idOptions.Lockout.MaxFailedAccessAttempts = Config.MaxFailedAccessAttemptsBeforeLockout;
                     idOptions.Lockout.AllowedForNewUsers = Config.UserLockoutEnabledByDefault;
 
-                    // 二ヨウ素認証
+                    // 二要素認証
 
                     // トークン
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#tokens

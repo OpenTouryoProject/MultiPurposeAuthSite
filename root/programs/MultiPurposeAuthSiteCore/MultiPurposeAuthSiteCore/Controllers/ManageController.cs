@@ -71,7 +71,6 @@ using Touryo.Infrastructure.Public.Util;
 namespace MultiPurposeAuthSite.Controllers
 {
     [Authorize]
-    [Route("[controller]/[action]")]
     public class ManageController : MyBaseMVControllerCore
     {
         #region Enum
@@ -142,20 +141,20 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region OwinContext
         /// <summary>UserManager</summary>
-        private UserManager<ApplicationUser> _userManager = null;
+        private readonly UserManager<ApplicationUser> _userManager = null;
         /// <summary>UserManager</summary>
-        private RoleManager<ApplicationRole> _roleManager = null;
+        private readonly RoleManager<ApplicationRole> _roleManager = null;
         /// <summary>SignInManager</summary>
-        private SignInManager<ApplicationUser> _signInManager = null;
+        private readonly SignInManager<ApplicationUser> _signInManager = null;
         #endregion
 
         #region Else
         /// <summary>IEmailSender</summary>
-        private IEmailSender _emailSender = null;
+        private readonly IEmailSender _emailSender = null;
         /// <summary>ISmsSender</summary>
-        private ISmsSender _smsSender = null;
+        private readonly ISmsSender _smsSender = null;
         /// <summary>UrlEncoder</summary>
-        private UrlEncoder _urlEncoder = null;
+        private readonly UrlEncoder _urlEncoder = null;
         #endregion
 
         #endregion
@@ -904,9 +903,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 入力の検証 2
                     if (user.Id == userId)
                     {
-                        bool isExpired = false;
                         string email = CustomizedConfirmationProvider.GetInstance()
-                            .CheckCustomizedConfirmationData(userId, code, out isExpired);
+                            .CheckCustomizedConfirmationData(userId, code, out bool isExpired);
 
                         if (!string.IsNullOrWhiteSpace(email))
                         {

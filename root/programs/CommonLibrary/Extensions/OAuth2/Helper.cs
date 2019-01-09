@@ -103,8 +103,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         private Helper()
         {
             // クライアント識別子情報
-            this._oauth2ClientsInfo =
-                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(Config.OAuth2ClientsInformation);
+            this._oauth2ClientsInfo = Config.OAuth2ClientsInformation;
 
             // OAuth ServerにアクセスするためのHttpClient
             this._oAuth2HttpClient = HttpClientBuilder(EnumProxyType.Intranet);

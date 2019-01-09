@@ -50,7 +50,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </returns>
         [HttpGet]
         [Route("[action]")]
-        public IEnumerable<string> get()
+        public IEnumerable<string> Get()
         {
             return new string[] { "value1", "value2" };
         }

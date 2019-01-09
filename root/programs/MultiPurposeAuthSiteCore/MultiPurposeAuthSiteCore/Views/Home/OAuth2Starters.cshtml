@@ -38,7 +38,8 @@
     @if (!Config.IsLockedDownRedirectEndpoint)
     {
         <ul>
-            <li>Authorization Code Flow
+            <li>
+                Authorization Code Flow
                 <ul>
                     <li>@Html.ActionLink("Test Authorization Code Flow", "AuthorizationCode", "Home")</li>
                     <li>@Html.ActionLink("Test Authorization Code Flow (form_post)", "AuthorizationCode_FormPost", "Home")</li>
@@ -49,7 +50,8 @@
                     <li>@Html.ActionLink("Test Authorization Code Flow (FAPI1)", "FAPI1AuthorizationCode", "Home")</li>
                 </ul>
             </li>
-            <li>Implicit Flow
+            <li>
+                Implicit Flow
                 <ul>
                     <li>@Html.ActionLink("Test Implicit Flow", "Implicit", "Home")</li>
                     <li>@Html.ActionLink("Test Implicit Flow 'id_token'(OIDC)", "Implicit_OIDC1", "Home") ... this is not supported.</li>
@@ -65,8 +67,14 @@
                 </ul>
             </li>
             <li>
-                Client Authentication Flow<br />
-                ※ If you use a user account for client authentication in the following flows, registration of OAuth2 data is necessary to the account.
+            ResourceOwner Password Credentials Flow<br />
+            <ul>
+                <li>@Html.ActionLink("Test ResourceOwner Password Credentials Flow", "TestResourceOwnerPasswordCredentialsFlow", "Home")</li>
+            </ul>
+        </li>
+        <li>
+            Client Authentication Flow<br />
+            ※ If you use a user account for client authentication in the following flows, registration of OAuth2 secret data is necessary to the account.
                 <ul>
                     <li>@Html.ActionLink("Test Client Credentials Flow", "TestClientCredentialsFlow", "Home")</li>
                 </ul>
