@@ -125,8 +125,8 @@ namespace MultiPurposeAuthSite
                 // https://forums.asp.net/t/2114176.aspx?app+UseDeveloperExceptionPage+not+working
                 // UseDeveloperExceptionPageとUseIdentity、併用できない？
                 // UseStatusCodePagesWithRedirects＋自作開発用エラー画面？
-                app.UseStatusCodePagesWithRedirects(
-                    GetConfigParameter.GetConfigValue(FxLiteral.ERROR_SCREEN_PATH));
+                //app.UseStatusCodePagesWithRedirects(
+                //    GetConfigParameter.GetConfigValue(FxLiteral.ERROR_SCREEN_PATH));
 
                 // 簡易ログ出力
                 loggerFactory.AddConsole(Configuration.GetSection("Logging"));
@@ -283,7 +283,20 @@ namespace MultiPurposeAuthSite
             services.AddTransient<IEmailSender, EmailSender>();
             services.AddTransient<ISmsSender, SmsSender>();
 
+            // AddMvc
             services.AddMvc();
+
+            // AddCors
+            services.AddCors(
+                o => o.AddPolicy("AllowAllOrigins", 
+                builder =>
+                {
+                    builder
+                    .AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+                }));
+
 
             #region ASP.NET Core Identity認証
 

@@ -355,7 +355,7 @@ namespace MultiPurposeAuthSite.Data
 #if NETFX
                             user = CmnStore._users.FirstOrDefault(x => x.UserName == userName);
 #else
-                            user = CmnStore._users.FirstOrDefault(x => x.NormalizedUserName == userName);
+                            user = CmnStore._users.FirstOrDefault(x => x.NormalizedUserName == userName.ToUpper());
 #endif
 
                             break;

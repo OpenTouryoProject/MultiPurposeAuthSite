@@ -49,7 +49,7 @@
 <h2>@ViewBag.Title.</h2>
 <div class="row">
     <div class="col-md-8">
-        <p><a class="btn btn-default" href="#" id="OAuthGetUserClaimsWebAPI" url="@(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2GetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-default" href="#" id="OAuth2UserInfoEndpoint" url="@(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint)">Get user claims</a></p>
         <p><a class="btn btn-default" href="#" id="TestHybridFlowWebAPI" url="@(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.TestHybridFlowWebAPI)">Test hybrid flow</a></p>
         <br />
         <div id="debug"></div>
@@ -66,34 +66,45 @@
 
         var fragment = "";
 
-        function CallOAuthAPI(url, httpMethod, token, postData) {
+        function CallOAuthAPI(url, token, requestData) {
             alert(
-                "<httpMethod>" + "\n" + httpMethod + "\n" +
                 "<url>" + "\n" + url + "\n" +
-                "<token>" + "\n" + token);
+                "<token>" + "\n" + token + "\n" +
+                "<data>" + "\n" + requestData);
 
             var authorizationHeaders = null;
 
-            if (fragment.access_token) {
-                authorizationHeaders = { 'Authorization': 'Bearer ' + fragment.access_token };
-            }
+            if (token) {
+                authorizationHeaders = { 'Authorization': 'Bearer ' + token };
 
-            $.ajax({
-                type: httpMethod,
-                url: url,
-                crossDomain: true,
-                headers: authorizationHeaders,
-                data: postData,
-                xhrFields: {
-                    withCredentials: true
-                },
-                success: function (responseData, textStatus, jqXHR) {
-                    alert(textStatus + ', ' + JSON.stringify(responseData));
-                },
-                error: function (responseData, textStatus, errorThrown) {
-                    alert(textStatus + ', ' + errorThrown.message);
-                }
-            });
+                $.ajax({
+                    type: 'get',
+                    url: url,
+                    crossDomain: true,
+                    headers: authorizationHeaders,
+                    success: function (responseData, textStatus, jqXHR) {
+                        alert(textStatus + ', ' + JSON.stringify(responseData));
+                    },
+                    error: function (responseData, textStatus, errorThrown) {
+                        alert(textStatus + ', ' + errorThrown.message);
+                    }
+                });
+            }
+            else
+            {
+                $.ajax({
+                    type: 'post',
+                    url: url,
+                    crossDomain: true,
+                    data: requestData,
+                    success: function (responseData, textStatus, jqXHR) {
+                        alert(textStatus + ', ' + JSON.stringify(responseData));
+                    },
+                    error: function (responseData, textStatus, errorThrown) {
+                        alert(textStatus + ', ' + errorThrown.message);
+                    }
+                });
+            }
         }
 
         $(function () {
@@ -115,14 +126,14 @@
             // OAuthGetUserClaimsWebAPI
             //   access_token (Bearer Token) を使用して
             //   AuthorizationServerのWebAPIにアクセスする。
-            $('#OAuthGetUserClaimsWebAPI').on('click', function () {
-                CallOAuthAPI($('#OAuthGetUserClaimsWebAPI').attr("url"), 'get', fragment.access_token, null)
+            $('#OAuth2UserInfoEndpoint').on('click', function () {
+                CallOAuthAPI($('#OAuth2UserInfoEndpoint').attr("url"), fragment.access_token, null);
             });
 
             // TestHybridFlowWebAPI
             //   Hybridのテスト用のAuthorizationServerのWebAPIにアクセスする。
             $('#TestHybridFlowWebAPI').on('click', function () {
-                CallOAuthAPI($('#TestHybridFlowWebAPI').attr("url"), 'post', null, 'code=' + fragment.code)
+                CallOAuthAPI($('#TestHybridFlowWebAPI').attr("url"), null, 'code=' + fragment.code);
             });
         });
 
