@@ -15,15 +15,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Extensions\OIDC\HttpMod\**" />
     <Compile Remove="Manager\**" />
-    <Compile Remove="TokenProviders\Oasp\**" />
-    <EmbeddedResource Remove="Extensions\OIDC\HttpMod\**" />
     <EmbeddedResource Remove="Manager\**" />
-    <EmbeddedResource Remove="TokenProviders\Oasp\**" />
-    <None Remove="Extensions\OIDC\HttpMod\**" />
     <None Remove="Manager\**" />
-    <None Remove="TokenProviders\Oasp\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,9 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Extensions\OIDC\" />
     <Folder Include="Properties\" />
-    <Folder Include="TokenProviders\Cmn\" />
   </ItemGroup>
 
   <ItemGroup>
@@ -54,6 +46,7 @@
     <PackageReference Include="MiniProfiler.AspNetCore.Mvc" Version="4.0.138" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="Npgsql" Version="4.0.3" />
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="2.18.3" />
     <PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
     <PackageReference Include="System.Security.Cryptography.Cng" Version="4.5.0" />
     <PackageReference Include="Twilio" Version="5.23.0" />

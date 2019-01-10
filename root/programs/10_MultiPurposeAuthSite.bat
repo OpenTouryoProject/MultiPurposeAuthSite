@@ -19,7 +19,7 @@ rem --------------------------------------------------
 rem Batch build of MultiPurposeAuthSite.
 rem --------------------------------------------------
 nuget.exe restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
-%BUILDFILEPATH% %COMMANDLINE% "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
+@rem %BUILDFILEPATH% %COMMANDLINE% "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
 
 pause
 

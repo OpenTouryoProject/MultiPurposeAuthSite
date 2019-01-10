@@ -68,6 +68,7 @@ namespace MultiPurposeAuthSite.Co
         public const string Role_SystemAdminOrAdminOrUser
             = Role_SystemAdmin + ", " + Role_Admin + ", " + Role_User;
 
+#if NETFX
         /// <summary>SystemAdministratorのrole</summary>
         public const string Role_SystemAdmin = "SystemAdmin";
 
@@ -75,12 +76,22 @@ namespace MultiPurposeAuthSite.Co
         public const string Role_Admin = "Admin";
 
         /// <summary>Userのrole</summary>
-        public const string Role_User = "User";
+        public const string Role_User = "User";    
+#else
+        /// <summary>SystemAdministratorのrole</summary>
+        public const string Role_SystemAdmin = "SYSTEMADMIN";
+
+        /// <summary>Administratorのrole</summary>
+        public const string Role_Admin = "ADMIN";
+
+        /// <summary>Userのrole</summary>
+        public const string Role_User = "USER";
+#endif
 
         #endregion
 
         #region Scope
-        
+
         #region ScopeSet
 
         /// <summary>標準的なscope</summary>

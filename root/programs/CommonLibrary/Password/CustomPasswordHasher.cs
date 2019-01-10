@@ -47,7 +47,6 @@ using Touryo.Infrastructure.Public.Security;
 /// <summary>MultiPurposeAuthSite.Password</summary>
 namespace MultiPurposeAuthSite.Password
 {
-
     /// <summary>
     /// CustomPasswordHasher
     /// </summary>

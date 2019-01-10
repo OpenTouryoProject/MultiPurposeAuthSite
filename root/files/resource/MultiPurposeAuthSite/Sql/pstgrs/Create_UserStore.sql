@@ -80,7 +80,7 @@ CREATE TABLE AuthenticationCodeDictionary(
 
 CREATE TABLE RefreshTokenDictionary(
     Key varchar(256) NOT NULL,               -- PK
-    Value bytea NOT NULL,                    -- RefreshToken
+    Value varchar(2000) NOT NULL,            -- RefreshToken
     CreatedDate timestamp NOT NULL,
     CONSTRAINT PK_RefreshTokenDictionary PRIMARY KEY (Key)
 );

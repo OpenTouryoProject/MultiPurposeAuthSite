@@ -39,9 +39,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Reflection;
 using System.Threading.Tasks;
-#if NETFX
 using Oracle.ManagedDataAccess.Client;
-# endif
 using Npgsql;
 
 using Dapper;
@@ -68,13 +66,11 @@ namespace MultiPurposeAuthSite.Data
                         new SqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_SQL")),
                         new TraceDbProfiler());
 
-#if NETFX
                 case EnumUserStoreType.ODPManagedDriver:
                     //return new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP"));
                     return new ProfiledDbConnection(
                         new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP")),
                         new TraceDbProfiler());
-#endif
 
                 case EnumUserStoreType.PostgreSQL:
                     //return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));

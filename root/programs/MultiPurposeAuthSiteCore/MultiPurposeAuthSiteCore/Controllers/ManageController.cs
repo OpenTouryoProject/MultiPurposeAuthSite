@@ -71,7 +71,6 @@ using Touryo.Infrastructure.Public.Util;
 namespace MultiPurposeAuthSite.Controllers
 {
     [Authorize]
-    [Route("[controller]/[action]")]
     public class ManageController : MyBaseMVControllerCore
     {
         #region Enum
@@ -142,20 +141,20 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region OwinContext
         /// <summary>UserManager</summary>
-        private UserManager<ApplicationUser> _userManager = null;
+        private readonly UserManager<ApplicationUser> _userManager = null;
         /// <summary>UserManager</summary>
-        private RoleManager<ApplicationRole> _roleManager = null;
+        private readonly RoleManager<ApplicationRole> _roleManager = null;
         /// <summary>SignInManager</summary>
-        private SignInManager<ApplicationUser> _signInManager = null;
+        private readonly SignInManager<ApplicationUser> _signInManager = null;
         #endregion
 
         #region Else
         /// <summary>IEmailSender</summary>
-        private IEmailSender _emailSender = null;
+        private readonly IEmailSender _emailSender = null;
         /// <summary>ISmsSender</summary>
-        private ISmsSender _smsSender = null;
+        private readonly ISmsSender _smsSender = null;
         /// <summary>UrlEncoder</summary>
-        private UrlEncoder _urlEncoder = null;
+        private readonly UrlEncoder _urlEncoder = null;
         #endregion
 
         #endregion
@@ -314,7 +313,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // モデルの生成
-                string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
+                string oAuth2Data = DataProvider.Get(user.ClientID);
 
                 string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
                 ManageIndexViewModel model = new ManageIndexViewModel
@@ -904,9 +903,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 入力の検証 2
                     if (user.Id == userId)
                     {
-                        bool isExpired = false;
                         string email = CustomizedConfirmationProvider.GetInstance()
-                            .CheckCustomizedConfirmationData(userId, code, out isExpired);
+                            .CheckCustomizedConfirmationData(userId, code, out bool isExpired);
 
                         if (!string.IsNullOrWhiteSpace(email))
                         {
@@ -2235,7 +2233,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddOAuth2DataViewModel model = null;
 
-                string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
+                string oAuth2Data = DataProvider.Get(user.ClientID);
 
                 if (!string.IsNullOrEmpty(oAuth2Data))
                 {
@@ -2307,7 +2305,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                DataProvider.GetInstance().Update(user.ClientID, unstructuredData);
+                                DataProvider.Update(user.ClientID, unstructuredData);
 
                                 // 再ログイン
                                 await this.ReSignInAsync(user.Id);
@@ -2326,8 +2324,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 成功
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) DataProvider.GetInstance().Delete(temp);
-                                    DataProvider.GetInstance().Create(user.ClientID, unstructuredData);
+                                    if (!string.IsNullOrEmpty(temp)) DataProvider.Delete(temp);
+                                    DataProvider.Create(user.ClientID, unstructuredData);
 
                                     // 再ログイン
                                     await this.ReSignInAsync(user.Id);
@@ -2439,7 +2437,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // OAuth2関連の非構造化データのクリア
-                DataProvider.GetInstance().Delete(user.ClientID);
+                DataProvider.Delete(user.ClientID);
 
                 // ユーザーの保存（ClientIDのクリア）
                 //user.ClientID = ""; 一意制約エラーになるので
@@ -2757,8 +2755,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + Config.OAuth2BearerTokenEndpoint);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -2841,8 +2838,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                     Uri tokenEndpointUri = new Uri(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + Config.OAuth2BearerTokenEndpoint);
+                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                     // Tokenエンドポイントにアクセス
 

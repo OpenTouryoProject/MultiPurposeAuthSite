@@ -34,6 +34,7 @@
 using MultiPurposeAuthSite.ViewModels;
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Data;
 #if NETFX
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
@@ -77,7 +78,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         private static Helper _oAuth2Helper = new Helper();
 
         /// <summary>クライアント識別子情報</summary>
-        private Dictionary<string, Dictionary<string, string>> _oauth2ClientsInfo = null;
+        private readonly Dictionary<string, Dictionary<string, string>> _oauth2ClientsInfo = null;
 
         /// <summary>
         /// OAuth Server
@@ -102,8 +103,8 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         private Helper()
         {
             // クライアント識別子情報
-            this._oauth2ClientsInfo =
-                JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(Config.OAuth2ClientsInformation);
+            this._oauth2ClientsInfo = Config.OAuth2ClientsInformation;
+
             // OAuth ServerにアクセスするためのHttpClient
             this._oAuth2HttpClient = HttpClientBuilder(EnumProxyType.Intranet);
 
@@ -242,6 +243,24 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         }
 
         /// <summary>
+        /// Resource Owner Password Credentials Grant
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="username">string</param>
+        /// <param name="password">string</param>
+        /// <param name="scopes">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> ResourceOwnerPasswordCredentialsGrantAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret,
+            string username, string password, string scopes)
+        {
+            return await OAuth2AndOIDCClient.ResourceOwnerPasswordCredentialsGrantAsync(
+                tokenEndpointUri, client_id, client_secret, username, password, scopes);
+        }
+
+        /// <summary>
         /// Client Credentials Grant
         /// </summary>
         /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
@@ -278,8 +297,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri userInfoUri = new Uri(
-                Config.OAuth2ResourceServerEndpointsRootURI
-                + Config.OAuth2GetUserClaimsWebAPI);
+                Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
 
             return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
         }
@@ -383,15 +401,27 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         #endregion
 
-        #region Credential
+        #region Credential( → DataProvider)
 
         #region Client authentication
+
+        #region GetClientSecret
 
         /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_secret</returns>
         public string GetClientSecret(string client_id)
         {
+            return this.GetClientSecret(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからclient_secretを取得する（Client認証で使用する）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>client_secret</returns>
+        public string GetClientSecret(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
             client_id = client_id ?? "";
 
             // *.config内を検索
@@ -401,9 +431,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
+                isResourceOwner = true;
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
                 return model.ClientSecret;
             }
@@ -411,17 +442,27 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             return "";
         }
 
+        #endregion
+
+        #region GetClientsRedirectUri
+
         /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
         /// <returns>redirect_uri</returns>
-        /// <remarks>
-        /// ApplicationOAuthBearerTokenProviderで、
-        /// redirect_uriが指定されていない場合、
-        /// client_idの既定のredirect_uriを取得する。
-        /// </remarks>
         public string GetClientsRedirectUri(string client_id, string response_type)
+        {   
+            return this.GetClientsRedirectUri(client_id, response_type, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからresponse_typeに対応するredirect_uriを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="response_type">response_type</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>redirect_uri</returns>
+        public string GetClientsRedirectUri(string client_id, string response_type, out bool isResourceOwner)
         {
+            isResourceOwner = false;
             client_id = client_id ?? "";
             response_type = response_type ?? "";
 
@@ -432,17 +473,23 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 {
                     return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
                 }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
                 }
             }
 
             // OAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
 
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
+                isResourceOwner = true;
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
 
                 if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
@@ -458,11 +505,25 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             return "";
         }
 
+        #endregion
+
+        #region GetJwtAssertionPublickey
+
         /// <summary>client_idからjwt_assertion_publickeyを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>jwt_assertion_publickey</returns>
         public string GetJwtAssertionPublickey(string client_id)
         {
+            return this.GetJwtAssertionPublickey(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからjwt_assertion_publickeyを取得する（Client認証で使用する）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>jwt_assertion_publickey</returns>
+        public string GetJwtAssertionPublickey(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
             client_id = client_id ?? "";
 
             // *.config内を検索
@@ -472,9 +533,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
+                isResourceOwner = true;
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
                 return model.JwtAssertionPublickey;
             }
@@ -485,19 +547,27 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         #endregion
 
+        #endregion
+
         #region Client Name
+
+        #region GetClientName
 
         /// <summary>client_idからclient_nameを取得する。</summary>
         /// <param name="client_id">client_id</param>
         /// <returns>client_name</returns>
-        /// <remarks>
-        /// Client Credentialsグラント種別の場合に、
-        /// ・AccessTokenFormatJwt
-        /// ・OAuthResourceApiController
-        /// からclient_id（aud）に対応するsubを取得するために利用される。
-        /// </remarks>
         public string GetClientName(string client_id)
         {
+            return this.GetClientName(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからclient_nameを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>client_name</returns>
+        public string GetClientName(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
             client_id = client_id ?? "";
 
             // *.config内を検索
@@ -507,9 +577,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             }
 
             // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.GetInstance().Get(client_id);
+            string oAuth2Data = DataProvider.Get(client_id);
             if (!string.IsNullOrEmpty(oAuth2Data))
             {
+                isResourceOwner = true;
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
                 return model.ClientName;
             }
@@ -517,10 +588,26 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             return "";
         }
 
+        #endregion
+
+        #region GetClientIdByName
+
         /// <summary>clientNameからclientIdを取得</summary>
+        /// <param name="clientName">string</param>
         /// <returns>指定したclientNameのclientId</returns>
         public string GetClientIdByName(string clientName)
         {
+            return this.GetClientIdByName(clientName, out bool isResourceOwner);
+        }
+
+        /// <summary>clientNameからclientIdを取得</summary>
+        /// <param name="clientName">string</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>指定したclientNameのclientId</returns>
+        public string GetClientIdByName(string clientName, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+
             // *.config内を検索
             foreach (string clientId in this.Oauth2ClientsInfo.Keys)
             {
@@ -536,23 +623,25 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
             ApplicationUser user = null;
 
-#if NETFX
-            // UserStoreを検索
-            ApplicationUserManager userManager
-                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            user = userManager.FindByName(clientName); // 同期版でOK。
-#else
-            // 要検討
-#endif
+            // ★ CommonLibraryから、Manager系への依存を
+            //    CmnStoreに変更して、段階的に削減する。
 
+            //// UserStoreを検索
+            //ApplicationUserManager userManager
+            //    = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            //user = userManager.FindByName(); // 同期版でOK。
 
+            user = CmnUserStore.FindByName(clientName);
+
+            isResourceOwner = true;
             return user.ClientID;
         }
-
         #endregion
 
         #endregion
-        
+
+        #endregion
+
         #endregion
 
         #region staticメソッド

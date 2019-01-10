@@ -102,7 +102,7 @@ CREATE TABLE [AuthenticationCodeDictionary](
 
 CREATE TABLE [RefreshTokenDictionary](
     [Key] [nvarchar](256) NOT NULL,          -- PK
-    [Value] [binary](1024) NOT NULL,         -- RefreshToken
+    [Value] [nvarchar](max) NOT NULL,        -- RefreshToken
     [CreatedDate] [smalldatetime] NOT NULL,
     CONSTRAINT [PK.RefreshTokenDictionary] PRIMARY KEY NONCLUSTERED ([Key] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]

@@ -44,6 +44,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.AspNetCore.Mvc.Cors.Internal;
 
 using Touryo.Infrastructure.Framework.StdMigration;
+using Touryo.Infrastructure.Framework.Util;
 using Touryo.Infrastructure.Public.Util;
 
 namespace MultiPurposeAuthSite
@@ -118,9 +119,15 @@ namespace MultiPurposeAuthSite
                 // Developmentモードの場合
 
                 // 開発用エラー画面
-                app.UseDeveloperExceptionPage();
-                app.UseDatabaseErrorPage();
-                
+                //app.UseDeveloperExceptionPage();
+                //app.UseDatabaseErrorPage();
+
+                // https://forums.asp.net/t/2114176.aspx?app+UseDeveloperExceptionPage+not+working
+                // UseDeveloperExceptionPageとUseIdentity、併用できない？
+                // UseStatusCodePagesWithRedirects＋自作開発用エラー画面？
+                //app.UseStatusCodePagesWithRedirects(
+                //    GetConfigParameter.GetConfigValue(FxLiteral.ERROR_SCREEN_PATH));
+
                 // 簡易ログ出力
                 loggerFactory.AddConsole(Configuration.GetSection("Logging"));
                 loggerFactory.AddDebug();
@@ -184,6 +191,16 @@ namespace MultiPurposeAuthSite
             // MVCをパイプラインに追加（routesも設定）
             app.UseMvc(routes =>
             {
+                routes.MapRoute(
+                   name: "OAuth2Authorize",
+                   template: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
+                   defaults: new { controller = "Account", action = "OAuth2Authorize" });
+
+                routes.MapRoute(
+                    name: "OAuth2Token",
+                    template: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2EndpointApi", action = "OAuth2Token" });
+
                 routes.MapRoute(
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
@@ -266,7 +283,20 @@ namespace MultiPurposeAuthSite
             services.AddTransient<IEmailSender, EmailSender>();
             services.AddTransient<ISmsSender, SmsSender>();
 
+            // AddMvc
             services.AddMvc();
+
+            // AddCors
+            services.AddCors(
+                o => o.AddPolicy("AllowAllOrigins", 
+                builder =>
+                {
+                    builder
+                    .AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+                }));
+
 
             #region ASP.NET Core Identity認証
 
@@ -298,7 +328,7 @@ namespace MultiPurposeAuthSite
                     idOptions.Lockout.MaxFailedAccessAttempts = Config.MaxFailedAccessAttemptsBeforeLockout;
                     idOptions.Lockout.AllowedForNewUsers = Config.UserLockoutEnabledByDefault;
 
-                    // 二ヨウ素認証
+                    // 二要素認証
 
                     // トークン
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#tokens

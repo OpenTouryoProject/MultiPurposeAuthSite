@@ -210,7 +210,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
+                string oAuth2Data = DataProvider.Get(user.ClientID);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
@@ -1984,7 +1984,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddOAuth2DataViewModel model = null;
 
-                string oAuth2Data = DataProvider.GetInstance().Get(user.ClientID);
+                string oAuth2Data = DataProvider.Get(user.ClientID);
 
                 if (!string.IsNullOrEmpty(oAuth2Data))
                 {
@@ -2056,7 +2056,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                DataProvider.GetInstance().Update(user.ClientID, unstructuredData);
+                                DataProvider.Update(user.ClientID, unstructuredData);
 
                                 // 再ログイン
                                 await this.ReSignInAsync();
@@ -2075,8 +2075,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 成功
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) DataProvider.GetInstance().Delete(temp);
-                                    DataProvider.GetInstance().Create(user.ClientID, unstructuredData);
+                                    if (!string.IsNullOrEmpty(temp)) DataProvider.Delete(temp);
+                                    DataProvider.Create(user.ClientID, unstructuredData);
 
                                     // 再ログイン
                                     await this.ReSignInAsync();
@@ -2188,7 +2188,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // OAuth2関連の非構造化データのクリア
-                DataProvider.GetInstance().Delete(user.ClientID);
+                DataProvider.Delete(user.ClientID);
 
                 // ユーザーの保存（ClientIDのクリア）
                 //user.ClientID = ""; 一意制約エラーになるので
@@ -2505,8 +2505,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + Config.OAuth2BearerTokenEndpoint);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -2589,8 +2588,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region Tokenエンドポイントで、Refresh Tokenを使用してAccess Tokenを更新
 
                     Uri tokenEndpointUri = new Uri(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + Config.OAuth2BearerTokenEndpoint);
+                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
                     // Tokenエンドポイントにアクセス
 
