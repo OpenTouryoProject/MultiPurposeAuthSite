@@ -19,7 +19,7 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuth2EndpointApiController
+//* クラス名        ：OAuth2EndpointController
 //* クラス日本語名  ：OAuth2EndpointのApiController
 //*
 //* 作成日時        ：－
@@ -33,7 +33,9 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Log;
 
 using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Extensions.OAuth2;
@@ -45,11 +47,13 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
+using System.Web;
+using System.Web.Http;
+using System.Web.Http.Cors;
 using System.Net.Http;
+using System.Net.Http.Formatting;
 
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Cors;
+using Microsoft.Owin.Security;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -57,7 +61,6 @@ using Newtonsoft.Json.Serialization;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Presentation;
 using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
@@ -65,9 +68,17 @@ using Touryo.Infrastructure.Public.Str;
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
 {
-    /// <summary>OAuth2ResourceServerのApiController（ライブラリ）</summary>
-    [EnableCors("AllowAllOrigins")]
-    public class OAuth2EndpointApiController : Controller
+    /// <summary>OAuth2EndpointのApiController（ライブラリ）</summary>
+    [EnableCors(
+        // リソースへのアクセスを許可されている発生元
+        origins: "*",
+        // リソースによってサポートされているヘッダー
+        headers: "*",
+        // リソースによってサポートされているメソッド
+        methods: "*",
+        // 
+        SupportsCredentials = true)]
+    public class OAuth2EndpointController : ApiController
     {
         #region /.well-known/openid-configuration
 
@@ -308,12 +319,12 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// Tokenエンドポイント
-        /// POST: /OAuth2Token
+        /// POST: /token
         /// </summary>
         /// <param name="formData">FormDataCollection</param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        public Dictionary<string, string> OAuth2Token(IFormCollection formData)
+        public Dictionary<string, string> OAuth2Token(FormDataCollection formData)
         {
             Dictionary<string, string> ret = null;
             Dictionary<string, string> err = null;
@@ -324,7 +335,7 @@ namespace MultiPurposeAuthSite.Controllers
             string assertion = "";
 
             AuthenticationHeader.GetCredentials(
-                    MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
+                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
 
             if (temp.Length == 2)
             {
@@ -404,7 +415,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>Dictionary(string, object)</returns>
         [HttpGet]
-        [Route("userinfo")] // OpenID Connectライクなインターフェイスに変更した。
         public async Task<Dictionary<string, object>> GetUserClaims()
         {
             // 戻り値（エラー）
@@ -412,7 +422,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // クライアント認証
             AuthenticationHeader.GetCredentials(
-                MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
 
             if (temp.Length == 1)
             {
@@ -514,8 +524,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        [Route("revoke")]
-        public Dictionary<string, string> RevokeToken(IFormCollection formData)
+        public Dictionary<string, string> RevokeToken(FormDataCollection formData)
         {
             // 戻り値（エラー）
             Dictionary<string, string> err = new Dictionary<string, string>();
@@ -526,7 +535,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // クライアント認証
             AuthenticationHeader.GetCredentials(
-                MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
 
             if (temp.Length == 2)
             {
@@ -624,8 +633,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        [Route("introspect")]
-        public Dictionary<string, string> IntrospectToken(IFormCollection formData)
+        public Dictionary<string, string> IntrospectToken(FormDataCollection formData)
         {
             // 戻り値
             // ・正常
@@ -639,7 +647,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // クライアント認証
             AuthenticationHeader.GetCredentials(
-                MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
 
             if (temp.Length == 2)
             {

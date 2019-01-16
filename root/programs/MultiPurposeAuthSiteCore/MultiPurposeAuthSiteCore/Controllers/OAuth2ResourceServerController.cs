@@ -69,7 +69,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="formData">code</param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        [Route("TestHybridFlow")]
         public async Task<Dictionary<string, string>> TestHybridFlow(IFormCollection formData)
         {
             // 変数
@@ -117,7 +116,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>string</returns>
         [HttpPost]
-        [Route("TestChageToUser")]
         public async Task<string> TestChageToUser(IFormCollection formData)
         {
             // Claimを取得する。

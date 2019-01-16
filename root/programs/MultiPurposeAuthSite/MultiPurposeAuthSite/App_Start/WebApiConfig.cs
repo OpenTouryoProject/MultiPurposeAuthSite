@@ -67,11 +67,47 @@ namespace MultiPurposeAuthSite
                 defaults: new { id = RouteParameter.Optional }
             );
 
+            #region OAuth2Endpoint
             config.Routes.MapHttpRoute(
                 name: "OAuth2Token",
                 routeTemplate: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除
-                defaults: new { controller = "OAuth2EndpointApi", action = "OAuth2Token" }
+                defaults: new { controller = "OAuth2Endpoint", action = "OAuth2Token" }
             );
+
+            config.Routes.MapHttpRoute(
+                name: "GetUserClaims",
+                routeTemplate: Config.OAuth2UserInfoEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "GetUserClaims" }
+            );
+
+            config.Routes.MapHttpRoute(
+                name: "RevokeToken",
+                routeTemplate: Config.OAuth2RevokeTokenEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "RevokeToken" }
+            );
+
+            config.Routes.MapHttpRoute(
+                name: "IntrospectToken",
+                routeTemplate: Config.OAuth2IntrospectTokenEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "IntrospectToken" }
+            );
+            #endregion
+
+            #region OAuth2ResourceServer
+
+            config.Routes.MapHttpRoute(
+                name: "TestHybridFlow",
+                routeTemplate: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" }
+            );
+
+            config.Routes.MapHttpRoute(
+                name: "TestChageToUser",
+                routeTemplate: Config.TestChageToUserWebAPI.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2ResourceServer", action = "TestChageToUser" }
+            );
+
+            #endregion
 
             //// トレース機能を有効化します。
             //TraceConfig.Register(config);

@@ -191,15 +191,47 @@ namespace MultiPurposeAuthSite
             // MVCをパイプラインに追加（routesも設定）
             app.UseMvc(routes =>
             {
+                #region Account
                 routes.MapRoute(
                    name: "OAuth2Authorize",
                    template: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
+                #endregion
 
+                #region OAuth2Endpoint
                 routes.MapRoute(
                     name: "OAuth2Token",
                     template: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除,
-                    defaults: new { controller = "OAuth2EndpointApi", action = "OAuth2Token" });
+                    defaults: new { controller = "OAuth2Endpoint", action = "OAuth2Token" });
+
+                routes.MapRoute(
+                    name: "GetUserClaims",
+                    template: Config.OAuth2UserInfoEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "GetUserClaims" });
+
+                routes.MapRoute(
+                    name: "RevokeToken",
+                    template: Config.OAuth2RevokeTokenEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "RevokeToken" });
+
+                routes.MapRoute(
+                    name: "IntrospectToken",
+                    template: Config.OAuth2IntrospectTokenEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "IntrospectToken" });
+                #endregion
+
+                #region OAuth2ResourceServer
+                routes.MapRoute(
+                    name: "TestHybridFlow",
+                    template: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
+
+                routes.MapRoute(
+                    name: "TestChageToUser",
+                    template: Config.TestChageToUserWebAPI.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2ResourceServer", action = "TestChageToUser" });
+                #endregion
+
 
                 routes.MapRoute(
                     name: "default",
