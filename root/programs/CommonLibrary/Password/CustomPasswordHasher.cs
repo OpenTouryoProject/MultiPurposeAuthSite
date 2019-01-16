@@ -224,8 +224,8 @@ namespace MultiPurposeAuthSite.Password
         {   
             if(GetPasswordHashV2.EqualSaltedPassword(
                 providedPassword,
-                EnumKeyedHashAlgorithm.HMACSHA512,
-                hashedPassword.Substring(4)))
+                hashedPassword.Substring(4),
+                EnumKeyedHashAlgorithm.HMACSHA512))
             {
                 return PasswordVerificationResult.Success;
             }
