@@ -24,6 +24,8 @@ using System.Web.Http;
 using Microsoft.Owin.Security.OAuth;
 using Newtonsoft.Json.Serialization;
 
+using Touryo.Infrastructure.Framework.Authentication;
+
 namespace MultiPurposeAuthSite
 {
     /// <summary>
@@ -90,6 +92,12 @@ namespace MultiPurposeAuthSite
                 name: "IntrospectToken",
                 routeTemplate: Config.OAuth2IntrospectTokenEndpoint.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "IntrospectToken" }
+            );
+
+            config.Routes.MapHttpRoute(
+                name: "JwksUri",
+                routeTemplate: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" }
             );
             #endregion
 

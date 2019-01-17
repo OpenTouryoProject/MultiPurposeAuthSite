@@ -43,6 +43,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 using Microsoft.AspNetCore.Mvc.Cors.Internal;
 
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Util;
 using Touryo.Infrastructure.Public.Util;
@@ -218,6 +219,11 @@ namespace MultiPurposeAuthSite
                     name: "IntrospectToken",
                     template: Config.OAuth2IntrospectTokenEndpoint.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "IntrospectToken" });
+
+                routes.MapRoute(
+                    name: "JwksUri",
+                    template: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" });
                 #endregion
 
                 #region OAuth2ResourceServer
