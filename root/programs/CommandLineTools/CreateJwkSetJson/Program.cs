@@ -32,16 +32,13 @@
 //**********************************************************************************
 
 using System.IO;
-using System.Text;
-using System.Collections.Generic;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.IO;
-using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace CreateJwkSetJson
 {

@@ -177,8 +177,8 @@ namespace MultiPurposeAuthSite.Password
             }
         }
 
-#region Verify Hash AlgorithmのVersion管理
-        
+        #region Verify Hash AlgorithmのVersion管理
+
         /// <summary>テスト用 Version 0</summary>
         /// <param name="hashedPassword">hashedPassword</param>
         /// <param name="providedPassword">providedPassword</param>
@@ -224,8 +224,8 @@ namespace MultiPurposeAuthSite.Password
         /// <returns>検証結果</returns>
         private PasswordVerificationResult V2VerifyHashAlgorithm(
             string hashedPassword, string providedPassword)
-        {   
-            if(GetPasswordHashV2.EqualSaltedPassword(
+        {
+            if (GetPasswordHashV2.EqualSaltedPassword(
                 providedPassword,
                 hashedPassword.Substring(4),
                 EnumKeyedHashAlgorithm.HMACSHA512))
@@ -238,6 +238,6 @@ namespace MultiPurposeAuthSite.Password
             }
         }
 
-#endregion
+        #endregion
     }
 }

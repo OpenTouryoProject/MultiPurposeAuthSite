@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28010.2016
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateClientsIdentity", "CreateClientsIdentity\CreateClientsIdentity.csproj", "{9176504B-F14B-4C59-8601-5C04BE9A889D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateClientsIdentity", "CreateClientsIdentity\net\CreateClientsIdentity.csproj", "{9176504B-F14B-4C59-8601-5C04BE9A889D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateJwtBearerTokenFlowAssertion", "CreateJwtBearerTokenFlowAssertion\CreateJwtBearerTokenFlowAssertion.csproj", "{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateJwtBearerTokenFlowAssertion", "CreateJwtBearerTokenFlowAssertion\net\CreateJwtBearerTokenFlowAssertion.csproj", "{4AB3D69C-314D-4CF2-8A3A-F8E1536BFA3F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateJwkSetJson", "CreateJwkSetJson\CreateJwkSetJson.csproj", "{5E268E70-CCCC-4629-A442-F077FAB243A1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreateJwkSetJson", "CreateJwkSetJson\net\CreateJwkSetJson.csproj", "{5E268E70-CCCC-4629-A442-F077FAB243A1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
