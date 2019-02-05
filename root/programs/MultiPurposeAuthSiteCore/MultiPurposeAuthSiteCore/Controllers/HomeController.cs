@@ -50,8 +50,8 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Security.Pwd;
 
 namespace MultiPurposeAuthSite.Controllers
 {

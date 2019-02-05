@@ -59,10 +59,10 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Authentication;
-using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Dbg;
 using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Security.Pwd;
 
 // 参考
 // https://github.com/OpenTouryoProject/SampleProgram/blob/master/ASPNET/AuthN_AuthZ/ASPNETIdentity/ASPNETIdentity31Sample/Controllers/ManageController.cs

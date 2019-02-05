@@ -43,6 +43,7 @@ using Microsoft.AspNetCore.Identity;
 #endif
 
 using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Public.Security.Pwd;
 
 /// <summary>MultiPurposeAuthSite.Password</summary>
 namespace MultiPurposeAuthSite.Password
@@ -98,6 +99,8 @@ namespace MultiPurposeAuthSite.Password
         private string V1HashAlgorithm(string password)
         {
             // $1$ バージョンの実装
+            // - ver 01-20以前のPasswordHashを使用する場合は、GetPasswordHashV1を使用して下さい。
+            // - 以降、新規でPasswordHashを生成する場合は、GetPasswordHashV2を使用して下さい。
             return "$1$" + "." +
                 GetPasswordHashV1.GetSaltedPassword(
                     password,                            // password

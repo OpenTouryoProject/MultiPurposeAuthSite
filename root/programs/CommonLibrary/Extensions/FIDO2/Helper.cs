@@ -42,6 +42,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.Extensions.FIDO2
 {

@@ -47,7 +47,6 @@ using System.Configuration;
 using System.Web.Configuration;
 
 using Microsoft.Owin.Security;
-using Microsoft.Owin.Security.OAuth;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 
@@ -57,7 +56,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Security;
+using Touryo.Infrastructure.Public.Security.Pwd;
 
 using Facebook;
 
