@@ -16,6 +16,12 @@ set CURRENT_DIR="%~dp0"
 call %CURRENT_DIR%z_Common.bat
 
 rem --------------------------------------------------
+rem Batch build of CommandLineToolsCore.
+rem --------------------------------------------------
+dotnet restore "CommandLineTools\CommandLineToolsCore.sln"
+dotnet msbuild %COMMANDLINE% "CommandLineTools\CommandLineToolsCore.sln"
+
+rem --------------------------------------------------
 rem Batch build of MultiPurposeAuthSiteCore.
 rem --------------------------------------------------
 
