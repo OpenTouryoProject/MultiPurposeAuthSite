@@ -13,6 +13,14 @@
       "n": "nOSgXEBwV-maKTcGlGAFL6KPyTQB7Z0G0Z4ewZi5rhFhEDsZRLV5p3_AqWQQlZFVrIJ_6wdrBY5sCAle6av654jqnI8AqxVV-OL-COmrhVMhrikRXxhxATAzo0Gf_hjW0yux8Ns2HT72PVscjBk9SKeedcorMjWWJPfr1zwsByLaSz8pQApBccRk_bUc-oBHRpDanPFz23v4ts3RXso05G8UZmcaqDqjMsVZfI3Cd3jqaWdb6NeeUw0DZDtMJObOJExJN43LO7rvtWmYXlEgLp-rCTI6CQ0Cmo4WuLU8Rv03fXQXGX0jDNeqfck8EEj7NwJWCvtf_AYaZ6hGcw2PMw",
       "e": "AQAB",
       "kid": "J-sRdCQK90U__njN5HmPtEwsziIkg92TV9xziNIJXEQ"
+    },
+    {
+      "kty": "EC",
+      "alg": "ES256",
+      "crv": "P-256",
+      "x": "QHqRgMdwA7DemAL3OrTMMUOPs6dvLLiguQYRTv8Iaro",
+      "y": "l6P2TEqzx5g_S2A3CPTasScM3dS8Dt-KYBY3WCARxCE",
+      "kid": "v9sSmiz1eT5KDX-dmeqCI6VQgTZqBoHyf3CTpLj9jNo"
     }
   ]
 }

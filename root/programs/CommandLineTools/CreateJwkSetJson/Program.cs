@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using System.IO;
+using System.Security.Cryptography;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -54,9 +55,12 @@ namespace CreateJwkSetJson
 #endif
 
             // 現在の証明書のJwk
-            JObject jwkObject = 
+            JObject rsaJwkObject = 
                 JsonConvert.DeserializeObject<JObject>(
                     RsaPublicKeyConverter.X509CerToJwk(OAuth2AndOIDCParams.RS256Cer));
+            JObject ecdsaJwkObject =
+                JsonConvert.DeserializeObject<JObject>(
+                    EccPublicKeyConverter.X509CerToJwk(OAuth2AndOIDCParams.ES256Cer, HashAlgorithmName.SHA256));
 
             // JwkSet.jsonファイルの存在チェック
             if (!ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))
@@ -77,14 +81,16 @@ namespace CreateJwkSetJson
             {
                 // 新規
                 jwkSetObject = new JwkSet();
-                jwkSetObject.keys.Add(jwkObject);
+                jwkSetObject.keys.Add(rsaJwkObject);
+                jwkSetObject.keys.Add(ecdsaJwkObject);
             }
             else
             {
                 // 既存
 
                 // kidの重複確認
-                JwkSet.AddJwkToJwkSet(jwkSetObject, jwkObject);
+                JwkSet.AddJwkToJwkSet(jwkSetObject, rsaJwkObject);
+                JwkSet.AddJwkToJwkSet(jwkSetObject, ecdsaJwkObject);
             }
 
             // jwkSetObjectのセーブ
