@@ -37,7 +37,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
+
 using Touryo.Infrastructure.Public.IO;
+using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace CreateJwkSetJson
@@ -46,6 +48,11 @@ namespace CreateJwkSetJson
     {
         static void Main(string[] args)
         {
+#if NETCORE
+            // configの初期化
+            GetConfigParameter.InitConfiguration("appsettings.json");
+#endif
+
             // 現在の証明書のJwk
             JObject jwkObject = 
                 JsonConvert.DeserializeObject<JObject>(

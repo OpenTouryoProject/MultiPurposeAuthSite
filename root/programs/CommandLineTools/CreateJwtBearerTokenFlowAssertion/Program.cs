@@ -37,7 +37,9 @@ using System;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
+
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace CreateJwtBearerTokenFlowAssertion
@@ -46,6 +48,11 @@ namespace CreateJwtBearerTokenFlowAssertion
     {
         static void Main(string[] args)
         {
+#if NETCORE
+            // configの初期化
+            GetConfigParameter.InitConfiguration("appsettings.json");
+#endif
+
             string jwkPrivateKey = "";
             string jwkPublicKey = "";
 

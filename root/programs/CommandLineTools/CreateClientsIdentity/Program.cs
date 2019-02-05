@@ -35,6 +35,8 @@ using System;
 using System.Collections.Generic;
 
 using Newtonsoft.Json;
+
+using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security.Pwd;
 
 namespace CreateClientsIdentity
@@ -43,6 +45,10 @@ namespace CreateClientsIdentity
     {
         static void Main(string[] args)
         {
+#if NETCORE
+            // configの初期化
+            GetConfigParameter.InitConfiguration("appsettings.json");
+#endif
             Dictionary<string, Dictionary<string, string>> obj
                 = new Dictionary<string, Dictionary<string, string>>();
             
