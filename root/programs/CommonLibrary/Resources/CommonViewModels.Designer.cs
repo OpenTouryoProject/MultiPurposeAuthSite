@@ -70,6 +70,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   OAuth2/OIDC mode of Client. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientMode {
+            get {
+                return ResourceManager.GetString("ClientMode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Client name に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientName {

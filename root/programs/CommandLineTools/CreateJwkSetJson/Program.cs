@@ -60,7 +60,7 @@ namespace CreateJwkSetJson
                     RsaPublicKeyConverter.X509CerToJwk(OAuth2AndOIDCParams.RS256Cer));
             JObject ecdsaJwkObject =
                 JsonConvert.DeserializeObject<JObject>(
-                    EccPublicKeyConverter.X509CerToJwk(OAuth2AndOIDCParams.ES256Cer, HashAlgorithmName.SHA256));
+                    EccPublicKeyConverter.X509CerToJwk(OAuth2AndOIDCParams.ES256Cer));
 
             // JwkSet.jsonファイルの存在チェック
             if (!ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))

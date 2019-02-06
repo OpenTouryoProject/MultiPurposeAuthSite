@@ -66,6 +66,7 @@ using Microsoft.AspNetCore.Identity;
 using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.FastReflection;
 
 namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
@@ -546,6 +547,66 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         }
 
         #endregion
+
+        #endregion
+
+        #region Client Mode
+
+        /// <summary>client_idからClientModeを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>ClientMode</returns>
+        public string GetClientMode(string client_id)
+        {
+            return this.GetClientMode(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからClientModeを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>ClientMode</returns>
+        public string GetClientMode(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey("oauth2_oidc_mode"))
+                {
+                    // 設定値
+                    return this.Oauth2ClientsInfo[client_id]["oauth2_oidc_mode"];
+                }
+                else
+                {
+                    // 既定値
+                    return OAuth2AndOIDCEnum.ClientMode.normal.ToStringFromEnum();
+                }
+            }
+
+            // oAuth2Dataを検索
+            string oAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(oAuth2Data))
+            {
+                isResourceOwner = true;
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+
+                if (!string.IsNullOrEmpty(model.ClientMode))
+                {
+                    // 設定値
+                    return model.ClientMode;
+                }
+                else
+                {
+                    // 既定値
+                    return OAuth2AndOIDCEnum.ClientMode.normal.ToStringFromEnum();
+                }
+            }
+
+            return ""; // エラーになる。
+        }
 
         #endregion
 

@@ -120,6 +120,9 @@
   <data name="ClientID" xml:space="preserve">
     <value>client_id</value>
   </data>
+  <data name="ClientMode" xml:space="preserve">
+    <value>OAuth2/OIDC mode of Client.</value>
+  </data>
   <data name="ClientName" xml:space="preserve">
     <value>Client name</value>
   </data>

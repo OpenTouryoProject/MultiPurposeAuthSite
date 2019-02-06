@@ -29,6 +29,16 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/02/xx  西野 大介         - Token生成処理の集約（code + Implicitも ★）
+//*                                - CheckClientModeの集約
+//*                                - Client認証のclient_idとtoken類のaudをチェック ★
+//*                                - オペレーション・トレース・ログ出力の集約
+//*                                  - 情報源
+//*                                    - Client情報はclient_idから取得する。
+//*                                    - User情報はTokenのsubから取得する。 ★
+//*                                  - 以下は、Client = User
+//*                                    - GrantClientCredentials
+//*                                    - GrantJwtBearerTokenCredentials
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -57,15 +67,215 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.FastReflection;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>CmnEndpoints</summary>
     public class CmnEndpoints
     {
-        #region ValidateClientRedirectUri
+        #region .well-known/openid-configuration
 
-        /// <summary>ValidateClientRedirectUri</summary>
+        /// <summary>OpenIDConfig</summary>
+        /// <returns>Dictionary(string, object)</returns>
+        public static Dictionary<string, object> OpenIDConfig()
+        {
+            Dictionary<string, object> OpenIDConfig = new Dictionary<string, object>();
+
+            #region 基本
+
+            OpenIDConfig.Add("issuer", Config.OAuth2IssuerId);
+
+            OpenIDConfig.Add("authorization_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2AuthorizeEndpoint);
+
+            OpenIDConfig.Add("token_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
+
+            OpenIDConfig.Add("userinfo_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
+
+            #endregion
+
+            #region オプション
+
+            List<string> grant_types_supported = new List<string>();
+            List<string> response_types_supported = new List<string>();
+            List<string> scopes_supported = new List<string>();
+
+            OpenIDConfig.Add("grant_types_supported", grant_types_supported);
+            OpenIDConfig.Add("response_types_supported", response_types_supported);
+            OpenIDConfig.Add("scopes_supported", scopes_supported);
+
+            #region token
+
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
+            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
+
+            OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringFromEnum(),
+                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringFromEnum()
+            });
+
+            OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
+                "RS256"
+            });
+
+            #endregion
+
+            #region grant_types and response_types
+
+            if (Config.EnableAuthorizationCodeGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
+                response_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+            }
+
+            if (Config.EnableImplicitGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.ImplicitGrantType);
+                response_types_supported.Add(OAuth2AndOIDCConst.ImplicitResponseType);
+            }
+
+            if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
+            }
+
+            if (Config.EnableClientCredentialsGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
+            }
+
+            if (Config.EnableJwtBearerTokenFlowGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
+            }
+
+            if (Config.EnableRefreshToken)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
+            }
+
+
+            #endregion
+
+            #region OpenID Connect
+
+            if (Config.EnableOpenIDConnect)
+            {
+                scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
+
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
+                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
+
+                // subject_types_supported
+                OpenIDConfig.Add("subject_types_supported", new List<string> {
+                    "public"
+                });
+
+                // claims_supported
+                OpenIDConfig.Add("claims_supported", new List<string> {
+                    //Jwt
+                    OAuth2AndOIDCConst.iss,
+                    OAuth2AndOIDCConst.aud,
+                    OAuth2AndOIDCConst.sub,
+                    OAuth2AndOIDCConst.exp,
+                    OAuth2AndOIDCConst.nbf,
+                    OAuth2AndOIDCConst.iat,
+                    OAuth2AndOIDCConst.jti,
+                    // scope
+                    // 標準
+                    OAuth2AndOIDCConst.Scope_Email,
+                    OAuth2AndOIDCConst.email_verified,
+                    OAuth2AndOIDCConst.phone_number,
+                    OAuth2AndOIDCConst.phone_number_verified,
+                    // 拡張
+                    OAuth2AndOIDCConst.scopes,
+                    OAuth2AndOIDCConst.Scope_Roles,
+                    OAuth2AndOIDCConst.Scope_UserID,
+                    // OIDC, FAPI1
+                    OAuth2AndOIDCConst.nonce,
+                    OAuth2AndOIDCConst.at_hash,
+                    OAuth2AndOIDCConst.c_hash,
+                    OAuth2AndOIDCConst.s_hash
+                });
+
+                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
+                    "RS256"
+                });
+
+                OpenIDConfig.Add("jwks_uri",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
+            }
+
+            #endregion
+
+            #region OAuth2拡張
+
+            #region response_modes
+            OpenIDConfig.Add("response_modes_supported", new List<string> {
+                OAuth2AndOIDCEnum.ResponseMode.query.ToStringFromEnum(),
+                OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringFromEnum(),
+                OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringFromEnum()
+            });
+            #endregion
+
+            #region revocation
+
+            OpenIDConfig.Add("revocation_endpoint", new List<string> {
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint
+            });
+
+            OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringFromEnum()
+            });
+
+            #endregion
+
+            #region revocation
+
+            OpenIDConfig.Add("introspection_endpoint", new List<string> {
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint
+            });
+
+            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringFromEnum()
+            });
+
+            #endregion
+
+            #region OAuth2拡張
+
+            OpenIDConfig.Add("code_challenge_methods_supported", new List<string> {
+                OAuth2AndOIDCConst.PKCE_plain,
+                OAuth2AndOIDCConst.PKCE_S256
+            });
+
+            #endregion
+
+            OpenIDConfig.Add("service_documentation", "・・・");
+
+            #endregion
+
+            #endregion
+
+            return OpenIDConfig;
+        }
+
+        #endregion
+
+        #region ValidateAuthZReqParam
+
+        /// <summary>ValidateAuthZReqParam</summary>
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="redirect_uri">string</param>
@@ -76,7 +286,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
         /// <returns>成功 or 失敗</returns>
-        public static bool ValidateClientRedirectUri(
+        public static bool ValidateAuthZReqParam(
             string grant_type, string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription)
@@ -246,7 +456,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region Token
+        #region CreateToken
 
         #region GrantAuthorizationCodeCredentials
 
@@ -274,6 +484,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (Config.EnableAuthorizationCodeGrantType)
             {
+                // 初期値の許容レベルは最高値に設定
+                OAuth2AndOIDCEnum.ClientMode acceptedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
+
                 #region 認証
 
                 bool authned = false;
@@ -288,6 +501,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                             {
                                 authned = true;
+                                acceptedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
                             }
                         }
                     }
@@ -310,10 +524,34 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                                 {
                                     authned = true;
+                                    client_id = iss;
+                                    acceptedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
                                 }
                             }
                         }
                     }
+                    else
+                    {
+                        // MTLSなどTBをチェックした場合、fapi2を設定
+                        //authned = true;
+                        //acceptedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                    }
+                }
+
+                #endregion
+
+                #region CheckClientMode
+
+                // このフローが認められるか？
+                if (CmnEndpoints.CheckClientMode(client_id, acceptedLevel, err))
+                {
+                    // 継続可
+                }
+                else
+                {
+                    // 継続不可
+                    // err設定済み
+                    return false;
                 }
 
                 #endregion
@@ -335,10 +573,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         refresh_token = RefreshTokenProvider.Create(tokenPayload);
                     }
 
-                    //// オペレーション・トレース・ログ出力
-                    //Logging.MyOperationTrace(string.Format(
-                    //    "{0}({1}) passed the '{2} flow' by {0}({1}).",
-                    //    user.Id, user.UserName, grant_type));
+                    // オペレーション・トレース・ログ出力
+                    string name = Helper.GetInstance().GetClientName(client_id);
+                    Logging.MyOperationTrace(string.Format(
+                        "{0}({1}) passed the 'Authorization Code flow' by {2}({3}).",
+                        client_id, name, "u_id", "u_name")); // User Account & Client Account
 
                     ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
 
@@ -364,6 +603,9 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         #endregion
+
+        // GrantImplicitCredentials
+        // GrantHybridCredentials
 
         #region GrantRefreshTokenCredentials
 
@@ -409,6 +651,22 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
 
+                #region CheckClientMode
+
+                // このフローが認められるか？
+                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                {
+                    // 継続可
+                }
+                else
+                {
+                    // 継続不可
+                    // err設定済み
+                    return false;
+                }
+
+                #endregion
+
                 #region 発行
 
                 if (authned)
@@ -427,10 +685,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                             refresh_token = RefreshTokenProvider.Create(tokenPayload);
                         }
 
-                        //// オペレーション・トレース・ログ出力
-                        //Logging.MyOperationTrace(string.Format(
-                        //    "{0}({1}) passed the '{2} flow' by {0}({1}).",
-                        //    user.Id, user.UserName, grant_type));
+                        // オペレーション・トレース・ログ出力
+                        string name = Helper.GetInstance().GetClientName(client_id);
+                        Logging.MyOperationTrace(string.Format(
+                            "{0}({1}) passed the 'Refresh Token flow' by {2}({3}).",
+                            client_id, name, "u_id", "u_name")); // User Account & Client Account
 
                         ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
 
@@ -502,6 +761,22 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
 
+                #region CheckClientMode
+
+                // このフローが認められるか？
+                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                {
+                    // 継続可
+                }
+                else
+                {
+                    // 継続不可
+                    // err設定済み
+                    return false;
+                }
+
+                #endregion
+
                 #region 発行
 
                 if (authned)
@@ -533,9 +808,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                             // オペレーション・トレース・ログ出力
-                            Logging.MyOperationTrace(
-                                string.Format("{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
-                                user.Id, user.UserName, user.ClientID, Helper.GetInstance().GetClientName(user.ClientID)));
+                            string name = Helper.GetInstance().GetClientName(client_id);
+                            Logging.MyOperationTrace(string.Format(
+                                "{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
+                                user.Id, user.UserName, // User Account
+                                client_id, name)); // Client Account
 
                             ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
                             return true;
@@ -619,6 +896,22 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
 
+                #region CheckClientMode
+
+                // このフローが認められるか？
+                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                {
+                    // 継続可
+                }
+                else
+                {
+                    // 継続不可
+                    // err設定済み
+                    return false;
+                }
+
+                #endregion
+
                 #region 発行
 
                 if (authned)
@@ -645,9 +938,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                         // オペレーション・トレース・ログ出力
-                        Logging.MyOperationTrace(
-                            string.Format("{0}({1}) passed the 'client credentials flow' by {2}({3}).",
-                            user.Id, user.UserName, user.ClientID, Helper.GetInstance().GetClientName(user.ClientID)));
+                        Logging.MyOperationTrace(string.Format(
+                            "{0}({1}) passed the 'client credentials flow'.",
+                            user.Id, user.UserName)); // User Account
 
                         ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
                         return true;
@@ -677,7 +970,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                             // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format(
-                                "Passed the 'client credentials flow' by {0}({1}).", client_id, sub));
+                                "Passed the 'client credentials flow' by {0}({1}).",
+                                client_id, sub)); // Client Account
 
                             ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
                             return true;
@@ -743,28 +1037,35 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // aud 検証
                         if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                         {
-                            // JwtTokenを作る
+                            // このフローが認められるか？
+                            if (CmnEndpoints.CheckClientMode(iss, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                            {
+                                // JwtTokenを作る
 
-                            // issに対応するsubを取得する。
-                            string sub = Helper.GetInstance().GetClientName(iss, out bool isResourceOwner);
+                                // issに対応するsubを取得する。
+                                string sub = Helper.GetInstance().GetClientName(iss);
 
-                            // ClaimsIdentityにClaimを追加する。
-                            ClaimsIdentity identity = new ClaimsIdentity(OAuth2AndOIDCConst.Bearer);
-                            identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                            identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
+                                // ClaimsIdentityにClaimを追加する。
+                                ClaimsIdentity identity = new ClaimsIdentity(OAuth2AndOIDCConst.Bearer);
+                                identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+                                identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
 
-                            // access_token
-                            string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
-                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                                // access_token
+                                string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                                    DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
-                            // オペレーション・トレース・ログ出力
-                            string clientName = Helper.GetInstance().GetClientName(iss);
-                            Logging.MyOperationTrace(string.Format(
-                                "{0}({1}) passed the 'jwt bearer token flow' by {2}({3}).",
-                                iss, clientName, iss, clientName));
+                                // オペレーション・トレース・ログ出力
+                                Logging.MyOperationTrace(string.Format(
+                                    "Passed the 'jwt bearer token flow' by {0}({1}).",
+                                    iss, sub)); // Client Account
 
-                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
-                            return true;
+                                ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
+                                return true;
+                            }
+                            else
+                            {
+                                // 設定済み
+                            }
                         }
                         else
                         {
@@ -795,17 +1096,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region 共通
+        #region CreateAutheNRes4HybridFlow
 
-        #region CreateAuthenticationResponseForHybridFlow
-
-        /// <summary>CreateAuthenticationResponseForHybridFlow</summary>
+        /// <summary>CreateAutheNRes4HybridFlow</summary>
+        /// <param name="client_id">string</param>
         /// <param name="code">string</param>
         /// <param name="state">string</param>
         /// <param name="access_token">string</param>
         /// <param name="refresh_token">string</param>
-        public static void CreateAuthenticationResponseForHybridFlow(
-            string code, string state, out string access_token, out string id_token)
+        public static void CreateAutheNRes4HybridFlow(
+            string client_id, string code, string state, out string access_token, out string id_token)
         {
             access_token = "";
             id_token = "";
@@ -834,6 +1134,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
                 }
             }
+
+            // オペレーション・トレース・ログ出力
+            string name = Helper.GetInstance().GetClientName(client_id);
+            Logging.MyOperationTrace(string.Format(
+                "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
+                client_id, name, "u_id", "u_name")); // User Account & Client Account
         }
 
         #endregion
@@ -844,7 +1150,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="access_token">string</param>
         /// <param name="refresh_token">string</param>
         /// <returns>Dictionary(string, string)</returns>
-        public static Dictionary<string, string> CreateAccessTokenResponse(string access_token, string refresh_token)
+        private static Dictionary<string, string> CreateAccessTokenResponse(string access_token, string refresh_token)
         {
             Dictionary<string, string> ret = new Dictionary<string, string>();
 
@@ -888,6 +1194,85 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         #endregion
+
+        #region CheckClientMode
+
+        /// <summary>CheckClientMode</summary>
+        /// <param name="client_id">ClientId</param>
+        /// <param name="acceptedLevel">当該フローのClientModeの許容レベル</param>
+        /// <param name="err">Dictionary(string, string)</param>
+        /// <returns>継続の可否</returns>
+        public static bool CheckClientMode(
+            string client_id,
+            OAuth2AndOIDCEnum.ClientMode acceptedLevel,
+            Dictionary<string, string> err)
+        {
+            bool retval = false;
+
+            string clientMode = Helper.GetInstance().GetClientMode(client_id);
+
+            // switch には定数値が必要なので if で。
+            if (clientMode == OAuth2AndOIDCEnum.ClientMode.normal.ToStringFromEnum())
+            {
+                // clientMode == normal
+                if (acceptedLevel == OAuth2AndOIDCEnum.ClientMode.normal)
+                {
+                    // acceptedLevel == normal
+                    retval = true;
+                }
+                else
+                {
+                    // acceptedLevel != normal
+                    retval = false;
+                }
+            }
+            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringFromEnum())
+            {
+                // clientMode == fapi1
+                if (acceptedLevel == OAuth2AndOIDCEnum.ClientMode.normal)
+                {
+                    // acceptedLevel == normal
+                    retval = false; 
+                }
+                else
+                {
+                    // acceptedLevel != normal, == fapi1 or fapi2
+                    retval = true;
+                }
+            }
+            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringFromEnum())
+            {
+                // clientMode == fapi2
+                if (acceptedLevel == OAuth2AndOIDCEnum.ClientMode.normal
+                    || acceptedLevel == OAuth2AndOIDCEnum.ClientMode.fapi1)
+                {
+                    // acceptedLevel == normal, == fapi1
+                    retval = false;
+                }
+                else
+                {
+                    // acceptedLevel != normal || != fapi1, == fapi2
+                    retval = true;
+                }
+            }
+
+            if (!retval)
+            {
+                // エラーを追加
+                err.Add("error", "not_supported");
+
+                if (string.IsNullOrEmpty(clientMode))
+                {
+                    err.Add("error_description", string.Format("This client is not set the mode."));
+                }
+                else
+                {
+                    err.Add("error_description", string.Format("This client is required the {0} mode.", clientMode));
+                }
+            }
+
+            return retval;
+        }
 
         #endregion
     }

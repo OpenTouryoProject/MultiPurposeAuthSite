@@ -204,4 +204,7 @@
   <data name="JwtAssertionPublickey" xml:space="preserve">
     <value>JWTアサーションの公開鍵</value>
   </data>
+  <data name="ClientMode" xml:space="preserve">
+    <value>Client の OAuth2/OIDC mode</value>
+  </data>
 </root>

@@ -20,11 +20,14 @@
 
 using MultiPurposeAuthSite.Co;
 
+using System.Web.Mvc;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 using Newtonsoft.Json;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.FastReflection;
 
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>
 namespace MultiPurposeAuthSite.ViewModels
@@ -68,6 +71,31 @@ namespace MultiPurposeAuthSite.ViewModels
         [Display(Name = "JwtAssertionPublickey", ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "jwt_assertion_publickey")]
         public string JwtAssertionPublickey { get; set; }
+
+        /// <summary>ClientMode</summary>
+        [Display(Name = "ClientMode", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "oauth2_oidc_mode")]
+        public string ClientMode { get; set; }
+
+        /// <summary>ClientModeアイテムリスト</summary>
+        public List<SelectListItem> DdlClientModeItems
+        {
+            get
+            {
+                return new List<SelectListItem>()
+                {
+                    new SelectListItem() {
+                        Text = "OAuth2.0 / OIDC",
+                        Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringFromEnum() },
+                    new SelectListItem() {
+                        Text = "Financial-grade API - Part1",
+                        Value = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringFromEnum() },
+                    new SelectListItem() {
+                        Text = "Financial-grade API - Part2",
+                        Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringFromEnum() }
+                };
+            }
+        }
 
         /// <summary>ClientName</summary>
         [Display(Name = "ClientName", ResourceType = typeof(Resources.CommonViewModels))]
