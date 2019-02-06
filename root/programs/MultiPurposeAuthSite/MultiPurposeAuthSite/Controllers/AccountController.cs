@@ -56,6 +56,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Pwd;
 
 using Facebook;
@@ -1969,7 +1970,7 @@ namespace MultiPurposeAuthSite.Controllers
             string nonce, string prompt) // OpenID Connect
             // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
         {
-            if (CmnEndpoints.ValidateClientRedirectUri(
+            if (CmnEndpoints.ValidateAuthZReqParam(
                 grant_type, client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
@@ -2020,15 +2021,15 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // RedirectエンドポイントへRedirect
                         if (string.IsNullOrEmpty(response_mode) ||
-                            response_mode.ToLower() == OAuth2AndOIDCConst.query)
+                            response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringFromEnum())
                         {
                             return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                         }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCConst.fragment)
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringFromEnum())
                         {
                             return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                         }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringFromEnum())
                         {
                             // form_postに必要な、HTTP response message body
                             string body =
@@ -2133,13 +2134,8 @@ namespace MultiPurposeAuthSite.Controllers
                     string code = AuthorizationCodeProvider.Create(identity, Request.QueryString);
 
                     // Tokenの生成
-                    CmnEndpoints.CreateAuthenticationResponseForHybridFlow(
+                    CmnEndpoints.CreateAutheNRes4HybridFlow(client_id,
                         code, state, out string access_token, out string id_token);
-
-                    // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
-                        user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
 
                     // RedirectエンドポイントへRedirect
                     switch (response_type)
@@ -2199,7 +2195,7 @@ namespace MultiPurposeAuthSite.Controllers
             string scope, string state,
             string nonce) // OpenID Connect
         {
-            if (CmnEndpoints.ValidateClientRedirectUri(
+            if (CmnEndpoints.ValidateAuthZReqParam(
                 grant_type, client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
@@ -2239,15 +2235,15 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // RedirectエンドポイントへRedirect
                     if (string.IsNullOrEmpty(response_mode) ||
-                        response_mode.ToLower() == OAuth2AndOIDCConst.query)
+                        response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringFromEnum())
                     {
                         return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                     }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCConst.fragment)
+                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringFromEnum())
                     {
                         return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                     }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCConst.form_post)
+                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringFromEnum())
                     {
                         // form_postに必要な、HTTP response message body
                         string body =
@@ -2348,15 +2344,12 @@ namespace MultiPurposeAuthSite.Controllers
                     Code = code
                 };
 
-                //  client_Idから、client_secretを取得。
-                string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
-                string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
-
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                 //stateの検証
+                string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringFromEnum() + ":";
                 if (state == state_InSessionOrCookie
-                    || state == "fapi1:" + state_InSessionOrCookie)
+                    || state == fapi1Prefix + state_InSessionOrCookie)
                 {
                     //state正常
 
@@ -2366,8 +2359,12 @@ namespace MultiPurposeAuthSite.Controllers
                     + Config.OAuth2AuthorizationCodeGrantClient_Account;
 
                     // Tokenエンドポイントにアクセス
-                    if (!state.StartsWith("fapi1:"))
+                    if (!state.StartsWith(fapi1Prefix))
                     {
+                        //  client_Idから、client_secretを取得。
+                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+
                         if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                         {
                             // 通常
@@ -2395,7 +2392,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string iss = "";
 
                         // Client Accountのみ
-                        iss = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        iss = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient1");
 
                         // テストなので秘密鍵は共通とする。
                         string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;

@@ -94,77 +94,75 @@ namespace MultiPurposeAuthSite.Controllers
             Dictionary<string, string> ret = null;
             Dictionary<string, string> err = null;
 
-            string clientId = "";
-            string clientSecret = "";
+            string client_id = "";
+            string client_secret = "";
             string grant_type = "";
             string assertion = "";
+            string scope = "";
 
             AuthenticationHeader.GetCredentials(
                     HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string[] temp);
 
             if (temp.Length == 2)
             {
-                clientId = temp[0];
-                clientSecret = temp[1];
+                client_id = temp[0];
+                client_secret = temp[1];
             }
 
             grant_type = formData[OAuth2AndOIDCConst.grant_type];
             assertion = formData[OAuth2AndOIDCConst.assertion];
 
-            if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
+            switch (grant_type.ToLower())
             {
-                string code = formData[OAuth2AndOIDCConst.code];
-                string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
-                string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
+                case OAuth2AndOIDCConst.AuthorizationCodeGrantType:
+                    string code = formData[OAuth2AndOIDCConst.code];
+                    string redirect_uri = formData[OAuth2AndOIDCConst.redirect_uri];
+                    string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
 
-                if (CmnEndpoints.GrantAuthorizationCodeCredentials(
-                    grant_type, clientId, clientSecret, assertion,
-                    code, code_verifier, redirect_uri, out ret, out err))
-                {
-                    return ret;
-                }
-            }
-            if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
-            {
-                string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
-                if (CmnEndpoints.GrantRefreshTokenCredentials(
-                    grant_type, clientId, clientSecret, refresh_token, out ret, out err))
-                {
-                    return ret;
-                }
-            }
-            if (grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
-            {
-                string username = formData["username"];
-                string password = formData["password"];
-                string scope = formData[OAuth2AndOIDCConst.scope];
-                if (CmnEndpoints.GrantResourceOwnerCredentials(
-                    grant_type, clientId, clientSecret, username, password, scope, out ret, out err))
-                {
-                    return ret;
-                }
-            }
-            if (grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
-            {
-                string scope = formData[OAuth2AndOIDCConst.scope];
-                if (CmnEndpoints.GrantClientCredentials(
-                    grant_type, clientId, clientSecret, scope, out ret, out err))
-                {
-                    return ret;
-                }
-            }
-            else if (grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
-            {
-                if (CmnEndpoints.GrantJwtBearerTokenCredentials(
+                    if (CmnEndpoints.GrantAuthorizationCodeCredentials(
+                        grant_type, client_id, client_secret, assertion,
+                        code, code_verifier, redirect_uri, out ret, out err))
+                    {
+                        return ret;
+                    }
+                    break;
+                case OAuth2AndOIDCConst.RefreshTokenGrantType:
+                    string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
+                    if (CmnEndpoints.GrantRefreshTokenCredentials(
+                        grant_type, client_id, client_secret, refresh_token, out ret, out err))
+                    {
+                        return ret;
+                    }
+                    break;
+                case OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType:
+                    string username = formData["username"];
+                    string password = formData["password"];
+                    scope = formData[OAuth2AndOIDCConst.scope];
+                    if (CmnEndpoints.GrantResourceOwnerCredentials(
+                        grant_type, client_id, client_secret, username, password, scope, out ret, out err))
+                    {
+                        return ret;
+                    }
+                    break;
+                case OAuth2AndOIDCConst.ClientCredentialsGrantType:
+                    scope = formData[OAuth2AndOIDCConst.scope];
+                    if (CmnEndpoints.GrantClientCredentials(
+                        grant_type, client_id, client_secret, scope, out ret, out err))
+                    {
+                        return ret;
+                    }
+                    break;
+                case OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType:
+                    if (CmnEndpoints.GrantJwtBearerTokenCredentials(
                     grant_type, assertion, out ret, out err))
-                {
-                    return ret;
-                }
-            }
-            else
-            {
-                err.Add("error", "invalid_grant_type");
-                err.Add("error_description", "Invalid grant_type");
+                    {
+                        return ret;
+                    }
+                    break;
+                default:
+                    err.Add("error", "invalid_grant_type");
+                    err.Add("error_description", "Invalid grant_type");
+                    break;
             }
 
             return err; // 失敗
@@ -545,198 +543,11 @@ namespace MultiPurposeAuthSite.Controllers
         [Route(".well-known/openid-configuration")]  // ココは固定
         public HttpResponseMessage OpenIDConfig()
         {
-            Dictionary<string, object> OpenIDConfig = new Dictionary<string, object>();
-
-            #region 基本
-
-            OpenIDConfig.Add("issuer", Config.OAuth2IssuerId);
-
-            OpenIDConfig.Add("authorization_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2AuthorizeEndpoint);
-
-            OpenIDConfig.Add("token_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-
-            OpenIDConfig.Add("userinfo_endpoint",
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
-
-            #endregion
-
-            #region オプション
-
-            List<string> grant_types_supported = new List<string>();
-            List<string> response_types_supported = new List<string>();
-            List<string> scopes_supported = new List<string>();
-
-            OpenIDConfig.Add("grant_types_supported", grant_types_supported);
-            OpenIDConfig.Add("response_types_supported", response_types_supported);
-            OpenIDConfig.Add("scopes_supported", scopes_supported);
-
-            #region token
-
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
-            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
-
-            OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
-                OAuth2AndOIDCConst.ClientSecretBasic,
-                OAuth2AndOIDCConst.PrivateKeyJwt
-            });
-
-            OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
-                "RS256"
-            });
-
-            #endregion
-
-            #region grant_types and response_types
-
-            if (Config.EnableAuthorizationCodeGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
-                response_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeResponseType);
-            }
-
-            if (Config.EnableImplicitGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.ImplicitGrantType);
-                response_types_supported.Add(OAuth2AndOIDCConst.ImplicitResponseType);
-            }
-
-            if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType);
-            }
-
-            if (Config.EnableClientCredentialsGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
-            }
-
-            if (Config.EnableJwtBearerTokenFlowGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
-            }
-
-            if (Config.EnableRefreshToken)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
-            }
-
-
-            #endregion
-
-            #region OpenID Connect
-
-            if (Config.EnableOpenIDConnect)
-            {
-                scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
-
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
-                response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
-
-                // subject_types_supported
-                OpenIDConfig.Add("subject_types_supported", new List<string> {
-                    "public"
-                });
-
-                // claims_supported
-                OpenIDConfig.Add("claims_supported", new List<string> {
-                    //Jwt
-                    OAuth2AndOIDCConst.iss,
-                    OAuth2AndOIDCConst.aud,
-                    OAuth2AndOIDCConst.sub,
-                    OAuth2AndOIDCConst.exp,
-                    OAuth2AndOIDCConst.nbf,
-                    OAuth2AndOIDCConst.iat,
-                    OAuth2AndOIDCConst.jti,
-                    // scope
-                    // 標準
-                    OAuth2AndOIDCConst.Scope_Email,
-                    OAuth2AndOIDCConst.email_verified,
-                    OAuth2AndOIDCConst.phone_number,
-                    OAuth2AndOIDCConst.phone_number_verified,
-                    // 拡張
-                    OAuth2AndOIDCConst.scopes,
-                    OAuth2AndOIDCConst.Scope_Roles,
-                    OAuth2AndOIDCConst.Scope_UserID,
-                    // OIDC, FAPI1
-                    OAuth2AndOIDCConst.nonce,
-                    OAuth2AndOIDCConst.at_hash,
-                    OAuth2AndOIDCConst.c_hash,
-                    OAuth2AndOIDCConst.s_hash
-                });
-
-                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
-                    "RS256"
-                });
-
-                OpenIDConfig.Add("jwks_uri",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
-            }
-
-            #endregion
-
-            #region OAuth2拡張
-
-            #region response_modes
-            OpenIDConfig.Add("response_modes_supported", new List<string> {
-                OAuth2AndOIDCConst.query,
-                OAuth2AndOIDCConst.fragment,
-                OAuth2AndOIDCConst.form_post
-            });
-            #endregion
-
-            #region revocation
-
-            OpenIDConfig.Add("revocation_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint
-            });
-
-            OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCConst.ClientSecretBasic
-            });
-
-            #endregion
-
-            #region revocation
-
-            OpenIDConfig.Add("introspection_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint
-            });
-
-            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCConst.ClientSecretBasic
-            });
-
-            #endregion
-
-            #region OAuth2拡張
-
-            OpenIDConfig.Add("code_challenge_methods_supported", new List<string> {
-                OAuth2AndOIDCConst.PKCE_plain,
-                OAuth2AndOIDCConst.PKCE_S256
-            });
-
-            #endregion
-
-            OpenIDConfig.Add("service_documentation", "・・・");
-
-            #endregion
-
-            #endregion
-
             // JsonSerializerSettingsを指定して、可読性の高いJSONを返す。
             return new HttpResponseMessage()
             {
-                Content = new JsonContent(OpenIDConfig,
+                Content = new JsonContent(
+                    CmnEndpoints.OpenIDConfig(),
                     new JsonSerializerSettings
                     {
                         Formatting = Formatting.Indented,

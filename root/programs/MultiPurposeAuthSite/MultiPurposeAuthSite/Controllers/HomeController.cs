@@ -33,6 +33,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security.Pwd;
 
 namespace MultiPurposeAuthSite.Controllers
@@ -41,7 +42,7 @@ namespace MultiPurposeAuthSite.Controllers
     [Authorize]
     public class HomeController : MyBaseMVController
     {
-        #region Action Method
+        #region Test MVC
 
         /// <summary>
         /// GET: Home
@@ -68,13 +69,19 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Test OAuth2
 
-        #region Common
+        #region Params
 
         /// <summary>認可エンドポイント</summary>
         private string OAuthAuthorizeEndpoint = "";
 
         /// <summary>client_id</summary>
         private string ClientId = "";
+
+        /// <summary>client_id(fapi1)</summary>
+        private string ClientId_1 = "";
+
+        /// <summary>client_id(fapi2)</summary>
+        private string ClientId_2 = "";
 
         /// <summary>state (nonce)</summary>
         private string State = "";
@@ -88,39 +95,11 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>code_verifier</summary>
         private string CodeChallenge = "";
 
-        /// <summary>OAuth2スターターを組み立てて返す</summary>
-        /// <param name="response_type">string</param>
-        /// <returns>組み立てたOAuth2スターター</returns>
-        private string AssembleOAuth2Starter(string response_type)
-        {
-            return this.OAuthAuthorizeEndpoint +
-                string.Format(
-                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.StandardScopes, this.State);
-        }
+        #endregion
 
-        /// <summary>OIDCスターターを組み立てて返す</summary>
-        /// <param name="response_type">string</param>
-        /// <returns>組み立てたOIDCスターター</returns>
-        private string AssembleOidcStarter(string response_type)
-        {
-            return this.OAuthAuthorizeEndpoint +
-                string.Format(
-                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.OidcScopes, this.State)
-                    + "&nonce=" + this.Nonce;
-        }
+        #region Common
 
-        /// <summary>FAPI1スターターを組み立てて返す</summary>
-        /// <param name="response_type">string</param>
-        /// <returns>組み立てたFAPI1スターター</returns>
-        private string AssembleFAPI1Starter(string response_type)
-        {
-            return this.OAuthAuthorizeEndpoint +
-                string.Format(
-                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.StandardScopes, "fapi1:" + this.State);
-        }
+        #region Init
 
         /// <summary>初期化</summary>
         private void Init()
@@ -130,6 +109,9 @@ namespace MultiPurposeAuthSite.Controllers
             + Config.OAuth2AuthorizeEndpoint;
 
             this.ClientId = Helper.GetInstance().GetClientIdByName("TestClient");
+            this.ClientId_1 = Helper.GetInstance().GetClientIdByName("TestClient1");
+            this.ClientId_2 = Helper.GetInstance().GetClientIdByName("TestClient2");
+
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
             this.Nonce = GetPassword.Generate(20, 0); // 記号は入れない。
 
@@ -186,6 +168,61 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
         }
+
+        #endregion
+
+        #region Assemble
+
+        /// <summary>OAuth2スターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたOAuth2スターター</returns>
+        private string AssembleOAuth2Starter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId, response_type, Const.StandardScopes, this.State);
+        }
+
+        /// <summary>OIDCスターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたOIDCスターター</returns>
+        private string AssembleOidcStarter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId, response_type, Const.OidcScopes, this.State)
+                    + "&nonce=" + this.Nonce;
+        }
+
+        /// <summary>FAPI1スターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたFAPI1スターター</returns>
+        private string AssembleFAPI1Starter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId_1, response_type, Const.StandardScopes,
+                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringFromEnum() + ":" + this.State);
+            // テストコードで、clientを識別するために、Stateに細工する。
+        }
+
+        /// <summary>FAPI2スターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたFAPI2スターター</returns>
+        private string AssembleFAPI2Starter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId_2, response_type, Const.StandardScopes,
+                    OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringFromEnum() + ":" + this.State);
+            // テストコードで、clientを識別するために、Stateに細工する。
+        }
+
+        #endregion
 
         #endregion
 
@@ -310,24 +347,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region FAPI1
-
-        /// <summary>Test Authorization Code Flow (FAPI1)</summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult FAPI1AuthorizationCode()
-        {
-            this.Init();
-            this.Save();
-
-            // Authorization Code Flow
-            return Redirect(this.AssembleFAPI1Starter(
-                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
-        }
-
-        #endregion
-
         #endregion
 
         #region Implicit Flow
@@ -434,6 +453,46 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region FAPI2
+
+        #endregion
+
+        #endregion
+
+        #region Financial-grade API
+
+        #region FAPI1
+
+        /// <summary>Test Authorization Code Flow (FAPI1)</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult FAPI1AuthorizationCode()
+        {
+            this.Init();
+            this.Save();
+
+            // Authorization Code Flow
+            return Redirect(this.AssembleFAPI1Starter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+        }
+
+        #endregion
+
+        #region FAPI2
+
+        /// <summary>Test Authorization Code Flow (FAPI2)</summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        [AllowAnonymous]
+        public ActionResult FAPI2AuthorizationCode()
+        {
+            this.Init();
+            this.Save();
+
+            // Authorization Code Flow
+            return Redirect(this.AssembleFAPI2Starter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+        }
 
         #endregion
 
