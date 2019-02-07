@@ -1963,7 +1963,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
-        public async Task<ActionResult> OAuth2Authorize(
+        public ActionResult OAuth2Authorize(
             string grant_type, string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
@@ -2008,28 +2008,21 @@ namespace MultiPurposeAuthSite.Controllers
                             scopes = ExtOAuth2.Helper.FilterClaimAtAuth(scopes).ToArray();
                         }
 
-                        // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
-
-                        // Codeの生成
-                        string code = AuthorizationCodeProvider.Create(identity, Request.QueryString);
-
-                        // オペレーション・トレース・ログ出力
-                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                        Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of AuthzCode by {2}({3}).",
-                            user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
+                        // ★ Codeの生成
+                        string code = CmnEndpoints.CreateCodeInAuthZNRes(
+                            identity, Request.QueryString, client_id, state, scopes, nonce);
 
                         // RedirectエンドポイントへRedirect
                         if (string.IsNullOrEmpty(response_mode) ||
-                            response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringFromEnum())
+                            response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToString1())
                         {
                             return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                         }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringFromEnum())
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToString1())
                         {
                             return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                         }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringFromEnum())
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToString1())
                         {
                             // form_postに必要な、HTTP response message body
                             string body =
@@ -2065,39 +2058,14 @@ namespace MultiPurposeAuthSite.Controllers
                     // OAuth2/OIDC Implicit
 
                     // ClaimsIdentityを生成
-                    identity = new ClaimsIdentity(identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
+                    identity = new ClaimsIdentity(
+                        identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
-                    // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
-
-                    // AccessTokenの生成
-                    string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
-                        DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes));
-
-                    // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of Implicit by {2}({3}).",
-                            user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
-
-                    JObject jObj = (JObject)JsonConvert.DeserializeObject(
-                        CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                            access_token.Split('.')[1]), CustomEncode.us_ascii));
-
-                    // id_token
-                    string id_token = "";
-                    if (response_type.IndexOf(OAuth2AndOIDCConst.IDToken) != -1)
-                    {
-                        JArray jAry = (JArray)jObj["scopes"];
-                        foreach (string s in jAry)
-                        {
-                            if (s == OAuth2AndOIDCConst.Scope_Openid)
-                            {
-                                id_token = IdToken.ChangeToIdTokenFromAccessToken(
-                                    access_token, "", "", // c_hash, s_hash は /token で生成不可
-                                    HashClaimType.None, Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
-                            }
-                        }
-                    }
+                    // ★ Tokenの生成
+                    CmnEndpoints.CreateAuthZRes4ImplicitFlow(
+                        identity, Request.QueryString,
+                        response_type, client_id, state, scopes, nonce,
+                        out string access_token, out string id_token);
 
                     // RedirectエンドポイントへRedirect
                     switch (response_type)
@@ -2127,15 +2095,11 @@ namespace MultiPurposeAuthSite.Controllers
                     identity = new ClaimsIdentity(
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
-                    // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
-
-                    // Codeの生成
-                    string code = AuthorizationCodeProvider.Create(identity, Request.QueryString);
-
-                    // Tokenの生成
-                    CmnEndpoints.CreateAutheNRes4HybridFlow(client_id,
-                        code, state, out string access_token, out string id_token);
+                    // ★ Tokenの生成
+                    string code = CmnEndpoints.CreateAuthNRes4HybridFlow(
+                        identity, Request.QueryString,
+                        client_id, state, scopes, nonce,
+                        out string access_token, out string id_token);
 
                     // RedirectエンドポイントへRedirect
                     switch (response_type)
@@ -2189,7 +2153,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> OAuth2Authorize(
+        public ActionResult OAuth2Authorize(
             string grant_type, string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
@@ -2219,31 +2183,24 @@ namespace MultiPurposeAuthSite.Controllers
                 else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
                 {
                     // アクセス要求を保存して、仲介コードを発行する。
-                    identity = new ClaimsIdentity(identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
-                    //ClaimsIdentity identity = new ClaimsIdentity(new ClaimsPrincipal(User).Claims.ToArray(), OAuth2AndOIDCConst.bearer);
-
-                    // ClaimsIdentityに、その他、所定のClaimを追加する。
-                    ExtOAuth2.Helper.AddClaim(identity, client_id, state, scopes, nonce);
-
-                    // Codeの生成
-                    string code = AuthorizationCodeProvider.Create(identity, Request.QueryString);
-
-                    // オペレーション・トレース・ログ出力
-                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                    Logging.MyOperationTrace(string.Format("{0}({1}) passed the authorization endpoint of code by {2}({3}).",
-                            user.Id, user.UserName, client_id, ExtOAuth2.Helper.GetInstance().GetClientName(client_id)));
+                    identity = new ClaimsIdentity(
+                        identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
+                    
+                    // ★ Codeの生成
+                    string code = CmnEndpoints.CreateCodeInAuthZNRes(
+                        identity, Request.QueryString, client_id, state, scopes, nonce);
 
                     // RedirectエンドポイントへRedirect
                     if (string.IsNullOrEmpty(response_mode) ||
-                        response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringFromEnum())
+                        response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToString1())
                     {
                         return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                     }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringFromEnum())
+                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToString1())
                     {
                         return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                     }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringFromEnum())
+                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToString1())
                     {
                         // form_postに必要な、HTTP response message body
                         string body =
@@ -2347,7 +2304,7 @@ namespace MultiPurposeAuthSite.Controllers
                 #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                 //stateの検証
-                string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringFromEnum() + ":";
+                string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":";
                 if (state == state_InSessionOrCookie
                     || state == fapi1Prefix + state_InSessionOrCookie)
                 {

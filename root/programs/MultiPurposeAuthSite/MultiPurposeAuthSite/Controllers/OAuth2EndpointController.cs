@@ -161,7 +161,7 @@ namespace MultiPurposeAuthSite.Controllers
                     break;
                 default:
                     err.Add("error", "invalid_grant_type");
-                    err.Add("error_description", "Invalid grant_type");
+                    err.Add("error_description", "Invalid grant_type.");
                     break;
             }
 
@@ -178,7 +178,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>Dictionary(string, object)</returns>
         [HttpGet]
-        public async Task<Dictionary<string, object>> GetUserClaims()
+        public Dictionary<string, object> GetUserClaims()
         {
             // 戻り値（エラー）
             Dictionary<string, object> err = new Dictionary<string, object>();
@@ -260,14 +260,14 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     err.Add("error", "invalid_request");
-                    err.Add("error_description", "invalid token");
+                    err.Add("error_description", "invalid token.");
                 }
             }
             else
             {
                 // クライアント認証エラー（ヘッダ不正
                 err.Add("error", "invalid_request");
-                err.Add("error_description", "Invalid authentication header");
+                err.Add("error_description", "Invalid authentication header.");
             }
 
             return err; // 失敗
@@ -332,7 +332,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 // 検証失敗
                                 // 検証エラー
                                 err.Add("error", "invalid_request");
-                                err.Add("error_description", "invalid token");
+                                err.Add("error_description", "invalid token.");
                             }
                         }
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
@@ -347,35 +347,35 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // 取り消し失敗
                                 err.Add("error", "invalid_request");
-                                err.Add("error_description", "invalid token");
+                                err.Add("error_description", "invalid token.");
                             }
                         }
                         else
                         {
                             // token_type_hint パラメタ・エラー
                             err.Add("error", "invalid_request");
-                            err.Add("error_description", "invalid token_type_hint");
+                            err.Add("error_description", "invalid token_type_hint.");
                         }
                     }
                     else
                     {
                         // クライアント認証エラー（Credential不正
                         err.Add("error", "invalid_client");
-                        err.Add("error_description", "Invalid credential");
+                        err.Add("error_description", "Invalid credential.");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    err.Add("error_description", "Invalid credential.");
                 }
             }
             else
             {
                 // クライアント認証エラー（ヘッダ不正
                 err.Add("error", "invalid_request");
-                err.Add("error_description", "Invalid authentication header");
+                err.Add("error_description", "Invalid authentication header.");
             }
 
             return err; // 失敗
@@ -432,7 +432,8 @@ namespace MultiPurposeAuthSite.Controllers
                             string tokenPayload = RefreshTokenProvider.Refer(token);
                             if (!string.IsNullOrEmpty(tokenPayload))
                             {
-                                token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload, DateTimeOffset.Now);
+                                token = CmnAccessToken.ProtectFromPayload(
+                                    tokenPayload, DateTimeOffset.Now, out string aud, out string sub);
                             }
                             else
                             {
@@ -444,7 +445,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // token_type_hint パラメタ・エラー
                             err.Add("error", "invalid_request");
-                            err.Add("error_description", "invalid token_type_hint");
+                            err.Add("error_description", "invalid token_type_hint.");
                         }
 
                         // AccessToken化して共通処理
@@ -482,28 +483,28 @@ namespace MultiPurposeAuthSite.Controllers
                             // 検証失敗
                             // 検証エラー
                             err.Add("error", "invalid_request");
-                            err.Add("error_description", "invalid token");
+                            err.Add("error_description", "invalid token.");
                         }
                     }
                     else
                     {
                         // クライアント認証エラー（Credential不正
                         err.Add("error", "invalid_client");
-                        err.Add("error_description", "Invalid credential");
+                        err.Add("error_description", "Invalid credential.");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    err.Add("error_description", "Invalid credential.");
                 }
             }
             else
             {
                 // クライアント認証エラー（ヘッダ不正
                 err.Add("error", "invalid_request");
-                err.Add("error_description", "Invalid authentication header");
+                err.Add("error_description", "Invalid authentication header.");
             }
 
             return err; // 失敗

@@ -205,7 +205,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId_1, response_type, Const.StandardScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringFromEnum() + ":" + this.State);
+                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
         }
 
@@ -218,7 +218,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId_2, response_type, Const.StandardScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringFromEnum() + ":" + this.State);
+                    OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
         }
 
