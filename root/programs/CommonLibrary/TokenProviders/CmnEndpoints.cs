@@ -29,16 +29,17 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
-//*  2019/02/xx  西野 大介         - Token生成処理の集約（code + Implicitも ★）
+//*  2019/02/07  西野 大介         - Code, Token生成処理の集約
 //*                                - CheckClientModeの集約
-//*                                - Client認証のclient_idとtoken類のaudをチェック ★
+//*                                - Client認証のclient_idとToken類のaudをチェック追加
 //*                                - オペレーション・トレース・ログ出力の集約
 //*                                  - 情報源
 //*                                    - Client情報はclient_idから取得する。
-//*                                    - User情報はTokenのsubから取得する。 ★
+//*                                    - User情報はTokenのsubから取得する。
 //*                                  - 以下は、Client = User
 //*                                    - GrantClientCredentials
 //*                                    - GrantJwtBearerTokenCredentials
+//*                                - CheckClientModeの再チェック（PKCE、Hybrid部分）★
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -54,6 +55,7 @@ using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Security.Claims;
 
 #if NETFX
@@ -119,8 +121,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
 
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringFromEnum(),
-                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringFromEnum()
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToString1(),
+                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToString1()
             });
 
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
@@ -223,9 +225,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region response_modes
             OpenIDConfig.Add("response_modes_supported", new List<string> {
-                OAuth2AndOIDCEnum.ResponseMode.query.ToStringFromEnum(),
-                OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringFromEnum(),
-                OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringFromEnum()
+                OAuth2AndOIDCEnum.ResponseMode.query.ToString1(),
+                OAuth2AndOIDCEnum.ResponseMode.fragment.ToString1(),
+                OAuth2AndOIDCEnum.ResponseMode.form_post.ToString1()
             });
             #endregion
 
@@ -236,7 +238,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             });
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringFromEnum()
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToString1()
             });
 
             #endregion
@@ -248,7 +250,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             });
 
             OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringFromEnum()
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToString1()
             });
 
             #endregion
@@ -272,6 +274,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         #endregion
+
+        #region AuthZAuthNEndpoint
 
         #region ValidateAuthZReqParam
 
@@ -456,7 +460,149 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region CreateToken
+        #region CreateCodeInAuthZNRes
+
+        /// <summary>CreateCodeInAuthZNRes</summary>
+        public static string CreateCodeInAuthZNRes(
+            ClaimsIdentity identity, NameValueCollection queryString,
+            string client_id, string state, IEnumerable<string> scopes, string nonce)
+        {
+            // ClaimsIdentityに、その他、所定のClaimを追加する。
+            Helper.AddClaim(identity, client_id, state, scopes, nonce);
+
+            // Codeの生成
+            string code = AuthorizationCodeProvider.Create(identity, queryString);
+
+            // オペレーション・トレース・ログ出力
+            
+
+            return code;
+        }
+
+        #endregion
+
+        #region CreateAuthZRes4ImplicitFlow
+
+        /// <summary>CreateAuthZRes4ImplicitFlow</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="queryString">NameValueCollection</param>
+        /// <param name="response_type">string</param>
+        /// <param name="client_id">string</param>
+        /// <param name="state">string</param>
+        /// <param name="scopes">IEnumerable(string)</param>
+        /// <param name="nonce">string</param>
+        /// <param name="access_token">out string</param>
+        /// <param name="id_token">out string</param>
+        public static void CreateAuthZRes4ImplicitFlow(
+            ClaimsIdentity identity, NameValueCollection queryString, string response_type,
+            string client_id, string state, IEnumerable<string> scopes, string nonce,
+            out string access_token, out string id_token)
+        {
+            // ClaimsIdentityに、その他、所定のClaimを追加する。
+            Helper.AddClaim(identity, client_id, state, scopes, nonce);
+
+            // AccessTokenの生成
+            access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes));
+
+            JObject jObj = (JObject)JsonConvert.DeserializeObject(
+                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                    access_token.Split('.')[1]), CustomEncode.us_ascii));
+
+            // id_token
+            id_token = ""; // 初期化
+            if (response_type.IndexOf(OAuth2AndOIDCConst.IDToken) != -1)
+            {
+                JArray jAry = (JArray)jObj["scopes"];
+                foreach (string s in jAry)
+                {
+                    if (s == OAuth2AndOIDCConst.Scope_Openid)
+                    {
+                        id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                            access_token, "", "", // c_hash, s_hash は /token で生成不可
+                            HashClaimType.None, Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+                    }
+                }
+            }
+
+            // オペレーション・トレース・ログ出力
+            string name = Helper.GetInstance().GetClientName(client_id);
+            Logging.MyOperationTrace(string.Format(
+                "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
+                client_id, name,                                                        // Client Account
+                Helper.GetInstance().GetClientIdByName(identity.Name), identity.Name)); // User Account
+        }
+
+        #endregion
+
+        #region CreateAuthNRes4HybridFlow
+
+        /// <summary>CreateAuthNRes4HybridFlow</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="queryString">NameValueCollection</param>
+        /// <param name="client_id">string</param>
+        /// <param name="state">string</param>
+        /// <param name="scopes">IEnumerable(string)</param>
+        /// <param name="nonce">string</param>
+        /// <param name="access_token">out string</param>
+        /// <param name="id_token">out string</param>
+        /// <returns></returns>
+        public static string CreateAuthNRes4HybridFlow(
+            ClaimsIdentity identity, NameValueCollection queryString,
+            string client_id, string state, IEnumerable<string> scopes, string nonce,
+            out string access_token, out string id_token)
+        {
+            // ClaimsIdentityに、その他、所定のClaimを追加する。
+            Helper.AddClaim(identity, client_id, state, scopes, nonce);
+
+            // Codeの生成
+            string code = AuthorizationCodeProvider.Create(identity, queryString);
+
+            string tokenPayload = AuthorizationCodeProvider.GetAccessTokenPayload(code);
+
+            // ★ 必要に応じて、scopeを調整する。
+
+            // access_token
+            access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                out string aud, out string sub);
+
+            // Client認証のclient_idとToken類のaudをチェック
+            if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+
+            JObject jObj = (JObject)JsonConvert.DeserializeObject(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                                access_token.Split('.')[1]), CustomEncode.us_ascii));
+
+            // id_token
+            id_token = ""; // 初期化
+            JArray jAry = (JArray)jObj["scopes"];
+            foreach (string s in jAry)
+            {
+                if (s == OAuth2AndOIDCConst.Scope_Openid)
+                {
+                    id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                        access_token, code, state, // at_hash, c_hash, s_hash
+                        HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
+                        Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+                }
+            }
+
+            // オペレーション・トレース・ログ出力
+            string name = Helper.GetInstance().GetClientName(client_id);
+            Logging.MyOperationTrace(string.Format(
+                "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
+                client_id, name,                                    // Client Account
+                Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
+
+            return code;
+        }
+
+        #endregion
+
+        #endregion
+
+        #region TokenEndpoint
 
         #region GrantAuthorizationCodeCredentials
 
@@ -563,8 +709,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string tokenPayload = AuthorizationCodeProvider.Receive(code, redirect_uri, code_verifier);
 
                     // access_token
-                    string access_token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload,
-                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                    string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                        out string aud, out string sub);
+
+                    // Client認証のclient_idとToken類のaudをチェック
+                    if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 
                     // refresh_token
                     string refresh_token = "";
@@ -577,7 +727,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string name = Helper.GetInstance().GetClientName(client_id);
                     Logging.MyOperationTrace(string.Format(
                         "{0}({1}) passed the 'Authorization Code flow' by {2}({3}).",
-                        client_id, name, "u_id", "u_name")); // User Account & Client Account
+                        client_id, name,                                    // Client Account
+                        Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
 
                     ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
 
@@ -587,7 +738,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    err.Add("error_description", "Invalid credential.");
                 }
 
                 #endregion
@@ -604,6 +755,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        // 以下は、AuthZAuthNEndpointを参照。
         // GrantImplicitCredentials
         // GrantHybridCredentials
 
@@ -676,8 +828,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
                         // access_token
-                        string access_token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload,
-                            DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                        string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                            DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                            out string aud, out string sub);
+
+                        // Client認証のclient_idとToken類のaudをチェック
+                        if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 
                         string refresh_token = "";
                         if (Config.EnableRefreshToken)
@@ -689,7 +845,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string name = Helper.GetInstance().GetClientName(client_id);
                         Logging.MyOperationTrace(string.Format(
                             "{0}({1}) passed the 'Refresh Token flow' by {2}({3}).",
-                            client_id, name, "u_id", "u_name")); // User Account & Client Account
+                            client_id, name,                                    // Client Account
+                            Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
 
                         ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
 
@@ -700,7 +857,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    err.Add("error_description", "Invalid credential.");
                 }
 
                 #endregion
@@ -835,7 +992,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    err.Add("error_description", "Invalid credential.");
                 }
 
                 #endregion
@@ -917,72 +1074,32 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (authned)
                 {
                     // client_idに対応するsubを取得する。
-                    string sub = Helper.GetInstance().GetClientName(client_id, out bool isResourceOwner);
+                    string sub = Helper.GetInstance().GetClientName(client_id);
 
                     // ClaimsIdentityにClaimを追加する。
                     ClaimsIdentity identity = new ClaimsIdentity(OAuth2AndOIDCConst.Bearer);
 
-                    if (isResourceOwner)
-                    {
-                        // User Accountの場合、
-                        ApplicationUser user = CmnUserStore.FindByName(sub);
+                    // ClaimsIdentityに、その他、所定のClaimを追加する。
+                    identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+                    identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
 
-                        // Name Claimを追加
-                        identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
+                    // access_token
+                    string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
-                        // ClaimsIdentityに、その他、所定のClaimを追加する。
-                        identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
+                    // オペレーション・トレース・ログ出力
+                    Logging.MyOperationTrace(string.Format(
+                        "Passed the 'client credentials flow' by {0}({1}).",
+                        client_id, sub)); // Client Account
 
-                        // access_token
-                        string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
-                            DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
-
-                        // オペレーション・トレース・ログ出力
-                        Logging.MyOperationTrace(string.Format(
-                            "{0}({1}) passed the 'client credentials flow'.",
-                            user.Id, user.UserName)); // User Account
-
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
-                        return true;
-                    }
-                    else
-                    {
-                        // Client Accountの場合、
-                        if (string.IsNullOrEmpty(sub))
-                        {
-                            // subの取得に失敗
-                            err.Add("error", "invalid_client");
-                            err.Add("error_description", "sub is null or empty");
-
-                            return false;
-                        }
-                        else
-                        {
-                            // Name Claimを追加
-                            identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-
-                            // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
-
-                            // access_token
-                            string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
-                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
-
-                            // オペレーション・トレース・ログ出力
-                            Logging.MyOperationTrace(string.Format(
-                                "Passed the 'client credentials flow' by {0}({1}).",
-                                client_id, sub)); // Client Account
-
-                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
-                            return true;
-                        }
-                    }
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
+                    return true;
                 }
                 else
                 {
                     // クライアント認証エラー（Credential不正
                     err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    err.Add("error_description", "Invalid credential.");
                 }
 
                 #endregion
@@ -1047,6 +1164,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityにClaimを追加する。
                                 ClaimsIdentity identity = new ClaimsIdentity(OAuth2AndOIDCConst.Bearer);
+
+                                // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
                                 identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
 
@@ -1071,21 +1190,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                         {
                             // クライアント認証エラー（Credential（aud）不正
                             err.Add("error", "invalid_client");
-                            err.Add("error_description", "Invalid credential");
+                            err.Add("error_description", "Invalid credential.");
                         }
                     }
                     else
                     {
                         // クライアント認証エラー（Credential（署名）不正
                         err.Add("error", "invalid_client");
-                        err.Add("error_description", "Invalid credential");
+                        err.Add("error_description", "Invalid credential.");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential（iss or pubKey）不正
                     err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential");
+                    err.Add("error_description", "Invalid credential or pubkey is not set.");
                 }
             }
 
@@ -1096,53 +1215,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region CreateAutheNRes4HybridFlow
-
-        /// <summary>CreateAutheNRes4HybridFlow</summary>
-        /// <param name="client_id">string</param>
-        /// <param name="code">string</param>
-        /// <param name="state">string</param>
-        /// <param name="access_token">string</param>
-        /// <param name="refresh_token">string</param>
-        public static void CreateAutheNRes4HybridFlow(
-            string client_id, string code, string state, out string access_token, out string id_token)
-        {
-            access_token = "";
-            id_token = "";
-
-            string tokenPayload = AuthorizationCodeProvider.GetAccessTokenPayload(code);
-
-            // ★ 必要に応じて、scopeを調整する。
-
-            // access_token
-            access_token = CmnAccessToken.ProtectFromPayloadForCode(tokenPayload,
-                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
-
-            JObject jObj = (JObject)JsonConvert.DeserializeObject(
-                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                                access_token.Split('.')[1]), CustomEncode.us_ascii));
-
-            // id_token
-            JArray jAry = (JArray)jObj["scopes"];
-            foreach (string s in jAry)
-            {
-                if (s == OAuth2AndOIDCConst.Scope_Openid)
-                {
-                    id_token = IdToken.ChangeToIdTokenFromAccessToken(
-                        access_token, code, state, // at_hash, c_hash, s_hash
-                        HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                        Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
-                }
-            }
-
-            // オペレーション・トレース・ログ出力
-            string name = Helper.GetInstance().GetClientName(client_id);
-            Logging.MyOperationTrace(string.Format(
-                "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
-                client_id, name, "u_id", "u_name")); // User Account & Client Account
-        }
-
-        #endregion
+        #region Common (Private)
 
         #region CreateAccessTokenResponse
 
@@ -1202,17 +1275,27 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="acceptedLevel">当該フローのClientModeの許容レベル</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>継続の可否</returns>
-        public static bool CheckClientMode(
+        private static bool CheckClientMode(
             string client_id,
             OAuth2AndOIDCEnum.ClientMode acceptedLevel,
             Dictionary<string, string> err)
         {
             bool retval = false;
+            string clientMode = "";
 
-            string clientMode = Helper.GetInstance().GetClientMode(client_id);
+            if (string.IsNullOrEmpty(client_id))
+            {
+                err.Add("error", "invalid_client");
+                err.Add("error_description", string.Format("client_id is not set."));
+                return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
+            }
+            else
+            {
+                clientMode = Helper.GetInstance().GetClientMode(client_id);
+            }
 
             // switch には定数値が必要なので if で。
-            if (clientMode == OAuth2AndOIDCEnum.ClientMode.normal.ToStringFromEnum())
+            if (clientMode == OAuth2AndOIDCEnum.ClientMode.normal.ToString1())
             {
                 // clientMode == normal
                 if (acceptedLevel == OAuth2AndOIDCEnum.ClientMode.normal)
@@ -1226,7 +1309,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     retval = false;
                 }
             }
-            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringFromEnum())
+            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1())
             {
                 // clientMode == fapi1
                 if (acceptedLevel == OAuth2AndOIDCEnum.ClientMode.normal)
@@ -1240,7 +1323,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     retval = true;
                 }
             }
-            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringFromEnum())
+            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1())
             {
                 // clientMode == fapi2
                 if (acceptedLevel == OAuth2AndOIDCEnum.ClientMode.normal
@@ -1273,6 +1356,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return retval;
         }
+
+        #endregion
 
         #endregion
     }

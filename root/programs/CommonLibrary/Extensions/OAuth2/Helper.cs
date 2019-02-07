@@ -582,7 +582,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 else
                 {
                     // 既定値
-                    return OAuth2AndOIDCEnum.ClientMode.normal.ToStringFromEnum();
+                    return OAuth2AndOIDCEnum.ClientMode.normal.ToString1();
                 }
             }
 
@@ -601,7 +601,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 else
                 {
                     // 既定値
-                    return OAuth2AndOIDCEnum.ClientMode.normal.ToStringFromEnum();
+                    return OAuth2AndOIDCEnum.ClientMode.normal.ToString1();
                 }
             }
 

@@ -248,11 +248,19 @@ namespace MultiPurposeAuthSite.TokenProviders
             return JsonConvert.SerializeObject(authTokenClaimSet);
         }
 
-        /// <summary>ProtectFromPayloadForCode</summary>
+        #endregion
+
+        #region ProtectFromPayload
+
+        /// <summary>ProtectFromPayload</summary>
         /// <param name="access_token_payload">AccessTokenのPayload</param>
         /// <param name="expiresUtc">DateTimeOffset</param>
+        /// <param name="audience">string</param>
+        /// <param name="subject">string</param>
         /// <returns>AccessToken</returns>
-        public static string ProtectFromPayloadForCode(string access_token_payload, DateTimeOffset expiresUtc)
+        public static string ProtectFromPayload(
+            string access_token_payload, DateTimeOffset expiresUtc,
+            out string audience, out string subject)
         {
             string json = "";
 
@@ -262,7 +270,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             Dictionary<string, object> payload =
                 JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
 
-            payload[OAuth2AndOIDCConst.scopes] = payload[OAuth2AndOIDCConst.scopes];
+            audience = (string)payload[OAuth2AndOIDCConst.aud];
+            subject = (string)payload[OAuth2AndOIDCConst.sub];
 
             payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
             payload[OAuth2AndOIDCConst.nbf] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
