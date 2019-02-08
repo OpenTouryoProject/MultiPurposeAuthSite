@@ -20,7 +20,12 @@
 
 using MultiPurposeAuthSite.Co;
 
+#if NETFX
 using System.Web.Mvc;
+#elif NETCORE
+using Microsoft.AspNetCore.Mvc.Rendering;
+#endif
+
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
