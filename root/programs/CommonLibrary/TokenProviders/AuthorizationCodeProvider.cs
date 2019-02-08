@@ -139,12 +139,17 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>Receive</summary>
         /// <param name="code">string</param>
         /// <param name="redirect_uri">string</param>
-        /// <param name="code_verifier">string</param>
+        /// <param name="code_challenge_method">string</param>
+        /// <param name="code_challenge">string</param>
         /// <returns>PayloadForCode</returns>
-        public static string Receive(string code, string redirect_uri, string code_verifier)
+        public static string Receive(
+            string code, string redirect_uri,
+            out string code_challenge_method, out string code_challenge)
         {
             string value = "";
             string payload = "";
+            code_challenge_method = "";
+            code_challenge = "";
 
             switch (Config.UserStoreType)
             {
@@ -218,39 +223,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
-            if (string.IsNullOrEmpty(code_verifier))
-            {
-                // 通常のアクセストークン・リクエスト
-                if (string.IsNullOrEmpty((string)jobj[OAuth2AndOIDCConst.code_challenge]))
-                {
-                    payload = (string)jobj["access_token_payload"];
-                }
-            }
-            else
-            {
-                // OAuth PKCEのアクセストークン・リクエスト
-                if (!string.IsNullOrEmpty((string)jobj[OAuth2AndOIDCConst.code_challenge]) && !string.IsNullOrEmpty(code_verifier))
-                {
-                    if (((string)jobj[OAuth2AndOIDCConst.code_challenge_method]).ToLower() == OAuth2AndOIDCConst.PKCE_plain)
-                    {
-                        // plain
-                        if ((string)jobj[OAuth2AndOIDCConst.code_challenge] == code_verifier)
-                        {
-                            // 検証成功
-                            payload = (string)jobj["access_token_payload"];
-                        }
-                    }
-                    else if (((string)jobj[OAuth2AndOIDCConst.code_challenge_method]).ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
-                    {
-                        // S256
-                        if ((string)jobj[OAuth2AndOIDCConst.code_challenge] == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
-                        {
-                            // 検証成功
-                            payload = (string)jobj["access_token_payload"];
-                        }
-                    }
-                }
-            }
+            code_challenge_method = (string)jobj[OAuth2AndOIDCConst.code_challenge_method];
+            code_challenge = (string)jobj[OAuth2AndOIDCConst.code_challenge]; 
+            payload = (string)jobj["access_token_payload"];
 
             return payload;
         }

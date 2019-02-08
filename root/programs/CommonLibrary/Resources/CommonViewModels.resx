@@ -129,6 +129,9 @@
   <data name="ClientSecret" xml:space="preserve">
     <value>client_secret</value>
   </data>
+  <data name="ClientType" xml:space="preserve">
+    <value>Client type for tests.</value>
+  </data>
   <data name="ConfirmNewEmail" xml:space="preserve">
     <value>Confirm new E-mail address</value>
   </data>

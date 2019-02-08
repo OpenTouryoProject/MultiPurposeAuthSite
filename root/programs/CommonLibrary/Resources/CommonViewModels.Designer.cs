@@ -97,6 +97,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Client type for tests. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClientType {
+            get {
+                return ResourceManager.GetString("ClientType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Confirm new E-mail address に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ConfirmNewEmail {

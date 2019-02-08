@@ -205,6 +205,9 @@
     <value>JWTアサーションの公開鍵</value>
   </data>
   <data name="ClientMode" xml:space="preserve">
-    <value>Client の OAuth2/OIDC mode</value>
+    <value>Client の OAuth2/OIDCモード</value>
+  </data>
+  <data name="ClientType" xml:space="preserve">
+    <value>テスト用のClientタイプ</value>
   </data>
 </root>
