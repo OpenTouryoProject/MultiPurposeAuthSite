@@ -2258,6 +2258,13 @@ namespace MultiPurposeAuthSite.Controllers
         {
             #region テスト用
 
+            // client_id
+            string clientId_InSessionOrCookie = (string)Session["test_client_id"];
+            if (string.IsNullOrEmpty(clientId_InSessionOrCookie))
+            {
+                clientId_InSessionOrCookie = Request.Cookies["test_client_id"].Value;
+            }
+
             // state
             string state_InSessionOrCookie = (string)Session["test_state"];
             if (string.IsNullOrEmpty(state_InSessionOrCookie))
@@ -2280,6 +2287,8 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // クリア
+            Session["test_client_id"] = null;
+            Response.Cookies["test_client_id"].Value = "";
             Session["test_state"] = null;
             Response.Cookies["test_state"].Value = "";
             Session["test_code_verifier"] = null;
@@ -2297,16 +2306,20 @@ namespace MultiPurposeAuthSite.Controllers
                 Dictionary<string, string> dic = null;
                 OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
                 {
+                    ClientId = clientId_InSessionOrCookie,
                     State = state,
                     Code = code
                 };
 
-                #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
+                #region 仲介コードを使用してAccess, Refresh, Id Tokenを取得
 
                 //stateの検証
                 string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":";
+                string fapi2Prefix = OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() + ":";
+
                 if (state == state_InSessionOrCookie
-                    || state == fapi1Prefix + state_InSessionOrCookie)
+                    || state == fapi1Prefix + state_InSessionOrCookie  // specではなくテスト仕様
+                    || state == fapi2Prefix + state_InSessionOrCookie) // specではなくテスト仕様
                 {
                     //state正常
 
@@ -2316,10 +2329,40 @@ namespace MultiPurposeAuthSite.Controllers
                     + Config.OAuth2AuthorizationCodeGrantClient_Account;
 
                     // Tokenエンドポイントにアクセス
-                    if (!state.StartsWith(fapi1Prefix))
+                    if (state.StartsWith(fapi1Prefix))
                     {
+                        // FAPI1
+
+                        // Tokenエンドポイントにアクセス
+                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+
+                        // client_id(iss)
+                        string iss = clientId_InSessionOrCookie;
+
+                        // テストなので秘密鍵は共通とする。
+                        string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
+                        privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
+
+                        model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
+                                iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
+                    }
+                    else if (state.StartsWith(fapi2Prefix))
+                    {
+                        // FAPI2
+
+                        // Tokenエンドポイントにアクセス
+                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+
+                        // client_id(iss)
+                        model.Response = "{error:\"hogehoge\"}";
+                    }
+                    else
+                    {
+                        // OAuth2 / OIDC
+
                         //  client_Idから、client_secretを取得。
-                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_id = clientId_InSessionOrCookie;
                         string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
                         if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
@@ -2338,87 +2381,81 @@ namespace MultiPurposeAuthSite.Controllers
                                code, code_verifier_InSessionOrCookie);
                         }
                     }
-                    else
-                    {
-                        // FAPI1
-
-                        // Tokenエンドポイントにアクセス
-                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
-                        // ClientNameから、client_id(iss)を取得。
-                        string iss = "";
-
-                        // Client Accountのみ
-                        iss = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient1");
-
-                        // テストなので秘密鍵は共通とする。
-                        string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
-                        privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
-
-                        model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                                iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
-                    }
 
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-
-                    model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
-                    model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                           CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
-
-                    // 余談：OpenID Connectであれば、ここで id_token 検証。                    
-                    if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
-                    {
-                        model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
-                        model.IdTokenJwtToJson = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(model.IdToken.Split('.')[1]), CustomEncode.UTF_8);
-                    }
-
-                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
                 }
                 else
                 {
                     // state異常
                 }
 
-                #region 各種Token検証
+                #endregion
 
-                string out_sub = "";
-                JObject out_jobj = null;
+                #region Access, Refresh, Id Tokenの検証と表示
 
-                if (!string.IsNullOrEmpty(model.AccessToken))
+                if (!dic.ContainsKey("error"))
                 {
-                    if (!AccessToken.Verify(model.AccessToken,
-                        out out_sub, out List<string> out_roles, out List<string> out_scopes, out out_jobj))
-                    {
-                        throw new Exception("AccessToken検証エラー");
-                    }
-                }
+                    string out_sub = "";
+                    JObject out_jobj = null;
 
-                if (!string.IsNullOrEmpty(model.IdToken))
-                {
-                    
-                    if(!IdToken.Verify(
-                        model.IdToken, model.AccessToken, code, state,
-                        out out_sub, out string out_nonce, out out_jobj)
-                        && out_nonce == nonce_InSessionOrCookie)
+                    if (dic.ContainsKey(OAuth2AndOIDCConst.AccessToken))
                     {
-                        throw new Exception("IdToken検証エラー");
+                        model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
+                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                               CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+
+                        if (!string.IsNullOrEmpty(model.AccessToken))
+                        {
+                            if (!AccessToken.Verify(model.AccessToken,
+                            out out_sub, out List<string> out_roles, out List<string> out_scopes, out out_jobj))
+                            {
+                                throw new Exception("AccessToken検証エラー");
+                            }
+                        }
+                        else
+                        {
+                            throw new Exception("AccessToken検証エラー");
+                        }
                     }
+
+                    if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
+                    {
+                        model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
+                        model.IdTokenJwtToJson = CustomEncode.ByteToString(
+                            CustomEncode.FromBase64UrlString(model.IdToken.Split('.')[1]), CustomEncode.UTF_8);
+
+                        if (!string.IsNullOrEmpty(model.IdToken))
+                        {
+                            if (!IdToken.Verify(
+                                model.IdToken, model.AccessToken, code, state,
+                                out out_sub, out string out_nonce, out out_jobj)
+                                && out_nonce == nonce_InSessionOrCookie)
+                            {
+                                throw new Exception("IdToken検証エラー");
+                            }
+                        }
+                        else
+                        {
+                            throw new Exception("IdToken検証エラー");
+                        }
+                    }
+
+                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
+
+                    // 画面の表示。
+                    return View(model);
                 }
 
                 #endregion
-
-                #endregion
-
-                // 画面の表示。
-                return View(model);
             }
             else
             {
-                // エラー
-                return View("Error");
+                // IsLockedDownRedirectEndpoint == true;
             }
+
+            // エラー
+            return View("Error");
         }
 
         /// <summary>
@@ -2457,12 +2494,13 @@ namespace MultiPurposeAuthSite.Controllers
                         // Tokenエンドポイントにアクセス
 
                         //  client_Idから、client_secretを取得。
-                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_id = model.ClientId;
                         string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
                         model.Response = await ExtOAuth2.Helper.GetInstance().
                             UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
+
                         dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
                         if (dic.ContainsKey(OAuth2AndOIDCConst.AccessToken))
@@ -2506,7 +2544,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // Revokeエンドポイントにアクセス
 
                         //  client_Idから、client_secretを取得。
-                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_id = model.ClientId;
                         string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
                         model.Response = await ExtOAuth2.Helper.GetInstance().RevokeTokenAsync(
@@ -2541,7 +2579,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // Introspectエンドポイントにアクセス
 
                         //  client_Idから、client_secretを取得。
-                        string client_id = ExtOAuth2.Helper.GetInstance().GetClientIdByName("TestClient");
+                        string client_id = model.ClientId;
                         string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
                         model.Response = await ExtOAuth2.Helper.GetInstance().IntrospectTokenAsync(

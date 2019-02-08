@@ -16,16 +16,24 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/02/08  西野 大介         OAuth2Startersの大改造（Clientを選択可能に
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Manager;
+using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
-using System.Collections.Generic;
+using System.Web;
 using System.Web.Mvc;
+using System.Net.Http;
 using System.Threading.Tasks;
-using System.Diagnostics;
+
+using Microsoft.Owin.Security;
+using Microsoft.AspNet.Identity;
+using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -42,7 +50,60 @@ namespace MultiPurposeAuthSite.Controllers
     [Authorize]
     public class HomeController : MyBaseMVController
     {
+        #region constructor
+
+        /// <summary>constructor</summary>
+        public HomeController() { }
+
+        #endregion
+
+        #region property
+
+        #region GetOwinContext
+
+        /// <summary>ApplicationUserManager</summary>
+        private ApplicationUserManager UserManager
+        {
+            get
+            {
+                return HttpContext.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            }
+        }
+
+        /// <summary>ApplicationRoleManager</summary>
+        private ApplicationRoleManager RoleManager
+        {
+            get
+            {
+                return HttpContext.GetOwinContext().GetUserManager<ApplicationRoleManager>();
+            }
+        }
+
+        /// <summary>ApplicationSignInManager</summary>
+        private ApplicationSignInManager SignInManager
+        {
+            get
+            {
+                return HttpContext.GetOwinContext().Get<ApplicationSignInManager>();
+            }
+        }
+
+        /// <summary>AuthenticationManager</summary>
+        private IAuthenticationManager AuthenticationManager
+        {
+            get
+            {
+                return HttpContext.GetOwinContext().Authentication;
+            }
+        }
+
+        #endregion
+
+        #endregion
+
         #region Test MVC
+
+        #region Action Method
 
         /// <summary>
         /// GET: Home
@@ -67,21 +128,20 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region Test OAuth2
+        #endregion
+
+        #region OAuth2Starters
 
         #region Params
 
         /// <summary>認可エンドポイント</summary>
         private string OAuthAuthorizeEndpoint = "";
 
-        /// <summary>client_id</summary>
+        /// <summary>ClientName</summary>
+        private string ClientName = "";
+
+        /// <summary>ClientId</summary>
         private string ClientId = "";
-
-        /// <summary>client_id(fapi1)</summary>
-        private string ClientId_1 = "";
-
-        /// <summary>client_id(fapi2)</summary>
-        private string ClientId_2 = "";
 
         /// <summary>state (nonce)</summary>
         private string State = "";
@@ -108,9 +168,7 @@ namespace MultiPurposeAuthSite.Controllers
             Config.OAuth2AuthorizationServerEndpointsRootURI
             + Config.OAuth2AuthorizeEndpoint;
 
-            this.ClientId = Helper.GetInstance().GetClientIdByName("TestClient");
-            this.ClientId_1 = Helper.GetInstance().GetClientIdByName("TestClient1");
-            this.ClientId_2 = Helper.GetInstance().GetClientIdByName("TestClient2");
+            this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
 
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
             this.Nonce = GetPassword.Generate(20, 0); // 記号は入れない。
@@ -125,6 +183,20 @@ namespace MultiPurposeAuthSite.Controllers
             // テスト用にstate, nonce, code_verifierを、Session, Cookieに保存
             // ・Session : サイト分割時
             // ・Cookie : 同一サイト時
+
+            // client_id
+            Session["test_client_id"] = this.ClientId;
+            if (Request.Cookies["test_client_id"] == null)
+            {
+                Response.Cookies["test_client_id"].Value = this.ClientId;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Request.Cookies["test_client_id"].Value))
+                {
+                    Response.Cookies["test_client_id"].Value = this.ClientId;
+                }
+            }
 
             // state
             Session["test_state"] = this.State;
@@ -204,7 +276,7 @@ namespace MultiPurposeAuthSite.Controllers
             return this.OAuthAuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId_1, response_type, Const.StandardScopes,
+                    this.ClientId, response_type, Const.StandardScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
         }
@@ -217,7 +289,7 @@ namespace MultiPurposeAuthSite.Controllers
             return this.OAuthAuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId_2, response_type, Const.StandardScopes,
+                    this.ClientId, response_type, Const.StandardScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
         }
@@ -228,14 +300,171 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Action Method
 
-        /// <summary>OAuthStarters</summary>
+        #region Public
+
+        /// <summary>
+        /// OAuthStarters画面（初期表示）
+        /// GET: /Home/OAuth2Starters
+        /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
         [AllowAnonymous]
         public ActionResult OAuth2Starters()
         {
-            return View();
+            if (Config.IsLockedDownRedirectEndpoint)
+            {
+                return View("Index");
+            }
+            else
+            {
+                return View(new HomeOAuth2StartersViewModel()); 
+            }
         }
+
+        /// <summary>
+        /// OAuthStarters画面
+        /// POST: /Home/OAuth2Starters
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        public async Task<ActionResult> OAuth2Starters(HomeOAuth2StartersViewModel model)
+        {
+            if (Config.IsLockedDownRedirectEndpoint)
+            {
+                return View("Index");
+            }
+            else
+            {
+                // AccountLoginViewModelの検証
+                if (ModelState.IsValid)
+                {
+                    #region Client選択
+                    if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.normal.ToString1())
+                    {
+                        // OAuth2.0 / OIDC用 Client
+                        this.ClientName = "TestClient";
+                    }
+                    else if(model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1())
+                    {
+                        // Financial-grade API - Part1用 Client
+                        this.ClientName = "TestClient1";
+                    }
+                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1())
+                    {
+                        // Financial-grade API - Part2用 Client
+                        this.ClientName = "TestClient2";
+                    }
+                    else
+                    {
+                        // ログイン・ユーザの Client
+                        if (User.Identity.IsAuthenticated)
+                        {
+                            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                            this.ClientName = user.UserName;
+                        }
+                    }
+                    #endregion
+                }
+
+                if (!string.IsNullOrEmpty(this.ClientName))
+                {
+                    #region Starter
+
+                    #region AuthorizationCode系
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode")))
+                    {
+                        return this.AuthorizationCode();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_FormPost")))
+                    {
+                        return this.AuthorizationCode_FormPost();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_OIDC")))
+                    {
+                        return this.AuthorizationCode_OIDC();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_OIDC_FormPost")))
+                    {
+                        return this.AuthorizationCode_OIDC_FormPost();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_PKCE_Plain")))
+                    {
+                        return this.AuthorizationCode_PKCE_Plain();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_PKCE_S256")))
+                    {
+                        return this.AuthorizationCode_PKCE_S256();
+                    }
+                    #endregion
+
+                    #region Implicit系
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit")))
+                    {
+                        return this.Implicit();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit_OIDC1")))
+                    {
+                        return this.Implicit_OIDC1();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit_OIDC2")))
+                    {
+                        return this.Implicit_OIDC2();
+                    }
+                    #endregion
+
+                    #region Hybrid系
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC1")))
+                    {
+                        return this.Hybrid_OIDC1();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC2")))
+                    {
+                        return this.Hybrid_OIDC2();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC3")))
+                    {
+                        return this.Hybrid_OIDC3();
+                    }
+                    #endregion
+
+                    #region F-API系
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.FAPI1AuthorizationCode")))
+                    {
+                        return this.FAPI1AuthorizationCode();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.FAPI2AuthorizationCode")))
+                    {
+                        return this.FAPI2AuthorizationCode();
+                    }
+                    #endregion
+
+                    #region Another系
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestResourceOwnerPasswordCredentialsFlow")))
+                    {
+                        return await this.TestResourceOwnerPasswordCredentialsFlow();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestClientCredentialsFlow")))
+                    {
+                        return await this.TestClientCredentialsFlow();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestJWTBearerTokenFlow")))
+                    {
+                        return await this.TestJWTBearerTokenFlow();
+                    }
+                    #endregion
+
+                    #endregion
+                }
+
+                // 再表示
+                return View(model);
+            }
+        }
+
+        #endregion
+
+        #region Private
 
         #region Authorization Code Flow
 
@@ -243,9 +472,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult AuthorizationCode()
+        private ActionResult AuthorizationCode()
         {
             this.Init();
             this.Save();
@@ -257,9 +484,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (form_post)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult AuthorizationCode_FormPost()
+        private ActionResult AuthorizationCode_FormPost()
         {
             this.Init();
             this.Save();
@@ -276,9 +501,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (OIDC)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult AuthorizationCode_OIDC()
+        private ActionResult AuthorizationCode_OIDC()
         {
             this.Init();
             this.Save();
@@ -291,9 +514,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (OIDC, form_post)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult AuthorizationCode_OIDC_FormPost()
+        private ActionResult AuthorizationCode_OIDC_FormPost()
         {
             this.Init();
             this.Save();
@@ -307,7 +528,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region PKCE(FAPI1)
+        #region PKCE
 
         /// <summary>Test Authorization Code Flow (PKCE plain)</summary>
         /// <returns>ActionResult</returns>
@@ -329,9 +550,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult AuthorizationCode_PKCE_S256()
+        private ActionResult AuthorizationCode_PKCE_S256()
         {
             this.Init();
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
@@ -355,9 +574,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Implicit Flow</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult Implicit()
+        private ActionResult Implicit()
         {
             this.Init();
             this.Save();
@@ -373,9 +590,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Implicit Flow 'id_token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult Implicit_OIDC1()
+        private ActionResult Implicit_OIDC1()
         {
             this.Init();
             this.Save();
@@ -388,9 +603,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Implicit Flow 'id_token token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult Implicit_OIDC2()
+        private ActionResult Implicit_OIDC2()
         {
             this.Init();
             this.Save();
@@ -410,9 +623,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Hybrid Flow 'code id_token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult Hybrid_OIDC1()
+        private ActionResult Hybrid_OIDC1()
         {
             this.Init();
             this.Save();
@@ -424,9 +635,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Hybrid Flow 'code token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult Hybrid_OIDC2()
+        private ActionResult Hybrid_OIDC2()
         {
             this.Init();
             this.Save();
@@ -438,9 +647,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Hybrid Flow 'code id_token token'(OIDC)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult Hybrid_OIDC3()
+        private ActionResult Hybrid_OIDC3()
         {
             this.Init();
             this.Save();
@@ -452,10 +659,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region FAPI2
-
-        #endregion
-
         #endregion
 
         #region Financial-grade API
@@ -464,9 +667,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (FAPI1)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult FAPI1AuthorizationCode()
+        private ActionResult FAPI1AuthorizationCode()
         {
             this.Init();
             this.Save();
@@ -482,9 +683,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (FAPI2)</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult FAPI2AuthorizationCode()
+        private ActionResult FAPI2AuthorizationCode()
         {
             this.Init();
             this.Save();
@@ -504,19 +703,14 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>TestResourceOwnerPasswordCredentialsFlow</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<ActionResult> TestResourceOwnerPasswordCredentialsFlow()
+        private async Task<ActionResult> TestResourceOwnerPasswordCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
             string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id, client_secretを取得。
-            string client_id = "";
-            string client_secret = "";
-
-            client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-            client_secret = Helper.GetInstance().GetClientSecret(client_id);
+            string client_id = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
             string response = await Helper.GetInstance()
                 .ResourceOwnerPasswordCredentialsGrantAsync(new Uri(
@@ -535,29 +729,14 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>TestClientCredentialsFlow</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<ActionResult> TestClientCredentialsFlow()
+        private async Task<ActionResult> TestClientCredentialsFlow()
         {
             // Tokenエンドポイントにアクセス
             string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id, client_secretを取得。
-            string client_id = "";
-            string client_secret = "";
-
-            if (User.Identity.IsAuthenticated)
-            {
-                // User Accountの場合、
-                client_id = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                client_secret = Helper.GetInstance().GetClientSecret(client_id);
-            }
-            else
-            {
-                // Client Accountの場合、
-                client_id = Helper.GetInstance().GetClientIdByName("TestClient");
-                client_secret = Helper.GetInstance().GetClientSecret(client_id);
-            }
+            string client_id = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
             string response = await Helper.GetInstance()
                 .ClientCredentialsGrantAsync(new Uri(
@@ -576,26 +755,13 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>TestJWTBearerTokenFlow</summary>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<ActionResult> TestJWTBearerTokenFlow()
+        private async Task<ActionResult> TestJWTBearerTokenFlow()
         {
             // Tokenエンドポイントにアクセス
             string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
 
             // ClientNameから、client_id(iss)を取得。
-            string iss = "";
-
-            if (User.Identity.IsAuthenticated)
-            {
-                // User Accountの場合、
-                iss = Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-            }
-            else
-            {
-                // Client Accountの場合、
-                iss = Helper.GetInstance().GetClientIdByName("TestClient");
-            }
+            string iss = Helper.GetInstance().GetClientIdByName(this.ClientName);
 
             // テストなので秘密鍵は共通とする。
             string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
@@ -611,6 +777,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View("OAuth2ClientAuthenticationFlow");
         }
+
+        #endregion
 
         #endregion
 
