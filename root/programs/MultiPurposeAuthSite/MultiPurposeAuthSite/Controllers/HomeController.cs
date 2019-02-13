@@ -30,6 +30,7 @@ using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -41,8 +42,9 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
+using Touryo.Infrastructure.Public.FastReflection;
 
 namespace MultiPurposeAuthSite.Controllers
 {
@@ -281,6 +283,19 @@ namespace MultiPurposeAuthSite.Controllers
             // テストコードで、clientを識別するために、Stateに細工する。
         }
 
+        /// <summary>FAPI1 + OIDCSスターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたFAPI1スターター</returns>
+        private string AssembleFAPI1_OIDCStarter(string response_type)
+        {
+            return this.OAuthAuthorizeEndpoint +
+                string.Format(
+                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
+                    this.ClientId, response_type, Const.OidcScopes,
+                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":" + this.State);
+            // テストコードで、clientを識別するために、Stateに細工する。
+        }
+
         /// <summary>FAPI2スターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたFAPI2スターター</returns>
@@ -289,7 +304,7 @@ namespace MultiPurposeAuthSite.Controllers
             return this.OAuthAuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.StandardScopes,
+                    this.ClientId, response_type, Const.OidcScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
         }
@@ -429,13 +444,21 @@ namespace MultiPurposeAuthSite.Controllers
                     #endregion
 
                     #region F-API系
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.FAPI1AuthorizationCode")))
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1")))
                     {
-                        return this.FAPI1AuthorizationCode();
+                        return this.AuthorizationCodeFAPI1();
                     }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.FAPI2AuthorizationCode")))
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1_OIDC")))
                     {
-                        return this.FAPI2AuthorizationCode();
+                        return this.AuthorizationCodeFAPI1_OIDC();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1_OIDC_FormPost")))
+                    {
+                        return this.AuthorizationCodeFAPI1_OIDC_FormPost();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI2")))
+                    {
+                        return this.AuthorizationCodeFAPI2();
                     }
                     #endregion
 
@@ -667,14 +690,40 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (FAPI1)</summary>
         /// <returns>ActionResult</returns>
-        private ActionResult FAPI1AuthorizationCode()
+        private ActionResult AuthorizationCodeFAPI1()
         {
             this.Init();
             this.Save();
 
-            // Authorization Code Flow
+            // Authorization Code Flow (FAPI1)
             return Redirect(this.AssembleFAPI1Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+        }
+
+        /// <summary>Test Authorization Code Flow (FAPI1, OIDC)</summary>
+        /// <returns>ActionResult</returns>
+        private ActionResult AuthorizationCodeFAPI1_OIDC()
+        {
+            this.Init();
+            this.Save();
+
+            // Authorization Code Flow (FAPI1, OIDC)
+            return Redirect(this.AssembleFAPI1_OIDCStarter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+        }
+
+        /// <summary>Test Authorization Code Flow (FAPI1, OIDC, form_post)</summary>
+        /// <returns>ActionResult</returns>
+        private ActionResult AuthorizationCodeFAPI1_OIDC_FormPost()
+        {
+            this.Init();
+            this.Save();
+
+            // Authorization Code Flow (FAPI1, OIDC, form_post)
+            return Redirect(this.AssembleFAPI1_OIDCStarter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                + "&prompt=none"
+                + "&response_mode=form_post");
         }
 
         #endregion
@@ -683,7 +732,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (FAPI2)</summary>
         /// <returns>ActionResult</returns>
-        private ActionResult FAPI2AuthorizationCode()
+        private ActionResult AuthorizationCodeFAPI2()
         {
             this.Init();
             this.Save();
@@ -763,14 +812,16 @@ namespace MultiPurposeAuthSite.Controllers
             // ClientNameから、client_id(iss)を取得。
             string iss = Helper.GetInstance().GetClientIdByName(this.ClientName);
 
-            // テストなので秘密鍵は共通とする。
-            string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
-            privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
+            // 秘密鍵
+            DigitalSignX509 dsX509 = new DigitalSignX509(
+                OAuth2AndOIDCParams.OAuth2AndOidcRS256Pfx,
+                OAuth2AndOIDCParams.OAuth2AndOidcRS256Pwd, HashAlgorithmName.SHA256);
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(iss, aud,
-                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes, privateKey));
+                JwtAssertion.CreateJwtBearerTokenFlowAssertion(iss, aud,
+                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes,
+                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];

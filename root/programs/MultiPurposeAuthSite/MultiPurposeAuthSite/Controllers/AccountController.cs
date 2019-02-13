@@ -43,6 +43,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Configuration;
 using System.Web.Configuration;
 
@@ -57,6 +58,7 @@ using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
 
 using Facebook;
@@ -2339,23 +2341,30 @@ namespace MultiPurposeAuthSite.Controllers
                         // client_id(iss)
                         string iss = clientId_InSessionOrCookie;
 
-                        // テストなので秘密鍵は共通とする。
-                        string privateKey = OAuth2AndOIDCParams.OAuth2JwtAssertionPrivatekey;
-                        privateKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(privateKey), CustomEncode.us_ascii);
+                        // 秘密鍵
+                        DigitalSignX509 dsX509 = new DigitalSignX509(
+                            OAuth2AndOIDCParams.OAuth2AndOidcRS256Pfx,
+                            OAuth2AndOIDCParams.OAuth2AndOidcRS256Pwd, HashAlgorithmName.SHA256);
 
                         model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                                iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes, privateKey));
+                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
+                                iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
+                                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
                     }
                     else if (state.StartsWith(fapi2Prefix))
                     {
                         // FAPI2
 
-                        // Tokenエンドポイントにアクセス
-                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+                        // TB？
 
-                        // client_id(iss)
-                        model.Response = "{error:\"hogehoge\"}";
+                        //  client_Idから、client_secretを取得。
+                        string client_id = clientId_InSessionOrCookie;
+                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+
+                        // 通常
+                        model.Response = await ExtOAuth2.Helper.GetInstance()
+                            .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                            client_id, client_secret, redirect_uri, code);
                     }
                     else
                     {
@@ -2422,9 +2431,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
                         model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
-                        model.IdTokenJwtToJson = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(model.IdToken.Split('.')[1]), CustomEncode.UTF_8);
-
+                        
                         if (!string.IsNullOrEmpty(model.IdToken))
                         {
                             if (!IdToken.Verify(
@@ -2439,6 +2446,9 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             throw new Exception("IdToken検証エラー");
                         }
+
+                        // 暗号化解除のケースがあるので、jobjを使用。
+                        model.IdTokenJwtToJson = out_jobj.ToString();
                     }
 
                     model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
