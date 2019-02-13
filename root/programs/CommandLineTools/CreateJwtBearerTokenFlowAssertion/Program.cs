@@ -30,9 +30,11 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/12/25  西野 大介         新規
 //*  2018/11/27  西野 大介         XML(Base64) ---> Jwk(Base64Url)に変更。
+//*  2019/02/13  西野 大介         自動生成から、証明書利用に変更。
 //**********************************************************************************
 
 using System;
+using System.Security.Cryptography;
 
 using Newtonsoft.Json.Linq;
 
@@ -40,6 +42,7 @@ using Touryo.Infrastructure.Framework.Authentication;
 
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Util;
+using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace CreateJwtBearerTokenFlowAssertion
@@ -61,14 +64,15 @@ namespace CreateJwtBearerTokenFlowAssertion
             string scopes = "hoge1 hoge2 hoge3";
             JObject jobj = null;
 
-            JWS_RS256_Param jws_RS256 = new JWS_RS256_Param();
-            
+            DigitalSignX509 dsX509 = new DigitalSignX509(
+                OAuth2AndOIDCParams.OAuth2AndOidcRS256Pfx,
+                OAuth2AndOIDCParams.OAuth2AndOidcRS256Pwd, HashAlgorithmName.SHA256);
 
             #region PrivateKey
             Console.WriteLine("PrivateKey:");
 
-            jwkPrivateKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(
-                PrivateKeyConverter.RsaParamToJwk(jws_RS256.RsaPrivateParameters), CustomEncode.us_ascii));
+            jwkPrivateKey = PrivateKeyConverter.RsaParamToJwk(((RSA)dsX509.X509Certificate.PrivateKey).ExportParameters(true));
+            jwkPrivateKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPrivateKey, CustomEncode.us_ascii));
 
             Console.WriteLine(jwkPrivateKey);
             Console.WriteLine("");
@@ -77,8 +81,8 @@ namespace CreateJwtBearerTokenFlowAssertion
             #region PublicKey
             Console.WriteLine("PublicKey:");
 
-            jwkPublicKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(
-                 RsaPublicKeyConverter.ParamToJwk(jws_RS256.RsaPublicParameters), CustomEncode.us_ascii));
+            jwkPublicKey = RsaPublicKeyConverter.ParamToJwk(((RSA)dsX509.X509Certificate.PublicKey.Key).ExportParameters(false));
+            jwkPublicKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPublicKey, CustomEncode.us_ascii));
 
             Console.WriteLine(jwkPublicKey);
             Console.WriteLine("");

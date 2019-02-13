@@ -503,16 +503,18 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id, string state, IEnumerable<string> scopes, string nonce,
             out string access_token, out string id_token)
         {
+            string jwkString = "";
+
             access_token = ""; // 初期化
             id_token = "";     // 初期化
-            
+
             if (Config.EnableImplicitGrantType)
             {
                 #region CheckClientMode
 
                 // このフローが認められるか？
                 Dictionary<string, string> err = new Dictionary<string, string>();
-                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
                 {
                     // 継続可
                 }
@@ -546,9 +548,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         if (s == OAuth2AndOIDCConst.Scope_Openid)
                         {
-                            id_token = IdToken.ChangeToIdTokenFromAccessToken(
-                                access_token, "", "", // c_hash, s_hash は /token で生成不可
-                                HashClaimType.None, Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+                            id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                                access_token, "", state, // c_hash, は Implicit Flow で生成不可
+                                HashClaimType.AtHash | HashClaimType.SHash,
+                                Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd, jwkString);
                         }
                     }
                 }
@@ -584,6 +587,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             out string access_token, out string id_token)
         {
             string code = "";
+            string jwkString = "";
+
             access_token = ""; // 初期化
             id_token = "";     // 初期化
 
@@ -594,6 +599,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // 初期値の許容レベルは最低レベルに設定
                 OAuth2AndOIDCEnum.ClientMode permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
 
+                // ★ 未実装
                 // TokenBindingの有無で、permittedLevelを変更する。
                 // TokenBindingの無
                 //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
@@ -602,7 +608,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // このフローが認められるか？
                 Dictionary<string, string> err = new Dictionary<string, string>();
-                if (CmnEndpoints.CheckClientMode(client_id, permittedLevel, err))
+                if (CmnEndpoints.CheckClientMode(client_id, permittedLevel, out jwkString, out err))
                 {
                     // 継続可
                 }
@@ -644,10 +650,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (s == OAuth2AndOIDCConst.Scope_Openid)
                     {
-                        id_token = IdToken.ChangeToIdTokenFromAccessToken(
+                        id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, code, state, // at_hash, c_hash, s_hash
                             HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+                            Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd, jwkString);
                     }
                 }
 
@@ -692,12 +698,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
+
+            string jwkString = "";
             err = new Dictionary<string, string>();
 
             if (Config.EnableAuthorizationCodeGrantType)
             {
                 // 初期値の許容レベルは最低レベルに設定
                 OAuth2AndOIDCEnum.ClientMode permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                //permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2; // テスト
 
                 #region 認証
 
@@ -744,13 +753,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
                     else
                     {
-                        // TokenBindingの有無で、permittedLevelを変更する。
-                        // TokenBindingの無
-                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-                        // TokenBindingの有
-                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
-
                         //authned = true;
+
+                        // 先ず、OIDCでないとダメ。
+
+                        // 次いで、TokenBindingの有無で、
+                        // permittedLevelを変更する。
+
+                        // - TokenBindingの無
+                        //   permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                        // - TokenBindingの有
+                        //   permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
                     }
                 }
 
@@ -801,7 +814,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, permittedLevel, err))
+                    if (CmnEndpoints.CheckClientMode(client_id, permittedLevel, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -838,7 +851,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         client_id, name,                                    // Client Account
                         Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, jwkString);
 
                     return true;
 
@@ -885,6 +898,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
+
+            string jwkString = "";
             err = new Dictionary<string, string>();
 
             if (Config.EnableRefreshToken)
@@ -916,7 +931,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -956,7 +971,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                    // Client Account
                             Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token);
+                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, jwkString);
 
                         return true;
                     }
@@ -976,7 +991,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.Add("error", "not_supported");
                 err.Add("error_description", Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
             }
-            
+
             return false;
         }
 
@@ -1000,6 +1015,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
+
+            string jwkString = "";
             err = new Dictionary<string, string>();
 
             if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
@@ -1031,7 +1048,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -1079,7 +1096,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 user.Id, user.UserName, // User Account
                                 client_id, name)); // Client Account
 
-                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
+                            ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
                             return true;
                         }
                         else
@@ -1135,6 +1152,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
+
+            string jwkString = "";
             err = new Dictionary<string, string>();
 
             if (Config.EnableClientCredentialsGrantType)
@@ -1166,7 +1185,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -1200,7 +1219,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         "Passed the 'client credentials flow' by {0}({1}).",
                         client_id, sub)); // Client Account
 
-                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
                     return true;
 
                     #endregion
@@ -1242,6 +1261,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
+
+            string jwkString = "";
             err = new Dictionary<string, string>();
 
             if (Config.EnableJwtBearerTokenFlowGrantType &&
@@ -1263,7 +1284,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                         {
                             // このフローが認められるか？
-                            if (CmnEndpoints.CheckClientMode(iss, OAuth2AndOIDCEnum.ClientMode.normal, err))
+                            if (CmnEndpoints.CheckClientMode(iss, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
                             {
                                 // JwtTokenを作る
 
@@ -1286,7 +1307,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                                     "Passed the 'jwt bearer token flow' by {0}({1}).",
                                     iss, sub)); // Client Account
 
-                                ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "");
+                                ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
                                 return true;
                             }
                             else
@@ -1330,8 +1351,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>CreateAccessTokenResponse</summary>
         /// <param name="access_token">string</param>
         /// <param name="refresh_token">string</param>
+        /// <param name="jwkString">string</param>
         /// <returns>Dictionary(string, string)</returns>
-        private static Dictionary<string, string> CreateAccessTokenResponse(string access_token, string refresh_token)
+        private static Dictionary<string, string> CreateAccessTokenResponse(
+            string access_token, string refresh_token, string jwkString)
         {
             Dictionary<string, string> ret = new Dictionary<string, string>();
 
@@ -1357,9 +1380,19 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (s == OAuth2AndOIDCConst.Scope_Openid)
                 {
-                    string id_token = IdToken.ChangeToIdTokenFromAccessToken(
-                        access_token, "", "", // c_hash, s_hash は /token で生成不可
-                        HashClaimType.None, Config.OAuth2JWT_pfx, Config.OAuth2JWTPassword);
+                    string id_token = "";
+                    if (string.IsNullOrEmpty(jwkString))
+                    {
+                        id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                            access_token, "", "", // c_hash, s_hash は /token で生成不可
+                            HashClaimType.None, Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd, jwkString);
+                    }
+                    else
+                    {
+                        id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                            access_token, "", "", // c_hash, s_hash は /token で生成不可
+                            HashClaimType.None, Config.OAuth2JwsEs256Pfx, Config.OAuth2JwsEs256Pwd, jwkString);
+                    }
 
                     if (!string.IsNullOrEmpty(id_token))
                     {
@@ -1381,20 +1414,27 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>CheckClientMode</summary>
         /// <param name="client_id">ClientId</param>
         /// <param name="permittedLevel">当該フローのClientModeの許容レベル</param>
+        /// <param name="jwkString">jwkString</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>継続の可否</returns>
         private static bool CheckClientMode(
             string client_id,
             OAuth2AndOIDCEnum.ClientMode permittedLevel,
-            Dictionary<string, string> err)
+            out string jwkString,
+            out Dictionary<string, string> err)
         {
+            // ret
             bool retval = false;
-            string clientModeString = "";
+
+            // out
+            jwkString = "";
+            err = new Dictionary<string, string>();
+
             // 要求値を最大値に設定
             OAuth2AndOIDCEnum.ClientMode clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
 
             // clientMode <= permittedLevel であればOK。
-
+            string clientModeString = "";
             if (string.IsNullOrEmpty(client_id))
             {
                 err.Add("error", "invalid_client");
@@ -1405,9 +1445,20 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 clientModeString = Helper.GetInstance().GetClientMode(client_id);
 
-                if (clientModeString == OAuth2AndOIDCEnum.ClientMode.normal.ToString1()) clientModeEnum = (int)OAuth2AndOIDCEnum.ClientMode.normal;
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1()) clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1()) clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                if (clientModeString == OAuth2AndOIDCEnum.ClientMode.normal.ToString1())
+                {
+                    clientModeEnum = (int)OAuth2AndOIDCEnum.ClientMode.normal;
+                }
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1())
+                {
+                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi1;
+                }
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1())
+                {
+                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                    jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                        Helper.GetInstance().GetJwtAssertionPublickey(client_id)), CustomEncode.us_ascii);
+                }
             }
 
             if ((int)clientModeEnum <= (int)permittedLevel)

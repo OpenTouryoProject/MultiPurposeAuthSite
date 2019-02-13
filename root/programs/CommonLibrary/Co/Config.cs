@@ -990,27 +990,57 @@ namespace MultiPurposeAuthSite.Co
 
         #region 証明書
 
+        #region RS256
+
         /// <summary>
-        /// OAuth2/OIDCのTokenに使用するJWTの署名用証明書（*.pfx）のパスワード
+        /// OAuth2/OIDCのRS256 JWT Tokenの署名用証明書（*.pfx）のパスワード
         /// </summary>
-        public static string OAuth2JWTPassword
+        public static string OAuth2JwsRs256Pwd
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("OAuth2JWTPassword");
+                return GetConfigParameter.GetConfigValue("OAuth2JwsRs256Pwd");
             }
         }
 
         /// <summary>
-        /// OAuth2/OIDCのTokenに使用するJWTの署名用証明書（*.pfx）のパス
+        /// OAuth2/OIDCのRS256 JWT Tokenの署名用証明書（*.pfx）のパス
         /// </summary>
-        public static string OAuth2JWT_pfx
+        public static string OAuth2JwsRs256Pfx
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("OAuth2JWT_pfx");
+                return GetConfigParameter.GetConfigValue("OAuth2JwsRs256Pfx");
             }
         }
+
+        #endregion
+
+        #region ES256
+
+        /// <summary>
+        /// OAuth2/OIDCのES256 JWT Tokenの署名用証明書（*.pfx）のパスワード
+        /// </summary>
+        public static string OAuth2JwsEs256Pwd
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("OAuth2JwsEs256Pwd");
+            }
+        }
+
+        /// <summary>
+        /// OAuth2/OIDCのES256 JWT Tokenの署名用証明書（*.pfx）のパス
+        /// </summary>
+        public static string OAuth2JwsEs256Pfx
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("OAuth2JwsEs256Pfx");
+            }
+        }
+
+        #endregion
 
         #endregion
 
