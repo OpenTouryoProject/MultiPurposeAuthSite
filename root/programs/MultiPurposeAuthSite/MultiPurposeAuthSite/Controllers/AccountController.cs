@@ -2343,8 +2343,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // 秘密鍵
                         DigitalSignX509 dsX509 = new DigitalSignX509(
-                            OAuth2AndOIDCParams.OAuth2AndOidcRS256Pfx,
-                            OAuth2AndOIDCParams.OAuth2AndOidcRS256Pwd, HashAlgorithmName.SHA256);
+                            OAuth2AndOIDCParams.RS256Pfx,
+                            OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
 
                         model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
                             tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
@@ -2355,16 +2355,13 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // FAPI2
 
-                        // TB？
-
-                        //  client_Idから、client_secretを取得。
+                        //  client_Idと、クライアント証明書（TB）
                         string client_id = clientId_InSessionOrCookie;
-                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        //string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
 
-                        // 通常
                         model.Response = await ExtOAuth2.Helper.GetInstance()
                             .GetAccessTokenByCodeAsync(tokenEndpointUri,
-                            client_id, client_secret, redirect_uri, code);
+                            client_id, "", redirect_uri, code);
                     }
                     else
                     {

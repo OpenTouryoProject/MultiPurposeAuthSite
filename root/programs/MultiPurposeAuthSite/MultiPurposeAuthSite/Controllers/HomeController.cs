@@ -814,8 +814,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 秘密鍵
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.OAuth2AndOidcRS256Pfx,
-                OAuth2AndOIDCParams.OAuth2AndOidcRS256Pwd, HashAlgorithmName.SHA256);
+                OAuth2AndOIDCParams.RS256Pfx,
+                OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
