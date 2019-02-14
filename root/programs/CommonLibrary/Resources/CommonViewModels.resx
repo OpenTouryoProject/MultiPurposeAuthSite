@@ -153,8 +153,8 @@
   <data name="Email" xml:space="preserve">
     <value>E-mail</value>
   </data>
-  <data name="JwtAssertionPublickey" xml:space="preserve">
-    <value>Public key of JWT assertion</value>
+  <data name="JwkRsaPublickey" xml:space="preserve">
+    <value>JWK's RSA public key</value>
   </data>
   <data name="MaxLengthErrMsg" xml:space="preserve">
     <value>The {0} must be at less than or equal to {1} characters long.</value>
@@ -197,6 +197,9 @@
   </data>
   <data name="Search" xml:space="preserve">
     <value>Search</value>
+  </data>
+  <data name="TlsClientAuthSubjectDn" xml:space="preserve">
+    <value>The DN of the client certificate to use.</value>
   </data>
   <data name="UnstructuredData1" xml:space="preserve">
     <value>UnstructuredData1</value>

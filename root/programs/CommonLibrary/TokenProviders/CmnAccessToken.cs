@@ -53,6 +53,7 @@ using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security.Jwt;
+using Touryo.Infrastructure.Public.FastReflection;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
@@ -255,11 +256,16 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>ProtectFromPayload</summary>
         /// <param name="access_token_payload">AccessTokenのPayload</param>
         /// <param name="expiresUtc">DateTimeOffset</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
         /// <param name="audience">string</param>
         /// <param name="subject">string</param>
         /// <returns>AccessToken</returns>
         public static string ProtectFromPayload(
-            string access_token_payload, DateTimeOffset expiresUtc,
+            string access_token_payload,
+            DateTimeOffset expiresUtc,
+            X509Certificate2 x509,
+            OAuth2AndOIDCEnum.ClientMode permittedLevel,
             out string audience, out string subject)
         {
             string json = "";
@@ -270,13 +276,42 @@ namespace MultiPurposeAuthSite.TokenProviders
             Dictionary<string, object> payload =
                 JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
 
+            // 読取
             audience = (string)payload[OAuth2AndOIDCConst.aud];
             subject = (string)payload[OAuth2AndOIDCConst.sub];
 
+            // 書込１
             payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
             payload[OAuth2AndOIDCConst.nbf] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
             payload[OAuth2AndOIDCConst.iat] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
             payload[OAuth2AndOIDCConst.jti] = Guid.NewGuid().ToString("N");
+
+            // 書込２
+            // - cnf
+            if (x509 != null)
+            {
+                Dictionary<string, string> dic = new Dictionary<string, string>();
+                string key = OAuth2AndOIDCConst.x5t + "#";
+                string val = x509.Thumbprint;
+
+                if (x509.FriendlyName == "sha256RSA")
+                {
+                    key += "256";
+                }
+                else if (x509.FriendlyName == "sha512RSA")
+                {
+                    key += "512";
+                }
+
+                dic.Add(key, val);
+                payload[OAuth2AndOIDCConst.cnf] = dic;
+            }
+
+            // - fapi
+            if (permittedLevel != OAuth2AndOIDCEnum.ClientMode.normal)
+            {
+                payload[OAuth2AndOIDCConst.fapi] = permittedLevel.ToString1();
+            }
 
             json = JsonConvert.SerializeObject(payload);
 

@@ -72,10 +72,15 @@ namespace MultiPurposeAuthSite.ViewModels
         [JsonProperty(PropertyName = "redirect_uri_token")]
         public string RedirectUriToken { get; set; }
 
-        /// <summary>JwtAssertionPublickey</summary>
-        [Display(Name = "JwtAssertionPublickey", ResourceType = typeof(Resources.CommonViewModels))]
-        [JsonProperty(PropertyName = "jwt_assertion_publickey")]
-        public string JwtAssertionPublickey { get; set; }
+        /// <summary>JwkRsaPublickey</summary>
+        [Display(Name = "JwkRsaPublickey", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "jwk_rsa_publickey")]
+        public string JwkRsaPublickey { get; set; }
+
+        /// <summary>TlsClientAuthSubjectDn</summary>
+        [Display(Name = "TlsClientAuthSubjectDn", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "tls_client_auth_subject_dn")]
+        public string TlsClientAuthSubjectDn { get; set; }
 
         /// <summary>ClientMode</summary>
         [Display(Name = "ClientMode", ResourceType = typeof(Resources.CommonViewModels))]

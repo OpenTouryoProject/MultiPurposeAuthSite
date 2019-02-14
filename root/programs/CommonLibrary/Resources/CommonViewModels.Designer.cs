@@ -169,11 +169,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Public key of JWT assertion に類似しているローカライズされた文字列を検索します。
+        ///   JWK&apos;s RSA public key に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string JwtAssertionPublickey {
+        public static string JwkRsaPublickey {
             get {
-                return ResourceManager.GetString("JwtAssertionPublickey", resourceCulture);
+                return ResourceManager.GetString("JwkRsaPublickey", resourceCulture);
             }
         }
         
@@ -300,6 +300,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string Search {
             get {
                 return ResourceManager.GetString("Search", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   The DN of the client certificate to use. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TlsClientAuthSubjectDn {
+            get {
+                return ResourceManager.GetString("TlsClientAuthSubjectDn", resourceCulture);
             }
         }
         

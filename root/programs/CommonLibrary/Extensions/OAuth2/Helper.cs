@@ -48,6 +48,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
 
 using System.Net;
 using System.Net.Http;
@@ -182,10 +183,23 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                     break;
             }
 
-            HttpClientHandler handler = new HttpClientHandler
+            // ASP.NET＋クライアント証明書 - マイクロソフト系技術情報 Wiki
+            // https://techinfoofmicrosofttech.osscons.jp/index.php?ASP.NET%EF%BC%8B%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%83%88%E8%A8%BC%E6%98%8E%E6%9B%B8
+
+            WebRequestHandler handler = new WebRequestHandler
             {
                 Proxy = proxy,
+                //ClientCertificateOptions = ClientCertificateOption.Automatic
             };
+
+            // Browser（Resource Owner）からではなくでClientから
+            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfx))
+            {
+                handler.ClientCertificates.Add(new X509Certificate(
+                    OAuth2AndOIDCParams.ClientCertPfx,
+                    OAuth2AndOIDCParams.ClientCertPwd,
+                    X509KeyStorageFlags.MachineKeySet));
+            }
 
             return new HttpClient(handler);
             //return new HttpClient();
@@ -508,21 +522,21 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
 
         #endregion
 
-        #region GetJwtAssertionPublickey
+        #region GetJwkRsaPublickey
 
-        /// <summary>client_idからjwt_assertion_publickeyを取得する（Client認証で使用する）。</summary>
+        /// <summary>client_idからjwk_rsa_publickeyを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
-        /// <returns>jwt_assertion_publickey</returns>
-        public string GetJwtAssertionPublickey(string client_id)
+        /// <returns>jwk_rsa_publickey</returns>
+        public string GetJwkRsaPublickey(string client_id)
         {
-            return this.GetJwtAssertionPublickey(client_id, out bool isResourceOwner);
+            return this.GetJwkRsaPublickey(client_id, out bool isResourceOwner);
         }
 
-        /// <summary>client_idからjwt_assertion_publickeyを取得する（Client認証で使用する）。</summary>
+        /// <summary>client_idからjwk_rsa_publickeyを取得する（Client認証で使用する）。</summary>
         /// <param name="client_id">client_id</param>
         /// <param name="isResourceOwner">bool</param>
-        /// <returns>jwt_assertion_publickey</returns>
-        public string GetJwtAssertionPublickey(string client_id, out bool isResourceOwner)
+        /// <returns>jwk_rsa_publickey</returns>
+        public string GetJwkRsaPublickey(string client_id, out bool isResourceOwner)
         {
             isResourceOwner = false;
             client_id = client_id ?? "";
@@ -530,7 +544,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.Oauth2ClientsInfo[client_id]["jwt_assertion_publickey"];
+                return this.Oauth2ClientsInfo[client_id]["jwk_rsa_publickey"];
             }
 
             // oAuth2Dataを検索
@@ -539,11 +553,49 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             {
                 isResourceOwner = true;
                 ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
-                return model.JwtAssertionPublickey;
+                return model.JwkRsaPublickey;
             }
 
             return "";
+        }
 
+        #endregion
+
+        #region GetTlsClientAuthSubjectDn
+
+        /// <summary>client_idからtls_client_auth_subject_dnを取得する（Client認証で使用する）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>tls_client_auth_subject_dn</returns>
+        public string GetTlsClientAuthSubjectDn(string client_id)
+        {
+            return this.GetTlsClientAuthSubjectDn(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからtls_client_auth_subject_dnを取得する（Client認証で使用する）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>tls_client_auth_subject_dn</returns>
+        public string GetTlsClientAuthSubjectDn(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                return this.Oauth2ClientsInfo[client_id]["tls_client_auth_subject_dn"];
+            }
+
+            // oAuth2Dataを検索
+            string oAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(oAuth2Data))
+            {
+                isResourceOwner = true;
+                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                return model.TlsClientAuthSubjectDn;
+            }
+
+            return "";
         }
 
         #endregion

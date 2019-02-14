@@ -201,13 +201,16 @@
   <data name="ConfirmNewEmailErrMsg" xml:space="preserve">
     <value>新しいE-mailアドレスと確認のE-mailアドレスが一致しません。</value>
   </data>
-  <data name="JwtAssertionPublickey" xml:space="preserve">
-    <value>JWTアサーションの公開鍵</value>
+  <data name="JwkRsaPublickey" xml:space="preserve">
+    <value>JWKのRSA公開鍵</value>
   </data>
   <data name="ClientMode" xml:space="preserve">
     <value>Client の OAuth2/OIDCモード</value>
   </data>
   <data name="ClientType" xml:space="preserve">
     <value>テスト用のClientタイプ</value>
+  </data>
+  <data name="TlsClientAuthSubjectDn" xml:space="preserve">
+    <value>使用するクライアント証明書のDN</value>
   </data>
 </root>

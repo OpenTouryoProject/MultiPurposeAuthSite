@@ -58,6 +58,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
 
 #if NETFX
 using Microsoft.AspNet.Identity;
@@ -635,7 +636,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // access_token
                 access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                    out string aud, out string sub);
+                    null, permittedLevel, out string aud, out string sub);
 
                 // Client認証のclient_idとToken類のaudをチェック
                 if (client_id != aud) { throw new Exception("[client_id != aud]"); }
@@ -686,6 +687,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="assertion">string</param>
+        /// <param name="x509">X509Certificate2</param>
         /// <param name="code">string</param>
         /// <param name="code_verifier">string</param>
         /// <param name="redirect_uri">string</param>
@@ -693,7 +695,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantAuthorizationCodeCredentials(
-            string grant_type, string client_id, string client_secret, string assertion,
+            string grant_type, string client_id, string client_secret,
+            string assertion, X509Certificate2 x509,
             string code, string code_verifier, string redirect_uri,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
@@ -706,25 +709,16 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // 初期値の許容レベルは最低レベルに設定
                 OAuth2AndOIDCEnum.ClientMode permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-                //permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2; // テスト
 
                 #region 認証
 
                 bool authned = false;
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
                 {
-                    if (!string.IsNullOrEmpty(client_secret))
+                    if (!string.IsNullOrEmpty(client_id))
                     {
-                        // client_id & client_secret
-                        if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
-                        {
-                            // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                            if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                            {
-                                authned = true;
-                                //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-                            }
-                        }
+                        // client_id & (client_secret or x509)
+                        authned = CmnEndpoints.ClientAuthentication(client_id, client_secret, x509, out permittedLevel);
                     }
                     else if (!string.IsNullOrEmpty(assertion))
                     {
@@ -733,7 +727,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                                 assertion.Split('.')[1]), CustomEncode.us_ascii));
 
-                        string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                        string pubKey = Helper.GetInstance().GetJwkRsaPublickey(dic[OAuth2AndOIDCConst.iss]);
                         pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                         if (!string.IsNullOrEmpty(pubKey))
@@ -750,20 +744,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 }
                             }
                         }
-                    }
-                    else
-                    {
-                        //authned = true;
-
-                        // 先ず、OIDCでないとダメ。
-
-                        // 次いで、TokenBindingの有無で、
-                        // permittedLevelを変更する。
-
-                        // - TokenBindingの無
-                        //   permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-                        // - TokenBindingの有
-                        //   permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
                     }
                 }
 
@@ -832,7 +812,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // access_token
                     string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        out string aud, out string sub);
+                        x509, permittedLevel, out string aud, out string sub);
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud) { throw new Exception("[client_id != aud]"); }
@@ -889,13 +869,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
-        /// <param name="tokenId">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="refresh_token">string</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantRefreshTokenCredentials(
-            string grant_type, string client_id, string client_secret, string tokenId,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            string grant_type, string client_id, string client_secret, X509Certificate2 x509,
+            string refresh_token, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -909,19 +890,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 bool authned = false;
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
-                    if (!string.IsNullOrEmpty(client_secret))
-                    {
-                        // client_id & client_secret
-                        if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
-                        {
-                            // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                            if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                            {
-                                // 検証完了
-                                authned = true;
-                            }
-                        }
-                    }
+                    // client_id & (client_secret or x509)
+                    authned = CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, x509,
+                        out OAuth2AndOIDCEnum.ClientMode permittedLevel);
                 }
 
                 #endregion
@@ -946,22 +918,22 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     #region 発行
 
-                    string tokenPayload = RefreshTokenProvider.Receive(tokenId);
+                    string tokenPayload = RefreshTokenProvider.Receive(refresh_token);
 
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
                         // access_token
                         string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            out string aud, out string sub);
+                            x509, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 
-                        string refresh_token = "";
+                        string new_refresh_token = "";
                         if (Config.EnableRefreshToken)
                         {
-                            refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                            new_refresh_token = RefreshTokenProvider.Create(tokenPayload);
                         }
 
                         // オペレーション・トレース・ログ出力
@@ -971,7 +943,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             client_id, name,                                    // Client Account
                             Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
 
-                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, jwkString);
+                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, new_refresh_token, jwkString);
 
                         return true;
                     }
@@ -1003,6 +975,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
         /// <param name="username">string</param>
         /// <param name="password">string</param>
         /// <param name="scopes">string</param>
@@ -1010,7 +983,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantResourceOwnerCredentials(
-            string grant_type, string client_id, string client_secret,
+            string grant_type, string client_id,
+            string client_secret, X509Certificate2 x509,
             string username, string password, string scopes,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
@@ -1027,18 +1001,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
                 {
                     // client_id & client_secret
-                    if (!string.IsNullOrEmpty(client_secret))
-                    {
-                        if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
-                        {
-                            // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                            if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                            {
-                                // 検証完了
-                                authned = true;
-                            }
-                        }
-                    }
+                    authned = CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, x509,
+                        out OAuth2AndOIDCEnum.ClientMode permittedLevel);
                 }
 
                 #endregion
@@ -1143,13 +1108,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
         /// <param name="scopes">string</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantClientCredentials(
-            string grant_type, string client_id, string client_secret, string scopes,
-            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+            string grant_type, string client_id, string client_secret, X509Certificate2 x509,
+            string scopes, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
 
@@ -1164,18 +1130,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
                 {
                     // client_id & client_secret
-                    if (!string.IsNullOrEmpty(client_secret))
-                    {
-                        if (!(string.IsNullOrEmpty(client_id) && string.IsNullOrEmpty(client_secret)))
-                        {
-                            // *.config or OAuth2Dataテーブルを参照してクライアント認証を行なう。
-                            if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                            {
-                                // 検証完了
-                                authned = true;
-                            }
-                        }
-                    }
+                    authned = CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, x509,
+                        out OAuth2AndOIDCEnum.ClientMode permittedLevel);
                 }
 
                 #endregion
@@ -1253,11 +1210,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </summary>
         /// <param name="grant_type">string</param>
         /// <param name="assertion">string</param>
+        /// <param name="x509">X509Certificate2</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantJwtBearerTokenCredentials(
-            string grant_type, string assertion,
+            string grant_type, string assertion, X509Certificate2 x509,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -1272,7 +1230,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                         assertion.Split('.')[1]), CustomEncode.us_ascii));
 
-                string pubKey = Helper.GetInstance().GetJwtAssertionPublickey(dic[OAuth2AndOIDCConst.iss]);
+                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(dic[OAuth2AndOIDCConst.iss]);
                 pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                 if (!string.IsNullOrEmpty(pubKey))
@@ -1344,7 +1302,135 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region Common (Private)
+        #region Common (Private, etc.)
+
+        #region　ClientAuthentication
+
+        /// <summary>ClientAuthentication</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <returns>bool</returns>
+        public static bool ClientAuthentication(string client_id, string client_secret,
+            X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+        {
+            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+
+            // client_id & client_secret
+            if (!string.IsNullOrEmpty(client_id))
+            {
+                if (!string.IsNullOrEmpty(client_secret))
+                {
+                    // *.config or OAuth2Dataテーブルを参照して、
+                    // クライアント認証（client_secret）を行なう。
+                    if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
+                    {
+                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                        return true;
+                    }
+                }
+                else if (x509 != null)
+                {
+                    // *.config or OAuth2Dataテーブルを参照して、
+                    // クライアント認証（X509Certificate2）を行なう。
+                    if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                    {
+                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region CheckClientMode
+
+        /// <summary>CheckClientMode</summary>
+        /// <param name="client_id">ClientId</param>
+        /// <param name="permittedLevel">当該フローのClientModeの許容レベル</param>
+        /// <param name="jwkString">jwkString</param>
+        /// <param name="err">Dictionary(string, string)</param>
+        /// <returns>継続の可否</returns>
+        private static bool CheckClientMode(
+            string client_id,
+            OAuth2AndOIDCEnum.ClientMode permittedLevel,
+            out string jwkString,
+            out Dictionary<string, string> err)
+        {
+            // ret
+            bool retval = false;
+
+            // out
+            jwkString = "";
+            err = new Dictionary<string, string>();
+
+            // 要求値を最大値に設定
+            OAuth2AndOIDCEnum.ClientMode clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
+
+            // clientMode <= permittedLevel であればOK。
+            string clientModeString = "";
+            if (string.IsNullOrEmpty(client_id))
+            {
+                err.Add("error", "invalid_client");
+                err.Add("error_description", string.Format("client_id is not set."));
+                return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
+            }
+            else
+            {
+                clientModeString = Helper.GetInstance().GetClientMode(client_id);
+
+                if (clientModeString == OAuth2AndOIDCEnum.ClientMode.normal.ToString1())
+                {
+                    clientModeEnum = (int)OAuth2AndOIDCEnum.ClientMode.normal;
+                }
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1())
+                {
+                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi1;
+                }
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1())
+                {
+                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                    jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                        Helper.GetInstance().GetJwkRsaPublickey(client_id)), CustomEncode.us_ascii);
+                }
+            }
+
+            if ((int)clientModeEnum <= (int)permittedLevel)
+            {
+                // permittedLevel == normal
+                retval = true;
+            }
+            else
+            {
+                // permittedLevel != normal
+                retval = false;
+            }
+
+            if (!retval)
+            {
+                // エラーを追加
+                err.Add("error", "not_supported");
+
+                if (string.IsNullOrEmpty(clientModeString))
+                {
+                    err.Add("error_description", string.Format("This client is not set the mode."));
+                }
+                else
+                {
+                    err.Add("error_description", string.Format(
+                        "This client is set the {0} mode, but this flow permitted up to {1} mode.",
+                        clientModeString, permittedLevel.ToString1()));
+                }
+            }
+
+            return retval;
+        }
+
+        #endregion
 
         #region CreateAccessTokenResponse
 
@@ -1405,91 +1491,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             ret.Add("expires_in", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
 
             return ret;
-        }
-
-        #endregion
-
-        #region CheckClientMode
-
-        /// <summary>CheckClientMode</summary>
-        /// <param name="client_id">ClientId</param>
-        /// <param name="permittedLevel">当該フローのClientModeの許容レベル</param>
-        /// <param name="jwkString">jwkString</param>
-        /// <param name="err">Dictionary(string, string)</param>
-        /// <returns>継続の可否</returns>
-        private static bool CheckClientMode(
-            string client_id,
-            OAuth2AndOIDCEnum.ClientMode permittedLevel,
-            out string jwkString,
-            out Dictionary<string, string> err)
-        {
-            // ret
-            bool retval = false;
-
-            // out
-            jwkString = "";
-            err = new Dictionary<string, string>();
-
-            // 要求値を最大値に設定
-            OAuth2AndOIDCEnum.ClientMode clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
-
-            // clientMode <= permittedLevel であればOK。
-            string clientModeString = "";
-            if (string.IsNullOrEmpty(client_id))
-            {
-                err.Add("error", "invalid_client");
-                err.Add("error_description", string.Format("client_id is not set."));
-                return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
-            }
-            else
-            {
-                clientModeString = Helper.GetInstance().GetClientMode(client_id);
-
-                if (clientModeString == OAuth2AndOIDCEnum.ClientMode.normal.ToString1())
-                {
-                    clientModeEnum = (int)OAuth2AndOIDCEnum.ClientMode.normal;
-                }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1())
-                {
-                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1())
-                {
-                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
-                    jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                        Helper.GetInstance().GetJwtAssertionPublickey(client_id)), CustomEncode.us_ascii);
-                }
-            }
-
-            if ((int)clientModeEnum <= (int)permittedLevel)
-            {
-                // permittedLevel == normal
-                retval = true;
-            }
-            else
-            {
-                // permittedLevel != normal
-                retval = false;
-            }
-
-            if (!retval)
-            {
-                // エラーを追加
-                err.Add("error", "not_supported");
-
-                if (string.IsNullOrEmpty(clientModeString))
-                {
-                    err.Add("error_description", string.Format("This client is not set the mode."));
-                }
-                else
-                {
-                    err.Add("error_description", string.Format(
-                        "This client is set the {0} mode, but this flow permitted up to {1} mode.",
-                        clientModeString, permittedLevel.ToString1()));
-                }
-            }
-
-            return retval;
         }
 
         #endregion
