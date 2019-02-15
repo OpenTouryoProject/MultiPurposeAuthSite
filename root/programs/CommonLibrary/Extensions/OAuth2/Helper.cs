@@ -442,7 +442,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.Oauth2ClientsInfo[client_id]["client_secret"];
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("client_secret"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["client_secret"];
+                }
             }
 
             // oAuth2Dataを検索
@@ -486,7 +489,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             {
                 if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
-                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
+                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_code"))
+                    {
+                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
+                    }
                 }
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
@@ -495,7 +501,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
-                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
+                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_token"))
+                    {
+                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
+                    }
                 }
             }
 
@@ -511,7 +520,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 {
                     return model.RedirectUriCode;
                 }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType)
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
                     return model.RedirectUriToken;
                 }
@@ -544,7 +558,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.Oauth2ClientsInfo[client_id]["jwk_rsa_publickey"];
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("jwk_rsa_publickey"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["jwk_rsa_publickey"];
+                }
             }
 
             // oAuth2Dataを検索
@@ -583,7 +600,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                return this.Oauth2ClientsInfo[client_id]["tls_client_auth_subject_dn"];
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("tls_client_auth_subject_dn"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["tls_client_auth_subject_dn"];
+                }
             }
 
             // oAuth2Dataを検索

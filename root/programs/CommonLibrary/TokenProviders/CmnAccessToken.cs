@@ -294,11 +294,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 string key = OAuth2AndOIDCConst.x5t + "#";
                 string val = x509.Thumbprint;
 
-                if (x509.FriendlyName == "sha256RSA")
+                if (x509.SignatureAlgorithm.FriendlyName == "sha256RSA")
                 {
                     key += "256";
                 }
-                else if (x509.FriendlyName == "sha512RSA")
+                else if (x509.SignatureAlgorithm.FriendlyName == "sha512RSA")
                 {
                     key += "512";
                 }
@@ -464,25 +464,42 @@ namespace MultiPurposeAuthSite.TokenProviders
             Dictionary<string, object> authTokenClaimSet,
             ClaimsIdentity identity)
         {
-            // sub（client_idに対応するclient_name）Claimを設定する。
+            // 予約Claimを追加
             identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet[OAuth2AndOIDCConst.sub]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
 
-            // aud、scopes、nonceなどのClaimを追加する。
+            // 基本Claimを追加
+            // scopes
             List<string> scopes = new List<string>();
             foreach (string s in (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes])
             {
                 scopes.Add(s);
             }
-
-            // もろもろのClaimの設定
             Helper.AddClaim(identity,
                 (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
 
-            // その他、所定のClaimを追加する。
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
+            // 拡張Claimを追加
+            // - cnf
+            if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.cnf))
+            {
+                JObject cnf = (JObject)authTokenClaimSet[OAuth2AndOIDCConst.cnf];
+
+                if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + "#256"))
+                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + "#256",
+                        (string)cnf[OAuth2AndOIDCConst.x5t + "#256"]));
+                else if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + "#512"))
+                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + "#256",
+                        (string)cnf[OAuth2AndOIDCConst.x5t + "#512"]));
+            }
+            
+            // - fapi
+            if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.fapi))
+            {
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_FApi, (string)authTokenClaimSet[OAuth2AndOIDCConst.fapi]));
+            }
         }
 
         #endregion

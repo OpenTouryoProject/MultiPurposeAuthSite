@@ -55,6 +55,7 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Security.Claims;
@@ -292,32 +293,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
         /// <returns>成功 or 失敗</returns>
-        public static bool ValidateAuthZReqParam(
-            string grant_type, string client_id, string redirect_uri,
+        public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription)
         {
             valid_redirect_uri = "";
             err = "";
             errDescription = "";
-
-            #region grant_type
-
-            // grant_typeチェック
-            if (!string.IsNullOrEmpty(grant_type))
-            {
-                if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType
-                    || grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType
-                    || grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType
-                    || grant_type.ToLower() == OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType)
-                {
-                    err = "server_error";
-                    errDescription = "This grant_type is valid in here.";
-                    return false;
-                }
-            }
-
-            #endregion
 
             #region response_type
 
@@ -342,41 +324,52 @@ namespace MultiPurposeAuthSite.TokenProviders
                         return false;
                     }
                 }
-                else
-                {
-                    // OIDCチェック
-                    if (scope.IndexOf(OAuth2AndOIDCConst.Scope_Openid) != -1) // トリガはscope=openid
-                    {
-                        // OIDC有効
-                        if (!Config.EnableOpenIDConnect)
-                        {
-                            err = "server_error";
-                            errDescription = "OIDC is not enabled.";
-                            return false;
-                        }
-
-                        // nonceパラメタ 必須
-                        if (string.IsNullOrEmpty(nonce))
-                        {
-                            err = "server_error";
-                            errDescription = "There was no nonce in query.";
-                            return false;
-                        }
-                    }
-                    else
-                    {
-                        // response_typeチェック
-                        if (response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
                             || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
                             || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
                             || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
                             || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
-                        {
-                            err = "server_error";
-                            errDescription = "This response_type is valid only for oidc.";
-                            return false;
-                        }
+                {
+                    // OIDCチェック１
+                    if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
+                    {
+                        // OIDC無効
+                        err = "server_error";
+                        errDescription = "This response_type is valid only for oidc.";
+                        return false;
                     }
+                }
+                else
+                {
+                    err = "server_error";
+                    errDescription = "This response_type is unknown.";
+                    return false;
+                }
+            }
+            else
+            {
+                err = "server_error";
+                errDescription = "response_type is empty.";
+                return false;
+            }
+
+            // OIDCチェック２
+            if (scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
+            {
+                // OIDC有効
+                if (!Config.EnableOpenIDConnect)
+                {
+                    err = "server_error";
+                    errDescription = "OIDC is not enabled.";
+                    return false;
+                }
+
+                // nonceパラメタ 必須
+                if (string.IsNullOrEmpty(nonce))
+                {
+                    err = "server_error";
+                    errDescription = "There was no nonce in query.";
+                    return false;
                 }
             }
 
@@ -718,32 +711,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!string.IsNullOrEmpty(client_id))
                     {
                         // client_id & (client_secret or x509)
-                        authned = CmnEndpoints.ClientAuthentication(client_id, client_secret, x509, out permittedLevel);
+                        authned = CmnEndpoints.ClientAuthentication(
+                            client_id, client_secret, ref x509, out permittedLevel);
                     }
                     else if (!string.IsNullOrEmpty(assertion))
                     {
                         // assertion
-                        Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                                assertion.Split('.')[1]), CustomEncode.us_ascii));
-
-                        string pubKey = Helper.GetInstance().GetJwkRsaPublickey(dic[OAuth2AndOIDCConst.iss]);
-                        pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                        if (!string.IsNullOrEmpty(pubKey))
-                        {
-                            if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
-                                assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
-                            {
-                                // aud 検証
-                                if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
-                                {
-                                    authned = true;
-                                    client_id = iss;
-                                    permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                                }
-                            }
-                        }
+                        authned = CmnEndpoints.ClientAuthentication(
+                            assertion, out client_id, ref x509, out permittedLevel);
                     }
                 }
 
@@ -891,9 +866,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
                     // client_id & (client_secret or x509)
-                    authned = CmnEndpoints.ClientAuthentication(
-                        client_id, client_secret, x509,
-                        out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
+                        ref x509,　out OAuth2AndOIDCEnum.ClientMode permittedLevel);
                 }
 
                 #endregion
@@ -1001,9 +975,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
                 {
                     // client_id & client_secret
-                    authned = CmnEndpoints.ClientAuthentication(
-                        client_id, client_secret, x509,
-                        out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
+                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel);
                 }
 
                 #endregion
@@ -1130,9 +1103,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
                 {
                     // client_id & client_secret
-                    authned = CmnEndpoints.ClientAuthentication(
-                        client_id, client_secret, x509,
-                        out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
+                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel);
                 }
 
                 #endregion
@@ -1306,6 +1278,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region　ClientAuthentication
 
+        #region client_id & (client_secret or x509)
+
         /// <summary>ClientAuthentication</summary>
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
@@ -1313,7 +1287,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
         /// <returns>bool</returns>
         public static bool ClientAuthentication(string client_id, string client_secret,
-            X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
         {
             permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
 
@@ -1327,6 +1301,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                     {
                         //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                        x509 = null; // client_secretがあった場合、x509を無効化
                         return true;
                     }
                 }
@@ -1344,6 +1319,56 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return false;
         }
+
+        #endregion
+
+        #region assertion
+
+        /// <summary>ClientAuthentication</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <returns>bool</returns>
+        public static bool ClientAuthentication(string assertion, out string client_id,
+            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+        {
+            if (!string.IsNullOrEmpty(assertion))
+            {
+                // assertionがあった場合、x509を無効化
+                x509 = null;
+
+                // pubKey
+                Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                        assertion.Split('.')[1]), CustomEncode.us_ascii));
+
+                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(dic[OAuth2AndOIDCConst.iss]);
+                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                if (!string.IsNullOrEmpty(pubKey))
+                {
+                    // 署名検証 ≒ クライアント認証
+                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+                        assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
+                    {
+                        // aud 検証
+                        if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
+                        {
+                            permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
+                            client_id = iss;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+            client_id = "";
+            return false;
+        }
+
+        #endregion
 
         #endregion
 
