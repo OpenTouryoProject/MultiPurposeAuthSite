@@ -110,8 +110,8 @@ namespace MultiPurposeAuthSite.Controllers
             //{
             //    //string thumbprint = x509.Thumbprint;
             //    //string subject = x509.Subject;
-            //    //string subjectName = x509.SubjectName.Name; // Subjectと同じ
-            //    //string friendlyName = x509.FriendlyName;　// sha256RSA, etc.
+            //    //string subjectName = x509.SubjectName.Name;                     // Subjectと同じ
+            //    //string algFriendlyName = x509.SignatureAlgorithm.FriendlyName;　// sha256RSA, etc.
             //}
 
             string scope = "";
@@ -316,9 +316,8 @@ namespace MultiPurposeAuthSite.Controllers
                 out string client_id, out string client_secret))
             {
                 // client_id & (client_secret or x509)
-                if (CmnEndpoints.ClientAuthentication(
-                    client_id, client_secret, x509,
-                    out OAuth2AndOIDCEnum.ClientMode permittedLevel))
+                if (CmnEndpoints.ClientAuthentication(client_id, client_secret,
+                    ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
                 {
                     // 検証完了
                     if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
@@ -398,13 +397,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        public Dictionary<string, string> IntrospectToken(FormDataCollection formData)
+        public Dictionary<string, object> IntrospectToken(FormDataCollection formData)
         {
             // 戻り値
             // ・正常
-            Dictionary<string, string> ret = new Dictionary<string, string>();
+            Dictionary<string, object> ret = new Dictionary<string, object>();
             // ・異常
-            Dictionary<string, string> err = new Dictionary<string, string>();
+            Dictionary<string, object> err = new Dictionary<string, object>();
 
             // 変数
             string token = formData[OAuth2AndOIDCConst.token];
@@ -419,9 +418,8 @@ namespace MultiPurposeAuthSite.Controllers
                 out string client_id, out string client_secret))
             {
                 // client_id & (client_secret or x509)
-                if (CmnEndpoints.ClientAuthentication(
-                    client_id, client_secret, x509,
-                    out OAuth2AndOIDCEnum.ClientMode permittedLevel))
+                if (CmnEndpoints.ClientAuthentication(client_id, client_secret,
+                    ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
                 {
 
                     // 検証完了
@@ -469,6 +467,14 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
                                 {
                                     scopes += claim.Value + " ";
+                                }
+                                else if(claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_CnfX5t))
+                                {
+                                    string temp = OAuth2AndOIDCConst.x5t + claim.Type.Substring(OAuth2AndOIDCConst.Claim_CnfX5t.Length);
+                                    ret.Add(OAuth2AndOIDCConst.cnf, new Dictionary<string, string>()
+                                    {
+                                        { temp, claim.Value}
+                                    });
                                 }
                                 else
                                 {

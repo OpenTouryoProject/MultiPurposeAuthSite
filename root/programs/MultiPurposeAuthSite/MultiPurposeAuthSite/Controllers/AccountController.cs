@@ -1953,7 +1953,6 @@ namespace MultiPurposeAuthSite.Controllers
         #region Authorize（認可エンドポイント）
 
         /// <summary>認可エンドポイント</summary>
-        /// <param name="grant_type">string（必須）</param>
         /// <param name="client_id">string（必須）</param>
         /// <param name="redirect_uri">string（任意）</param>
         /// <param name="response_type">string（必須）</param>
@@ -1966,14 +1965,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
         public ActionResult OAuth2Authorize(
-            string grant_type, string client_id, string redirect_uri,
+            string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
             string nonce, string prompt) // OpenID Connect
             // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
         {
             if (CmnEndpoints.ValidateAuthZReqParam(
-                grant_type, client_id, redirect_uri, response_type, scope, nonce,
+                client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
                 // Cookie認証チケットからClaimsIdentityを取得しておく。
@@ -2073,16 +2072,43 @@ namespace MultiPurposeAuthSite.Controllers
                     switch (response_type)
                     {
                         case OAuth2AndOIDCConst.ImplicitResponseType:
-                            return new RedirectResult(valid_redirect_uri + string.Format(
-                                "#access_token={0}&state={1}&token_type={2}&expires_in={3}",
-                                access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            if (string.IsNullOrEmpty(access_token))
+                            {
+                                return new RedirectResult(valid_redirect_uri
+                                    + string.Format("#error=access_denied&state={0}", state));
+                            }
+                            else
+                            {
+                                return new RedirectResult(valid_redirect_uri + string.Format(
+                                    "#access_token={0}&state={1}&token_type={2}&expires_in={3}",
+                                    access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            }
+                            
                         case OAuth2AndOIDCConst.OidcImplicit1_ResponseType:
-                            return new RedirectResult(valid_redirect_uri + string.Format(
-                                "#id_token={0}&state={1}", id_token, state));
+                            if (string.IsNullOrEmpty(id_token))
+                            {
+                                return new RedirectResult(valid_redirect_uri
+                                    + string.Format("#error=access_denied&state={0}", state));
+                            }
+                            else
+                            {
+                                return new RedirectResult(valid_redirect_uri
+                                    + string.Format("#id_token={0}&state={1}", id_token, state));
+                            }
+                            
                         case OAuth2AndOIDCConst.OidcImplicit2_ResponseType:
-                            return new RedirectResult(valid_redirect_uri + string.Format(
-                                "#id_token={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
-                                id_token, access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            if (string.IsNullOrEmpty(id_token))
+                            {
+                                return new RedirectResult(valid_redirect_uri
+                                    + string.Format("#error=access_denied&state={0}", state));
+                            }
+                            else
+                            {
+                                return new RedirectResult(valid_redirect_uri + string.Format(
+                                    "#id_token={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
+                                    id_token, access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            }
+                            
                         default:
                             break;
                     }
@@ -2107,18 +2133,45 @@ namespace MultiPurposeAuthSite.Controllers
                     switch (response_type)
                     {
                         case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType:
-                            return new RedirectResult(valid_redirect_uri + string.Format(
-                                "#code={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
-                                code, access_token, state, "bearer",
-                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            if (string.IsNullOrEmpty(access_token))
+                            {
+                                return new RedirectResult(valid_redirect_uri
+                                    + string.Format("#error=access_denied&state={0}", state));
+                            }
+                            else
+                            {
+                                return new RedirectResult(valid_redirect_uri + string.Format(
+                                    "#code={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
+                                    code, access_token, state, "bearer",
+                                    Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            }
+                            
                         case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType:
-                            return new RedirectResult(valid_redirect_uri + string.Format(
-                                "#code={0}&id_token={1}", code, id_token));
+                            if (string.IsNullOrEmpty(id_token))
+                            {
+                                return new RedirectResult(valid_redirect_uri
+                                    + string.Format("#error=access_denied&state={0}", state));
+                            }
+                            else
+                            {
+                                return new RedirectResult(valid_redirect_uri + string.Format(
+                                    "#code={0}&id_token={1}", code, id_token));
+                            }
+                            
                         case OAuth2AndOIDCConst.OidcHybrid3_ResponseType:
-                            return new RedirectResult(valid_redirect_uri + string.Format(
-                                "#code={0}&access_token={1}&id_token={2}&state={3}&token_type={4}&expires_in={5}",
-                                code, access_token, id_token, state, "bearer",
-                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            if (string.IsNullOrEmpty(id_token))
+                            {
+                                return new RedirectResult(valid_redirect_uri
+                                    + string.Format("#error=access_denied&state={0}", state));
+                            }
+                            else
+                            {
+                                return new RedirectResult(valid_redirect_uri + string.Format(
+                                    "#code={0}&access_token={1}&id_token={2}&state={3}&token_type={4}&expires_in={5}",
+                                    code, access_token, id_token, state, "bearer",
+                                    Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                            }
+                            
                         default:
                             break;
                     }
@@ -2143,7 +2196,6 @@ namespace MultiPurposeAuthSite.Controllers
         /// 仲介コードを発行してRedirectエンドポイントへRedirect。
         /// ※ パラメタは、認可レスポンスのURL中に残っているものを使用。
         /// </summary>
-        /// <param name="grant_type">string（必須）</param>
         /// <param name="client_id">string（必須）</param>
         /// <param name="redirect_uri">string（任意）</param>
         /// <param name="response_type">string（必須）</param>
@@ -2156,13 +2208,13 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public ActionResult OAuth2Authorize(
-            string grant_type, string client_id, string redirect_uri,
+            string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
             string nonce) // OpenID Connect
         {
             if (CmnEndpoints.ValidateAuthZReqParam(
-                grant_type, client_id, redirect_uri, response_type, scope, nonce,
+                client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
                 // Cookie認証チケットからClaimsIdentityを取得しておく。

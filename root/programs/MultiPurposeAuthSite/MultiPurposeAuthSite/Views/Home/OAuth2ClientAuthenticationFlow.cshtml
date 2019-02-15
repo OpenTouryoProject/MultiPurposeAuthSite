@@ -58,6 +58,7 @@
     <div class="col-md-8">
         <p><a class="btn btn-default" href="#" id="OAuth2UserInfoEndpoint" url="@(Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint)">Get user claims</a></p>
         <br />
+        <div id="debug"></div>
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
         <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
@@ -101,7 +102,9 @@
 
         $(function () {
             // Response
-            alert(JSON.stringify('@ViewBag.Response'));
+            //alert(JSON.stringify('@ViewBag.Response'));
+            document.getElementById('debug').innerHTML
+                = 'Objected fragment : ' + '@ViewBag.Response';
 
             // access_token
             // access_token (Bearer Token) を使用して
