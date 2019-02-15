@@ -60,6 +60,11 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// <summary>CmnAccessToken</summary>
     public class CmnAccessToken
     {
+        /// <summary>S256</summary>
+        static string S256 = "#S256";
+        /// <summary>S512</summary>
+        static string S512 = "#S512";
+
         #region Create
 
         #region Claims経由
@@ -291,16 +296,16 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (x509 != null)
             {
                 Dictionary<string, string> dic = new Dictionary<string, string>();
-                string key = OAuth2AndOIDCConst.x5t + "#";
+                string key = OAuth2AndOIDCConst.x5t;
                 string val = x509.Thumbprint;
 
                 if (x509.SignatureAlgorithm.FriendlyName == "sha256RSA")
                 {
-                    key += "256";
+                    key += CmnAccessToken.S256;
                 }
                 else if (x509.SignatureAlgorithm.FriendlyName == "sha512RSA")
                 {
-                    key += "512";
+                    key += CmnAccessToken.S512;
                 }
 
                 dic.Add(key, val);
@@ -487,12 +492,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 JObject cnf = (JObject)authTokenClaimSet[OAuth2AndOIDCConst.cnf];
 
-                if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + "#256"))
-                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + "#256",
-                        (string)cnf[OAuth2AndOIDCConst.x5t + "#256"]));
-                else if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + "#512"))
-                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + "#256",
-                        (string)cnf[OAuth2AndOIDCConst.x5t + "#512"]));
+                if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256))
+                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + CmnAccessToken.S256,
+                        (string)cnf[OAuth2AndOIDCConst.x5t + CmnAccessToken.S256]));
+                else if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + CmnAccessToken.S512))
+                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + CmnAccessToken.S512,
+                        (string)cnf[OAuth2AndOIDCConst.x5t + CmnAccessToken.S512]));
             }
             
             // - fapi

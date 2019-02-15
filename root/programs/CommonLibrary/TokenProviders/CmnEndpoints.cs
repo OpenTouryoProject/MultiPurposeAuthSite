@@ -125,7 +125,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
                 OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToString1(),
-                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToString1()
+                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToString1(),
+                OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToString1()
             });
 
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
@@ -215,7 +216,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 });
 
                 OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
-                    "RS256"
+                    "RS256", "ES256"
+                });
+
+                OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
+                    "RSA-OAEP"
                 });
 
                 OpenIDConfig.Add("jwks_uri",
@@ -267,9 +272,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #endregion
 
-            OpenIDConfig.Add("service_documentation", "・・・");
-
             #endregion
+
+            #region FAPI
+
+            OpenIDConfig.Add("mutual_tls_sender_constrained_access_tokens", "true");
+            
+            #endregion
+
+            OpenIDConfig.Add("service_documentation", "・・・");
 
             #endregion
 
