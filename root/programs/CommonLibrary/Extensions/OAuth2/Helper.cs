@@ -186,6 +186,33 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             // ASP.NET＋クライアント証明書 - マイクロソフト系技術情報 Wiki
             // https://techinfoofmicrosofttech.osscons.jp/index.php?ASP.NET%EF%BC%8B%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%83%88%E8%A8%BC%E6%98%8E%E6%9B%B8
 
+#if NETCORE
+            // - Equivalent to WebRequestHandler in .net Core · Issue #26223 · dotnet/corefx
+            //   https://github.com/dotnet/corefx/issues/26223
+            //   - https://docs.microsoft.com/ja-jp/dotnet/api/system.net.http.webrequesthandler?view=netcore-2.2
+            //   - https://docs.microsoft.com/ja-jp/dotnet/api/system.net.http.webrequesthandler?view=netcore-3.0
+            // 
+            // On the netcore, WebRequestHandler is not yet supported,
+            // but HttpClientHandleralso has ClientCertificates member.
+            // 
+            // - c# - Add client certificate to .net core Httpclient - Stack Overflow
+            //   https://stackoverflow.com/questions/40014047/add-client-certificate-to-net-core-httpclient
+
+            HttpClientHandler handler = new HttpClientHandler
+            {
+                Proxy = proxy,
+                //ClientCertificateOptions = ClientCertificateOption.Automatic
+            };
+
+            // Browser（Resource Owner）からではなくでClientから
+            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfx))
+            {
+                handler.ClientCertificates.Add(new X509Certificate(
+                    OAuth2AndOIDCParams.ClientCertPfx,
+                    OAuth2AndOIDCParams.ClientCertPwd,
+                    X509KeyStorageFlags.MachineKeySet));
+            }
+#else
             WebRequestHandler handler = new WebRequestHandler
             {
                 Proxy = proxy,
@@ -200,7 +227,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                     OAuth2AndOIDCParams.ClientCertPwd,
                     X509KeyStorageFlags.MachineKeySet));
             }
-
+#endif
             return new HttpClient(handler);
             //return new HttpClient();
         }
@@ -352,7 +379,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         }
 
         #endregion
-        
+
         #region JWT Bearer Token Flow
 
         /// <summary>
@@ -367,7 +394,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         }
 
         #endregion
-        
+
         #endregion
 
         #region OAuth2（ResourcesServer）WebAPI
@@ -469,7 +496,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <param name="response_type">response_type</param>
         /// <returns>redirect_uri</returns>
         public string GetClientsRedirectUri(string client_id, string response_type)
-        {   
+        {
             return this.GetClientsRedirectUri(client_id, response_type, out bool isResourceOwner);
         }
 
@@ -815,9 +842,9 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <param name="nonce">string</param>
         /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
-        public static ClaimsIdentity AddClaim(ClaimsIdentity claims, 
+        public static ClaimsIdentity AddClaim(ClaimsIdentity claims,
             string client_id, string state, IEnumerable<string> scopes, string nonce)
-            // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
+        // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
         {
             // 発行者の情報を含める。
 
@@ -852,7 +879,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         }
 
         #endregion
-        
+
         #endregion
     }
 }

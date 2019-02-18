@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/06/07  西野 大介         新規
+    //*  2019/02/18  西野 大介         FAPI2 CC対応実施
     //**********************************************************************************
 *@
 
@@ -77,9 +78,21 @@
         </div>
     </div>
     <div class="form-group">
-        @Html.LabelFor(m => m.JwtAssertionPublickey, new { @class = "col-md-2 control-label" })
+        @Html.LabelFor(m => m.JwkRsaPublickey, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
-            @Html.TextBoxFor(m => m.JwtAssertionPublickey, new { @class = "form-control" })
+            @Html.TextBoxFor(m => m.JwkRsaPublickey, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.TlsClientAuthSubjectDn, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.TlsClientAuthSubjectDn, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ClientMode, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.DropDownListFor(model => model.ClientMode, Model.DdlClientModeItems, new { @class = "form-control" })
         </div>
     </div>
     <div class="form-group">

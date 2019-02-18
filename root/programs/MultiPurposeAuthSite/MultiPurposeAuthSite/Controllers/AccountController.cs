@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/02/18  西野 大介         FAPI2 CC対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -57,9 +58,9 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
+using Touryo.Infrastructure.Public.FastReflection;
 
 using Facebook;
 
@@ -2367,10 +2368,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region 仲介コードを使用してAccess, Refresh, Id Tokenを取得
 
-                //stateの検証
                 string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":";
                 string fapi2Prefix = OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() + ":";
 
+                //stateの検証
                 if (state == state_InSessionOrCookie
                     || state == fapi1Prefix + state_InSessionOrCookie  // specではなくテスト仕様
                     || state == fapi2Prefix + state_InSessionOrCookie) // specではなくテスト仕様
@@ -2572,7 +2573,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken))
                         {
                             model.RefreshToken = dic[OAuth2AndOIDCConst.RefreshToken] ?? "";
-                        }   
+                        }
 
                         #endregion
                     }
@@ -2740,7 +2741,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// ModelStateDictionaryに
-        /// IEnumerable<string>の情報を移送
+        /// IEnumerable(string)の情報を移送
         /// </summary>
         /// <param name="errors">IEnumerable<string></param>
         private void AddErrors(IEnumerable<string> errors)
