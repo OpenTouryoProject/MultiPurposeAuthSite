@@ -17,7 +17,8 @@
     <TargetFrameworkVersion>v4.7</TargetFrameworkVersion>
     <MvcBuildViews>true</MvcBuildViews>
     <UseIISExpress>true</UseIISExpress>
-    <IISExpressSSLPort />
+    <IISExpressSSLPort>
+    </IISExpressSSLPort>
     <IISExpressAnonymousAuthentication />
     <IISExpressWindowsAuthentication />
     <IISExpressUseClassicPipelineMode />
@@ -253,6 +254,7 @@
     <Compile Include="Controllers\ErrorController.cs" />
     <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\ManageController.cs" />
+    <Compile Include="Controllers\Fido2ServerController.cs" />
     <Compile Include="Controllers\OAuth2EndpointController.cs" />
     <Compile Include="Controllers\OAuth2ResourceServerController.cs" />
     <Compile Include="Controllers\PingController.cs" />
@@ -274,6 +276,10 @@
     <Content Include="Content\font-awesome.css" />
     <Content Include="Content\font-awesome.min.css" />
     <Content Include="Content\touryo\Style.css" />
+    <Content Include="images\securitykey.min.svg" />
+    <Content Include="images\securitykey.svg" />
+    <Content Include="Scripts\touryo\msWebauthn.js" />
+    <Content Include="Scripts\touryo\util.js" />
     <Content Include="Scripts\touryo\webauthn.js" />
     <Content Include="fonts\fontawesome-webfont.svg" />
     <Content Include="fonts\glyphicons-halflings-regular.svg" />
