@@ -126,8 +126,8 @@
   <data name="AddEmailSuccess" xml:space="preserve">
     <value>Your E-mail has been added.</value>
   </data>
-  <data name="AddFIDO2DataSuccess" xml:space="preserve">
-    <value>Your FIDO2 data has been added.</value>
+  <data name="AddMsPassDataSuccess" xml:space="preserve">
+    <value>Your MsPass data has been added.</value>
   </data>
   <data name="AddOAuth2DataSuccess" xml:space="preserve">
     <value>Your OAuth2 data has been added.</value>
@@ -140,6 +140,9 @@
   </data>
   <data name="AddUnstructuredDataSuccess" xml:space="preserve">
     <value>Your additional attribute data has been added.</value>
+  </data>
+  <data name="AddWebAuthnDataSuccess" xml:space="preserve">
+    <value>Your WebAuthn data has been added.</value>
   </data>
   <data name="ChangeEmailFailure" xml:space="preserve">
     <value>Your E-mail has not been changed.</value>
@@ -171,8 +174,8 @@
   <data name="RemoveExternalLoginSuccess" xml:space="preserve">
     <value>The external login has been removed.</value>
   </data>
-  <data name="RemoveFIDO2DataSuccess" xml:space="preserve">
-    <value>Your FIDO2 has been removed.</value>
+  <data name="RemoveMsPassDataSuccess" xml:space="preserve">
+    <value>Your MsPass has been removed.</value>
   </data>
   <data name="RemoveOAuth2DataSuccess" xml:space="preserve">
     <value>Your OAuth2 has been removed.</value>
@@ -185,6 +188,9 @@
   </data>
   <data name="RemoveUnstructuredDataSuccess" xml:space="preserve">
     <value>Your additional attribute data has been removed.</value>
+  </data>
+  <data name="RemoveWebAuthnDataSuccess" xml:space="preserve">
+    <value>Your WebAuthn has been removed.</value>
   </data>
   <data name="SetPasswordSuccess" xml:space="preserve">
     <value>Your password has been set.</value>

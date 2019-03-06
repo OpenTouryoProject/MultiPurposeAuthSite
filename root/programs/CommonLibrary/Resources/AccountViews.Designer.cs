@@ -178,24 +178,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   FIDO2 login に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string FIDO2Login {
-            get {
-                return ResourceManager.GetString("FIDO2Login", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Login with FIDO2 authenticator に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string FIDO2LoginSubmit {
-            get {
-                return ResourceManager.GetString("FIDO2LoginSubmit", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Please check your email to reset your password. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ForgotPasswordConfirmationP {
@@ -345,6 +327,24 @@ namespace MultiPurposeAuthSite.Resources {
         public static string LoginWithTwoFactorAuthenticatorTitle {
             get {
                 return ResourceManager.GetString("LoginWithTwoFactorAuthenticatorTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Microsoft Passport login に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string MsPassLogin {
+            get {
+                return ResourceManager.GetString("MsPassLogin", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Login with Microsoft Passport authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string MsPassLoginSubmit {
+            get {
+                return ResourceManager.GetString("MsPassLoginSubmit", resourceCulture);
             }
         }
         
@@ -552,6 +552,24 @@ namespace MultiPurposeAuthSite.Resources {
         public static string VerifyEmailAddressTitle {
             get {
                 return ResourceManager.GetString("VerifyEmailAddressTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   WebAuthn login に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string WebAuthnLogin {
+            get {
+                return ResourceManager.GetString("WebAuthnLogin", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Login with WebAuthn authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string WebAuthnLoginSubmit {
+            get {
+                return ResourceManager.GetString("WebAuthnLoginSubmit", resourceCulture);
             }
         }
     }

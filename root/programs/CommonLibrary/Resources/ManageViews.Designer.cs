@@ -88,29 +88,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add FIDO2 data form に類似しているローカライズされた文字列を検索します。
+        ///   Add Microsoft Passport data form に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string AddFIDO2DataH4 {
+        public static string AddMsPassDataH4 {
             get {
-                return ResourceManager.GetString("AddFIDO2DataH4", resourceCulture);
+                return ResourceManager.GetString("AddMsPassDataH4", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Register FIDO 2 authenticator に類似しているローカライズされた文字列を検索します。
+        ///   Register Microsoft Passport 2 authenticator に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string AddFIDO2DataSubmit {
+        public static string AddMsPassDataSubmit {
             get {
-                return ResourceManager.GetString("AddFIDO2DataSubmit", resourceCulture);
+                return ResourceManager.GetString("AddMsPassDataSubmit", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Add FIDO2 data に類似しているローカライズされた文字列を検索します。
+        ///   Add Microsoft Passport data に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string AddFIDO2DataTitle {
+        public static string AddMsPassDataTitle {
             get {
-                return ResourceManager.GetString("AddFIDO2DataTitle", resourceCulture);
+                return ResourceManager.GetString("AddMsPassDataTitle", resourceCulture);
             }
         }
         
@@ -219,6 +219,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string AddUnstructuredDataTitle {
             get {
                 return ResourceManager.GetString("AddUnstructuredDataTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add WebAuthn data form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataH4 {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Register WebAuthn authenticator に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataSubmit {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add WebAuthn data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataTitle {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataTitle", resourceCulture);
             }
         }
         
@@ -493,33 +520,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   FIDO2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexFIDO2Data {
-            get {
-                return ResourceManager.GetString("IndexFIDO2Data", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add your FIDO2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexFIDO2DataAddActionLink {
-            get {
-                return ResourceManager.GetString("IndexFIDO2DataAddActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Remove your OAuth2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexFIDO2DataRemoveButton {
-            get {
-                return ResourceManager.GetString("IndexFIDO2DataRemoveButton", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Change your account settings に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexH4 {
@@ -534,6 +534,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexManageGdprData {
             get {
                 return ResourceManager.GetString("IndexManageGdprData", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Microsoft Passport data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexMsPassData {
+            get {
+                return ResourceManager.GetString("IndexMsPassData", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add your Microsoft Passport data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexMsPassDataAddActionLink {
+            get {
+                return ResourceManager.GetString("IndexMsPassDataAddActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove your Microsoft Passport data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexMsPassDataRemoveButton {
+            get {
+                return ResourceManager.GetString("IndexMsPassDataRemoveButton", resourceCulture);
             }
         }
         
@@ -768,6 +795,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexUserNameChangeActionLink {
             get {
                 return ResourceManager.GetString("IndexUserNameChangeActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   WebAuthn data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexWebAuthnData {
+            get {
+                return ResourceManager.GetString("IndexWebAuthnData", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add your WebAuthn data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexWebAuthnDataAddActionLink {
+            get {
+                return ResourceManager.GetString("IndexWebAuthnDataAddActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove your WebAuthn data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexWebAuthnDataRemoveButton {
+            get {
+                return ResourceManager.GetString("IndexWebAuthnDataRemoveButton", resourceCulture);
             }
         }
         

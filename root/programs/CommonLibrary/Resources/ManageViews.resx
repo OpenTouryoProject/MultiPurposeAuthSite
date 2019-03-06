@@ -126,14 +126,14 @@
   <data name="AddEmailTitle" xml:space="preserve">
     <value>Add E-mail</value>
   </data>
-  <data name="AddFIDO2DataH4" xml:space="preserve">
-    <value>Add FIDO2 data form</value>
+  <data name="AddMsPassDataH4" xml:space="preserve">
+    <value>Add Microsoft Passport data form</value>
   </data>
-  <data name="AddFIDO2DataSubmit" xml:space="preserve">
-    <value>Register FIDO 2 authenticator</value>
+  <data name="AddMsPassDataSubmit" xml:space="preserve">
+    <value>Register Microsoft Passport 2 authenticator</value>
   </data>
-  <data name="AddFIDO2DataTitle" xml:space="preserve">
-    <value>Add FIDO2 data</value>
+  <data name="AddMsPassDataTitle" xml:space="preserve">
+    <value>Add Microsoft Passport data</value>
   </data>
   <data name="AddOAuth2DataH4" xml:space="preserve">
     <value>Add OAuth2 data form</value>
@@ -170,6 +170,15 @@
   </data>
   <data name="AddUnstructuredDataTitle" xml:space="preserve">
     <value>Add attribute data</value>
+  </data>
+  <data name="AddWebAuthnDataH4" xml:space="preserve">
+    <value>Add WebAuthn data form</value>
+  </data>
+  <data name="AddWebAuthnDataSubmit" xml:space="preserve">
+    <value>Register WebAuthn authenticator</value>
+  </data>
+  <data name="AddWebAuthnDataTitle" xml:space="preserve">
+    <value>Add WebAuthn data</value>
   </data>
   <data name="ChangeEmailH4" xml:space="preserve">
     <value>Change E-mail form</value>
@@ -261,20 +270,20 @@
   <data name="IndexExternalLoginsActionLink" xml:space="preserve">
     <value>Manage</value>
   </data>
-  <data name="IndexFIDO2Data" xml:space="preserve">
-    <value>FIDO2 data</value>
-  </data>
-  <data name="IndexFIDO2DataAddActionLink" xml:space="preserve">
-    <value>Add your FIDO2 data</value>
-  </data>
-  <data name="IndexFIDO2DataRemoveButton" xml:space="preserve">
-    <value>Remove your OAuth2 data</value>
-  </data>
   <data name="IndexH4" xml:space="preserve">
     <value>Change your account settings</value>
   </data>
   <data name="IndexManageGdprData" xml:space="preserve">
     <value>Gdpr personal data</value>
+  </data>
+  <data name="IndexMsPassData" xml:space="preserve">
+    <value>Microsoft Passport data</value>
+  </data>
+  <data name="IndexMsPassDataAddActionLink" xml:space="preserve">
+    <value>Add your Microsoft Passport data</value>
+  </data>
+  <data name="IndexMsPassDataRemoveButton" xml:space="preserve">
+    <value>Remove your Microsoft Passport data</value>
   </data>
   <data name="IndexOAuth2Data" xml:space="preserve">
     <value>OAuth2 data</value>
@@ -353,6 +362,15 @@
   </data>
   <data name="IndexUserNameChangeActionLink" xml:space="preserve">
     <value>Change your user name</value>
+  </data>
+  <data name="IndexWebAuthnData" xml:space="preserve">
+    <value>WebAuthn data</value>
+  </data>
+  <data name="IndexWebAuthnDataAddActionLink" xml:space="preserve">
+    <value>Add your WebAuthn data</value>
+  </data>
+  <data name="IndexWebAuthnDataRemoveButton" xml:space="preserve">
+    <value>Remove your WebAuthn data</value>
   </data>
   <data name="ManageGdprPersonalDataH4" xml:space="preserve">
     <value>GDPR personal data management form</value>

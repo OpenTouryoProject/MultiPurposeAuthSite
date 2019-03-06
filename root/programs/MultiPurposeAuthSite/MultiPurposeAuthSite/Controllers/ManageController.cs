@@ -25,6 +25,7 @@ using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.IdP;
+using MultiPurposeAuthSite.Extensions.FIDO;
 using MultiPurposeAuthSite.Extensions.OAuth2;
 using MultiPurposeAuthSite.ViewModels;
 
@@ -106,10 +107,14 @@ namespace MultiPurposeAuthSite.Controllers
             AddOAuth2DataSuccess,
             /// <summary>RemoveOAuth2DataSuccess</summary>
             RemoveOAuth2DataSuccess,
-            /// <summary>AddFIDO2DataSuccess</summary>
-            AddFIDO2DataSuccess,
-            /// <summary>RemoveFIDO2DataSuccess</summary>
-            RemoveFIDO2DataSuccess,
+            /// <summary>AddMsPassDataSuccess</summary>
+            AddMsPassDataSuccess,
+            /// <summary>RemoveMsPassDataSuccess</summary>
+            RemoveMsPassDataSuccess,
+            /// <summary>AddWebAuthnDataSuccess</summary>
+            AddWebAuthnDataSuccess,
+            /// <summary>RemoveWebAuthnDataSuccess</summary>
+            RemoveWebAuthnDataSuccess,
             /// <summary>Error</summary>
             Error
         }
@@ -201,8 +206,10 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
                 : message == EnumManageMessageId.AddOAuth2DataSuccess ? Resources.ManageController.AddOAuth2DataSuccess
                 : message == EnumManageMessageId.RemoveOAuth2DataSuccess ? Resources.ManageController.RemoveOAuth2DataSuccess
-                : message == EnumManageMessageId.AddFIDO2DataSuccess ? Resources.ManageController.AddFIDO2DataSuccess
-                : message == EnumManageMessageId.RemoveFIDO2DataSuccess ? Resources.ManageController.RemoveFIDO2DataSuccess
+                : message == EnumManageMessageId.AddMsPassDataSuccess ? Resources.ManageController.AddMsPassDataSuccess
+                : message == EnumManageMessageId.RemoveMsPassDataSuccess ? Resources.ManageController.RemoveMsPassDataSuccess
+                : message == EnumManageMessageId.AddWebAuthnDataSuccess ? Resources.ManageController.AddWebAuthnDataSuccess
+                : message == EnumManageMessageId.RemoveWebAuthnDataSuccess ? Resources.ManageController.RemoveWebAuthnDataSuccess
                 : message == EnumManageMessageId.Error ? Resources.ManageController.Error
                 : "";
 
@@ -2229,19 +2236,19 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region FIDO2 Data
+        #region FIDO Data
 
-        #region Create
+        #region WebAuthn
 
         /// <summary>
-        /// FIDO2関連の非構造化データの追加・編集画面（初期表示）
-        /// GET: /Manage/AddFIDO2Data
+        /// WebAuthn関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddWebAuthnData
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
-        public async Task<ActionResult> AddFIDO2Data()
+        public async Task<ActionResult> AddWebAuthnData()
         {
-            if (Config.CanEditFIDO2Data
+            if ((Config.FIDOServerMode == EnumFidoType.WebAuthn)
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
@@ -2260,18 +2267,68 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>
-        /// FIDO2関連の非構造化データの追加・編集画面（FIDO2関連の非構造化データ設定）
-        /// POST: /Manage/AddFIDO2Data
+        /// WebAuthn関連の非構造化データの削除
+        /// GET: /Manage/RemoveWebAuthnData
         /// </summary>
-        /// <param name="fido2UserId">string</param>
-        /// <param name="fido2Publickey">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> RemoveWebAuthnData()
+        {
+            if ((Config.FIDOServerMode == EnumFidoType.WebAuthn)
+                && Config.EnableEditingOfUserAttribute)
+            {
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        #endregion
+
+        #region MsPass
+
+        /// <summary>
+        /// MsPass関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddMsPassData
+        /// </summary>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpGet]
+        public async Task<ActionResult> AddMsPassData()
+        {
+            if ((Config.FIDOServerMode == EnumFidoType.MsPass)
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                ViewBag.UserId = user.Id;
+                ViewBag.UserName = user.UserName;
+                ViewBag.AttestationChallenge = GetPassword.Generate(22, 0);
+
+                return View();
+            }
+            else
+            {
+                // エラー画面
+                return View("Error");
+            }
+        }
+
+        /// <summary>
+        /// MsPass関連の非構造化データの追加・編集画面
+        /// POST: /Manage/AddMsPassData
+        /// </summary>
+        /// <param name="msPassUserId">string</param>
+        /// <param name="msPassPublickey">string</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddFIDO2Data(
-            string fido2UserId, string fido2Publickey)
+        public async Task<ActionResult> AddMsPassData(
+            string msPassUserId, string msPassPublickey)
         {
-            if (Config.CanEditFIDO2Data
+            if ((Config.FIDOServerMode == EnumFidoType.MsPass)
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
@@ -2281,10 +2338,10 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ユーザを取得できた。
                     //if (user.Id == credentialId)
-                    if (user.UserName == fido2UserId)
+                    if (user.UserName == msPassUserId)
                     {
                         // 公開鍵を保存
-                        user.FIDO2PublicKey = fido2Publickey;
+                        user.FIDO2PublicKey = msPassPublickey;
 
                         // ユーザーの保存
                         IdentityResult result = await UserManager.UpdateAsync(user);
@@ -2292,7 +2349,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 結果の確認
                         if (result.Succeeded)
                         {
-                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddFIDO2DataSuccess });
+                            return RedirectToAction("Index", new { Message = EnumManageMessageId.AddMsPassDataSuccess });
                         }
                     }
                 }
@@ -2302,20 +2359,16 @@ namespace MultiPurposeAuthSite.Controllers
             return View("Error");
         }
 
-        #endregion
-
-        #region Delete
-
         /// <summary>
-        /// FIDO2関連の非構造化データの削除
-        /// POST: /Manage/RemoveFIDO2Data
+        /// MsPass関連の非構造化データの削除
+        /// POST: /Manage/RemoveMsPassData
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveFIDO2Data()
+        public async Task<ActionResult> RemoveMsPassData()
         {
-            if (Config.CanEditFIDO2Data
+            if ((Config.FIDOServerMode == EnumFidoType.MsPass)
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
@@ -2334,7 +2387,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果の確認
                     if (result.Succeeded)
                     {
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveFIDO2DataSuccess });
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
                     }
                 }
             }

@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：FIDO2.Helper
-//* クラス日本語名  ：FIDO2.Helper（ライブラリ）
+//* クラス名        ：FIDO.MsPassHelper
+//* クラス日本語名  ：FIDO.MsPassHelper（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -44,10 +44,10 @@ using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Jwt;
 
-namespace MultiPurposeAuthSite.Extensions.FIDO2
+namespace MultiPurposeAuthSite.Extensions.FIDO
 {
-    /// <summary>FIDO2.Helper（ライブラリ）</summary>
-    public class Helper
+    /// <summary>FIDO.MsPassHelper（ライブラリ）</summary>
+    public class MsPassHelper
     {
         private string PublicKey = "";
         private string Challenge = "";
@@ -55,7 +55,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO2
         /// <summary>constructor</summary>
         /// <param name="publicKey">string</param>
         /// <param name="challenge">string</param>
-        public Helper(string publicKey, string challenge)
+        public MsPassHelper(string publicKey, string challenge)
         {
             this.PublicKey = publicKey;
             this.Challenge = challenge;

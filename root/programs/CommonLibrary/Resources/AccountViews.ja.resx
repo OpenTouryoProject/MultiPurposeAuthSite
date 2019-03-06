@@ -156,12 +156,6 @@
   <data name="ExternalLoginsListPartialSubmit" xml:space="preserve">
     <value>{0} アカウントを使用してログイン</value>
   </data>
-  <data name="FIDO2Login" xml:space="preserve">
-    <value>FIDO2ログイン</value>
-  </data>
-  <data name="FIDO2LoginSubmit" xml:space="preserve">
-    <value>FIDO2 認証器でログインする。</value>
-  </data>
   <data name="ForgotPasswordConfirmationP" xml:space="preserve">
     <value>電子メールを確認してパスワードをリセットしてください。</value>
   </data>
@@ -212,6 +206,12 @@
   </data>
   <data name="LoginWithTwoFactorAuthenticatorTitle" xml:space="preserve">
     <value>TOTP二要素認証</value>
+  </data>
+  <data name="MsPassLogin" xml:space="preserve">
+    <value>Microsoft Passportログイン</value>
+  </data>
+  <data name="MsPassLoginSubmit" xml:space="preserve">
+    <value>Microsoft Passport認証器でログインする。</value>
   </data>
   <data name="OAuth2AuthorizeGrantButton" xml:space="preserve">
     <value>権限を付与</value>
@@ -281,5 +281,11 @@
   </data>
   <data name="VerifyEmailAddressTitle" xml:space="preserve">
     <value>あなたのe-mailアドレスを確証します。</value>
+  </data>
+  <data name="WebAuthnLogin" xml:space="preserve">
+    <value>WebAuthnログイン</value>
+  </data>
+  <data name="WebAuthnLoginSubmit" xml:space="preserve">
+    <value>WebAuthn認証器でログインする。</value>
   </data>
 </root>

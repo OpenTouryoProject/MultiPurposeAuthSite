@@ -339,23 +339,23 @@
   <data name="IndexOAuth2TokenGetButton" xml:space="preserve">
     <value>OAuth2アクセス トークンの取得</value>
   </data>
-  <data name="AddFIDO2DataH4" xml:space="preserve">
-    <value>FIDO2データの追加フォーム</value>
+  <data name="AddMsPassDataH4" xml:space="preserve">
+    <value>Microsoft Passportデータの追加フォーム</value>
   </data>
-  <data name="AddFIDO2DataSubmit" xml:space="preserve">
-    <value>FIDO2 認証器を登録する</value>
+  <data name="AddMsPassDataSubmit" xml:space="preserve">
+    <value>Microsoft Passport認証器を登録する</value>
   </data>
-  <data name="AddFIDO2DataTitle" xml:space="preserve">
-    <value>FIDO2データの追加</value>
+  <data name="AddMsPassDataTitle" xml:space="preserve">
+    <value>Microsoft Passportデータの追加</value>
   </data>
-  <data name="IndexFIDO2Data" xml:space="preserve">
-    <value>FIDO2データ</value>
+  <data name="IndexMsPassData" xml:space="preserve">
+    <value>Microsoft Passportデータ</value>
   </data>
-  <data name="IndexFIDO2DataAddActionLink" xml:space="preserve">
-    <value>FIDO2データの設定</value>
+  <data name="IndexMsPassDataAddActionLink" xml:space="preserve">
+    <value>Microsoft Passportデータの設定</value>
   </data>
-  <data name="IndexFIDO2DataRemoveButton" xml:space="preserve">
-    <value>FIDO2データの削除</value>
+  <data name="IndexMsPassDataRemoveButton" xml:space="preserve">
+    <value>Microsoft Passportデータの削除</value>
   </data>
   <data name="IndexDeleteGdprPersonalDataButton" xml:space="preserve">
     <value>GDPR 個人情報データ削除</value>
@@ -455,5 +455,23 @@
   </data>
   <data name="ShowTwoFactorAuthenticatorRecoveryCodesTitle" xml:space="preserve">
     <value>TOTP二要素認証のリカバリコード管理</value>
+  </data>
+  <data name="AddWebAuthnDataH4" xml:space="preserve">
+    <value>WebAuthnデータの追加フォーム</value>
+  </data>
+  <data name="AddWebAuthnDataSubmit" xml:space="preserve">
+    <value>WebAuthn認証器を登録する</value>
+  </data>
+  <data name="AddWebAuthnDataTitle" xml:space="preserve">
+    <value>WebAuthnデータの追加</value>
+  </data>
+  <data name="IndexWebAuthnData" xml:space="preserve">
+    <value>WebAuthnデータ</value>
+  </data>
+  <data name="IndexWebAuthnDataAddActionLink" xml:space="preserve">
+    <value>WebAuthnデータの設定</value>
+  </data>
+  <data name="IndexWebAuthnDataRemoveButton" xml:space="preserve">
+    <value>WebAuthnデータの削除</value>
   </data>
 </root>

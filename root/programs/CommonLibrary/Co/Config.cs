@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
 using System.Collections.Generic;
@@ -42,6 +43,7 @@ using Newtonsoft.Json;
 using Microsoft.Extensions.Configuration;
 #endif
 
+using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Util;
 
 /// <summary>MultiPurposeAuthSite.Co</summary>
@@ -855,18 +857,7 @@ namespace MultiPurposeAuthSite.Co
                     Config.EquipOAuth2Server
                     && Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditOAuth2Data"));
             }
-        }
-
-        /// <summary>
-        /// CanEditFIDO2Data
-        /// </summary>
-        public static bool CanEditFIDO2Data
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditFIDO2Data"));
-            }
-        }
+        }        
 
         /// <summary>
         /// CanUseGdprFunction
@@ -912,7 +903,31 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
-        #region OAuth2 Client & Server
+        #region FIDO
+
+        /// <summary>
+        /// FIDOServerMode
+        /// </summary>
+        public static EnumFidoType FIDOServerMode
+        {
+            get
+            {
+                string temp = GetConfigParameter.GetConfigValue("FIDOServerMode");
+                switch (temp.ToLower())
+                {
+                    case "webauthn":
+                        return EnumFidoType.WebAuthn;
+                    case "mspass":
+                        return EnumFidoType.MsPass;
+                    default:
+                        return EnumFidoType.None;
+                }
+            }
+        }
+
+        #endregion
+
+        #region OAuth2
 
         #region 共通設定
 

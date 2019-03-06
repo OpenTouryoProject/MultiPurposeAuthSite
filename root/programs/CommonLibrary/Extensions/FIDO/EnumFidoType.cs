@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：Fido2ServerController
-//* クラス日本語名  ：Fido2ServerのApiController
+//* クラス名        ：EnumFidoType
+//* クラス日本語名  ：EnumFidoType列挙型
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -28,35 +28,19 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2019/03/05  西野 大介         新規
+//*  2019/03/06  西野 大介         新規
 //**********************************************************************************
 
-using System.Collections.Generic;
-
-using System.Web.Http;
-using System.Net.Http.Formatting;
-
-/// <summary>MultiPurposeAuthSite.Controllers</summary>
-namespace MultiPurposeAuthSite.Controllers
+namespace MultiPurposeAuthSite.Extensions.FIDO
 {
-    /// <summary>Fido2ServerのApiController（ライブラリ）</summary>
-    [Authorize]
-    public class Fido2ServerController : ApiController
+    /// <summary>列挙型</summary>
+    public enum EnumFidoType
     {
-        #region /hoge
-
-        /// <summary>
-        /// hogeエンドポイント
-        /// POST: /hoge
-        /// </summary>
-        /// <param name="formData">FormDataCollection</param>
-        /// <returns>Dictionary(string, string)</returns>
-        [HttpPost]
-        public Dictionary<string, string> hoge(FormDataCollection formData)
-        {
-            return null;
-        }
-
-        #endregion
+        /// <summary>None</summary>
+        None,
+        /// <summary>MsPass (Microsoft Passport)</summary>
+        MsPass,
+        /// <summary>WebAuthn</summary>
+        WebAuthn
     }
 }

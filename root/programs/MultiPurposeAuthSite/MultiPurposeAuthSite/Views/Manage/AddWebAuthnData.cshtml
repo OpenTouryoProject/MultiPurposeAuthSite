@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：AddFIDO2Data
-    //* クラス日本語名  ：FIDO2関連の非構造化データの追加・編集用のView
+    //* クラス名        ：AddWebAuthnData
+    //* クラス日本語名  ：WebAuthn関連の非構造化データの追加・編集用のView
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -16,7 +16,7 @@
     //*
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
-    //*  2017/06/07  西野 大介         新規
+    //*  2019/03/06  西野 大介         新規
     //**********************************************************************************
 *@
 
@@ -26,7 +26,7 @@
 @using MultiPurposeAuthSite.ViewModels
 
 @{
-    ViewBag.Title = ManageViews.AddFIDO2DataTitle;
+    ViewBag.Title = ManageViews.AddWebAuthnDataTitle;
 }
 
 @Scripts.Render("~/bundles/multiauthsite")
@@ -38,19 +38,19 @@
 
 <h2>@ViewBag.Title</h2>
 
-@using (Html.BeginForm("AddFIDO2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+@using (Html.BeginForm("AddWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
 {
     @Html.AntiForgeryToken()
-    <h4>@ManageViews.AddFIDO2DataH4</h4>
+    <h4>@ManageViews.AddWebAuthnDataH4</h4>
     <hr />
     @Html.ValidationSummary("", new { @class = "text-danger" })
     <div class="form-group">
         <div class="col-md-6">
-            <button id="fido2_make" type="button" class="btn btn-default">@ManageViews.AddFIDO2DataSubmit</button>
+            <button id="webauthn_make" type="button" class="btn btn-default">@ManageViews.AddWebAuthnDataSubmit</button>
         </div>
     </div>
-    <input type="hidden" id="fido2UserId" name="fido2UserId" />
-    <input type="hidden" id="fido2Publickey" name="fido2Publickey" />
+    <input type="hidden" id="webauthnUserId" name="webauthnUserId" />
+    <input type="hidden" id="webauthnPublickey" name="webauthnPublickey" />
 }
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
@@ -63,9 +63,9 @@
 
             var accountInfo = {
                 rpDisplayName: 'MultiPurposeAuthSite', // Name of relying party
-                displayName: '@ViewBag.UserName',      // Name of user account in relying partying
+                displayName: '@ViewBag.UserName'       // Name of user account in relying partying
 
-                @*name: '@ViewBag.UserName',             // Detailed name of account
+                @*name: '@ViewBag.UserName',           // Detailed name of account
                 id: '@ViewBag.UserName',               // Account identifier ... credentialId
                 imageUri: '',                          // user’s account image*@
             };
@@ -83,10 +83,11 @@
             var denyList = {};
             var ext = {};*@
 
-            $("#fido2_make").on("click", function () {
+            $("#webauthn_make").on("click", function () {
                 navigator.authentication.makeCredential(accountInfo, cryptoParameters)
                     .then(function (result) {
                         // properties
+                        //alert(JSON.stringify(result));
 
                         localStorage["userId"] = "@ViewBag.UserName";
                         localStorage["credentialType"] = result.credential.type;
@@ -95,13 +96,13 @@
                         localStorage["publicKey"] = JSON.stringify(result.publicKey);
                         localStorage["attestation"] = result.attestation; // 現時点では動作しない
 
-                        $("#fido2UserId").val("@ViewBag.UserName");
-                        $("#fido2Publickey").val(JSON.stringify(result.publicKey));
+                        $("#webauthnUserId").val("@ViewBag.UserName");
+                        $("#webauthnPublickey").val(JSON.stringify(result.publicKey));
 
                         // submit
                         $("form").submit();
                     });
             });
-        })
+        });
     </script>
 }

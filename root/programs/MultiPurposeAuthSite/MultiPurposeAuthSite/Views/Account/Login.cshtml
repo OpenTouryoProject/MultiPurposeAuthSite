@@ -24,6 +24,7 @@
 @using MultiPurposeAuthSite.Entity
 @using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.ViewModels
+@using MultiPurposeAuthSite.Extensions.FIDO
 
 @model AccountLoginViewModel
 
@@ -98,6 +99,7 @@
                     @Html.ActionLink(AccountViews.LoginForgotPasswordActionLink, "ForgotPassword")
                 </p>
 
+                // MsPass, WebAuthn 共用フィールド
                 @Html.HiddenFor(m => m.Fido2UserId)
                 @Html.HiddenFor(m => m.Fido2Signature)
                 @Html.HiddenFor(m => m.Fido2AuthenticatorData)
@@ -128,13 +130,23 @@
             </section>
         </div>
 
-@if (Config.CanEditFIDO2Data)
+@if (Config.FIDOServerMode == EnumFidoType.MsPass)
 {
         <div class="sample-box-1">
-            @*ここにFIDO2を実装*@
-            @AccountViews.FIDO2Login
+            @*ここにMsPassを実装*@
+            @AccountViews.MsPassLogin
             <section>
-                <button id="fido2_signin" name="submitButton" value="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
+                <button id="mspass_signin" name="submitButton" value="mspass_signin" type="button" class="btn btn-default">@AccountViews.MsPassLoginSubmit</button>
+            </section>
+        </div>
+}
+else if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
+{
+        <div class="sample-box-1">
+            @*ここにWebAuthnを実装*@
+            @AccountViews.WebAuthnLogin
+            <section>
+                <button id="webauthn_signin" name="submitButton" value="webauthn_signin" type="button" class="btn btn-default">@AccountViews.WebAuthnLoginSubmit</button>
             </section>
         </div>
 }
@@ -152,7 +164,7 @@
                 // submit
                 $("#LoginForm").submit();
             });
-        })
+        });
     </script>
 
     <script>
@@ -164,30 +176,28 @@
                 // submit
                 $("#LoginForm").submit();
             });
-        })
+        });
     </script>
 
     <script>
-        // FIDO2
+        // MsPass
         const credAlgorithm = "RSASSA-PKCS1-v1_5";
-
-        
 
         $(function () {
 
-            $("#fido2_signin").on("click", function () {
+            $("#mspass_signin").on("click", function () {
                 // button name
                 $("#submitButtonName").val(this.value);
-                
+
                 var challenge = '@Model.Fido2Challenge';
                 var id = localStorage["credentialId"];
                 var allowList =
-                      [
+                    [
                         {
                             type: 'ScopedCred',
                             id: id
                         }
-                      ];
+                    ];
 
                 //var timeout = {};
                 //var ext = {};
@@ -211,14 +221,14 @@
                         $("#LoginForm").submit();
                     });
 
-                    //.then(function(result) {
-                    //    alert("ID=" + id + "\r\n" + result);
-                    //})
-                    //.catch(function(err) {
-                    //    alert(err);
-                    //});
+                //.then(function(result) {
+                //    alert("ID=" + id + "\r\n" + result);
+                //})
+                //.catch(function(err) {
+                //    alert(err);
+                //});
             });
-        })        
+        });       
 
         /*
         function parseBase64(s) {

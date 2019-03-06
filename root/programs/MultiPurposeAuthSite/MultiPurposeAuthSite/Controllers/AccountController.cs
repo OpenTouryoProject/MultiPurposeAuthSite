@@ -31,8 +31,8 @@ using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.TokenProviders;
-using ExtOAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
-using ExtFIDO2 = MultiPurposeAuthSite.Extensions.FIDO2;
+using MultiPurposeAuthSite.Extensions.FIDO;
+using MultiPurposeAuthSite.Extensions.OAuth2;
 
 using System;
 using System.Collections.Generic;
@@ -285,13 +285,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                                         // テスト機能でSession["state"]のチェックを止めたので不要になった。
                                         // また、ManageControllerの方はログイン済みアクセスになるので。
-                                        
+
                                         // AppScan指摘の反映
                                         this.FxSessionAbandon();
                                         // SessionIDの切換にはこのコードが必要である模様。
                                         // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                         Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
-                                        
+
                                         // オペレーション・トレース・ログ出力
                                         Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
 
@@ -393,9 +393,9 @@ namespace MultiPurposeAuthSite.Controllers
                         "&login_hint=" + uid +
                         "&prompt=none");
                 }
-                else if (submitButtonName == "fido2_signin")
+                else if (submitButtonName == "mspass_signin")
                 {
-                    // FIDO2のサインイン
+                    // Microsoft Passportのサインイン
 
                     //ApplicationUser user = await UserManager.FindByIdAsync(model.Fido2UserId);
                     ApplicationUser user = await UserManager.FindByNameAsync(model.Fido2UserId);
@@ -436,8 +436,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 //Debug.WriteLine("authenticatorData: " + model.Fido2AuthenticatorData);
                                 //Debug.WriteLine("signature: " + model.Fido2Signature);
 
-                                ExtFIDO2.Helper fido2Helper = new ExtFIDO2.Helper(user.FIDO2PublicKey, fido2Challenge);
-                                if (fido2Helper.ValidateSignature(
+                                MsPassHelper msPassHelper = new MsPassHelper(user.FIDO2PublicKey, fido2Challenge);
+                                if (msPassHelper.ValidateSignature(
                                     model.Fido2ClientData, model.Fido2AuthenticatorData, model.Fido2Signature))
                                 {
                                     await SignInManager.SignInAsync(user, false, false);
@@ -457,13 +457,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // テスト機能でSession["state"]のチェックを止めたので不要になった。
                                     // また、ManageControllerの方はログイン済みアクセスになるので。
-                                    
+
                                     // AppScan指摘の反映
                                     this.FxSessionAbandon();
                                     // SessionIDの切換にはこのコードが必要である模様。
                                     // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
                                     Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
-                                    
+
                                     // オペレーション・トレース・ログ出力
                                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
 
@@ -503,6 +503,10 @@ namespace MultiPurposeAuthSite.Controllers
                             ModelState.AddModelError("", Resources.AccountController.Login_emailconfirm);
                         }
                     }
+                }
+                else if (submitButtonName == "webauthn_signin")
+                {
+                    // WebAuthnのサインイン
                 }
                 else
                 {
@@ -1768,7 +1772,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string redirect_uri = Config.IdFederationRedirectEndPoint;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                    model.Response = await Helper.GetInstance().GetAccessTokenByCodeAsync(
                              new Uri(Config.IdFederationTokenEndPoint),
                             client_id, client_secret, redirect_uri, code, "");
 
@@ -2007,7 +2011,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // ★ 必要に応じてスコープのフィルタ
                         if (isAuth)
                         {
-                            scopes = ExtOAuth2.Helper.FilterClaimAtAuth(scopes).ToArray();
+                            scopes = Helper.FilterClaimAtAuth(scopes).ToArray();
                         }
 
                         // ★ Codeの生成
@@ -2399,7 +2403,7 @@ namespace MultiPurposeAuthSite.Controllers
                             OAuth2AndOIDCParams.RS256Pfx,
                             OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
 
-                        model.Response = await ExtOAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                        model.Response = await Helper.GetInstance().GetAccessTokenByCodeAsync(
                             tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
                                 iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
                                 ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
@@ -2410,9 +2414,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idと、クライアント証明書（TB）
                         string client_id = clientId_InSessionOrCookie;
-                        //string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        //string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await ExtOAuth2.Helper.GetInstance()
+                        model.Response = await Helper.GetInstance()
                             .GetAccessTokenByCodeAsync(tokenEndpointUri,
                             client_id, "", redirect_uri, code);
                     }
@@ -2422,19 +2426,19 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = clientId_InSessionOrCookie;
-                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
                         if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                         {
                             // 通常
-                            model.Response = await ExtOAuth2.Helper.GetInstance()
+                            model.Response = await Helper.GetInstance()
                                 .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                 client_id, client_secret, redirect_uri, code);
                         }
                         else
                         {
                             // PKCE
-                            model.Response = await ExtOAuth2.Helper.GetInstance()
+                            model.Response = await Helper.GetInstance()
                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                client_id, client_secret, redirect_uri,
                                code, code_verifier_InSessionOrCookie);
@@ -2542,7 +2546,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
                     {
                         // UserInfoエンドポイントにアクセス
-                        model.Response = await ExtOAuth2.Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
+                        model.Response = await Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
                     }
                     else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
                     {
@@ -2555,9 +2559,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await ExtOAuth2.Helper.GetInstance().
+                        model.Response = await Helper.GetInstance().
                             UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
 
@@ -2605,9 +2609,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await ExtOAuth2.Helper.GetInstance().RevokeTokenAsync(
+                        model.Response = await Helper.GetInstance().RevokeTokenAsync(
                             revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -2640,9 +2644,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = ExtOAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await ExtOAuth2.Helper.GetInstance().IntrospectTokenAsync(
+                        model.Response = await Helper.GetInstance().IntrospectTokenAsync(
                             introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion

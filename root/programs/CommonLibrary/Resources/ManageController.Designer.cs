@@ -88,11 +88,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your FIDO2 data has been added. に類似しているローカライズされた文字列を検索します。
+        ///   Your MsPass data has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string AddFIDO2DataSuccess {
+        public static string AddMsPassDataSuccess {
             get {
-                return ResourceManager.GetString("AddFIDO2DataSuccess", resourceCulture);
+                return ResourceManager.GetString("AddMsPassDataSuccess", resourceCulture);
             }
         }
         
@@ -129,6 +129,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string AddUnstructuredDataSuccess {
             get {
                 return ResourceManager.GetString("AddUnstructuredDataSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your WebAuthn data has been added. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddWebAuthnDataSuccess {
+            get {
+                return ResourceManager.GetString("AddWebAuthnDataSuccess", resourceCulture);
             }
         }
         
@@ -223,11 +232,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your FIDO2 has been removed. に類似しているローカライズされた文字列を検索します。
+        ///   Your MsPass has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string RemoveFIDO2DataSuccess {
+        public static string RemoveMsPassDataSuccess {
             get {
-                return ResourceManager.GetString("RemoveFIDO2DataSuccess", resourceCulture);
+                return ResourceManager.GetString("RemoveMsPassDataSuccess", resourceCulture);
             }
         }
         
@@ -264,6 +273,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string RemoveUnstructuredDataSuccess {
             get {
                 return ResourceManager.GetString("RemoveUnstructuredDataSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your WebAuthn has been removed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RemoveWebAuthnDataSuccess {
+            get {
+                return ResourceManager.GetString("RemoveWebAuthnDataSuccess", resourceCulture);
             }
         }
         

@@ -156,12 +156,6 @@
   <data name="ExternalLoginsListPartialSubmit" xml:space="preserve">
     <value>Login using your {0} account</value>
   </data>
-  <data name="FIDO2Login" xml:space="preserve">
-    <value>FIDO2 login</value>
-  </data>
-  <data name="FIDO2LoginSubmit" xml:space="preserve">
-    <value>Login with FIDO2 authenticator</value>
-  </data>
   <data name="ForgotPasswordConfirmationP" xml:space="preserve">
     <value>Please check your email to reset your password.</value>
   </data>
@@ -212,6 +206,12 @@
   </data>
   <data name="LoginWithTwoFactorAuthenticatorTitle" xml:space="preserve">
     <value>TOTP Two-factor authentication</value>
+  </data>
+  <data name="MsPassLogin" xml:space="preserve">
+    <value>Microsoft Passport login</value>
+  </data>
+  <data name="MsPassLoginSubmit" xml:space="preserve">
+    <value>Login with Microsoft Passport authenticator</value>
   </data>
   <data name="OAuth2AuthorizeGrantButton" xml:space="preserve">
     <value>Grant</value>
@@ -281,5 +281,11 @@
   </data>
   <data name="VerifyEmailAddressTitle" xml:space="preserve">
     <value>Verify your e-mail address.</value>
+  </data>
+  <data name="WebAuthnLogin" xml:space="preserve">
+    <value>WebAuthn login</value>
+  </data>
+  <data name="WebAuthnLoginSubmit" xml:space="preserve">
+    <value>Login with WebAuthn authenticator</value>
   </data>
 </root>
