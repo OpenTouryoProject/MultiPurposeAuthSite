@@ -200,6 +200,7 @@
     <Compile Include="Data\StopUserStoreException.cs" />
     <Compile Include="Data\CmnUserStore.cs" />
     <Compile Include="Extensions\FIDO\EnumFidoType.cs" />
+    <Compile Include="Extensions\FIDO\WebAuthnHelper.cs" />
     <Compile Include="Extensions\FIDO\MsPassHelper.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\OAuth2\DataProvider.cs" />
