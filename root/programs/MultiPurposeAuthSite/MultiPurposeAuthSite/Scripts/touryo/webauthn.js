@@ -42,10 +42,11 @@
 //**********************************************************************************
 // Endpoint
 //**********************************************************************************
-var CredentialCreationOptionsEndpoint = "/CredentialCreationOptions";
-var AuthenticatorAttestationEndpoint = "/AuthenticatorAttestation";
-var CredentialGetOptionsEndpoint = "/CredentialGetOptions";
-var AuthenticatorAssertionEndpoint = "/AuthenticatorAssertion";
+var EndpointPrefix = "/MultiPurposeAuthSite/Fido2";
+var CredentialCreationOptionsEndpoint = EndpointPrefix + "/CredentialCreationOptions";
+var AuthenticatorAttestationEndpoint = EndpointPrefix + "/AuthenticatorAttestation";
+var CredentialGetOptionsEndpoint = EndpointPrefix + "/CredentialGetOptions";
+var AuthenticatorAssertionEndpoint = EndpointPrefix + "/AuthenticatorAssertion";
 
 //**********************************************************************************
 // 初期化
@@ -199,12 +200,16 @@ function makeCredential() {
     let require_resident_key = $("#checkbox-residentCredentials").is(':checked');
 
     // POST JSONデータ生成
+    // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#example-credential-creation-options
     const data = {
         username: state.user.name,
-        attType: attestation_type,
-        authType: authenticator_attachment,
-        userVerification: user_verification,
-        requireResidentKey: require_resident_key
+        displayName: state.user.name,
+        authenticatorSelection: {
+            residentKey: require_resident_key,
+            authenticatorAttachment: authenticator_attachment,
+            userVerification: user_verification
+        },
+        attestation: attestation_type
     };
 
     // ログ
@@ -214,9 +219,10 @@ function makeCredential() {
     fetch(CredentialCreationOptionsEndpoint, {
         // Request
         method: 'POST',
-        body: data,
+        body: JSON.stringify(data),
         headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
         }
     }).then((response) => {
         // Response
@@ -286,7 +292,7 @@ function makeCredential() {
                 navigator.credentials.create({
                     publicKey: publicKeyCredentialCreationOptions 
 
-                }).then(function (AuthenticatorAttestationResponse) {
+                }).then(function (authenticatorAttestationResponse) {
                     // 戻り値
                     Fx_DebugOutput("registerNewCredential - authenticatorAttestationResponse:", authenticatorAttestationResponse);
                     // 使ってる？

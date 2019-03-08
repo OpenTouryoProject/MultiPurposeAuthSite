@@ -131,13 +131,15 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
 
         /// <summary>CredentialCreationOptions</summary>
         /// <param name="username">string</param>
-        /// <param name="attType">string</param>
-        /// <param name="authType">string</param>
-        /// <param name="requireResidentKey">string</param>
+        /// <param name="attestation">string</param>
+        /// <param name="authenticatorAttachment">string</param>
+        /// <param name="residentKey">string</param>
         /// <param name="userVerification">string</param>
-        public CredentialCreateOptions CredentialCreationOptions(
-            string username, string attType, string authType, bool requireResidentKey, string userVerification)
+        public CredentialCreateOptions CredentialCreationOptions(string username,
+            string attestation, string authenticatorAttachment,
+            bool residentKey, string userVerification)
         {
+            // , , , , 
             // 1. Get user from DB by username (in our example, auto create missing users)
             // https://www.w3.org/TR/webauthn/#dom-publickeycredentialcreationoptions-user
             User user = DemoStorage.GetOrAddUser(username, () => new User
@@ -157,13 +159,13 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             // https://www.w3.org/TR/webauthn/#dictdef-authenticatorselectioncriteria
             AuthenticatorSelection authenticatorSelection = new AuthenticatorSelection
             {
-                RequireResidentKey = requireResidentKey,
+                RequireResidentKey = residentKey,
                 UserVerification = userVerification.ToEnum<UserVerificationRequirement>()
             };
 
             // https://www.w3.org/TR/webauthn/#enumdef-authenticatorattachment
-            if (!string.IsNullOrEmpty(authType))
-                authenticatorSelection.AuthenticatorAttachment = authType.ToEnum<AuthenticatorAttachment>();
+            if (!string.IsNullOrEmpty(authenticatorAttachment))
+                authenticatorSelection.AuthenticatorAttachment = authenticatorAttachment.ToEnum<AuthenticatorAttachment>();
 
             // https://www.w3.org/TR/webauthn/#dictdef-authenticationextensionsclientinputs
             // https://www.w3.org/TR/webauthn/#sctn-defined-extensions
@@ -194,7 +196,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                 // https://www.w3.org/TR/webauthn/#dictdef-authenticatorselectioncriteria
                 authenticatorSelection,
                 // https://www.w3.org/TR/webauthn/#enumdef-attestationconveyancepreference
-                attType.ToEnum<AttestationConveyancePreference>(),
+                attestation.ToEnum<AttestationConveyancePreference>(),
                 // https://www.w3.org/TR/webauthn/#dictdef-authenticationextensionsclientinputs
                 exts);
 

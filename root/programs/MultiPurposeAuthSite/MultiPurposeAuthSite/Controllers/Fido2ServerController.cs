@@ -31,20 +31,10 @@
 //*  2019/03/05  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Co;
-using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Log;
-
-using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
-using System.Text;
-using System.Linq;
 using System.Collections.Generic;
-using System.Security.Claims;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
 using System.Web;
@@ -53,28 +43,29 @@ using System.Web.Http.Cors;
 using System.Net.Http;
 using System.Net.Http.Formatting;
 
-using Microsoft.Owin.Security;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
 using Fido2NetLib;
 using Fido2NetLib.Objects;
-using Fido2NetLib.Development;
 using static Fido2NetLib.Fido2;
 
-using Touryo.Infrastructure.Business.Presentation;
-using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.Presentation;
-using Touryo.Infrastructure.Public.IO;
-using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>Fido2ServerのApiController（ライブラリ）</summary>
-    [Authorize]
+    [EnableCors(
+        // リソースへのアクセスを許可されている発生元
+        origins: "*",
+        // リソースによってサポートされているヘッダー
+        headers: "*",
+        // リソースによってサポートされているメソッド
+        methods: "*",
+        // 
+        SupportsCredentials = true)]
     public class Fido2ServerController : ApiController
     {
         /// <summary>FormatException</summary>
@@ -88,28 +79,44 @@ namespace MultiPurposeAuthSite.Controllers
                 e.InnerException != null ? " (" + e.InnerException.Message + ")" : "");
         }
 
+        //[HttpGet]
+        //[Route("Fido2/CredentialCreationOptions")]
+        //public Dictionary<string, string> Index()
+        //{
+        //    return new Dictionary<string, string>()
+        //    {
+        //        { "txt", "notepad.exe"},
+        //        { "bmp", "paint.exe"},
+        //        { "dib", "paint.exe"},
+        //        { "rtf", "wordpad.exe"}
+        //    };
+        //}
+
         #region 登録フロー
 
         /// <summary>
         /// CredentialCreationOptions
         /// </summary>
-        /// <param name="username"string></param>
-        /// <param name="attType">string</param>
-        /// <param name="authType">string</param>
-        /// <param name="requireResidentKey">string</param>
-        /// <param name="userVerification">string</param>
+        /// <param name="requestJSON">JObject</param>
         /// <returns>HttpResponseMessage</returns>
         [HttpPost]
-        public HttpResponseMessage CredentialCreationOptions(
-            string username, string attType, string authType, bool requireResidentKey, string userVerification)
+        [Route("Fido2/CredentialCreationOptions")]
+        public HttpResponseMessage CredentialCreationOptions(JObject requestJSON)
         {
+            string username = (string)requestJSON["username"];
+            string displayName = (string)requestJSON["displayName"];
+            bool residentKey = bool.Parse((string)requestJSON["authenticatorSelection"]["residentKey"]);
+            string authenticatorAttachment = (string)requestJSON["authenticatorSelection"]["authenticatorAttachment"];
+            string userVerification = (string)requestJSON["authenticatorSelection"]["userVerification"];
+            string attestation = (string)requestJSON["attestation"];
+
             CredentialCreateOptions options = null;
 
             try
             {
                 WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
                 options = webAuthnHelper.CredentialCreationOptions(
-                    username, attType, authType, requireResidentKey, userVerification);
+                    username, attestation, authenticatorAttachment, residentKey, userVerification);
             }
             catch (Exception e)
             {
@@ -138,6 +145,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="attestationResponse">AuthenticatorAttestationRawResponse</param>
         /// <returns>HttpResponseMessage</returns>
         [HttpPost]
+        [Route("Fido2/AuthenticatorAttestation")]
         public async Task<HttpResponseMessage> AuthenticatorAttestation(
             AuthenticatorAttestationRawResponse attestationResponse)
         {
@@ -179,6 +187,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="username"string></param>
         /// <returns>HttpResponseMessage</returns>
         [HttpPost]
+        [Route("Fido2/CredentialGetOptions")]
         public HttpResponseMessage CredentialGetOptions(string username)
         {
             AssertionOptions options = null;
@@ -215,6 +224,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="attestationResponse">AuthenticatorAttestationRawResponse</param>
         /// <returns>HttpResponseMessage</returns>
         [HttpPost]
+        [Route("Fido2/AuthenticatorAssertion")]
         public async Task<HttpResponseMessage> AuthenticatorAssertion(
             AuthenticatorAssertionRawResponse clientResponse)
         {

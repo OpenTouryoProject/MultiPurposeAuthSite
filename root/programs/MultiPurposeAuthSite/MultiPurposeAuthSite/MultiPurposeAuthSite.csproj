@@ -439,7 +439,7 @@
           <AutoAssignPort>True</AutoAssignPort>
           <DevelopmentServerPort>54300</DevelopmentServerPort>
           <DevelopmentServerVPath>/</DevelopmentServerVPath>
-          <IISUrl>http://localhost:54300/MultiPurposeAuthSite/</IISUrl>
+          <IISUrl>https://localhost:44300/MultiPurposeAuthSite/</IISUrl>
           <NTLMAuthentication>False</NTLMAuthentication>
           <UseCustomServer>False</UseCustomServer>
           <CustomServerUrl>
