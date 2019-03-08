@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：FIDO.MsPassHelper
-//* クラス日本語名  ：FIDO.MsPassHelper（ライブラリ）
+//* クラス名        ：MsPassHelper
+//* クラス日本語名  ：MsPassHelper（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/10/16  西野 大介         新規
+//*  2019/03/06  西野 大介         リネーム
 //**********************************************************************************
 
 using System;
@@ -46,7 +47,7 @@ using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.Extensions.FIDO
 {
-    /// <summary>FIDO.MsPassHelper（ライブラリ）</summary>
+    /// <summary>MsPassHelper（ライブラリ）</summary>
     public class MsPassHelper
     {
         private string PublicKey = "";

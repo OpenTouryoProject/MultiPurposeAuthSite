@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuth2.DataProvider
-//* クラス日本語名  ：OAuth2.DataProvider（ライブラリ）
+//* クラス名        ：DataProvider
+//* クラス日本語名  ：DataProvider（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -43,7 +43,7 @@ using Dapper;
 namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
     /// <summary>
-    /// OAuth2.DataProvider
+    /// DataProvider
     /// OAuth2DataにUnstructuredDataを保存する。
     /// </summary>
     public class DataProvider

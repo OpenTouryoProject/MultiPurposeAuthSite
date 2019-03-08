@@ -217,6 +217,7 @@
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
+    <Compile Include="Util\UriExtension.cs" />
     <Compile Include="Util\Sts\OnlySts.cs" />
     <Compile Include="Data\EnumUserStoreType.cs" />
     <Compile Include="Entity\ApplicationRole.cs" />

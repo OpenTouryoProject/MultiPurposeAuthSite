@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuth2.Helper
-//* クラス日本語名  ：OAuth2.Helper（ライブラリ）
+//* クラス名        ：Helper
+//* クラス日本語名  ：Helper（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -71,7 +71,7 @@ using Touryo.Infrastructure.Public.FastReflection;
 
 namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
-    /// <summary>OAuth2.Helper（ライブラリ）</summary>
+    /// <summary>Helper（ライブラリ）</summary>
     public class Helper
     {
         #region member variable

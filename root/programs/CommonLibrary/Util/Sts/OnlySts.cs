@@ -36,8 +36,6 @@ using MultiPurposeAuthSite.Data;
 
 namespace MultiPurposeAuthSite.Util.Sts
 {
-   
-
     /// <summary>
     /// 提供する機能をSTSだけにする場合の支援機能
     /// </summary>

@@ -31,10 +31,44 @@
 //*  2019/03/05  西野 大介         新規
 //**********************************************************************************
 
-using System.Collections.Generic;
+using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Log;
 
+using MultiPurposeAuthSite.TokenProviders;
+using MultiPurposeAuthSite.Extensions.FIDO;
+
+using System;
+using System.Text;
+using System.Linq;
+using System.Collections.Generic;
+using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+
+using System.Web;
 using System.Web.Http;
+using System.Web.Http.Cors;
+using System.Net.Http;
 using System.Net.Http.Formatting;
+
+using Microsoft.Owin.Security;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
+
+using Fido2NetLib;
+using Fido2NetLib.Objects;
+using Fido2NetLib.Development;
+using static Fido2NetLib.Fido2;
+
+using Touryo.Infrastructure.Business.Presentation;
+using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Framework.Presentation;
+using Touryo.Infrastructure.Public.IO;
+using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -43,18 +77,173 @@ namespace MultiPurposeAuthSite.Controllers
     [Authorize]
     public class Fido2ServerController : ApiController
     {
-        #region /hoge
+        /// <summary>FormatException</summary>
+        /// <param name="e">Exception</param>
+        /// <returns>string</returns>
+        private string FormatException(Exception e)
+        {
+            return string.Format(
+                "{0}{1}",
+                e.Message,
+                e.InnerException != null ? " (" + e.InnerException.Message + ")" : "");
+        }
+
+        #region 登録フロー
 
         /// <summary>
-        /// hogeエンドポイント
-        /// POST: /hoge
+        /// CredentialCreationOptions
         /// </summary>
-        /// <param name="formData">FormDataCollection</param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <param name="username"string></param>
+        /// <param name="attType">string</param>
+        /// <param name="authType">string</param>
+        /// <param name="requireResidentKey">string</param>
+        /// <param name="userVerification">string</param>
+        /// <returns>HttpResponseMessage</returns>
         [HttpPost]
-        public Dictionary<string, string> hoge(FormDataCollection formData)
+        public HttpResponseMessage CredentialCreationOptions(
+            string username, string attType, string authType, bool requireResidentKey, string userVerification)
         {
-            return null;
+            CredentialCreateOptions options = null;
+
+            try
+            {
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
+                options = webAuthnHelper.CredentialCreationOptions(
+                    username, attType, authType, requireResidentKey, userVerification);
+            }
+            catch (Exception e)
+            {
+                options = new CredentialCreateOptions
+                {
+                    Status = "error",
+                    ErrorMessage = FormatException(e)
+                };
+            }
+
+            return new HttpResponseMessage()
+            {
+                Content = new JsonContent(
+                        options,
+                        new JsonSerializerSettings
+                        {
+                            Formatting = Formatting.None,
+                            ContractResolver = new CamelCasePropertyNamesContractResolver()
+                        })
+            };
+        }
+
+        /// <summary>
+        /// AuthenticatorAttestation
+        /// </summary>
+        /// <param name="attestationResponse">AuthenticatorAttestationRawResponse</param>
+        /// <returns>HttpResponseMessage</returns>
+        [HttpPost]
+        public async Task<HttpResponseMessage> AuthenticatorAttestation(
+            AuthenticatorAttestationRawResponse attestationResponse)
+        {
+            CredentialMakeResult result = null;
+
+            try
+            {
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
+                result = await webAuthnHelper.AuthenticatorAttestation(attestationResponse);
+            }
+            catch (Exception e)
+            {
+                result = new CredentialMakeResult
+                {
+                    Status = "error",
+                    ErrorMessage = FormatException(e)
+                };
+            }
+
+            return new HttpResponseMessage()
+            {
+                Content = new JsonContent(
+                    result,
+                    new JsonSerializerSettings
+                    {
+                        Formatting = Formatting.None,
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    })
+            };
+        }
+
+        #endregion
+
+        #region 認証フロー
+
+        /// <summary>
+        /// CredentialGetOptions
+        /// </summary>
+        /// <param name="username"string></param>
+        /// <returns>HttpResponseMessage</returns>
+        [HttpPost]
+        public HttpResponseMessage CredentialGetOptions(string username)
+        {
+            AssertionOptions options = null;
+
+            try
+            {
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
+                options = webAuthnHelper.CredentialGetOptions(username);
+            }
+            catch (Exception e)
+            {
+                options = new AssertionOptions
+                {
+                    Status = "error",
+                    ErrorMessage = FormatException(e)
+                };
+            }
+
+            return new HttpResponseMessage()
+            {
+                Content = new JsonContent(
+                    options,
+                    new JsonSerializerSettings
+                    {
+                        Formatting = Formatting.None,
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    })
+            };
+        }
+
+        /// <summary>
+        /// AuthenticatorAttestation
+        /// </summary>
+        /// <param name="attestationResponse">AuthenticatorAttestationRawResponse</param>
+        /// <returns>HttpResponseMessage</returns>
+        [HttpPost]
+        public async Task<HttpResponseMessage> AuthenticatorAssertion(
+            AuthenticatorAssertionRawResponse clientResponse)
+        {
+            AssertionVerificationResult result = null;
+
+            try
+            {
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
+                result = await webAuthnHelper.AuthenticatorAssertion(clientResponse);
+            }
+            catch (Exception e)
+            {
+                result = new AssertionVerificationResult
+                {
+                    Status = "error",
+                    ErrorMessage = FormatException(e)
+                };
+            }
+
+            return new HttpResponseMessage()
+            {
+                Content = new JsonContent(
+                    result,
+                    new JsonSerializerSettings
+                    {
+                        Formatting = Formatting.None,
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    })
+            };
         }
 
         #endregion

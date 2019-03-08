@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：OAuth2.RevocationProvider
-//* クラス日本語名  ：OAuth2.RevocationProvider（ライブラリ）
+//* クラス名        ：RevocationProvider
+//* クラス日本語名  ：RevocationProvider（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -43,7 +43,7 @@ using Dapper;
 namespace MultiPurposeAuthSite.Extensions.OAuth2
 {
     /// <summary>
-    /// OAuth2.RevocationProvider
+    /// RevocationProvider
     /// RevocationしたOAuth2のaccess_tokenのjtiを保存する。
     /// </summary>
     public class RevocationProvider
