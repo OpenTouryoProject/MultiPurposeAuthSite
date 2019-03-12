@@ -133,18 +133,22 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region WebAuthn
+
         /// <summary>
-        /// GET: Home/TestWebAuthn
+        /// GET: Home/WebAuthnStarters
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult TestWebAuthn()
+        public ActionResult WebAuthnStarters()
         {
             return View();
         }
 
-        #region OAuth2Starters
+        #endregion
+
+        #region OAuth2
 
         #region Params
 

@@ -23,6 +23,8 @@
 
 // System
 using System;
+using System.Web;
+using System.Web.SessionState;
 
 // OpenTouryo
 using Touryo.Infrastructure.Public.Log;
@@ -317,5 +319,31 @@ namespace MultiPurposeAuthSite
         {
         }
 
+        ///////////////////////////////////////////////////
+        // https://stackoverflow.com/questions/9594229/accessing-session-using-asp-net-web-api
+        ///////////////////////////////////////////////////
+        
+        /// <summary>Application_PostAuthorizeRequest</summary>
+        void Application_PostAuthorizeRequest()
+        {
+            if (this.IsRequest4WebApiThatIsRequiredSession())
+            {
+                HttpContext.Current.SetSessionStateBehavior(SessionStateBehavior.Required);
+            }
+        }
+
+        /// <summary>Is request for webapi that is required session.</summary>
+        /// <returns>bool</returns>
+        bool IsRequest4WebApiThatIsRequiredSession()
+        {
+            if (HttpContext.Current.Request.AppRelativeCurrentExecutionFilePath.IndexOf("/Fido2/") != -1)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
 }

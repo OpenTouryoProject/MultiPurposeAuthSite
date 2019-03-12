@@ -39,12 +39,15 @@ using System.Text;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 using Fido2NetLib;
 using Fido2NetLib.Objects;
 using Fido2NetLib.Development;
 using static Fido2NetLib.Fido2;
+
+using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Extensions.FIDO
 {
@@ -72,6 +75,9 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// </summary>
         /// <see cref="https://techinfoofmicrosofttech.osscons.jp/index.php?fido2-net-lib#sabce498"/>
         private static readonly DevelopmentInMemoryStore DemoStorage = new DevelopmentInMemoryStore();
+
+        /// <summary>Sessionの維持</summary>
+        private static ConcurrentDictionary<string, string> SessionInformation = new ConcurrentDictionary<string, string>();
 
         //private StoredCredential sc = new StoredCredential();
         //private PublicKeyCredentialDescriptor pd = new PublicKeyCredentialDescriptor();
@@ -105,11 +111,12 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         #region constructor
 
         /// <summary>constructor</summary>
-        public WebAuthnHelper()
+        /// <param name="origin">string</param>
+        public WebAuthnHelper(string origin)
         {
             // this._mds = MDSMetadata.Instance("accesskey", "cachedirPath");
-            this._origin = Config.OAuth2AuthorizationServerEndpointsRootURI;
-            
+            this._origin = origin;
+
             Uri uri = new Uri(this._origin);
             this._lib = new Fido2(new Configuration()
             {
@@ -139,14 +146,13 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             string attestation, string authenticatorAttachment,
             bool residentKey, string userVerification)
         {
-            // , , , , 
             // 1. Get user from DB by username (in our example, auto create missing users)
             // https://www.w3.org/TR/webauthn/#dom-publickeycredentialcreationoptions-user
             User user = DemoStorage.GetOrAddUser(username, () => new User
             {
                 DisplayName = username,
                 Name = username,
-                Id = Encoding.UTF8.GetBytes(username) // byte representation of userID is required
+                Id = CustomEncode.StringToByte(username, CustomEncode.UTF_8)
             });
 
             // 2. Get user existing keys by username
@@ -202,28 +208,21 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
 
             #endregion
 
-            // 4. Temporarily store options, session/in-memory cache/redis/db
-            JsonOptions1 = options.ToJson();
-
-            // 5. return options
+            // 4. return options
             return options;
         }
 
-        /// <summary>あとで session/in-memory cache/redis/db に変更する。</summary>
-        string JsonOptions1 = "";
-
         /// <summary>AuthenticatorAttestation</summary>
         /// <param name="attestationResponse">AuthenticatorAttestationRawResponse</param>
+        /// <param name="options">CredentialCreateOptions</param>
         /// <returns>CredentialMakeResultを非同期的に返す</returns>
         public async Task<CredentialMakeResult> AuthenticatorAttestation(
             // https://www.w3.org/TR/webauthn/#authenticatorattestationresponse
-            AuthenticatorAttestationRawResponse attestationResponse)
-        {
-            // 1. get the options we sent the client
+            AuthenticatorAttestationRawResponse attestationResponse,
             // https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialcreationoptions
-            CredentialCreateOptions options = CredentialCreateOptions.FromJson(JsonOptions1);
-
-            // 2. Verify and make the credentials
+            CredentialCreateOptions options)
+        {
+            // 1. Verify and make the credentials
             CredentialMakeResult result =
                 await _lib.MakeNewCredentialAsync(attestationResponse, options,
                 async (IsCredentialIdUniqueToUserParams args) =>
@@ -237,7 +236,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                         return true;
                 });
 
-            // 3. Store the credentials in db
+            // 2. Store the credentials in db
             DemoStorage.AddCredentialToUser(
                 options.User, new StoredCredential
                 {
@@ -251,7 +250,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                     AaGuid = result.Result.Aaguid
                 });
 
-            // 4. return result
+            // 3. return result
             return result;
         }
 
@@ -310,31 +309,25 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                 exts
             );
 
-            // 4. Temporarily store options, session/in-memory cache/redis/db
-            JsonOptions2 = options.ToJson();
-
-            // 5. Return options to client
+            // 4. Return options to client
             return options;
         }
 
-        /// <summary>あとで session/in-memory cache/redis/db に変更する。</summary>
-        string JsonOptions2 = "";
-
         /// <summary>AuthenticatorAssertion</summary>
         /// <param name="clientResponse">AuthenticatorAssertionRawResponse</param>
+        /// <param name="options">AssertionOptions</param>
         /// <returns>AssertionVerificationResultを非同期的に返す</returns>
-        public async Task<AssertionVerificationResult> AuthenticatorAssertion(AuthenticatorAssertionRawResponse clientResponse)
+        public async Task<AssertionVerificationResult> AuthenticatorAssertion(
+            AuthenticatorAssertionRawResponse clientResponse,
+            AssertionOptions options)
         {
-            // 1. Get the assertion options we sent the client
-            AssertionOptions options = AssertionOptions.FromJson(JsonOptions2);
-
-            // 2. Get registered credential from database
+            // 1. Get registered credential from database
             StoredCredential storedCred = DemoStorage.GetCredentialById(clientResponse.Id);
 
-            // 3. Get credential counter from database
+            // 2. Get credential counter from database
             uint storedCounter = storedCred.SignatureCounter;
 
-            // 4. Make the assertion
+            // 3. Make the assertion
             AssertionVerificationResult result = await _lib.MakeAssertionAsync(
                 clientResponse, options, storedCred.PublicKey, storedCounter, async (args) =>
                 {
@@ -343,10 +336,10 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                     return storedCreds.Exists(c => c.Descriptor.Id.SequenceEqual(args.CredentialId));
                 });
 
-            // 5. Store the updated counter
+            // 4. Store the updated counter
             DemoStorage.UpdateCounter(result.CredentialId, result.Counter);
 
-            // 6. return result
+            // 5. return result
             return result;
         }
 

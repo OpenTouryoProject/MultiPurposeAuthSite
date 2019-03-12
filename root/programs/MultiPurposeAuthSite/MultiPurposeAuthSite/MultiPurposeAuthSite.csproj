@@ -408,7 +408,7 @@
     <Content Include="Views\Manage\ManageGDPRData.cshtml" />
     <Content Include="Views\Home\Scroll.cshtml" />
     <Content Include="Views\Manage\AddWebAuthnData.cshtml" />
-    <Content Include="Views\Home\TestWebAuthn.cshtml" />
+    <Content Include="Views\Home\WebAuthnStarters.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

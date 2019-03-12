@@ -54,11 +54,17 @@ var AuthenticatorAssertionEndpoint = EndpointPrefix + "/AuthenticatorAssertion";
 if (window.location.protocol !== "https:") {
     showErrorAlert("Please use HTTPS");}
 
-// state object
-var state = {
-    createResponse: null,
-    publicKeyCredential: null,
-    credential: null,
+// input object
+var input = {
+    //createResponse: null,
+    //publicKeyCredential: null,
+    //credential: null,
+
+    attestationType: null,
+    authenticatorAttachment: null,
+    userVerification: null,
+    requireResidentKey: null,
+
     user: {
         name: "",
         displayName: ""
@@ -71,10 +77,16 @@ var state = {
 // 引数    －
 // 戻り値  －
 // ---------------------------------------------------------------
-function setUser() {
-    username = $("#input-email").val();
-    state.user.name = username.toLowerCase().replace(/\s/g, '') + "@example.com";
-    state.user.displayName = username.toLowerCase();
+function setInput() {
+    
+    input.attestationType = $('#select-attestation').find(':selected').val();
+    input.authenticatorAttachment = $('#select-authenticator').find(':selected').val();
+    input.userVerification = $('#select-userVerification').find(':selected').val();
+    input.requireResidentKey = $("#checkbox-residentCredentials").is(':checked');
+
+    let username = $("#input-email").val();
+    input.user.name = username.toLowerCase().replace(/\s/g, '') + "@example.com";
+    input.user.displayName = username.toLowerCase();
 }
 
 // ---------------------------------------------------------------
@@ -183,7 +195,7 @@ function makeCredential() {
     Fx_DebugOutput("enter makeCredential method", null);
 
     // 初期処理
-    setUser();
+    setInput();
     hideErrorAlert();
     hideWarningAlert();
 
@@ -193,23 +205,17 @@ function makeCredential() {
         return;
     }
 
-    // 入力
-    let attestation_type = $('#select-attestation').find(':selected').val();
-    let authenticator_attachment = $('#select-authenticator').find(':selected').val();
-    let user_verification = $('#select-userVerification').find(':selected').val();
-    let require_resident_key = $("#checkbox-residentCredentials").is(':checked');
-
     // POST JSONデータ生成
     // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#example-credential-creation-options
     const data = {
-        username: state.user.name,
-        displayName: state.user.name,
+        username: input.user.name,
+        displayName: input.user.name,
         authenticatorSelection: {
-            residentKey: require_resident_key,
-            authenticatorAttachment: authenticator_attachment,
-            userVerification: user_verification
+            residentKey: input.requireResidentKey,
+            authenticatorAttachment: input.authenticatorAttachment,
+            userVerification: input.userVerification
         },
-        attestation: attestation_type
+        attestation: input.attestationType
     };
 
     // ログ
@@ -295,8 +301,8 @@ function makeCredential() {
                 }).then(function (authenticatorAttestationResponse) {
                     // 戻り値
                     Fx_DebugOutput("registerNewCredential - authenticatorAttestationResponse:", authenticatorAttestationResponse);
-                    // 使ってる？
-                    state.createResponse = authenticatorAttestationResponse;
+                    //// 使ってる？
+                    //input.createResponse = authenticatorAttestationResponse;
                     // サーバーに登録
                     registerNewCredential(authenticatorAttestationResponse);
 
@@ -384,7 +390,7 @@ function registerNewCredential(authenticatorAttestationResponse) {
                 type: 'success',
                 timer: 2000
             });
-            //window.location.href = "/dashboard/" + state.user.displayName;
+            //window.location.href = "/dashboard/" + input.user.displayName;
         });
 }
 
@@ -400,7 +406,7 @@ function getAssertion() {
     Fx_DebugOutput("enter getAssertion method", null);
 
     // 初期処理
-    setUser();
+    setInput();
     hideErrorAlert();
     hideWarningAlert();
 
@@ -412,7 +418,8 @@ function getAssertion() {
 
     // POST JSONデータ生成
     var data = {
-        username: state.user.name
+        username: input.user.name,
+        userVerification: input.user_verification
     };
 
     // ログ
@@ -422,9 +429,10 @@ function getAssertion() {
     fetch(CredentialGetOptionsEndpoint, {
         // Request
         method: 'POST',
-        body: data,
+        body: JSON.stringify(data),
         headers: {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
         }
     }).then((response) => {
         // Response
@@ -515,20 +523,20 @@ function verifyAssertion(authenticatorAttestationResponse) {
     Fx_DebugOutput("enter verifyAssertion method", null);
 
     // Move data into Arrays incase it is super long
-    let authData = new Uint8Array(authenticatorAttestationResponse.response.authenticatorData);
-    let clientDataJSON = new Uint8Array(authenticatorAttestationResponse.response.clientDataJSON);
-    let rawId = new Uint8Array(authenticatorAttestationResponse.rawId);
-    let sig = new Uint8Array(authenticatorAttestationResponse.response.signature);
+    let authData = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.authenticatorData);
+    let clientDataJSON = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.clientDataJSON);
+    let rawId = Fx_CoerceToBase64Url(authenticatorAttestationResponse.rawId);
+    let sig = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.signature);
 
     const data = {
         id: authenticatorAttestationResponse.id,
-        rawId: b64enc(rawId),
+        rawId: rawId,
         type: authenticatorAttestationResponse.type,
         extensions: authenticatorAttestationResponse.getClientExtensionResults(),
         response: {
-            authenticatorData: b64RawEnc(authData),
-            clientDataJson: b64RawEnc(clientDataJSON),
-            signature: b64RawEnc(sig)
+            authenticatorData: authData,
+            clientDataJson: clientDataJSON,
+            signature: sig
         }
     };
 
@@ -577,6 +585,6 @@ function verifyAssertion(authenticatorAttestationResponse) {
                 type: 'success',
                 timer: 2000
             });
-            //window.location.href = "/dashboard/" + state.user.displayName;
+            //window.location.href = "/dashboard/" + input.user.displayName;
         });
 }

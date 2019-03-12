@@ -31,6 +31,7 @@
 //*  2019/03/05  西野 大介         新規
 //**********************************************************************************
 
+using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
@@ -52,6 +53,7 @@ using Fido2NetLib.Objects;
 using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Framework.Presentation;
+using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -68,6 +70,15 @@ namespace MultiPurposeAuthSite.Controllers
         SupportsCredentials = true)]
     public class Fido2ServerController : ApiController
     {
+        /// <summary>origin</summary>
+        private string _origin = new Func<string>(() =>
+        {
+            string temp = Config.OAuth2AuthorizationServerEndpointsRootURI;
+            Uri uri = new Uri(temp);
+            temp = temp.Substring(0, temp.IndexOf(uri.Authority) + uri.Authority.Length);
+            return temp;
+        })();
+
         /// <summary>FormatException</summary>
         /// <param name="e">Exception</param>
         /// <returns>string</returns>
@@ -114,9 +125,13 @@ namespace MultiPurposeAuthSite.Controllers
 
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
+
                 options = webAuthnHelper.CredentialCreationOptions(
                     username, attestation, authenticatorAttachment, residentKey, userVerification);
+
+                // Sessionに保存
+                HttpContext.Current.Session["fido2.CredentialCreateOptions"] = options.ToJson();
             }
             catch (Exception e)
             {
@@ -153,8 +168,13 @@ namespace MultiPurposeAuthSite.Controllers
 
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
-                result = await webAuthnHelper.AuthenticatorAttestation(attestationResponse);
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
+
+                // Sessionから復元
+                CredentialCreateOptions options = CredentialCreateOptions.FromJson(
+                    (string)HttpContext.Current.Session["fido2.CredentialCreateOptions"]);
+
+                result = await webAuthnHelper.AuthenticatorAttestation(attestationResponse, options);
             }
             catch (Exception e)
             {
@@ -184,18 +204,25 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>
         /// CredentialGetOptions
         /// </summary>
-        /// <param name="username"string></param>
+        /// <param name="requestJSON">JObject</param>
         /// <returns>HttpResponseMessage</returns>
         [HttpPost]
         [Route("Fido2/CredentialGetOptions")]
-        public HttpResponseMessage CredentialGetOptions(string username)
+        public HttpResponseMessage CredentialGetOptions(JObject requestJSON)
         {
             AssertionOptions options = null;
 
+            string username = (string)requestJSON["username"];
+            string userVerification = (string)requestJSON["userVerification"];
+            // ※ userVerification を使ってない。
+
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
                 options = webAuthnHelper.CredentialGetOptions(username);
+
+                // Sessionに保存
+                HttpContext.Current.Session["fido2.AssertionOptions"] = options.ToJson();
             }
             catch (Exception e)
             {
@@ -232,8 +259,13 @@ namespace MultiPurposeAuthSite.Controllers
 
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
-                result = await webAuthnHelper.AuthenticatorAssertion(clientResponse);
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
+
+                // Sessionから復元
+                AssertionOptions options = AssertionOptions.FromJson(
+                    (string)HttpContext.Current.Session["fido2.AssertionOptions"]);
+
+                result = await webAuthnHelper.AuthenticatorAssertion(clientResponse, options);
             }
             catch (Exception e)
             {
