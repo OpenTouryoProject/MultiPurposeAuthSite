@@ -32,6 +32,8 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Util;
 
 using System;
@@ -57,34 +59,6 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
     /// </summary>
     public class WebAuthnHelper
     {
-        /// <summary>
-        /// 開発時のストレージ
-        /// ・User
-        /// ・StoredCredential
-        ///   - byte[] UserId
-        ///   - PublicKeyCredentialDescriptor Descriptor
-        ///     - byte[] Id (CredentialId)
-        ///     - enum PublicKeyCredentialType? Type
-        ///     - enum AuthenticatorTransport[] Transports
-        ///   - byte[] PublicKey
-        ///   - byte[] UserHandle = UserId
-        ///   - uint SignatureCounter
-        ///   - string CredType
-        ///   - DateTime RegDate
-        ///   - Guid AaGuid
-        /// </summary>
-        /// <see cref="https://techinfoofmicrosofttech.osscons.jp/index.php?fido2-net-lib#sabce498"/>
-        private static readonly DevelopmentInMemoryStore DemoStorage = new DevelopmentInMemoryStore();
-
-        /// <summary>Sessionの維持</summary>
-        private static ConcurrentDictionary<string, string> SessionInformation = new ConcurrentDictionary<string, string>();
-
-        //private StoredCredential sc = new StoredCredential();
-        //private PublicKeyCredentialDescriptor pd = new PublicKeyCredentialDescriptor();
-        //private PublicKeyCredentialType pc = new PublicKeyCredentialType();
-        //private AuthenticatorTransport at = new AuthenticatorTransport();
-        //private AttestationVerificationSuccess avs = new AttestationVerificationSuccess();
-
         #region mem & prop & constructor
 
         #region mem & prop
@@ -148,17 +122,22 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         {
             // 1. Get user from DB by username (in our example, auto create missing users)
             // https://www.w3.org/TR/webauthn/#dom-publickeycredentialcreationoptions-user
-            User user = DemoStorage.GetOrAddUser(username, () => new User
+
+            ApplicationUser _user = CmnUserStore.FindByName(username);
+
+            if (_user == null)
+                throw new Exception(string.Format("{0} is not founded.", username));
+
+            User user = new User
             {
                 DisplayName = username,
                 Name = username,
                 Id = CustomEncode.StringToByte(username, CustomEncode.UTF_8)
-            });
+            };
 
             // 2. Get user existing keys by username
             // https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialdescriptor
-            List<PublicKeyCredentialDescriptor> existingPubCredDescriptor 
-                = DemoStorage.GetCredentialsByUser(user).Select(c => c.Descriptor).ToList();
+            List<PublicKeyCredentialDescriptor> existingPubCredDescriptor = DataProvider.GetCredentialsByUser(username);
 
             #region 3. Create options
 
@@ -224,23 +203,17 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         {
             // 1. Verify and make the credentials
             CredentialMakeResult result =
-                await _lib.MakeNewCredentialAsync(attestationResponse, options,
-                async (IsCredentialIdUniqueToUserParams args) =>
-                {
-                    // Create callback so that lib can verify credential id is unique to this user
-                    List<User> users = await DemoStorage.GetUsersByCredentialIdAsync(args.CredentialId);
-
-                    if (0 < users.Count)
-                        return false;
-                    else
-                        return true;
-                });
+                await _lib.MakeNewCredentialAsync(
+                    attestationResponse, options,
+                    // Storage を false になるように設計していないので、true固定。
+                    async (IsCredentialIdUniqueToUserParams args) => { return true; });
 
             // 2. Store the credentials in db
-            DemoStorage.AddCredentialToUser(
-                options.User, new StoredCredential
+            DataProvider.Create(
+                new StoredCredential
                 {
                     // https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialdescriptor
+                    UserId = result.Result.User.Id,
                     Descriptor = new PublicKeyCredentialDescriptor(result.Result.CredentialId),
                     PublicKey = result.Result.PublicKey,
                     UserHandle = result.Result.User.Id,
@@ -265,14 +238,21 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         {
             // 1. Get user from DB
             // https://www.w3.org/TR/webauthn/#dom-publickeycredentialcreationoptions-user
-            User user = DemoStorage.GetUser(username);
+            ApplicationUser _user = CmnUserStore.FindByName(username);
+
+            if (_user == null)
+                throw new Exception(string.Format("{0} is not founded.", username));
+
+            User user = new User
+            {
+                DisplayName = username,
+                Name = username,
+                Id = CustomEncode.StringToByte(username, CustomEncode.UTF_8)
+            };
 
             // 2. Get registered credentials from database
             // https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialdescriptor
-            List<PublicKeyCredentialDescriptor> existingPubCredDescriptor
-                = DemoStorage.GetCredentialsByUser(user).Select(c => c.Descriptor).ToList();
-
-            if (user == null) throw new ArgumentException("Username was not registered");
+            List<PublicKeyCredentialDescriptor> existingPubCredDescriptor = DataProvider.GetCredentialsByUser(username);
 
             // https://www.w3.org/TR/webauthn/#dictdef-authenticationextensionsclientinputs
             // https://www.w3.org/TR/webauthn/#sctn-defined-extensions
@@ -321,23 +301,27 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             AuthenticatorAssertionRawResponse clientResponse,
             AssertionOptions options)
         {
+            StoredCredential storedCred = null;
+
             // 1. Get registered credential from database
-            StoredCredential storedCred = DemoStorage.GetCredentialById(clientResponse.Id);
+            storedCred = DataProvider.GetCredentialById(clientResponse.Id);
 
             // 2. Get credential counter from database
             uint storedCounter = storedCred.SignatureCounter;
 
             // 3. Make the assertion
             AssertionVerificationResult result = await _lib.MakeAssertionAsync(
-                clientResponse, options, storedCred.PublicKey, storedCounter, async (args) =>
+                clientResponse, options, storedCred.PublicKey, storedCounter,
+                async (IsUserHandleOwnerOfCredentialIdParams args) =>
                 {
                     // Create callback to check if userhandle owns the credentialId
-                    List<StoredCredential> storedCreds = await DemoStorage.GetCredentialsByUserHandleAsync(args.UserHandle);
-                    return storedCreds.Exists(c => c.Descriptor.Id.SequenceEqual(args.CredentialId));
+                    storedCred = DataProvider.GetCredentialById(args.CredentialId);
+                    return (storedCred.UserHandle == args.UserHandle);
                 });
 
             // 4. Store the updated counter
-            DemoStorage.UpdateCounter(result.CredentialId, result.Counter);
+            storedCred.SignatureCounter = result.Counter;
+            DataProvider.Update(storedCred);
 
             // 5. return result
             return result;

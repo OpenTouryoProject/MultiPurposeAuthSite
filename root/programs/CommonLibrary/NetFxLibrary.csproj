@@ -199,6 +199,7 @@
     <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
     <Compile Include="Data\CmnUserStore.cs" />
+    <Compile Include="Extensions\FIDO\DataProvider.cs" />
     <Compile Include="Extensions\FIDO\EnumFidoType.cs" />
     <Compile Include="Extensions\FIDO\WebAuthnHelper.cs" />
     <Compile Include="Extensions\FIDO\MsPassHelper.cs" />

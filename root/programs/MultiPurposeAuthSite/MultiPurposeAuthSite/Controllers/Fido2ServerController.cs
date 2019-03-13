@@ -90,19 +90,6 @@ namespace MultiPurposeAuthSite.Controllers
                 e.InnerException != null ? " (" + e.InnerException.Message + ")" : "");
         }
 
-        //[HttpGet]
-        //[Route("Fido2/CredentialCreationOptions")]
-        //public Dictionary<string, string> Index()
-        //{
-        //    return new Dictionary<string, string>()
-        //    {
-        //        { "txt", "notepad.exe"},
-        //        { "bmp", "paint.exe"},
-        //        { "dib", "paint.exe"},
-        //        { "rtf", "wordpad.exe"}
-        //    };
-        //}
-
         #region 登録フロー
 
         /// <summary>

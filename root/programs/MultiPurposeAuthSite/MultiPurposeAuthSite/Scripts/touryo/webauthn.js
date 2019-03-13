@@ -85,7 +85,7 @@ function setInput() {
     input.requireResidentKey = $("#checkbox-residentCredentials").is(':checked');
 
     let username = $("#input-email").val();
-    input.user.name = username.toLowerCase().replace(/\s/g, '') + "@example.com";
+    input.user.name = username.toLowerCase().replace(/\s/g, '');
     input.user.displayName = username.toLowerCase();
 }
 
