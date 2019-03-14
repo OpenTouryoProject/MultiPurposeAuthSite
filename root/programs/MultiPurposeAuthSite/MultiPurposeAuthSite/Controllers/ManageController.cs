@@ -39,6 +39,7 @@ using System.Security.Claims;
 
 using System.Web;
 using System.Web.Mvc;
+//using System.Web.Http;
 using System.Net.Http;
 
 using Microsoft.Owin.Security;
@@ -47,8 +48,13 @@ using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 using Facebook;
+
+using Fido2NetLib;
+using Fido2NetLib.Objects;
+using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
@@ -2253,9 +2259,9 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-                ViewBag.UserId = user.Id;
+                ViewBag.SequenceNo = "0";
                 ViewBag.UserName = user.UserName;
-                ViewBag.AttestationChallenge = GetPassword.Generate(22, 0);
+                ViewBag.FIDO2Data = "";
 
                 return View();
             }
@@ -2264,6 +2270,112 @@ namespace MultiPurposeAuthSite.Controllers
                 // エラー画面
                 return View("Error");
             }
+        }
+
+        /// <summary>
+        /// WebAuthn関連の非構造化データの追加・編集画面（初期表示）
+        /// GET: /Manage/AddWebAuthnData
+        /// </summary>
+        /// <param name="fido2Data">string</param>
+        /// <param name="sequenceNo">string</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        [HttpPost]
+        public async Task<ActionResult> AddWebAuthnData(string fido2Data, string sequenceNo)
+        {
+            if ((Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+                && Config.EnableEditingOfUserAttribute)
+            {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                ViewBag.UserName = user.UserName;
+
+                string temp = "";
+
+                if (sequenceNo == "0")
+                {
+                    CredentialCreateOptions options = null;
+
+                    try
+                    {
+                        JObject requestJSON = JsonConvert.DeserializeObject<JObject>(fido2Data);
+                        string username = (string)requestJSON["username"];
+                        string displayName = (string)requestJSON["displayName"];
+                        bool residentKey = bool.Parse((string)requestJSON["authenticatorSelection"]["residentKey"]);
+                        string authenticatorAttachment = (string)requestJSON["authenticatorSelection"]["authenticatorAttachment"];
+                        string userVerification = (string)requestJSON["authenticatorSelection"]["userVerification"];
+                        string attestation = (string)requestJSON["attestation"];
+
+                        if (username == user.UserName)
+                        {
+                            FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
+
+                            options = webAuthnHelper.CredentialCreationOptions(
+                                username, attestation, authenticatorAttachment, residentKey, userVerification);
+
+                            // Sessionに保存
+                            temp = options.ToJson();
+                            Session["fido2.CredentialCreateOptions"] = temp;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        options = new CredentialCreateOptions
+                        {
+                            Status = "error",
+                            ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
+                        };
+                    }
+
+                    // Htmlを返す。
+                    ViewBag.SequenceNo = "1";
+                    ViewBag.UserName = user.UserName;
+                    ViewBag.FIDO2Data = temp;
+
+                    return View();
+                }
+                else if (sequenceNo == "1")
+                {
+                    CredentialMakeResult result = null;
+
+                    try
+                    {
+                        AuthenticatorAttestationRawResponse attestationResponse
+                        = JsonConvert.DeserializeObject<AuthenticatorAttestationRawResponse>(fido2Data);
+
+                        FIDO.WebAuthnHelper webAuthnHelper = new FIDO.WebAuthnHelper();
+
+                        // Sessionから復元
+                        CredentialCreateOptions options =
+                            CredentialCreateOptions.FromJson(
+                                (string)Session["fido2.CredentialCreateOptions"]);
+
+                        result = await webAuthnHelper.AuthenticatorAttestation(attestationResponse, options);
+
+                    }
+                    catch (Exception e)
+                    {
+                        result = new CredentialMakeResult
+                        {
+                            Status = "error",
+                            ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
+                        };
+                    }
+                    // Htmlを返す。
+                    ViewBag.SequenceNo = "2";
+                    ViewBag.UserName = user.UserName;
+                    ViewBag.FIDO2Data = JsonConvert.SerializeObject(result);
+
+                    return View();
+                }
+                else if (sequenceNo == "2")
+                {
+                    // リダイレクト "Index", "Home"へ
+                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddWebAuthnDataSuccess });
+                }
+            }
+
+            // エラー画面
+            return View("Error");
         }
 
         /// <summary>
@@ -2519,6 +2631,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // サインアウト（Cookieの削除）
                     AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+
                     //// オペレーション・トレース・ログ出力
                     //Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
 

@@ -64,6 +64,17 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         #region mem & prop
 
         /// <summary>
+        /// Origin of the website: "http(s)://..."
+        /// </summary>
+        private string _origin = new Func<string>(() =>
+        {
+            string temp = Config.OAuth2AuthorizationServerEndpointsRootURI;
+            Uri uri = new Uri(temp);
+            temp = temp.Substring(0, temp.IndexOf(uri.Authority) + uri.Authority.Length);
+            return temp;
+        })();
+
+        /// <summary>
         /// fido2-net-lib
         /// https://techinfoofmicrosofttech.osscons.jp/index.php?fido2-net-lib
         /// </summary>
@@ -75,21 +86,14 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// </summary>
         private IMetadataService _mds;
 
-        /// <summary>
-        /// Origin of the website: "http(s)://..."
-        /// </summary>
-        private string _origin;
-
         #endregion
 
         #region constructor
 
         /// <summary>constructor</summary>
-        /// <param name="origin">string</param>
-        public WebAuthnHelper(string origin)
+        public WebAuthnHelper()
         {
             // this._mds = MDSMetadata.Instance("accesskey", "cachedirPath");
-            this._origin = origin;
 
             Uri uri = new Uri(this._origin);
             this._lib = new Fido2(new Configuration()
@@ -328,6 +332,17 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         }
 
         #endregion
+
+        /// <summary>FormatException</summary>
+        /// <param name="e">Exception</param>
+        /// <returns>string</returns>
+        public static string FormatException(Exception e)
+        {
+            return string.Format(
+                "{0}{1}",
+                e.Message,
+                e.InnerException != null ? " (" + e.InnerException.Message + ")" : "");
+        }
 
         #endregion
     }

@@ -52,11 +52,13 @@ namespace MultiPurposeAuthSite
 
             bundles.Add(new ScriptBundle("~/bundles/touryo").Include(
                         "~/Scripts/touryo/common.js",
+                        "~/Scripts/touryo/util.js",
                         "~/Scripts/touryo/else.js"));
 
             bundles.Add(new ScriptBundle("~/bundles/multiauthsite").Include(
                         "~/Scripts/touryo/oauthimplicit.js",
-                        "~/Scripts/touryo/msWebauthn.js"));
+                        "~/Scripts/touryo/msWebauthn.js",
+                        "~/Scripts/touryo/ffWebauthn.js"));
 
             bundles.Add(new ScriptBundle(
                 "~/bundles/jquery",

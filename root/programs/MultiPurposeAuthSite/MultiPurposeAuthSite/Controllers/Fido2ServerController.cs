@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：Fido2ServerController
-//* クラス日本語名  ：Fido2ServerのApiController
+//* クラス日本語名  ：Fido2ServerのApiController（テスト用なので本番では削除）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -70,26 +70,6 @@ namespace MultiPurposeAuthSite.Controllers
         SupportsCredentials = true)]
     public class Fido2ServerController : ApiController
     {
-        /// <summary>origin</summary>
-        private string _origin = new Func<string>(() =>
-        {
-            string temp = Config.OAuth2AuthorizationServerEndpointsRootURI;
-            Uri uri = new Uri(temp);
-            temp = temp.Substring(0, temp.IndexOf(uri.Authority) + uri.Authority.Length);
-            return temp;
-        })();
-
-        /// <summary>FormatException</summary>
-        /// <param name="e">Exception</param>
-        /// <returns>string</returns>
-        private string FormatException(Exception e)
-        {
-            return string.Format(
-                "{0}{1}",
-                e.Message,
-                e.InnerException != null ? " (" + e.InnerException.Message + ")" : "");
-        }
-
         #region 登録フロー
 
         /// <summary>
@@ -112,7 +92,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
 
                 options = webAuthnHelper.CredentialCreationOptions(
                     username, attestation, authenticatorAttachment, residentKey, userVerification);
@@ -125,7 +105,7 @@ namespace MultiPurposeAuthSite.Controllers
                 options = new CredentialCreateOptions
                 {
                     Status = "error",
-                    ErrorMessage = FormatException(e)
+                    ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }
 
@@ -155,7 +135,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
 
                 // Sessionから復元
                 CredentialCreateOptions options = CredentialCreateOptions.FromJson(
@@ -168,7 +148,7 @@ namespace MultiPurposeAuthSite.Controllers
                 result = new CredentialMakeResult
                 {
                     Status = "error",
-                    ErrorMessage = FormatException(e)
+                    ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }
 
@@ -205,7 +185,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
                 options = webAuthnHelper.CredentialGetOptions(username);
 
                 // Sessionに保存
@@ -216,7 +196,7 @@ namespace MultiPurposeAuthSite.Controllers
                 options = new AssertionOptions
                 {
                     Status = "error",
-                    ErrorMessage = FormatException(e)
+                    ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }
 
@@ -246,7 +226,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             try
             {
-                WebAuthnHelper webAuthnHelper = new WebAuthnHelper(this._origin);
+                WebAuthnHelper webAuthnHelper = new WebAuthnHelper();
 
                 // Sessionから復元
                 AssertionOptions options = AssertionOptions.FromJson(
@@ -259,7 +239,7 @@ namespace MultiPurposeAuthSite.Controllers
                 result = new AssertionVerificationResult
                 {
                     Status = "error",
-                    ErrorMessage = FormatException(e)
+                    ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }
 

@@ -19,9 +19,8 @@
 // limitations under the License.
 
 //**********************************************************************************
-//* ファイル名        ：webauthn.js
-//* ファイル日本語名  ：webauthn処理
-//*                     Server Requirements and Transport Binding Profile用
+//* ファイル名        ：ffWebauthn.js
+//* ファイル日本語名  ：webauthn処理（Form Post用
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -39,8 +38,9 @@
 // - button
 //   - #register-button
 //   - #login-button
-// - text
-//   - #input-email
+// - hidden
+//   - #userName
+//   - #inputUsername
 // - select and checkbox
 //   - #select-attestation
 //   - #select-authenticator
@@ -52,15 +52,6 @@
 //   - #error-alert-msg
 //   - #warning-alert
 //   - #warning-alert-msg
-
-//**********************************************************************************
-// Endpoint
-//**********************************************************************************
-var EndpointPrefix = "/MultiPurposeAuthSite/Fido2";
-var CredentialCreationOptionsEndpoint = EndpointPrefix + "/CredentialCreationOptions";
-var AuthenticatorAttestationEndpoint = EndpointPrefix + "/AuthenticatorAttestation";
-var CredentialGetOptionsEndpoint = EndpointPrefix + "/CredentialGetOptions";
-var AuthenticatorAssertionEndpoint = EndpointPrefix + "/AuthenticatorAssertion";
 
 //**********************************************************************************
 // 初期化
@@ -93,7 +84,7 @@ function setInput() {
     input.userVerification = $('#select-userVerification').find(':selected').val();
     input.requireResidentKey = $("#checkbox-residentCredentials").is(':checked');
 
-    let username = $("#input-email").val();
+    let username = $("#userName").val();
     input.user.name = username.toLowerCase().replace(/\s/g, '');
     input.user.displayName = username.toLowerCase();
 }
@@ -193,12 +184,12 @@ function hideWarningAlert() {
 }
 
 // ---------------------------------------------------------------
-// navigator.credentials.createを実行する。
+// webauthn.makeCredentialの前半
 // ---------------------------------------------------------------
 // 引数    －
 // 戻り値  －
 // ---------------------------------------------------------------
-function makeCredential() {
+function makeCredential1() {
 
     // ログ
     Fx_DebugOutput("enter makeCredential method", null);
@@ -207,13 +198,7 @@ function makeCredential() {
     setInput();
     hideErrorAlert();
     hideWarningAlert();
-
-    // チェック処理
-    if ($("#input-email").val() === "") {
-        showErrorAlert("Please enter a username");
-        return;
-    }
-
+    
     // POST JSONデータ生成
     // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#example-credential-creation-options
     const data = {
@@ -230,98 +215,86 @@ function makeCredential() {
     // ログ
     Fx_DebugOutput("makeCredential - data:", data);
 
-    // fetch
-    fetch(CredentialCreationOptionsEndpoint, {
-        // Request
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
+    // データのPOST
+    $("#fido2Data").val(JSON.stringify(data));
+    $("form").submit();
+}
+
+// ---------------------------------------------------------------
+// webauthn.makeCredentialの後半
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function makeCredential2() {
+
+    let publicKeyCredentialCreationOptions = JSON.parse($("#fido2Data").val());
+
+    // Normal
+    Fx_DebugOutput("registerNewCredential - publicKeyCredentialCreationOptions 1:", publicKeyCredentialCreationOptions);
+
+    if (publicKeyCredentialCreationOptions.status !== "ok") {
+        showErrorAlert(publicKeyCredentialCreationOptions.errorMessage);
+        return;
+    }
+
+    // JSON to CredentialCreationOptions
+
+    // To ArrayBuffer
+    publicKeyCredentialCreationOptions.challenge = Fx_CoerceToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
+    publicKeyCredentialCreationOptions.user.id = Fx_CoerceToArrayBuffer(publicKeyCredentialCreationOptions.user.id);
+    publicKeyCredentialCreationOptions.excludeCredentials = publicKeyCredentialCreationOptions.excludeCredentials.map((c) => {
+        c.id = Fx_CoerceToArrayBuffer(c.id);
+        return c;
+    });
+    // null -> undefined
+    if (publicKeyCredentialCreationOptions.authenticatorSelection.authenticatorAttachment === null)
+        publicKeyCredentialCreationOptions.authenticatorSelection.authenticatorAttachment = undefined;
+
+    // 引数
+    Fx_DebugOutput("registerNewCredential - publicKeyCredentialCreationOptions 2:", publicKeyCredentialCreationOptions);
+
+    // SweetAlert
+    let confirmed = true;
+    Swal.fire({
+        title: 'Registering...',
+        text: 'Tap your security key to finish registration.',
+        imageUrl: "/images/securitykey.min.svg",
+        showCancelButton: true,
+        showConfirmButton: false,
+        focusConfirm: false,
+        focusCancel: false
+
+    }).then(function (result) {
+        if (!result.value) {
+            confirmed = false;
+            Fx_DebugOutput('Registration cancelled', null);
         }
-    }).then((response) => {
-        // Response
-        if (response.ok) {
-            return response.json();
-        }
-        else {
-            return Promise.reject(response.text());
-        }
 
-        }).catch((error) => {
-            // Error
-            error.then(msg => {
-                showErrorAlert(msg);
-                return;
-            });
-        })
-        .then((publicKeyCredentialCreationOptions) => {
-            // Normal
-            Fx_DebugOutput("registerNewCredential - publicKeyCredentialCreationOptions 1:", publicKeyCredentialCreationOptions);
+    }).catch(function (error) {
+        confirmed = false;
+        Fx_DebugOutput("SweetAlert Error:", error);
+    });
 
-            if (publicKeyCredentialCreationOptions.status !== "ok") {
-                showErrorAlert(publicKeyCredentialCreationOptions.errorMessage);
-                return;
-            }
+    // Credential Management API (navigator.credentials.create)
+    if (confirmed) {
+        navigator.credentials.create({
+            publicKey: publicKeyCredentialCreationOptions
 
-            // JSON to CredentialCreationOptions
-            
-            // To ArrayBuffer
-            publicKeyCredentialCreationOptions.challenge = Fx_CoerceToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
-            publicKeyCredentialCreationOptions.user.id = Fx_CoerceToArrayBuffer(publicKeyCredentialCreationOptions.user.id);
-            publicKeyCredentialCreationOptions.excludeCredentials = publicKeyCredentialCreationOptions.excludeCredentials.map((c) => {
-                c.id = Fx_CoerceToArrayBuffer(c.id);
-                return c;
-            });
-            // null -> undefined
-            if (publicKeyCredentialCreationOptions.authenticatorSelection.authenticatorAttachment === null)
-                publicKeyCredentialCreationOptions.authenticatorSelection.authenticatorAttachment = undefined;
+        }).then(function (authenticatorAttestationResponse) {
+            // 戻り値
+            Fx_DebugOutput("registerNewCredential - authenticatorAttestationResponse:", authenticatorAttestationResponse);
+            // サーバーに登録
+            registerNewCredential(authenticatorAttestationResponse);
 
-            // 引数
-            Fx_DebugOutput("registerNewCredential - publicKeyCredentialCreationOptions 2:", publicKeyCredentialCreationOptions);
+        }).catch(function (err) {
+            // 戻り値
+            Fx_DebugOutput("registerNewCredential - err:", err);
+            Swal.closeModal();
+            showErrorAlert(err.message ? err.message : err);
 
-            // SweetAlert
-            let confirmed = true;
-            Swal.fire({
-                title: 'Registering...',
-                text: 'Tap your security key to finish registration.',
-                imageUrl: "/images/securitykey.min.svg",
-                showCancelButton: true,
-                showConfirmButton: false,
-                focusConfirm: false,
-                focusCancel: false
-
-            }).then(function (result) {
-                if (!result.value) {
-                    confirmed = false;
-                    Fx_DebugOutput('Registration cancelled', null);
-                }
-
-            }).catch(function (error) {
-                confirmed = false;
-                Fx_DebugOutput("SweetAlert Error:", error);
-            });
-
-            // Credential Management API (navigator.credentials.create)
-            if (confirmed) {
-                navigator.credentials.create({
-                    publicKey: publicKeyCredentialCreationOptions 
-
-                }).then(function (authenticatorAttestationResponse) {
-                    // 戻り値
-                    Fx_DebugOutput("registerNewCredential - authenticatorAttestationResponse:", authenticatorAttestationResponse);
-                    // サーバーに登録
-                    registerNewCredential(authenticatorAttestationResponse);
-
-                }).catch(function (err) {
-                    // 戻り値
-                    Fx_DebugOutput("registerNewCredential - err:", err);
-                    Swal.closeModal();
-                    showErrorAlert(err.message ? err.message : err);
-
-                });
-            }
         });
+    }
 }
 
 // ---------------------------------------------------------------
@@ -355,52 +328,40 @@ function registerNewCredential(authenticatorAttestationResponse) {
     // ログ
     Fx_DebugOutput("registerNewCredential - data:", data);
 
-    // fetch
-    fetch(AuthenticatorAttestationEndpoint, {
-        // Request
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-    }).then((response) => {
-        // Response
-        if (response.ok) {
-            return response.json();
-        }
-        else {
-            return Promise.reject(response.text());
-        }
-
-        }).catch((error) => {
-            // Error
-            error.then(msg => {
-                showErrorAlert(msg);
-                return;
-            });
-        })
-        .then(responseJson => {
-            // Normal
-            Fx_DebugOutput("registerNewCredential - responseJson:", responseJson);
-
-            if (responseJson.status !== "ok") {
-                Swal.closeModal();
-                showErrorAlert(responseJson.errorMessage);
-                return;
-            }
-
-            // SweetAlert
-            Swal.fire({
-                title: 'Registration Successful!',
-                text: 'You\'ve registered successfully.',
-                type: 'success',
-                timer: 2000
-            });
-            //window.location.href = "/dashboard/" + input.user.displayName;
-        });
+    // データのPOST
+    $("#fido2Data").val(JSON.stringify(data));
+    $("form").submit();
 }
 
+// ---------------------------------------------------------------
+// navigator.credentials.createの結果を登録結果
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function registeredNewCredential() {
+
+    let responseJson = JSON.parse($("#fido2Data").val());
+
+    // Normal
+    Fx_DebugOutput("registerNewCredential - responseJson:", responseJson);
+
+    if (responseJson.status !== "ok") {
+        Swal.closeModal();
+        showErrorAlert(responseJson.errorMessage);
+        return;
+    }
+
+    // SweetAlert
+    Swal.fire({
+        title: 'Registration Successful!',
+        text: 'You\'ve registered successfully.',
+        type: 'success',
+        timer: 2000
+    }).then(function (result) {
+        $("form").submit();
+    });
+}
 // ---------------------------------------------------------------
 // navigator.credentials.getを実行する。
 // ---------------------------------------------------------------
@@ -416,13 +377,7 @@ function getAssertion() {
     setInput();
     hideErrorAlert();
     hideWarningAlert();
-
-    // チェック処理
-    if ($("#input-email").val() === "") {
-        showErrorAlert("Please enter a username");
-        return;
-    }
-
+    
     // POST JSONデータ生成
     var data = {
         username: input.user.name,
