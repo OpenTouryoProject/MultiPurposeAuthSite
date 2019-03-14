@@ -123,6 +123,14 @@ CREATE TABLE [OAuth2Data](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+CREATE TABLE [FIDO2Data](
+    [PublicKeyId] [nvarchar](256) NOT NULL,  -- PK, base64url
+    [UserName] [nvarchar](256) NOT NULL,     -- Value
+    [UnstructuredData] [nvarchar](max) NULL, -- FIDO2 Unstructured Data
+    CONSTRAINT [PK.FIDO2Data] PRIMARY KEY NONCLUSTERED ([PublicKeyId] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [OAuth2Revocation](
     [Jti] [nvarchar](38) NOT NULL,            -- PK, guid
     [CreatedDate] [smalldatetime] NOT NULL,
@@ -162,3 +170,5 @@ ALTER TABLE [UserClaims] WITH CHECK ADD CONSTRAINT [FK.UserClaims.Users_UserId] 
 ALTER TABLE [TotpTokens] WITH CHECK ADD CONSTRAINT [FK.TotpTokens.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- OAuth2Data
 ALTER TABLE [OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.OAuth2Data.Users_ClientID] FOREIGN KEY([ClientID]) REFERENCES [Users] ([ClientID]) ON DELETE CASCADE
+---- FIDO2Data
+ALTER TABLE [FIDO2Data] WITH CHECK ADD CONSTRAINT [FK.FIDO2Data.Users_UserName] FOREIGN KEY([UserName]) REFERENCES [Users] ([UserName]) ON DELETE CASCADE
