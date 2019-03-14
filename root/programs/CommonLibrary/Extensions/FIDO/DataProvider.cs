@@ -329,6 +329,11 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                     {
                         StoredCredential storedCredential =
                             JsonConvert.DeserializeObject<StoredCredential>(unstructuredData);
+
+                        if (storedCredential != null)
+                        {
+                            existingPubCredDescriptor.Add(storedCredential.Descriptor);
+                        }
                     }
 
                     break;

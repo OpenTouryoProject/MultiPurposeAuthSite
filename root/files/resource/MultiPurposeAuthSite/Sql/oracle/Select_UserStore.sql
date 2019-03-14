@@ -8,3 +8,4 @@ SELECT * FROM "AuthenticationCodeDictionary";
 SELECT * FROM "RefreshTokenDictionary";
 SELECT * FROM "CustomizedConfirmation";
 SELECT * FROM "OAuth2Data";
+SELECT * FROM "FIDO2Data";
