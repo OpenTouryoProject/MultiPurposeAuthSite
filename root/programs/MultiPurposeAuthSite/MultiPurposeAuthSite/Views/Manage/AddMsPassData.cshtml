@@ -65,10 +65,6 @@
             var accountInfo = {
                 rpDisplayName: 'MultiPurposeAuthSite', // Name of relying party
                 displayName: '@ViewBag.UserName'       // Name of user account in relying partying
-
-                @*name: '@ViewBag.UserName',           // Detailed name of account
-                id: '@ViewBag.UserName',               // Account identifier ... credentialId
-                imageUri: '',                          // user’s account image*@
             };
 
             var cryptoParameters = [
@@ -78,18 +74,9 @@
                 }
             ];
 
-            @*var attestationChallenge = '@ViewBag.AttestationChallenge';
-
-            var timeout = {};
-            var denyList = {};
-            var ext = {};*@
-
             $("#msPass_make").on("click", function () {
                 navigator.authentication.makeCredential(accountInfo, cryptoParameters)
                     .then(function (result) {
-                        // properties
-                        //alert(JSON.stringify(result));
-
                         localStorage["userId"] = "@ViewBag.UserName";
                         localStorage["credentialType"] = result.credential.type;
                         localStorage["credentialId"] = result.credential.id;

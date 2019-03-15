@@ -19,6 +19,7 @@
 //**********************************************************************************
 
 using System.Web.Optimization;
+using MultiPurposeAuthSite.Co;
 
 namespace MultiPurposeAuthSite
 {
@@ -41,7 +42,7 @@ namespace MultiPurposeAuthSite
 
             string jqueryVersion = "3.1.1";
 
-            BundleTable.EnableOptimizations = true;
+            BundleTable.EnableOptimizations = !Config.IsDebug;
             BundleTable.Bundles.UseCdn = true; // same as: bundles.UseCdn = true;
 
             // ( new ScriptBundle("~/XXXX") のパスは実在するpathと被るとRender時にバグる。

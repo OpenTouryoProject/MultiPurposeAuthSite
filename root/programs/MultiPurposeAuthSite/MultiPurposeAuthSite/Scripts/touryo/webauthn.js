@@ -467,15 +467,12 @@ function getAssertion() {
             }
 
             // JSON to PublicKeyCredentialRequestOptions
-
-            // これ（challenge、allowCredentials.id）、
-            // ArrayBufferにした方がイイんじゃないかと。
             const challenge = publicKeyCredentialRequestOptions.challenge.replace(/-/g, "+").replace(/_/g, "/");
-            publicKeyCredentialRequestOptions.challenge = Uint8Array.from(atob(challenge), c => c.charCodeAt(0));
+            publicKeyCredentialRequestOptions.challenge = Fx_CoerceToArrayBuffer(challenge);
 
             publicKeyCredentialRequestOptions.allowCredentials.forEach(function (listItem) {
                 var fixedId = listItem.id.replace(/\_/g, "/").replace(/\-/g, "+");
-                listItem.id = Uint8Array.from(atob(fixedId), c => c.charCodeAt(0));
+                listItem.id = Fx_CoerceToArrayBuffer(fixedId);
             });
 
             Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 2:", publicKeyCredentialRequestOptions);
@@ -507,7 +504,6 @@ function getAssertion() {
                 publicKey: publicKeyCredentialRequestOptions
 
             }).then(function (authenticatorAttestationResponse) {
-                // ★ ★ ★
                 console.log("getAssertion - authenticatorAttestationResponse:");
                     console.log(authenticatorAttestationResponse);
                     console.log(JSON.stringify(authenticatorAttestationResponse));
@@ -523,7 +519,12 @@ function getAssertion() {
         });
 }
 
+// ---------------------------------------------------------------
 // navigator.credentials.getの結果を検証する。
+// ---------------------------------------------------------------
+// 引数    authenticatorAttestationResponse
+// 戻り値  －
+// ---------------------------------------------------------------
 function verifyAssertion(authenticatorAttestationResponse) {
 
     // ログ

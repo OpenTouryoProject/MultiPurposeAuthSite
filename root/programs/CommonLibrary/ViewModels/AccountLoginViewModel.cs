@@ -50,22 +50,11 @@ namespace MultiPurposeAuthSite.ViewModels
         public string ReturnUrl { get; set; }
 
         #region FIDO2
+        /// <summary>Fido2Data</summary>
+        public string Fido2Data { get; set; }
 
-        /// <summary>Fido2Challenge</summary>
-        public string Fido2Challenge { get; set; }
-
-        /// <summary>Fido2UserId</summary>
-        public string Fido2UserId { get; set; }
-
-        /// <summary>Fido2Signature</summary>
-        public string Fido2Signature { get; set; }
-
-        /// <summary>Fido2AuthenticatorData</summary>
-        public string Fido2AuthenticatorData { get; set; }
-
-        /// <summary>Fido2ClientData</summary>
-        public string Fido2ClientData { get; set; }
-
+        /// <summary>SequenceNo</summary>
+        public string SequenceNo { get; set; }
         #endregion
     }
 }

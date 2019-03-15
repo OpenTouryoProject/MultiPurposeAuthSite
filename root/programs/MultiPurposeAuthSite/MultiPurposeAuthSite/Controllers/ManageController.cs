@@ -2380,7 +2380,6 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else if (sequenceNo == "2")
                 {
-                    // リダイレクト "Index", "Home"へ
                     return RedirectToAction("Index", new { Message = EnumManageMessageId.AddWebAuthnDataSuccess });
                 }
             }

@@ -37,7 +37,7 @@
 // Input items
 // - button
 //   - #register-button
-//   - #login-button
+//   - #webauthn_signin
 // - hidden
 //   - #userName
 //   - #inputUsername
@@ -79,12 +79,21 @@ var input = {
 // 戻り値  －
 // ---------------------------------------------------------------
 function setInput() {
-    input.attestationType = $('#select-attestation').find(':selected').val();
-    input.authenticatorAttachment = $('#select-authenticator').find(':selected').val();
-    input.userVerification = $('#select-userVerification').find(':selected').val();
-    input.requireResidentKey = $("#checkbox-residentCredentials").is(':checked');
-
+    
     let username = $("#userName").val();
+
+    if (username) {
+        localStorage["userId"] = username;
+        input.attestationType = $('#select-attestation').find(':selected').val();
+        input.authenticatorAttachment = $('#select-authenticator').find(':selected').val();
+        input.userVerification = $('#select-userVerification').find(':selected').val();
+        input.requireResidentKey = $("#checkbox-residentCredentials").is(':checked');
+    }
+    else {
+        username = localStorage["userId"];
+        input.userVerification = $('#select-userVerification').find(':selected').val();
+    }
+
     input.user.name = username.toLowerCase().replace(/\s/g, '');
     input.user.displayName = username.toLowerCase();
 }
@@ -98,7 +107,7 @@ function setInput() {
 function detectFIDOSupport() {
     if (window.PublicKeyCredential === undefined || typeof window.PublicKeyCredential !== "function") {
         $('#register-button').attr("disabled", true);
-        $('#login-button').attr("disabled", true);
+        $('#webauthn_signin').attr("disabled", true);
         showErrorAlert("WebAuthn is not currently supported on this browser.");
         return;
     }
@@ -362,13 +371,14 @@ function registeredNewCredential() {
         $("form").submit();
     });
 }
+
 // ---------------------------------------------------------------
 // navigator.credentials.getを実行する。
 // ---------------------------------------------------------------
 // 引数    －
 // 戻り値  －
 // ---------------------------------------------------------------
-function getAssertion() {
+function getAssertion1() {
 
     // ログ
     Fx_DebugOutput("enter getAssertion method", null);
@@ -387,98 +397,87 @@ function getAssertion() {
     // ログ
     Fx_DebugOutput("getAssertion - data:", data);
 
-    // fetch
-    fetch(CredentialGetOptionsEndpoint, {
-        // Request
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-    }).then((response) => {
-        // Response
-        if (response.ok) {
-            return response.json();
-        }
-        else {
-            return Promise.reject(response.text());
-        }
-
-        }).catch((error) => {
-            // Error
-            error.then(msg => {
-                showErrorAlert(msg);
-                return;
-            });
-
-        }).then((publicKeyCredentialRequestOptions) => {
-            // Normal
-            Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 1:", publicKeyCredentialRequestOptions);
-
-            if (publicKeyCredentialRequestOptions.status !== "ok") {
-                showErrorAlert(publicKeyCredentialRequestOptions.errorMessage);
-                return;
-            }
-
-            // JSON to PublicKeyCredentialRequestOptions
-
-            // これ（challenge、allowCredentials.id）、
-            // ArrayBufferにした方がイイんじゃないかと。
-            const challenge = publicKeyCredentialRequestOptions.challenge.replace(/-/g, "+").replace(/_/g, "/");
-            publicKeyCredentialRequestOptions.challenge = Uint8Array.from(atob(challenge), c => c.charCodeAt(0));
-
-            publicKeyCredentialRequestOptions.allowCredentials.forEach(function (listItem) {
-                var fixedId = listItem.id.replace(/\_/g, "/").replace(/\-/g, "+");
-                listItem.id = Uint8Array.from(atob(fixedId), c => c.charCodeAt(0));
-            });
-
-            Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 2:", publicKeyCredentialRequestOptions);
-
-            // SweetAlert
-            let confirmed = true;
-            Swal.fire({
-                title: 'Logging In...',
-                text: 'Tap your security key to login.',
-                imageUrl: "/images/securitykey.min.svg",
-                showCancelButton: true,
-                showConfirmButton: false,
-                focusConfirm: false,
-                focusCancel: false
-
-            }).then(function (result) {
-                if (!result.value) {
-                    confirmed = false;
-                    Fx_DebugOutput('Login cancelled', null);
-                }
-
-            }).catch(function (error) {
-                confirmed = false;
-                Fx_DebugOutput("SweetAlert Error:", error);
-            });
-
-            // Credential Management API (navigator.credentials.get)
-            navigator.credentials.get({
-                publicKey: publicKeyCredentialRequestOptions
-
-            }).then(function (authenticatorAttestationResponse) {
-                // ★ ★ ★
-                console.log("getAssertion - authenticatorAttestationResponse:");
-                    console.log(authenticatorAttestationResponse);
-                    console.log(JSON.stringify(authenticatorAttestationResponse));
-
-                    // サーバーで検証
-                    verifyAssertion(authenticatorAttestationResponse);
-                })
-                .catch(function (err) {
-                    console.log(err);
-                    showErrorAlert(err.message ? err.message : err);
-                    Swal.closeModal();
-                });
-        });
+    // データのPOST
+    $("#Fido2Data").val(JSON.stringify(data));
+    $("#submitButtonName").val("webauthn_signin");
+    $("#LoginForm").submit();
 }
 
-// navigator.credentials.getの結果を検証する。
+// ---------------------------------------------------------------
+// navigator.credentials.getを実行する。
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function getAssertion2() {
+
+    let publicKeyCredentialRequestOptions = JSON.parse($("#Fido2Data").val());
+
+    // Normal
+    Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 1:", publicKeyCredentialRequestOptions);
+
+    if (publicKeyCredentialRequestOptions.status !== "ok") {
+        showErrorAlert(publicKeyCredentialRequestOptions.errorMessage);
+        return;
+    }
+
+    // JSON to PublicKeyCredentialRequestOptions
+    const challenge = publicKeyCredentialRequestOptions.challenge.replace(/-/g, "+").replace(/_/g, "/");
+    publicKeyCredentialRequestOptions.challenge = Fx_CoerceToArrayBuffer(challenge);
+
+    publicKeyCredentialRequestOptions.allowCredentials.forEach(function (listItem) {
+        var fixedId = listItem.id.replace(/\_/g, "/").replace(/\-/g, "+");
+        listItem.id = Fx_CoerceToArrayBuffer(fixedId);
+    });
+
+    Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 2:", publicKeyCredentialRequestOptions);
+
+    // SweetAlert
+    let confirmed = true;
+    Swal.fire({
+        title: 'Logging In...',
+        text: 'Tap your security key to login.',
+        imageUrl: "/images/securitykey.min.svg",
+        showCancelButton: true,
+        showConfirmButton: false,
+        focusConfirm: false,
+        focusCancel: false
+
+    }).then(function (result) {
+        if (!result.value) {
+            confirmed = false;
+            Fx_DebugOutput('Login cancelled', null);
+        }
+
+    }).catch(function (error) {
+        confirmed = false;
+        Fx_DebugOutput("SweetAlert Error:", error);
+    });
+
+    // Credential Management API (navigator.credentials.get)
+    navigator.credentials.get({
+        publicKey: publicKeyCredentialRequestOptions
+
+    }).then(function (authenticatorAttestationResponse) {
+        console.log("getAssertion - authenticatorAttestationResponse:");
+        console.log(authenticatorAttestationResponse);
+        console.log(JSON.stringify(authenticatorAttestationResponse));
+
+        // サーバーで検証
+        verifyAssertion(authenticatorAttestationResponse);
+    }).catch(function (err) {
+        console.log(err);
+        showErrorAlert(err.message ? err.message : err);
+        Swal.closeModal();
+    });
+}
+
+// ---------------------------------------------------------------
+// navigator.credentials.getの結果を取得する。
+// ---------------------------------------------------------------
+// 引数    authenticatorAttestationResponse
+// 戻り値  －
+// ---------------------------------------------------------------
 function verifyAssertion(authenticatorAttestationResponse) {
 
     // ログ
@@ -504,49 +503,29 @@ function verifyAssertion(authenticatorAttestationResponse) {
 
     // ログ
     Fx_DebugOutput("verifyAssertion - data:", data);
-    
-    // fetch
-    fetch(AuthenticatorAssertionEndpoint, {
-        // Request
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-    }).then((response) => {
-        // Response
-        if (response.ok) {
-            return response.json();
-        }
-        else {
-            return Promise.reject(response.text());
-        }
 
-        }).catch((error) => {
-            // Error
-            error.then(msg => {
-                showErrorAlert(msg);
-                return;
-            });
-        })
-        .then(responseJson => {
-            // Normal
-            Fx_DebugOutput("verifyAssertion - responseJson:", responseJson);
+    // データのPOST
+    $("#Fido2Data").val(JSON.stringify(data));
+    $("#submitButtonName").val("webauthn_signin");
+    $("#LoginForm").submit();
+}
 
-            if (responseJson.status !== "ok") {
-                Swal.closeModal();
-                showErrorAlert(responseJson.errorMessage);
-                return;
-            }
+// ---------------------------------------------------------------
+// navigator.credentials.getの結果を検証する。
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function verifiedAssertion() {
 
-            // SweetAlert
-            Swal.fire({
-                title: 'Logged In!',
-                text: 'You\'re logged in successfully.',
-                type: 'success',
-                timer: 2000
-            });
-            //window.location.href = "/dashboard/" + input.user.displayName;
-        });
+    let responseJson = JSON.parse($("#Fido2Data").val());
+
+    // Normal
+    Fx_DebugOutput("verifyAssertion - responseJson:", responseJson);
+
+    if (responseJson.status !== "ok") {
+        Swal.closeModal();
+        showErrorAlert(responseJson.errorMessage);
+        return;
+    }
 }
