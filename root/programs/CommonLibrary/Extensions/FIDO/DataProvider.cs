@@ -409,16 +409,15 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         #region Delete
 
         /// <summary>Delete</summary>
-        /// <param name="publicKeyId">byte[]</param>
-        public static void Delete(byte[] publicKeyId)
+        /// <param name="publicKeyId">string</param>
+        /// <param name="userName">string</param>
+        public static void Delete(string publicKeyId, string userName)
         {
-            string _publicKeyId = CustomEncode.ToBase64UrlString(publicKeyId);
-
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
                     string unstructuredData = "";
-                    DataProvider.FIDO2Data.TryRemove(_publicKeyId, out unstructuredData);
+                    DataProvider.FIDO2Data.TryRemove(publicKeyId, out unstructuredData);
 
                     break;
 
@@ -435,21 +434,24 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "DELETE FROM [FIDO2Data] WHERE [PublicKeyId] = @PublicKeyId", new { PublicKeyId = _publicKeyId });
+                                    "DELETE FROM [FIDO2Data] WHERE [PublicKeyId] = @PublicKeyId AND [UserName] = @UserName",
+                                    new { PublicKeyId = publicKeyId, UserName = userName });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
-                                    "DELETE FROM \"FIDO2Data\" WHERE \"PublicKeyId\" = :PublicKeyId", new { PublicKeyId = _publicKeyId });
+                                    "DELETE FROM \"FIDO2Data\" WHERE \"PublicKeyId\" = :PublicKeyId AND \"UserName\" = :UserName",
+                                    new { PublicKeyId = publicKeyId, UserName = userName });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
                                 cnn.Execute(
-                                    "DELETE FROM \"fido2data\" WHERE \"publickeyid\" = @PublicKeyId", new { PublicKeyId = _publicKeyId });
+                                    "DELETE FROM \"fido2data\" WHERE \"publickeyid\" = @PublicKeyId AND \"username\" = @UserName",
+                                    new { PublicKeyId = publicKeyId, UserName = userName });
 
                                 break;
                         }

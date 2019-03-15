@@ -32,7 +32,11 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+#if NETFX
 using MultiPurposeAuthSite.Entity;
+#else
+using MultiPurposeAuthSite;
+#endif
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Util;
 
@@ -130,7 +134,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             ApplicationUser _user = CmnUserStore.FindByName(username);
 
             if (_user == null)
-                throw new Exception(string.Format("{0} is not founded.", username));
+                throw new Exception(string.Format("{0} is not found.", username));
 
             User user = new User
             {

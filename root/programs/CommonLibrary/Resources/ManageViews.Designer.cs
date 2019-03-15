@@ -997,6 +997,33 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Remove WebAuthn data form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RemoveWebAuthnDataH4 {
+            get {
+                return ResourceManager.GetString("RemoveWebAuthnDataH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove WebAuthn authenticator&apos;s key  に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RemoveWebAuthnDataSubmit {
+            get {
+                return ResourceManager.GetString("RemoveWebAuthnDataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove WebAuthn data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RemoveWebAuthnDataTitle {
+            get {
+                return ResourceManager.GetString("RemoveWebAuthnDataTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   If you reset your authenticator key your authenticator app will not work until you reconfigure it. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ResetTwoFactorAuthenticatorH {

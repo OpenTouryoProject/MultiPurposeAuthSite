@@ -474,4 +474,13 @@
   <data name="IndexWebAuthnDataRemoveButton" xml:space="preserve">
     <value>WebAuthnデータの削除</value>
   </data>
+  <data name="RemoveWebAuthnDataH4" xml:space="preserve">
+    <value>WebAuthnデータの削除フォーム</value>
+  </data>
+  <data name="RemoveWebAuthnDataSubmit" xml:space="preserve">
+    <value>WebAuthn認証器の公開鍵を削除する</value>
+  </data>
+  <data name="RemoveWebAuthnDataTitle" xml:space="preserve">
+    <value>WebAuthnデータの削除</value>
+  </data>
 </root>

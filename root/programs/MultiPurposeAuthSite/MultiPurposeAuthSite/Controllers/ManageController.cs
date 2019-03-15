@@ -244,7 +244,18 @@ namespace MultiPurposeAuthSite.Controllers
                     // OAuth2Data
                     HasOAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
                     // FIDO2PublicKey
-                    HasFIDO2Data = !string.IsNullOrEmpty(user.FIDO2PublicKey),
+                    HasFIDO2Data = new Func<bool>(() =>
+                    {
+                        if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
+                        {
+                            return !string.IsNullOrEmpty(user.FIDO2PublicKey);
+                        }
+                        else if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+                        {
+                            return (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count);
+                        }
+                        else return false;                        
+                    })(),
                     // Scopes
                     Scopes = Const.StandardScopes
                 };
@@ -2380,15 +2391,36 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// WebAuthn関連の非構造化データの削除
-        /// GET: /Manage/RemoveWebAuthnData
+        /// POST: /Manage/RemoveWebAuthnData
         /// </summary>
+
+        /// <param name="publicKeys"></param>
         /// <returns>ActionResultを非同期に返す</returns>
-        [HttpGet]
-        public async Task<ActionResult> RemoveWebAuthnData()
+        [HttpPost]
+        public async Task<ActionResult> RemoveWebAuthnData(string publicKeys)
         {
             if ((Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
                 && Config.EnableEditingOfUserAttribute)
             {
+                // ユーザの検索
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
+                // 削除処理
+                if (!string.IsNullOrEmpty(publicKeys))
+                {
+                    string[] _publicKeys = publicKeys.Split(',');
+
+                    foreach (string publicKey in _publicKeys)
+                    {
+                        FIDO.DataProvider.Delete(publicKey, user.UserName);
+                    }
+                }
+                
+                // 公開鍵の検索
+                List<PublicKeyCredentialDescriptor> existingPubCredDescriptor = FIDO.DataProvider.GetCredentialsByUser(user.UserName);
+
+                // Htmlを返す。
+                ViewBag.ExistingPubCredDescriptor = existingPubCredDescriptor;
                 return View();
             }
             else

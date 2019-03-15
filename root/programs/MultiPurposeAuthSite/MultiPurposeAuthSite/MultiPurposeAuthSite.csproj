@@ -410,6 +410,7 @@
     <Content Include="Views\Home\Scroll.cshtml" />
     <Content Include="Views\Manage\AddWebAuthnData.cshtml" />
     <Content Include="Views\Home\WebAuthnStarters.cshtml" />
+    <Content Include="Views\Manage\RemoveWebAuthnData.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

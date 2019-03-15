@@ -429,6 +429,15 @@
   <data name="ReferGdprPersonalDataSubmit" xml:space="preserve">
     <value>Refer your GDPR personal data</value>
   </data>
+  <data name="RemoveWebAuthnDataH4" xml:space="preserve">
+    <value>Remove WebAuthn data form</value>
+  </data>
+  <data name="RemoveWebAuthnDataSubmit" xml:space="preserve">
+    <value>Remove WebAuthn authenticator's key </value>
+  </data>
+  <data name="RemoveWebAuthnDataTitle" xml:space="preserve">
+    <value>Remove WebAuthn data</value>
+  </data>
   <data name="ResetTwoFactorAuthenticatorH" xml:space="preserve">
     <value>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</value>
   </data>
