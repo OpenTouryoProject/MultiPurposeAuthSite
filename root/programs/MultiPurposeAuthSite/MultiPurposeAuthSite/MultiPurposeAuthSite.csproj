@@ -297,7 +297,7 @@
     <Content Include="images\securitykey.min.svg" />
     <Content Include="images\securitykey.svg" />
     <Content Include="Scripts\touryo\msWebauthn.js" />
-    <Content Include="Scripts\touryo\util.js" />
+    <Content Include="Scripts\touryo\arrayBufferUtil.js" />
     <Content Include="Scripts\touryo\ffWebauthn.js" />
     <Content Include="Scripts\touryo\webauthn.js" />
     <Content Include="fonts\fontawesome-webfont.svg" />

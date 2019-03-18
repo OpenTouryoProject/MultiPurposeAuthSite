@@ -785,3 +785,35 @@ function Fx_ResolveServerUrl(url) {
     }
     return url;
 }
+
+// ---------------------------------------------------------------
+// ランダムな文字列を生成する
+// ---------------------------------------------------------------
+// 引数    len
+// 戻り値  Random String
+// ---------------------------------------------------------------
+function Fx_GetRandomString(len) {
+    //使用文字の定義
+    var str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&=~/*-+";
+
+    //ランダムな文字列の生成
+    var result = "";
+    for (var i = 0; i < len; i++) {
+        result += str.charAt(Math.floor(Math.random() * str.length));
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------
+// Debug出力
+// ---------------------------------------------------------------
+// 引数    testLabel: ラベル, object: オブジェクト
+// 戻り値  －
+// ---------------------------------------------------------------
+function Fx_DebugOutput(testLabel, object) {
+    console.log(testLabel);
+    if (object) {
+        console.log(object);
+        console.log(JSON.stringify(object));
+    }
+}
