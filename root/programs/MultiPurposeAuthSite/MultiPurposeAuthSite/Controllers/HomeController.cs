@@ -393,6 +393,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // ログイン・ユーザの Client
                         if (User.Identity.IsAuthenticated)
                         {
+                            // ユーザの取得
                             ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                             this.ClientName = user.UserName;
                         }

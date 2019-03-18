@@ -3,8 +3,8 @@
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
     "iisExpress": {
-      "applicationUrl": "http://localhost:63359/MultiPurposeAuthSite",
-      "sslPort": 0
+      "applicationUrl": "https://localhost:44300/MultiPurposeAuthSite",
+      "sslPort": 44300
     }
   },
   "profiles": {
@@ -21,7 +21,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "http://localhost:63359/MultiPurposeAuthSite"
+      "applicationUrl": "https://localhost:44300/MultiPurposeAuthSite"
     }
   }
 }

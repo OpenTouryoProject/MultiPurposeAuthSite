@@ -20,6 +20,8 @@
     //**********************************************************************************
 *@
 
+@using MultiPurposeAuthSite.Extensions.FIDO
+
 @model AccountLoginViewModel
 
 @{
@@ -29,6 +31,9 @@
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
 @section HeaderScriptsSection{
     <!-- Head 部の section -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/6.10.1/sweetalert2.min.css" />
 }
 
 <h2>@ViewBag.Title</h2>
@@ -91,10 +96,9 @@
                     @Html.ActionLink(AccountViews.LoginForgotPasswordActionLink, "ForgotPassword")
                 </p>
 
-                @Html.HiddenFor(m => m.Fido2UserId)
-                @Html.HiddenFor(m => m.Fido2Signature)
-                @Html.HiddenFor(m => m.Fido2AuthenticatorData)
-                @Html.HiddenFor(m => m.Fido2ClientData)
+                // MsPass, WebAuthn 共用フィールド
+                @Html.HiddenFor(m => m.SequenceNo)
+                @Html.HiddenFor(m => m.Fido2Data)
 
                 <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
             }
@@ -121,13 +125,44 @@
             </section>
         </div>
 
-        @if (Config.CanEditFIDO2Data)
+        @if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
         {
             <div class="sample-box-1">
-                @*ここにFIDO2を実装*@
-                @AccountViews.FIDO2Login
+                @*ここにWebAuthnを実装*@
+                @AccountViews.WebAuthnLogin
                 <section>
-                    <button id="fido2_signin" name="submitButton" value="fido2_signin" type="button" class="btn btn-default">@AccountViews.FIDO2LoginSubmit</button>
+                    <button id="webauthn_signin" class="btn btn-default" type="button" onclick="getAssertion1()">@AccountViews.WebAuthnLoginSubmit</button>
+                    <div class="form-group">
+                        <p class="col-md-4 control-label">Resident Credentials</p>
+                        <div class="col-md-8">
+                            <input class="form-control" type="checkbox" id="checkbox-residentCredentials" value="residentCredentials" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="alert-wrapper" id="error-alert" style="display:none">
+                            <div class="alert alert-danger" id="error-alert-msg" role="alert">
+                                <strong>Holy guacamole!</strong> You should check in on some of those fields below.
+                            </div>
+                        </div>
+                        <div class="warning-wrapper" id="warning-alert" style="display:none">
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                                <span id="warning-alert-msg"></span>
+                                <button type="button" class="close" aria-label="Close" onclick="hideWarningAlert()">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        }
+        else if (Config.FIDOServerMode == EnumFidoType.MsPass)
+        {
+            <div class="sample-box-1">
+                @*ここにMsPassを実装*@
+                @AccountViews.MsPassLogin
+                <section>
+                    <button id="mspass_signin" name="submitButton" value="mspass_signin" type="button" class="btn btn-default">@AccountViews.MsPassLoginSubmit</button>
                 </section>
             </div>
         }
@@ -137,7 +172,6 @@
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
-    <script src="~/js/webauthn.js"></script>
     <script>
         $(function () {
             $("#normal_signin").on("click", function () {
@@ -161,86 +195,66 @@
         });
     </script>
 
-    <script>
-        // FIDO2
-        const credAlgorithm = "RSASSA-PKCS1-v1_5";
+    @if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
+    {
+        <script>
+            // WebAuthn
 
-        $(function () {
+            // body.onload代替
+            detectFIDOSupport();
 
-            $("#fido2_signin").on("click", function () {
-                // button name
-                $("#submitButtonName").val(this.value);
+            if ($("#SequenceNo").val() === "0") {
+                // getAssertion1();
+            }
+            else if ($("#SequenceNo").val() === "1") {
+                // getAssertion2() -> verifyAssertion();
+                getAssertion2();
+            }
+            else if ($("#SequenceNo").val() === "2") {
+                verifiedAssertion();
+            }
+        </script>
+    }
+    else if (Config.FIDOServerMode == EnumFidoType.MsPass)
+    {
+        <script>
+            // MsPass
+            const credAlgorithm = "RSASSA-PKCS1-v1_5";
 
-                var challenge = '@Model.Fido2Challenge';
-                var id = localStorage["credentialId"];
-                var allowList =
-                    [
-                        {
-                            type: 'ScopedCred',
-                            id: id
-                        }
-                    ];
+            $(function () {
 
-                //var timeout = {};
-                //var ext = {};
+                $("#mspass_signin").on("click", function () {
+                    // button name
+                    $("#submitButtonName").val(this.value);
 
-                navigator.authentication.getAssertion(challenge, { allowList })
-                    .then(function (result) {
+                    var challenge = '@Model.Fido2Data';
+                    var id = localStorage["credentialId"];
+                    var allowList =
+                        [
+                            {
+                                type: 'ScopedCred',
+                                id: id
+                            }
+                        ];
 
-                        //return verifyMSFidoSignature(
-                        //    result.clientData,
-                        //    result.authenticatorData,
-                        //    result.signature,
-                        //    localStorage["publicKey"]);
+                    navigator.authentication.getAssertion(challenge, { allowList })
+                        .then(function (result) {
 
-                        // properties
-                        $("#Fido2UserId").val(localStorage["userId"]);
-                        $("#Fido2Signature").val(result.signature);
-                        $("#Fido2AuthenticatorData").val(result.authenticatorData);
-                        $("#Fido2ClientData").val(result.clientData);
+                            //return verifyMSFidoSignature(...
 
-                        // submit
-                        $("#LoginForm").submit();
-                    });
+                            // properties
+                            $("#Fido2Data").val(JSON.stringify({
+                                fido2UserId: localStorage["userId"],
+                                fido2ClientData: result.clientData,
+                                fido2AuthenticatorData: result.authenticatorData,
+                                fido2Signature: result.signature
+                            }));
 
-                //.then(function(result) {
-                //    alert("ID=" + id + "\r\n" + result);
-                //})
-                //.catch(function(err) {
-                //    alert(err);
-                //});
+                            // submit
+                            $("#LoginForm").submit();
+                        });
+                });
             });
-        });
-
-        /*
-        function parseBase64(s) {
-            s = s.replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, '');
-            return new Uint8Array(Array.prototype.map.call(atob(s), function (c) { return c.charCodeAt(0) }));
-        }
-
-        function concatUint8Array(a1, a2) {
-            var d = new Uint8Array(a1.length + a2.length);
-            d.set(a1);
-            d.set(a2, a1.length);
-            return d;
-        }
-
-        function verifyMSFidoSignature(clientData, authenticatorData, signature, publicKey) {
-            var hash;
-            // the server would have to validate that the clientData contained the same challenge
-            // that was generated on the server for the getAssertion call
-            return crypto.subtle.digest("SHA-256", parseBase64(clientData))
-            .then(function (h) {
-                hash = new Uint8Array(h);
-                return crypto.subtle.importKey("jwk", JSON.parse(publicKey), credAlgorithm, false, ["verify"]);
-            })
-            .then(function (key) {
-                return crypto.subtle.verify(
-                    { name: credAlgorithm, hash: { name: "SHA-256" } },
-                    key, parseBase64(signature), concatUint8Array(parseBase64(authenticatorData), hash));
-            });
-        }
-        */
-
-    </script>
+        </script>
+    }
 }

@@ -17,8 +17,16 @@
 // limitations under the License.
 
 //**********************************************************************************
+//* ファイル名        ：common.js
+//* ファイル日本語名  ：共通のJS処理
+//*
+//* 作成日時        ：－
+//* 作成者          ：－
+//* 更新履歴        ：－
+//*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
+//*  201?/0?/0?  西野 大介         新規作成
 //*  2015/02/06  Supragyan         Added condition for check AjaxPostBackElement in Fx_AjaxExtensionInitializeRequest
 //*  2015/02/06  Supragyan         Added condition for check AjaxPostBackElement in Fx_AjaxExtensionEndRequest
 //*  2015/02/09  Supragyan         Added condition for Trident on Internet Explorer
@@ -796,4 +804,16 @@ function Fx_GetRandomString(len) {
     return result;
 }
 
-
+// ---------------------------------------------------------------
+// Debug出力
+// ---------------------------------------------------------------
+// 引数    testLabel: ラベル, object: オブジェクト
+// 戻り値  －
+// ---------------------------------------------------------------
+function Fx_DebugOutput(testLabel, object) {
+    console.log(testLabel);
+    if (object) {
+        console.log(object);
+        console.log(JSON.stringify(object));
+    }
+}

@@ -83,7 +83,7 @@
             <div id="header-title">
 @if (User.Identity.IsAuthenticated)
 {
-                @Html.ActionLink(string.Format(SharedViews.LoginPartial, User.Identity.GetUserName()), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage", @class = "pull-right"})
+                @Html.ActionLink(string.Format(SharedViews.LoginPartial, User.Identity.GetUserName()), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage", @class = "pull-right" })
 }
             </div>
         </div>
@@ -102,7 +102,7 @@ else
     </div>
     <div id="body-bk">
         <div id="body" class="row">
-            <div class="nav-side-menu  col-sm-4 col-md-3">
+            <div class="nav-side-menu col-sm-4 col-md-3">
                 <div class="brand">メニュー</div>
                 <i class="fa fa-bars fa-2x toggle-btn" data-toggle="collapse" data-target="#menu-content"></i>
                 <div class="menu-list">
@@ -142,7 +142,7 @@ else
     <footer class="footer">
         <div class="container">
             <p class="text-muted">Powered by <a target="_blank" href="https://github.com/OpenTouryoProject">OpenTouryo</a></p>
-    </div>
+        </div>
     </footer>
 
     @Scripts.Render("~/bundles/bootstrap")
@@ -150,6 +150,5 @@ else
     @Scripts.Render("~/bundles/app")
 
     @RenderSection("FooterScriptsSection", required: true)
-
 </body>
 </html>

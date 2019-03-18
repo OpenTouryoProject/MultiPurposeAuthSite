@@ -1,6 +1,12 @@
 "use strict";
 
-// Editor's draft of spec at https://w3c.github.io/webauthn/#api
+//**********************************************************************************
+//* ファイル名        ：msWebauthn.js
+//* ファイル日本語名  ：webauthn処理
+//*                     https://github.com/adrianba/fido-snippets/blob/master/polyfill/webauthn.js
+//*
+//* Editor's draft of spec at https://w3c.github.io/webauthn/#api
+//**********************************************************************************
 
 navigator.authentication = navigator.authentication || (function () {
 

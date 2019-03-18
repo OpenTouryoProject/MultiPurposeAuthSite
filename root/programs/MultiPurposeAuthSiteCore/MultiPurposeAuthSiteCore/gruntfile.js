@@ -65,15 +65,21 @@ module.exports = function (grunt) {
                     ],
                     'wwwroot/js/touryo.min.js': [
                         'wwwroot/js/touryo/common.js',
-                        'wwwroot/js/touryo/else.js']
+                        'wwwroot/js/touryo/else.js'],
+                    'wwwroot/js/multiauthsite.min.js': [
+                        'wwwroot/js/multiauthsite/qrcode.js',
+                        'wwwroot/js/multiauthsite/oauthimplicit.js',
+                        'wwwroot/js/multiauthsite/arrayBufferUtil.js',
+                        'wwwroot/js/multiauthsite/msWebauthn.js',
+                        'wwwroot/js/multiauthsite/ffWebauthn.js']
                 }
             }
         }
     });
     // 必要なGruntプラグインを読み込む。
-    grunt.loadNpmTasks('grunt-contrib-cssmin');
-    grunt.loadNpmTasks('grunt-contrib-uglify');
     grunt.loadNpmTasks('grunt-contrib-copy');
+    grunt.loadNpmTasks('grunt-contrib-cssmin');
+    grunt.loadNpmTasks('grunt-contrib-uglify-es');
     // 各タスクを組合せたカスタム タスクを登録する。
     // package.json の scripts から "grunt bundle" で呼び出せる。
     grunt.registerTask('bundle', ['copy', 'cssmin', 'uglify']);

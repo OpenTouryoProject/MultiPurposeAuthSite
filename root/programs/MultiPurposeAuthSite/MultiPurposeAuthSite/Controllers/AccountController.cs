@@ -19,15 +19,15 @@
 //*  2019/02/18  西野 大介         FAPI2 CC対応実施
 //**********************************************************************************
 
-using MultiPurposeAuthSite.ViewModels;
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notifications;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.TokenProviders;
@@ -37,15 +37,16 @@ using OAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Web;
-using System.Web.Mvc;
-using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Configuration;
+
+using System.Web;
+using System.Web.Mvc;
+using System.Net.Http;
 using System.Web.Configuration;
 
 using Microsoft.Owin.Security;
@@ -449,7 +450,6 @@ namespace MultiPurposeAuthSite.Controllers
                     && Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
                 {
                     // Microsoft Passportのサインイン
-
                     JObject fido2Data = JsonConvert.DeserializeObject<JObject>(model.Fido2Data);
                     ApplicationUser user = await UserManager.FindByNameAsync((string)fido2Data["fido2UserId"]);
 
@@ -912,12 +912,11 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
+                ApplicationUser user = await UserManager.FindByIdAsync(userId);
+
                 if (Config.DisplayAgreementScreen)
                 {
                     //　約款あり
-
-                    ApplicationUser user = await UserManager.FindByIdAsync(userId);
-
                     if (user == null)
                     {
                         // 削除済み
@@ -956,7 +955,6 @@ namespace MultiPurposeAuthSite.Controllers
                     if (result.Succeeded)
                     {
                         // オペレーション・トレース・ログ出力
-                        ApplicationUser user = await UserManager.FindByIdAsync(userId);
                         Logging.MyOperationTrace(string.Format("{0}({1}) has confirmed.", user.Id, user.UserName));
 
                         return View("EmailConfirmation");
@@ -994,6 +992,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (model.AcceptedAgreement)
                         {
                             // 同意された。
+                            ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
 
                             // アクティベーション
                             IdentityResult result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
@@ -1001,8 +1000,6 @@ namespace MultiPurposeAuthSite.Controllers
                             // メアド検証結果 ( "EmailConfirmation" or "Error"
                             if (result.Succeeded)
                             {
-                                ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
-
                                 // メールの送信
                                 this.SendRegisterCompletedEmail(user);
 
@@ -1197,13 +1194,13 @@ namespace MultiPurposeAuthSite.Controllers
                 // AccountResetPasswordViewModelの検証に成功
 
                 // パスワードのリセット
+                ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
                 IdentityResult result = await UserManager.ResetPasswordAsync(model.UserId, model.Code, model.Password);
 
                 // 結果の確認
                 if (result.Succeeded)
                 {
                     // パスワードのリセットの成功
-                    ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
 
                     // メールの送信
                     this.SendPasswordResetCompletedEmail(user);
@@ -1221,7 +1218,6 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果のエラー情報を追加
                     this.AddErrors(result);
                 }
-
             }
             else
             {
@@ -1392,11 +1388,11 @@ namespace MultiPurposeAuthSite.Controllers
                 // 指定時間の間にコード入力の誤りが指定の回数に達すると、アカウントは、指定時間の間ロックアウトされる。
                 // IdentityConfig.cs(ApplicationUserManager.Create)でアカウントロックアウトの設定を行うことができる。
                 SignInStatus result = await SignInManager.TwoFactorSignInAsync(
-                        provider: model.Provider,                                  // 2FAプロバイダ
-                        code: model.Code,                                          // 2FAコ－ド
-                        isPersistent: model.RememberBrowser, // model.RememberMe,  // アカウント記憶 ( ・・・仕様として解り難いので、RememberBrowserを使用 )
-                        rememberBrowser: model.RememberBrowser                     // ブラウザ記憶(2FA)
-                        );
+                    provider: model.Provider,                                  // 2FAプロバイダ
+                    code: model.Code,                                          // 2FAコ－ド
+                    isPersistent: model.RememberBrowser, // model.RememberMe,  // アカウント記憶 ( ・・・仕様として解り難いので、RememberBrowserを使用 )
+                    rememberBrowser: model.RememberBrowser                     // ブラウザ記憶(2FA)
+                    );
 
                 // SignInStatus
                 switch (result)
@@ -1855,7 +1851,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // id_tokenがある。
                         string id_token = dic[OAuth2AndOIDCConst.IDToken];
-                        
+
                         if (AccessToken.Verify(id_token, out sub, out roles, out scopes, out jobj)
                             && jobj[OAuth2AndOIDCConst.nonce].ToString() == (string)Session["id_federation_signin_nonce"])
                         {
@@ -2478,7 +2474,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idと、クライアント証明書（TB）
                         string client_id = clientId_InSessionOrCookie;
-                        //string client_secret = Helper.GetInstance().GetClientSecret(client_id);
 
                         model.Response = await OAuth2.Helper.GetInstance()
                             .GetAccessTokenByCodeAsync(tokenEndpointUri,
@@ -2549,7 +2544,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
                         model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
-                        
+
                         if (!string.IsNullOrEmpty(model.IdToken))
                         {
                             if (!IdToken.Verify(
@@ -2856,8 +2851,7 @@ namespace MultiPurposeAuthSite.Controllers
             // URLの生成
             callbackUrl = this.Url.Action(
                     "EmailConfirmation", "Account",
-                    new { userId = user.Id, code = code }, protocol: Request.Url.Scheme
-                );
+                    new { userId = user.Id, code = code }, protocol: Request.Url.Scheme);
 
             // E-mailの送信
             string subject = GetContentOfLetter.Get("EmailConfirmationTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_emailconfirm);
@@ -2885,8 +2879,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // E-mailの送信
             await UserManager.SendEmailAsync(
-                    user.Id,
-                    GetContentOfLetter.Get("PasswordResetTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset),
+                    user.Id, GetContentOfLetter.Get("PasswordResetTitle", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset),
                     string.Format(GetContentOfLetter.Get("PasswordResetMsg", CustomEncode.UTF_8, Resources.AccountController.SendEmail_passwordreset_msg), callbackUrl));
         }
 
@@ -2998,7 +2991,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region 管理者ユーザ
 
-                user =  ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
                 result = await this.UserManager.CreateAsync(user, Config.AdministratorPWD);
                 if (result.Succeeded)
                 {
@@ -3036,7 +3029,6 @@ namespace MultiPurposeAuthSite.Controllers
                         await this.UserManager.AddToRoleAsync(
                             (await this.UserManager.FindByNameAsync("tanaka@gmail.com")).Id, Const.Role_User);
                     }
-                    
                 }
 
                 #endregion

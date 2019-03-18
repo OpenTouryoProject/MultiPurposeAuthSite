@@ -20,14 +20,14 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
+using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Network;
-using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Notifications;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
 using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using OAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
-using MultiPurposeAuthSite.ViewModels;
 
 using System;
 using System.IO;
@@ -327,7 +327,7 @@ namespace MultiPurposeAuthSite.Controllers
                             userName: user.UserName,                                          // アカウント(UID)
                             password: model.Password,                                         // アカウント(PWD)
                             isPersistent: false,                                              // アカウント記憶
-                            shouldLockout: Config.UserLockoutEnabledByDefault); // ロックアウト
+                            shouldLockout: Config.UserLockoutEnabledByDefault);               // ロックアウト
 
                         if (signInResult == SignInStatus.Success)
                         {
@@ -436,6 +436,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageSetPasswordViewModelの検証に成功
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                     // パスワード設定
                     IdentityResult result = await UserManager.AddPasswordAsync(User.Identity.GetUserId(), model.NewPassword);
@@ -449,7 +450,6 @@ namespace MultiPurposeAuthSite.Controllers
                         await this.ReSignInAsync();
 
                         // オペレーション・トレース・ログ出力
-                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                         Logging.MyOperationTrace(string.Format("{0}({1}) has set own local password.", user.Id, user.UserName));
 
                         // Index - SetPasswordSuccess
@@ -515,6 +515,7 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageChangePasswordViewModelの検証に成功
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                     // パスワード変更
                     IdentityResult result = await UserManager.ChangePasswordAsync(User.Identity.GetUserId(), model.OldPassword, model.NewPassword);
@@ -528,7 +529,6 @@ namespace MultiPurposeAuthSite.Controllers
                         await this.ReSignInAsync();
 
                         // オペレーション・トレース・ログ出力
-                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                         Logging.MyOperationTrace(string.Format("{0}({1}) has changed own password.", user.Id, user.UserName));
 
                         // Index - ChangePasswordSuccess
@@ -602,12 +602,12 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     // ManageEmailViewModelの検証に成功
+                    ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                     // Passwordチェック
                     if (Config.RequirePasswordInEditingUserNameAndEmail)
                     {
                         // パスワードのチェック
-                        ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
                         SignInStatus result = await SignInManager.PasswordSignInAsync(
                             userName: user.UserName,                                          // アカウント(UID)
                             password: model.Password,                                         // アカウント(PWD)
@@ -638,7 +638,8 @@ namespace MultiPurposeAuthSite.Controllers
                         Code = GetPassword.Base64UrlSecret(128),
                         Email = model.Email // 更新後のメアド
                     };
-                    CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
+                    CustomizedConfirmationProvider.GetInstance()
+                        .CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
                     // 確認メールの送信
                     this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
@@ -755,7 +756,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 Code = GetPassword.Base64UrlSecret(128),
                                 Email = model.Email // 更新後のメアド
                             };
-                            CustomizedConfirmationProvider.GetInstance().CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
+                            CustomizedConfirmationProvider.GetInstance()
+                                .CreateCustomizedConfirmationData(User.Identity.GetUserId(), customizedConfirmationJson);
 
                             // 確認メールの送信
                             this.SendConfirmEmail(User.Identity.GetUserId(), customizedConfirmationJson.Email, customizedConfirmationJson.Code);
@@ -802,6 +804,9 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> EmailConfirmation(string userId, string code)
         {
+        	// ユーザの取得
+            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
             if (Config.CanEditEmail
                 && Config.EnableEditingOfUserAttribute)
             {
@@ -815,15 +820,11 @@ namespace MultiPurposeAuthSite.Controllers
                     // 入力の検証 2
                     if (User.Identity.GetUserId() == userId)
                     {
-                        bool isExpired = false;
-                        string email = CustomizedConfirmationProvider.GetInstance().CheckCustomizedConfirmationData(userId, code, out isExpired);
+                        string email = CustomizedConfirmationProvider.GetInstance()
+                            .CheckCustomizedConfirmationData(userId, code, out bool isExpired);
 
                         if (!string.IsNullOrWhiteSpace(email))
                         {
-                            // ユーザの取得
-                            ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
-
-
                             // 更新（UserName＝メアドの場合は、UserNameも更新）
                             string oldUserName = "";
                             if (Config.RequireUniqueEmail)
@@ -1126,8 +1127,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemovePhoneNumber()
         {
-            if (Config.CanEditPhone
-                && Config.EnableEditingOfUserAttribute)
+            if (Config.CanEditPhone && Config.EnableEditingOfUserAttribute)
             {
                 // null クリア
                 IdentityResult result = await UserManager.SetPhoneNumberAsync(User.Identity.GetUserId(), "");
@@ -1241,10 +1241,10 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 色々な結果メッセージの設定
                 ViewBag.StatusMessage =
-               message == EnumManageMessageId.Error ? Resources.ManageController.Error
-               : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
-               : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
-               : "";
+                    message == EnumManageMessageId.Error ? Resources.ManageController.Error
+                    : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
+                    : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
+                    : "";
 
                 // 認証されたユーザを取得
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1309,8 +1309,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> RemoveLogin(string loginProvider, string providerKey)
         {
-            if (Config.CanEditExtLogin
-                && Config.EnableEditingOfUserAttribute)
+            if (Config.CanEditExtLogin && Config.EnableEditingOfUserAttribute)
             {
                 // メッセージ列挙型
                 EnumManageMessageId? message;
@@ -1409,6 +1408,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// （外部Login providerからRedirectで戻る先のURLのAction method）
         /// GET: /Manage/ExternalLoginCallback
         /// </summary>
+        /// <param name="returnUrl">string</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         public async Task<ActionResult> ExternalLoginCallback(string returnUrl)
@@ -1784,6 +1784,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
                 // 支払元情報のクリア
                 user.PaymentInformation = "";
                 // ユーザーの保存
@@ -1947,6 +1948,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+
                 // 非構造化データのクリア
                 user.UnstructuredData = "";
                 // ユーザーの保存
@@ -2587,7 +2589,7 @@ namespace MultiPurposeAuthSite.Controllers
                         streamWriter.WriteLine(JsonConvert.SerializeObject(user));
                         streamWriter.Flush();
                     }
-                    
+
                     return File(ms.ToArray(), "application/json", "user.json");
                 }
             }

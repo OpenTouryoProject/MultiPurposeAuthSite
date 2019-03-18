@@ -80,8 +80,8 @@
         <h4>@ManageViews.IndexH4</h4>
         <hr />
         <dl class="dl-horizontal">
-            @if (Config.AllowEditingUserName)
-            {
+@if (Config.AllowEditingUserName)
+{
                 // UserNameの変更が許可されている場合。
                 if (Config.RequireUniqueEmail)
                 {
@@ -99,31 +99,31 @@
                         [@Html.ActionLink(ManageViews.IndexUserNameChangeActionLink, "ChangeUserName")]
                     </dd>
                 }
-            }
-            else
-            {
+}
+else
+{
                 // UserNameの変更が許可されていない場合。
-            }
+}
             <dt>Password :</dt>
             <dd>
                 [
-                @if (Model.HasPassword)
-                {
+@if (Model.HasPassword)
+{
                     @Html.ActionLink(ManageViews.IndexChangePasswordActionLink, "ChangePassword")
-                }
-                else
-                {
+}
+else
+{
                     @Html.ActionLink(ManageViews.IndexSetPasswordActionLink, "SetPassword")
-                }
+}
                 ]
             </dd>
 
-            @if (Config.RequireUniqueEmail)
-            {
+@if (Config.RequireUniqueEmail)
+{
                 // UserName＝メアドの場合
-            }
-            else
-            {
+}
+else
+{
                 // UserName≠メアドの場合（のメアド追加
                 if (Config.CanEditEmail)
                 {
@@ -152,10 +152,10 @@
                 {
                     // メアドの変更が許可されていない場合。
                 }
-            }
+}
 
-            @if (Config.CanEditPhone)
-            {
+@if (Config.CanEditPhone)
+{
                 // 電話番号の変更が許可されている場合。
 
                 <dt>@ManageViews.IndexPhoneNumber :</dt>
@@ -179,14 +179,14 @@
                         }
                     }
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // 電話番号の変更が許可されていない場合。
-            }
+}
 
-            @if (Config.CanEdit2FA)
-            {
+@if (Config.CanEdit2FA)
+{
                 // 2要素認証の変更が許可されている場合。
                 <dt>@ManageViews.IndexTwoFactorAuth :</dt>
                 <dd>
@@ -211,27 +211,27 @@
                         }
                     }
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // 2要素認証の変更が許可されていない場合。
-            }
+}
 
-            @if (Config.CanEditExtLogin)
-            {
+@if (Config.CanEditExtLogin)
+{
                 // 外部ログインの変更が許可されている場合。
                 <dt>@ManageViews.IndexExternalLogins :</dt>
                 <dd>
                     @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // 外部ログインの変更が許可されていない場合。
-            }
+}
 
-            @if (Config.CanEditPayment)
-            {
+@if (Config.CanEditPayment)
+{
                 // 支払い元情報の変更が許可されている場合。
 
                 <dt>@ManageViews.IndexPaymentInformation :</dt>
@@ -266,14 +266,14 @@
                         }
                     }
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // 支払い元情報の変更が許可されていない場合。
-            }
+}
 
-            @if (Config.CanEditUnstructuredData)
-            {
+@if (Config.CanEditUnstructuredData)
+{
                 // 非構造化データの変更が許可されていない場合。
                 <dt>@ManageViews.IndexUnstructuredData :</dt>
                 <dd>
@@ -296,14 +296,14 @@
                         }
                     }
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // 非構造化データの変更が許可されていない場合。
-            }
+}
 
-            @if (Config.CanEditOAuth2Data && canShowOAuthScreen)
-            {
+@if (Config.CanEditOAuth2Data && canShowOAuthScreen)
+{
                 // OAuth2データの変更が許可されている場合。
                 <dt>EditOAuth2Data :</dt>
                 <dd>
@@ -330,73 +330,73 @@
                         }
                     }
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // OAuth2データの変更が許可されていない場合。
-            }
+}
 
-            @if (Config.FIDOServerMode != EnumFidoType.None)
-            {
+@if (Config.FIDOServerMode != EnumFidoType.None)
+{
                 // FIDO2データの変更が許可されている場合。
                 <dt>EditFIDO2Data :</dt>
                 <dd>
-                    @*"Add" and "Remove or Change"*@
-                    @if (Config.FIDOServerMode == EnumFidoType.MsPass)
-                    {
-                        // Microsoft Passport
-                        if (!Model.HasFIDO2Data)
-                        {
+    @*"Add" and "Remove or Change"*@
+    @if (Config.FIDOServerMode == EnumFidoType.MsPass)
+    {
+        // Microsoft Passport
+        if (!Model.HasFIDO2Data)
+        {
                             <text>None</text><br />
                             <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexMsPassDataAddActionLink, "AddMsPassData")&nbsp;&nbsp;]</text>
-                        }
-                        else
-                        {
+        }
+        else
+        {
                             <text>XXXXXXXXXX</text><br />
-                            using (Html.BeginForm("RemoveMsPassData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                            {
+            using (Html.BeginForm("RemoveMsPassData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            {
                                 @Html.AntiForgeryToken()
                                 <text>[<input type="submit" value="@ManageViews.IndexMsPassDataRemoveButton" class="btn-link" />]</text>
-                            }
-                        }
-                    }
-                    else if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
-                    {
-                        // WebAuthn
-                        if (!Model.HasFIDO2Data)
-                        {
+            }
+        }
+    }
+    else if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
+    {
+        // WebAuthn
+        if (!Model.HasFIDO2Data)
+        {
                             <text>None</text><br />
                             <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexWebAuthnDataAddActionLink, "AddWebAuthnData")&nbsp;&nbsp;]</text>
-                        }
-                        else
-                        {
+        }
+        else
+        {
                             <text>XXXXXXXXXX</text><br />
-                            using (Html.BeginForm("RemoveWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                            {
+            using (Html.BeginForm("RemoveWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            {
                                 @Html.AntiForgeryToken()
                                 <text>[<input type="submit" value="@ManageViews.IndexWebAuthnDataRemoveButton" class="btn-link" />]</text>
-                            }
-                        }
-                    }
+            }
+        }
+    }
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // FIDO2データの変更が許可されていない場合。
-            }
+}
 
-            @if (Config.CanUseGdprFunction)
-            {
+@if (Config.CanUseGdprFunction)
+{
                 // GDPR 個人情報管理が許可されている場合。
                 <dt>ManageGdprData :</dt>
                 <dd>
                     <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexManageGdprData, "ManageGdprData")&nbsp;&nbsp;]</text>
                 </dd>
-            }
-            else
-            {
+}
+else
+{
                 // FIDO2データの変更が許可されていない場合。
-            }
+}
         </dl>
     </div>
 </div>
