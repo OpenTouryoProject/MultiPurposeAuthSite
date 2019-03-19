@@ -62,7 +62,6 @@
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
-    <script src="~/js/oauthimplicit.js"></script>
     <script type="text/javascript">
 
         var fragment = "";
@@ -78,44 +77,43 @@
             if (token) {
                 authorizationHeaders = { 'Authorization': 'Bearer ' + token };
 
-            $.ajax({
-                type: 'get',
-                url: url,
-                crossDomain: true,
-                headers: authorizationHeaders,
+                $.ajax({
+                    type: 'get',
+                    url: url,
+                    crossDomain: true,
+                    headers: authorizationHeaders,
                     success: function (responseData, textStatus, jqXHR) {
                         alert(textStatus + ', ' + JSON.stringify(responseData));
-                },
+                    },
                     error: function (responseData, textStatus, errorThrown) {
                         alert(textStatus + ', ' + errorThrown.message);
                     }
                 });
             }
-            else
-            {
+            else {
                 $.ajax({
                     type: 'post',
                     url: url,
                     crossDomain: true,
                     data: requestData,
-                success: function (responseData, textStatus, jqXHR) {
-                    alert(textStatus + ', ' + JSON.stringify(responseData));
-                },
-                error: function (responseData, textStatus, errorThrown) {
-                    alert(textStatus + ', ' + errorThrown.message);
-                }
-            });
-        }
+                    success: function (responseData, textStatus, jqXHR) {
+                        alert(textStatus + ', ' + JSON.stringify(responseData));
+                    },
+                    error: function (responseData, textStatus, errorThrown) {
+                        alert(textStatus + ', ' + errorThrown.message);
+                    }
+                });
+            }
         }
 
         $(function () {
 
             // フラグメントを取得し、
             fragment = getFragment();
-            
+
             //alert("location.hash : " + window.location.hash);
             //alert("Objected fragment : " + JSON.stringify(fragment));
-            
+
             document.getElementById("debug").innerHTML
                 = "Objected fragment : " + JSON.stringify(fragment);
 

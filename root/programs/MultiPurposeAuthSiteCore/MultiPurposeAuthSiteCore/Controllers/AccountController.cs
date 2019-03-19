@@ -1376,17 +1376,23 @@ namespace MultiPurposeAuthSite.Controllers
                 // 自動送信されていたが3.0では手動送信に変更された模様。
                 if (model.SelectedProvider == "Email")
                 {
+                    // Email
                     await EmailSender.SendAsync(user.Email, "Two factor authentication code", code);
+                }
+                else if (model.SelectedProvider == "Phone")
+                {
+                    // SMS
+                    await SmsSender.SendAsync(user.PhoneNumber, code);
                 }
                 else
                 {
-                    await SmsSender.SendAsync(user.PhoneNumber, code);
+                    // TOTP authenticator
+                    code = "";
                 }
 
                 if (!string.IsNullOrEmpty(code))
                 {
-                    // 成功
-
+                    // Email or SMS
                     // 2FA画面でコードの検証用のViewへ
                     return RedirectToAction("VerifyCode", new
                     {
@@ -1398,7 +1404,12 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // 失敗
+                    // TOTP authenticator
+                    return RedirectToAction("LoginWithTwoFactorAuthenticator", new
+                    {
+                        ReturnUrl = model.ReturnUrl,        // 戻り先のURL
+                        RememberMe = model.RememberMe,      // アカウント記憶
+                    });
                 }
             }
             else
