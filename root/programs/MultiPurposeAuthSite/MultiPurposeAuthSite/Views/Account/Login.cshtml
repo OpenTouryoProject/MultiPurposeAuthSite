@@ -92,7 +92,7 @@
                 </div>
                 <div class="form-group">
                     <div class="col-md-offset-2 col-md-10">
-                        <button id="normal_signin" name="submitButton" value="normal_signin" type="button" class="btn btn-default">@AccountViews.LoginSubmit</button>
+                        <button id="normal_signin" name="submitButton" value="normal_signin" type="button" class="btn btn-primary">@AccountViews.LoginSubmit</button>
                     </div>
                 </div>
                 <p>@Html.ActionLink(AccountViews.LoginRegisterActionLink, "Register")</p>
@@ -127,7 +127,7 @@
             @*ここにIDフェデレーションを実装*@
             @AccountViews.IdFederationLogin
             <section>
-                <button id="id_federation_signin" name="submitButton" value="id_federation_signin" type="button" class="btn btn-default">@AccountViews.IdFederationLoginSubmit</button>
+                <button id="id_federation_signin" name="submitButton" value="id_federation_signin" type="button" class="btn btn-primary">@AccountViews.IdFederationLoginSubmit</button>
             </section>
         </div>
 
@@ -137,7 +137,7 @@
             @*ここにWebAuthnを実装*@
             @AccountViews.WebAuthnLogin
             <section>
-                <button id="webauthn_signin" class="btn btn-default" type="button" onclick="getAssertion1()">@AccountViews.WebAuthnLoginSubmit</button>
+                <button id="webauthn_signin" class="btn btn-primary" type="button" onclick="getAssertion1()">@AccountViews.WebAuthnLoginSubmit</button>
                 <div class="form-group">
                     <p class="col-md-4 control-label">Resident Credentials</p>
                     <div class="col-md-8">
@@ -168,7 +168,7 @@ else if (Config.FIDOServerMode == EnumFidoType.MsPass)
             @*ここにMsPassを実装*@
             @AccountViews.MsPassLogin
             <section>
-                <button id="mspass_signin" name="submitButton" value="mspass_signin" type="button" class="btn btn-default">@AccountViews.MsPassLoginSubmit</button>
+                <button id="mspass_signin" name="submitButton" value="mspass_signin" type="button" class="btn btn-primary">@AccountViews.MsPassLoginSubmit</button>
             </section>
         </div>
 }

@@ -143,7 +143,7 @@ else
                             using (Html.BeginForm("RemoveEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                             {
                                 @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexEmailRemoveButton" class="btn-link" />]</text>
+                                <text>[<input type="submit" value="@ManageViews.IndexEmailRemoveButton" class="btn btn-link" />]</text>
                             }
                         }
                     </dd>
@@ -175,7 +175,7 @@ else
                         using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn-link" />]</text>
+                            <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn btn-link" />]</text>
                         }
                     }
                 </dd>
@@ -252,7 +252,7 @@ else
                         using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn-link" />]</text>
+                            <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn btn-link" />]</text>
                         }
 
                         if (Config.IsDebug)
@@ -260,7 +260,7 @@ else
                             using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                             {
                                 @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn-link" />]</text><br />
+                                <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn btn-link" />]</text><br />
                                 <text>※ If test the this function, there is needs to obtain the OAuth2 access token beforehand.</text>
                             }
                         }
@@ -292,7 +292,7 @@ else
                         using (Html.BeginForm("RemoveUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexUnstructuredDataRemoveButton" class="btn-link" />]</text>
+                            <text>[<input type="submit" value="@ManageViews.IndexUnstructuredDataRemoveButton" class="btn btn-link" />]</text>
                         }
                     }
                 </dd>
@@ -321,12 +321,12 @@ else
                         {
                             @Html.AntiForgeryToken()
                             <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
-                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn-link" />]</text>
+                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn btn-link" />]</text>
                         }
                         using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn-link" />]</text>
+                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn btn-link" />]</text>
                         }
                     }
                 </dd>
@@ -356,7 +356,7 @@ else
             using (Html.BeginForm("RemoveMsPassData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
             {
                                 @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexMsPassDataRemoveButton" class="btn-link" />]</text>
+                                <text>[<input type="submit" value="@ManageViews.IndexMsPassDataRemoveButton" class="btn btn-link" />]</text>
             }
         }
     }
@@ -374,7 +374,7 @@ else
             using (Html.BeginForm("RemoveWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
             {
                                 @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexWebAuthnDataRemoveButton" class="btn-link" />]</text>
+                                <text>[<input type="submit" value="@ManageViews.IndexWebAuthnDataRemoveButton" class="btn btn-link" />]</text>
             }
         }
     }
