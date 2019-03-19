@@ -256,9 +256,10 @@ namespace MultiPurposeAuthSite
                     ClientSecret = Config.MicrosoftAccountAuthenticationClientSecret
                 };
                 // スコープを追加する。
-                options.Scope.Add("wl.basic");
-                options.Scope.Add("wl.emails");
-                
+                //// https://stackoverflow.com/questions/48933675/microsoft-grap-wl-signin-scope
+                //options.Scope.Add("wl.basic");
+                //options.Scope.Add("wl.emails");
+
                 // MicrosoftAccountAuthenticationの有効化
                 app.UseMicrosoftAccountAuthentication(options);
             }

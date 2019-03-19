@@ -206,6 +206,7 @@
      - The OSS included in the source code such as JavaScript / CSS
        - jQuery
        - jQuery.Validation
+       - Popper.js
        - bootstrap
        - FontAwesome
        - Respond

@@ -148,17 +148,11 @@ else
         <script src="~/js/app/site.js" asp-append-version="true"></script>
         <script src="~/js/touryo/common.js" asp-append-version="true"></script>
         <script src="~/js/touryo/else.js" asp-append-version="true"></script>
-        <script src="~/js/multiauthsite/qrcode.js" asp-append-version="true"></script>
-        <script src="~/js/multiauthsite/oauthimplicit.js" asp-append-version="true"></script>
-        <script src="~/js/multiauthsite/arrayBufferUtil.js" asp-append-version="true"></script>
-        <script src="~/js/multiauthsite/msWebauthn.js" asp-append-version="true"></script>
-        <script src="~/js/multiauthsite/ffWebauthn.js" asp-append-version="true"></script>        
     </environment>
     <environment exclude="Development">
         <script src="~/js/footer.min.js" asp-append-version="true"></script>
         <script src="~/js/app.min.js" asp-append-version="true"></script>
         <script src="~/js/touryo.min.js" asp-append-version="true"></script>
-        <script src="~/js/multiauthsite.min.js" asp-append-version="true"></script>
     </environment>
 
     @RenderSection("FooterScriptsSection", required: true)

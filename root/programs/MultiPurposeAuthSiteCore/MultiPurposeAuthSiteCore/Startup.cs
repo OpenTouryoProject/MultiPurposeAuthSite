@@ -433,6 +433,7 @@ namespace MultiPurposeAuthSite
                 {
                     options.ConsumerKey = Config.TwitterAuthenticationClientId;
                     options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
+                    options.RetrieveUserDetails = true;
                 });
             }
             #endregion
