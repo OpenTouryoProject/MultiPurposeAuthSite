@@ -40,7 +40,7 @@ namespace MultiPurposeAuthSite
         {
             // see : https://www.asp.net/ajax/cdn
 
-            string jqueryVersion = "3.1.1";
+            string jqueryVersion = "3.3.1";
 
             BundleTable.EnableOptimizations = !Config.IsDebug;
             BundleTable.Bundles.UseCdn = true; // same as: bundles.UseCdn = true;
