@@ -72,13 +72,13 @@
 
     <text>Refresh Token:</text><br />
     @Html.TextBoxFor(model => model.RefreshToken, new { style = "width:100%;", @readonly = "readonly" })<br />
-    <input class="btn btn-block" type="submit" name="submit.Refresh" value="Refresh" />
-    <input class="btn btn-block" type="submit" name="submit.IntrospectRefresh" value="IntrospectRefresh" />
-    <input class="btn btn-block" type="submit" name="submit.RevokeRefresh" value="RevokeRefresh" />
+    <input class="btn btn-secondary btn-block" type="submit" name="submit.Refresh" value="Refresh" />
+    <input class="btn btn-secondary btn-block" type="submit" name="submit.IntrospectRefresh" value="IntrospectRefresh" />
+    <input class="btn btn-secondary btn-block" type="submit" name="submit.RevokeRefresh" value="RevokeRefresh" />
     <br />
-    <input class="btn btn-block" type="submit" name="submit.GetUserClaims" value="Get user claims" />
-    <input class="btn btn-block" type="submit" name="submit.IntrospectAccess" value="IntrospectAccess" />
-    <input class="btn btn-block" type="submit" name="submit.RevokeAccess" value="RevokeAccess" />
+    <input class="btn btn-secondary btn-block" type="submit" name="submit.GetUserClaims" value="Get user claims" />
+    <input class="btn btn-secondary btn-block" type="submit" name="submit.IntrospectAccess" value="IntrospectAccess" />
+    <input class="btn btn-secondary btn-block" type="submit" name="submit.RevokeAccess" value="RevokeAccess" />
 
     <text>Response:</text><br />
     @Html.TextArea("Response", Model.Response ?? "", new { style = "width:100%; height:200px;", @readonly = "readonly" })<br />
