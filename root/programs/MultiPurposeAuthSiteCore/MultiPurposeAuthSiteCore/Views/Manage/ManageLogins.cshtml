@@ -77,7 +77,7 @@
                                         <div>
                                             @Html.Hidden("loginProvider", account.LoginProvider)
                                             @Html.Hidden("providerKey", account.ProviderKey)
-                                            <input type="submit" class="btn btn-default" value="@ManageViews.ManageLoginsRemoveButton" title="@string.Format(ManageViews.ManageLoginsRemoveButtonTitle, account.LoginProvider)" />
+                                            <input type="submit" class="btn btn-primary" value="@ManageViews.ManageLoginsRemoveButton" title="@string.Format(ManageViews.ManageLoginsRemoveButtonTitle, account.LoginProvider)" />
                                         </div>
                                     }
                                 }
@@ -104,7 +104,7 @@
                     <p>
                         @foreach (AuthenticationScheme p in Model.OtherLogins)
                         {
-                            <button type="submit" class="btn btn-default" name="provider" value="@p.Name" title="@string.Format(AccountViews.ExternalLoginsListPartialSubmit, p.DisplayName)">@p.DisplayName</button>
+                            <button type="submit" class="btn btn-primary" name="provider" value="@p.Name" title="@string.Format(AccountViews.ExternalLoginsListPartialSubmit, p.DisplayName)">@p.DisplayName</button>
                         }
                     </p>
                 </div>

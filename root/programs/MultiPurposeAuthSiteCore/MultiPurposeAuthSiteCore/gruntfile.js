@@ -30,7 +30,7 @@ module.exports = function (grunt) {
                     {
                         expand: true, src: ['**'],
                         cwd: 'node_modules/font-awesome/css/',
-                        dest: 'wwwroot/lib/font-awesome/css/'
+                        dest: 'wwwroot/css/'
                     },
                     {
                         expand: true, src: ['**'],
@@ -46,7 +46,7 @@ module.exports = function (grunt) {
                     'wwwroot/css/app/site.css',
                     'wwwroot/css/touryo/Style.css',
                     'wwwroot/lib/bootstrap/dist/css/bootstrap.css',
-                    'wwwroot/lib/font-awesome/css/font-awesome.css'
+                    'wwwroot/css/font-awesome.css'
                 ],
                 dest: 'wwwroot/css/css.min.css'
             }

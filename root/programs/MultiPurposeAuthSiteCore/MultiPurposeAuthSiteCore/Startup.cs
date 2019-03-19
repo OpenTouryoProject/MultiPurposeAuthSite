@@ -388,7 +388,6 @@ namespace MultiPurposeAuthSite
                 {
                     // https://community.auth0.com/t/asp-net-core-2-intermittent-correlation-failed-errors/11918/18
                     options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
-
                     options.LoginPath = "/MultiPurposeAuthSite/Account/Login";
                     options.LogoutPath = "/MultiPurposeAuthSite/Account/LogOff";
                     //options.AccessDeniedPath = "/Identity/Account/AccessDenied";

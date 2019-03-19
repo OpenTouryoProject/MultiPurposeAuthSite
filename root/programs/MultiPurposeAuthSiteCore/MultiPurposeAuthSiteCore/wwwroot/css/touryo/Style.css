@@ -1,30 +1,4 @@
-﻿/* common.jsで使用している。 */
-.dialog-mask
-{
-    position         : absolute;
-    top              : 0;
-    left             : 0;
-    opacity          : 0.5;
-    -ms-filter       : "alpha(opacity=50)";    /* IE対応 */
-    background-color : gray;
-    z-index          : 1000;                   /* 1000なら最前面だろう ( ToMost相当が無い */
-}
-
-.progress-dialog
-{
-    position         : fixed;
-    top              : 0;
-    left             : 0;
-    padding          : 10px 10px 0 10px;
-    text-align       : center;
-    overflow         : hidden;                 /* hiddenに変更*/
-    /*width            : 300px;*/              /* 位置計算はJSで行うため */
-    /*height           : 200px;*/              /* 位置計算はJSで行うため */
-    background-color : lightcyan;
-    z-index          : 1001;                   /* dialog-maskより前面に出す。*/
-}
-
-/* *.master の 分割で使用している。 */
+﻿/* *.master の 分割で使用している。 */
 
 /* ヘッダー固定 */
 .page-header
@@ -65,7 +39,7 @@
    height            : 80px;
 }
 #header-title{
-   padding           : 20px 0 0 0;
+   padding           : 60px 0 0 0;
 }
 #header-button {
     padding-top      : 20px;
@@ -240,7 +214,7 @@
       height: 40px;
   }
   #header-title{
-     padding: 10px;
+     padding: 30px 0 0 0;
   }
   #header-button{
     padding-top: 10px;

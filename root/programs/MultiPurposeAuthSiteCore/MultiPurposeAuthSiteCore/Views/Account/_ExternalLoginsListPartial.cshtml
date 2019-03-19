@@ -50,7 +50,7 @@
                 <p>
                     @foreach (AuthenticationScheme p in loginProviders)
                     {
-                        <button type="submit" class="btn btn-default" name="provider" value="@p.Name" title="@string.Format(AccountViews.ExternalLoginsListPartialSubmit, p.DisplayName)">@p.DisplayName</button>
+                        <button type="submit" class="btn btn-primary" name="provider" value="@p.Name" title="@string.Format(AccountViews.ExternalLoginsListPartialSubmit, p.DisplayName)">@p.DisplayName</button>
                     }
                 </p>
             </div>

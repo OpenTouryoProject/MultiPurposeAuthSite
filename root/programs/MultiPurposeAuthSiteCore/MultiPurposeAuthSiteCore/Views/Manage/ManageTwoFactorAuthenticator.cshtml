@@ -55,18 +55,18 @@
         </div>
     }
 
-        <a asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes" class="btn btn-default">@ManageViews.ManageTwoFactorAuthenticatorSubmitRRC</a>
+        <a asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitRRC</a>
 }
 
 <h5></h5>
 @if (!Model.HasAuthenticator)
 {
-<a asp-action="EnableTwoFactorAuthenticator" class="btn btn-default">@ManageViews.ManageTwoFactorAuthenticatorSubmitAAA</a>
+<a asp-action="EnableTwoFactorAuthenticator" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitAAA</a>
 }
 else
 {
-<a asp-action="EnableTwoFactorAuthenticator" class="btn btn-default">@ManageViews.ManageTwoFactorAuthenticatorSubmitCAA</a>
-<a asp-action="ResetTwoFactorAuthenticator" class="btn btn-default">@ManageViews.ManageTwoFactorAuthenticatorSubmitRAA</a>
+<a asp-action="EnableTwoFactorAuthenticator" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitCAA</a>
+<a asp-action="ResetTwoFactorAuthenticator" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitRAA</a>
 }
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
