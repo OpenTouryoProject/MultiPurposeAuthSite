@@ -53,13 +53,13 @@ namespace MultiPurposeAuthSite.ViewModels
                 {
                     new SelectListItem() {
                         Text = "OAuth2.0 / OIDC用 Client",
-                        Value = OAuth2AndOIDCEnum.ClientMode.normal.ToString1() },
+                        Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part1用 Client",
-                        Value = OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() },
+                        Value = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part2用 Client",
-                        Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() },
+                        Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "ログイン・ユーザの Client",
                         Value = "login User" }

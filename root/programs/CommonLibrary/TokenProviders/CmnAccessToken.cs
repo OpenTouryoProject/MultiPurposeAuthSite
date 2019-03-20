@@ -315,7 +315,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // - fapi
             if (permittedLevel != OAuth2AndOIDCEnum.ClientMode.normal)
             {
-                payload[OAuth2AndOIDCConst.fapi] = permittedLevel.ToString1();
+                payload[OAuth2AndOIDCConst.fapi] = permittedLevel.ToStringByEmit();
             }
 
             json = JsonConvert.SerializeObject(payload);

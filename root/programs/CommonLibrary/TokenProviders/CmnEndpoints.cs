@@ -124,9 +124,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
 
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
-                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToString1(),
-                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToString1(),
-                OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToString1()
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
+                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
+                OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
             });
 
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
@@ -233,9 +233,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region response_modes
             OpenIDConfig.Add("response_modes_supported", new List<string> {
-                OAuth2AndOIDCEnum.ResponseMode.query.ToString1(),
-                OAuth2AndOIDCEnum.ResponseMode.fragment.ToString1(),
-                OAuth2AndOIDCEnum.ResponseMode.form_post.ToString1()
+                OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit(),
+                OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit(),
+                OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit()
             });
             #endregion
 
@@ -246,7 +246,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             });
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToString1()
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
             });
 
             #endregion
@@ -258,7 +258,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             });
 
             OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToString1()
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
             });
 
             #endregion
@@ -1419,15 +1419,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 clientModeString = Helper.GetInstance().GetClientMode(client_id);
 
-                if (clientModeString == OAuth2AndOIDCEnum.ClientMode.normal.ToString1())
+                if (clientModeString == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit())
                 {
                     clientModeEnum = (int)OAuth2AndOIDCEnum.ClientMode.normal;
                 }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1())
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
                 {
                     clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi1;
                 }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1())
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
                 {
                     clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
                     jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
@@ -1459,7 +1459,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err.Add("error_description", string.Format(
                         "This client is set the {0} mode, but this flow permitted up to {1} mode.",
-                        clientModeString, permittedLevel.ToString1()));
+                        clientModeString, permittedLevel.ToStringByEmit()));
                 }
             }
 

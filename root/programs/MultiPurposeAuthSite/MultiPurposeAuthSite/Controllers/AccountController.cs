@@ -2080,15 +2080,15 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // RedirectエンドポイントへRedirect
                         if (string.IsNullOrEmpty(response_mode) ||
-                            response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToString1())
+                            response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit())
                         {
                             return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                         }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToString1())
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                         {
                             return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                         }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToString1())
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
                             // form_postに必要な、HTTP response message body
                             string body =
@@ -2311,15 +2311,15 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // RedirectエンドポイントへRedirect
                     if (string.IsNullOrEmpty(response_mode) ||
-                        response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToString1())
+                        response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit())
                     {
                         return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
                     }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToString1())
+                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
                     {
                         return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
                     }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToString1())
+                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                     {
                         // form_postに必要な、HTTP response message body
                         string body =
@@ -2432,8 +2432,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region 仲介コードを使用してAccess, Refresh, Id Tokenを取得
 
-                string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":";
-                string fapi2Prefix = OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() + ":";
+                string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":";
+                string fapi2Prefix = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":";
 
                 //stateの検証
                 if (state == state_InSessionOrCookie

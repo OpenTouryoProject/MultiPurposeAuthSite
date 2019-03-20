@@ -66,9 +66,9 @@ using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Dbg;
 using Touryo.Infrastructure.Public.Util;
 using Touryo.Infrastructure.Public.Security.Pwd;
+using Touryo.Infrastructure.Public.Diagnostics;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers

@@ -276,7 +276,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.StandardScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":" + this.State);
+                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
         }
 
@@ -289,7 +289,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() + ":" + this.State)
+                    OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State)
                     + "&nonce=" + this.Nonce;
             // テストコードで、clientを識別するために、Stateに細工する。
         }
@@ -303,7 +303,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() + ":" + this.State)
+                    OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State)
                     + "&nonce=" + this.Nonce;
             // テストコードで、clientを識別するために、Stateに細工する。
         }
@@ -354,17 +354,17 @@ namespace MultiPurposeAuthSite.Controllers
                 if (ModelState.IsValid)
                 {
                     #region Client選択
-                    if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.normal.ToString1())
+                    if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit())
                     {
                         // OAuth2.0 / OIDC用 Client
                         this.ClientName = "TestClient";
                     }
-                    else if(model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1())
+                    else if(model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
                     {
                         // Financial-grade API - Part1用 Client
                         this.ClientName = "TestClient1";
                     }
-                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1())
+                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
                     {
                         // Financial-grade API - Part2用 Client
                         this.ClientName = "TestClient2";

@@ -96,13 +96,13 @@ namespace MultiPurposeAuthSite.ViewModels
                 {
                     new SelectListItem() {
                         Text = "OAuth2.0 / OIDC",
-                        Value = OAuth2AndOIDCEnum.ClientMode.normal.ToString1() },
+                        Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part1",
-                        Value = OAuth2AndOIDCEnum.ClientMode.fapi1.ToString1() },
+                        Value = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part2",
-                        Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToString1() }
+                        Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() }
                 };
             }
         }
