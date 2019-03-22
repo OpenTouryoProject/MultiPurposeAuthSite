@@ -177,7 +177,7 @@ namespace MultiPurposeAuthSite
             });
 
             // HttpContextのマイグレーション用
-            app.UseHttpContextAccessor();
+            app._UseHttpContextAccessor();
 
             // /wwwroot（既定の）の
             // 静的ファイルをパイプラインに追加
@@ -292,7 +292,7 @@ namespace MultiPurposeAuthSite
             services.AddSession();
 
             // HttpContextのマイグレーション用
-            services.AddHttpContextAccessor();
+            services._AddHttpContextAccessor();
 
             #region Add Frameworks
 
