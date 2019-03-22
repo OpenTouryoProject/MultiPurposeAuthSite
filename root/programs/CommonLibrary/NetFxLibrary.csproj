@@ -1,6 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.props" Condition="Exists('..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.props')" />
   <Import Project="..\MultiPurposeAuthSite\packages\Microsoft.Net.Compilers.2.10.0\build\Microsoft.Net.Compilers.props" Condition="Exists('..\MultiPurposeAuthSite\packages\Microsoft.Net.Compilers.2.10.0\build\Microsoft.Net.Compilers.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -385,13 +384,6 @@
     </PropertyGroup>
     <Error Condition="!Exists('..\MultiPurposeAuthSite\packages\Microsoft.Net.Compilers.2.10.0\build\Microsoft.Net.Compilers.props')" Text="$([System.String]::Format('$(ErrorText)', '..\MultiPurposeAuthSite\packages\Microsoft.Net.Compilers.2.10.0\build\Microsoft.Net.Compilers.props'))" />
     <Error Condition="!Exists('..\MultiPurposeAuthSite\packages\Fido2.1.0.0-preview3\build\fido2.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\MultiPurposeAuthSite\packages\Fido2.1.0.0-preview3\build\fido2.targets'))" />
-    <Error Condition="!Exists('..\MultiPurposeAuthSite\packages\Microsoft.Packaging.Tools.1.0.0-preview2-25401-01\build\Microsoft.Packaging.Tools.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\MultiPurposeAuthSite\packages\Microsoft.Packaging.Tools.1.0.0-preview2-25401-01\build\Microsoft.Packaging.Tools.targets'))" />
-    <Error Condition="!Exists('..\MultiPurposeAuthSite\packages\NETStandard.Library.2.0.0-preview2-25401-01\build\netstandard2.0\NETStandard.Library.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\MultiPurposeAuthSite\packages\NETStandard.Library.2.0.0-preview2-25401-01\build\netstandard2.0\NETStandard.Library.targets'))" />
-    <Error Condition="!Exists('..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.props')" Text="$([System.String]::Format('$(ErrorText)', '..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.props'))" />
-    <Error Condition="!Exists('..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.targets'))" />
   </Target>
   <Import Project="..\MultiPurposeAuthSite\packages\Fido2.1.0.0-preview3\build\fido2.targets" Condition="Exists('..\MultiPurposeAuthSite\packages\Fido2.1.0.0-preview3\build\fido2.targets')" />
-  <Import Project="..\MultiPurposeAuthSite\packages\Microsoft.Packaging.Tools.1.0.0-preview2-25401-01\build\Microsoft.Packaging.Tools.targets" Condition="Exists('..\MultiPurposeAuthSite\packages\Microsoft.Packaging.Tools.1.0.0-preview2-25401-01\build\Microsoft.Packaging.Tools.targets')" />
-  <Import Project="..\MultiPurposeAuthSite\packages\NETStandard.Library.2.0.0-preview2-25401-01\build\netstandard2.0\NETStandard.Library.targets" Condition="Exists('..\MultiPurposeAuthSite\packages\NETStandard.Library.2.0.0-preview2-25401-01\build\netstandard2.0\NETStandard.Library.targets')" />
-  <Import Project="..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.targets" Condition="Exists('..\MultiPurposeAuthSite\packages\NETStandard.Library.NETFramework.2.0.0-preview2-25405-01\build\net47\NETStandard.Library.NETFramework.targets')" />
 </Project>
