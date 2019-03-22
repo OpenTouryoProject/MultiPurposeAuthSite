@@ -301,7 +301,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
         #endregion
 
-        #region Collection (private set)
+        #region Collection
 
         /// <summary>
         /// Gets the collection of roles for the user.
@@ -328,7 +328,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// <summary>Totp AuthenticatorKey</summary>
         public string TotpAuthenticatorKey { get; set; }
 
-        #region Collection (private set)
+        #region Collection
 
 #if NETFX
 #else
