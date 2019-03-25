@@ -5,8 +5,8 @@
 
 @rem 本ファイルを適切なフォルダに配置するか、以下のパスを修正してからダブルクリックして実行する。
 
-@rem 既定値は、フォルダ X にOpenTouryoとMultiPurposeAuthSiteをcloneした場合、
-@rem フォルダ X に本 bat ファイルをコピーして実行することを想定している。
+@rem 既定では、任意のフォルダにOpenTouryoとMultiPurposeAuthSiteをcloneし、
+@rem 当該フォルダに本バッチファイルをコピーして実行することを想定している。
 
 xcopy /E /Y /I "OpenTouryo\root\programs\CS\Frameworks\Infrastructure\Build_net47" "MultiPurposeAuthSite\root\programs\OpenTouryoAssemblies\Build_net47\"
 xcopy /E /Y /I "OpenTouryo\root\programs\CS\Frameworks\Infrastructure\Build_netcore20" "MultiPurposeAuthSite\root\programs\OpenTouryoAssemblies\Build_netcore20\"

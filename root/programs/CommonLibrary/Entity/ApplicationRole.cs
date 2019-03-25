@@ -61,6 +61,10 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// Nameを大文字化した値が自動的にセットされる。
         /// これをUserStoreに登録しておけば、検索し易くなる。
         /// </summary>
+        /// <remarks>
+        /// 本プロパティは、検索条件用に、Nameプロパティを大文字化したプロパティですが、
+        /// 本システムではNameプロパティを軸にするため、ココでは指定された値を無視しています。
+        /// </remarks> 
         public string NormalizedName
         {
 #if NETFX
