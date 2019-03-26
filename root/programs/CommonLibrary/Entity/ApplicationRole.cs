@@ -63,7 +63,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// </summary>
         /// <remarks>
         /// 本プロパティは、検索条件用に、Nameプロパティを大文字化したプロパティですが、
-        /// 本システムではNameプロパティを軸にするため、ココでは指定された値を無視しています。
+        /// 本システムではNameプロパティを軸にするため、NETFX の場合は指定された値を無視しています。
         /// </remarks> 
         public string NormalizedName
         {
