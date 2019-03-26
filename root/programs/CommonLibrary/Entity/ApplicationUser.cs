@@ -164,7 +164,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// </summary>
         /// <remarks>
         /// 本プロパティは、検索条件用に、UserNameプロパティを大文字化したプロパティですが、
-        /// 本システムではUserNameプロパティを軸にするため、NETFX の場合は指定された値を無視しています。
+        /// 本システムではUserNameプロパティを軸にするため、.NET Framework 上で実行する場合は指定された値を無視します。
         /// </remarks> 
         public string NormalizedUserName
         {
@@ -233,7 +233,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// </summary>
         /// <remarks>
         /// 本プロパティは、検索条件用に、Emailプロパティを大文字化したプロパティですが、
-        /// 本システムではEmailプロパティを軸にするため、NETFX の場合は指定された値を無視しています。
+        /// 本システムではEmailプロパティを軸にするため、.NET Framework 上で実行する場合は指定された値を無視します。
         /// </remarks> 
         public string NormalizedEmail
         {
