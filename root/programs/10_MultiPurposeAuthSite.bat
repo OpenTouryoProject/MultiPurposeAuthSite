@@ -16,10 +16,16 @@ set CURRENT_DIR="%~dp0"
 call %CURRENT_DIR%z_Common.bat
 
 rem --------------------------------------------------
+rem Batch build of CommandLineTools.
+rem --------------------------------------------------
+nuget.exe restore "CommandLineTools\CommandLineTools.sln"
+%BUILDFILEPATH% %COMMANDLINE% "CommandLineTools\CommandLineTools.sln"
+
+rem --------------------------------------------------
 rem Batch build of MultiPurposeAuthSite.
 rem --------------------------------------------------
-nuget.exe restore "MultiPurposeAuthSite\MultiPurposeAuthSiteAll.sln"
-%BUILDFILEPATH% %COMMANDLINE% "MultiPurposeAuthSite\MultiPurposeAuthSiteAll.sln"
+nuget.exe restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
+rem %BUILDFILEPATH% %COMMANDLINE% "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
 
 pause
 

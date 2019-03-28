@@ -1,0 +1,59 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：_ExternalLoginsListPartial
+    //* クラス日本語名  ：外部ログインList表示用の部分View
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@model AccountExternalLoginListViewModel
+@inject SignInManager<ApplicationUser> SignInManager
+
+<h4>@AccountViews.ExternalLoginsListPartialH4</h4>
+<hr />
+@{
+    List<AuthenticationScheme> loginProviders = (await SignInManager.GetExternalAuthenticationSchemesAsync()).ToList();
+    if (loginProviders.Count() == 0)
+    {
+        <div>
+            <p>
+
+                @AccountViews.ExternalLoginsListPartialP
+
+                @*See <a href="http://go.microsoft.com/fwlink/?LinkId=403804">this article</a>
+                    for details on setting up this ASP.NET application to support logging in via external services.*@
+                @*外部サービス経由のログインをサポートするようにこの ASP.NET アプリケーションを設定する方法の
+                    詳細については、<a href="http://go.microsoft.com/fwlink/?LinkId=403804">こちらの記事</a>をご覧ください。*@
+            </p>
+        </div>
+    }
+    else
+    {
+        using (Html.BeginForm("ExternalLogin", "Account", new { ReturnUrl = Model.ReturnUrl }))
+        {
+            @Html.AntiForgeryToken()
+            <div id="socialLoginList">
+                <p>
+                    @foreach (AuthenticationScheme p in loginProviders)
+                    {
+                        <button type="submit" class="btn btn-primary" name="provider" value="@p.Name" title="@string.Format(AccountViews.ExternalLoginsListPartialSubmit, p.DisplayName)">@p.DisplayName</button>
+                    }
+                </p>
+            </div>
+        }
+    }
+}

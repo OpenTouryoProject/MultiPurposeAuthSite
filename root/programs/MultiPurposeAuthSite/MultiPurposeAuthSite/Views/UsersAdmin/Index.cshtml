@@ -20,9 +20,10 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
 
 @model UsersAdminSearchViewModel
 
@@ -50,7 +51,7 @@
         @Html.TextBoxFor(m => m.UserNameforSearch, new { @class = "form-control" })
     </div>
 
-    <input type="submit" value="@CommonViewModels.Search" class="btn btn-default" />
+    <input type="submit" value="@CommonViewModels.Search" class="btn btn-primary" />
 }
 
 <table class="table" style="margin-top:20px">

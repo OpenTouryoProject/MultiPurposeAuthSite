@@ -16,6 +16,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//**********************************************************************************
+//* ファイル名        ：else.js
+//* ファイル日本語名  ：その他のJS処理
+//*
+//* 作成日時        ：－
+//* 作成者          ：－
+//* 更新履歴        ：－
+//*
+//*  日時        更新者            内容
+//*  ----------  ----------------  -------------------------------------------------
+//*  201?/0?/0?  西野 大介         新規作成
+//**********************************************************************************
+
 function Fx_CommonAdjustStyle(offset) {
     var menuTopMargin = $('.page-header').height();
     var targetScrollValue = offset.top - menuTopMargin;

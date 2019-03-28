@@ -1,0 +1,96 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：AddMsPassData
+    //* クラス日本語名  ：MsPass関連の非構造化データの追加用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/06/07  西野 大介         新規
+    //*  2019/03/06  西野 大介         リネーム
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
+@{
+    ViewBag.Title = ManageViews.AddMsPassDataTitle;
+}
+
+@Scripts.Render("~/bundles/multiauthsite")
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+
+@using (Html.BeginForm("AddMsPassData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken()
+    <h4>@ManageViews.AddMsPassDataH4</h4>
+    <hr />
+    @Html.ValidationSummary("", new { @class = "text-danger" })
+    <div class="form-group">
+        <div class="col-md-6">
+            <button id="msPass_make" type="button" class="btn btn-primary">@ManageViews.AddMsPassDataSubmit</button>
+        </div>
+    </div>
+    <input type="hidden" id="msPassUserId" name="msPassUserId" />
+    <input type="hidden" id="msPassPublickey" name="msPassPublickey" />
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+    <script>
+        const credAlgorithm = "RSASSA-PKCS1-v1_5";
+
+        $(function () {
+
+            var accountInfo = {
+                rpDisplayName: 'MultiPurposeAuthSite', // Name of relying party
+                displayName: '@ViewBag.UserName'       // Name of user account in relying partying
+            };
+
+            var cryptoParameters = [
+                {
+                    type: 'ScopedCred',
+                    algorithm: credAlgorithm
+                }
+            ];
+
+            $("#msPass_make").on("click", function () {
+                navigator.authentication.makeCredential(accountInfo, cryptoParameters)
+                    .then(function (result) {
+                        localStorage["userId"] = "@ViewBag.UserName";
+                        localStorage["credentialType"] = result.credential.type;
+                        localStorage["credentialId"] = result.credential.id;
+                        localStorage["algorithm"] = result.algorithm; // 現時点では動作しない
+                        localStorage["publicKey"] = JSON.stringify(result.publicKey);
+                        localStorage["attestation"] = result.attestation; // 現時点では動作しない
+
+                        $("#msPassUserId").val("@ViewBag.UserName");
+                        $("#msPassPublickey").val(JSON.stringify(result.publicKey));
+
+                        // submit
+                        $("form").submit();
+                    });
+            });
+        });
+    </script>
+}

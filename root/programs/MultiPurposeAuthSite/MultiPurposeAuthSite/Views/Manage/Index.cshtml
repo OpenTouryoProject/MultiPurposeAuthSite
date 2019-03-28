@@ -20,15 +20,16 @@
     //**********************************************************************************
 *@
 
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+@using MultiPurposeAuthSite.Extensions.FIDO
+@using Manager = MultiPurposeAuthSite.Manager
+
 @using System.Web
 @using Microsoft.AspNet.Identity
 @using Microsoft.AspNet.Identity.Owin
-
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity;
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.Manager
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity
 
 @model ManageIndexViewModel
 @{
@@ -40,29 +41,22 @@
     bool canShowOAuthScreen = false;
     if (User.Identity.IsAuthenticated)
     {
-        if (Session["Roles"] == null)
+        Manager.ApplicationUserManager userManager
+            = HttpContext.Current.GetOwinContext().GetUserManager<Manager.ApplicationUserManager>();
+        ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
+        if (user == null)
         {
-            ApplicationUserManager userManager
-                = HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
-            ApplicationUser user = userManager.FindById(User.Identity.GetUserId()); // 同期版でOK。
-            if (user == null)
-            {
-                roles = new List<string>();
-            }
-            else
-            {
-                roles = userManager.GetRoles(user.Id); // 同期版でOK。
-            }
+            roles = new List<string>();
         }
         else
         {
-            roles = (IList<string>)Session["Roles"];
+            roles = userManager.GetRoles(user.Id); // 同期版でOK。
         }
 
         foreach (string role in roles)
         {
-            if (role == ASPNETIdentityConst.Role_SystemAdmin
-                || role == ASPNETIdentityConst.Role_Admin)
+            if (role == Const.Role_SystemAdmin
+                || role == Const.Role_Admin)
             {
                 // サインアップしていないユーザは使用不可
                 canShowOAuthScreen = true;
@@ -81,33 +75,34 @@
 <h2>@ViewBag.Title</h2>
 <p class="text-success">@ViewBag.StatusMessage</p>
 <div class="row">
-    <div class="col-md-8">
+    <div class="col-md-3"></div>
+    <div class="col-md-9">
         <h4>@ManageViews.IndexH4</h4>
         <hr />
         <dl class="dl-horizontal">
-@if (ASPNETIdentityConfig.AllowEditingUserName)
+@if (Config.AllowEditingUserName)
 {
-    // UserNameの変更が許可されている場合。
-    if (ASPNETIdentityConfig.RequireUniqueEmail)
-    {
-            // UserName＝メアドの場合
-            <dt>Email :</dt>
-            <dd>
-                [@Html.ActionLink(ManageViews.IndexEmailChangeActionLink, "ChangeEmail")]
-            </dd>
-    }
-    else
-    {
-            // UserName≠メアドの場合
-            <dt>UserName :</dt>
-            <dd>
-                [@Html.ActionLink(ManageViews.IndexUserNameChangeActionLink, "ChangeUserName")]
-            </dd>
-    }
+                // UserNameの変更が許可されている場合。
+                if (Config.RequireUniqueEmail)
+                {
+                    // UserName＝メアドの場合
+                    <dt>Email :</dt>
+                    <dd>
+                        [@Html.ActionLink(ManageViews.IndexEmailChangeActionLink, "ChangeEmail")]
+                    </dd>
+                }
+                else
+                {
+                    // UserName≠メアドの場合
+                    <dt>UserName :</dt>
+                    <dd>
+                        [@Html.ActionLink(ManageViews.IndexUserNameChangeActionLink, "ChangeUserName")]
+                    </dd>
+                }
 }
 else
 {
-    // UserNameの変更が許可されていない場合。
+                // UserNameの変更が許可されていない場合。
 }
             <dt>Password :</dt>
             <dd>
@@ -123,262 +118,284 @@ else
                 ]
             </dd>
 
-@if (ASPNETIdentityConfig.RequireUniqueEmail)
+@if (Config.RequireUniqueEmail)
 {
-    // UserName＝メアドの場合
+                // UserName＝メアドの場合
 }
 else
 {
-    // UserName≠メアドの場合（のメアド追加
-    if (ASPNETIdentityConfig.CanEditEmail)
-    {
-        // メアドの変更が許可されている場合。
-
-            <dt>@ManageViews.IndexEmail :</dt>
-            <dd>
-                @if (string.IsNullOrEmpty(Model.Email))
+                // UserName≠メアドの場合（のメアド追加
+                if (Config.CanEditEmail)
                 {
-                    <text>None</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
+                    // メアドの変更が許可されている場合。
+
+                    <dt>@ManageViews.IndexEmail :</dt>
+                    <dd>
+                        @if (string.IsNullOrEmpty(Model.Email))
+                        {
+                            <text>None</text><br />
+                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
+                        }
+                        else
+                        {
+                            <text>@Model.Email</text><br />
+                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
+                            using (Html.BeginForm("RemoveEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                            {
+                                @Html.AntiForgeryToken()
+                                <text>[<input type="submit" value="@ManageViews.IndexEmailRemoveButton" class="btn btn-link" />]</text>
+                            }
+                        }
+                    </dd>
                 }
                 else
                 {
-                    <text>@Model.Email</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
-                    using (Html.BeginForm("RemoveEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                    // メアドの変更が許可されていない場合。
+                }
+}
+
+@if (Config.CanEditPhone)
+{
+                // 電話番号の変更が許可されている場合。
+
+                <dt>@ManageViews.IndexPhoneNumber :</dt>
+                <dd>
+
+                    @*"Add" or "Remove"*@
+                    @if (string.IsNullOrEmpty(Model.PhoneNumber))
                     {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexEmailRemoveButton" class="btn-link" />]</text>
+                        <text>None</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
                     }
-                }
-            </dd>
-    }
-    else
-    {
-        // メアドの変更が許可されていない場合。
-    }
-}
+                    else
+                    {
+                        <text>@Model.PhoneNumber</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
 
-@if (ASPNETIdentityConfig.CanEditPhone)
-{
-    // 電話番号の変更が許可されている場合。
-
-            <dt>@ManageViews.IndexPhoneNumber :</dt>
-            <dd>
-
-            @*"Add" or "Remove"*@
-            @if (string.IsNullOrEmpty(Model.PhoneNumber))
-            {
-                    <text>None</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
-            }
-            else
-            {
-                    <text>@Model.PhoneNumber</text><br/>
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPhoneNumberAddActionLink, "AddPhoneNumber")&nbsp;&nbsp;]</text>
-
-                using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn-link" />]</text>
-                }
-            }
-            </dd>
+                        using (Html.BeginForm("RemovePhoneNumber", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>[<input type="submit" value="@ManageViews.IndexPhoneNumberRemoveButton" class="btn btn-link" />]</text>
+                        }
+                    }
+                </dd>
 }
 else
 {
-    // 電話番号の変更が許可されていない場合。
+                // 電話番号の変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEdit2FA)
+@if (Config.CanEdit2FA)
 {
-    // 2要素認証の変更が許可されている場合。
-            <dt>@ManageViews.IndexTwoFactorAuth :</dt>
-            <dd>
-            @if (Model.TwoFactor)
-            {
-                using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                {
-                        @Html.AntiForgeryToken()
-                        <text>
-                            @ManageViews.IndexTwoFactorAuthEnableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabledButton" class="btn btn-link" />]
-                        </text>
-                }
-            }
-            else
-            {
-                using (Html.BeginForm("EnableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                {
-                        @Html.AntiForgeryToken()
-                        <text>
-                            @ManageViews.IndexTwoFactorAuthDisableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabledButton" class="btn btn-link" />]
-                        </text>
-                }
-            }
-            </dd>
-}
-else
-{
-    // 2要素認証の変更が許可されていない場合。
-}
-
-@if (ASPNETIdentityConfig.CanEditExtLogin)
-{
-    // 外部ログインの変更が許可されている場合。
-            <dt>@ManageViews.IndexExternalLogins :</dt>
-            <dd>
-                @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
-            </dd>
+                // 2要素認証の変更が許可されている場合。
+                <dt>@ManageViews.IndexTwoFactorAuth :</dt>
+                <dd>
+                    @if (Model.TwoFactor)
+                    {
+                        using (Html.BeginForm("DisableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>
+                                @ManageViews.IndexTwoFactorAuthEnableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToDisabledButton" class="btn btn-link" />]
+                            </text>
+                        }
+                    }
+                    else
+                    {
+                        using (Html.BeginForm("EnableTwoFactorAuthentication", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>
+                                @ManageViews.IndexTwoFactorAuthDisableStatus , [<input type="submit" value="@ManageViews.IndexTwoFactorAuthToEnabledButton" class="btn btn-link" />]
+                            </text>
+                        }
+                    }
+                </dd>
 }
 else
 {
-    // 外部ログインの変更が許可されていない場合。
+                // 2要素認証の変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditPayment)
+@if (Config.CanEditExtLogin)
 {
-    // 支払い元情報の変更が許可されている場合。
+                // 外部ログインの変更が許可されている場合。
+                <dt>@ManageViews.IndexExternalLogins :</dt>
+                <dd>
+                    @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
+                </dd>
+}
+else
+{
+                // 外部ログインの変更が許可されていない場合。
+}
 
-            <dt>@ManageViews.IndexPaymentInformation :</dt>
+@if (Config.CanEditPayment)
+{
+                // 支払い元情報の変更が許可されている場合。
 
-            <dd>
+                <dt>@ManageViews.IndexPaymentInformation :</dt>
 
-            @*"Add" and "Charge" or "Remove or Change"*@
-            @if (!Model.HasPaymentInformation)
-            {
+                <dd>
+
+                    @*"Add" and "Charge" or "Remove or Change"*@
+                    @if (!Model.HasPaymentInformation)
+                    {
                         <text>None</text><br />
                         <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationAddActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
-            }
-            else
-            {
+                    }
+                    else
+                    {
                         <text>XXXXXXXXXX</text><br />
                         <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexPaymentInformationChangeActionLink, "AddPaymentInformation")&nbsp;&nbsp;]</text>
 
-                using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn-link" />]</text>
-                }
+                        using (Html.BeginForm("RemovePaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>[<input type="submit" value="@ManageViews.IndexPaymentInformationRemoveButton" class="btn btn-link" />]</text>
+                        }
 
-                if (ASPNETIdentityConfig.IsDebug)
-                {
-                    using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                    {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn-link" />]</text><br/>
-                        <text>※ If test the this function, there is needs to obtain the OAuth2 access token beforehand.</text>
+                        if (Config.IsDebug)
+                        {
+                            using (Html.BeginForm("ChargeByPaymentInformation", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                            {
+                                @Html.AntiForgeryToken()
+                                <text>[<input type="submit" value="@ManageViews.IndexPaymentButton" class="btn btn-link" />]</text><br />
+                                <text>※ If test the this function, there is needs to obtain the OAuth2 access token beforehand.</text>
+                            }
+                        }
                     }
-                }
+                </dd>
+}
+else
+{
+                // 支払い元情報の変更が許可されていない場合。
+}
+
+@if (Config.CanEditUnstructuredData)
+{
+                // 非構造化データの変更が許可されていない場合。
+                <dt>@ManageViews.IndexUnstructuredData :</dt>
+                <dd>
+
+                    @*"Add" and "Remove or Change"*@
+                    @if (!Model.HasUnstructuredData)
+                    {
+                        <text>None</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataAddActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
+                    }
+                    else
+                    {
+                        <text>XXXXXXXXXX</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataChangeActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
+
+                        using (Html.BeginForm("RemoveUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>[<input type="submit" value="@ManageViews.IndexUnstructuredDataRemoveButton" class="btn btn-link" />]</text>
+                        }
+                    }
+                </dd>
+}
+else
+{
+                // 非構造化データの変更が許可されていない場合。
+}
+
+@if (Config.CanEditOAuth2Data && canShowOAuthScreen)
+{
+                // OAuth2データの変更が許可されている場合。
+                <dt>EditOAuth2Data :</dt>
+                <dd>
+                    @*"Add" and "Remove or Change"*@
+                    @if (!Model.HasOAuth2Data)
+                    {
+                        <text>None</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataAddActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text>
+                    }
+                    else
+                    {
+                        <text>XXXXXXXXXX</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataChangeActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text><br />
+                        using (Html.BeginForm("GetOAuth2Token", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
+                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn btn-link" />]</text>
+                        }
+                        using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn btn-link" />]</text>
+                        }
+                    }
+                </dd>
+}
+else
+{
+                // OAuth2データの変更が許可されていない場合。
+}
+
+@if (Config.FIDOServerMode != EnumFidoType.None)
+{
+                // FIDO2データの変更が許可されている場合。
+                <dt>EditFIDO2Data :</dt>
+                <dd>
+    @*"Add" and "Remove or Change"*@
+    @if (Config.FIDOServerMode == EnumFidoType.MsPass)
+    {
+        // Microsoft Passport
+        if (!Model.HasFIDO2Data)
+        {
+                            <text>None</text><br />
+                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexMsPassDataAddActionLink, "AddMsPassData")&nbsp;&nbsp;]</text>
+        }
+        else
+        {
+                            <text>XXXXXXXXXX</text><br />
+            using (Html.BeginForm("RemoveMsPassData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            {
+                                @Html.AntiForgeryToken()
+                                <text>[<input type="submit" value="@ManageViews.IndexMsPassDataRemoveButton" class="btn btn-link" />]</text>
             }
-            </dd>
+        }
+    }
+    else if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
+    {
+        // WebAuthn
+        if (!Model.HasFIDO2Data)
+        {
+                            <text>None</text><br />
+                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexWebAuthnDataAddActionLink, "AddWebAuthnData")&nbsp;&nbsp;]</text>
+        }
+        else
+        {
+                            <text>XXXXXXXXXX</text><br />
+            using (Html.BeginForm("RemoveWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            {
+                                @Html.AntiForgeryToken()
+                                <text>[<input type="submit" value="@ManageViews.IndexWebAuthnDataRemoveButton" class="btn btn-link" />]</text>
+            }
+        }
+    }
+                </dd>
 }
 else
 {
-    // 支払い元情報の変更が許可されていない場合。
+                // FIDO2データの変更が許可されていない場合。
 }
 
-@if (ASPNETIdentityConfig.CanEditUnstructuredData)
+@if (Config.CanUseGdprFunction)
 {
-    // 非構造化データの変更が許可されていない場合。
-            <dt>@ManageViews.IndexUnstructuredData :</dt>
-            <dd>
-
-                @*"Add" and "Remove or Change"*@
-                @if (!Model.HasUnstructuredData)
-                {
-                    <text>None</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataAddActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
-                }
-                else
-                {
-                    <text>XXXXXXXXXX</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexUnstructuredDataChangeActionLink, "AddUnstructuredData")&nbsp;&nbsp;]</text>
-
-                    using (Html.BeginForm("RemoveUnstructuredData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                    {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexUnstructuredDataRemoveButton" class="btn-link" />]</text>
-                    }
-                }
-            </dd>
+                // GDPR 個人情報管理が許可されている場合。
+                <dt>ManageGdprData :</dt>
+                <dd>
+                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexManageGdprData, "ManageGdprData")&nbsp;&nbsp;]</text>
+                </dd>
 }
 else
 {
-    // 非構造化データの変更が許可されていない場合。
-}
-
-@if (ASPNETIdentityConfig.CanEditOAuth2Data && canShowOAuthScreen)
-{
-    // OAuth2データの変更が許可されている場合。
-            <dt>EditOAuth2Data :</dt>
-            <dd>
-                @*"Add" and "Remove or Change"*@
-                @if (!Model.HasOAuth2Data)
-                {
-                    <text>None</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataAddActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text>
-                }
-                else
-                {
-                    <text>XXXXXXXXXX</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataChangeActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text><br />
-                    using (Html.BeginForm("GetOAuth2Token", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                    {
-                        @Html.AntiForgeryToken()
-                        <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
-                        <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn-link" />]</text>
-                    }
-                    using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                    {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn-link" />]</text>
-                    }
-                }
-</dd>
-}
-else
-{
-    // OAuth2データの変更が許可されていない場合。
-}
-
-@if (ASPNETIdentityConfig.CanEditFIDO2Data)
-{
-    // FIDO2データの変更が許可されている場合。
-            <dt>EditFIDO2Data :</dt>
-            <dd>
-                @*"Add" and "Remove or Change"*@
-                @if (!Model.HasFIDO2Data)
-                {
-                    <text>None</text><br />
-                    <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexFIDO2DataAddActionLink, "AddFIDO2Data")&nbsp;&nbsp;]</text>
-                }
-                else
-                {
-                    <text>XXXXXXXXXX</text><br />
-                    using (Html.BeginForm("RemoveFIDO2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                    {
-                        @Html.AntiForgeryToken()
-                        <text>[<input type="submit" value="@ManageViews.IndexFIDO2DataRemoveButton" class="btn-link" />]</text>
-                    }
-                }
-            </dd>
-}
-else
-{
-    // FIDO2データの変更が許可されていない場合。
-}
-
-@if (ASPNETIdentityConfig.CanUseGdprFunction)
-{
-    // GDPR 個人情報管理が許可されている場合。
-            <dt>ManageGdprData :</dt>
-            <dd>
-                <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexManageGdprData, "ManageGdprData")&nbsp;&nbsp;]</text>
-            </dd>
-}
-else
-{
-    // FIDO2データの変更が許可されていない場合。
+                // FIDO2データの変更が許可されていない場合。
 }
         </dl>
     </div>

@@ -20,9 +20,10 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
 
 @model AccountRegisterViewModel
 @{
@@ -44,7 +45,7 @@
             @Html.AntiForgeryToken()
             @Html.ValidationSummary("", new { @class = "text-danger" })
 
-            if (ASPNETIdentityConfig.RequireUniqueEmail)
+            if (Config.RequireUniqueEmail)
             {
                 <div class="form-group">
                     @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
@@ -78,14 +79,14 @@
             
             <div class="form-group">
                 <div class="col-md-offset-2 col-md-10">
-                    <input type="submit" class="btn btn-default" value="@AccountViews.RegisterSubmit" />
+                    <input type="submit" class="btn btn-primary" value="@AccountViews.RegisterSubmit" />
                 </div>
             </div>
         }
     </div>
     <div class="col-md-4">
 
-@if (ASPNETIdentityConfig.CanEditExtLogin)
+@if (Config.CanEditExtLogin)
 {
         <div class="sample-box-1">
             @*ここに外部ログインを実装*@

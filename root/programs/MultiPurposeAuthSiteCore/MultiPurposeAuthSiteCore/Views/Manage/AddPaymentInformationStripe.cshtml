@@ -1,0 +1,152 @@
+﻿@*
+    //**********************************************************************************
+    //* Copyright (C) 2017 Hitachi Solutions,Ltd.
+    //**********************************************************************************
+
+    #region Apache License
+    //
+    // Licensed under the Apache License, Version 2.0 (the "License");
+    // you may not use this file except in compliance with the License.
+    // You may obtain a copy of the License at
+    //
+    // http://www.apache.org/licenses/LICENSE-2.0
+    //
+    // Unless required by applicable law or agreed to in writing, software
+    // distributed under the License is distributed on an "AS IS" BASIS,
+    // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    // See the License for the specific language governing permissions and
+    // limitations under the License.
+    //
+    #endregion
+
+    //**********************************************************************************
+    //* クラス名        ：AddPaymentInformationStripe
+    //* クラス日本語名  ：支払元情報の追加用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@model ManageAddPaymentInformationViewModel
+@{
+    ViewBag.Title = ManageViews.AddPaymentTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+    <script type="text/javascript" src="https://js.stripe.com/v2/"></script>
+    <script type="text/javascript">
+        Stripe.setPublishableKey('@ViewBag.PublishableKey');
+    </script>
+}
+
+<h2>@ViewBag.Title</h2>
+
+@using (Html.BeginForm("AddPaymentInformation", "Manage", FormMethod.Post, new { id = "payment-form", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken();
+
+    <h4>@ManageViews.AddPaymentH4</h4>
+    <hr />
+    @Html.ValidationSummary("", new { @class = "text-danger" })
+
+    <div class="form-row">
+        <span class="payment-errors text-danger"></span>
+    </div>
+    
+    <br/>
+
+    <div class="form-row">
+        <label>
+            <span>Card Number</span>
+            @*submitされないようにname属性は付与しない！*@
+            <input type="text" size="20" data-stripe="number">
+        </label>
+    </div>
+
+    <div class="form-row">
+        @*submitされないようにname属性は付与しない！*@
+        <label><span>Expiration (MM/YY)</span></label>
+        <input type="text" size="2" data-stripe="exp_month">
+        <span> / </span>
+        <input type="text" size="2" data-stripe="exp_year">
+    </div>
+
+    <div class="form-row">
+        @*submitされないようにname属性は付与しない！*@
+        <label>
+            <span>CVC</span>
+            <input type="text" size="4" data-stripe="cvc">
+        </label>
+    </div>
+
+    @Html.HiddenFor(m => m.PaymentInformation)
+
+    <div class="form-group">
+        <div class="col-md-offset-2 col-md-10">
+            <input type="submit" class="submit btn btn-primary" value="@ManageViews.AddPaymentSubmit" />
+        </div>
+    </div>
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+<!-- Footer 部の section -->
+<script type="text/javascript">
+
+    // Submit EventHandlerを仕掛ける（Card情報をToken情報に変換する）。
+    $(function () {
+        var $form = $('#payment-form');
+
+        $form.submit(function (event) {
+
+            // Disable the submit button to prevent repeated clicks:
+            $form.find('.submit').prop('disabled', true);
+
+            // Request a token from Stripe:
+            Stripe.card.createToken($form, stripeResponseHandler);
+
+            // Prevent the form from being submitted:
+            return false;
+        });
+    });
+
+    // Tokenへの変換処理のCallbackを受け取って、TokenをサーバにPOSTする。
+    function stripeResponseHandler(status, response) {
+        // Grab the form:
+        var $form = $('#payment-form');
+
+        if (response.error) { // Problem!
+            // 変換失敗
+            //alert("failed");
+
+            // Show the errors on the form:
+            $form.find('.payment-errors').text(response.error.message);
+            $form.find('.submit').prop('disabled', false); // Re-enable submission
+
+        } else { // Token was created!
+            // 変換成功
+            //alert("succeeded");
+
+            // Get the token ID:
+            var token = response.id;
+
+            //alert(token);
+
+            //// Insert the token ID into the form so it gets submitted to the server:
+            //$form.append($('<input type="hidden" name="stripeToken">').val(token));
+            $('input[name=PaymentInformation]').val(token);　// Html.HiddenForに仕掛ける。
+            
+            // Submit the form:
+            $form.get(0).submit();
+        }
+    };
+</script>
+}

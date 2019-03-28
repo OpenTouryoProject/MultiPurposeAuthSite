@@ -1,0 +1,129 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：AddWebAuthnData
+    //* クラス日本語名  ：WebAuthn関連の非構造化データの追加用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2019/03/06  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
+@{
+    ViewBag.Title = ManageViews.AddWebAuthnDataTitle;
+}
+
+@Scripts.Render("~/bundles/multiauthsite")
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/6.10.1/sweetalert2.min.css" />
+}
+
+<h2>@ViewBag.Title</h2>
+
+@using (Html.BeginForm("AddWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="sequenceNo" name="sequenceNo" value="@ViewBag.SequenceNo" />
+    <input type="hidden" id="userName" name="userName" value="@ViewBag.UserName" />
+    <input type="hidden" id="fido2Data" name="fido2Data" value="@ViewBag.FIDO2Data" />
+    <h4>@ManageViews.AddWebAuthnDataH4</h4>
+    <hr />
+    @Html.ValidationSummary("", new { @class = "text-danger" })
+    <div class="form-group">
+        <p class="col-md-2 control-label">Attestation Type</p>
+        <div class="col-md-3">
+            <select class="form-control" id="select-attestation">
+                <option selected value="none">None</option>
+                <option value="indirect">Indirect</option>
+                <option value="direct">Direct</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <p class="col-md-2 control-label">Authenticator Type</p>
+        <div class="col-md-3">
+            <select class="form-control" id="select-authenticator" onchange="detectFIDOUserVerifyingPlatformSupport()">
+                <option selected value="">Not specified</option>
+                <option value="cross-platform">Cross Platform (Token)</option>
+                <option value="platform">Platform (TPM)</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <p class="col-md-2 control-label">User Verification</p>
+        <div class="col-md-3">
+            <select class="form-control" id="select-userVerification" onchange="detectFIDOUserVerifyingPlatformSupport()">
+                <option value="required">Required</option>
+                <option selected value="preferred">Preferred</option>
+                <option value="discouraged">Discouraged</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <p class="col-md-2 control-label">Resident Credentials</p>
+        <div class="col-md-3">
+            <input class="form-control" type="checkbox" id="checkbox-residentCredentials" value="residentCredentials" />
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="alert-wrapper" id="error-alert" style="display:none">
+            <div class="alert alert-danger" id="error-alert-msg" role="alert">
+                <strong>Holy guacamole!</strong> You should check in on some of those fields below.
+            </div>
+        </div>
+        <div class="warning-wrapper" id="warning-alert" style="display:none">
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <span id="warning-alert-msg"></span>
+                <button type="button" class="close" aria-label="Close" onclick="hideWarningAlert()">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="col-md-offset-2 col-md-10">
+            <button id="register-button" class="btn btn-primary" type="button" onclick="makeCredential1()">@ManageViews.AddWebAuthnDataSubmit</button>
+        </div>
+    </div>
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+    <script>
+        // body.onload代替
+        detectFIDOSupport();
+
+        if ($("#sequenceNo").val() === "0") {
+            // makeCredential1();
+        }
+        else if ($("#sequenceNo").val() === "1") {
+            // makeCredential2() -> registerNewCredential();
+            makeCredential2();
+        }
+        else if ($("#sequenceNo").val() === "2") {
+            registeredNewCredential();
+        }
+    </script>
+}

@@ -1,0 +1,260 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Login
+    //* クラス日本語名  ：サインイン用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/04/24  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Extensions.FIDO
+
+@model AccountLoginViewModel
+
+@{
+    ViewBag.Title = AccountViews.LoginTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/6.10.1/sweetalert2.min.css" />
+}
+
+<h2>@ViewBag.Title</h2>
+<div class="row">
+    <div class="col-md-8">
+        <h4>@AccountViews.LoginH4</h4>
+        <hr />
+        <section id="loginForm">
+            @using (Html.BeginForm("Login", "Account", FormMethod.Post, new { id = "LoginForm", @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+            {
+                @Html.AntiForgeryToken()
+                @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+                @Html.HiddenFor(m => m.ReturnUrl)
+
+                if (Config.RequireUniqueEmail)
+                {
+                    <div class="form-group">
+                        @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
+                        <div class="col-md-10">
+                            @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+                            @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
+                        <div class="col-md-10">
+                            @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+                            @Html.ValidationMessageFor(m => m.Name, "", new { @class = "text-danger" })
+                        </div>
+                    </div>
+                }
+
+                <div class="form-group">
+                    @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
+                    <div class="col-md-10">
+                        @Html.PasswordFor(m => m.Password, new { @class = "form-control" })
+                        @Html.ValidationMessageFor(m => m.Password, "", new { @class = "text-danger" })
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-offset-2 col-md-10">
+                        <div class="checkbox">
+                            @Html.CheckBoxFor(m => m.RememberMe)
+                            @Html.LabelFor(m => m.RememberMe)
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-md-offset-2 col-md-10">
+                        <button id="normal_signin" name="submitButton" value="normal_signin" type="button" class="btn btn-primary">@AccountViews.LoginSubmit</button>
+                    </div>
+                </div>
+                <p>@Html.ActionLink(AccountViews.LoginRegisterActionLink, "Register")</p>
+                <p>
+                    @*Enable this once you have account confirmation enabled for password reset functionality*@
+                    @*これを有効にする前に、パスワード リセット機能に対するアカウント確認を有効にしてください。*@
+                    @Html.ActionLink(AccountViews.LoginForgotPasswordActionLink, "ForgotPassword")
+                </p>
+
+                // MsPass, WebAuthn 共用フィールド
+                @Html.HiddenFor(m => m.SequenceNo)
+                @Html.HiddenFor(m => m.Fido2Data)
+
+                <input type="hidden" id="submitButtonName" name="submitButtonName" value="">
+            }
+        </section>
+    </div>
+    <div class="col-md-4">
+
+        @if (Config.CanEditExtLogin)
+        {
+            <div class="sample-box-1">
+                @*ここに外部ログインを実装*@
+                @AccountViews.ExternalLogins
+                <section id="socialLoginForm">
+                    @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
+                </section>
+            </div>
+        }
+
+        <div class="sample-box-1">
+            @*ここにIDフェデレーションを実装*@
+            @AccountViews.IdFederationLogin
+            <section>
+                <button id="id_federation_signin" name="submitButton" value="id_federation_signin" type="button" class="btn btn-primary">@AccountViews.IdFederationLoginSubmit</button>
+            </section>
+        </div>
+
+        @if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
+        {
+            <div class="sample-box-1">
+                @*ここにWebAuthnを実装*@
+                @AccountViews.WebAuthnLogin
+                <section>
+                    <button id="webauthn_signin" class="btn btn-primary" type="button" onclick="getAssertion1()">@AccountViews.WebAuthnLoginSubmit</button>
+                    <div class="form-group">
+                        <p class="col-md-4 control-label">Resident Credentials</p>
+                        <div class="col-md-8">
+                            <input class="form-control" type="checkbox" id="checkbox-residentCredentials" value="residentCredentials" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="alert-wrapper" id="error-alert" style="display:none">
+                            <div class="alert alert-danger" id="error-alert-msg" role="alert">
+                                <strong>Holy guacamole!</strong> You should check in on some of those fields below.
+                            </div>
+                        </div>
+                        <div class="warning-wrapper" id="warning-alert" style="display:none">
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                                <span id="warning-alert-msg"></span>
+                                <button type="button" class="close" aria-label="Close" onclick="hideWarningAlert()">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        }
+        else if (Config.FIDOServerMode == EnumFidoType.MsPass)
+        {
+            <div class="sample-box-1">
+                @*ここにMsPassを実装*@
+                @AccountViews.MsPassLogin
+                <section>
+                    <button id="mspass_signin" name="submitButton" value="mspass_signin" type="button" class="btn btn-primary">@AccountViews.MsPassLoginSubmit</button>
+                </section>
+            </div>
+        }
+    </div>
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+    <script>
+        $(function () {
+            $("#normal_signin").on("click", function () {
+                // button name
+                $("#submitButtonName").val(this.value);
+                // submit
+                $("#LoginForm").submit();
+            });
+        });
+    </script>
+
+    <script>
+        // Id federationLogin
+        $(function () {
+            $("#id_federation_signin").on("click", function () {
+                // button name
+                $("#submitButtonName").val(this.value);
+                // submit
+                $("#LoginForm").submit();
+            });
+        });
+    </script>
+
+    @if (Config.FIDOServerMode == EnumFidoType.WebAuthn)
+    {
+        <script>
+            // WebAuthn
+
+            // body.onload代替
+            detectFIDOSupport();
+
+            if ($("#SequenceNo").val() === "0") {
+                // getAssertion1();
+            }
+            else if ($("#SequenceNo").val() === "1") {
+                // getAssertion2() -> verifyAssertion();
+                getAssertion2();
+            }
+            else if ($("#SequenceNo").val() === "2") {
+                verifiedAssertion();
+            }
+        </script>
+    }
+    else if (Config.FIDOServerMode == EnumFidoType.MsPass)
+    {
+        <script>
+            // MsPass
+            const credAlgorithm = "RSASSA-PKCS1-v1_5";
+
+            $(function () {
+
+                $("#mspass_signin").on("click", function () {
+                    // button name
+                    $("#submitButtonName").val(this.value);
+
+                    var challenge = '@Model.Fido2Data';
+                    var id = localStorage["credentialId"];
+                    var allowList =
+                        [
+                            {
+                                type: 'ScopedCred',
+                                id: id
+                            }
+                        ];
+
+                    navigator.authentication.getAssertion(challenge, { allowList })
+                        .then(function (result) {
+
+                            //return verifyMSFidoSignature(...
+
+                            // properties
+                            $("#Fido2Data").val(JSON.stringify({
+                                fido2UserId: localStorage["userId"],
+                                fido2ClientData: result.clientData,
+                                fido2AuthenticatorData: result.authenticatorData,
+                                fido2Signature: result.signature
+                            }));
+
+                            // submit
+                            $("#LoginForm").submit();
+                        });
+                });
+            });
+        </script>
+    }
+}

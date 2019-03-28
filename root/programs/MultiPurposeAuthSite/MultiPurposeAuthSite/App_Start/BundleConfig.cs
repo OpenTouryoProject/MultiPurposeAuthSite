@@ -19,6 +19,7 @@
 //**********************************************************************************
 
 using System.Web.Optimization;
+using MultiPurposeAuthSite.Co;
 
 namespace MultiPurposeAuthSite
 {
@@ -39,9 +40,9 @@ namespace MultiPurposeAuthSite
         {
             // see : https://www.asp.net/ajax/cdn
 
-            string jqueryVersion = "3.1.1";
+            string jqueryVersion = "3.3.1";
 
-            BundleTable.EnableOptimizations = true;
+            BundleTable.EnableOptimizations = !Config.IsDebug;
             BundleTable.Bundles.UseCdn = true; // same as: bundles.UseCdn = true;
 
             // ( new ScriptBundle("~/XXXX") のパスは実在するpathと被るとRender時にバグる。
@@ -56,7 +57,9 @@ namespace MultiPurposeAuthSite
 
             bundles.Add(new ScriptBundle("~/bundles/multiauthsite").Include(
                         "~/Scripts/touryo/oauthimplicit.js",
-                        "~/Scripts/touryo/webauthn.js"));
+                        "~/Scripts/touryo/arrayBufferUtil.js",
+                        "~/Scripts/touryo/msWebauthn.js",
+                        "~/Scripts/touryo/ffWebauthn.js"));
 
             bundles.Add(new ScriptBundle(
                 "~/bundles/jquery",

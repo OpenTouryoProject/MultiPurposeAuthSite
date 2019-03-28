@@ -1,0 +1,76 @@
+@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：ManageTwoFactorAuthenticator
+    //* クラス日本語名  ：ManageTwoFactorAuthenticator
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2018/11/30  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@model ManageTwoFactorAuthenticationViewModel
+@{
+    ViewBag.Title = ManageViews.ManageTwoFactorAuthenticatorTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+@if (Model.Is2faEnabled)
+{
+    if (Model.RecoveryCodesLeft == 0)
+    {
+        <div class="alert alert-danger">
+            <strong>@ManageViews.ManageTwoFactorAuthenticatorCodesLeft0H</strong>
+            <p>You must <a asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes">generate a new set of recovery codes</a> before you can log in with a recovery code.</p>
+        </div>
+    }
+    else if (Model.RecoveryCodesLeft == 1)
+    {
+        <div class="alert alert-danger">
+            <strong>@ManageViews.ManageTwoFactorAuthenticatorCodesLeft1H</strong>
+            <p>You can <a asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes">generate a new set of recovery codes</a>.</p>
+        </div>
+    }
+    else if (Model.RecoveryCodesLeft <= 3)
+    {
+        <div class="alert alert-warning">
+            <strong>@string.Format(ManageViews.ManageTwoFactorAuthenticatorCodesLeft3H, Model.RecoveryCodesLeft)</strong>
+            <p>You should <a asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes">generate a new set of recovery codes</a>.</p>
+        </div>
+    }
+
+        <a asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitRRC</a>
+}
+
+<h5></h5>
+@if (!Model.HasAuthenticator)
+{
+<a asp-action="EnableTwoFactorAuthenticator" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitAAA</a>
+}
+else
+{
+<a asp-action="EnableTwoFactorAuthenticator" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitCAA</a>
+<a asp-action="ResetTwoFactorAuthenticator" class="btn btn-primary">@ManageViews.ManageTwoFactorAuthenticatorSubmitRAA</a>
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}
+

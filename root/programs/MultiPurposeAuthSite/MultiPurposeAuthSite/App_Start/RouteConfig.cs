@@ -21,6 +21,8 @@
 using System.Web.Mvc;
 using System.Web.Routing;
 
+using MultiPurposeAuthSite.Co;
+
 namespace MultiPurposeAuthSite
 {
     /// <summary>
@@ -47,6 +49,12 @@ namespace MultiPurposeAuthSite
             // ・ name：ルート名。
             // ・ url：URIパターン。
             // ・ defaults：初期値。 
+
+            routes.MapRoute(
+                name: "OAuth2Authorize",
+                url: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "Account", action = "OAuth2Authorize" }
+            );
 
             // Defaultルートを定義
             routes.MapRoute(

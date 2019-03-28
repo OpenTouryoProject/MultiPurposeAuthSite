@@ -20,8 +20,11 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
 @model AccountVerifyCodeViewModel
 @{
     ViewBag.Title = AccountViews.VerifyCodeTitle;
@@ -57,7 +60,7 @@
     </div>
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
-            <input type="submit" class="btn btn-default" value="@AccountViews.VerifyCodeSubmit" />
+            <input type="submit" class="btn btn-primary" value="@AccountViews.VerifyCodeSubmit" />
         </div>
     </div>
 }

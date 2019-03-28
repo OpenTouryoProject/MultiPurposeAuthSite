@@ -36,10 +36,15 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/12/26  西野 大介         新規
+    //*  2019/02/18  西野 大介         FAPI2 CC対応実施
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
 @{
     ViewBag.Title = "OAuth2ClientAuthenticationFlow";
 }
@@ -52,8 +57,9 @@
 <h2>@ViewBag.Title.</h2>
 <div class="row">
     <div class="col-md-8">
-        <p><a class="btn btn-default" href="#" id="OAuth2GetUserClaimsWebAPI" url="@(ASPNETIdentityConfig.OAuth2ResourceServerEndpointsRootURI + ASPNETIdentityConfig.OAuth2GetUserClaimsWebAPI)">Get user claims</a></p>
+        <p><a class="btn btn-primary" href="#" id="OAuth2UserInfoEndpoint" url="@(Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint)">Get user claims</a></p>
         <br />
+        <div id="debug"></div>
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
         <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
@@ -97,16 +103,18 @@
 
         $(function () {
             // Response
-            alert(JSON.stringify('@ViewBag.Response'));
+            //alert(JSON.stringify('@ViewBag.Response'));
+            document.getElementById('debug').innerHTML
+                = 'Objected fragment : ' + '@ViewBag.Response';
 
             // access_token
             // access_token (Bearer Token) を使用して
             // ResourceServerのWebAPIにアクセスする。
             token = '@ViewBag.AccessToken';
 
-            // OAuth2GetUserClaimsWebAPI
-            $('#OAuth2GetUserClaimsWebAPI').on('click', function () {
-                CallOAuthAPI($('#OAuth2GetUserClaimsWebAPI').attr("url"), 'get', null)
+            // OAuth2UserInfoEndpoint
+            $('#OAuth2UserInfoEndpoint').on('click', function () {
+                CallOAuthAPI($('#OAuth2UserInfoEndpoint').attr("url"), 'get', null);
             });
 
         });

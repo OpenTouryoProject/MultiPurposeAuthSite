@@ -1,0 +1,127 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // WebAuthn テスト用 画面なので、必要に応じて流用 or 削除して下さい。
+
+    //**********************************************************************************
+    //* クラス名        ：WebAuthn Starters
+    //* クラス日本語名  ：WebAuthn Starters
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2019/03/08  西野 大介         新規
+    //*  2019/03/12  西野 大介         リネーム
+    //**********************************************************************************
+*@
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>FIDO2 .NET lib Demo</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/6.10.1/sweetalert2.min.css" />
+</head>
+
+<body onload="detectFIDOSupport();Fx_Document_OnLoad()">
+    <div class="container">
+        <div class="login-wrapper">
+            <form class="form-signin mb-">
+                <h2 class="form-signin-heading text-center">FIDO2 .NET lib Demo</h2>
+                <div class="row" id="inputEmailRow">
+                    <div class="mx-auto">
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Username" autofocus aria-label="email" id="input-email">
+                        </div>
+                    </div>
+                </div>
+                <br>
+                <div class="row" id="inputAttestation">
+                    <div class="mx-auto">
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <label class="input-group-text" for="attestationType">
+                                    Attestation Type
+                                </label>
+                            </div>
+                            <select class="custom-select" id="select-attestation">
+                                <option selected value="none">None</option>
+                                <option value="indirect">Indirect</option>
+                                <option value="direct">Direct</option>
+                            </select>
+                            <div class="input-group-prepend">
+                                <label class="input-group-text" for="authenticatorType">
+                                    Authenticator Type
+                                </label>
+                            </div>
+                            <select class="custom-select" id="select-authenticator" onchange="detectFIDOUserVerifyingPlatformSupport()">
+                                <option selected value="">Not specified</option>
+                                <option value="cross-platform">Cross Platform (Token)</option>
+                                <option value="platform">Platform (TPM)</option>
+                            </select>
+                            <div class="input-group-prepend">
+                                <label class="input-group-text" for="userVerification">
+                                    User Verification
+                                </label>
+                            </div>
+                            <select class="custom-select" id="select-userVerification" onchange="detectFIDOUserVerifyingPlatformSupport()">
+                                <option value="required">Required</option>
+                                <option selected value="preferred">Preferred</option>
+                                <option value="discouraged">Discouraged</option>
+                            </select>
+                            <div class="input-group-prepend">
+                                <label class="input-group-text" for="residentCredentials">
+                                    Resident Credentials
+                                </label>
+                            </div>
+                            <div class="input-group-text" style="background-color: #fff">
+                                <input type="checkbox" class="custom-checkbox" id="checkbox-residentCredentials" value="residentCredentials" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            <div class="alert-wrapper" id="error-alert" style="display:none">
+                <div class="alert alert-danger" id="error-alert-msg" role="alert">
+                    <strong>Holy guacamole!</strong> You should check in on some of those fields below.
+                </div>
+            </div>
+            <div class="warning-wrapper" id="warning-alert" style="display:none">
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <span id="warning-alert-msg"></span>
+                    <button type="button" class="close" aria-label="Close" onclick="hideWarningAlert()">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            </div>
+            <div class="text-center buttons">
+                <button id="register-button" class="btn btn-lg btn-primary" type="button" onclick="makeCredential()">Register a User/Credential</button>
+                <button id="login-button" class="btn btn-lg btn-primary" type="button" onclick="getAssertion()">Login with Credential</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js"></script>
+    <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/sweetalert2"></script>
+
+    <script type="text/javascript" src="~/Scripts/touryo/common.js"></script>
+    <script type="text/javascript" src="~/Scripts/touryo/arrayBufferUtil.js"></script>
+    <script type="text/javascript" src="~/Scripts/touryo/webauthn.js"></script>
+</body>
+
+</html>

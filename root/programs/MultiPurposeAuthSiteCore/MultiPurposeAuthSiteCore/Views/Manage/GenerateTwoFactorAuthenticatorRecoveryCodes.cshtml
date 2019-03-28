@@ -1,0 +1,56 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：GenerateTwoFactorAuthenticatorRecoveryCodes
+    //* クラス日本語名  ：GenerateTwoFactorAuthenticatorRecoveryCodes
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2018/11/30  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@{
+    ViewBag.Title = ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+
+<div class="alert alert-warning" role="alert">
+    <p>
+        <span class="glyphicon glyphicon-warning-sign"></span>
+        <strong>@ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesH</strong>
+    </p>
+    <p>
+        @ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesP1
+    </p>
+    <p>
+        <a asp-action="ResetAuthenticatorWarning">@ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesP2</a>
+    </p>
+</div>
+
+<div>
+    <form asp-action="GenerateTwoFactorAuthenticatorRecoveryCodes" method="post" class="form-group">
+        <button class="btn btn-danger" type="submit">@ManageViews.GenerateTwoFactorAuthenticatorRecoveryCodesSubmit</button>
+    </form>
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

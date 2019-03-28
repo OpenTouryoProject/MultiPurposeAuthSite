@@ -20,8 +20,11 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ASPNETIdentity.Entity;
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
 @model ApplicationRole
 
 @{
@@ -47,7 +50,7 @@
             {
                 @Html.AntiForgeryToken()
                 <b>@AdminViews.RolesAdminRoleName</b> <text>&#058;</text> <span>@Html.DisplayFor(model => model.Name)</span>
-                <input type="submit" value="@AdminViews.RolesAdminDeleteSubmit" class="btn btn-default" />
+                <input type="submit" value="@AdminViews.RolesAdminDeleteSubmit" class="btn btn-primary" />
             }
         </div>
     </div>

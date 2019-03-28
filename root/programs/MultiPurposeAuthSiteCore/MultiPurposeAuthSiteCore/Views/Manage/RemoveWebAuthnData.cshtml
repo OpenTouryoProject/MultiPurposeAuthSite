@@ -1,0 +1,65 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：RemoveWebAuthnData
+    //* クラス日本語名  ：WebAuthn関連の非構造化データの削除用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2019/03/15  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@using Fido2NetLib.Objects;
+@using Touryo.Infrastructure.Public.Str
+
+@{
+    ViewBag.Title = ManageViews.RemoveWebAuthnDataTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+
+@using (Html.BeginForm("RemoveWebAuthnData", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="fido2Data" name="fido2Data" value="@ViewBag.FIDO2Data" />
+    <h4>@ManageViews.RemoveWebAuthnDataH4</h4>
+    <hr />
+    @Html.ValidationSummary("", new { @class = "text-danger" })
+    foreach (PublicKeyCredentialDescriptor item in ViewBag.ExistingPubCredDescriptor)
+    {
+        <div class="form-group">
+            <p class="col-md-2 control-label">PublicKeyId</p>
+            <div class="col-md-1">
+                <input class="form-control" type="checkbox" id="publicKeys" name="publicKeys"
+                       value="@CustomEncode.ToBase64UrlString(item.Id)" />
+            </div>
+            @CustomEncode.ToBase64UrlString(item.Id)
+        </div>
+    }
+    <div class="form-group">
+        <div class="col-md-offset-2 col-md-10">
+            <input type="submit" class="btn btn-primary" value="@ManageViews.RemoveWebAuthnDataSubmit" />
+        </div>
+    </div>
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

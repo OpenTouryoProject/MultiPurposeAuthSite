@@ -1,0 +1,44 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：VerifyEmailAddress
+    //* クラス日本語名  ：e-mailアドレス検証のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/05/23  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@{
+    ViewBag.Title = AccountViews.VerifyEmailAddressTitle; @*流用のため*@
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<p class="text-info">
+    @AccountViews.VerifyEmailAddressP @*流用のため*@
+</p>
+@*<p class="text-danger">
+    For DEMO only: You can click this link to confirm the email: <a href="@ViewBag.Link">link</a>
+    Please change this code to register an email service in IdentityConfig to send an email.
+</p>*@
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28010.2016
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MultiPurposeAuthSiteCore", "MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.csproj", "{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetCoreLibrary", "..\CommonLibrary\NetCoreLibrary.csproj", "{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9113DCB6-89F8-4C17-BFFC-49855D9CCD57}.Release|Any CPU.Build.0 = Release|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{13C59E33-8BC2-427E-BBAB-80E406C9FCE7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {61A12D9B-25D6-4BCC-9E35-DC5B56056779}
+	EndGlobalSection
+EndGlobal

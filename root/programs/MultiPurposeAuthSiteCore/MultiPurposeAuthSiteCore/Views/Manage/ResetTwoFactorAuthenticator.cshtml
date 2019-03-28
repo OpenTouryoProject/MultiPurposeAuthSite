@@ -1,0 +1,51 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：ResetTwoFactorAuthenticator
+    //* クラス日本語名  ：ResetTwoFactorAuthenticator
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2018/11/30  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@{
+    ViewBag.Title = ManageViews.ResetTwoFactorAuthenticatorTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<div class="alert alert-warning" role="alert">
+    <p>
+        <span class="glyphicon glyphicon-warning-sign"></span>
+        <strong>@ManageViews.ResetTwoFactorAuthenticatorH</strong>
+    </p>
+    <p>
+        @ManageViews.ResetTwoFactorAuthenticatorP
+    </p>
+</div>
+<div>
+    <form asp-action="ResetTwoFactorAuthenticator" method="post" class="form-group">
+        <button class="btn btn-danger" type="submit">@ManageViews.ResetTwoFactorAuthenticatorSubmit</button>
+    </form>
+</div>
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

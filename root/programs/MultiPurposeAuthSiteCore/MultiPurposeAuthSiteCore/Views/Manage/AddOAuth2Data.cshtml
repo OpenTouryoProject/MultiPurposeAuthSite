@@ -1,0 +1,108 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：AddOAuth2Data
+    //* クラス日本語名  ：OAuth2関連の非構造化データの追加・編集用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2017/06/07  西野 大介         新規
+    //*  2019/02/18  西野 大介         FAPI2 CC対応実施
+    //**********************************************************************************
+*@
+
+@model ManageAddOAuth2DataViewModel
+@{
+    ViewBag.Title = ManageViews.AddOAuth2DataTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+
+@using (Html.BeginForm("AddOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken()
+    <h4>@ManageViews.AddOAuth2DataH4</h4>
+    <hr />
+    @Html.ValidationSummary("", new { @class = "text-danger" })
+    <div class="form-group">
+        @Html.LabelFor(m => m.ClientID, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            <div class="form-inline">
+                <div class="input-group">
+                    @Html.TextBoxFor(m => m.ClientID, new { @class = "form-control", @readonly = "readonly" })
+                    <span class="input-group-btn">
+                        <input type="submit" class="btn btn-primary" name="submit.ClientID" value="@ManageViews.IndexClientIDChangeButton" />
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ClientSecret, new { @class = "col-md-2 control-label" })
+        <div class="col-md-10">
+            <div class="form-inline">
+                <div class="input-group">
+                    @Html.TextBoxFor(m => m.ClientSecret, new { @class = "form-control", @readonly = "readonly" })
+                    <span class="input-group-btn">
+                        <input type="submit" class="btn btn-primary" name="submit.ClientSecret" value="@ManageViews.IndexClientSecretChangeButton" />
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.RedirectUriCode, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.RedirectUriCode, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.RedirectUriToken, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.RedirectUriToken, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.JwkRsaPublickey, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.JwkRsaPublickey, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.TlsClientAuthSubjectDn, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.TlsClientAuthSubjectDn, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        @Html.LabelFor(m => m.ClientMode, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.DropDownListFor(model => model.ClientMode, Model.DdlClientModeItems, new { @class = "form-control" })
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="col-md-offset-2 col-md-10">
+            <input type="submit" class="btn btn-primary" name="submit.Add" value="@ManageViews.AddOAuth2DataSubmit" />
+        </div>
+    </div>
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

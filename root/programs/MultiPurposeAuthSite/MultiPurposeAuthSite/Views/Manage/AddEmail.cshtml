@@ -20,9 +20,10 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity;
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
 
 @model ManageEmailViewModel
 @{
@@ -54,7 +55,7 @@
             @Html.TextBoxFor(m => m.ConfirmEmail, new { @class = "form-control" })
         </div>
     </div>
-    if (ASPNETIdentityConfig.RequirePasswordInEditingUserNameAndEmail)
+    if (Config.RequirePasswordInEditingUserNameAndEmail)
     {
         <div class="form-group">
             @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })
@@ -69,7 +70,7 @@
     }
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
-            <input type="submit" class="btn btn-default" value="@ManageViews.AddEmailSubmit" />
+            <input type="submit" class="btn btn-primary" value="@ManageViews.AddEmailSubmit" />
         </div>
     </div>
 }

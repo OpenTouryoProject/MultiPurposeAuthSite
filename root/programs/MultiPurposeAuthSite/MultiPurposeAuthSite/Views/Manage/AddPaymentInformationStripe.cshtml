@@ -33,8 +33,11 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels;
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
 @model ManageAddPaymentInformationViewModel
 @{
     ViewBag.Title = ManageViews.AddPaymentTitle;
@@ -93,7 +96,7 @@
 
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
-            <input type="submit" class="submit btn btn-default" value="@ManageViews.AddPaymentSubmit" />
+            <input type="submit" class="submit btn btn-primary" value="@ManageViews.AddPaymentSubmit" />
         </div>
     </div>
 }

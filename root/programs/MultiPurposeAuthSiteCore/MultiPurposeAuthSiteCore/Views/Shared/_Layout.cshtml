@@ -1,0 +1,166 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：_Layout
+    //* クラス日本語名  ：マスタ・ページ相当
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2018/11/30  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@* マスタ・ページに相当 *@
+
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+
+@{
+    IList<string> roles = null;
+    bool canShowAdminScreen = false;
+
+    if (User.Identity.IsAuthenticated)
+    {
+        ApplicationUser user = await UserManager.GetUserAsync(User);
+        if (user == null)
+        {
+            roles = new List<string>();
+        }
+        else
+        {
+            roles = await UserManager.GetRolesAsync(user);
+        }
+        canShowAdminScreen = (roles.Where(x => x == Const.Role_SystemAdmin).Any());
+    }
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewBag.Title - MultiPurposeAuthSite</title>
+
+    @* ScriptTagHelperの属性を指定可能。*@
+    <environment include="Development">
+        <link rel="stylesheet" href="~/css/app/site.css" />
+        <link rel="stylesheet" href="~/css/touryo/Style.css" />
+        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.css" />
+        <link rel="stylesheet" href="~/css/font-awesome.css" />
+        <script src="~/lib/jquery/dist/jquery.js"></script>
+        <script src="~/lib/bootstrap/dist/js/bootstrap.js"></script>
+    </environment>
+    <environment exclude="Development">
+        <link rel="stylesheet" href="~/css/css.min.css" asp-append-version="true" />
+        <script src="~/js/header.min.js" asp-append-version="true"></script>
+    </environment>
+
+    @RenderSection("HeaderScriptsSection", required: true)
+
+    <script type="text/javascript">
+        // Resolve URL in the javascript
+        var baseUrl = '@Url.Content("~/")';
+    </script>
+
+</head>
+<body onload="Fx_Document_OnLoad();Fx_AdjustStyle();">
+    <div class="page-header row">
+        <div class="col-3" style="padding: 0">
+            <div id="header-logo"><a href="@Url.Action("Index", "Home")"><img alt="logo" src="~/images/touryo/logo.png" /></a></div>
+        </div>
+        <div class="col-6" style="padding: 0">
+            <div id="header-title">
+@if (SignInManager.IsSignedIn(User))
+{
+                @Html.ActionLink(string.Format(SharedViews.LoginPartial, UserManager.GetUserName(User)), "Index", "Manage", routeValues: null, htmlAttributes: new { title = "Manage", @class = "float-right" })
+}
+            </div>
+        </div>
+        <div id="header-button" class="col-3">
+@if (SignInManager.IsSignedIn(User))
+{
+            @* サインアウトボタンは、ユーザーが認証されている時だけ表示する *@
+            <button type="button" class="btn btn-primary float-right" onclick="window.location.href = '@Url.Action("Logoff", "Account")';">Sign-out</button>
+}
+else
+{
+            <button type="button" class="btn btn-secondary float-right" onclick="window.location.href = '@Url.Action("Register", "Account")';">Sign-up</button>
+            <button type="button" class="btn btn-primary float-right" onclick="window.location.href = '@Url.Action("Login", "Account")';">Sign-in</button>
+}
+        </div>
+    </div>
+    <div id="body-bk">
+        <div id="body" class="row">
+            <div class="nav-side-menu col-sm-4 col-md-3">
+                <div class="brand">メニュー</div>
+                <i class="fa fa-bars fa-2x toggle-btn" data-toggle="collapse" data-target="#menu-content"></i>
+                <div class="menu-list">
+                    <ul id="menu-content" class="menu-content collapse out">
+                        <li onclick="window.location.href = '@Url.Action("Index", "Home")';">
+                            <i class="fa fa-arrow-circle-right"></i> メニュートップ
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("OAuth Starters", "OAuth2Starters", "Home", null, new { style = "color:peachpuff" })
+                        </li>
+@if (SignInManager.IsSignedIn(User))
+{
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("Scroll", "Scroll", "Home", null, new { style = "color:peachpuff" })
+                        </li>
+    @*if (canShowAdminScreen)
+    {
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
+                        </li>
+                        <li>
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
+                        </li>
+    }*@
+}
+                    </ul>
+                </div>
+            </div>
+            <div id="contents" class="col-sm-8 col-md-9">
+                @RenderBody()
+            </div>
+        </div>
+    </div>
+    <footer class="footer">
+        <div class="container">
+            <p class="text-muted">Powered by <a target="_blank" href="https://github.com/OpenTouryoProject">OpenTouryo</a></p>
+        </div>
+    </footer>
+
+    <environment include="Development">
+        <script src="~/lib/jquery-validation/dist/jquery.validate.js"></script>
+        <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.js"></script>
+        <script src="~/js/app/site.js" asp-append-version="true"></script>
+        <script src="~/js/touryo/common.js" asp-append-version="true"></script>
+        <script src="~/js/touryo/else.js" asp-append-version="true"></script>
+        <script src="~/js/multiauthsite/qrcode.js" asp-append-version="true"></script>
+        <script src="~/js/multiauthsite/oauthimplicit.js" asp-append-version="true"></script>
+        <script src="~/js/multiauthsite/arrayBufferUtil.js" asp-append-version="true"></script>
+        <script src="~/js/multiauthsite/ffWebauthn.js" asp-append-version="true"></script>
+        <script src="~/js/multiauthsite/msWebauthn.js" asp-append-version="true"></script>
+    </environment>
+    <environment exclude="Development">
+        <script src="~/js/footer.min.js" asp-append-version="true"></script>
+        <script src="~/js/app.min.js" asp-append-version="true"></script>
+        <script src="~/js/touryo.min.js" asp-append-version="true"></script>
+        <script src="~/js/multiauthsite.min.js" asp-append-version="true"></script>
+    </environment>
+
+    @RenderSection("FooterScriptsSection", required: true)
+</body>
+</html>

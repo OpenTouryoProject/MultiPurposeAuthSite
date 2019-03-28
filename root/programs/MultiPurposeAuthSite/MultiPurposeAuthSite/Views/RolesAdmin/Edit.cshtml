@@ -20,8 +20,11 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
 @model RolesAdminEditViewModel
 
 @{
@@ -53,7 +56,7 @@
 
         <div class="form-group">
             <div class="col-md-offset-2 col-md-10">
-                <input type="submit" value="@AdminViews.RolesAdminEditSubmit" class="btn btn-default" />
+                <input type="submit" value="@AdminViews.RolesAdminEditSubmit" class="btn btn-primary" />
             </div>
         </div>
     }

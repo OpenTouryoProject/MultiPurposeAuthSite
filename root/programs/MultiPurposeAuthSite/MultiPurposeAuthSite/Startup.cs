@@ -18,8 +18,6 @@
 //*  2017/04/24  西野 大介         新規
 //**********************************************************************************
 
-using MultiPurposeAuthSite.Models.ASPNETIdentity;
-
 using Owin;
 using Microsoft.Owin;
 

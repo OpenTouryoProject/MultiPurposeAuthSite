@@ -1,164 +1,598 @@
-"use strict";
+// https://github.com/abergs/fido2-net-lib/blob/master/Fido2Demo/wwwroot/js/webauthn.js
 
-// Editor's draft of spec at https://w3c.github.io/webauthn/#api
+//**********************************************************************************
+//* Copyright (C) 2017 Hitachi Solutions,Ltd.
+//**********************************************************************************
 
-navigator.authentication = navigator.authentication || (function () {
+// Apache License
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License. 
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-    const webauthnDB = (function () {
-        const WEBAUTHN_DB_VERSION = 1;
-        const WEBAUTHN_DB_NAME = "_webauthn";
-        const WEBAUTHN_ID_TABLE = "identities";
+//**********************************************************************************
+//* ファイル名        ：webauthn.js
+//* ファイル日本語名  ：webauthn処理
+//*                     Server Requirements and Transport Binding Profile用
+//*
+//* 作成日時        ：－
+//* 作成者          ：－
+//* 更新履歴        ：－
+//*
+//*  日時        更新者            内容
+//*  ----------  ----------------  -------------------------------------------------
+//*  2019/03/0?  西野 大介         新規作成
+//**********************************************************************************
 
-        var db = null;
-        var initPromise = null;
+//**********************************************************************************
+// インターフェイス
+//**********************************************************************************
+// Input items
+// - button
+//   - #register-button
+//   - #login-button
+// - text
+//   - #input-email
+// - select and checkbox
+//   - #select-attestation
+//   - #select-authenticator
+//   - #select-userVerification
+//   - #checkbox-residentCredentials
+// Output items
+// - alert
+//   - #error-alert
+//   - #error-alert-msg
+//   - #warning-alert
+//   - #warning-alert-msg
 
-        function initDB() {
-            /* to remove database, use window.indexedDB.deleteDatabase('_webauthn'); */
-            return new Promise(function (resolve, reject) {
-                var req = indexedDB.open(WEBAUTHN_DB_NAME, WEBAUTHN_DB_VERSION);
-                req.onupgradeneeded = function () {
-                    // new database - set up store
-                    db = req.result;
-                    var store = db.createObjectStore(WEBAUTHN_ID_TABLE, { keyPath: "id" });
-                };
-                req.onsuccess = function () {
-                    db = req.result;
-                    resolve();
-                };
-                req.onerror = function (e) {
-                    reject(e);
-                };
-            });
-        }
+//**********************************************************************************
+// Endpoint
+//**********************************************************************************
+var EndpointPrefix = "/MultiPurposeAuthSite/Fido2";
+var CredentialCreationOptionsEndpoint = EndpointPrefix + "/CredentialCreationOptions";
+var AuthenticatorAttestationEndpoint = EndpointPrefix + "/AuthenticatorAttestation";
+var CredentialGetOptionsEndpoint = EndpointPrefix + "/CredentialGetOptions";
+var AuthenticatorAssertionEndpoint = EndpointPrefix + "/AuthenticatorAssertion";
 
-        function store(id, data) {
-            if (!initPromise) { initPromise = initDB(); }
-            return initPromise.then(function () { doStore(id, data) });
-        }
+//**********************************************************************************
+// 初期化
+//**********************************************************************************
+if (window.location.protocol !== "https:") {
+    showErrorAlert("Please use HTTPS");}
 
-        function doStore(id, data) {
-            if (!db) throw "DB not initialised";
-            return new Promise(function (resolve, reject) {
-                var tx = db.transaction(WEBAUTHN_ID_TABLE, "readwrite");
-                var store = tx.objectStore(WEBAUTHN_ID_TABLE);
-                store.put({ id: id, data: data });
-                tx.oncomplete = function () {
-                    resolve();
-                }
-                tx.onerror = function (e) {
-                    reject(e);
-                };
-            });
-        }
+// input object
+var input = {
+    attestationType: null,
+    authenticatorAttachment: null,
+    userVerification: null,
+    requireResidentKey: null,
 
-        function getAll() {
-            if (!initPromise) { initPromise = initDB(); }
-            return initPromise.then(doGetAll);
-        }
+    user: {
+        name: "",
+        displayName: ""
+    }
+};
 
-        function doGetAll() {
-            if (!db) throw "DB not initialised";
-            return new Promise(function (resolve, reject) {
-                var tx = db.transaction(WEBAUTHN_ID_TABLE, "readonly");
-                var store = tx.objectStore(WEBAUTHN_ID_TABLE);
-                var req = store.openCursor();
-                var res = [];
-                req.onsuccess = function () {
-                    var cur = req.result;
-                    if (cur) {
-                        res.push({ id: cur.value.id, data: cur.value.data });
-                        cur.continue();
-                    } else {
-                        resolve(res);
-                    }
-                }
-                req.onerror = function (e) {
-                    reject(e);
-                };
-            });
-        }
+// ---------------------------------------------------------------
+// 冒頭で実行
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function setInput() {
+    input.attestationType = $('#select-attestation').find(':selected').val();
+    input.authenticatorAttachment = $('#select-authenticator').find(':selected').val();
+    input.userVerification = $('#select-userVerification').find(':selected').val();
+    input.requireResidentKey = $("#checkbox-residentCredentials").is(':checked');
 
-        return {
-            store: store,
-            getAll: getAll
-        };
-    }());
+    let username = $("#input-email").val();
+    input.user.name = username.toLowerCase().replace(/\s/g, '');
+    input.user.displayName = username.toLowerCase();
+}
 
-    function makeCredential(accountInfo, cryptoParams, attestChallenge, options) {
-        var acct = { rpDisplayName: accountInfo.rpDisplayName, userDisplayName: accountInfo.displayName };
-        var params = [];
-        var i;
+// ---------------------------------------------------------------
+// FIDOサポートの検出
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function detectFIDOSupport() {
+    if (window.PublicKeyCredential === undefined || typeof window.PublicKeyCredential !== "function") {
+        $('#register-button').attr("disabled", true);
+        $('#login-button').attr("disabled", true);
+        showErrorAlert("WebAuthn is not currently supported on this browser.");
+        return;
+    }
+}
 
-        if (accountInfo.name) { acct.accountName = accountInfo.name; }
-        if (accountInfo.id) { acct.userId = accountInfo.id; }
-        if (accountInfo.imageUri) { acct.accountImageUri = accountInfo.imageUri; }
-
-        for (i = 0; i < cryptoParams.length; i++) {
-            if (cryptoParams[i].type === 'ScopedCred') {
-                params[i] = { type: 'FIDO_2_0', algorithm: cryptoParams[i].algorithm };
-            } else {
-                params[i] = cryptoParams[i];
+// ---------------------------------------------------------------
+// FIDOUserVerifyingPlatformサポートの検出
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function detectFIDOUserVerifyingPlatformSupport() {
+    if (window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== "function") {
+        markPlatformAuthenticatorUnavailable();
+    } else if (typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === "function") {
+        window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function (available) {
+            if (!available) {
+                markPlatformAuthenticatorUnavailable();
             }
-        }
-        return msCredentials.makeCredential(acct, params).then(function (cred) {
-            if (cred.type === "FIDO_2_0") {
-                var result = Object.freeze({
-                    credential: { type: "ScopedCred", id: cred.id },
-                    publicKey: JSON.parse(cred.publicKey),
-                    attestation: cred.attestation
-                });
-                return webauthnDB.store(result.credential.id, accountInfo).then(function () { return result; });
-            } else {
-                return cred;
-            }
+        }).catch(function (e) {
+            markPlatformAuthenticatorUnavailable();
         });
     }
+}
 
-    function getCredList(allowlist) {
-        var credList = [];
-        if (allowlist) {
-            return new Promise(function (resolve, reject) {
-                allowlist.forEach(function (item) {
-                    if (item.type === 'ScopedCred') {
-                        credList.push({ type: 'FIDO_2_0', id: item.id });
-                    } else {
-                        credList.push(item);
-                    }
-                });
-                resolve(credList);
-            });
-        } else {
-            return webauthnDB.getAll().then(function (list) {
-                list.forEach(item => credList.push({ type: 'FIDO_2_0', id: item.id }));
-                return credList;
-            });
-        }
+// ---------------------------------------------------------------
+// markPlatformAuthenticatorUnavailable
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function markPlatformAuthenticatorUnavailable() {
+    var authenticator_attachment = $('#select-authenticator').find(':selected').val();
+    var user_verification = $('#select-userVerification').find(':selected').val();
+
+    if (authenticator_attachment === "platform" && user_verification === "required") {
+        showWarningAlert("User verifying platform authenticators are not currently supported on this browser.");
+    }
+}
+
+//**********************************************************************************
+// Alert
+//**********************************************************************************
+// ---------------------------------------------------------------
+// showErrorAlert
+// ---------------------------------------------------------------
+// 引数    msg
+// 戻り値  －
+// ---------------------------------------------------------------
+function showErrorAlert(msg) {
+    $("#error-alert-msg").text(msg);
+    $("#error-alert").show();
+}
+// ---------------------------------------------------------------
+// hideErrorAlert
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function hideErrorAlert() {
+    $("#error-alert").hide();
+}
+
+// ---------------------------------------------------------------
+// showWarningAlert
+// ---------------------------------------------------------------
+// 引数    msg
+// 戻り値  －
+// ---------------------------------------------------------------
+function showWarningAlert(msg) {
+    $("#warning-alert-msg").text(msg);
+    $("#warning-alert").show();
+}
+
+// ---------------------------------------------------------------
+// hideWarningAlert
+// ---------------------------------------------------------------
+// 引数    msg
+// 戻り値  －
+// ---------------------------------------------------------------
+function hideWarningAlert() {
+    $("#warning-alert").fadeOut(200);
+}
+
+// ---------------------------------------------------------------
+// navigator.credentials.createを実行する。
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function makeCredential() {
+
+    // ログ
+    Fx_DebugOutput("enter makeCredential method", null);
+
+    // 初期処理
+    setInput();
+    hideErrorAlert();
+    hideWarningAlert();
+
+    // チェック処理
+    if ($("#input-email").val() === "") {
+        showErrorAlert("Please enter a username");
+        return;
     }
 
-    function getAssertion(challenge, options) {
-        var allowlist = options ? options.allowList : undefined;
-        return getCredList(allowlist).then(function (credList) {
-            var filter = { accept: credList };
-            var sigParams = undefined;
-            if (options && options.extensions && options.extensions["webauthn_txAuthSimple"]) { sigParams = { userPrompt: options.extensions["webauthn_txAuthSimple"] }; }
-
-            return msCredentials.getAssertion(challenge, filter, sigParams).then(function (sig) {
-                if (sig.type === "FIDO_2_0") {
-                    return Object.freeze({
-                        credential: { type: "ScopedCred", id: sig.id },
-                        clientData: sig.signature.clientData,
-                        authenticatorData: sig.signature.authnrData,
-                        signature: sig.signature.signature
-                    });
-                } else {
-                    return sig;
-                }
-            });
-        });
-    }
-
-    return {
-        makeCredential: makeCredential,
-        getAssertion: getAssertion
+    // POST JSONデータ生成
+    // https://fidoalliance.org/specs/fido-v2.0-rd-20180702/fido-server-v2.0-rd-20180702.html#example-credential-creation-options
+    const data = {
+        username: input.user.name,
+        displayName: input.user.name,
+        authenticatorSelection: {
+            residentKey: input.requireResidentKey,
+            authenticatorAttachment: input.authenticatorAttachment,
+            userVerification: input.userVerification
+        },
+        attestation: input.attestationType
     };
-}());
+
+    // ログ
+    Fx_DebugOutput("makeCredential - data:", data);
+
+    // fetch
+    fetch(CredentialCreationOptionsEndpoint, {
+        // Request
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    }).then((response) => {
+        // Response
+        if (response.ok) {
+            return response.json();
+        }
+        else {
+            return Promise.reject(response.text());
+        }
+
+        }).catch((error) => {
+            // Error
+            error.then(msg => {
+                showErrorAlert(msg);
+                return;
+            });
+        })
+        .then((publicKeyCredentialCreationOptions) => {
+            // Normal
+            Fx_DebugOutput("registerNewCredential - publicKeyCredentialCreationOptions 1:", publicKeyCredentialCreationOptions);
+
+            if (publicKeyCredentialCreationOptions.status !== "ok") {
+                showErrorAlert(publicKeyCredentialCreationOptions.errorMessage);
+                return;
+            }
+
+            // JSON to CredentialCreationOptions
+            
+            // To ArrayBuffer
+            publicKeyCredentialCreationOptions.challenge = Fx_CoerceToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
+            publicKeyCredentialCreationOptions.user.id = Fx_CoerceToArrayBuffer(publicKeyCredentialCreationOptions.user.id);
+            publicKeyCredentialCreationOptions.excludeCredentials = publicKeyCredentialCreationOptions.excludeCredentials.map((c) => {
+                c.id = Fx_CoerceToArrayBuffer(c.id);
+                return c;
+            });
+            // null -> undefined
+            if (publicKeyCredentialCreationOptions.authenticatorSelection.authenticatorAttachment === null)
+                publicKeyCredentialCreationOptions.authenticatorSelection.authenticatorAttachment = undefined;
+
+            // 引数
+            Fx_DebugOutput("registerNewCredential - publicKeyCredentialCreationOptions 2:", publicKeyCredentialCreationOptions);
+
+            // SweetAlert
+            let confirmed = true;
+            Swal.fire({
+                title: 'Registering...',
+                text: 'Tap your security key to finish registration.',
+                imageUrl: "/images/securitykey.min.svg",
+                showCancelButton: true,
+                showConfirmButton: false,
+                focusConfirm: false,
+                focusCancel: false
+
+            }).then(function (result) {
+                if (!result.value) {
+                    confirmed = false;
+                    Fx_DebugOutput('Registration cancelled', null);
+                }
+
+            }).catch(function (error) {
+                confirmed = false;
+                Fx_DebugOutput("SweetAlert Error:", error);
+            });
+
+            // Credential Management API (navigator.credentials.create)
+            if (confirmed) {
+                navigator.credentials.create({
+                    publicKey: publicKeyCredentialCreationOptions 
+
+                }).then(function (authenticatorAttestationResponse) {
+                    // 戻り値
+                    Fx_DebugOutput("registerNewCredential - authenticatorAttestationResponse:", authenticatorAttestationResponse);
+                    // サーバーに登録
+                    registerNewCredential(authenticatorAttestationResponse);
+
+                }).catch(function (err) {
+                    // 戻り値
+                    Fx_DebugOutput("registerNewCredential - err:", err);
+                    Swal.closeModal();
+                    showErrorAlert(err.message ? err.message : err);
+
+                });
+            }
+        });
+}
+
+// ---------------------------------------------------------------
+// navigator.credentials.createの結果を登録する。
+// ---------------------------------------------------------------
+// 引数    authenticatorAttestationResponse
+// 戻り値  －
+// ---------------------------------------------------------------
+function registerNewCredential(authenticatorAttestationResponse) {
+
+    // ログ
+    Fx_DebugOutput("enter registerNewCredential method", null);
+
+    // 入力
+    let attestationObject = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.attestationObject);
+    let clientDataJSON = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.clientDataJSON);
+    let rawId = Fx_CoerceToBase64Url(authenticatorAttestationResponse.rawId);
+
+    // POST JSONデータ生成
+    const data = {
+        id: authenticatorAttestationResponse.id,
+        rawId: rawId,
+        type: authenticatorAttestationResponse.type,
+        extensions: authenticatorAttestationResponse.getClientExtensionResults(),
+        response: {
+            AttestationObject: attestationObject,
+            clientDataJson: clientDataJSON
+        }
+    };
+
+    // ログ
+    Fx_DebugOutput("registerNewCredential - data:", data);
+
+    // fetch
+    fetch(AuthenticatorAttestationEndpoint, {
+        // Request
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    }).then((response) => {
+        // Response
+        if (response.ok) {
+            return response.json();
+        }
+        else {
+            return Promise.reject(response.text());
+        }
+
+        }).catch((error) => {
+            // Error
+            error.then(msg => {
+                showErrorAlert(msg);
+                return;
+            });
+        })
+        .then(responseJson => {
+            // Normal
+            Fx_DebugOutput("registerNewCredential - responseJson:", responseJson);
+
+            if (responseJson.status !== "ok") {
+                Swal.closeModal();
+                showErrorAlert(responseJson.errorMessage);
+                return;
+            }
+
+            // SweetAlert
+            Swal.fire({
+                title: 'Registration Successful!',
+                text: 'You\'ve registered successfully.',
+                type: 'success',
+                timer: 2000
+            });
+            //window.location.href = "/dashboard/" + input.user.displayName;
+        });
+}
+
+// ---------------------------------------------------------------
+// navigator.credentials.getを実行する。
+// ---------------------------------------------------------------
+// 引数    －
+// 戻り値  －
+// ---------------------------------------------------------------
+function getAssertion() {
+
+    // ログ
+    Fx_DebugOutput("enter getAssertion method", null);
+
+    // 初期処理
+    setInput();
+    hideErrorAlert();
+    hideWarningAlert();
+
+    // チェック処理
+    if ($("#input-email").val() === "") {
+        showErrorAlert("Please enter a username");
+        return;
+    }
+
+    // POST JSONデータ生成
+    var data = {
+        username: input.user.name,
+        userVerification: input.user_verification
+    };
+
+    // ログ
+    Fx_DebugOutput("getAssertion - data:", data);
+
+    // fetch
+    fetch(CredentialGetOptionsEndpoint, {
+        // Request
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    }).then((response) => {
+        // Response
+        if (response.ok) {
+            return response.json();
+        }
+        else {
+            return Promise.reject(response.text());
+        }
+
+        }).catch((error) => {
+            // Error
+            error.then(msg => {
+                showErrorAlert(msg);
+                return;
+            });
+
+        }).then((publicKeyCredentialRequestOptions) => {
+            // Normal
+            Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 1:", publicKeyCredentialRequestOptions);
+
+            if (publicKeyCredentialRequestOptions.status !== "ok") {
+                showErrorAlert(publicKeyCredentialRequestOptions.errorMessage);
+                return;
+            }
+
+            // JSON to PublicKeyCredentialRequestOptions
+            const challenge = publicKeyCredentialRequestOptions.challenge.replace(/-/g, "+").replace(/_/g, "/");
+            publicKeyCredentialRequestOptions.challenge = Fx_CoerceToArrayBuffer(challenge);
+
+            publicKeyCredentialRequestOptions.allowCredentials.forEach(function (listItem) {
+                var fixedId = listItem.id.replace(/\_/g, "/").replace(/\-/g, "+");
+                listItem.id = Fx_CoerceToArrayBuffer(fixedId);
+            });
+
+            Fx_DebugOutput("getAssertion - publicKeyCredentialRequestOptions 2:", publicKeyCredentialRequestOptions);
+
+            // SweetAlert
+            let confirmed = true;
+            Swal.fire({
+                title: 'Logging In...',
+                text: 'Tap your security key to login.',
+                imageUrl: "/images/securitykey.min.svg",
+                showCancelButton: true,
+                showConfirmButton: false,
+                focusConfirm: false,
+                focusCancel: false
+
+            }).then(function (result) {
+                if (!result.value) {
+                    confirmed = false;
+                    Fx_DebugOutput('Login cancelled', null);
+                }
+
+            }).catch(function (error) {
+                confirmed = false;
+                Fx_DebugOutput("SweetAlert Error:", error);
+            });
+
+            // Credential Management API (navigator.credentials.get)
+            navigator.credentials.get({
+                publicKey: publicKeyCredentialRequestOptions
+
+            }).then(function (authenticatorAttestationResponse) {
+                console.log("getAssertion - authenticatorAttestationResponse:");
+                    console.log(authenticatorAttestationResponse);
+                    console.log(JSON.stringify(authenticatorAttestationResponse));
+
+                    // サーバーで検証
+                    verifyAssertion(authenticatorAttestationResponse);
+                })
+                .catch(function (err) {
+                    console.log(err);
+                    showErrorAlert(err.message ? err.message : err);
+                    Swal.closeModal();
+                });
+        });
+}
+
+// ---------------------------------------------------------------
+// navigator.credentials.getの結果を検証する。
+// ---------------------------------------------------------------
+// 引数    authenticatorAttestationResponse
+// 戻り値  －
+// ---------------------------------------------------------------
+function verifyAssertion(authenticatorAttestationResponse) {
+
+    // ログ
+    Fx_DebugOutput("enter verifyAssertion method", null);
+
+    // Move data into Arrays incase it is super long
+    let authData = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.authenticatorData);
+    let clientDataJSON = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.clientDataJSON);
+    let rawId = Fx_CoerceToBase64Url(authenticatorAttestationResponse.rawId);
+    let sig = Fx_CoerceToBase64Url(authenticatorAttestationResponse.response.signature);
+
+    const data = {
+        id: authenticatorAttestationResponse.id,
+        rawId: rawId,
+        type: authenticatorAttestationResponse.type,
+        extensions: authenticatorAttestationResponse.getClientExtensionResults(),
+        response: {
+            authenticatorData: authData,
+            clientDataJson: clientDataJSON,
+            signature: sig
+        }
+    };
+
+    // ログ
+    Fx_DebugOutput("verifyAssertion - data:", data);
+    
+    // fetch
+    fetch(AuthenticatorAssertionEndpoint, {
+        // Request
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    }).then((response) => {
+        // Response
+        if (response.ok) {
+            return response.json();
+        }
+        else {
+            return Promise.reject(response.text());
+        }
+
+        }).catch((error) => {
+            // Error
+            error.then(msg => {
+                showErrorAlert(msg);
+                return;
+            });
+        })
+        .then(responseJson => {
+            // Normal
+            Fx_DebugOutput("verifyAssertion - responseJson:", responseJson);
+
+            if (responseJson.status !== "ok") {
+                Swal.closeModal();
+                showErrorAlert(responseJson.errorMessage);
+                return;
+            }
+
+            // SweetAlert
+            Swal.fire({
+                title: 'Logged In!',
+                text: 'You\'re logged in successfully.',
+                type: 'success',
+                timer: 2000
+            });
+            //window.location.href = "/dashboard/" + input.user.displayName;
+        });
+}

@@ -20,9 +20,10 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Resources;
-@using MultiPurposeAuthSite.Models.ViewModels
-@using MultiPurposeAuthSite.Models.ASPNETIdentity
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
 
 @model AccountRegisterViewModel
 @{
@@ -43,7 +44,7 @@
     <hr />
     @Html.ValidationSummary("", new { @class = "text-error" })
     
-    if (ASPNETIdentityConfig.RequireUniqueEmail)
+    if (Config.RequireUniqueEmail)
     {
         <div class="form-group">
             @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
@@ -88,7 +89,7 @@
     </div>
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
-            <input type="submit" class="btn btn-default" value="@AdminViews.UsersAdminCreateSubmit" />
+            <input type="submit" class="btn btn-primary" value="@AdminViews.UsersAdminCreateSubmit" />
         </div>
     </div>
 }
