@@ -2090,21 +2090,24 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
-                            // form_postに必要な、HTTP response message body
-                            string body =
-                                "<html>" +
-                                "  <body onload=\"javascript: document.forms[0].submit()\">" +
-                                "    <form method=\"post\" action =\"{0}\">" +
-                                "      <input type=\"hidden\" name =\"code\" value =\"{1}\"/>" +
-                                "      <input type=\"hidden\" name =\"state\"  value =\"{2}\"/>" +
-                                "    </form>" +
-                                "  </body>" +
-                                "</html>";
+                            #region 旧コード
+                            //string body =
+                            //    "<html>" +
+                            //    "  <body onload=\"javascript: document.forms[0].submit()\">" +
+                            //    "    <form method=\"post\" action =\"{0}\">" +
+                            //    "      <input type=\"hidden\" name =\"code\" value =\"{1}\"/>" +
+                            //    "      <input type=\"hidden\" name =\"state\"  value =\"{2}\"/>" +
+                            //    "    </form>" +
+                            //    "  </body>" +
+                            //    "</html>";
+                            //body = string.Format(body, valid_redirect_uri, code, state);
+                            //return this.Content(body);
+                            #endregion
 
-                            // bodyに組み込んで
-                            body = string.Format(body, valid_redirect_uri, code, state);
-
-                            return this.Content(body);
+                            ViewData["Action"] = valid_redirect_uri;
+                            ViewData["Code"] = code;
+                            ViewData["State"] = state;
+                            return View("FormPost");
                         }
                         else
                         {
@@ -2321,21 +2324,10 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                     {
-                        // form_postに必要な、HTTP response message body
-                        string body =
-                            "<html>" +
-                            "  <body onload=\"javascript: document.forms[0].submit()\">" +
-                            "    <form method=\"post\" action =\"{0}\">" +
-                            "      <input type=\"hidden\" name =\"code\" value =\"{1}\"/>" +
-                            "      <input type=\"hidden\" name =\"state\"  value =\"{2}\"/>" +
-                            "    </form>" +
-                            "  </body>" +
-                            "</html>";
-
-                        // bodyに組み込んで
-                        body = string.Format(body, valid_redirect_uri, code, state);
-
-                        return this.Content(body);
+                        ViewData["Action"] = valid_redirect_uri;
+                        ViewData["Code"] = code;
+                        ViewData["State"] = state;
+                        return View("FormPost");
                     }
                     else
                     {

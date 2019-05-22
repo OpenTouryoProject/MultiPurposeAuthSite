@@ -6,8 +6,8 @@
     // OAuth 2.0 テスト用 画面なので、必要に応じて流用 or 削除して下さい。
 
     //**********************************************************************************
-    //* クラス名        ：OAuth2 Starters
-    //* クラス日本語名  ：OAuth2 Starters
+    //* クラス名        ：Saml2 & OAuth2 Starters
+    //* クラス日本語名  ：Saml2 & OAuth2 Starters
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -25,9 +25,9 @@
 @using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.ViewModels
 
-@model HomeOAuth2StartersViewModel
+@model HomeSaml2OAuth2StartersViewModel
 @{
-    ViewBag.Title = "OAuth2 Starters";
+    ViewBag.Title = "Saml2 & OAuth2 Starters";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
@@ -38,7 +38,7 @@
 
 <h2>@ViewBag.Title</h2>
 <div class="col-md-8">
-    @using (Html.BeginForm("OAuth2Starters", "Home", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+    @using (Html.BeginForm("Saml2OAuth2Starters", "Home", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
     {
         @Html.AntiForgeryToken()
         <div class="form-group">
@@ -48,6 +48,14 @@
             </div>
         </div>
         <ul>
+            <li>
+                SAML2
+                <ul>
+                    <li><input type="submit" name="submit.Saml2RedirectRedirectBinding" value="Saml2 Redirect Redirect Binding" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.Saml2RedirectPostBinding" value="Saml2 Redirect Post Binding" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.Saml2PostPostBinding" value="Saml2 Post Post Binding" class="btn btn-link" /></li>
+                </ul>
+            </li>
             <li>
                 Authorization Code Flow
                 <ul>

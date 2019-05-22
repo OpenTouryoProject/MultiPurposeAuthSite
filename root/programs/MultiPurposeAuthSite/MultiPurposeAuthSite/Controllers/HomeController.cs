@@ -133,7 +133,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region WebAuthn
+        #region Test WebAuthn
 
         /// <summary>
         /// GET: Home/WebAuthnStarters
@@ -148,7 +148,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region OAuth2
+        #region Test STS
 
         #region Params
 
@@ -177,10 +177,19 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Common
 
-        #region Init
+        #region InitParams
+
+        #region InitSaml2Params
+
+        // Init扶養（state, nonce系が無い）
+        // Save不要（state, nonce, code_verifier系が無い）
+
+        #endregion
+
+        #region InitOAuth2Params
 
         /// <summary>初期化</summary>
-        private void Init()
+        private void InitOAuth2Params()
         {
             this.OAuthAuthorizeEndpoint =
             Config.OAuth2AuthorizationServerEndpointsRootURI
@@ -196,7 +205,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>保存</summary>
-        private void Save()
+        private void SaveOAuth2Params()
         {
             // テスト用にstate, nonce, code_verifierを、Session, Cookieに保存
             // ・Session : サイト分割時
@@ -261,7 +270,17 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
         #region Assemble
+
+        #region AssembleSaml2
+
+        // パターン少ないので不要
+
+        #endregion
+
+        #region AssembleOAuth2
 
         /// <summary>OAuth2スターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
@@ -331,18 +350,20 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
         #region Action Method
 
         #region Public
 
         /// <summary>
-        /// OAuthStarters画面（初期表示）
-        /// GET: /Home/OAuth2Starters
+        /// SAML2OAuth2Starters画面（初期表示）
+        /// GET: /Home/Saml2OAuth2Starters
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpGet]
         [AllowAnonymous]
-        public ActionResult OAuth2Starters()
+        public ActionResult Saml2OAuth2Starters()
         {
             if (Config.IsLockedDownRedirectEndpoint)
             {
@@ -350,18 +371,18 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                return View(new HomeOAuth2StartersViewModel()); 
+                return View(new HomeSaml2OAuth2StartersViewModel()); 
             }
         }
 
         /// <summary>
-        /// OAuthStarters画面
-        /// POST: /Home/OAuth2Starters
+        /// SAML2OAuth2Starters画面
+        /// POST: /Home/Saml2OAuth2Starters
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpPost]
         [AllowAnonymous]
-        public async Task<ActionResult> OAuth2Starters(HomeOAuth2StartersViewModel model)
+        public async Task<ActionResult> Saml2OAuth2Starters(HomeSaml2OAuth2StartersViewModel model)
         {
             if (Config.IsLockedDownRedirectEndpoint)
             {
@@ -404,6 +425,21 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!string.IsNullOrEmpty(this.ClientName))
                 {
                     #region Starter
+
+                    #region SAML2
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2RedirectRedirectBinding")))
+                    {
+                        return this.Saml2RedirectRedirectBinding();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2RedirectPostBinding")))
+                    {
+                        return this.Saml2RedirectPostBinding();
+                    }
+                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2PostPostBinding")))
+                    {
+                        return this.Saml2PostPostBinding();
+                    }
+                    #endregion
 
                     #region AuthorizationCode系
                     if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode")))
@@ -508,6 +544,43 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Private
 
+        #region SAML2
+
+        /// <summary>Test Saml2 Redirect & Redirect Binding</summary>
+        /// <returns>ActionResult</returns>
+        private ActionResult Saml2RedirectRedirectBinding()
+        {
+            // Redirectを生成
+            string saml2Request = SAML2Bindings.CreateRequest(
+                "hoge-iss", SAML2Const.UrnNameIDFormatUnspecified, 
+                SAML2Const.UrnBindingsRedirect, "redirect_uri",
+                new RSACryptoServiceProvider()).OuterXml;
+            
+            return null;
+        }
+
+        /// <summary>Test Saml2 Redirect & Post Binding</summary>
+        /// <returns>ActionResult</returns>
+        private ActionResult Saml2RedirectPostBinding()
+        {
+            // Redirectを生成
+
+            return null;
+        }
+
+        /// <summary>Test Saml2 Post & Post Binding</summary>
+        /// <returns>ActionResult</returns>
+        private ActionResult Saml2PostPostBinding()
+        {
+            // Postを生成
+
+            return null;
+        }
+
+        #endregion
+
+        #region OAuth2
+
         #region Authorization Code Flow
 
         #region OAuth2
@@ -516,8 +589,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCode()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow
             return Redirect(this.AssembleOAuth2Starter(
@@ -528,8 +601,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCode_FormPost()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (form_post)
             return Redirect(this.AssembleOAuth2Starter(
@@ -545,8 +618,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCode_OIDC()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (OIDC)
             return Redirect(this.AssembleOidcStarter(
@@ -558,8 +631,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCode_OIDC_FormPost()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (OIDC, form_post)
             return Redirect(this.AssembleOidcStarter(
@@ -578,10 +651,10 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult AuthorizationCode_PKCE_Plain()
         {
-            this.Init();
+            this.InitOAuth2Params();
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = this.CodeVerifier;
-            this.Save();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (PKCE plain)
             return Redirect(this.AssembleOAuth2Starter(
@@ -594,10 +667,10 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCode_PKCE_S256()
         {
-            this.Init();
+            this.InitOAuth2Params();
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
-            this.Save();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (PKCE S256)
             return Redirect(this.AssembleOAuth2Starter(
@@ -618,8 +691,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Implicit()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Implicit Flow
             return Redirect(this.AssembleOAuth2Starter(
@@ -634,8 +707,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Implicit_OIDC1()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Implicit Flow 'id_token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
@@ -647,8 +720,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Implicit_OIDC2()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Implicit Flow 'id_token token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
@@ -667,8 +740,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Hybrid_OIDC1()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Hybrid Flow 'code id_token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
@@ -679,8 +752,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Hybrid_OIDC2()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Hybrid Flow 'code token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
@@ -691,8 +764,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Hybrid_OIDC3()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Hybrid Flow 'code id_token token'(OIDC)
             return Redirect(this.AssembleOidcStarter(
@@ -711,8 +784,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCodeFAPI1()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (FAPI1)
             return Redirect(this.AssembleFAPI1Starter(
@@ -723,8 +796,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCodeFAPI1_OIDC()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (FAPI1, OIDC)
             return Redirect(this.AssembleFAPI1_OIDCStarter(
@@ -735,8 +808,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCodeFAPI1_OIDC_FormPost()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow (FAPI1, OIDC, form_post)
             return Redirect(this.AssembleFAPI1_OIDCStarter(
@@ -753,8 +826,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult AuthorizationCodeFAPI2()
         {
-            this.Init();
-            this.Save();
+            this.InitOAuth2Params();
+            this.SaveOAuth2Params();
 
             // Authorization Code Flow
             return Redirect(this.AssembleFAPI2Starter(
@@ -847,6 +920,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             return View("OAuth2ClientAuthenticationFlow");
         }
+
+        #endregion
 
         #endregion
 

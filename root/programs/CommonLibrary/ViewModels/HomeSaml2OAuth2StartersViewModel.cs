@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：HomeOAuth2StartersViewModel
-//* クラス日本語名  ：Home > OAuth2StartersのVM（テンプレート）
+//* クラス名        ：HomeSaml2OAuth2StartersViewModel
+//* クラス日本語名  ：Home > Saml2OAuth2StartersのVM（テンプレート）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -37,8 +37,8 @@ using Touryo.Infrastructure.Public.FastReflection;
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>
 namespace MultiPurposeAuthSite.ViewModels
 {
-    /// <summary>Home > OAuth2StartersのVM</summary>
-    public class HomeOAuth2StartersViewModel : BaseViewModel
+    /// <summary>Home > Saml2OAuth2StartersのVM</summary>
+    public class HomeSaml2OAuth2StartersViewModel : BaseViewModel
     {
         /// <summary>ClientType</summary>
         [Display(Name = "ClientType", ResourceType = typeof(Resources.CommonViewModels))]
@@ -52,7 +52,7 @@ namespace MultiPurposeAuthSite.ViewModels
                 return new List<SelectListItem>()
                 {
                     new SelectListItem() {
-                        Text = "OAuth2.0 / OIDC用 Client",
+                        Text = "Saml2 / OAuth2.0 / OIDC用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part1用 Client",
