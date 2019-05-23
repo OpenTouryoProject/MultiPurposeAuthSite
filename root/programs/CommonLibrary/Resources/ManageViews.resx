@@ -135,13 +135,13 @@
   <data name="AddMsPassDataTitle" xml:space="preserve">
     <value>Add Microsoft Passport data</value>
   </data>
-  <data name="AddOAuth2DataH4" xml:space="preserve">
+  <data name="AddSaml2OAuth2DataH4" xml:space="preserve">
     <value>Add OAuth2 data form</value>
   </data>
-  <data name="AddOAuth2DataSubmit" xml:space="preserve">
+  <data name="AddSaml2OAuth2DataSubmit" xml:space="preserve">
     <value>Submit</value>
   </data>
-  <data name="AddOAuth2DataTitle" xml:space="preserve">
+  <data name="AddSaml2OAuth2DataTitle" xml:space="preserve">
     <value>Add OAuth2 data</value>
   </data>
   <data name="AddPaymentH4" xml:space="preserve">
@@ -285,16 +285,16 @@
   <data name="IndexMsPassDataRemoveButton" xml:space="preserve">
     <value>Remove your Microsoft Passport data</value>
   </data>
-  <data name="IndexOAuth2Data" xml:space="preserve">
+  <data name="IndexSaml2OAuth2Data" xml:space="preserve">
     <value>OAuth2 data</value>
   </data>
-  <data name="IndexOAuth2DataAddActionLink" xml:space="preserve">
+  <data name="IndexSaml2OAuth2DataAddActionLink" xml:space="preserve">
     <value>Add your OAuth2 data</value>
   </data>
-  <data name="IndexOAuth2DataChangeActionLink" xml:space="preserve">
+  <data name="IndexSaml2OAuth2DataChangeActionLink" xml:space="preserve">
     <value>Change your OAuth2 data</value>
   </data>
-  <data name="IndexOAuth2DataRemoveButton" xml:space="preserve">
+  <data name="IndexSaml2OAuth2DataRemoveButton" xml:space="preserve">
     <value>Remove your OAuth2 data</value>
   </data>
   <data name="IndexOAuth2TokenGetButton" xml:space="preserve">

@@ -302,31 +302,31 @@ else
                 // 非構造化データの変更が許可されていない場合。
 }
 
-@if (Config.CanEditOAuth2Data && canShowOAuthScreen)
+@if (Config.CanEditSaml2OAuth2Data && canShowOAuthScreen)
 {
                 // OAuth2データの変更が許可されている場合。
-                <dt>EditOAuth2Data :</dt>
+                <dt>EditSaml2OAuth2Data :</dt>
                 <dd>
                     @*"Add" and "Remove or Change"*@
-                    @if (!Model.HasOAuth2Data)
+                    @if (!Model.HasSaml2OAuth2Data)
                     {
                         <text>None</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataAddActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text>
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexSaml2OAuth2DataAddActionLink, "AddSaml2OAuth2Data")&nbsp;&nbsp;]</text>
                     }
                     else
                     {
                         <text>XXXXXXXXXX</text><br />
-                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexOAuth2DataChangeActionLink, "AddOAuth2Data")&nbsp;&nbsp;]</text><br />
+                        <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexSaml2OAuth2DataChangeActionLink, "AddSaml2OAuth2Data")&nbsp;&nbsp;]</text><br />
                         using (Html.BeginForm("GetOAuth2Token", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
                             <text>scope : </text> @Html.TextBoxFor(m => m.Scopes) <br />
                             <text>[<input type="submit" value="@ManageViews.IndexOAuth2TokenGetButton" class="btn btn-link" />]</text>
                         }
-                        using (Html.BeginForm("RemoveOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+                        using (Html.BeginForm("RemoveSaml2OAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
                         {
                             @Html.AntiForgeryToken()
-                            <text>[<input type="submit" value="@ManageViews.IndexOAuth2DataRemoveButton" class="btn btn-link" />]</text>
+                            <text>[<input type="submit" value="@ManageViews.IndexSaml2OAuth2DataRemoveButton" class="btn btn-link" />]</text>
                         }
                     }
                 </dd>

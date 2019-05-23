@@ -847,15 +847,15 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// CanEditOAuth2Data
+        /// CanEditSaml2OAuth2Data
         /// </summary>
-        public static bool CanEditOAuth2Data
+        public static bool CanEditSaml2OAuth2Data
         {
             get
             {
                 return
                     Config.EquipOAuth2Server
-                    && Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditOAuth2Data"));
+                    && Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditSaml2OAuth2Data"));
             }
         }        
 

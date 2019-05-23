@@ -1307,7 +1307,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!string.IsNullOrEmpty(client_secret))
                 {
-                    // *.config or OAuth2Dataテーブルを参照して、
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（client_secret）を行なう。
                     if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                     {
@@ -1318,7 +1318,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
                 else if (x509 != null)
                 {
-                    // *.config or OAuth2Dataテーブルを参照して、
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（X509Certificate2）を行なう。
                     if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
                     {

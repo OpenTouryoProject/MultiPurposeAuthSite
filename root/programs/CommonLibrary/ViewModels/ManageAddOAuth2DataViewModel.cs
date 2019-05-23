@@ -6,7 +6,7 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：ManageAddOAuth2DataViewModel
+//* クラス名        ：ManageAddSaml2OAuth2DataViewModel
 //* クラス日本語名  ：OAuth2関連の非構造化データ設定用のVM（テンプレート）
 //*
 //* 作成日時        ：－
@@ -38,7 +38,7 @@ using Touryo.Infrastructure.Public.FastReflection;
 namespace MultiPurposeAuthSite.ViewModels
 {
     /// <summary>OAuth2関連の非構造化データ設定用のVM</summary>
-    public class ManageAddOAuth2DataViewModel : BaseViewModel
+    public class ManageAddSaml2OAuth2DataViewModel : BaseViewModel
     {
         /// <summary>ClientID</summary>
         [Display(Name = "ClientID", ResourceType = typeof(Resources.CommonViewModels))]
