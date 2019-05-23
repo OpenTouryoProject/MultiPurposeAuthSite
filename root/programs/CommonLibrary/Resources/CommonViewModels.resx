@@ -186,6 +186,9 @@
   <data name="RedirectUriCode" xml:space="preserve">
     <value>redirect_uri_code</value>
   </data>
+  <data name="RedirectUriSaml" xml:space="preserve">
+    <value>redirect_uri_saml</value>
+  </data>
   <data name="RedirectUriToken" xml:space="preserve">
     <value>redirect_uri_token</value>
   </data>

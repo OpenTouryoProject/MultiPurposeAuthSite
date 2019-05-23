@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -51,6 +52,16 @@ namespace MultiPurposeAuthSite.ViewModels
         // [StringLength( // ユーザ入力でないので不要
         [JsonProperty(PropertyName = "client_secret")]
         public string ClientSecret { get; set; }
+
+        /// <summary>RedirectUriSaml</summary>
+        [Display(Name = "RedirectUriSaml", ResourceType = typeof(Resources.CommonViewModels))]
+        //[Url] localhost や IPアドレスが入力できない。
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "redirect_uri_saml")]
+        public string RedirectUriSaml { get; set; }
 
         /// <summary>RedirectUriCode</summary>
         [Display(Name = "RedirectUriCode", ResourceType = typeof(Resources.CommonViewModels))]

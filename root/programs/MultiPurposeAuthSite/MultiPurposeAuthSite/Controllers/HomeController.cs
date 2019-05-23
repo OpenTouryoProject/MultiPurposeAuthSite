@@ -708,10 +708,10 @@ namespace MultiPurposeAuthSite.Controllers
             this.InitSaml2Params();
 
             // Saml2Request 
-            string saml2Request = SAML2Bindings.CreateRequest(
-                this.Issuer, SAML2Const.UrnNameIDFormatUnspecified, 
-                SAML2Const.UrnBindingsRedirect, this.RedirectUri,
-                new RSACryptoServiceProvider()).OuterXml;
+            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+                SAML2Enum.ProtocolBinding.HttpRedirect,
+                SAML2Enum.NameIDFormat.unspecified, 
+                 this.RedirectUri, new RSACryptoServiceProvider()).OuterXml;
 
             // QueryStringを生成
             // Saml2Requestのエンコ
@@ -727,10 +727,11 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.InitSaml2Params();
 
-            string saml2Request = SAML2Bindings.CreateRequest(
-                "hoge-iss", SAML2Const.UrnNameIDFormatUnspecified,
-                SAML2Const.UrnBindingsPost, "redirect_uri",
-                new RSACryptoServiceProvider()).OuterXml;
+            // Saml2Request 
+            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+                SAML2Enum.ProtocolBinding.HttpPost,
+                SAML2Enum.NameIDFormat.unspecified,
+                 this.RedirectUri, new RSACryptoServiceProvider()).OuterXml;
 
             this.SaveSaml2Params();
 
@@ -743,7 +744,11 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.InitSaml2Params();
 
-            // Postを生成
+            // Saml2Request 
+            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+                SAML2Enum.ProtocolBinding.HttpPost,
+                SAML2Enum.NameIDFormat.unspecified,
+                 this.RedirectUri, new RSACryptoServiceProvider()).OuterXml;
 
             this.SaveSaml2Params();
 

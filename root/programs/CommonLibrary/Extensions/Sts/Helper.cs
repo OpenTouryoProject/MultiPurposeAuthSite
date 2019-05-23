@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -495,7 +496,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
         /// <returns>redirect_uri</returns>
-        public string GetClientsRedirectUri(string client_id, string response_type)
+        public string GetClientsRedirectUri(string client_id, string response_type = "saml")
         {
             return this.GetClientsRedirectUri(client_id, response_type, out bool isResourceOwner);
         }
@@ -514,7 +515,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                if (response_type.ToLower() == "saml")
+                {
+                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_saml"))
+                    {
+                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_saml"];
+                    }
+                }
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_code"))
                     {
@@ -543,7 +551,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 isResourceOwner = true;
                 ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                if (response_type.ToLower() == "saml")
+                {
+                    return model.RedirectUriSaml;
+                }
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     return model.RedirectUriCode;
                 }

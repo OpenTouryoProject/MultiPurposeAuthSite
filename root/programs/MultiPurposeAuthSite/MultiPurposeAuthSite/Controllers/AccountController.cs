@@ -2020,7 +2020,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         [HttpGet]
         [HttpPost]
-        public ActionResult Saml2Request()
+        public ActionResult Saml2Request(string samlRequest, string relayState, string sigAlg)
         {
             return null;
         }
@@ -2032,7 +2032,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         [HttpPost]
         [AllowAnonymous]
-        public async Task<ActionResult> Saml2Response()
+        public async Task<ActionResult> Saml2Response(string samlRequest, string relayState, string sigAlg)
         {
             return null;
         }

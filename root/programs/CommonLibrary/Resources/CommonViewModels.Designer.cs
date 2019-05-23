@@ -268,6 +268,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   redirect_uri_saml に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RedirectUriSaml {
+            get {
+                return ResourceManager.GetString("RedirectUriSaml", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   redirect_uri_token に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RedirectUriToken {
