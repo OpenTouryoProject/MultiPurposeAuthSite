@@ -18,6 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //*  2019/02/08  西野 大介         OAuth2Starters改造
 //*  2019/02/18  西野 大介         FAPI2 CC対応実施
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -162,8 +163,9 @@ namespace MultiPurposeAuthSite.Controllers
         private bool ClarifyRedirectUri = false;
 
         #region Saml2
+
         /// <summary>認可エンドポイント</summary>
-        private string Saml2AssertionConsumerServiceEndpoint = "";
+        private string Saml2RequestEndpoint = "";
                 
         #endregion
 
@@ -201,13 +203,18 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>初期化</summary>
         private void InitSaml2Params()
         {
-            this.Saml2AssertionConsumerServiceEndpoint =
+            this.Saml2RequestEndpoint =
             Config.OAuth2AuthorizationServerEndpointsRootURI // 共用
             + Config.Saml2RequestEndpoint;
 
             // Issuer (RootURI + ClientId) 
             this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
             this.Issuer = "http://" + ClientId;
+
+            if (this.ClarifyRedirectUri)
+            {
+                this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId);
+            }
 
             // RelayStateに入れる（本来の用途と異なるが）。
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
@@ -275,7 +282,7 @@ namespace MultiPurposeAuthSite.Controllers
             + Config.OAuth2AuthorizeEndpoint;
 
             this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
-            // ココでは、まだ、response_typeが明確にならない。
+            // ココでは、まだ、response_typeが明確にならないので取得できない。
             //this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientName, response_type);
 
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
@@ -368,6 +375,9 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region Assemble
+
+        #region AssembleSaml2
+        #endregion
 
         #region AssembleOAuth2
 
@@ -700,7 +710,7 @@ namespace MultiPurposeAuthSite.Controllers
             // Saml2Request 
             string saml2Request = SAML2Bindings.CreateRequest(
                 this.Issuer, SAML2Const.UrnNameIDFormatUnspecified, 
-                SAML2Const.UrnBindingsRedirect, "",
+                SAML2Const.UrnBindingsRedirect, this.RedirectUri,
                 new RSACryptoServiceProvider()).OuterXml;
 
             // QueryStringを生成

@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2019/02/18  西野 大介         FAPI2 CC対応実施
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 
@@ -2010,6 +2011,33 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
         }
+
+        #endregion
+
+        #region Saml Endpoint
+
+        #region Saml2 Request
+
+        [HttpGet]
+        [HttpPost]
+        public ActionResult Saml2Request()
+        {
+            return null;
+        }
+
+        #endregion
+
+        #region Saml2 Response
+
+        [HttpGet]
+        [HttpPost]
+        [AllowAnonymous]
+        public async Task<ActionResult> Saml2Response()
+        {
+            return null;
+        }
+
+        #endregion
 
         #endregion
 
