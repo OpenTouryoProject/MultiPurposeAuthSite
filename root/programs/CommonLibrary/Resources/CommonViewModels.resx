@@ -117,6 +117,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="ClarifyRedirectUri" xml:space="preserve">
+    <value>Specify redirect_uri at the time of test.</value>
+  </data>
   <data name="ClientID" xml:space="preserve">
     <value>client_id</value>
   </data>

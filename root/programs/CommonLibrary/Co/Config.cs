@@ -927,6 +927,21 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region Saml2
+
+        /// <summary>
+        /// Saml2のAssertion Consumer Serviceエンドポイント 
+        /// </summary>
+        public static string Saml2AssertionConsumerServiceEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2AssertionConsumerServiceEndpoint");
+            }
+        }
+
+        #endregion
+
         #region OAuth2
 
         #region 共通設定

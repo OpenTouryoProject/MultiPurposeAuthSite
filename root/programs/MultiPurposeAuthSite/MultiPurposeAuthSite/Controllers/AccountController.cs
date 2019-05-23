@@ -2383,6 +2383,13 @@ namespace MultiPurposeAuthSite.Controllers
                 state_InSessionOrCookie = Request.Cookies["test_state"].Value;
             }
 
+            // redirect_uri
+            string redirect_uri_InSessionOrCookie = (string)Session["test_redirect_uri"];
+            if (string.IsNullOrEmpty(redirect_uri_InSessionOrCookie))
+            {
+                redirect_uri_InSessionOrCookie = Request.Cookies["test_redirect_uri"].Value;
+            }
+
             // nonce
             string nonce_InSessionOrCookie = (string)Session["test_nonce"];
             if (string.IsNullOrEmpty(nonce_InSessionOrCookie))
@@ -2402,6 +2409,8 @@ namespace MultiPurposeAuthSite.Controllers
             Response.Cookies["test_client_id"].Value = "";
             Session["test_state"] = null;
             Response.Cookies["test_state"].Value = "";
+            Session["test_redirect_uri"] = null;
+            Response.Cookies["test_redirect_uri"].Value = "";
             Session["test_code_verifier"] = null;
             Response.Cookies["test_code_verifier"].Value = "";
 
@@ -2435,9 +2444,20 @@ namespace MultiPurposeAuthSite.Controllers
                     //state正常
 
                     // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri
-                    = Config.OAuth2ClientEndpointsRootURI
-                    + Config.OAuth2AuthorizationCodeGrantClient_Account;
+
+                    // redirect_uriを設定
+                    string redirect_uri = "";
+                    if (string.IsNullOrEmpty(redirect_uri_InSessionOrCookie))
+                    {
+                        // 指定なしの場合のテストケース（指定不要
+                        //redirect_uri = Config.OAuth2ClientEndpointsRootURI
+                        //    + Config.OAuth2AuthorizationCodeGrantClient_Account;
+                    }
+                    else
+                    {
+                        // 指定ありの場合のテストケース（指定必要
+                        redirect_uri = redirect_uri_InSessionOrCookie;
+                    }
 
                     // Tokenエンドポイントにアクセス
                     if (state.StartsWith(fapi1Prefix))

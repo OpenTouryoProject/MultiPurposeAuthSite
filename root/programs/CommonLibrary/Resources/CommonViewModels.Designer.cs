@@ -61,6 +61,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Specify redirect_uri at the time of test. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClarifyRedirectUri {
+            get {
+                return ResourceManager.GetString("ClarifyRedirectUri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   client_id に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientID {

@@ -40,6 +40,10 @@ namespace MultiPurposeAuthSite.ViewModels
     /// <summary>Home > Saml2OAuth2StartersのVM</summary>
     public class HomeSaml2OAuth2StartersViewModel : BaseViewModel
     {
+        /// <summary>ClarifyRedirectUri</summary>
+        [Display(Name = "ClarifyRedirectUri", ResourceType = typeof(Resources.CommonViewModels))]
+        public bool ClarifyRedirectUri { get; set; }
+
         /// <summary>ClientType</summary>
         [Display(Name = "ClientType", ResourceType = typeof(Resources.CommonViewModels))]
         public string ClientType { get; set; }

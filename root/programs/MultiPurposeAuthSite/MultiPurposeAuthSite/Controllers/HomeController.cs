@@ -152,8 +152,24 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Params
 
+        /// <summary>Issuer</summary>
+        private string Issuer = "";
+
+        /// <summary>RedirectUri</summary>
+        private string RedirectUri = "";
+
+        /// <summary>ClarifyRedirectUri</summary>
+        private bool ClarifyRedirectUri = false;
+
+        #region Saml2
         /// <summary>認可エンドポイント</summary>
-        private string OAuthAuthorizeEndpoint = "";
+        private string Saml2AssertionConsumerServiceEndpoint = "";
+                
+        #endregion
+
+        #region OAuth2
+        /// <summary>認可エンドポイント</summary>
+        private string OAuth2AuthorizeEndpoint = "";
 
         /// <summary>ClientName</summary>
         private string ClientName = "";
@@ -172,6 +188,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>code_verifier</summary>
         private string CodeChallenge = "";
+        #endregion
 
         #endregion
 
@@ -181,8 +198,70 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region InitSaml2Params
 
-        // Init扶養（state, nonce系が無い）
-        // Save不要（state, nonce, code_verifier系が無い）
+        /// <summary>初期化</summary>
+        private void InitSaml2Params()
+        {
+            this.Saml2AssertionConsumerServiceEndpoint =
+            Config.OAuth2AuthorizationServerEndpointsRootURI // 共用
+            + Config.Saml2AssertionConsumerServiceEndpoint;
+
+            // Issuer (RootURI + ClientId) 
+            this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            this.Issuer = Config.OAuth2AuthorizationServerEndpointsRootURI + "/" + ClientId;
+
+            // RelayStateに入れる（本来の用途と異なるが）。
+            this.State = GetPassword.Generate(10, 0); // 記号は入れない。
+        }
+
+        /// <summary>保存</summary>
+        private void SaveSaml2Params()
+        {
+            // テスト用にパラメタを、Session, Cookieに保存
+            // ・Session : サイト分割時
+            // ・Cookie : 同一サイト時
+
+            // client_id → Issuer
+            Session["test_client_id"] = this.ClientId;
+            if (Request.Cookies["test_client_id"] == null)
+            {
+                Response.Cookies["test_client_id"].Value = this.ClientId;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Request.Cookies["test_client_id"].Value))
+                {
+                    Response.Cookies["test_client_id"].Value = this.ClientId;
+                }
+            }
+
+            // redirect_uri → AssertionConsumerService
+            Session["test_redirect_uri"] = this.RedirectUri;
+            if (Request.Cookies["test_redirect_uri"] == null)
+            {
+                Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Request.Cookies["test_redirect_uri"].Value))
+                {
+                    Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
+                }
+            }
+
+            // state → RelayState
+            Session["test_state"] = this.State;
+            if (Request.Cookies["test_state"] == null)
+            {
+                Response.Cookies["test_state"].Value = this.State;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Request.Cookies["test_state"].Value))
+                {
+                    Response.Cookies["test_state"].Value = this.State;
+                }
+            }
+        }
 
         #endregion
 
@@ -191,11 +270,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>初期化</summary>
         private void InitOAuth2Params()
         {
-            this.OAuthAuthorizeEndpoint =
+            this.OAuth2AuthorizeEndpoint =
             Config.OAuth2AuthorizationServerEndpointsRootURI
             + Config.OAuth2AuthorizeEndpoint;
 
             this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
+            // ココでは、まだ、response_typeが明確にならない。
+            //this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientName, response_type);
 
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
             this.Nonce = GetPassword.Generate(20, 0); // 記号は入れない。
@@ -207,7 +288,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>保存</summary>
         private void SaveOAuth2Params()
         {
-            // テスト用にstate, nonce, code_verifierを、Session, Cookieに保存
+            // テスト用にパラメタを、Session, Cookieに保存
             // ・Session : サイト分割時
             // ・Cookie : 同一サイト時
 
@@ -236,6 +317,20 @@ namespace MultiPurposeAuthSite.Controllers
                 if (string.IsNullOrEmpty(Request.Cookies["test_state"].Value))
                 {
                     Response.Cookies["test_state"].Value = this.State;
+                }
+            }
+
+            // redirect_uri
+            Session["test_redirect_uri"] = this.RedirectUri;
+            if (Request.Cookies["test_redirect_uri"] == null)
+            {
+                Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(Request.Cookies["test_redirect_uri"].Value))
+                {
+                    Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
                 }
             }
 
@@ -274,23 +369,44 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Assemble
 
-        #region AssembleSaml2
-
-        // パターン少ないので不要
-
-        #endregion
-
         #region AssembleOAuth2
+
+        /// <summary>OAuth2スターターを組み立てて返す</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>組み立てたOAuth2スターター</returns>
+        /// 
+        /// <summary>OAuth2スターターにRedirectUriを組み込む</summary>
+        /// <param name="redirect">string</param>
+        /// <param name="response_type">string</param>
+        /// <returns>OAuth2スターター</returns>
+        private string AndAddRedirectUriToOAuth2Starter(string redirect, string response_type)
+        {
+            if (this.ClarifyRedirectUri)
+            {
+                this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                return redirect + "&redirect_uri=" + this.RedirectUri;
+            }
+            else
+            {
+                return redirect;
+            }
+        }
 
         /// <summary>OAuth2スターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたOAuth2スターター</returns>
         private string AssembleOAuth2Starter(string response_type)
         {
-            return this.OAuthAuthorizeEndpoint +
+            string temp = "";
+
+            temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.StandardScopes, this.State);
+
+            temp = AndAddRedirectUriToOAuth2Starter(temp, response_type);
+
+            return temp;
         }
 
         /// <summary>OIDCスターターを組み立てて返す</summary>
@@ -298,11 +414,17 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>組み立てたOIDCスターター</returns>
         private string AssembleOidcStarter(string response_type)
         {
-            return this.OAuthAuthorizeEndpoint +
+            string temp = "";
+
+            temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes, this.State)
                     + "&nonce=" + this.Nonce;
+
+            temp = AndAddRedirectUriToOAuth2Starter(temp, response_type);
+
+            return temp;
         }
 
         /// <summary>FAPI1スターターを組み立てて返す</summary>
@@ -310,26 +432,38 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>組み立てたFAPI1スターター</returns>
         private string AssembleFAPI1Starter(string response_type)
         {
-            return this.OAuthAuthorizeEndpoint +
+            string temp = "";
+
+            temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.StandardScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State);
             // テストコードで、clientを識別するために、Stateに細工する。
+
+            temp = AndAddRedirectUriToOAuth2Starter(temp, response_type);
+
+            return temp;
         }
 
-        /// <summary>FAPI1 + OIDCSスターターを組み立てて返す</summary>
+        /// <summary>FAPI1 + OIDCスターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたFAPI1スターター</returns>
         private string AssembleFAPI1_OIDCStarter(string response_type)
         {
-            return this.OAuthAuthorizeEndpoint +
+            string temp = "";
+
+            temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":" + this.State)
                     + "&nonce=" + this.Nonce;
             // テストコードで、clientを識別するために、Stateに細工する。
+
+            temp = AndAddRedirectUriToOAuth2Starter(temp, response_type);
+
+            return temp;
         }
 
         /// <summary>FAPI2スターターを組み立てて返す</summary>
@@ -337,13 +471,19 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>組み立てたFAPI2スターター</returns>
         private string AssembleFAPI2Starter(string response_type)
         {
-            return this.OAuthAuthorizeEndpoint +
+            string temp = "";
+
+            temp = this.OAuth2AuthorizeEndpoint +
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes,
                     OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State)
                     + "&nonce=" + this.Nonce;
             // テストコードで、clientを識別するために、Stateに細工する。
+
+            temp = AndAddRedirectUriToOAuth2Starter(temp, response_type);
+
+            return temp;
         }
 
         #endregion
@@ -393,13 +533,16 @@ namespace MultiPurposeAuthSite.Controllers
                 // AccountLoginViewModelの検証
                 if (ModelState.IsValid)
                 {
+                    // RedirectUriの扱い
+                    this.ClarifyRedirectUri = model.ClarifyRedirectUri;
+
                     #region Client選択
                     if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit())
                     {
                         // OAuth2.0 / OIDC用 Client
                         this.ClientName = "TestClient";
                     }
-                    else if(model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
+                    else if (model.ClientType == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
                     {
                         // Financial-grade API - Part1用 Client
                         this.ClientName = "TestClient1";
@@ -420,118 +563,120 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                     }
                     #endregion
-                }
 
-                if (!string.IsNullOrEmpty(this.ClientName))
-                {
-                    #region Starter
+                    #region Starterの実行
+                    if (!string.IsNullOrEmpty(this.ClientName))
+                    {
+                        #region SAML2
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2RedirectRedirectBinding")))
+                        {
+                            return this.Saml2RedirectRedirectBinding();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2RedirectPostBinding")))
+                        {
+                            return this.Saml2RedirectPostBinding();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2PostPostBinding")))
+                        {
+                            return this.Saml2PostPostBinding();
+                        }
+                        #endregion
 
-                    #region SAML2
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2RedirectRedirectBinding")))
-                    {
-                        return this.Saml2RedirectRedirectBinding();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2RedirectPostBinding")))
-                    {
-                        return this.Saml2RedirectPostBinding();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2PostPostBinding")))
-                    {
-                        return this.Saml2PostPostBinding();
-                    }
-                    #endregion
+                        #region OAuth2
 
-                    #region AuthorizationCode系
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode")))
-                    {
-                        return this.AuthorizationCode();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_FormPost")))
-                    {
-                        return this.AuthorizationCode_FormPost();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_OIDC")))
-                    {
-                        return this.AuthorizationCode_OIDC();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_OIDC_FormPost")))
-                    {
-                        return this.AuthorizationCode_OIDC_FormPost();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_PKCE_Plain")))
-                    {
-                        return this.AuthorizationCode_PKCE_Plain();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_PKCE_S256")))
-                    {
-                        return this.AuthorizationCode_PKCE_S256();
-                    }
-                    #endregion
+                        #region AuthorizationCode系
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode")))
+                        {
+                            return this.AuthorizationCode();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_FormPost")))
+                        {
+                            return this.AuthorizationCode_FormPost();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_OIDC")))
+                        {
+                            return this.AuthorizationCode_OIDC();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_OIDC_FormPost")))
+                        {
+                            return this.AuthorizationCode_OIDC_FormPost();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_PKCE_Plain")))
+                        {
+                            return this.AuthorizationCode_PKCE_Plain();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCode_PKCE_S256")))
+                        {
+                            return this.AuthorizationCode_PKCE_S256();
+                        }
+                        #endregion
 
-                    #region Implicit系
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit")))
-                    {
-                        return this.Implicit();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit_OIDC1")))
-                    {
-                        return this.Implicit_OIDC1();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit_OIDC2")))
-                    {
-                        return this.Implicit_OIDC2();
-                    }
-                    #endregion
+                        #region Implicit系
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit")))
+                        {
+                            return this.Implicit();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit_OIDC1")))
+                        {
+                            return this.Implicit_OIDC1();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Implicit_OIDC2")))
+                        {
+                            return this.Implicit_OIDC2();
+                        }
+                        #endregion
 
-                    #region Hybrid系
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC1")))
-                    {
-                        return this.Hybrid_OIDC1();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC2")))
-                    {
-                        return this.Hybrid_OIDC2();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC3")))
-                    {
-                        return this.Hybrid_OIDC3();
-                    }
-                    #endregion
+                        #region Hybrid系
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC1")))
+                        {
+                            return this.Hybrid_OIDC1();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC2")))
+                        {
+                            return this.Hybrid_OIDC2();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Hybrid_OIDC3")))
+                        {
+                            return this.Hybrid_OIDC3();
+                        }
+                        #endregion
 
-                    #region F-API系
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1")))
-                    {
-                        return this.AuthorizationCodeFAPI1();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1_OIDC")))
-                    {
-                        return this.AuthorizationCodeFAPI1_OIDC();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1_OIDC_FormPost")))
-                    {
-                        return this.AuthorizationCodeFAPI1_OIDC_FormPost();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI2")))
-                    {
-                        return this.AuthorizationCodeFAPI2();
-                    }
-                    #endregion
+                        #region F-API系
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1")))
+                        {
+                            return this.AuthorizationCodeFAPI1();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1_OIDC")))
+                        {
+                            return this.AuthorizationCodeFAPI1_OIDC();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI1_OIDC_FormPost")))
+                        {
+                            return this.AuthorizationCodeFAPI1_OIDC_FormPost();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI2")))
+                        {
+                            return this.AuthorizationCodeFAPI2();
+                        }
+                        #endregion
 
-                    #region Another系
-                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestResourceOwnerPasswordCredentialsFlow")))
-                    {
-                        return await this.TestResourceOwnerPasswordCredentialsFlow();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestClientCredentialsFlow")))
-                    {
-                        return await this.TestClientCredentialsFlow();
-                    }
-                    else if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestJWTBearerTokenFlow")))
-                    {
-                        return await this.TestJWTBearerTokenFlow();
-                    }
-                    #endregion
+                        #region Another系
+                        if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestResourceOwnerPasswordCredentialsFlow")))
+                        {
+                            return await this.TestResourceOwnerPasswordCredentialsFlow();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestClientCredentialsFlow")))
+                        {
+                            return await this.TestClientCredentialsFlow();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.TestJWTBearerTokenFlow")))
+                        {
+                            return await this.TestJWTBearerTokenFlow();
+                        }
+                        #endregion
 
+                        #endregion
+                    }
                     #endregion
                 }
 
@@ -550,29 +695,47 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Saml2RedirectRedirectBinding()
         {
-            // Redirectを生成
+            this.InitSaml2Params();
+
+            // Saml2Request 
             string saml2Request = SAML2Bindings.CreateRequest(
-                "hoge-iss", SAML2Const.UrnNameIDFormatUnspecified, 
-                SAML2Const.UrnBindingsRedirect, "redirect_uri",
+                this.Issuer, SAML2Const.UrnNameIDFormatUnspecified, 
+                SAML2Const.UrnBindingsRedirect, "",
                 new RSACryptoServiceProvider()).OuterXml;
-            
-            return null;
+
+            // QueryStringを生成
+            // Saml2Requestのエンコ
+
+            this.SaveSaml2Params();
+
+            return Redirect("");
         }
 
         /// <summary>Test Saml2 Redirect & Post Binding</summary>
         /// <returns>ActionResult</returns>
         private ActionResult Saml2RedirectPostBinding()
         {
-            // Redirectを生成
+            this.InitSaml2Params();
 
-            return null;
+            string saml2Request = SAML2Bindings.CreateRequest(
+                "hoge-iss", SAML2Const.UrnNameIDFormatUnspecified,
+                SAML2Const.UrnBindingsPost, "redirect_uri",
+                new RSACryptoServiceProvider()).OuterXml;
+
+            this.SaveSaml2Params();
+
+            return Redirect("");
         }
 
         /// <summary>Test Saml2 Post & Post Binding</summary>
         /// <returns>ActionResult</returns>
         private ActionResult Saml2PostPostBinding()
         {
+            this.InitSaml2Params();
+
             // Postを生成
+
+            this.SaveSaml2Params();
 
             return null;
         }
@@ -590,11 +753,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCode()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow
-            return Redirect(this.AssembleOAuth2Starter(
-                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+            string redirect = this.AssembleOAuth2Starter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         /// <summary>Test Authorization Code Flow (form_post)</summary>
@@ -602,12 +768,15 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCode_FormPost()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (form_post)
-            return Redirect(this.AssembleOAuth2Starter(
+            string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                + "&response_mode=form_post");
+                + "&response_mode=form_post";
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
@@ -619,12 +788,15 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCode_OIDC()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (OIDC)
-            return Redirect(this.AssembleOidcStarter(
+            string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                + "&prompt=none");
+                + "&prompt=none";
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         /// <summary>Test Authorization Code Flow (OIDC, form_post)</summary>
@@ -632,13 +804,16 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCode_OIDC_FormPost()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (OIDC, form_post)
-            return Redirect(this.AssembleOidcStarter(
+            string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none"
-                + "&response_mode=form_post");
+                + "&response_mode=form_post";
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
@@ -652,15 +827,21 @@ namespace MultiPurposeAuthSite.Controllers
         public ActionResult AuthorizationCode_PKCE_Plain()
         {
             this.InitOAuth2Params();
+
+            // 追加のパラメタ
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = this.CodeVerifier;
             this.SaveOAuth2Params();
 
             // Authorization Code Flow (PKCE plain)
-            return Redirect(this.AssembleOAuth2Starter(
+            string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain);
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain;
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
@@ -668,15 +849,21 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCode_PKCE_S256()
         {
             this.InitOAuth2Params();
+
+            // 追加のパラメタ
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
             this.SaveOAuth2Params();
 
             // Authorization Code Flow (PKCE S256)
-            return Redirect(this.AssembleOAuth2Starter(
+            string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256);
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256;
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
@@ -692,11 +879,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Implicit()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Implicit Flow
-            return Redirect(this.AssembleOAuth2Starter(
-                OAuth2AndOIDCConst.ImplicitResponseType));
+            string redirect = this.AssembleOAuth2Starter(
+                OAuth2AndOIDCConst.ImplicitResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
@@ -708,11 +898,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Implicit_OIDC1()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Implicit Flow 'id_token'(OIDC)
-            return Redirect(this.AssembleOidcStarter(
-                OAuth2AndOIDCConst.OidcImplicit1_ResponseType));
+            string redirect = this.AssembleOidcStarter(
+                OAuth2AndOIDCConst.OidcImplicit1_ResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
 
@@ -721,11 +914,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Implicit_OIDC2()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Implicit Flow 'id_token token'(OIDC)
-            return Redirect(this.AssembleOidcStarter(
-                OAuth2AndOIDCConst.OidcImplicit2_ResponseType));
+            string redirect = this.AssembleOidcStarter(
+                OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
@@ -741,11 +937,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Hybrid_OIDC1()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Hybrid Flow 'code id_token'(OIDC)
-            return Redirect(this.AssembleOidcStarter(
-                OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType));
+            string redirect = this.AssembleOidcStarter(
+                OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         /// <summary>Test Hybrid Flow 'code token'(OIDC)</summary>
@@ -753,11 +952,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Hybrid_OIDC2()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Hybrid Flow 'code token'(OIDC)
-            return Redirect(this.AssembleOidcStarter(
-                OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType));
+            string redirect = this.AssembleOidcStarter(
+                OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         /// <summary>Test Hybrid Flow 'code id_token token'(OIDC)</summary>
@@ -765,11 +967,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Hybrid_OIDC3()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Hybrid Flow 'code id_token token'(OIDC)
-            return Redirect(this.AssembleOidcStarter(
-                OAuth2AndOIDCConst.OidcHybrid3_ResponseType));
+            string redirect = this.AssembleOidcStarter(
+                OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
@@ -785,11 +990,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCodeFAPI1()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (FAPI1)
-            return Redirect(this.AssembleFAPI1Starter(
-                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+            string redirect = this.AssembleFAPI1Starter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         /// <summary>Test Authorization Code Flow (FAPI1, OIDC)</summary>
@@ -797,11 +1005,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCodeFAPI1_OIDC()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (FAPI1, OIDC)
-            return Redirect(this.AssembleFAPI1_OIDCStarter(
-                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+            string redirect = this.AssembleFAPI1_OIDCStarter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         /// <summary>Test Authorization Code Flow (FAPI1, OIDC, form_post)</summary>
@@ -809,13 +1020,16 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCodeFAPI1_OIDC_FormPost()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (FAPI1, OIDC, form_post)
-            return Redirect(this.AssembleFAPI1_OIDCStarter(
+            string redirect = this.AssembleFAPI1_OIDCStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none"
-                + "&response_mode=form_post");
+                + "&response_mode=form_post";
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
@@ -827,11 +1041,14 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult AuthorizationCodeFAPI2()
         {
             this.InitOAuth2Params();
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow
-            return Redirect(this.AssembleFAPI2Starter(
-                OAuth2AndOIDCConst.AuthorizationCodeResponseType));
+            string redirect = this.AssembleFAPI2Starter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+
+            this.SaveOAuth2Params();
+
+            return Redirect(redirect);
         }
 
         #endregion
