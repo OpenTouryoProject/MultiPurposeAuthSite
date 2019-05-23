@@ -38,7 +38,7 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite;
 #endif
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;

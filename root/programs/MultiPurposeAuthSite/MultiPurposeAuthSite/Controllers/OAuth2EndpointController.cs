@@ -39,7 +39,7 @@ using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Log;
 
 using MultiPurposeAuthSite.TokenProviders;
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Text;

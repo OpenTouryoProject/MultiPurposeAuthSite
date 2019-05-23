@@ -40,7 +40,7 @@ using System.Collections.Concurrent;
 
 using Dapper;
 
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
     /// RevocationProvider

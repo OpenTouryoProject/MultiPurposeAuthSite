@@ -32,7 +32,7 @@ using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.TokenProviders;
 using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
-using OAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
@@ -1832,7 +1832,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string redirect_uri = Config.IdFederationRedirectEndPoint;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                    model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                              new Uri(Config.IdFederationTokenEndPoint),
                             client_id, client_secret, redirect_uri, code, "");
 
@@ -2071,7 +2071,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // ★ 必要に応じてスコープのフィルタ
                         if (isAuth)
                         {
-                            scopes = OAuth2.Helper.FilterClaimAtAuth(scopes).ToArray();
+                            scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
                         }
 
                         // ★ Codeの生成
@@ -2475,7 +2475,7 @@ namespace MultiPurposeAuthSite.Controllers
                             OAuth2AndOIDCParams.RS256Pfx,
                             OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
 
-                        model.Response = await OAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                        model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                             tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
                                 iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
                                 ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
@@ -2487,7 +2487,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //  client_Idと、クライアント証明書（TB）
                         string client_id = clientId_InSessionOrCookie;
 
-                        model.Response = await OAuth2.Helper.GetInstance()
+                        model.Response = await Sts.Helper.GetInstance()
                             .GetAccessTokenByCodeAsync(tokenEndpointUri,
                             client_id, "", redirect_uri, code);
                     }
@@ -2497,19 +2497,19 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = clientId_InSessionOrCookie;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
                         if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                         {
                             // 通常
-                            model.Response = await OAuth2.Helper.GetInstance()
+                            model.Response = await Sts.Helper.GetInstance()
                                 .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                 client_id, client_secret, redirect_uri, code);
                         }
                         else
                         {
                             // PKCE
-                            model.Response = await OAuth2.Helper.GetInstance()
+                            model.Response = await Sts.Helper.GetInstance()
                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                client_id, client_secret, redirect_uri,
                                code, code_verifier_InSessionOrCookie);
@@ -2617,7 +2617,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(Request.Form.Get("submit.GetUserClaims")))
                     {
                         // UserInfoエンドポイントにアクセス
-                        model.Response = await OAuth2.Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
+                        model.Response = await Sts.Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
                     }
                     else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Refresh")))
                     {
@@ -2630,9 +2630,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2.Helper.GetInstance().
+                        model.Response = await Sts.Helper.GetInstance().
                             UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
 
@@ -2680,9 +2680,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2.Helper.GetInstance().RevokeTokenAsync(
+                        model.Response = await Sts.Helper.GetInstance().RevokeTokenAsync(
                             revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -2715,9 +2715,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2.Helper.GetInstance().IntrospectTokenAsync(
+                        model.Response = await Sts.Helper.GetInstance().IntrospectTokenAsync(
                             introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion

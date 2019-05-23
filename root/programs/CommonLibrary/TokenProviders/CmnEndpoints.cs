@@ -52,7 +52,7 @@ using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;

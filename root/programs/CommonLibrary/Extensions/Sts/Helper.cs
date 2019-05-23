@@ -69,7 +69,7 @@ using Newtonsoft.Json;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
 
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>Helper（ライブラリ）</summary>
     public class Helper

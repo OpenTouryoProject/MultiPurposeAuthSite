@@ -408,7 +408,7 @@
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
     <Content Include="Views\Manage\OAuth2AuthorizationCodeGrantClient.cshtml" />
-    <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
+    <Content Include="Views\Manage\AddSaml2OAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Manage\AddMsPassData.cshtml" />
     <Content Include="Views\Home\Saml2OAuth2Starters.cshtml" />

@@ -7,7 +7,7 @@
 
 //**********************************************************************************
 //* クラス名        ：ManageAddSaml2OAuth2DataViewModel
-//* クラス日本語名  ：OAuth2関連の非構造化データ設定用のVM（テンプレート）
+//* クラス日本語名  ：Saml2, OAuth2関連の非構造化データ設定用のVM（テンプレート）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -37,7 +37,7 @@ using Touryo.Infrastructure.Public.FastReflection;
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>
 namespace MultiPurposeAuthSite.ViewModels
 {
-    /// <summary>OAuth2関連の非構造化データ設定用のVM</summary>
+    /// <summary>Saml2, OAuth2関連の非構造化データ設定用のVM</summary>
     public class ManageAddSaml2OAuth2DataViewModel : BaseViewModel
     {
         /// <summary>ClientID</summary>
@@ -95,7 +95,7 @@ namespace MultiPurposeAuthSite.ViewModels
                 return new List<SelectListItem>()
                 {
                     new SelectListItem() {
-                        Text = "OAuth2.0 / OIDC",
+                        Text = "Saml2, OAuth2.0 / OIDC",
                         Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part1",

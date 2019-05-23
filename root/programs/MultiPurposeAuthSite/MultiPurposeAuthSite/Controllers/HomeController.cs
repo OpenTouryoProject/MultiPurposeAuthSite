@@ -24,7 +24,7 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.ViewModels;
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Web;
@@ -203,11 +203,11 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.Saml2AssertionConsumerServiceEndpoint =
             Config.OAuth2AuthorizationServerEndpointsRootURI // 共用
-            + Config.Saml2AssertionConsumerServiceEndpoint;
+            + Config.Saml2RequestEndpoint;
 
             // Issuer (RootURI + ClientId) 
             this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
-            this.Issuer = Config.OAuth2AuthorizationServerEndpointsRootURI + "/" + ClientId;
+            this.Issuer = "http://" + ClientId;
 
             // RelayStateに入れる（本来の用途と異なるが）。
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。

@@ -50,6 +50,14 @@ namespace MultiPurposeAuthSite
             // ・ url：URIパターン。
             // ・ defaults：初期値。 
 
+            // Saml2
+            routes.MapRoute(
+                name: "Saml2Request",
+                url: Config.Saml2RequestEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "Account", action = "Saml2Request" }
+            );
+
+            // OAuth2
             routes.MapRoute(
                 name: "OAuth2Authorize",
                 url: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除

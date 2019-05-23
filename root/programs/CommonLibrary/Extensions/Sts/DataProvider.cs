@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：DataProvider
-//* クラス日本語名  ：DataProvider（ライブラリ）
+//* クラス日本語名  ：Saml2OAuth2DataにUnstructuredDataを保存する。
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -40,7 +40,7 @@ using System.Collections.Concurrent;
 
 using Dapper;
 
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
     /// DataProvider

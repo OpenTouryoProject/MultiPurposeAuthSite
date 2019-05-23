@@ -929,14 +929,27 @@ namespace MultiPurposeAuthSite.Co
 
         #region Saml2
 
+        // 基本的に、OAuth2/OIDCインフラを流用
+
         /// <summary>
-        /// Saml2のAssertion Consumer Serviceエンドポイント 
+        /// Saml2のRequestエンドポイント 
         /// </summary>
-        public static string Saml2AssertionConsumerServiceEndpoint
+        public static string Saml2RequestEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("Saml2AssertionConsumerServiceEndpoint");
+                return GetConfigParameter.GetConfigValue("Saml2RequestEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// Saml2のResponseエンドポイント 
+        /// </summary>
+        public static string Saml2ResponseEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2ResponseEndpoint");
             }
         }
 
