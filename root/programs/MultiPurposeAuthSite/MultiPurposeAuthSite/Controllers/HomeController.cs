@@ -705,54 +705,94 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Saml2RedirectRedirectBinding()
         {
+            string id = "";
+            string saml2Request = "";
+
             this.InitSaml2Params();
-
+            
             // Saml2Request 
-            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+            saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
                 SAML2Enum.ProtocolBinding.HttpRedirect,
-                SAML2Enum.NameIDFormat.unspecified, 
-                 this.RedirectUri, new RSACryptoServiceProvider()).OuterXml;
+                SAML2Enum.NameIDFormat.unspecified, this.RedirectUri, out id).OuterXml;
 
-            // QueryStringを生成
-            // Saml2Requestのエンコ
+            // Saml2Requestのエンコと、QueryStringを生成（ + 署名）
+            DigitalSignParam dsXXXX = new DigitalSignParam(EnumDigitalSignAlgorithm.RsaCSP_SHA1);
+
+            string queryString = SAML2Bindings.EncodeRedirect(
+                SAML2Enum.RequestOrResponse.Request,
+                saml2Request, this.State, dsXXXX);
 
             this.SaveSaml2Params();
 
-            return Redirect("");
+            // 検証できるか確認
+            string test = SAML2Bindings.DecodeRedirect(queryString, dsXXXX);
+
+            // Redirect
+            return Redirect(Config.OAuth2AuthorizationServerEndpointsRootURI
+                + Config.Saml2RequestEndpoint + "?" + queryString);
         }
 
         /// <summary>Test Saml2 Redirect & Post Binding</summary>
         /// <returns>ActionResult</returns>
         private ActionResult Saml2RedirectPostBinding()
         {
+            string id = "";
+            string saml2Request = "";
+
             this.InitSaml2Params();
 
             // Saml2Request 
-            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+            saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.unspecified,
-                 this.RedirectUri, new RSACryptoServiceProvider()).OuterXml;
+                this.RedirectUri, out id, new RSACryptoServiceProvider()).OuterXml;
+
+            // Saml2Requestのエンコと、QueryStringを生成（ + 署名）
+            DigitalSignParam dsXXXX = new DigitalSignParam(EnumDigitalSignAlgorithm.RsaCSP_SHA1);
+
+            saml2Request = SAML2Bindings.EncodeRedirect(
+                SAML2Enum.RequestOrResponse.Request,
+                saml2Request, this.State, dsXXXX);
 
             this.SaveSaml2Params();
 
-            return Redirect("");
+            // 検証できるか確認
+
+            // Redirect
+            return Redirect(Config.OAuth2AuthorizationServerEndpointsRootURI
+                + Config.Saml2RequestEndpoint + "?" + saml2Request);
         }
 
         /// <summary>Test Saml2 Post & Post Binding</summary>
         /// <returns>ActionResult</returns>
         private ActionResult Saml2PostPostBinding()
         {
+            string id = "";
+            string saml2Request = "";
+
             this.InitSaml2Params();
 
-            // Saml2Request 
-            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+            // Saml2Request
+            RSA rsa = new RSACryptoServiceProvider();
+
+            saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.unspecified,
-                 this.RedirectUri, new RSACryptoServiceProvider()).OuterXml;
+                this.RedirectUri, out id, rsa).OuterXml;
+
+            // Saml2Requestのエンコと、QueryStringを生成（ + 署名）
+            saml2Request = SAML2Bindings.EncodePost(saml2Request, id, rsa);
 
             this.SaveSaml2Params();
 
-            return null;
+            // 検証できるか確認
+
+            // Post
+            ViewData["RelayState"] = this.State;
+            ViewData["SAMLRequest"] = saml2Request;
+            ViewData["Action"] = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
+
+            return View("PostBinding");
         }
 
         #endregion

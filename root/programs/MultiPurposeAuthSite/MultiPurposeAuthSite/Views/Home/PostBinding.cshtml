@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：PostBinding(SAMLResponse)
-    //* クラス日本語名  ：SAML2のHTTP POST Binding(SAMLResponse)用のView
+    //* クラス名        ：PostBinding(SAMLRequest)
+    //* クラス日本語名  ：SAML2のHTTP POST Binding(SAMLRequest)用のView
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -27,7 +27,7 @@
 <body onload="javascript: document.forms[0].submit();">
     <form method="post" action="@ViewData["Action"]">
         <input type="hidden" name="RelayState" value="@ViewData["RelayState"]" />
-        <input type="hidden" name="SAMLResponse" value="@ViewData["SAMLResponse"]" />
+        <input type="hidden" name="SAMLRequest" value="@ViewData["SAMLRequest"]" />
     </form>
 </body>
 </html>

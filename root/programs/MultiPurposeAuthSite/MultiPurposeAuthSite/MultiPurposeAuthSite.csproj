@@ -429,6 +429,7 @@
     <Content Include="Scripts\popper-utils.js.map" />
     <Content Include="Views\Account\FormPost.cshtml" />
     <Content Include="Views\Account\PostBinding.cshtml" />
+    <Content Include="Views\Home\PostBinding.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

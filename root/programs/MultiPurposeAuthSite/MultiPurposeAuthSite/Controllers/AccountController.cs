@@ -154,55 +154,20 @@ namespace MultiPurposeAuthSite.Controllers
             // データの生成
             await this.CreateData();
 
-            string cmnPattern = "";
-
-            #region ReturnUrl
-
-            cmnPattern = "ReturnUrl=";
-
-            if (string.IsNullOrEmpty(returnUrl)
-                && Request.RawUrl.IndexOf(cmnPattern) != -1)
-            {
-                if (Request.RawUrl.Contains('&'))
-                {
-                    // 正規表現でreturnUrlを抜き出す。
-                    string regexPattern = "(" + cmnPattern + ")(?<returnUrl>.+?)(\\&)";
-                    returnUrl = CustomEncode.UrlDecode(Regex.Match(Request.RawUrl, regexPattern).Groups["returnUrl"].Value);
-                }
-                else
-                {
-                    // IndexOf & SubstringでreturnUrlを抜き出す。
-                    returnUrl = CustomEncode.UrlDecode(Request.RawUrl.Substring(Request.RawUrl.IndexOf(cmnPattern) + cmnPattern.Length));
-                }
-            }
-
-            // ReturnUrl
-            ViewBag.ReturnUrl = returnUrl;
-
-            #endregion
-
-            #region LoginHint
-
             string loginHint = "";
-            cmnPattern = "login_hint=";
 
             if (!string.IsNullOrEmpty(returnUrl))
             {
-                if (returnUrl.IndexOf(cmnPattern) != -1)
-                {
-                    // IndexOf & SubstringでloginHintを抜き出す。
-                    loginHint = returnUrl.Substring(returnUrl.IndexOf(cmnPattern) + cmnPattern.Length);
-                    if (loginHint.IndexOf('&') != -1)
-                    {
-                        loginHint = loginHint.Substring(0, loginHint.IndexOf('&'));
-                    }
-                }
+                // RawUrlから、UrlデコードしたReturnUrlを取得
+                returnUrl = CustomEncode.UrlDecode(
+                    StringExtractor.GetParameterFromQueryString("ReturnUrl", Request.RawUrl));
+                //ViewBag.ReturnUrl = returnUrl;
 
-                // ReturnUrl
-                ViewBag.LoginHint = loginHint;
+                // ReturnUrlからLoginHintを取得
+                loginHint = CustomEncode.UrlDecode(
+                    StringExtractor.GetParameterFromQueryString("login_hint", returnUrl));
+                //ViewBag.LoginHint = loginHint;
             }
-
-            #endregion
 
             // サインイン画面（初期表示）
             string fido2Challenge = "";
@@ -2018,10 +1983,39 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Saml2 Request
 
-        [HttpGet]
-        [HttpPost]
         public ActionResult Saml2Request(string samlRequest, string relayState, string sigAlg)
         {
+            if (string.IsNullOrEmpty(sigAlg))
+            {
+                // 署名検証しない。
+            }
+            else
+            {
+                // 署名検証する。
+
+                if (SAML2Const.RSAwithSHA1 == sigAlg)
+                {
+                    // サポートする
+                }
+                else if (SAML2Const.RSAwithSHA1 == sigAlg)
+                {
+                    // サポートしない
+                }
+                else
+                {
+                    // サポートしない
+                }
+            }
+
+            if (Request.HttpMethod.ToLower() == "get")
+            {
+                // ...
+            }
+            else if (Request.HttpMethod.ToLower() == "post")
+            {
+                // ...
+            }
+
             return null;
         }
 
@@ -2029,10 +2023,8 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Saml2 Response
 
-        [HttpGet]
-        [HttpPost]
         [AllowAnonymous]
-        public async Task<ActionResult> Saml2Response(string samlRequest, string relayState, string sigAlg)
+        public ActionResult Saml2Response(string samlRequest, string relayState, string sigAlg)
         {
             return null;
         }
