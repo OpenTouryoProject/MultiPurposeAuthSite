@@ -1985,31 +1985,29 @@ namespace MultiPurposeAuthSite.Controllers
 
         public ActionResult Saml2Request(string samlRequest, string relayState, string sigAlg)
         {
-            if (string.IsNullOrEmpty(sigAlg))
+            if (Request.HttpMethod.ToLower() == "get")
             {
-                // 署名検証しない。
-            }
-            else
-            {
-                // 署名検証する。
-
-                if (SAML2Const.RSAwithSHA1 == sigAlg)
+                if (string.IsNullOrEmpty(sigAlg))
                 {
-                    // サポートする
-                }
-                else if (SAML2Const.RSAwithSHA1 == sigAlg)
-                {
-                    // サポートしない
+                    // 署名検証しない。
                 }
                 else
                 {
-                    // サポートしない
-                }
-            }
+                    // 署名検証する。
 
-            if (Request.HttpMethod.ToLower() == "get")
-            {
-                // ...
+                    if (SAML2Const.RSAwithSHA1 == sigAlg)
+                    {
+                        // サポートする
+                    }
+                    else if (SAML2Const.RSAwithSHA1 == sigAlg)
+                    {
+                        // サポートしない
+                    }
+                    else
+                    {
+                        // サポートしない
+                    }
+                }
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {

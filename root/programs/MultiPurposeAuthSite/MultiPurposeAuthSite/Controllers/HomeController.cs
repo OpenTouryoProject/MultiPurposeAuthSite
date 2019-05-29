@@ -706,12 +706,11 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Saml2RedirectRedirectBinding()
         {
             string id = "";
-            string saml2Request = "";
-
-            this.InitSaml2Params();
             
+            this.InitSaml2Params();
+
             // Saml2Request 
-            saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
                 SAML2Enum.ProtocolBinding.HttpRedirect,
                 SAML2Enum.NameIDFormat.unspecified, this.RedirectUri, out id).OuterXml;
 
@@ -727,8 +726,14 @@ namespace MultiPurposeAuthSite.Controllers
             // 検証できるか確認
             string test = SAML2Bindings.DecodeRedirect(queryString, dsXXXX);
 
+            //// XSDスキーマによる検証
+            //bool ret = SAML2Bindings.VerifySamlByXmlSchema(test, SAML2Enum.SamlSchema.Request);
+            // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
+            // The XML is valid.
+
             // Redirect
-            return Redirect(Config.OAuth2AuthorizationServerEndpointsRootURI
+            return Redirect(
+                Config.OAuth2AuthorizationServerEndpointsRootURI
                 + Config.Saml2RequestEndpoint + "?" + queryString);
         }
 
@@ -737,29 +742,34 @@ namespace MultiPurposeAuthSite.Controllers
         private ActionResult Saml2RedirectPostBinding()
         {
             string id = "";
-            string saml2Request = "";
 
             this.InitSaml2Params();
 
             // Saml2Request 
-            saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
+            string saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.unspecified,
-                this.RedirectUri, out id, new RSACryptoServiceProvider()).OuterXml;
+                this.RedirectUri, out id).OuterXml;
 
             // Saml2Requestのエンコと、QueryStringを生成（ + 署名）
             DigitalSignParam dsXXXX = new DigitalSignParam(EnumDigitalSignAlgorithm.RsaCSP_SHA1);
 
-            saml2Request = SAML2Bindings.EncodeRedirect(
+            string queryString = SAML2Bindings.EncodeRedirect(
                 SAML2Enum.RequestOrResponse.Request,
                 saml2Request, this.State, dsXXXX);
 
             this.SaveSaml2Params();
 
             // 検証できるか確認
+            string test = SAML2Bindings.DecodeRedirect(queryString, dsXXXX);
+
+            // XSDスキーマによる検証
+            // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
+            // The XML is valid.
 
             // Redirect
-            return Redirect(Config.OAuth2AuthorizationServerEndpointsRootURI
+            return Redirect(
+                Config.OAuth2AuthorizationServerEndpointsRootURI
                 + Config.Saml2RequestEndpoint + "?" + saml2Request);
         }
 
@@ -778,14 +788,19 @@ namespace MultiPurposeAuthSite.Controllers
             saml2Request = SAML2Bindings.CreateRequest(this.Issuer,
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.unspecified,
-                this.RedirectUri, out id, rsa).OuterXml;
+                this.RedirectUri, out id).OuterXml;
 
-            // Saml2Requestのエンコと、QueryStringを生成（ + 署名）
+            // Saml2Requestのエンコと、署名
             saml2Request = SAML2Bindings.EncodePost(saml2Request, id, rsa);
 
             this.SaveSaml2Params();
 
             // 検証できるか確認
+            string test = SAML2Bindings.DecodePost(saml2Request, id, rsa);
+
+            // XSDスキーマによる検証
+            // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
+            // The XML is valid. (ただし、Signature要素は外す。
 
             // Post
             ViewData["RelayState"] = this.State;
