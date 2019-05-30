@@ -37,8 +37,8 @@ using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
+using System.Xml;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Claims;
@@ -66,8 +66,10 @@ using static Fido2NetLib.Fido2;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Xml;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
+using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.FastReflection;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -1985,33 +1987,112 @@ namespace MultiPurposeAuthSite.Controllers
 
         public ActionResult Saml2Request(string samlRequest, string relayState, string sigAlg)
         {
+            string saml = "";
+            string iss = "";
+            string id = "";
+            string pubKey = "";
+            bool verified = false;
+
             if (Request.HttpMethod.ToLower() == "get")
             {
-                if (string.IsNullOrEmpty(sigAlg))
+                // DecodeRedirect
+                string rawUrl = Request.RawUrl;
+                string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                saml = SAML2Bindings.DecodeRedirect(queryString);
+
+                #region 署名検証
+                // iss, id
+                XmlDocument xmlDoc = new XmlDocument();
+                xmlDoc.PreserveWhitespace = false;
+                xmlDoc.LoadXml(saml);
+
+                // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
+                iss = SAML2Bindings.GetIssuer(xmlDoc);
+                iss = iss.Replace("http://", "");
+
+                // - id
+                id = SAML2Bindings.GetIdInRequest(xmlDoc);
+
+                // rsa from iss
+                pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
+
+                if (string.IsNullOrEmpty(pubKey))
                 {
-                    // 署名検証しない。
+                    // 鍵がない場合は、通す。
+                    verified = true;
                 }
                 else
                 {
-                    // 署名検証する。
-
+                    // 鍵がある場合は、検証。
                     if (SAML2Const.RSAwithSHA1 == sigAlg)
                     {
-                        // サポートする
-                    }
-                    else if (SAML2Const.RSAwithSHA1 == sigAlg)
-                    {
-                        // サポートしない
-                    }
-                    else
-                    {
-                        // サポートしない
+                        pubKey = CustomEncode.ByteToString(
+                            CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                        DigitalSignParam dsParam = new DigitalSignParam(
+                            RsaPublicKeyConverter.JwkToParam(pubKey),
+                            EnumDigitalSignAlgorithm.RsaCSP_SHA1);
+
+                        verified = SAML2Bindings.VerifyRedirect(queryString, dsParam);
                     }
                 }
+
+                if (verified)
+                {
+                    // XSDスキーマによる検証
+                    // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
+                    // The XML is valid. (ただし、Signature要素は外す。
+
+                    // Responseを作成する。
+                }
+                #endregion
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
-                // ...
+                // DecodePost
+                saml = SAML2Bindings.DecodePost(samlRequest);
+
+                #region 署名検証
+                // iss, id
+                XmlDocument xmlDoc = new XmlDocument();
+                xmlDoc.PreserveWhitespace = false;
+                xmlDoc.LoadXml(saml);
+                
+                // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
+                iss = SAML2Bindings.GetIssuer(xmlDoc);
+                iss = iss.Replace("http://", "");
+
+                // - id
+                id = SAML2Bindings.GetIdInRequest(xmlDoc);
+
+                // rsa from iss
+                pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
+
+                if (string.IsNullOrEmpty(pubKey))
+                {
+                    // 鍵がない場合は、通す。
+                    verified = true;
+                }
+                else
+                {
+                    // 鍵がある場合は、検証。
+                    pubKey = CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                    RSA rsa = RsaPublicKeyConverter.JwkToProvider(pubKey);
+                    verified = SAML2Bindings.VerifyPost(saml, id, rsa);
+                }
+                
+                #endregion
+
+                if (verified)
+                {
+                    // XSDスキーマによる検証
+                    // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
+                    // The XML is valid. (ただし、Signature要素は外す。
+
+                    // Responseを作成する。
+                }
             }
 
             return null;
