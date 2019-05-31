@@ -2000,18 +2000,24 @@ namespace MultiPurposeAuthSite.Controllers
                 string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
                 saml = SAML2Bindings.DecodeRedirect(queryString);
 
-                #region 署名検証
-                // iss, id
+                // XmlDocument
                 XmlDocument xmlDoc = new XmlDocument();
                 xmlDoc.PreserveWhitespace = false;
                 xmlDoc.LoadXml(saml);
 
+                // XmlNamespaceManager
+                XmlNamespaceManager samlNsMgr = 
+                    SAML2Bindings.CreateSamlNamespaceManager(xmlDoc);
+
+                #region 署名検証
+                // iss, id
+
                 // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
-                iss = SAML2Bindings.GetIssuer(xmlDoc);
+                iss = SAML2Bindings.GetIssuerInSamlRequest(xmlDoc, samlNsMgr);
                 iss = iss.Replace("http://", "");
 
                 // - id
-                id = SAML2Bindings.GetIdInRequest(xmlDoc);
+                id = SAML2Bindings.GetIdInRequest(xmlDoc, samlNsMgr);
 
                 // rsa from iss
                 pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
@@ -2033,16 +2039,21 @@ namespace MultiPurposeAuthSite.Controllers
                             RsaPublicKeyConverter.JwkToParam(pubKey),
                             EnumDigitalSignAlgorithm.RsaCSP_SHA1);
 
-                        verified = SAML2Bindings.VerifyRedirect(queryString, dsParam);
+                        if (SAML2Bindings.VerifyRedirect(queryString, dsParam))
+                        {
+                            // XSDスキーマによる検証
+                            // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
+                            // The XML is valid.
+
+                            // XPathによる検証
+                            verified = SAML2Bindings.VerifySamlByXPath(
+                                xmlDoc, SAML2Enum.SamlSchema.Request, samlNsMgr);
+                        }
                     }
                 }
 
                 if (verified)
                 {
-                    // XSDスキーマによる検証
-                    // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
-                    // The XML is valid. (ただし、Signature要素は外す。
-
                     // Responseを作成する。
                 }
                 #endregion
@@ -2052,18 +2063,24 @@ namespace MultiPurposeAuthSite.Controllers
                 // DecodePost
                 saml = SAML2Bindings.DecodePost(samlRequest);
 
-                #region 署名検証
-                // iss, id
+                // XmlDocument
                 XmlDocument xmlDoc = new XmlDocument();
                 xmlDoc.PreserveWhitespace = false;
                 xmlDoc.LoadXml(saml);
-                
+
+                // XmlNamespaceManager
+                XmlNamespaceManager samlNsMgr =
+                    SAML2Bindings.CreateSamlNamespaceManager(xmlDoc);
+
+                #region 署名検証
+                // iss, id
+
                 // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
-                iss = SAML2Bindings.GetIssuer(xmlDoc);
+                iss = SAML2Bindings.GetIssuerInSamlRequest(xmlDoc, samlNsMgr);
                 iss = iss.Replace("http://", "");
 
                 // - id
-                id = SAML2Bindings.GetIdInRequest(xmlDoc);
+                id = SAML2Bindings.GetIdInRequest(xmlDoc, samlNsMgr);
 
                 // rsa from iss
                 pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
@@ -2080,17 +2097,23 @@ namespace MultiPurposeAuthSite.Controllers
                         CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
                     RSA rsa = RsaPublicKeyConverter.JwkToProvider(pubKey);
-                    verified = SAML2Bindings.VerifyPost(saml, id, rsa);
+
+                    if (SAML2Bindings.VerifyPost(saml, id, rsa))
+                    {
+                        // XSDスキーマによる検証
+                        // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
+                        // The XML is valid. (ただし、Signature要素は外す。
+
+                        // XPathによる検証
+                        verified = SAML2Bindings.VerifySamlByXPath(
+                            xmlDoc, SAML2Enum.SamlSchema.Request, samlNsMgr);
+                    }
                 }
                 
                 #endregion
 
                 if (verified)
                 {
-                    // XSDスキーマによる検証
-                    // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
-                    // The XML is valid. (ただし、Signature要素は外す。
-
                     // Responseを作成する。
                 }
             }
