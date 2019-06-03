@@ -712,8 +712,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // DigitalSignX509
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.RS256Pfx,
-                OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA1);
+                OAuth2AndOIDCParams.RS256Pfx, OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA1,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // SamlRequestの生成
             string samlRequest = SAML2Bindings.CreateRequest(this.Issuer,
@@ -743,8 +743,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // DigitalSignX509
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.RS256Pfx,
-                OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA1);
+                OAuth2AndOIDCParams.RS256Pfx, OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA1,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // SamlRequestの生成
             string samlRequest = SAML2Bindings.CreateRequest(this.Issuer,
@@ -762,7 +762,7 @@ namespace MultiPurposeAuthSite.Controllers
             // Redirect
             return Redirect(
                 Config.OAuth2AuthorizationServerEndpointsRootURI
-                + Config.Saml2RequestEndpoint + "?" + samlRequest);
+                + Config.Saml2RequestEndpoint + "?" + queryString);
         }
 
         /// <summary>Test Saml2 Post & Post Binding</summary>
@@ -778,8 +778,7 @@ namespace MultiPurposeAuthSite.Controllers
             X509Certificate2 x509 = new X509Certificate2(
                 OAuth2AndOIDCParams.RS256Pfx,
                 OAuth2AndOIDCParams.RS256Pwd);
-            RSA rsa = x509.GetRSAPrivateKey();
-
+            
             // SamlRequestの生成
             saml2Request = SAML2Bindings.CreateRequest(
                 this.Issuer,
@@ -788,7 +787,8 @@ namespace MultiPurposeAuthSite.Controllers
                 this.RedirectUri, out id).OuterXml;
 
             // SamlRequestのエンコと署名
-            saml2Request = SAML2Bindings.EncodeAndSignPost(saml2Request, id, rsa);
+            saml2Request = SAML2Bindings.EncodeAndSignPost(
+                saml2Request, id, x509.GetRSAPrivateKey());
 
             this.SaveSaml2Params();
 
@@ -1183,8 +1183,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 秘密鍵
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.RS256Pfx,
-                OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
+                OAuth2AndOIDCParams.RS256Pfx, OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),

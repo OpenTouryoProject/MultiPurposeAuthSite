@@ -20,7 +20,6 @@
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
-
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.ViewModels;
@@ -31,7 +30,8 @@ using MultiPurposeAuthSite.Notifications;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
-using MultiPurposeAuthSite.TokenProviders;
+using Token = MultiPurposeAuthSite.TokenProviders;
+using Saml = MultiPurposeAuthSite.SamlProviders;
 using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
@@ -61,15 +61,12 @@ using Facebook;
 
 using Fido2NetLib;
 using Fido2NetLib.Objects;
-using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
-using Touryo.Infrastructure.Public.Xml;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
-using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.FastReflection;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -1985,195 +1982,89 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Saml2 Request
 
+        /// <summary>Saml2Request</summary>
+        /// <param name="samlRequest">string</param>
+        /// <param name="relayState">string</param>
+        /// <param name="sigAlg">string</param>
+        /// <returns>ActionResult</returns>
         public ActionResult Saml2Request(string samlRequest, string relayState, string sigAlg)
         {
-            string tempId = "";
-            string tempSaml = "";
-
-            string iss = "";
-            string pubKey = "";
             bool verified = false;
 
+            string decodeSaml = "";
+            XmlDocument samlRequest2 = null;
+            XmlNamespaceManager samlNsMgr = null;
+
+            string iss = "";
+            string id = "";
             string rtnUrl = "";
-            string rtnProtocol = "";
-            string nameIdPolicy = "";
 
             if (Request.HttpMethod.ToLower() == "get")
             {
-                #region 準備
                 // DecodeRedirect
                 string rawUrl = Request.RawUrl;
                 string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
-                tempSaml = SAML2Bindings.DecodeRedirect(queryString);
+                decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
 
                 // XmlDocument
-                XmlDocument samlRequest2 = new XmlDocument();
+                samlRequest2 = new XmlDocument();
                 samlRequest2.PreserveWhitespace = false;
-                samlRequest2.LoadXml(tempSaml);
+                samlRequest2.LoadXml(decodeSaml);
 
                 // XmlNamespaceManager
-                XmlNamespaceManager samlNsMgr = 
-                    SAML2Bindings.CreateNamespaceManager(samlRequest2);
-                #endregion
+                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
 
-                #region 署名検証
-                // iss, id
+                // リクエスト検証
+                if (SAML2Const.RSAwithSHA1 == sigAlg)
+                    verified = Saml.CmnEndpoints.VerifySamlRequest(
+                        queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
 
-                // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
-                iss = SAML2Bindings.GetIssuerInRequest(samlRequest2, samlNsMgr);
-                iss = iss.Replace("http://", "");
-
-                // - id
-                tempId = SAML2Bindings.GetIdInRequest(samlRequest2, samlNsMgr);
-
-                // rsa from iss
-                pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
-
-                if (string.IsNullOrEmpty(pubKey))
-                {
-                    // 鍵がない場合は、通す。
-                    verified = true;
-                }
-                else
-                {
-                    // 鍵がある場合は、検証。
-                    if (SAML2Const.RSAwithSHA1 == sigAlg)
-                    {
-                        pubKey = CustomEncode.ByteToString(
-                            CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                        DigitalSignParam dsParam = new DigitalSignParam(
-                            RsaPublicKeyConverter.JwkToParam(pubKey),
-                            EnumDigitalSignAlgorithm.RsaCSP_SHA1);
-
-                        if (SAML2Bindings.VerifyRedirect(queryString, dsParam))
-                        {
-                            // XSDスキーマによる検証
-                            // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
-                            // The XML is valid.
-
-                            // XPathによる検証
-                            verified = SAML2Bindings.VerifyByXPath(
-                                samlRequest2, SAML2Enum.SamlSchema.Request, samlNsMgr);
-                        }
-                    }
-                }
-                #endregion
-
-                #region レスポンス作成
+                // レスポンス生成
                 if (verified)
                 {
-                    // rtnUrl
-                    string temp1 = SAML2Bindings.GetAssertionConsumerServiceURLInRequest(samlRequest2, samlNsMgr);
-                    string temp2 = Sts.Helper.GetInstance().GetAssertionConsumerServiceURL(iss);
-                    if (string.IsNullOrEmpty(temp1))
+                    string samlResponse = "";
+
+                    if (Saml.CmnEndpoints.CreateSamlResponse(
+                        relayState, iss,
+                        out rtnUrl, out samlResponse, out queryString,
+                        samlRequest2, samlNsMgr)
+                        == SAML2Enum.ProtocolBinding.HttpRedirect)
                     {
-                        rtnUrl = temp2;
-                    }
-                    else if (temp1 == temp2)
-                    {
-                        rtnUrl = temp2;
+                        // Redirect
+                        return Redirect(rtnUrl + "?" + queryString);
                     }
                     else
                     {
-                        return null; // エラーレスポンス
+                        // Post
+                        ViewData["RelayState"] = relayState;
+                        ViewData["SAMLResponse"] = samlResponse;
+                        ViewData["Action"] = rtnUrl;
+
+                        return View("PostBinding");
                     }
-
-                    // rtnProtocol
-                    rtnProtocol = SAML2Bindings.GetProtocolBindingInRequest(samlRequest2, samlNsMgr);
-                    // NameIDPolicyFormat
-                    nameIdPolicy = SAML2Bindings.GetNameIDPolicyFormatInRequest(samlRequest2, samlNsMgr);
-
-                    // Responseを作成する。
-                    XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
-                        Config.OAuth2IssuerId, rtnUrl, SAML2Enum.StatusCode.Success, out tempId);
-
-                    SAML2Enum.NameIDFormat urnNameIDFormat = SAML2Enum.NameIDFormat.unspecified;
-                    switch (nameIdPolicy)
-                    {
-                        case SAML2Const.UrnNameIDFormatUnspecified:
-                            // ...
-                            urnNameIDFormat = SAML2Enum.NameIDFormat.unspecified;
-                            break;
-                        case SAML2Const.UrnNameIDFormatPersistent:
-                            // ...
-                            urnNameIDFormat = SAML2Enum.NameIDFormat.persistent;
-                            break;
-                        case SAML2Const.UrnNameIDFormatTransient:
-                            // ...
-                            urnNameIDFormat = SAML2Enum.NameIDFormat.transient;
-                            break; 
-                    }
-
-                    // Assertionを作成する。
-                    XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
-                        tempId, Config.OAuth2IssuerId, "hogehoge", urnNameIDFormat,
-                        SAML2Enum.AuthnContextClassRef.unspecified, 3600, rtnUrl, out tempId);
                 }
-                #endregion
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
-                #region 準備
                 // DecodePost
-                tempSaml = SAML2Bindings.DecodePost(samlRequest);
+                decodeSaml = SAML2Bindings.DecodePost(samlRequest);
 
                 // XmlDocument
-                XmlDocument xmlDoc = new XmlDocument();
-                xmlDoc.PreserveWhitespace = false;
-                xmlDoc.LoadXml(tempSaml);
+                samlRequest2 = new XmlDocument();
+                samlRequest2.PreserveWhitespace = false;
+                samlRequest2.LoadXml(decodeSaml);
 
                 // XmlNamespaceManager
-                XmlNamespaceManager samlNsMgr =
-                    SAML2Bindings.CreateNamespaceManager(xmlDoc);
-                #endregion
+                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
 
-                #region 署名検証
-                // iss, id
+                // リクエスト検証
+                verified = Saml.CmnEndpoints.VerifySamlRequest(
+                    "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
 
-                // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
-                iss = SAML2Bindings.GetIssuerInRequest(xmlDoc, samlNsMgr);
-                iss = iss.Replace("http://", "");
-
-                // - id
-                tempId = SAML2Bindings.GetIdInRequest(xmlDoc, samlNsMgr);
-
-                // rsa from iss
-                pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
-
-                if (string.IsNullOrEmpty(pubKey))
-                {
-                    // 鍵がない場合は、通す。
-                    verified = true;
-                }
-                else
-                {
-                    // 鍵がある場合は、検証。
-                    pubKey = CustomEncode.ByteToString(
-                        CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                    RSA rsa = RsaPublicKeyConverter.JwkToProvider(pubKey);
-
-                    if (SAML2Bindings.VerifyPost(tempSaml, tempId, rsa))
-                    {
-                        // XSDスキーマによる検証
-                        // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
-                        // The XML is valid. (ただし、Signature要素は外す。
-
-                        // XPathによる検証
-                        verified = SAML2Bindings.VerifyByXPath(
-                            xmlDoc, SAML2Enum.SamlSchema.Request, samlNsMgr);
-                    }
-                }
-
-                #endregion
-
-                #region レスポンス作成
+                // レスポンス生成
                 if (verified)
                 {
-                    // Responseを作成する。
                 }
-                #endregion
             }
 
             return null;
@@ -2183,9 +2074,15 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Saml2 Response
 
+        /// <summary>AssertionConsumerService</summary>
+        /// <param name="samlResponse">string</param>
+        /// <param name="relayState">string</param>
+        /// <param name="sigAlg">string</param>
+        /// <returns>ActionResult</returns>
         [AllowAnonymous]
-        public ActionResult Saml2Response(string samlRequest, string relayState, string sigAlg)
+        public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
+            // ほげ
             return null;
         }
 
@@ -2216,7 +2113,7 @@ namespace MultiPurposeAuthSite.Controllers
             string nonce, string prompt) // OpenID Connect
             // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
         {
-            if (CmnEndpoints.ValidateAuthZReqParam(
+            if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
@@ -2255,7 +2152,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
 
                         // ★ Codeの生成
-                        string code = CmnEndpoints.CreateCodeInAuthZNRes(
+                        string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
                             identity, Request.QueryString, client_id, state, scopes, nonce);
 
                         // RedirectエンドポイントへRedirect
@@ -2311,7 +2208,7 @@ namespace MultiPurposeAuthSite.Controllers
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
                     // ★ Tokenの生成
-                    CmnEndpoints.CreateAuthZRes4ImplicitFlow(
+                    Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
                         identity, Request.QueryString,
                         response_type, client_id, state, scopes, nonce,
                         out string access_token, out string id_token);
@@ -2372,7 +2269,7 @@ namespace MultiPurposeAuthSite.Controllers
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
                     // ★ Tokenの生成
-                    string code = CmnEndpoints.CreateAuthNRes4HybridFlow(
+                    string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
                         identity, Request.QueryString,
                         client_id, state, scopes, nonce,
                         out string access_token, out string id_token);
@@ -2461,7 +2358,7 @@ namespace MultiPurposeAuthSite.Controllers
             string scope, string state,
             string nonce) // OpenID Connect
         {
-            if (CmnEndpoints.ValidateAuthZReqParam(
+            if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
@@ -2489,7 +2386,7 @@ namespace MultiPurposeAuthSite.Controllers
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
                     
                     // ★ Codeの生成
-                    string code = CmnEndpoints.CreateCodeInAuthZNRes(
+                    string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
                         identity, Request.QueryString, client_id, state, scopes, nonce);
 
                     // RedirectエンドポイントへRedirect
