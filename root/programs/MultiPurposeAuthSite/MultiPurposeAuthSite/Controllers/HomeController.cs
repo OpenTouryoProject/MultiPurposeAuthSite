@@ -214,7 +214,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (this.ClarifyRedirectUri)
             {
-                this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId);
+                this.RedirectUri = Helper.GetInstance().GetAssertionConsumerServiceURL(this.ClientId);
             }
 
             // RelayStateに入れる（本来の用途と異なるが）。

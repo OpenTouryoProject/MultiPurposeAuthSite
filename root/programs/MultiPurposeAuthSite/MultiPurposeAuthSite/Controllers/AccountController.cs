@@ -1987,37 +1987,44 @@ namespace MultiPurposeAuthSite.Controllers
 
         public ActionResult Saml2Request(string samlRequest, string relayState, string sigAlg)
         {
-            string saml = "";
+            string tempId = "";
+            string tempSaml = "";
+
             string iss = "";
-            string id = "";
             string pubKey = "";
             bool verified = false;
 
+            string rtnUrl = "";
+            string rtnProtocol = "";
+            string nameIdPolicy = "";
+
             if (Request.HttpMethod.ToLower() == "get")
             {
+                #region 準備
                 // DecodeRedirect
                 string rawUrl = Request.RawUrl;
                 string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
-                saml = SAML2Bindings.DecodeRedirect(queryString);
+                tempSaml = SAML2Bindings.DecodeRedirect(queryString);
 
                 // XmlDocument
-                XmlDocument xmlDoc = new XmlDocument();
-                xmlDoc.PreserveWhitespace = false;
-                xmlDoc.LoadXml(saml);
+                XmlDocument samlRequest2 = new XmlDocument();
+                samlRequest2.PreserveWhitespace = false;
+                samlRequest2.LoadXml(tempSaml);
 
                 // XmlNamespaceManager
                 XmlNamespaceManager samlNsMgr = 
-                    SAML2Bindings.CreateSamlNamespaceManager(xmlDoc);
+                    SAML2Bindings.CreateNamespaceManager(samlRequest2);
+                #endregion
 
                 #region 署名検証
                 // iss, id
 
                 // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
-                iss = SAML2Bindings.GetIssuerInSamlRequest(xmlDoc, samlNsMgr);
+                iss = SAML2Bindings.GetIssuerInRequest(samlRequest2, samlNsMgr);
                 iss = iss.Replace("http://", "");
 
                 // - id
-                id = SAML2Bindings.GetIdInRequest(xmlDoc, samlNsMgr);
+                tempId = SAML2Bindings.GetIdInRequest(samlRequest2, samlNsMgr);
 
                 // rsa from iss
                 pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
@@ -2046,41 +2053,90 @@ namespace MultiPurposeAuthSite.Controllers
                             // The XML is valid.
 
                             // XPathによる検証
-                            verified = SAML2Bindings.VerifySamlByXPath(
-                                xmlDoc, SAML2Enum.SamlSchema.Request, samlNsMgr);
+                            verified = SAML2Bindings.VerifyByXPath(
+                                samlRequest2, SAML2Enum.SamlSchema.Request, samlNsMgr);
                         }
                     }
                 }
+                #endregion
 
+                #region レスポンス作成
                 if (verified)
                 {
+                    // rtnUrl
+                    string temp1 = SAML2Bindings.GetAssertionConsumerServiceURLInRequest(samlRequest2, samlNsMgr);
+                    string temp2 = Sts.Helper.GetInstance().GetAssertionConsumerServiceURL(iss);
+                    if (string.IsNullOrEmpty(temp1))
+                    {
+                        rtnUrl = temp2;
+                    }
+                    else if (temp1 == temp2)
+                    {
+                        rtnUrl = temp2;
+                    }
+                    else
+                    {
+                        return null; // エラーレスポンス
+                    }
+
+                    // rtnProtocol
+                    rtnProtocol = SAML2Bindings.GetProtocolBindingInRequest(samlRequest2, samlNsMgr);
+                    // NameIDPolicyFormat
+                    nameIdPolicy = SAML2Bindings.GetNameIDPolicyFormatInRequest(samlRequest2, samlNsMgr);
+
                     // Responseを作成する。
+                    XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
+                        Config.OAuth2IssuerId, rtnUrl, SAML2Enum.StatusCode.Success, out tempId);
+
+                    SAML2Enum.NameIDFormat urnNameIDFormat = SAML2Enum.NameIDFormat.unspecified;
+                    switch (nameIdPolicy)
+                    {
+                        case SAML2Const.UrnNameIDFormatUnspecified:
+                            // ...
+                            urnNameIDFormat = SAML2Enum.NameIDFormat.unspecified;
+                            break;
+                        case SAML2Const.UrnNameIDFormatPersistent:
+                            // ...
+                            urnNameIDFormat = SAML2Enum.NameIDFormat.persistent;
+                            break;
+                        case SAML2Const.UrnNameIDFormatTransient:
+                            // ...
+                            urnNameIDFormat = SAML2Enum.NameIDFormat.transient;
+                            break; 
+                    }
+
+                    // Assertionを作成する。
+                    XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
+                        tempId, Config.OAuth2IssuerId, "hogehoge", urnNameIDFormat,
+                        SAML2Enum.AuthnContextClassRef.unspecified, 3600, rtnUrl, out tempId);
                 }
                 #endregion
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
+                #region 準備
                 // DecodePost
-                saml = SAML2Bindings.DecodePost(samlRequest);
+                tempSaml = SAML2Bindings.DecodePost(samlRequest);
 
                 // XmlDocument
                 XmlDocument xmlDoc = new XmlDocument();
                 xmlDoc.PreserveWhitespace = false;
-                xmlDoc.LoadXml(saml);
+                xmlDoc.LoadXml(tempSaml);
 
                 // XmlNamespaceManager
                 XmlNamespaceManager samlNsMgr =
-                    SAML2Bindings.CreateSamlNamespaceManager(xmlDoc);
+                    SAML2Bindings.CreateNamespaceManager(xmlDoc);
+                #endregion
 
                 #region 署名検証
                 // iss, id
 
                 // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
-                iss = SAML2Bindings.GetIssuerInSamlRequest(xmlDoc, samlNsMgr);
+                iss = SAML2Bindings.GetIssuerInRequest(xmlDoc, samlNsMgr);
                 iss = iss.Replace("http://", "");
 
                 // - id
-                id = SAML2Bindings.GetIdInRequest(xmlDoc, samlNsMgr);
+                tempId = SAML2Bindings.GetIdInRequest(xmlDoc, samlNsMgr);
 
                 // rsa from iss
                 pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
@@ -2098,24 +2154,26 @@ namespace MultiPurposeAuthSite.Controllers
 
                     RSA rsa = RsaPublicKeyConverter.JwkToProvider(pubKey);
 
-                    if (SAML2Bindings.VerifyPost(saml, id, rsa))
+                    if (SAML2Bindings.VerifyPost(tempSaml, tempId, rsa))
                     {
                         // XSDスキーマによる検証
                         // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
                         // The XML is valid. (ただし、Signature要素は外す。
 
                         // XPathによる検証
-                        verified = SAML2Bindings.VerifySamlByXPath(
+                        verified = SAML2Bindings.VerifyByXPath(
                             xmlDoc, SAML2Enum.SamlSchema.Request, samlNsMgr);
                     }
                 }
-                
+
                 #endregion
 
+                #region レスポンス作成
                 if (verified)
                 {
                     // Responseを作成する。
                 }
+                #endregion
             }
 
             return null;

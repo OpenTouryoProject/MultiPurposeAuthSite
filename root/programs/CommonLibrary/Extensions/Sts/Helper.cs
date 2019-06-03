@@ -496,7 +496,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="client_id">client_id</param>
         /// <param name="response_type">response_type</param>
         /// <returns>redirect_uri</returns>
-        public string GetClientsRedirectUri(string client_id, string response_type = "saml")
+        public string GetClientsRedirectUri(string client_id, string response_type)
         {
             return this.GetClientsRedirectUri(client_id, response_type, out bool isResourceOwner);
         }
@@ -515,14 +515,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (response_type.ToLower() == "saml")
-                {
-                    if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_saml"))
-                    {
-                        return this.Oauth2ClientsInfo[client_id]["redirect_uri_saml"];
-                    }
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_code"))
                     {
@@ -551,11 +544,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 isResourceOwner = true;
                 ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
-                if (response_type.ToLower() == "saml")
-                {
-                    return model.RedirectUriSaml;
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
                     return model.RedirectUriCode;
                 }
@@ -568,6 +557,49 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     return model.RedirectUriToken;
                 }
+            }
+
+            return "";
+        }
+
+        #endregion
+
+        #region GetAssertionConsumerServiceURL
+
+        /// <summary>client_idからAssertionConsumerServiceURLを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>AssertionConsumerServiceURL</returns>
+        public string GetAssertionConsumerServiceURL(string client_id)
+        {
+            return this.GetAssertionConsumerServiceURL(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからAssertionConsumerServiceURLを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>AssertionConsumerServiceURL</returns>
+        public string GetAssertionConsumerServiceURL(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_saml"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_saml"];
+                }
+            }
+
+            // Saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                isResourceOwner = true;
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+                return model.RedirectUriSaml;
             }
 
             return "";
