@@ -2085,7 +2085,16 @@ namespace MultiPurposeAuthSite.Controllers
         {
             bool verified = false;
 
+            string nameId = "";
             string iss = "";
+            string aud = "";
+            string inResponseTo = "";
+            string recipient = "";
+            DateTime? notOnOrAfter = null;
+
+            SAML2Enum.StatusCode? statusCode = null;
+            SAML2Enum.NameIDFormat? nameIDFormat = null;
+            SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
 
             if (Request.HttpMethod.ToLower() == "get")
             {
@@ -2093,11 +2102,17 @@ namespace MultiPurposeAuthSite.Controllers
                 string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
 
                 if (SAML2Const.RSAwithSHA1 == sigAlg)
-                    verified = SAML2Client.VerifySamlResponse(queryString, samlResponse, out iss);
+                    verified = SAML2Client.VerifyResponse(
+                        queryString, samlResponse, out nameId, out iss, out aud,
+                        out inResponseTo, out recipient, out notOnOrAfter,
+                        out statusCode, out nameIDFormat, out authnContextClassRef);
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
-                verified = SAML2Client.VerifySamlResponse("", samlResponse, out iss);
+                verified = SAML2Client.VerifyResponse(
+                        "", samlResponse, out nameId, out iss, out aud,
+                        out inResponseTo, out recipient, out notOnOrAfter,
+                        out statusCode, out nameIDFormat, out authnContextClassRef);
             }
 
             // レスポンス生成
