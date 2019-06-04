@@ -55,13 +55,13 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="queryString">string</param>
         /// <param name="decodeSaml">string</param>
         /// <param name="iss">out string</param>
-        /// <param name="id">out string</param>
+        /// <param name="inResponseTo">out string</param>
         /// <param name="samlRequest2">XmlDocument</param>
         /// <param name="samlNsMgr">XmlNamespaceManager</param>
         /// <returns></returns>
         public static bool VerifySamlRequest(
             string queryString, string decodeSaml,
-            out string iss, out string id,
+            out string iss, out string inResponseTo,
             XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
         {
             bool verified = false;
@@ -73,7 +73,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             iss = iss.Replace("http://", "");
 
             // - id
-            id = SAML2Bindings.GetIdInRequest(samlRequest, samlNsMgr);
+            inResponseTo = SAML2Bindings.GetIdInRequest(samlRequest, samlNsMgr);
 
             // rsa from iss
             string pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
@@ -112,7 +112,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                     // VerifyPost
                     RSA rsa = RsaPublicKeyConverter.JwkToProvider(pubKey);
 
-                    if (SAML2Bindings.VerifyPost(decodeSaml, id, rsa))
+                    if (SAML2Bindings.VerifyPost(decodeSaml, inResponseTo, rsa))
                     {
                         // XSDスキーマによる検証
                         // https://developers.onelogin.com/saml/online-tools/validate/xml-against-xsd-schema
@@ -130,6 +130,7 @@ namespace MultiPurposeAuthSite.SamlProviders
 
         /// <summary>レスポンス作成</summary>
         /// <param name="relayState">string</param>
+        /// <param name="inResponseTo">string</param>
         /// <param name="iss">string</param>
         /// <param name="rtnUrl">out string</param>
         /// <param name="samlResponse">out string</param>
@@ -138,7 +139,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="samlNsMgr">XmlNamespaceManager</param>
         /// <returns>SAML2Enum.ProtocolBinding?</returns>
         public static SAML2Enum.ProtocolBinding? CreateSamlResponse(
-            string relayState, string iss,
+            string relayState, string inResponseTo, string iss,
             out string rtnUrl, out string samlResponse, out string queryString,
             XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
         {
@@ -194,16 +195,17 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // SamlResponseを作成する。
             XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
-                Config.OAuth2IssuerId, rtnUrl, SAML2Enum.StatusCode.Success, out id1);
+                Config.OAuth2IssuerId, rtnUrl, inResponseTo, SAML2Enum.StatusCode.Success, out id1);
 
             // SamlAssertionを作成する。
             XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
-                id1, Config.OAuth2IssuerId, "hogehoge", nameIDFormat.Value,
+                inResponseTo, Config.OAuth2IssuerId, "hogehoge", nameIDFormat.Value,
                 SAML2Enum.AuthnContextClassRef.unspecified, 3600, rtnUrl, out id2);
 
             // ResponseにAssertionを組込
-            samlResponse = samlResponse2.OuterXml.Replace(
-                "{Assertion}", samlAssertion.GetElementsByTagName("saml:Assertion")[0].OuterXml);
+            XmlNode newNode = samlResponse2.ImportNode( // 御呪い
+                samlAssertion.GetElementsByTagName("saml:Assertion")[0], true);
+            samlResponse2.GetElementsByTagName("samlp:Response")[0].AppendChild(newNode);
 
             // 返しのProtocol Binding
             switch (protocolBinding)
@@ -212,16 +214,20 @@ namespace MultiPurposeAuthSite.SamlProviders
                     // SamlResponseのエンコと、QueryStringを生成（ + 署名）
                     queryString = SAML2Bindings.EncodeAndSignRedirect(
                         SAML2Enum.RequestOrResponse.Response,
-                        samlResponse, relayState, dsX509);
+                        samlResponse2.OuterXml, relayState, dsX509);
                     break;
                 case SAML2Enum.ProtocolBinding.HttpPost:
                     // SamlRequestのエンコと署名
                     samlResponse = SAML2Bindings.EncodeAndSignPost(
-                        samlResponse, id1, dsX509.X509Certificate.GetRSAPrivateKey());
+                        samlResponse2.OuterXml, id1, dsX509.X509Certificate.GetRSAPrivateKey());
                     break;
             }
 
             return protocolBinding;
         }
+
+        // VerifySamlResponseはクライアントライブラリなので、
+        // Touryo.Infrastructure.Framework.Authenticationに実装
+
     }
 }

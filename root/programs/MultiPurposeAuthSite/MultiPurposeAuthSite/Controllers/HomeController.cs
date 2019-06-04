@@ -706,24 +706,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Saml2RedirectRedirectBinding()
         {
-            string id = "";
-            
             this.InitSaml2Params();
 
-            // DigitalSignX509
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.RS256Pfx, OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA1,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-            // SamlRequestの生成
-            string samlRequest = SAML2Bindings.CreateRequest(this.Issuer,
-                SAML2Enum.ProtocolBinding.HttpRedirect,
-                SAML2Enum.NameIDFormat.unspecified, this.RedirectUri, out id).OuterXml;
-
-            // SamlRequestのエンコと、QueryStringを生成（ + 署名）
-            string queryString = SAML2Bindings.EncodeAndSignRedirect(
+            string id = "";
+            string queryString = SAML2Client.CreateRedirectRequest(
                 SAML2Enum.RequestOrResponse.Request,
-                samlRequest, this.State, dsX509);
+                SAML2Enum.ProtocolBinding.HttpRedirect,
+                SAML2Enum.NameIDFormat.unspecified,
+                this.Issuer, this.RedirectUri, this.State, out id);
 
             this.SaveSaml2Params();
 
@@ -737,25 +727,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Saml2RedirectPostBinding()
         {
-            string id = "";
-
             this.InitSaml2Params();
 
-            // DigitalSignX509
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.RS256Pfx, OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA1,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
-
-            // SamlRequestの生成
-            string samlRequest = SAML2Bindings.CreateRequest(this.Issuer,
+            string id = "";
+            string queryString = SAML2Client.CreateRedirectRequest(
+                SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.unspecified,
-                this.RedirectUri, out id).OuterXml;
-
-            // SamlRequestのエンコと、QueryStringを生成（ + 署名）
-            string queryString = SAML2Bindings.EncodeAndSignRedirect(
-                SAML2Enum.RequestOrResponse.Request,
-                samlRequest, this.State, dsX509);
+                this.Issuer, this.RedirectUri, this.State, out id);
 
             this.SaveSaml2Params();
 
@@ -769,32 +748,19 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private ActionResult Saml2PostPostBinding()
         {
-            string id = "";
-            string saml2Request = "";
-
             this.InitSaml2Params();
 
-            // RSA
-            X509Certificate2 x509 = new X509Certificate2(
-                OAuth2AndOIDCParams.RS256Pfx,
-                OAuth2AndOIDCParams.RS256Pwd);
-            
-            // SamlRequestの生成
-            saml2Request = SAML2Bindings.CreateRequest(
-                this.Issuer,
+            string id = "";
+            string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.unspecified,
-                this.RedirectUri, out id).OuterXml;
-
-            // SamlRequestのエンコと署名
-            saml2Request = SAML2Bindings.EncodeAndSignPost(
-                saml2Request, id, x509.GetRSAPrivateKey());
+                this.Issuer, this.RedirectUri, this.State, out id);
 
             this.SaveSaml2Params();
 
             // Post
             ViewData["RelayState"] = this.State;
-            ViewData["SAMLRequest"] = saml2Request;
+            ViewData["SAMLRequest"] = samlRequest;
             ViewData["Action"] = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
 
             return View("PostBinding");

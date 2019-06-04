@@ -138,6 +138,8 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Action Method
 
+        #region IdP (Identity Provider)
+
         #region サインイン
 
         /// <summary>
@@ -1197,7 +1199,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region 2FA (2 要素認証)
+        #region 2 要素認証 (2FA :2 factor authentication)
 
         #region 2FA画面のコード送信
 
@@ -1403,7 +1405,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region 外部ログイン
+        #region 外部ログイン (ExternalLogin)
 
         /// <summary>
         /// 外部Login（Redirect）の開始
@@ -1755,7 +1757,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region ID連携
+        #region ID連携 (ID Federation)
 
         /// <summary>
         /// IDFederationRedirectEndPoint
@@ -1978,6 +1980,10 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
+        #region STS (Security Token Service)
+
         #region Saml Endpoint
 
         #region Saml2 Request
@@ -1991,7 +1997,9 @@ namespace MultiPurposeAuthSite.Controllers
         {
             bool verified = false;
 
+            string queryString = "";
             string decodeSaml = "";
+
             XmlDocument samlRequest2 = null;
             XmlNamespaceManager samlNsMgr = null;
 
@@ -2003,7 +2011,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // DecodeRedirect
                 string rawUrl = Request.RawUrl;
-                string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
                 decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
 
                 // XmlDocument
@@ -2014,35 +2022,10 @@ namespace MultiPurposeAuthSite.Controllers
                 // XmlNamespaceManager
                 samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
 
-                // リクエスト検証
+                // VerifySamlRequest
                 if (SAML2Const.RSAwithSHA1 == sigAlg)
                     verified = Saml.CmnEndpoints.VerifySamlRequest(
                         queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
-
-                // レスポンス生成
-                if (verified)
-                {
-                    string samlResponse = "";
-
-                    if (Saml.CmnEndpoints.CreateSamlResponse(
-                        relayState, iss,
-                        out rtnUrl, out samlResponse, out queryString,
-                        samlRequest2, samlNsMgr)
-                        == SAML2Enum.ProtocolBinding.HttpRedirect)
-                    {
-                        // Redirect
-                        return Redirect(rtnUrl + "?" + queryString);
-                    }
-                    else
-                    {
-                        // Post
-                        ViewData["RelayState"] = relayState;
-                        ViewData["SAMLResponse"] = samlResponse;
-                        ViewData["Action"] = rtnUrl;
-
-                        return View("PostBinding");
-                    }
-                }
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
@@ -2057,13 +2040,31 @@ namespace MultiPurposeAuthSite.Controllers
                 // XmlNamespaceManager
                 samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
 
-                // リクエスト検証
+                // VerifySamlRequest
                 verified = Saml.CmnEndpoints.VerifySamlRequest(
                     "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+            }
 
-                // レスポンス生成
-                if (verified)
+            // レスポンス生成
+            if (verified)
+            {
+                string samlResponse = "";
+
+                if (Saml.CmnEndpoints.CreateSamlResponse(relayState, id, iss, 
+                    out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
+                    == SAML2Enum.ProtocolBinding.HttpRedirect)
                 {
+                    // Redirect
+                    return Redirect(rtnUrl + "?" + queryString);
+                }
+                else
+                {
+                    // Post
+                    ViewData["RelayState"] = relayState;
+                    ViewData["SAMLResponse"] = samlResponse;
+                    ViewData["Action"] = rtnUrl;
+
+                    return View("PostBinding");
                 }
             }
 
@@ -2082,7 +2083,29 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
-            // ほげ
+            bool verified = false;
+
+            string iss = "";
+
+            if (Request.HttpMethod.ToLower() == "get")
+            {
+                string rawUrl = Request.RawUrl;
+                string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+
+                if (SAML2Const.RSAwithSHA1 == sigAlg)
+                    verified = SAML2Client.VerifySamlResponse(queryString, samlResponse, out iss);
+            }
+            else if (Request.HttpMethod.ToLower() == "post")
+            {
+                verified = SAML2Client.VerifySamlResponse("", samlResponse, out iss);
+            }
+
+            // レスポンス生成
+            if (verified)
+            {
+                // 認証完了。
+            }
+
             return null;
         }
 
@@ -2849,6 +2872,8 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
         }
+
+        #endregion
 
         #endregion
 
