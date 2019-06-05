@@ -34,12 +34,10 @@
 using MultiPurposeAuthSite.Co;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
-using System;
 using System.Xml;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-
-using System.Web.Mvc;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
@@ -129,9 +127,11 @@ namespace MultiPurposeAuthSite.SamlProviders
         }
 
         /// <summary>レスポンス作成</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="authnContextClassRef">SAML2Enum.AuthnContextClassRef</param>
+        /// <param name="iss">string</param>
         /// <param name="relayState">string</param>
         /// <param name="inResponseTo">string</param>
-        /// <param name="iss">string</param>
         /// <param name="rtnUrl">out string</param>
         /// <param name="samlResponse">out string</param>
         /// <param name="queryString">out string</param>
@@ -139,7 +139,8 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="samlNsMgr">XmlNamespaceManager</param>
         /// <returns>SAML2Enum.ProtocolBinding?</returns>
         public static SAML2Enum.ProtocolBinding? CreateSamlResponse(
-            string relayState, string inResponseTo, string iss,
+            ClaimsIdentity identity, SAML2Enum.AuthnContextClassRef authnContextClassRef,
+            string iss, string relayState, string inResponseTo,
             out string rtnUrl, out string samlResponse, out string queryString,
             XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
         {
@@ -197,10 +198,15 @@ namespace MultiPurposeAuthSite.SamlProviders
             XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
                 Config.OAuth2IssuerId, rtnUrl, inResponseTo, SAML2Enum.StatusCode.Success, out id1);
 
-            // SamlAssertionを作成する。
+            // SamlAssertionを作成する（nameIDFormat.Valueに合わせて処理）。
             XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
-                inResponseTo, Config.OAuth2IssuerId, "hogehoge", nameIDFormat.Value,
-                SAML2Enum.AuthnContextClassRef.unspecified, 3600, rtnUrl, out id2);
+                inResponseTo, Config.OAuth2IssuerId,
+                identity.Name, nameIDFormat.Value,
+                authnContextClassRef,
+                3600, rtnUrl, out id2);
+
+            // 必要に応じて、identity.Claimsを使用して、様々なクレームを追加できる。
+            //  > Assertion > AttributeStatement > Attribute > AttributeValue
 
             // ResponseにAssertionを組込
             XmlNode newNode = samlResponse2.ImportNode( // 御呪い

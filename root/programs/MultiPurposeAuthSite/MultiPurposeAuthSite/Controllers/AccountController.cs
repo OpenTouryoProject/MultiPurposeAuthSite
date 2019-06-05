@@ -2050,8 +2050,17 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 string samlResponse = "";
 
-                if (Saml.CmnEndpoints.CreateSamlResponse(relayState, id, iss, 
-                    out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
+                // Cookie認証チケットからClaimsIdentityを取得しておく。
+                AuthenticateResult ticket = this.AuthenticationManager
+                    .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
+                ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
+
+                // Assertion > AttributeStatement > Attribute > AttributeValueに
+                // クレームを足すなら、ココで、identity.Claimsに値を詰めたりする。
+
+                if (Saml.CmnEndpoints.CreateSamlResponse(
+                    identity, SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, 
+                    iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
                     == SAML2Enum.ProtocolBinding.HttpRedirect)
                 {
                     // Redirect
@@ -2119,6 +2128,9 @@ namespace MultiPurposeAuthSite.Controllers
             if (verified)
             {
                 // 認証完了。
+                return Redirect(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + "?ret=認証完了（面倒なので画面は作成しませんが）");
             }
 
             return null;
