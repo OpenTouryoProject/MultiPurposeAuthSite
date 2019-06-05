@@ -2105,6 +2105,8 @@ namespace MultiPurposeAuthSite.Controllers
             SAML2Enum.NameIDFormat? nameIDFormat = null;
             SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
 
+            XmlDocument samlResponse2 = null;
+
             if (Request.HttpMethod.ToLower() == "get")
             {
                 string rawUrl = Request.RawUrl;
@@ -2114,20 +2116,21 @@ namespace MultiPurposeAuthSite.Controllers
                     verified = SAML2Client.VerifyResponse(
                         queryString, samlResponse, out nameId, out iss, out aud,
                         out inResponseTo, out recipient, out notOnOrAfter,
-                        out statusCode, out nameIDFormat, out authnContextClassRef);
+                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2);
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
                 verified = SAML2Client.VerifyResponse(
                         "", samlResponse, out nameId, out iss, out aud,
                         out inResponseTo, out recipient, out notOnOrAfter,
-                        out statusCode, out nameIDFormat, out authnContextClassRef);
+                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2);
             }
 
             // レスポンス生成
             if (verified)
             {
                 // 認証完了。
+                // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
                 return Redirect(
                     Config.OAuth2AuthorizationServerEndpointsRootURI
                     + "?ret=認証完了（面倒なので画面は作成しませんが）");
