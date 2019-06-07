@@ -66,9 +66,9 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // iss, id
 
-            // - iss : 当該IdP/Stsの仕様（client_idを使用すので）
-            iss = SAML2Bindings.GetIssuerInRequest(samlRequest, samlNsMgr);
-            iss = iss.Replace("http://", "");
+            // - iss : 当該IdP/Stsの仕様（client_idを流用するので）
+            iss = SAML2Bindings.GetIssuerInRequest(
+                samlRequest, samlNsMgr).Replace("http://", "");
 
             // - id
             inResponseTo = SAML2Bindings.GetIdInRequest(samlRequest, samlNsMgr);

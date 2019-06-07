@@ -2113,17 +2113,23 @@ namespace MultiPurposeAuthSite.Controllers
                 string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
 
                 if (SAML2Const.RSAwithSHA1 == sigAlg)
-                    verified = SAML2Client.VerifyResponse(
+                    if (SAML2Client.VerifyResponse(
                         queryString, samlResponse, out nameId, out iss, out aud,
                         out inResponseTo, out recipient, out notOnOrAfter,
-                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2);
+                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
+                    {
+                        if (iss == Config.IssuerId) verified = true;
+                    }
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
-                verified = SAML2Client.VerifyResponse(
-                        "", samlResponse, out nameId, out iss, out aud,
-                        out inResponseTo, out recipient, out notOnOrAfter,
-                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2);
+                if (SAML2Client.VerifyResponse(
+                    "", samlResponse, out nameId, out iss, out aud,
+                    out inResponseTo, out recipient, out notOnOrAfter,
+                    out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
+                {
+                    if (iss == Config.IssuerId) verified = true;
+                }
             }
 
             // LoadRequestParameters
@@ -2143,7 +2149,10 @@ namespace MultiPurposeAuthSite.Controllers
             if (verified)
             {
                 // 認証完了。
-                if (relayState == state_InSessionOrCookie) { } // チェックしてもイイ
+
+                // 必要に応じてチェックしてもイイ
+                // relayStateをstateに利用したケース
+                if (relayState == state_InSessionOrCookie) { }
 
                 // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
                 return Redirect(
