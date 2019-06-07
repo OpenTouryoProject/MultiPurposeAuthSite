@@ -205,8 +205,7 @@ namespace MultiPurposeAuthSite.Controllers
         private void InitSaml2Params()
         {
             this.Saml2RequestEndpoint =
-            Config.OAuth2AuthorizationServerEndpointsRootURI // 共用
-            + Config.Saml2RequestEndpoint;
+            Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
 
             // Issuer (RootURI + ClientId) 
             this.ClientId = Helper.GetInstance().GetClientIdByName(this.ClientName);
@@ -1149,7 +1148,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 秘密鍵
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.RS256Pfx, OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256,
+                CmnClientParams.RsaPfx, CmnClientParams.RsaPwd, HashAlgorithmName.SHA256,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(

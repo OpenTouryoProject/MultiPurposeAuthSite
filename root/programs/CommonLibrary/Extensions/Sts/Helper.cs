@@ -221,11 +221,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             };
 
             // Browser（Resource Owner）からではなくでClientから
-            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfx))
+            if (!string.IsNullOrEmpty(CmnClientParams.ClientCertPfx))
             {
                 handler.ClientCertificates.Add(new X509Certificate(
-                    OAuth2AndOIDCParams.ClientCertPfx,
-                    OAuth2AndOIDCParams.ClientCertPwd,
+                    CmnClientParams.ClientCertPfx,
+                    CmnClientParams.ClientCertPwd,
                     X509KeyStorageFlags.MachineKeySet));
             }
 #endif
@@ -894,7 +894,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             #region 標準
 
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, Config.OAuth2IssuerId));
+            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, Config.IssuerId));
             claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Audience, client_id));
 
             foreach (string scope in scopes)

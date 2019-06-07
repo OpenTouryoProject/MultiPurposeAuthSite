@@ -153,7 +153,7 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // DigitalSignX509
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd, HashAlgorithmName.SHA1,
+                Config.RsaPfx, Config.RsaPwd, HashAlgorithmName.SHA1,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // rtnUrl
@@ -196,14 +196,13 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // SamlResponseを作成する。
             XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
-                Config.OAuth2IssuerId, rtnUrl, inResponseTo, SAML2Enum.StatusCode.Success, out id1);
+                Config.IssuerId, rtnUrl, inResponseTo, SAML2Enum.StatusCode.Success, out id1);
 
             // SamlAssertionを作成する（nameIDFormat.Valueに合わせて処理）。
             XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
-                inResponseTo, Config.OAuth2IssuerId,
-                identity.Name, nameIDFormat.Value,
-                authnContextClassRef,
-                3600, rtnUrl, out id2);
+                inResponseTo, Config.IssuerId,
+                identity.Name, nameIDFormat.Value, authnContextClassRef,
+                Config.Saml2AssertionExpireTimeSpanFromMinutes, rtnUrl, out id2);
 
             // 必要に応じて、identity.Claimsを使用して、様々なクレームを追加できる。
             //  > Assertion > AttributeStatement > Attribute > AttributeValue

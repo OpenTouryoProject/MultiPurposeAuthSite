@@ -2126,17 +2126,36 @@ namespace MultiPurposeAuthSite.Controllers
                         out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2);
             }
 
+            // LoadRequestParameters
+            string clientId_InSessionOrCookie = "";
+            string state_InSessionOrCookie = "";
+            string redirect_uri_InSessionOrCookie = "";
+            string nonce_InSessionOrCookie = "";
+            string code_verifier_InSessionOrCookie = "";
+            this.LoadRequestParameters(
+                out clientId_InSessionOrCookie,
+                out state_InSessionOrCookie,
+                out redirect_uri_InSessionOrCookie,
+                out nonce_InSessionOrCookie,
+                out code_verifier_InSessionOrCookie);
+
             // レスポンス生成
             if (verified)
             {
                 // 認証完了。
+                if (relayState == state_InSessionOrCookie) { } // チェックしてもイイ
+
                 // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
                 return Redirect(
                     Config.OAuth2AuthorizationServerEndpointsRootURI
                     + "?ret=認証完了（面倒なので画面は作成しませんが）");
             }
-
-            return null;
+            else
+            {
+                // 認証失敗。
+                return Redirect(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=認証失敗");
+            }
         }
 
         #endregion
@@ -2497,54 +2516,18 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
-            #region テスト用
-
-            // client_id
-            string clientId_InSessionOrCookie = (string)Session["test_client_id"];
-            if (string.IsNullOrEmpty(clientId_InSessionOrCookie))
-            {
-                clientId_InSessionOrCookie = Request.Cookies["test_client_id"].Value;
-            }
-
-            // state
-            string state_InSessionOrCookie = (string)Session["test_state"];
-            if (string.IsNullOrEmpty(state_InSessionOrCookie))
-            {
-                state_InSessionOrCookie = Request.Cookies["test_state"].Value;
-            }
-
-            // redirect_uri
-            string redirect_uri_InSessionOrCookie = (string)Session["test_redirect_uri"];
-            if (string.IsNullOrEmpty(redirect_uri_InSessionOrCookie))
-            {
-                redirect_uri_InSessionOrCookie = Request.Cookies["test_redirect_uri"].Value;
-            }
-
-            // nonce
-            string nonce_InSessionOrCookie = (string)Session["test_nonce"];
-            if (string.IsNullOrEmpty(nonce_InSessionOrCookie))
-            {
-                nonce_InSessionOrCookie = Request.Cookies["test_nonce"].Value;
-            }
-
-            // code_verifier
-            string code_verifier_InSessionOrCookie = (string)Session["test_code_verifier"];
-            if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
-            {
-                code_verifier_InSessionOrCookie = Request.Cookies["test_code_verifier"].Value;
-            }
-
-            // クリア
-            Session["test_client_id"] = null;
-            Response.Cookies["test_client_id"].Value = "";
-            Session["test_state"] = null;
-            Response.Cookies["test_state"].Value = "";
-            Session["test_redirect_uri"] = null;
-            Response.Cookies["test_redirect_uri"].Value = "";
-            Session["test_code_verifier"] = null;
-            Response.Cookies["test_code_verifier"].Value = "";
-
-            #endregion
+            // LoadRequestParameters
+            string clientId_InSessionOrCookie = "";
+            string state_InSessionOrCookie = "";
+            string redirect_uri_InSessionOrCookie = "";
+            string nonce_InSessionOrCookie = "";
+            string code_verifier_InSessionOrCookie = "";
+            this.LoadRequestParameters(
+                out clientId_InSessionOrCookie,
+                out state_InSessionOrCookie,
+                out redirect_uri_InSessionOrCookie,
+                out nonce_InSessionOrCookie,
+                out code_verifier_InSessionOrCookie);
 
             if (!Config.IsLockedDownRedirectEndpoint)
             {
@@ -2602,8 +2585,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // 秘密鍵
                         DigitalSignX509 dsX509 = new DigitalSignX509(
-                            OAuth2AndOIDCParams.RS256Pfx,
-                            OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
+                            CmnClientParams.RsaPfx, CmnClientParams.RsaPwd,
+                            HashAlgorithmName.SHA256);
 
                         model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                             tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
@@ -2907,6 +2890,96 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
+        #region テスト用
+
+        /// <summary>LoadRequestParameters</summary>
+        /// <param name="clientId">out string</param>
+        /// <param name="state">out string</param>
+        /// <param name="redirect_uri">out string</param>
+        /// <param name="nonce">out string</param>
+        /// <param name="code_verifier">out string</param>
+        private void LoadRequestParameters(
+            out string clientId,
+            out string state, out string redirect_uri,
+            out string nonce, out string code_verifier)
+        {
+            // client_id
+            clientId = (string)Session["test_client_id"];
+            if (string.IsNullOrEmpty(clientId))
+            {
+                clientId = Request.Cookies["test_client_id"]?.Value;
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    Response.Cookies["test_client_id"].Value = "";
+                }
+            }
+            else
+            {
+                Session["test_client_id"] = null;
+            }
+
+            // state
+            state = (string)Session["test_state"];
+            if (string.IsNullOrEmpty(state))
+            {
+                state = Request.Cookies["test_state"]?.Value;
+                if (!string.IsNullOrEmpty(state))
+                {
+                    Response.Cookies["test_state"].Value = "";
+                }
+            }
+            else
+            {
+                Session["test_state"] = null;
+            }
+
+            // redirect_uri
+            redirect_uri = (string)Session["test_redirect_uri"];
+            if (string.IsNullOrEmpty(redirect_uri))
+            {
+                redirect_uri = Request.Cookies["test_redirect_uri"]?.Value;
+                if (!string.IsNullOrEmpty(redirect_uri))
+                {
+                    Response.Cookies["test_redirect_uri"].Value = "";
+                }
+            }
+            else
+            {
+                Session["test_redirect_uri"] = null;
+            }
+
+            // nonce
+            nonce = (string)Session["test_nonce"];
+            if (string.IsNullOrEmpty(nonce))
+            {
+                nonce = Request.Cookies["test_nonce"]?.Value;
+                if (!string.IsNullOrEmpty(nonce))
+                {
+                    Response.Cookies["test_nonce"].Value = "";
+                }
+            }
+            else
+            {
+                Session["test_nonce"] = null;
+            }
+
+            // code_verifier
+            code_verifier = (string)Session["test_code_verifier"];
+            if (string.IsNullOrEmpty(code_verifier))
+            {
+                code_verifier = Request.Cookies["test_code_verifier"]?.Value;
+                if (!string.IsNullOrEmpty(code_verifier))
+                {
+                    Response.Cookies["test_code_verifier"].Value = "";
+                }
+            }
+            else
+            {
+                Session["test_code_verifier"] = null;
+            }
+        }
         #endregion
 
         #endregion

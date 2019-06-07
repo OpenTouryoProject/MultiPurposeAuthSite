@@ -180,14 +180,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             JWS_RS256_X509 jwsRS256 = null;
 
             // JWT_RS256_X509
-            jwsRS256 = new JWS_RS256_X509(Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd,
+            jwsRS256 = new JWS_RS256_X509(Config.RsaPfx, Config.RsaPwd,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // JWSHeaderのセット
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd));
+                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfx, Config.RsaPwd));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
@@ -327,13 +327,13 @@ namespace MultiPurposeAuthSite.TokenProviders
             JWS_RS256_X509 jwsRS256 = null;
 
             // 署名
-            jwsRS256 = new JWS_RS256_X509(Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd,
+            jwsRS256 = new JWS_RS256_X509(Config.RsaPfx, Config.RsaPwd,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // JWSHeaderのセット
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd));
+                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfx, Config.RsaPwd));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
@@ -371,7 +371,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (string.IsNullOrEmpty(header[JwtConst.kid]))
                     {
                         // 証明書を使用
-                        jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, "");
+                        jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCer, "");
                     }
                     else
                     {
@@ -386,7 +386,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (jwkObject == null)
                         {
                             // 証明書を使用
-                            jwsRS256 = new JWS_RS256_X509(OAuth2AndOIDCParams.RS256Cer, "");
+                            jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCer, "");
                         }
                         else
                         {
@@ -411,7 +411,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (datetime == null)
                     {
                         // authToken.iss, authToken.expの検証
-                        if ((string)authTokenClaimSet[OAuth2AndOIDCConst.iss] == Config.OAuth2IssuerId
+                        if ((string)authTokenClaimSet[OAuth2AndOIDCConst.iss] == Config.IssuerId
                             && Helper.GetInstance().GetClientSecret((string)authTokenClaimSet[OAuth2AndOIDCConst.aud]) != null
                             && long.Parse((string)authTokenClaimSet[OAuth2AndOIDCConst.exp]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                         {
