@@ -579,11 +579,11 @@ namespace MultiPurposeAuthSite.Controllers
             XmlDocument samlMetadata = SAML2Bindings.CreateMetadata(
                 Config.IssuerId,
                 PrivacyEnhancedMail.GetBase64StringFromPemFilePath(
-                    CmnClientParams.RsaCer,
+                    CmnClientParams.RsaCerFilePath,
                     PrivacyEnhancedMail.RFC7468Label.Certificate),
                 new SAML2Enum.NameIDFormat[]
                 {
-                    SAML2Enum.NameIDFormat.unspecified
+                    SAML2Enum.NameIDFormat.Unspecified
                 },
                 saml2RequestEndpoint,
                 saml2RequestEndpoint);

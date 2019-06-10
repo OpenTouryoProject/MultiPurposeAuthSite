@@ -153,7 +153,7 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // DigitalSignX509
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                Config.RsaPfx, Config.RsaPwd, HashAlgorithmName.SHA1,
+                Config.RsaPfxFilePath, Config.RsaPfxPassword, HashAlgorithmName.SHA1,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // rtnUrl
@@ -183,7 +183,7 @@ namespace MultiPurposeAuthSite.SamlProviders
             nameIdPolicy = SAML2Bindings.GetNameIDPolicyFormatInRequest(samlRequest, samlNsMgr);
             SAML2Enum.NameIDFormat? nameIDFormat = null;
             SAML2Enum.StringToEnum(nameIdPolicy, out nameIDFormat);
-            if (!nameIDFormat.HasValue) nameIDFormat = SAML2Enum.NameIDFormat.unspecified;
+            if (!nameIDFormat.HasValue) nameIDFormat = SAML2Enum.NameIDFormat.Unspecified;
 
             // rtnProtocol
             rtnProtocol = SAML2Bindings.GetProtocolBindingInRequest(samlRequest, samlNsMgr);

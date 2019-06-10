@@ -711,7 +711,7 @@ namespace MultiPurposeAuthSite.Controllers
             string queryString = SAML2Client.CreateRedirectRequest(
                 SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpRedirect,
-                SAML2Enum.NameIDFormat.unspecified,
+                SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
 
             this.SaveSaml2Params();
@@ -732,7 +732,7 @@ namespace MultiPurposeAuthSite.Controllers
             string queryString = SAML2Client.CreateRedirectRequest(
                 SAML2Enum.RequestOrResponse.Request,
                 SAML2Enum.ProtocolBinding.HttpPost,
-                SAML2Enum.NameIDFormat.unspecified,
+                SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
 
             this.SaveSaml2Params();
@@ -752,7 +752,7 @@ namespace MultiPurposeAuthSite.Controllers
             string id = "";
             string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpPost,
-                SAML2Enum.NameIDFormat.unspecified,
+                SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
 
             this.SaveSaml2Params();
@@ -1148,7 +1148,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 秘密鍵
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                CmnClientParams.RsaPfx, CmnClientParams.RsaPwd, HashAlgorithmName.SHA256,
+                CmnClientParams.RsaPfxFilePath, CmnClientParams.RsaPfxPassword, HashAlgorithmName.SHA256,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(

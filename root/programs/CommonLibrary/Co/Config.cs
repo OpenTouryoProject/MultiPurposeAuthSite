@@ -946,22 +946,22 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>
         /// RSA署名用証明書（*.pfx）のパスワード
         /// </summary>
-        public static string RsaPwd
+        public static string RsaPfxPassword
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("RsaPwd");
+                return GetConfigParameter.GetConfigValue("RsaPfxPassword");
             }
         }
 
         /// <summary>
         /// RSA署名用証明書（*.pfx）のパス
         /// </summary>
-        public static string RsaPfx
+        public static string RsaPfxFilePath
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("RsaPfx");
+                return GetConfigParameter.GetConfigValue("RsaPfxFilePath");
             }
         }
 
@@ -972,22 +972,22 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>
         /// ECDSA署名用証明書（*.pfx）のパスワード
         /// </summary>
-        public static string EcdsaPwd
+        public static string EcdsaPfxPassword
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("EcdsaPwd");
+                return GetConfigParameter.GetConfigValue("EcdsaPfxPassword");
             }
         }
 
         /// <summary>
         /// ECDSA署名用証明書（*.pfx）のパス
         /// </summary>
-        public static string EcdsaPfx
+        public static string EcdsaPfxFilePath
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("EcdsaPfx");
+                return GetConfigParameter.GetConfigValue("EcdsaPfxFilePath");
             }
         }
         #endregion

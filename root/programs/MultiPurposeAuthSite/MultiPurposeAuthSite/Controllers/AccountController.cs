@@ -2023,9 +2023,9 @@ namespace MultiPurposeAuthSite.Controllers
                 samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
 
                 // VerifySamlRequest
-                if (SAML2Const.RSAwithSHA1 == sigAlg)
-                    verified = Saml.CmnEndpoints.VerifySamlRequest(
-                        queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                //if (SAML2Const.RSAwithSHA1 == sigAlg) // 無い場合も通るようにする。
+                verified = Saml.CmnEndpoints.VerifySamlRequest(
+                    queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
             }
             else if (Request.HttpMethod.ToLower() == "post")
             {
@@ -2594,7 +2594,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // 秘密鍵
                         DigitalSignX509 dsX509 = new DigitalSignX509(
-                            CmnClientParams.RsaPfx, CmnClientParams.RsaPwd,
+                            CmnClientParams.RsaPfxFilePath, CmnClientParams.RsaPfxPassword,
                             HashAlgorithmName.SHA256);
 
                         model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(

@@ -556,7 +556,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
                                 HashClaimType.AtHash | HashClaimType.SHash,
-                                Config.RsaPfx, Config.RsaPwd, jwkString);
+                                Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
                         }
                     }
                 }
@@ -658,7 +658,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, code, state, // at_hash, c_hash, s_hash
                             HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            Config.RsaPfx, Config.RsaPwd, jwkString);
+                            Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
                     }
                 }
 
@@ -1507,13 +1507,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, Config.RsaPfx, Config.RsaPwd, jwkString);
+                            HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
                     }
                     else
                     {
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, Config.EcdsaPfx, Config.EcdsaPwd, jwkString);
+                            HashClaimType.None, Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, jwkString);
                     }
 
                     if (!string.IsNullOrEmpty(id_token))

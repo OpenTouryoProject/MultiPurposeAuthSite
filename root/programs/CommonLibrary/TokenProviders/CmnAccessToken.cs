@@ -180,14 +180,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             JWS_RS256_X509 jwsRS256 = null;
 
             // JWT_RS256_X509
-            jwsRS256 = new JWS_RS256_X509(Config.RsaPfx, Config.RsaPwd,
+            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // JWSHeaderのセット
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfx, Config.RsaPwd));
+                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
@@ -327,13 +327,13 @@ namespace MultiPurposeAuthSite.TokenProviders
             JWS_RS256_X509 jwsRS256 = null;
 
             // 署名
-            jwsRS256 = new JWS_RS256_X509(Config.RsaPfx, Config.RsaPwd,
+            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
 
             // JWSHeaderのセット
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfx, Config.RsaPwd));
+                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
@@ -371,7 +371,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (string.IsNullOrEmpty(header[JwtConst.kid]))
                     {
                         // 証明書を使用
-                        jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCer, "");
+                        jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
                     }
                     else
                     {
@@ -386,7 +386,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (jwkObject == null)
                         {
                             // 証明書を使用
-                            jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCer, "");
+                            jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
                         }
                         else
                         {
