@@ -99,9 +99,9 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your OAuth2 data has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string AddOAuth2DataSuccess {
+        public static string AddSaml2OAuth2DataSuccess {
             get {
-                return ResourceManager.GetString("AddOAuth2DataSuccess", resourceCulture);
+                return ResourceManager.GetString("AddSaml2OAuth2DataSuccess", resourceCulture);
             }
         }
         
@@ -243,9 +243,9 @@ namespace MultiPurposeAuthSite.Resources {
         /// <summary>
         ///   Your OAuth2 has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
-        public static string RemoveOAuth2DataSuccess {
+        public static string RemoveSaml2OAuth2DataSuccess {
             get {
-                return ResourceManager.GetString("RemoveOAuth2DataSuccess", resourceCulture);
+                return ResourceManager.GetString("RemoveSaml2OAuth2DataSuccess", resourceCulture);
             }
         }
         

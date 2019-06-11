@@ -408,10 +408,10 @@
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />
     <Content Include="Views\Manage\OAuth2AuthorizationCodeGrantClient.cshtml" />
-    <Content Include="Views\Manage\AddOAuth2Data.cshtml" />
+    <Content Include="Views\Manage\AddSaml2OAuth2Data.cshtml" />
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Manage\AddMsPassData.cshtml" />
-    <Content Include="Views\Home\OAuth2Starters.cshtml" />
+    <Content Include="Views\Home\Saml2OAuth2Starters.cshtml" />
     <Content Include="Views\Home\OAuth2ClientAuthenticationFlow.cshtml" />
     <Content Include="Views\Manage\ManageGDPRData.cshtml" />
     <Content Include="Views\Home\Scroll.cshtml" />
@@ -427,6 +427,9 @@
     <Content Include="Scripts\popper.js.map" />
     <Content Include="Scripts\popper-utils.min.js.map" />
     <Content Include="Scripts\popper-utils.js.map" />
+    <Content Include="Views\Account\FormPost.cshtml" />
+    <Content Include="Views\Account\PostBinding.cshtml" />
+    <Content Include="Views\Home\PostBinding.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

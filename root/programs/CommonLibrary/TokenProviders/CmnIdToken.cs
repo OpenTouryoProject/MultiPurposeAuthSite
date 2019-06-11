@@ -87,6 +87,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //・payloadからscopeを削除する。
                         authTokenClaimSet.Remove(OAuth2AndOIDCConst.scopes);
 
+                        //・expをIdToken用のexpに差し替える。
+                        authTokenClaimSet[OAuth2AndOIDCConst.exp] = DateTimeOffset.Now.AddMinutes(
+                            Config.OidcIdTokenExpireTimeSpanFromMinutes.TotalMinutes).ToUnixTimeSeconds().ToString();
+
+                        //Co.Config.;
+
                         //・payloadにat_hash, c_hash, s_hashを追加する。
 
                         if (hct.HasFlag(HashClaimType.AtHash))

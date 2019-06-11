@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using System.Web.Mvc;
@@ -50,6 +51,14 @@ namespace MultiPurposeAuthSite
             // ・ url：URIパターン。
             // ・ defaults：初期値。 
 
+            // Saml2
+            routes.MapRoute(
+                name: "Saml2Request",
+                url: Config.Saml2RequestEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "Account", action = "Saml2Request" }
+            );
+
+            // OAuth2
             routes.MapRoute(
                 name: "OAuth2Authorize",
                 url: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除

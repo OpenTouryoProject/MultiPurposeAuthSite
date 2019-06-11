@@ -57,10 +57,10 @@ namespace CreateJwkSetJson
             // 現在の証明書のJwk
             JObject rsaJwkObject = 
                 JsonConvert.DeserializeObject<JObject>(
-                    RsaPublicKeyConverter.X509CerToJwk(OAuth2AndOIDCParams.RS256Cer));
+                    RsaPublicKeyConverter.X509CerToJwk(CmnClientParams.RsaCerFilePath));
             JObject ecdsaJwkObject =
                 JsonConvert.DeserializeObject<JObject>(
-                    EccPublicKeyConverter.X509CerToJwk(OAuth2AndOIDCParams.ES256Cer));
+                    EccPublicKeyConverter.X509CerToJwk(CmnClientParams.EcdsaCerFilePath));
 
             // JwkSet.jsonファイルの存在チェック
             if (!ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))

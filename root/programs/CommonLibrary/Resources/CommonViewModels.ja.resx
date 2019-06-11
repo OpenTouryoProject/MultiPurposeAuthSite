@@ -213,4 +213,10 @@
   <data name="TlsClientAuthSubjectDn" xml:space="preserve">
     <value>使用するクライアント証明書のDN</value>
   </data>
+  <data name="ClarifyRedirectUri" xml:space="preserve">
+    <value>テスト時にredirect_uriを明示</value>
+  </data>
+  <data name="RedirectUriSaml" xml:space="preserve">
+    <value>redirect_uri_saml</value>
+  </data>
 </root>

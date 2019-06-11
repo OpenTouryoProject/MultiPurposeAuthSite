@@ -92,10 +92,10 @@ CREATE TABLE CustomizedConfirmation(
     CONSTRAINT PK_CustomizedConfirmation PRIMARY KEY (UserId)
 );
 
-CREATE TABLE OAuth2Data(
+CREATE TABLE Saml2OAuth2Data(
     ClientID varchar(256) NOT NULL,          -- PK
     UnstructuredData varchar(2000) NULL,     -- OAuth2 Unstructured Data
-    CONSTRAINT PK_OAuth2Data PRIMARY KEY (ClientID)
+    CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 
 CREATE TABLE FIDO2Data(
@@ -140,7 +140,7 @@ ALTER TABLE UserLogins ADD CONSTRAINT FK_UserLogins_Users_UserId FOREIGN KEY(Use
 ALTER TABLE UserClaims ADD CONSTRAINT FK_UserClaims_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- TotpTokens
 ALTER TABLE TotpTokens ADD CONSTRAINT FK_TotpTokens_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
----- OAuth2Data
-ALTER TABLE OAuth2Data ADD CONSTRAINT FK_OAuth2Data_Users_ClientID FOREIGN KEY(ClientID) REFERENCES Users (ClientID) ON DELETE CASCADE;
+---- Saml2OAuth2Data
+ALTER TABLE Saml2OAuth2Data ADD CONSTRAINT FK_Saml2OAuth2Data_Users_ClientID FOREIGN KEY(ClientID) REFERENCES Users (ClientID) ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE FIDO2Data ADD CONSTRAINT FK_FIDO2Data_Users_UserName FOREIGN KEY(UserName) REFERENCES Users (UserName) ON DELETE CASCADE;

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -847,15 +848,13 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// CanEditOAuth2Data
+        /// CanEditSaml2OAuth2Data
         /// </summary>
-        public static bool CanEditOAuth2Data
+        public static bool CanEditSaml2OAuth2Data
         {
             get
             {
-                return
-                    Config.EquipOAuth2Server
-                    && Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditOAuth2Data"));
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("CanEditSaml2OAuth2Data"));
             }
         }        
 
@@ -927,44 +926,116 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region STS
+
+        /// <summary>
+        /// IssuerId
+        /// </summary>
+        public static string IssuerId
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("IssuerId");
+            }
+        }
+
+        #region 証明書
+
+        #region RSA
+
+        /// <summary>
+        /// RSA署名用証明書（*.pfx）のパスワード
+        /// </summary>
+        public static string RsaPfxPassword
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("RsaPfxPassword");
+            }
+        }
+
+        /// <summary>
+        /// RSA署名用証明書（*.pfx）のパス
+        /// </summary>
+        public static string RsaPfxFilePath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("RsaPfxFilePath");
+            }
+        }
+
+        #endregion
+
+        #region ECDSA
+
+        /// <summary>
+        /// ECDSA署名用証明書（*.pfx）のパスワード
+        /// </summary>
+        public static string EcdsaPfxPassword
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("EcdsaPfxPassword");
+            }
+        }
+
+        /// <summary>
+        /// ECDSA署名用証明書（*.pfx）のパス
+        /// </summary>
+        public static string EcdsaPfxFilePath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("EcdsaPfxFilePath");
+            }
+        }
+        #endregion
+
+        #endregion
+
+        #region Saml2
+
+        // 基本的に、OAuth2/OIDCインフラを流用
+
+        /// <summary>
+        /// SAML2 Assertionの有効期限
+        /// </summary>
+        public static double Saml2AssertionExpireTimeSpanFromMinutes
+        {
+            get
+            {
+                return double.Parse(GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes"));
+            }
+        }
+
+        /// <summary>
+        /// Saml2のRequestエンドポイント 
+        /// </summary>
+        public static string Saml2RequestEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2RequestEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// Saml2のResponseエンドポイント 
+        /// </summary>
+        public static string Saml2ResponseEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("Saml2ResponseEndpoint");
+            }
+        }
+
+        #endregion
+
         #region OAuth2
 
-        #region 共通設定
-
-        /// <summary>
-        /// OAuth2Serverを実装しているか・どうか
-        /// </summary>
-        public static bool EquipOAuth2Server
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EquipOAuth2Server"));
-            }
-        }
-
         #region OAuth2関連プロパティ
-
-        /// <summary>
-        /// OAuth2のAllowInsecureHttpEndpointsプロパティ値
-        /// </summary>
-        public static bool AllowOAuth2InsecureHttpEndpoints
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("AllowOAuth2InsecureHttpEndpoints"));
-            }
-        }
-
-        /// <summary>
-        /// OAuth2のAuthorizeEndpointCanDisplayErrorsプロパティ値
-        /// </summary>
-        public static bool OAuth2AuthorizeEndpointCanDisplayErrors
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("OAuth2AuthorizeEndpointCanDisplayErrors"));
-            }
-        }
 
         /// <summary>
         /// OAuth2のAccessTokenの有効期限
@@ -978,6 +1049,17 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// OIDCのIdTokenの有効期限
+        /// </summary>
+        public static TimeSpan OidcIdTokenExpireTimeSpanFromMinutes
+        {
+            get
+            {
+                return TimeSpan.FromMinutes(int.Parse(GetConfigParameter.GetConfigValue("OidcIdTokenExpireTimeSpanFromMinutes")));
+            }
+        }
+
+        /// <summary>
         /// OAuth2のRefreshTokenの有効期限
         /// </summary>
         public static TimeSpan OAuth2RefreshTokenExpireTimeSpanFromDays
@@ -987,79 +1069,6 @@ namespace MultiPurposeAuthSite.Co
                 return TimeSpan.FromDays(int.Parse(GetConfigParameter.GetConfigValue("OAuth2RefreshTokenExpireTimeSpanFromDays")));
             }
         }
-
-        #endregion
-
-        #region JWT関連プロパティ
-        
-        /// <summary>
-        /// JWTのIssuerId (OAuth2 Server)
-        /// </summary>
-        public static string OAuth2IssuerId
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2IssuerId");
-            }
-        }
-
-        #region 証明書
-
-        #region RS256
-
-        /// <summary>
-        /// OAuth2/OIDCのRS256 JWT Tokenの署名用証明書（*.pfx）のパスワード
-        /// </summary>
-        public static string OAuth2JwsRs256Pwd
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2JwsRs256Pwd");
-            }
-        }
-
-        /// <summary>
-        /// OAuth2/OIDCのRS256 JWT Tokenの署名用証明書（*.pfx）のパス
-        /// </summary>
-        public static string OAuth2JwsRs256Pfx
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2JwsRs256Pfx");
-            }
-        }
-
-        #endregion
-
-        #region ES256
-
-        /// <summary>
-        /// OAuth2/OIDCのES256 JWT Tokenの署名用証明書（*.pfx）のパスワード
-        /// </summary>
-        public static string OAuth2JwsEs256Pwd
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2JwsEs256Pwd");
-            }
-        }
-
-        /// <summary>
-        /// OAuth2/OIDCのES256 JWT Tokenの署名用証明書（*.pfx）のパス
-        /// </summary>
-        public static string OAuth2JwsEs256Pfx
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2JwsEs256Pfx");
-            }
-        }
-
-        #endregion
-
-        #endregion
-
-        #endregion
 
         #endregion
 
@@ -1328,9 +1337,7 @@ namespace MultiPurposeAuthSite.Co
         {
             get
             {
-                return
-                    Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsLockedDownRedirectEndpoint"))
-                    || !Config.EquipOAuth2Server; // IsLockedDownがfalseでもOAuthServerがfalseならtrueを返す.
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsLockedDownRedirectEndpoint"));
             }
         }
 
@@ -1354,6 +1361,8 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("OAuth2ResourceServerEndpointsRootURI");
             }
         }
+
+        #endregion
 
         #endregion
 

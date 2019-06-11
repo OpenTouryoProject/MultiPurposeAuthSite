@@ -357,7 +357,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    // OAuth2DataProvider.OAuth2Data.TryUpdate が使えないので del -> ins にする。
+                    // TryUpdate が使えないので del -> ins にする。
                     string temp = "";
                     DataProvider.FIDO2Data.TryRemove(publicKeyId, out temp);
                     DataProvider.FIDO2Data.TryAdd(publicKeyId, unstructuredData);

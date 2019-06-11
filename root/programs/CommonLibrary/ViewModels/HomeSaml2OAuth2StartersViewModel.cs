@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：HomeOAuth2StartersViewModel
-//* クラス日本語名  ：Home > OAuth2StartersのVM（テンプレート）
+//* クラス名        ：HomeSaml2OAuth2StartersViewModel
+//* クラス日本語名  ：Home > Saml2OAuth2StartersのVM（テンプレート）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/02/16  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -37,9 +38,13 @@ using Touryo.Infrastructure.Public.FastReflection;
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>
 namespace MultiPurposeAuthSite.ViewModels
 {
-    /// <summary>Home > OAuth2StartersのVM</summary>
-    public class HomeOAuth2StartersViewModel : BaseViewModel
+    /// <summary>Home > Saml2OAuth2StartersのVM</summary>
+    public class HomeSaml2OAuth2StartersViewModel : BaseViewModel
     {
+        /// <summary>ClarifyRedirectUri</summary>
+        [Display(Name = "ClarifyRedirectUri", ResourceType = typeof(Resources.CommonViewModels))]
+        public bool ClarifyRedirectUri { get; set; }
+
         /// <summary>ClientType</summary>
         [Display(Name = "ClientType", ResourceType = typeof(Resources.CommonViewModels))]
         public string ClientType { get; set; }
@@ -52,7 +57,7 @@ namespace MultiPurposeAuthSite.ViewModels
                 return new List<SelectListItem>()
                 {
                     new SelectListItem() {
-                        Text = "OAuth2.0 / OIDC用 Client",
+                        Text = "Saml2 / OAuth2.0 / OIDC用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part1用 Client",

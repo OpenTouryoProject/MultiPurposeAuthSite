@@ -59,14 +59,14 @@ namespace CreateJwtBearerTokenFlowAssertion
             string jwkPrivateKey = "";
             string jwkPublicKey = "";
 
-            string iss = OAuth2AndOIDCParams.Isser;
+            string iss = CmnClientParams.Isser;
             string aud = OAuth2AndOIDCParams.Audience;
             string scopes = "hoge1 hoge2 hoge3";
             JObject jobj = null;
 
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                OAuth2AndOIDCParams.RS256Pfx,
-                OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
+                CmnClientParams.RsaPfxFilePath,
+                CmnClientParams.RsaPfxPassword, HashAlgorithmName.SHA256);
 
             #region PrivateKey
             Console.WriteLine("PrivateKey:");
@@ -90,14 +90,14 @@ namespace CreateJwtBearerTokenFlowAssertion
 
             #region Check
             string jwtAssertion = JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
-                OAuth2AndOIDCParams.Isser, OAuth2AndOIDCParams.Audience, new TimeSpan(0, 30, 0), scopes,
+                CmnClientParams.Isser, OAuth2AndOIDCParams.Audience, new TimeSpan(0, 30, 0), scopes,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPrivateKey), CustomEncode.us_ascii));
 
             if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
                 jwtAssertion, out iss, out aud, out scopes, out jobj,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPublicKey), CustomEncode.us_ascii)))
             {
-                if (iss == OAuth2AndOIDCParams.Isser
+                if (iss == CmnClientParams.Isser
                     && aud == OAuth2AndOIDCParams.Audience)
                 {
                     Console.WriteLine("JwtAssertion:");

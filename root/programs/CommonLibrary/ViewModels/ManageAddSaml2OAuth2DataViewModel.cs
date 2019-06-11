@@ -6,8 +6,8 @@
 // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
 //**********************************************************************************
-//* クラス名        ：ManageAddOAuth2DataViewModel
-//* クラス日本語名  ：OAuth2関連の非構造化データ設定用のVM（テンプレート）
+//* クラス名        ：ManageAddSaml2OAuth2DataViewModel
+//* クラス日本語名  ：Saml2, OAuth2関連の非構造化データ設定用のVM（テンプレート）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -37,8 +38,8 @@ using Touryo.Infrastructure.Public.FastReflection;
 /// <summary>MultiPurposeAuthSite.ViewModels</summary>
 namespace MultiPurposeAuthSite.ViewModels
 {
-    /// <summary>OAuth2関連の非構造化データ設定用のVM</summary>
-    public class ManageAddOAuth2DataViewModel : BaseViewModel
+    /// <summary>Saml2, OAuth2関連の非構造化データ設定用のVM</summary>
+    public class ManageAddSaml2OAuth2DataViewModel : BaseViewModel
     {
         /// <summary>ClientID</summary>
         [Display(Name = "ClientID", ResourceType = typeof(Resources.CommonViewModels))]
@@ -51,6 +52,16 @@ namespace MultiPurposeAuthSite.ViewModels
         // [StringLength( // ユーザ入力でないので不要
         [JsonProperty(PropertyName = "client_secret")]
         public string ClientSecret { get; set; }
+
+        /// <summary>RedirectUriSaml</summary>
+        [Display(Name = "RedirectUriSaml", ResourceType = typeof(Resources.CommonViewModels))]
+        //[Url] localhost や IPアドレスが入力できない。
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "redirect_uri_saml")]
+        public string RedirectUriSaml { get; set; }
 
         /// <summary>RedirectUriCode</summary>
         [Display(Name = "RedirectUriCode", ResourceType = typeof(Resources.CommonViewModels))]
@@ -95,7 +106,7 @@ namespace MultiPurposeAuthSite.ViewModels
                 return new List<SelectListItem>()
                 {
                     new SelectListItem() {
-                        Text = "OAuth2.0 / OIDC",
+                        Text = "Saml2, OAuth2.0 / OIDC",
                         Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part1",

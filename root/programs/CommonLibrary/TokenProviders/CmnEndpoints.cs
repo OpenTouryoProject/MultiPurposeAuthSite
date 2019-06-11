@@ -52,7 +52,7 @@ using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;
@@ -89,7 +89,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region 基本
 
-            OpenIDConfig.Add("issuer", Config.OAuth2IssuerId);
+            OpenIDConfig.Add("issuer", Config.IssuerId);
 
             OpenIDConfig.Add("authorization_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2AuthorizeEndpoint);
@@ -556,7 +556,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
                                 HashClaimType.AtHash | HashClaimType.SHash,
-                                Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd, jwkString);
+                                Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
                         }
                     }
                 }
@@ -658,7 +658,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, code, state, // at_hash, c_hash, s_hash
                             HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd, jwkString);
+                            Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
                     }
                 }
 
@@ -1307,7 +1307,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!string.IsNullOrEmpty(client_secret))
                 {
-                    // *.config or OAuth2Dataテーブルを参照して、
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（client_secret）を行なう。
                     if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                     {
@@ -1318,7 +1318,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
                 else if (x509 != null)
                 {
-                    // *.config or OAuth2Dataテーブルを参照して、
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
                     // クライアント認証（X509Certificate2）を行なう。
                     if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
                     {
@@ -1507,13 +1507,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, Config.OAuth2JwsRs256Pfx, Config.OAuth2JwsRs256Pwd, jwkString);
+                            HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
                     }
                     else
                     {
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, Config.OAuth2JwsEs256Pfx, Config.OAuth2JwsEs256Pwd, jwkString);
+                            HashClaimType.None, Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, jwkString);
                     }
 
                     if (!string.IsNullOrEmpty(id_token))
