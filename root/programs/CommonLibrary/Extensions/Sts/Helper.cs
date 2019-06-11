@@ -161,7 +161,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region ClientBuilder
 
         /// <summary>
-        /// TOAuth Serverにアクセスするための
+        /// AuthZ Serverにアクセスするための
         /// HttpClientを生成するメソッド
         /// </summary>
         /// <returns>
@@ -206,11 +206,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             };
 
             // Browser（Resource Owner）からではなくでClientから
-            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfx))
+            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfxFilePath))
             {
                 handler.ClientCertificates.Add(new X509Certificate(
-                    OAuth2AndOIDCParams.ClientCertPfx,
-                    OAuth2AndOIDCParams.ClientCertPwd,
+                    OAuth2AndOIDCParams.ClientCertPfxFilePath,
+                    OAuth2AndOIDCParams.ClientCertPfxPassword,
                     X509KeyStorageFlags.MachineKeySet));
             }
 #else
@@ -221,11 +221,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             };
 
             // Browser（Resource Owner）からではなくでClientから
-            if (!string.IsNullOrEmpty(CmnClientParams.ClientCertPfx))
+            if (!string.IsNullOrEmpty(CmnClientParams.ClientCertPfxFilePath))
             {
                 handler.ClientCertificates.Add(new X509Certificate(
-                    CmnClientParams.ClientCertPfx,
-                    CmnClientParams.ClientCertPwd,
+                    CmnClientParams.ClientCertPfxFilePath,
+                    CmnClientParams.ClientCertPfxPassword,
                     X509KeyStorageFlags.MachineKeySet));
             }
 #endif
