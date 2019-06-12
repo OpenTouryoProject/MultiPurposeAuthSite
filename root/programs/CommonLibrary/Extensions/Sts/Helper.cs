@@ -206,11 +206,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             };
 
             // Browser（Resource Owner）からではなくでClientから
-            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfxFilePath))
+            if (!string.IsNullOrEmpty(CmnClientParams.ClientCertPfxFilePath))
             {
                 handler.ClientCertificates.Add(new X509Certificate(
-                    OAuth2AndOIDCParams.ClientCertPfxFilePath,
-                    OAuth2AndOIDCParams.ClientCertPfxPassword,
+                    CmnClientParams.ClientCertPfxFilePath,
+                    CmnClientParams.ClientCertPfxPassword,
                     X509KeyStorageFlags.MachineKeySet));
             }
 #else

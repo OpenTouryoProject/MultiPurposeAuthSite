@@ -2248,20 +2248,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
-                            #region 旧コード
-                            //string body =
-                            //    "<html>" +
-                            //    "  <body onload=\"javascript: document.forms[0].submit()\">" +
-                            //    "    <form method=\"post\" action =\"{0}\">" +
-                            //    "      <input type=\"hidden\" name =\"code\" value =\"{1}\"/>" +
-                            //    "      <input type=\"hidden\" name =\"state\"  value =\"{2}\"/>" +
-                            //    "    </form>" +
-                            //    "  </body>" +
-                            //    "</html>";
-                            //body = string.Format(body, valid_redirect_uri, code, state);
-                            //return this.Content(body);
-                            #endregion
-
+                            // form_post
                             ViewData["Action"] = valid_redirect_uri;
                             ViewData["Code"] = code;
                             ViewData["State"] = state;
@@ -2482,6 +2469,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                     {
+                        // form_post
                         ViewData["Action"] = valid_redirect_uri;
                         ViewData["Code"] = code;
                         ViewData["State"] = state;
@@ -2594,7 +2582,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // 秘密鍵
                         DigitalSignX509 dsX509 = new DigitalSignX509(
-                            CmnClientParams.RsaPfxFilePath, CmnClientParams.RsaPfxPassword,
+                            CmnClientParams.RsaPfxFilePath,
+                            CmnClientParams.RsaPfxPassword,
                             HashAlgorithmName.SHA256);
 
                         model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(

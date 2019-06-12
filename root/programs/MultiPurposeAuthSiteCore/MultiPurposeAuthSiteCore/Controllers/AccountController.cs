@@ -28,13 +28,14 @@ using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
-using MultiPurposeAuthSite.Extensions;
-using MultiPurposeAuthSite.TokenProviders;
+using Token = MultiPurposeAuthSite.TokenProviders;
+using Saml = MultiPurposeAuthSite.SamlProviders;
 using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
-using OAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
+using System.Xml;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -200,6 +201,8 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region Action Method
+
+        #region IdP
 
         #region サインイン
 
@@ -2016,7 +2019,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string redirect_uri = Config.IdFederationRedirectEndPoint;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                    model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                              new Uri(Config.IdFederationTokenEndPoint),
                             client_id, client_secret, redirect_uri, code, "");
 
@@ -2197,6 +2200,201 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
+        #region STS (Security Token Service)
+
+        #region Saml Endpoint
+
+        #region Saml2 Request
+
+        /// <summary>Saml2Request</summary>
+        /// <param name="samlRequest">string</param>
+        /// <param name="relayState">string</param>
+        /// <param name="sigAlg">string</param>
+        /// <returns>ActionResult</returns>
+        public async Task<ActionResult> Saml2Request(string samlRequest, string relayState, string sigAlg)
+        {
+            bool verified = false;
+
+            string queryString = "";
+            string decodeSaml = "";
+
+            XmlDocument samlRequest2 = null;
+            XmlNamespaceManager samlNsMgr = null;
+
+            string iss = "";
+            string id = "";
+            string rtnUrl = "";
+
+            if (Request.Method.ToLower() == "get")
+            {
+                // DecodeRedirect
+                string rawUrl = Request.GetEncodedUrl();
+                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
+
+                // XmlDocument
+                samlRequest2 = new XmlDocument();
+                samlRequest2.PreserveWhitespace = false;
+                samlRequest2.LoadXml(decodeSaml);
+
+                // XmlNamespaceManager
+                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
+
+                // VerifySamlRequest
+                //if (SAML2Const.RSAwithSHA1 == sigAlg) // 無い場合も通るようにする。
+                verified = Saml.CmnEndpoints.VerifySamlRequest(
+                    queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+            }
+            else if (Request.Method.ToLower() == "post")
+            {
+                // DecodePost
+                decodeSaml = SAML2Bindings.DecodePost(samlRequest);
+
+                // XmlDocument
+                samlRequest2 = new XmlDocument();
+                samlRequest2.PreserveWhitespace = false;
+                samlRequest2.LoadXml(decodeSaml);
+
+                // XmlNamespaceManager
+                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
+
+                // VerifySamlRequest
+                verified = Saml.CmnEndpoints.VerifySamlRequest(
+                    "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+            }
+
+            // レスポンス生成
+            if (verified)
+            {
+                string samlResponse = "";
+
+                // Cookie認証チケットからClaimsIdentityを取得しておく。
+                // Cookie認証チケットからClaimsPrincipalを取得しておく。
+                AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
+                ClaimsPrincipal principal = (ticket != null) ? ticket.Principal : null;
+
+                // ClaimsIdentityを生成
+                ClaimsIdentity identity = new ClaimsIdentity(principal.Claims,
+                        OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
+
+                // Assertion > AttributeStatement > Attribute > AttributeValueに
+                // クレームを足すなら、ココで、identity.Claimsに値を詰めたりする。
+
+                if (Saml.CmnEndpoints.CreateSamlResponse(
+                    identity, SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, 
+                    iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
+                    == SAML2Enum.ProtocolBinding.HttpRedirect)
+                {
+                    // Redirect
+                    return Redirect(rtnUrl + "?" + queryString);
+                }
+                else
+                {
+                    // Post
+                    ViewData["RelayState"] = relayState;
+                    ViewData["SAMLResponse"] = samlResponse;
+                    ViewData["Action"] = rtnUrl;
+
+                    return View("PostBinding");
+                }
+            }
+
+            return null;
+        }
+
+        #endregion
+
+        #region Saml2 Response
+
+        /// <summary>AssertionConsumerService</summary>
+        /// <param name="samlResponse">string</param>
+        /// <param name="relayState">string</param>
+        /// <param name="sigAlg">string</param>
+        /// <returns>ActionResult</returns>
+        [AllowAnonymous]
+        public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
+        {
+            bool verified = false;
+
+            string nameId = "";
+            string iss = "";
+            string aud = "";
+            string inResponseTo = "";
+            string recipient = "";
+            DateTime? notOnOrAfter = null;
+
+            SAML2Enum.StatusCode? statusCode = null;
+            SAML2Enum.NameIDFormat? nameIDFormat = null;
+            SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
+
+            XmlDocument samlResponse2 = null;
+
+            if (Request.Method.ToLower() == "get")
+            {
+                string rawUrl = Request.GetEncodedUrl();
+                string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+
+                if (SAML2Const.RSAwithSHA1 == sigAlg)
+                    if (SAML2Client.VerifyResponse(
+                        queryString, samlResponse, out nameId, out iss, out aud,
+                        out inResponseTo, out recipient, out notOnOrAfter,
+                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
+                    {
+                        if (iss == Config.IssuerId) verified = true;
+                    }
+            }
+            else if (Request.Method.ToLower() == "post")
+            {
+                if (SAML2Client.VerifyResponse(
+                    "", samlResponse, out nameId, out iss, out aud,
+                    out inResponseTo, out recipient, out notOnOrAfter,
+                    out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
+                {
+                    if (iss == Config.IssuerId) verified = true;
+                }
+            }
+
+            // LoadRequestParameters
+            string clientId_InSessionOrCookie = "";
+            string state_InSessionOrCookie = "";
+            string redirect_uri_InSessionOrCookie = "";
+            string nonce_InSessionOrCookie = "";
+            string code_verifier_InSessionOrCookie = "";
+            this.LoadRequestParameters(
+                out clientId_InSessionOrCookie,
+                out state_InSessionOrCookie,
+                out redirect_uri_InSessionOrCookie,
+                out nonce_InSessionOrCookie,
+                out code_verifier_InSessionOrCookie);
+
+            // レスポンス生成
+            if (verified)
+            {
+                // 認証完了。
+
+                // 必要に応じてチェックしてもイイ
+                // relayStateをstateに利用したケース
+                if (relayState == state_InSessionOrCookie) { }
+
+                // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
+                return Redirect(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + "?ret=認証完了（面倒なので画面は作成しませんが）");
+            }
+            else
+            {
+                // 認証失敗。
+                return Redirect(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=認証失敗");
+            }
+        }
+
+        #endregion
+
+        #endregion
+
         #region OAuth Endpoint
 
         #region Authorize（認可エンドポイント）
@@ -2220,7 +2418,7 @@ namespace MultiPurposeAuthSite.Controllers
             string nonce, string prompt) // OpenID Connect
             // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
         {
-            if (CmnEndpoints.ValidateAuthZReqParam(
+            if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
@@ -2254,11 +2452,11 @@ namespace MultiPurposeAuthSite.Controllers
                         // ★ 必要に応じてスコープのフィルタ
                         if (isAuth)
                         {
-                            scopes = OAuth2.Helper.FilterClaimAtAuth(scopes).ToArray();
+                            scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
                         }
 
                         // ★ Codeの生成
-                        string code = CmnEndpoints.CreateCodeInAuthZNRes(identity,
+                        string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(identity,
                             HttpUtility.ParseQueryString(Request.QueryString.Value), client_id, state, scopes, nonce);
 
                         // RedirectエンドポイントへRedirect
@@ -2301,7 +2499,7 @@ namespace MultiPurposeAuthSite.Controllers
                             OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
                     // ★ Tokenの生成
-                    CmnEndpoints.CreateAuthZRes4ImplicitFlow(identity,
+                    Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(identity,
                         HttpUtility.ParseQueryString(Request.QueryString.Value),
                         response_type, client_id, state, scopes, nonce,
                         out string access_token, out string id_token);
@@ -2362,7 +2560,7 @@ namespace MultiPurposeAuthSite.Controllers
                             OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
                     // ★ Tokenの生成
-                    string code = CmnEndpoints.CreateAuthNRes4HybridFlow(identity,
+                    string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(identity,
                         HttpUtility.ParseQueryString(Request.QueryString.Value),
                         client_id, state, scopes, nonce,
                         out string access_token, out string id_token);
@@ -2451,7 +2649,7 @@ namespace MultiPurposeAuthSite.Controllers
             string scope, string state,
             string nonce) // OpenID Connect
         {
-            if (CmnEndpoints.ValidateAuthZReqParam(
+            if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
             {
@@ -2478,7 +2676,7 @@ namespace MultiPurposeAuthSite.Controllers
                         OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
                     
                     // ★ Codeの生成
-                    string code = CmnEndpoints.CreateCodeInAuthZNRes(identity,
+                    string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(identity,
                         HttpUtility.ParseQueryString(Request.QueryString.Value), client_id, state, scopes, nonce);
 
                     // RedirectエンドポイントへRedirect
@@ -2537,48 +2735,18 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
-            #region テスト用
-
-            IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
-            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-
-            // client_id
-            string clientId_InSessionOrCookie = (string)HttpContext.Session.GetString("test_client_id");
-            if (string.IsNullOrEmpty(clientId_InSessionOrCookie))
-            {
-                clientId_InSessionOrCookie = requestCookies.Get("test_client_id");
-            }
-
-            // state
-            string state_InSessionOrCookie = (string)HttpContext.Session.GetString("test_state");
-            if (string.IsNullOrEmpty(state_InSessionOrCookie))
-            {
-                state_InSessionOrCookie = requestCookies.Get("test_state");
-            }
-
-            // nonce
-            string nonce_InSessionOrCookie = (string)HttpContext.Session.GetString("test_nonce");
-            if (string.IsNullOrEmpty(nonce_InSessionOrCookie))
-            {
-                nonce_InSessionOrCookie = requestCookies.Get("test_nonce");
-            }
-
-            // code_verifier
-            string code_verifier_InSessionOrCookie = (string)HttpContext.Session.GetString("test_code_verifier");
-            if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
-            {
-                code_verifier_InSessionOrCookie = requestCookies.Get("test_code_verifier");
-            }
-
-            // クリア
-            HttpContext.Session.SetString("test_client_id", "");
-            responseCookies.Set("test_client_id", "");
-            HttpContext.Session.SetString("test_state", "");
-            responseCookies.Set("test_state", "");
-            HttpContext.Session.SetString("test_code_verifier", "");
-            responseCookies.Set("test_code_verifier", "");
-
-            #endregion
+            // LoadRequestParameters
+            string clientId_InSessionOrCookie = "";
+            string state_InSessionOrCookie = "";
+            string redirect_uri_InSessionOrCookie = "";
+            string nonce_InSessionOrCookie = "";
+            string code_verifier_InSessionOrCookie = "";
+            this.LoadRequestParameters(
+                out clientId_InSessionOrCookie,
+                out state_InSessionOrCookie,
+                out redirect_uri_InSessionOrCookie,
+                out nonce_InSessionOrCookie,
+                out code_verifier_InSessionOrCookie);
 
             if (!Config.IsLockedDownRedirectEndpoint)
             {
@@ -2608,9 +2776,20 @@ namespace MultiPurposeAuthSite.Controllers
                     //state正常
 
                     // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri
-                    = Config.OAuth2ClientEndpointsRootURI
-                    + Config.OAuth2AuthorizationCodeGrantClient_Account;
+
+                    // redirect_uriを設定
+                    string redirect_uri = "";
+                    if (string.IsNullOrEmpty(redirect_uri_InSessionOrCookie))
+                    {
+                        // 指定なしの場合のテストケース（指定不要
+                        //redirect_uri = Config.OAuth2ClientEndpointsRootURI
+                        //    + Config.OAuth2AuthorizationCodeGrantClient_Account;
+                    }
+                    else
+                    {
+                        // 指定ありの場合のテストケース（指定必要
+                        redirect_uri = redirect_uri_InSessionOrCookie;
+                    }
 
                     // Tokenエンドポイントにアクセス
                     if (state.StartsWith(fapi1Prefix))
@@ -2625,10 +2804,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // 秘密鍵
                         DigitalSignX509 dsX509 = new DigitalSignX509(
-                            OAuth2AndOIDCParams.RS256Pfx,
-                            OAuth2AndOIDCParams.RS256Pwd, HashAlgorithmName.SHA256);
+                            CmnClientParams.RsaPfxFilePath,
+                            CmnClientParams.RsaPfxPassword,
+                            HashAlgorithmName.SHA256);
 
-                        model.Response = await OAuth2.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                        model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                             tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
                                 iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
                                 ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
@@ -2640,7 +2820,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //  client_Idと、クライアント証明書（TB）
                         string client_id = clientId_InSessionOrCookie;
 
-                        model.Response = await OAuth2.Helper.GetInstance()
+                        model.Response = await Sts.Helper.GetInstance()
                             .GetAccessTokenByCodeAsync(tokenEndpointUri,
                             client_id, "", redirect_uri, code);
                     }
@@ -2650,19 +2830,19 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = clientId_InSessionOrCookie;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
                         if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                         {
                             // 通常
-                            model.Response = await OAuth2.Helper.GetInstance()
+                            model.Response = await Sts.Helper.GetInstance()
                                 .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                 client_id, client_secret, redirect_uri, code);
                         }
                         else
                         {
                             // PKCE
-                            model.Response = await OAuth2.Helper.GetInstance()
+                            model.Response = await Sts.Helper.GetInstance()
                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                client_id, client_secret, redirect_uri,
                                code, code_verifier_InSessionOrCookie);
@@ -2770,7 +2950,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (!string.IsNullOrEmpty(Request.Form["submit.GetUserClaims"]))
                     {
                         // UserInfoエンドポイントにアクセス
-                        model.Response = await OAuth2.Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
+                        model.Response = await Sts.Helper.GetInstance().GetUserInfoAsync(model.AccessToken);
                     }
                     else if (!string.IsNullOrEmpty(Request.Form["submit.Refresh"]))
                     {
@@ -2783,9 +2963,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2.Helper.GetInstance().
+                        model.Response = await Sts.Helper.GetInstance().
                             UpdateAccessTokenByRefreshTokenAsync(
                             tokenEndpointUri, client_id, client_secret, model.RefreshToken);
 
@@ -2833,9 +3013,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2.Helper.GetInstance().RevokeTokenAsync(
+                        model.Response = await Sts.Helper.GetInstance().RevokeTokenAsync(
                             revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -2868,9 +3048,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         //  client_Idから、client_secretを取得。
                         string client_id = model.ClientId;
-                        string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
-                        model.Response = await OAuth2.Helper.GetInstance().IntrospectTokenAsync(
+                        model.Response = await Sts.Helper.GetInstance().IntrospectTokenAsync(
                             introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
 
                         #endregion
@@ -2929,6 +3109,114 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #endregion
+
+        #endregion
+
+        #region テスト用
+
+        /// <summary>LoadRequestParameters</summary>
+        /// <param name="clientId">out string</param>
+        /// <param name="state">out string</param>
+        /// <param name="redirect_uri">out string</param>
+        /// <param name="nonce">out string</param>
+        /// <param name="code_verifier">out string</param>
+        private void LoadRequestParameters(
+            out string clientId,
+            out string state, out string redirect_uri,
+            out string nonce, out string code_verifier)
+        {
+            IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
+            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+
+            // client_id
+            clientId = HttpContext.Session.GetString("test_client_id");
+            if (requestCookies.Get("test_client_id") == null)
+            {
+                clientId = requestCookies.Get("test_client_id");
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(requestCookies.Get("test_client_id")))
+                {
+                    clientId = requestCookies.Get("test_client_id");
+                }
+            }
+
+            // state
+            state = HttpContext.Session.GetString("test_state");
+            if (requestCookies.Get("test_state") == null)
+            {
+                state = requestCookies.Get("test_state");
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(requestCookies.Get("test_state")))
+                {
+                    state = requestCookies.Get("test_state");
+                }
+            }
+
+            // redirect_uri
+            redirect_uri = HttpContext.Session.GetString("test_redirect_uri");
+            if (requestCookies.Get("test_redirect_uri") == null)
+            {
+                redirect_uri = requestCookies.Get("test_redirect_uri");
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(requestCookies.Get("test_redirect_uri")))
+                {
+                    redirect_uri = requestCookies.Get("test_redirect_uri");
+                }
+            }
+
+            // nonce
+            nonce = HttpContext.Session.GetString("test_nonce");
+            if (requestCookies.Get("test_nonce") == null)
+            {
+                nonce = requestCookies.Get("test_nonce");
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(requestCookies.Get("test_nonce")))
+                {
+                    nonce = requestCookies.Get("test_nonce");
+                }
+            }
+
+            // code_verifier
+            code_verifier = HttpContext.Session.GetString("test_code_verifier");
+            if (requestCookies.Get("test_code_verifier") == null)
+            {
+                code_verifier = requestCookies.Get("test_code_verifier");
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(requestCookies.Get("test_code_verifier")))
+                {
+                    code_verifier = requestCookies.Get("test_code_verifier");
+                }
+            }
+        }
+        #endregion
+
+        #endregion
+
+        #endregion
+
+        #region Dispose
+
+        /// <summary>Dispose</summary>
+        /// <param name="disposing">bool</param>
+        protected override void Dispose(bool disposing)
+        {
+            // メンバのdisposingを実装しているらしい。
+            if (disposing)
+            {
+            }
+
+            base.Dispose(disposing);
+        }
 
         #endregion
 
@@ -3183,8 +3471,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
         
-        #endregion
-
         #endregion
 
         #endregion
