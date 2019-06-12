@@ -7,8 +7,8 @@
     // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
 
     //**********************************************************************************
-    //* クラス名        ：AddOAuth2Data
-    //* クラス日本語名  ：OAuth2関連の非構造化データの追加・編集用のView
+    //* クラス名        ：AddSaml2OAuth2Data
+    //* クラス日本語名  ：Saml2, OAuth2関連の非構造化データの追加・編集用のView
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -21,9 +21,9 @@
     //**********************************************************************************
 *@
 
-@model ManageAddOAuth2DataViewModel
+@model ManageAddSaml2OAuth2DataViewModel
 @{
-    ViewBag.Title = ManageViews.AddOAuth2DataTitle;
+    ViewBag.Title = ManageViews.AddSaml2OAuth2DataTitle;
 }
 
 @* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
@@ -33,10 +33,10 @@
 
 <h2>@ViewBag.Title</h2>
 
-@using (Html.BeginForm("AddOAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+@using (Html.BeginForm("AddSaml2OAuth2Data", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
 {
     @Html.AntiForgeryToken()
-    <h4>@ManageViews.AddOAuth2DataH4</h4>
+    <h4>@ManageViews.AddSaml2OAuth2DataH4</h4>
     <hr />
     @Html.ValidationSummary("", new { @class = "text-danger" })
     <div class="form-group">
@@ -97,7 +97,7 @@
     </div>
     <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
-            <input type="submit" class="btn btn-primary" name="submit.Add" value="@ManageViews.AddOAuth2DataSubmit" />
+            <input type="submit" class="btn btn-primary" name="submit.Add" value="@ManageViews.AddSaml2OAuth2DataSubmit" />
         </div>
     </div>
 }
