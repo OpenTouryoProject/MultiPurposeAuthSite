@@ -180,8 +180,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             JWS_RS256_X509 jwsRS256 = null;
 
             // JWT_RS256_X509
-            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
 
             // JWSHeaderのセット
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
@@ -327,8 +326,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             JWS_RS256_X509 jwsRS256 = null;
 
             // 署名
-            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
 
             // JWSHeaderのセット
             Dictionary<string, string> jwk =

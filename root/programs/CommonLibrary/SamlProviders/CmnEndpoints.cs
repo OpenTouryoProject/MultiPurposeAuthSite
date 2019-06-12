@@ -153,8 +153,9 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // DigitalSignX509
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                Config.RsaPfxFilePath, Config.RsaPfxPassword, HashAlgorithmName.SHA1,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+                Config.RsaPfxFilePath,
+                Config.RsaPfxPassword,
+                HashAlgorithmName.SHA1);
 
             // rtnUrl
             string temp1 = SAML2Bindings.GetAssertionConsumerServiceURLInRequest(samlRequest, samlNsMgr);

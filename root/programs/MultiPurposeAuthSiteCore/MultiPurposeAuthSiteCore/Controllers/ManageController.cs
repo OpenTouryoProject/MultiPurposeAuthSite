@@ -2240,12 +2240,12 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// OAuth2関連の非構造化データの追加・編集画面（初期表示）
-        /// GET: /Manage/AddOAuth2Data
+        /// GET: /Manage/AddSaml2OAuth2Data
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> AddOAuth2Data()
+        public async Task<ActionResult> AddSaml2OAuth2Data()
         {
             if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
@@ -2255,11 +2255,11 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddSaml2OAuth2DataViewModel model = null;
 
-                string oAuth2Data = Sts.DataProvider.Get(user.ClientID);
+                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
 
-                if (!string.IsNullOrEmpty(oAuth2Data))
+                if (!string.IsNullOrEmpty(saml2OAuth2Data))
                 {
-                    model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(oAuth2Data);
+                    model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                     if (string.IsNullOrEmpty(model.ClientID))
                     {
                         // 空（userから取得
@@ -2287,22 +2287,22 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// OAuth2関連の非構造化データの追加・編集画面（OAuth2関連の非構造化データ設定）
-        /// POST: /Manage/AddOAuth2Data
+        /// POST: /Manage/AddSaml2OAuth2Data
         /// </summary>
-        /// <param name="model">ManageAddOAuth2DataViewModel</param>
+        /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> AddOAuth2Data(ManageAddSaml2OAuth2DataViewModel model)
+        public async Task<ActionResult> AddSaml2OAuth2Data(ManageAddSaml2OAuth2DataViewModel model)
         {
             if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
             {
-                // ManageAddOAuth2DataViewModelの検証
+                // ManageAddSaml2OAuth2DataViewModelの検証
                 if (ModelState.IsValid)
                 {
-                    // ManageAddOAuth2DataViewModelの検証に成功
+                    // ManageAddSaml2OAuth2DataViewModelの検証に成功
                     if (!string.IsNullOrEmpty(Request.Form["submit.ClientID"]))
                     {
                         ModelState.Clear();
@@ -2372,7 +2372,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // ManageAddOAuth2DataViewModelの検証に失敗
+                    // ManageAddSaml2OAuth2DataViewModelの検証に失敗
                 }
 
                 // 再表示
@@ -2444,13 +2444,13 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// OAuth2関連の非構造化データの削除
-        /// POST: /Manage/RemoveOAuth2Data
+        /// POST: /Manage/RemoveSaml2OAuth2Data
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> RemoveOAuth2Data()
+        public async Task<ActionResult> RemoveSaml2OAuth2Data()
         {
             if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
