@@ -208,45 +208,15 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id → Issuer
             HttpContext.Session.SetString("test_client_id", this.ClientId);
-            if (requestCookies.Get("test_client_id") == null)
-            {
-                responseCookies.Set("test_client_id", this.ClientId);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_client_id")))
-                {
-                    responseCookies.Set("test_client_id", this.ClientId);
-                }
-            }
+            responseCookies.Set("test_client_id", this.ClientId);
 
             // redirect_uri → AssertionConsumerService
             HttpContext.Session.SetString("test_redirect_uri", this.RedirectUri);
-            if (requestCookies.Get("test_redirect_uri") == null)
-            {
-                responseCookies.Set("test_redirect_uri", this.RedirectUri);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_redirect_uri")))
-                {
-                    responseCookies.Set("test_redirect_uri", this.RedirectUri);
-                }
-            }
+            responseCookies.Set("test_redirect_uri", this.RedirectUri);
 
             // state → RelayState
             HttpContext.Session.SetString("test_state", this.State);
-            if (requestCookies.Get("test_state") == null)
-            {
-                responseCookies.Set("test_state", this.State);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_state")))
-                {
-                    responseCookies.Set("test_state", this.State);
-                }
-            }
+            responseCookies.Set("test_state", this.State);
         }
 
         #endregion
@@ -732,6 +702,7 @@ namespace MultiPurposeAuthSite.Controllers
             this.InitSaml2Params();
 
             string id = "";
+
             string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpPost,
                 SAML2Enum.NameIDFormat.Unspecified,

@@ -208,7 +208,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // Browser（Resource Owner）からではなくでClientから
             if (!string.IsNullOrEmpty(CmnClientParams.ClientCertPfxFilePath))
             {
-                handler.ClientCertificates.Add(new X509Certificate(
+                // 2019/06/12 : X509Certificate -> X509Certificate2
+                // Because following error was outputted :
+                // Unable to cast object of type 'System.Security.Cryptography.X509Certificates.X509Certificate'
+                //                to type 'System.Security.Cryptography.X509Certificates.X509Certificate2'.
+                handler.ClientCertificates.Add(new X509Certificate2(
                     CmnClientParams.ClientCertPfxFilePath,
                     CmnClientParams.ClientCertPfxPassword,
                     X509KeyStorageFlags.MachineKeySet));

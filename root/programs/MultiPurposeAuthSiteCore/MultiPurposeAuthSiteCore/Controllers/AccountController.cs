@@ -2380,15 +2380,17 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
                 return Redirect(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + "?ret=認証完了（面倒なので画面は作成しませんが）");
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret="
+                    + CustomEncode.UrlEncode("認証完了（面倒なので画面は作成しませんが）"));
             }
             else
             {
                 // 認証失敗。
                 return Redirect(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=認証失敗");
+                    Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + "?ret=" + CustomEncode.UrlEncode("認証失敗"));
             }
+            // ※ ASP.NET Coreだと、手動でUrlEncodeしないとダメっぽい。
         }
 
         #endregion
@@ -2674,7 +2676,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // アクセス要求を保存して、仲介コードを発行する。
                     ClaimsIdentity identity = new ClaimsIdentity(principal.Claims, 
                         OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
-                    
+
                     // ★ Codeの生成
                     string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(identity,
                         HttpUtility.ParseQueryString(Request.QueryString.Value), client_id, state, scopes, nonce);
@@ -3130,71 +3132,56 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id
             clientId = HttpContext.Session.GetString("test_client_id");
-            if (requestCookies.Get("test_client_id") == null)
+            if (string.IsNullOrEmpty(clientId))
             {
                 clientId = requestCookies.Get("test_client_id");
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_client_id")))
+                if (!string.IsNullOrEmpty(clientId))
                 {
-                    clientId = requestCookies.Get("test_client_id");
+                    responseCookies.Set("test_client_id", "");
                 }
             }
 
             // state
             state = HttpContext.Session.GetString("test_state");
-            if (requestCookies.Get("test_state") == null)
+            if (string.IsNullOrEmpty(state))
             {
                 state = requestCookies.Get("test_state");
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_state")))
+                if (!string.IsNullOrEmpty(clientId))
                 {
-                    state = requestCookies.Get("test_state");
+                    responseCookies.Set("test_state", "");
                 }
             }
 
             // redirect_uri
             redirect_uri = HttpContext.Session.GetString("test_redirect_uri");
-            if (requestCookies.Get("test_redirect_uri") == null)
+            if (string.IsNullOrEmpty(redirect_uri))
             {
                 redirect_uri = requestCookies.Get("test_redirect_uri");
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_redirect_uri")))
+                if (!string.IsNullOrEmpty(clientId))
                 {
-                    redirect_uri = requestCookies.Get("test_redirect_uri");
+                    responseCookies.Set("test_redirect_uri", "");
                 }
             }
 
             // nonce
             nonce = HttpContext.Session.GetString("test_nonce");
-            if (requestCookies.Get("test_nonce") == null)
+            if (string.IsNullOrEmpty(nonce))
             {
                 nonce = requestCookies.Get("test_nonce");
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_nonce")))
+                if (!string.IsNullOrEmpty(clientId))
                 {
-                    nonce = requestCookies.Get("test_nonce");
+                    responseCookies.Set("test_nonce", "");
                 }
             }
 
             // code_verifier
             code_verifier = HttpContext.Session.GetString("test_code_verifier");
-            if (requestCookies.Get("test_code_verifier") == null)
+            if (string.IsNullOrEmpty(code_verifier))
             {
                 code_verifier = requestCookies.Get("test_code_verifier");
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_code_verifier")))
+                if (!string.IsNullOrEmpty(clientId))
                 {
-                    code_verifier = requestCookies.Get("test_code_verifier");
+                    responseCookies.Set("test_code_verifier", "");
                 }
             }
         }
