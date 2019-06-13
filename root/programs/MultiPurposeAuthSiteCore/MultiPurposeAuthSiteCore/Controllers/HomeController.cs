@@ -253,73 +253,23 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id
             HttpContext.Session.SetString("test_client_id", this.ClientId);
-            if (requestCookies.Get("test_client_id") == null)
-            {
-                responseCookies.Set("test_client_id", this.ClientId);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_client_id")))
-                {
-                    responseCookies.Set("test_client_id", this.ClientId);
-                }
-            }
+            responseCookies.Set("test_client_id", this.ClientId);
 
             // state
             HttpContext.Session.SetString("test_state", this.State);
-            if (requestCookies.Get("test_state") == null)
-            {
-                responseCookies.Set("test_state", this.State);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_state")))
-                {
-                    responseCookies.Set("test_state", this.State);
-                }
-            }
-            
+            responseCookies.Set("test_state", this.State);
+
             // redirect_uri
             HttpContext.Session.SetString("test_redirect_uri", this.RedirectUri);
-            if (requestCookies.Get("test_redirect_uri") == null)
-            {
-                responseCookies.Set("test_redirect_uri", this.RedirectUri);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_redirect_uri")))
-                {
-                    responseCookies.Set("test_redirect_uri", this.RedirectUri);
-                }
-            }
+            responseCookies.Set("test_redirect_uri", this.RedirectUri);
 
             // nonce
             HttpContext.Session.SetString("test_nonce", this.Nonce);
-            if (requestCookies.Get("test_nonce") == null)
-            {
-                responseCookies.Set("test_nonce", this.Nonce);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_nonce")))
-                {
-                    responseCookies.Set("test_nonce", this.Nonce);
-                }
-            }
+            responseCookies.Set("test_nonce", this.Nonce);
 
             // code_verifier
             HttpContext.Session.SetString("test_code_verifier", this.CodeVerifier);
-            if (requestCookies.Get("test_code_verifier") == null)
-            {
-                responseCookies.Set("test_code_verifier", this.CodeVerifier);
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(requestCookies.Get("test_code_verifier")))
-                {
-                    responseCookies.Set("test_code_verifier", this.CodeVerifier);
-                }
-            }
+            responseCookies.Set("test_code_verifier", this.CodeVerifier);
         }
 
         #endregion

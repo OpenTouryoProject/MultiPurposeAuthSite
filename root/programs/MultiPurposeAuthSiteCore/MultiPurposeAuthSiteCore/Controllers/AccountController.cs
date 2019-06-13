@@ -3132,7 +3132,11 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id
             clientId = HttpContext.Session.GetString("test_client_id");
-            if (string.IsNullOrEmpty(clientId))
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                HttpContext.Session.SetString("test_client_id", "");
+            }
+            else
             {
                 clientId = requestCookies.Get("test_client_id");
                 if (!string.IsNullOrEmpty(clientId))
@@ -3143,7 +3147,11 @@ namespace MultiPurposeAuthSite.Controllers
 
             // state
             state = HttpContext.Session.GetString("test_state");
-            if (string.IsNullOrEmpty(state))
+            if (!string.IsNullOrEmpty(state))
+            {
+                HttpContext.Session.SetString("test_state", "");
+            }
+            else
             {
                 state = requestCookies.Get("test_state");
                 if (!string.IsNullOrEmpty(clientId))
@@ -3154,7 +3162,11 @@ namespace MultiPurposeAuthSite.Controllers
 
             // redirect_uri
             redirect_uri = HttpContext.Session.GetString("test_redirect_uri");
-            if (string.IsNullOrEmpty(redirect_uri))
+            if (!string.IsNullOrEmpty(redirect_uri))
+            {
+                HttpContext.Session.SetString("test_redirect_uri", "");
+            }
+            else
             {
                 redirect_uri = requestCookies.Get("test_redirect_uri");
                 if (!string.IsNullOrEmpty(clientId))
@@ -3165,7 +3177,11 @@ namespace MultiPurposeAuthSite.Controllers
 
             // nonce
             nonce = HttpContext.Session.GetString("test_nonce");
-            if (string.IsNullOrEmpty(nonce))
+            if (!string.IsNullOrEmpty(nonce))
+            {
+                HttpContext.Session.SetString("test_nonce", "");
+            }
+            else
             {
                 nonce = requestCookies.Get("test_nonce");
                 if (!string.IsNullOrEmpty(clientId))
@@ -3176,7 +3192,11 @@ namespace MultiPurposeAuthSite.Controllers
 
             // code_verifier
             code_verifier = HttpContext.Session.GetString("test_code_verifier");
-            if (string.IsNullOrEmpty(code_verifier))
+            if (!string.IsNullOrEmpty(code_verifier))
+            {
+                HttpContext.Session.SetString("test_code_verifier", "");
+            }
+            else
             {
                 code_verifier = requestCookies.Get("test_code_verifier");
                 if (!string.IsNullOrEmpty(clientId))
