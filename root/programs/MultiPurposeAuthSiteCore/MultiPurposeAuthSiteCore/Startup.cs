@@ -194,6 +194,11 @@ namespace MultiPurposeAuthSite
             {
                 #region Account
                 routes.MapRoute(
+                   name: "Saml2Request",
+                   template: Config.Saml2RequestEndpoint.Substring(1), // 先頭の[/]を削除,
+                   defaults: new { controller = "Account", action = "Saml2Request" });
+
+                routes.MapRoute(
                    name: "OAuth2Authorize",
                    template: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
@@ -237,7 +242,6 @@ namespace MultiPurposeAuthSite
                     template: Config.TestChageToUserWebAPI.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2ResourceServer", action = "TestChageToUser" });
                 #endregion
-
 
                 routes.MapRoute(
                     name: "default",

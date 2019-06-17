@@ -229,45 +229,15 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id → Issuer
             Session["test_client_id"] = this.ClientId;
-            if (Request.Cookies["test_client_id"] == null)
-            {
-                Response.Cookies["test_client_id"].Value = this.ClientId;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_client_id"].Value))
-                {
-                    Response.Cookies["test_client_id"].Value = this.ClientId;
-                }
-            }
+            Response.Cookies["test_client_id"].Value = this.ClientId;
 
             // redirect_uri → AssertionConsumerService
             Session["test_redirect_uri"] = this.RedirectUri;
-            if (Request.Cookies["test_redirect_uri"] == null)
-            {
-                Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_redirect_uri"].Value))
-                {
-                    Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
-                }
-            }
+            Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
 
             // state → RelayState
             Session["test_state"] = this.State;
-            if (Request.Cookies["test_state"] == null)
-            {
-                Response.Cookies["test_state"].Value = this.State;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_state"].Value))
-                {
-                    Response.Cookies["test_state"].Value = this.State;
-                }
-            }
+            Response.Cookies["test_state"].Value = this.State;
         }
 
         #endregion
@@ -301,73 +271,23 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id
             Session["test_client_id"] = this.ClientId;
-            if (Request.Cookies["test_client_id"] == null)
-            {
-                Response.Cookies["test_client_id"].Value = this.ClientId;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_client_id"].Value))
-                {
-                    Response.Cookies["test_client_id"].Value = this.ClientId;
-                }
-            }
+            Response.Cookies["test_client_id"].Value = this.ClientId;
 
             // state
             Session["test_state"] = this.State;
-            if (Request.Cookies["test_state"] == null)
-            {
-                Response.Cookies["test_state"].Value = this.State;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_state"].Value))
-                {
-                    Response.Cookies["test_state"].Value = this.State;
-                }
-            }
+            Response.Cookies["test_state"].Value = this.State;
 
             // redirect_uri
             Session["test_redirect_uri"] = this.RedirectUri;
-            if (Request.Cookies["test_redirect_uri"] == null)
-            {
-                Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_redirect_uri"].Value))
-                {
-                    Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
-                }
-            }
+            Response.Cookies["test_redirect_uri"].Value = this.RedirectUri;
 
             // nonce
             Session["test_nonce"] = this.Nonce;
-            if (Request.Cookies["test_nonce"] == null)
-            {
-                Response.Cookies["test_nonce"].Value = this.Nonce;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_nonce"].Value))
-                {
-                    Response.Cookies["test_nonce"].Value = this.Nonce;
-                }
-            }
+            Response.Cookies["test_nonce"].Value = this.Nonce;
 
             // code_verifier
             Session["test_code_verifier"] = this.CodeVerifier;
-            if (Request.Cookies["test_code_verifier"] == null)
-            {
-                Response.Cookies["test_code_verifier"].Value = this.CodeVerifier;
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Request.Cookies["test_code_verifier"].Value))
-                {
-                    Response.Cookies["test_code_verifier"].Value = this.CodeVerifier;
-                }
-            }
+            Response.Cookies["test_code_verifier"].Value = this.CodeVerifier;
         }
 
         #endregion
@@ -1148,8 +1068,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 秘密鍵
             DigitalSignX509 dsX509 = new DigitalSignX509(
-                CmnClientParams.RsaPfxFilePath, CmnClientParams.RsaPfxPassword, HashAlgorithmName.SHA256,
-                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+                CmnClientParams.RsaPfxFilePath,
+                CmnClientParams.RsaPfxPassword,
+                HashAlgorithmName.SHA256);
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),

@@ -2248,20 +2248,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                         {
-                            #region 旧コード
-                            //string body =
-                            //    "<html>" +
-                            //    "  <body onload=\"javascript: document.forms[0].submit()\">" +
-                            //    "    <form method=\"post\" action =\"{0}\">" +
-                            //    "      <input type=\"hidden\" name =\"code\" value =\"{1}\"/>" +
-                            //    "      <input type=\"hidden\" name =\"state\"  value =\"{2}\"/>" +
-                            //    "    </form>" +
-                            //    "  </body>" +
-                            //    "</html>";
-                            //body = string.Format(body, valid_redirect_uri, code, state);
-                            //return this.Content(body);
-                            #endregion
-
+                            // form_post
                             ViewData["Action"] = valid_redirect_uri;
                             ViewData["Code"] = code;
                             ViewData["State"] = state;
@@ -2482,6 +2469,7 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
                     {
+                        // form_post
                         ViewData["Action"] = valid_redirect_uri;
                         ViewData["Code"] = code;
                         ViewData["State"] = state;
@@ -2594,7 +2582,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // 秘密鍵
                         DigitalSignX509 dsX509 = new DigitalSignX509(
-                            CmnClientParams.RsaPfxFilePath, CmnClientParams.RsaPfxPassword,
+                            CmnClientParams.RsaPfxFilePath,
+                            CmnClientParams.RsaPfxPassword,
                             HashAlgorithmName.SHA256);
 
                         model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
@@ -2916,7 +2905,11 @@ namespace MultiPurposeAuthSite.Controllers
         {
             // client_id
             clientId = (string)Session["test_client_id"];
-            if (string.IsNullOrEmpty(clientId))
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                Session.Remove("test_client_id");
+            }
+            else
             {
                 clientId = Request.Cookies["test_client_id"]?.Value;
                 if (!string.IsNullOrEmpty(clientId))
@@ -2924,14 +2917,14 @@ namespace MultiPurposeAuthSite.Controllers
                     Response.Cookies["test_client_id"].Value = "";
                 }
             }
-            else
-            {
-                Session["test_client_id"] = null;
-            }
 
             // state
             state = (string)Session["test_state"];
-            if (string.IsNullOrEmpty(state))
+            if (!string.IsNullOrEmpty(state))
+            {
+                Session.Remove("test_state");
+            }
+            else
             {
                 state = Request.Cookies["test_state"]?.Value;
                 if (!string.IsNullOrEmpty(state))
@@ -2939,14 +2932,14 @@ namespace MultiPurposeAuthSite.Controllers
                     Response.Cookies["test_state"].Value = "";
                 }
             }
-            else
-            {
-                Session["test_state"] = null;
-            }
 
             // redirect_uri
             redirect_uri = (string)Session["test_redirect_uri"];
-            if (string.IsNullOrEmpty(redirect_uri))
+            if (!string.IsNullOrEmpty(redirect_uri))
+            {
+                Session.Remove("test_redirect_uri");
+            }
+            else
             {
                 redirect_uri = Request.Cookies["test_redirect_uri"]?.Value;
                 if (!string.IsNullOrEmpty(redirect_uri))
@@ -2954,14 +2947,14 @@ namespace MultiPurposeAuthSite.Controllers
                     Response.Cookies["test_redirect_uri"].Value = "";
                 }
             }
-            else
-            {
-                Session["test_redirect_uri"] = null;
-            }
 
             // nonce
             nonce = (string)Session["test_nonce"];
-            if (string.IsNullOrEmpty(nonce))
+            if (!string.IsNullOrEmpty(nonce))
+            {
+                Session.Remove("test_nonce");
+            }
+            else
             {
                 nonce = Request.Cookies["test_nonce"]?.Value;
                 if (!string.IsNullOrEmpty(nonce))
@@ -2969,24 +2962,20 @@ namespace MultiPurposeAuthSite.Controllers
                     Response.Cookies["test_nonce"].Value = "";
                 }
             }
-            else
-            {
-                Session["test_nonce"] = null;
-            }
 
             // code_verifier
             code_verifier = (string)Session["test_code_verifier"];
-            if (string.IsNullOrEmpty(code_verifier))
+            if (!string.IsNullOrEmpty(code_verifier))
+            {
+                Session.Remove("test_code_verifier");
+            }
+            else
             {
                 code_verifier = Request.Cookies["test_code_verifier"]?.Value;
                 if (!string.IsNullOrEmpty(code_verifier))
                 {
                     Response.Cookies["test_code_verifier"].Value = "";
                 }
-            }
-            else
-            {
-                Session["test_code_verifier"] = null;
             }
         }
         #endregion

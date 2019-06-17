@@ -35,18 +35,18 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Log;
 
 using MultiPurposeAuthSite.TokenProviders;
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
+using System.Xml;
 using System.Text;
 using System.Linq;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 
 using System.Net;
 
@@ -64,6 +64,7 @@ using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Presentation;
 using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
+using Touryo.Infrastructure.Public.Security;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -550,12 +551,51 @@ namespace MultiPurposeAuthSite.Controllers
                     CmnEndpoints.OpenIDConfig(),
                     new JsonSerializerSettings
                     {
-                        Formatting = Formatting.Indented,
+                        Formatting = Newtonsoft.Json.Formatting.Indented,
                         ContractResolver = new CamelCasePropertyNamesContractResolver()
                     })
                     , "application/json");
         }
 
+        #endregion
+
+        #region /samlmetadata
+
+        /// <summary>
+        /// SamlMetadataを返すWebAPI
+        /// GET: /samlmetadata
+        /// </summary>
+        /// <returns>ContentResult</returns>
+        [HttpGet]
+        [Route("samlmetadata")]  // ココは固定
+        public ContentResult SamlMetadata()
+        {
+            // XmlWriterSettingsを指定して、可読性の高いXMLを返す。
+            string saml2RequestEndpoint = 
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
+
+            XmlDocument samlMetadata = SAML2Bindings.CreateMetadata(
+                Config.IssuerId,
+                PrivacyEnhancedMail.GetBase64StringFromPemFilePath(
+                    CmnClientParams.RsaCerFilePath,
+                    PrivacyEnhancedMail.RFC7468Label.Certificate),
+                new SAML2Enum.NameIDFormat[]
+                {
+                    SAML2Enum.NameIDFormat.Unspecified
+                },
+                saml2RequestEndpoint,
+                saml2RequestEndpoint);
+
+            return this.Content(
+                samlMetadata.XmlToString(
+                    new XmlWriterSettings()
+                    {
+                        Encoding = Encoding.UTF8,
+                        Indent = true
+                    })
+                    , "application/xml");
+
+        }
         #endregion
     }
 }

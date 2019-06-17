@@ -128,8 +128,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             // 通常
 
                             // JWS(RS256)
-                            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(pfxFilePath, pfxPassword,
-                                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+                            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(pfxFilePath, pfxPassword);
 
                             // ヘッダ ... access_tokenと同じ
                             JWS_Header jwsHeader =
@@ -157,8 +156,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 EnumASymmetricAlgorithm.RsaCng, RsaPublicKeyConverter.JwkToParam(cerJwkString));
 
                             // JWS(ES256)
-                            JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(pfxFilePath, pfxPassword,
-                                X509KeyStorageFlags.Exportable); // | X509KeyStorageFlags.MachineKeySet);
+                            JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(pfxFilePath, pfxPassword);
+                            // X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+                            // ECDSAは、MachineKeySetに入らない & ExportableはDigitalSignECDsaX509の既定値に指定。
 
                             // ヘッダ ... access_tokenと同じではない。
 

@@ -36,7 +36,7 @@ using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Network;
 
-using MultiPurposeAuthSite.Extensions.OAuth2;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Collections.Generic;
