@@ -2587,7 +2587,7 @@ namespace MultiPurposeAuthSite.Controllers
                             HashAlgorithmName.SHA256);
 
                         model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
+                            tokenEndpointUri, redirect_uri, code, JwtAssertion.Create(
                                 iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
                                 ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
                     }

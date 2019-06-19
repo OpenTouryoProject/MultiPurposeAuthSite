@@ -1218,7 +1218,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (!string.IsNullOrEmpty(pubKey))
                 {
-                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+                    if (JwtAssertion.Verify(
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
@@ -1360,7 +1360,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (!string.IsNullOrEmpty(pubKey))
                 {
                     // 署名検証 ≒ クライアント認証
-                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+                    if (JwtAssertion.Verify(
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証

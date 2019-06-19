@@ -498,11 +498,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         (string)cnf[OAuth2AndOIDCConst.x5t + CmnAccessToken.S512]));
             }
             
-            // - fapi
-            if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.fapi))
-            {
-                identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_FApi, (string)authTokenClaimSet[OAuth2AndOIDCConst.fapi]));
-            }
+            //// - fapi
+            //if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.fapi))
+            //{
+            //    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_FApi, (string)authTokenClaimSet[OAuth2AndOIDCConst.fapi]));
+            //}
         }
 
         #endregion

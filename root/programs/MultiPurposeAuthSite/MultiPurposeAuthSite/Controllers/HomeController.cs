@@ -32,6 +32,7 @@ using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -396,22 +397,75 @@ namespace MultiPurposeAuthSite.Controllers
             return temp;
         }
 
-        /// <summary>FAPI2スターターを組み立てて返す</summary>
+        /// <summary>FAPI2CCスターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
-        /// <returns>組み立てたFAPI2スターター</returns>
-        private string AssembleFAPI2Starter(string response_type)
+        /// <returns>組み立てたFAPI2CCスターター</returns>
+        private string AssembleFAPI2CCStarter(string response_type)
         {
             string temp = "";
 
-            temp = this.OAuth2AuthorizeEndpoint +
-                string.Format(
-                    "?client_id={0}&response_type={1}&scope={2}&state={3}",
-                    this.ClientId, response_type, Const.OidcScopes,
-                    OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State)
-                    + "&nonce=" + this.Nonce;
-            // テストコードで、clientを識別するために、Stateに細工する。
+            //temp = this.OAuth2AuthorizeEndpoint +
+            //    string.Format(
+            //        "?client_id={0}&response_type={1}&scope={2}&state={3}",
+            //        this.ClientId, response_type, Const.OidcScopes,
+            //        OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State)
+            //        + "&nonce=" + this.Nonce;
 
-            temp = AndAddRedirectUriToOAuth2Starter(temp, response_type);
+            // 秘密鍵
+            DigitalSignX509 dsX509 = new DigitalSignX509(
+                CmnClientParams.RsaPfxFilePath,
+                CmnClientParams.RsaPfxPassword,
+                HashAlgorithmName.SHA256);
+
+            if (this.ClarifyRedirectUri)
+            {
+                this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+            }
+
+            // テストコードで、clientを識別するために、Stateに細工する。
+            string requestObject = RequestObject.Create(this.ClientId,
+                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectUri,
+                response_type, "", this.RedirectUri, Const.OidcScopes,
+                OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce, "", "",
+                new ClaimsInRO(
+                    // userinfo > claims
+                    new Dictionary<string, object>()
+                    {
+                        {
+                            "hoge",
+                            new
+                            {
+                                essential = true
+                            }
+                        }
+                    },
+                    // id_token > claims
+                    new Dictionary<string, object>()
+                    {
+                        {
+                            "hoge",
+                            new
+                            {
+                                essential = true
+                            }
+                        }
+                    },
+                    // id_token > arc
+                    new
+                    {
+                        essential = true,
+                        values = new string[]
+                        {
+                            OAuth2AndOIDCConst.LoA1,
+                            OAuth2AndOIDCConst.LoA2
+                        }
+                    }),
+                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+
+            // RequestObjectを登録する。
+
+            // request_uriの認可リクエストを投げる。
+            temp = this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", "request_uri");
 
             return temp;
         }
@@ -988,7 +1042,7 @@ namespace MultiPurposeAuthSite.Controllers
             this.InitOAuth2Params();
 
             // Authorization Code Flow
-            string redirect = this.AssembleFAPI2Starter(
+            string redirect = this.AssembleFAPI2CCStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
             this.SaveOAuth2Params();
@@ -1074,9 +1128,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                JwtAssertion.CreateJwtBearerTokenFlowAssertion(iss, aud,
-                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes,
-                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
+                JwtAssertion.Create(iss, aud, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes,
+                    Const.StandardScopes, ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];

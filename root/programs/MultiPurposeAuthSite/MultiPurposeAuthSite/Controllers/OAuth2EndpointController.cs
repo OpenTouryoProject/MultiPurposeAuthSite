@@ -535,6 +535,24 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region /ros
+
+        /// <summary>
+        /// RequestObjectを登録するWebAPI
+        /// GET: /ros
+        /// </summary>
+        /// <returns>HttpResponseMessage</returns>
+        [HttpGet]
+        public HttpResponseMessage RequestObjectUri()
+        {
+            return new HttpResponseMessage()
+            {
+                Content = new JsonContent("")
+            };
+        }
+
+        #endregion
+
         #region /.well-known/openid-configuration
 
         /// <summary>
