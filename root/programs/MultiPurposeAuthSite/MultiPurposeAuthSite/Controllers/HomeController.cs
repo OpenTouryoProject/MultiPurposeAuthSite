@@ -400,11 +400,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>FAPI2CCスターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたFAPI2CCスターター</returns>
-        private string AssembleFAPI2CCStarter(string response_type)
+        private async Task<string> AssembleFAPI2CCStarterAsync(string response_type)
         {
-            string temp = "";
-
-            //temp = this.OAuth2AuthorizeEndpoint +
+            //string temp = this.OAuth2AuthorizeEndpoint +
             //    string.Format(
             //        "?client_id={0}&response_type={1}&scope={2}&state={3}",
             //        this.ClientId, response_type, Const.OidcScopes,
@@ -424,7 +422,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // テストコードで、clientを識別するために、Stateに細工する。
             string requestObject = RequestObject.Create(this.ClientId,
-                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectUri,
+                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri,
                 response_type, "", this.RedirectUri, Const.OidcScopes,
                 OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce, "", "",
                 new ClaimsInRO(
@@ -462,12 +460,24 @@ namespace MultiPurposeAuthSite.Controllers
                     }),
                 ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
 
-            // RequestObjectを登録する。
+            // 検証テスト
+            if (RequestObject.Verify(requestObject, out string iss,
+                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(false)))
+            {
+                // 検証できた。
 
-            // request_uriの認可リクエストを投げる。
-            temp = this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", "request_uri");
+                // RequestObjectを登録する。
+                string response = await Helper.GetInstance().RegisterRequestObjectAsync(
+                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
 
-            return temp;
+                // request_uriの認可リクエストを投げる。
+                return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", "request_uri");
+            }
+            else
+            {
+                // 検証できなかった。
+                return null;
+            }
         }
 
         #endregion
@@ -640,7 +650,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else if (!string.IsNullOrEmpty(Request.Form.Get("submit.AuthorizationCodeFAPI2")))
                         {
-                            return this.AuthorizationCodeFAPI2();
+                            return await this.AuthorizationCodeFAPI2Async();
                         }
                         #endregion
 
@@ -1037,12 +1047,12 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>Test Authorization Code Flow (FAPI2)</summary>
         /// <returns>ActionResult</returns>
-        private ActionResult AuthorizationCodeFAPI2()
+        private async Task<ActionResult> AuthorizationCodeFAPI2Async()
         {
             this.InitOAuth2Params();
 
             // Authorization Code Flow
-            string redirect = this.AssembleFAPI2CCStarter(
+            string redirect = await this.AssembleFAPI2CCStarterAsync(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
             this.SaveOAuth2Params();

@@ -41,6 +41,7 @@ using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
+using System.IO;
 using System.Xml;
 using System.Text;
 using System.Linq;
@@ -52,6 +53,7 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Web.Http;
 using System.Web.Http.Cors;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
 
@@ -544,13 +546,37 @@ namespace MultiPurposeAuthSite.Controllers
         /// GET: /ros
         /// </summary>
         /// <returns>HttpResponseMessage</returns>
-        [HttpGet]
+        [HttpPost]
         public HttpResponseMessage RequestObjectUri()
         {
-            return new HttpResponseMessage()
+            string body = new StreamReader(
+                HttpContext.Current.Request.InputStream).ReadToEnd();
+
+            JObject requestObject = (JObject)JsonConvert.DeserializeObject(
+                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(body.Split('.')[1]), CustomEncode.us_ascii));
+
+            string iss = (string)requestObject[OAuth2AndOIDCConst.iss];
+            string pubKey = Helper.GetInstance().GetJwkRsaPublickey(iss);
+            pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+            if (RequestObject.Verify(body, out iss, pubKey))
             {
-                Content = new JsonContent("")
-            };
+                return new HttpResponseMessage()
+                {
+                    Content = new JsonContent(JsonConvert.SerializeObject(new
+                    {
+                        iss = Config.IssuerId,
+                        aud = iss,
+                        request_uri = "",
+                        exp = "" // 有効期限（存続期間は短く、好ましくは一回限
+                    }, Newtonsoft.Json.Formatting.None)),
+                    StatusCode = HttpStatusCode.Created
+                };
+            }
+            else
+            {
+                return new HttpResponseMessage(HttpStatusCode.BadRequest);
+            }            
         }
 
         #endregion

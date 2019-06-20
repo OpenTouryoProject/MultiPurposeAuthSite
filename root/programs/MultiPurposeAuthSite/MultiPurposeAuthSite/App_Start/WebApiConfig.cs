@@ -102,7 +102,7 @@ namespace MultiPurposeAuthSite
 
             config.Routes.MapHttpRoute(
                 name: "RequestObjectUri",
-                routeTemplate: OAuth2AndOIDCParams.RequestObjectUri.Substring(1), // 先頭の[/]を削除
+                routeTemplate: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" }
             );
             #endregion

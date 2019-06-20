@@ -255,39 +255,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, client_id, client_secret, redirect_uri, code);
-        }
-
-        /// <summary>
-        /// PKCE : code, code_verifierからAccess Tokenを取得する。
-        /// </summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
-        /// <param name="client_id">client_id</param>
-        /// <param name="client_secret">client_secret</param>
-        /// <param name="redirect_uri">redirect_uri</param>
-        /// <param name="code">code</param>
-        /// <param name="code_verifier">code_verifier</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
-            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
-        {
-            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
-                tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
-        }
-
-        /// <summary>
-        /// FAPI1 : code, code_verifierからAccess Tokenを取得する。
-        /// </summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
-        /// <param name="redirect_uri">redirect_uri</param>
-        /// <param name="code">code</param>
-        /// <param name="assertion">assertion</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
-            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
-        {
-            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
-                tokenEndpointUri, redirect_uri, code, assertion);
-        }
+        }        
 
         /// <summary>
         /// Resource Owner Password Credentials Grant
@@ -322,6 +290,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 tokenEndpointUri, client_id, client_secret, scopes);
         }
 
+        #endregion
+
+        #region その他の 基本 WebAPI
+
         /// <summary>Refresh Tokenを使用してAccess Tokenを更新する。</summary>
         /// <param name="tokenEndpointUri">tokenEndpointUri</param>
         /// <param name="client_id">client_id</param>
@@ -352,6 +324,27 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #endregion
 
         #region 拡張フローのWebAPI
+
+        #region PKCE
+
+        /// <summary>
+        /// PKCE : code, code_verifierからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="code_verifier">code_verifier</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
+        }
+
+        #endregion
 
         #region Revoke & Introspect
 
@@ -388,14 +381,44 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region JWT Bearer Token Flow
 
         /// <summary>
-        /// Token2エンドポイントで、
+        /// Tokenエンドポイントで、
         /// JWT bearer token authorizationグラント種別の要求を行う。</summary>
-        /// <param name="token2EndpointUri">Token2エンドポイントのUri</param>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
         /// <param name="assertion">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> JwtBearerTokenFlowAsync(Uri token2EndpointUri, string assertion)
+        public async Task<string> JwtBearerTokenFlowAsync(Uri tokenEndpointUri, string assertion)
         {
-            return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(token2EndpointUri, assertion);
+            return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(tokenEndpointUri, assertion);
+        }
+
+        #endregion
+
+        #region FAPI (Financial-grade API) 
+
+        /// <summary>
+        /// FAPI1 : code, assertionからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, redirect_uri, code, assertion);
+        }
+
+        /// <summary>
+        /// FAPI2 : RequestObjectを登録する。
+        /// </summary>
+        /// <param name="requestObjectRegUri">Uri</param>
+        /// <param name="requestObject">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> RegisterRequestObjectAsync(Uri requestObjectRegUri, string requestObject)
+        {
+            return await OAuth2AndOIDCClient.RegisterRequestObjectAsync(requestObjectRegUri, requestObject);
         }
 
         #endregion
