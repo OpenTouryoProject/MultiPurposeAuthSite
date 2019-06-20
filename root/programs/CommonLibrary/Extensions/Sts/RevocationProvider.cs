@@ -51,7 +51,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// OAuth2RevocationProvider
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, DateTime> OAuth2Revocation = new ConcurrentDictionary<string, DateTime>();
+        private static ConcurrentDictionary<string, DateTime>
+            OAuth2Revocation = new ConcurrentDictionary<string, DateTime>();
 
         #region Create
 

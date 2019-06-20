@@ -538,7 +538,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 Helper.AddClaim(identity, client_id, state, scopes, nonce);
 
                 // AccessTokenの生成
-                access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                access_token = CmnAccessToken.CreateFromClaims(
+                	client_id, identity.Name, identity.Claims,
                     DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes));
 
                 JObject jObj = (JObject)JsonConvert.DeserializeObject(
@@ -638,7 +639,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // ★ 必要に応じて、scopeを調整する。
 
                 // access_token
-                access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                access_token = CmnAccessToken.ProtectFromPayload(
+                	client_id, tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                     null, permittedLevel, out string aud, out string sub);
 
@@ -796,7 +798,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region 発行
 
                     // access_token
-                    string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                    string access_token = CmnAccessToken.ProtectFromPayload(
+                        client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                         x509, permittedLevel, out string aud, out string sub);
 
@@ -908,7 +911,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
                         // access_token
-                        string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                        string access_token = CmnAccessToken.ProtectFromPayload(
+                            client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                             x509, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
 
@@ -1035,7 +1039,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
 
                             // access_token
-                            string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                            string access_token = CmnAccessToken.CreateFromClaims(
+                            	client_id, identity.Name, identity.Claims,
                                 DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                             // オペレーション・トレース・ログ出力
@@ -1151,7 +1156,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
 
                     // access_token
-                    string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                    string access_token = CmnAccessToken.CreateFromClaims(
+                        client_id, identity.Name, identity.Claims,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                     // オペレーション・トレース・ログ出力
@@ -1240,13 +1246,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
 
                                 // access_token
-                                string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                                string access_token = CmnAccessToken.CreateFromClaims(
+                                    iss, identity.Name, identity.Claims,
                                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format(
-                                    "Passed the 'jwt bearer token flow' by {0}({1}).",
-                                    iss, sub)); // Client Account
+                                    "Passed the 'jwt bearer token flow' by {0}({1}).", iss, sub)); // Client Account
 
                                 ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
                                 return true;

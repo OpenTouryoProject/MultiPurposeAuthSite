@@ -433,7 +433,9 @@ namespace MultiPurposeAuthSite.Controllers
                         string tokenPayload = RefreshTokenProvider.Refer(token);
                         if (!string.IsNullOrEmpty(tokenPayload))
                         {
-                            token = CmnAccessToken.ProtectFromPayload(tokenPayload, DateTimeOffset.Now,
+                            // AccessToken化して処理共通化
+                            token = CmnAccessToken.ProtectFromPayload(
+                                "", tokenPayload, DateTimeOffset.Now,
                                 null, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
                         }
                         else
@@ -449,7 +451,7 @@ namespace MultiPurposeAuthSite.Controllers
                         err.Add("error_description", "invalid token_type_hint.");
                     }
 
-                    // AccessToken化して共通処理
+                    // AccessToken化して共通化した処理
                     if (!string.IsNullOrEmpty(token)
                         && CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
                     {

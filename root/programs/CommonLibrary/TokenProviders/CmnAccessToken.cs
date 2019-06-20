@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/25  西野 大介         新規
+//*  2019/06/20  西野 大介         IssuedTokenProvider対応
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -70,17 +71,21 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region Claims経由
 
         /// <summary>CreateFromClaims</summary>
+        /// <param name="clientId">string</param>
         /// <param name="userName">string</param>
         /// <param name="claims">IEnumerable(Claim)</param>
         /// <param name="ExpiresUtc">DateTimeOffset</param>
         /// <returns>JWT文字列</returns>
         public static string CreateFromClaims(
-            string userName, IEnumerable<Claim> claims, DateTimeOffset expiresUtc)
+            string clientId, string userName,
+            IEnumerable<Claim> claims, DateTimeOffset expiresUtc)
         {
+            string jti = Guid.NewGuid().ToString("N");
             string json = "";
+            string audience = "";
 
             #region ClaimSetの生成
-            
+
             Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
             List<string> scopes = new List<string>();
             List<string> roles = new List<string>();
@@ -93,6 +98,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
                 else if (claim.Type == OAuth2AndOIDCConst.Claim_Audience)
                 {
+                    audience = claim.Value;
                     authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, claim.Value);
                 }
                 else if (claim.Type == OAuth2AndOIDCConst.Claim_Nonce)
@@ -123,10 +129,10 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, userName);
 
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, jti);
             authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, expiresUtc.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, Guid.NewGuid().ToString("N"));
 
             authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
 
@@ -190,6 +196,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+
+            // ここでストアに登録
+            IssuedTokenProvider.Create(jti, json, clientId, audience);
 
             // 署名
             return jwsRS256.Create(json);
@@ -258,25 +267,27 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region ProtectFromPayload
 
         /// <summary>ProtectFromPayload</summary>
+        /// <param name="clientId">string</param>
         /// <param name="access_token_payload">AccessTokenのPayload</param>
         /// <param name="expiresUtc">DateTimeOffset</param>
         /// <param name="x509">X509Certificate2</param>
         /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
-        /// <param name="audience">string</param>
-        /// <param name="subject">string</param>
+        /// <param name="audience">out string</param>
+        /// <param name="subject">out string</param>
         /// <returns>AccessToken</returns>
         public static string ProtectFromPayload(
-            string access_token_payload,
-            DateTimeOffset expiresUtc,
-            X509Certificate2 x509,
+            string clientId, string access_token_payload,
+            DateTimeOffset expiresUtc, X509Certificate2 x509,
             OAuth2AndOIDCEnum.ClientMode permittedLevel,
             out string audience, out string subject)
         {
+            string jti = Guid.NewGuid().ToString("N");
             string json = "";
+            //string audience = "";
 
             #region JSON編集
 
-            // access_token_payloadのDictionary化
+            // access_token_payload の Dictionary化
             Dictionary<string, object> payload =
                 JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
 
@@ -285,11 +296,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             subject = (string)payload[OAuth2AndOIDCConst.sub];
 
             // 書込１
+            payload[OAuth2AndOIDCConst.jti] = jti;
             payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
             payload[OAuth2AndOIDCConst.nbf] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
             payload[OAuth2AndOIDCConst.iat] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
-            payload[OAuth2AndOIDCConst.jti] = Guid.NewGuid().ToString("N");
-
+            
             // 書込２
             // - cnf
             if (x509 != null)
@@ -336,6 +347,13 @@ namespace MultiPurposeAuthSite.TokenProviders
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
+            // ここでストアに登録
+            if (!string.IsNullOrEmpty(clientId))
+                // ... clientIdがnullのケースは、
+                // IntrospectTokenから処理共通化のために利用されるケース。
+                IssuedTokenProvider.Create(jti, json, clientId, audience);
+
+            // 署名
             return jwsRS256.Create(json);
 
             #endregion

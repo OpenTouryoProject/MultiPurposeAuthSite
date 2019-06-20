@@ -48,21 +48,41 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     public class RequestObjectProvider
     {
         /// <summary>
+        /// RequestObjectBean
+        /// （メモリストア用）
+        /// </summary>
+        private class RequestObjectBean
+        {
+            /// <summary>Value</summary>
+            public string Value = "";
+            /// <summary>CreatedDate</summary>
+            public DateTime CreatedDate = DateTime.MinValue;
+        }
+
+        /// <summary>
         /// RequestObjects
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, DateTime> RequestObjects = new ConcurrentDictionary<string, DateTime>();
+        private static ConcurrentDictionary<string, RequestObjectBean>
+            RequestObjects = new ConcurrentDictionary<string, RequestObjectBean>();
 
         #region Create
 
         /// <summary>Create</summary>
-        /// <param name="jti">string</param>
-        public static void Create(string jti)
+        /// <param name="urn">string</param>
+        /// <param name="value">string</param>
+        public static void Create(string urn, string value)
         {
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    RequestObjectProvider.RequestObjects.TryAdd(jti, DateTime.Now);
+
+                    RequestObjectProvider.RequestObjects.TryAdd(
+                        urn,
+                        new RequestObjectBean{
+                            Value = value,
+                            CreatedDate = DateTime.Now
+                        });
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -78,24 +98,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "INSERT INTO [OAuth2Revocation] ([Jti], [CreatedDate]) VALUES (@Jti, @CreatedDate)",
-                                    new { Jti = jti, CreatedDate = DateTime.Now });
+                                    "INSERT INTO [RequestObject]" +
+                                    " ([Urn], [Value], [CreatedDate])" +
+                                    " VALUES (@Urn, @Value, @CreatedDate)",
+                                    new { Urn = urn, Value = value, CreatedDate = DateTime.Now });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"OAuth2Revocation\" (\"Jti\", \"CreatedDate\") VALUES (:Jti, :CreatedDate)",
-                                    new { Jti = jti, CreatedDate = DateTime.Now });
+                                    "INSERT INTO \"RequestObject\"" +
+                                    " (\"Urn\", \"Value\", \"CreatedDate\")" +
+                                    " VALUES (:Urn, :Value, :CreatedDate)",
+                                    new { Urn = urn, Value = value, CreatedDate = DateTime.Now });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"oauth2revocation\" (\"jti\", \"createddate\") VALUES (@Jti, @CreatedDate)",
-                                    new { Jti = jti, CreatedDate = DateTime.Now });
+                                    "INSERT INTO \"requestobject\"" +
+                                    " (\"urn\", \"value\", \"createddate\")" +
+                                    " VALUES (@Urn, @Value, @CreatedDate)",
+                                    new { Urn = urn, Value = value, CreatedDate = DateTime.Now });
 
                                 break;
                         }
@@ -110,20 +136,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region Get(Reference)
 
         /// <summary>Get</summary>
-        /// <param name="jti">string</param>
-        /// <returns>DateTime?</returns>
-        public static DateTime? Get(string jti)
+        /// <param name="urn">string</param>
+        /// <returns>RequestObject</returns>
+        public static string Get(string urn)
         {
-            DateTime? datetime = null;
+            string requestObjectValue = "";
 
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
 
-                    DateTime temp = DateTime.MinValue;
-                    if (RequestObjectProvider.RequestObjects.TryGetValue(jti, out temp))
+                    RequestObjectBean requestObject = null;
+                    if (RequestObjectProvider.RequestObjects.TryGetValue(urn, out requestObject))
                     {
-                        datetime = temp;
+                        requestObjectValue = requestObject.Value;
                     }
 
                     break;
@@ -140,22 +166,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         {
                             case EnumUserStoreType.SqlServer:
 
-                                datetime = cnn.ExecuteScalar<DateTime>(
-                                    "SELECT [CreatedDate] FROM [OAuth2Revocation] WHERE [Jti] = @Jti", new { Jti = jti });
+                                requestObjectValue = cnn.ExecuteScalar<string>(
+                                    "SELECT [Value] FROM [RequestObject] WHERE [Urn] = @Urn", new { Urn = urn });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
-                                datetime = cnn.ExecuteScalar<DateTime>(
-                                    "SELECT \"CreatedDate\" FROM \"OAuth2Revocation\" WHERE \"Jti\" = :Jti", new { Jti = jti });
+                                requestObjectValue = cnn.ExecuteScalar<string>(
+                                    "SELECT \"Value\" FROM \"RequestObject\" WHERE \"Urn\" = :Urn", new { Urn = urn });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
-                                datetime = cnn.ExecuteScalar<DateTime>(
-                                    "SELECT \"createddate\" FROM \"oauth2revocation\" WHERE \"jti\" = @Jti", new { Jti = jti });
+                                requestObjectValue = cnn.ExecuteScalar<string>(
+                                    "SELECT \"value\" FROM \"requestobject\" WHERE \"urn\" = @Urn", new { Urn = urn });
 
                                 break;
                         }
@@ -164,15 +190,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     break;
             }
 
-            // {0001/01/01 00:00} チェック
-            if (datetime == DateTime.MinValue)
-            {
-                return null;
-            }
-            else
-            {
-                return datetime;
-            }
+            return requestObjectValue;
         }
 
         #endregion
