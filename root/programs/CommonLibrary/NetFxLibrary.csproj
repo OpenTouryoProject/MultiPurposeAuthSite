@@ -202,6 +202,8 @@
     <Compile Include="Extensions\FIDO\EnumFidoType.cs" />
     <Compile Include="Extensions\FIDO\WebAuthnHelper.cs" />
     <Compile Include="Extensions\FIDO\MsPassHelper.cs" />
+    <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
+    <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\Sts\DataProvider.cs" />

@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：RevocationProvider
-//* クラス日本語名  ：RevocationしたOAuth2のaccess_tokenのjtiを保存する（ライブラリ）
+//* クラス名        ：IssuedTokenProvider
+//* クラス日本語名  ：IssueしたOAuth2のTokenのjtiを保存する（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -28,7 +28,7 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2017/06/07  西野 大介         新規
+//*  2019/06/20  西野 大介         新規
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -43,15 +43,15 @@ using Dapper;
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
-    /// RevocationしたOAuth2のaccess_tokenのjtiを保存する。
+    /// IssueしたOAuth2のTokenのjtiを保存する。
     /// </summary>
-    public class RevocationProvider
+    public class IssuedTokenProvider
     {
         /// <summary>
         /// OAuth2RevocationProvider
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, DateTime> OAuth2Revocation = new ConcurrentDictionary<string, DateTime>();
+        private static ConcurrentDictionary<string, DateTime> IssuedTokens = new ConcurrentDictionary<string, DateTime>();
 
         #region Create
 
@@ -62,7 +62,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    RevocationProvider.OAuth2Revocation.TryAdd(jti, DateTime.Now);
+                    IssuedTokenProvider.IssuedTokens.TryAdd(jti, DateTime.Now);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -121,7 +121,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 case EnumUserStoreType.Memory:
 
                     DateTime temp = DateTime.MinValue;
-                    if (RevocationProvider.OAuth2Revocation.TryGetValue(jti, out temp))
+                    if (IssuedTokenProvider.IssuedTokens.TryGetValue(jti, out temp))
                     {
                         datetime = temp;
                     }
@@ -174,7 +174,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 return datetime;
             }
         }
-
+        
         #endregion
     }
 }
