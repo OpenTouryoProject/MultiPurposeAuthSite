@@ -130,7 +130,7 @@
     <value>MsPassデータが追加されました。</value>
   </data>
   <data name="AddSaml2OAuth2DataSuccess" xml:space="preserve">
-    <value>OAuth2データが追加されました。</value>
+    <value>Saml2, OAuth2データが追加されました。</value>
   </data>
   <data name="AddPaymentInformationSuccess" xml:space="preserve">
     <value>支払元情報が追加されました。</value>
@@ -178,7 +178,7 @@
     <value>MsPassデータが削除されました。</value>
   </data>
   <data name="RemoveSaml2OAuth2DataSuccess" xml:space="preserve">
-    <value>OAuth2データが削除されました。</value>
+    <value>Saml2, OAuth2データが削除されました。</value>
   </data>
   <data name="RemovePaymentInformationSuccess" xml:space="preserve">
     <value>支払元情報が削除されました。</value>

@@ -130,7 +130,7 @@
     <value>Your MsPass data has been added.</value>
   </data>
   <data name="AddSaml2OAuth2DataSuccess" xml:space="preserve">
-    <value>Your OAuth2 data has been added.</value>
+    <value>Your Saml2 and OAuth2 data has been added.</value>
   </data>
   <data name="AddPaymentInformationSuccess" xml:space="preserve">
     <value>Your payment information has been added.</value>
@@ -178,7 +178,7 @@
     <value>Your MsPass has been removed.</value>
   </data>
   <data name="RemoveSaml2OAuth2DataSuccess" xml:space="preserve">
-    <value>Your OAuth2 has been removed.</value>
+    <value>Your Saml2 and OAuth2 has been removed.</value>
   </data>
   <data name="RemovePaymentInformationSuccess" xml:space="preserve">
     <value>Your payment information has been removed.</value>

@@ -2007,59 +2007,101 @@ namespace MultiPurposeAuthSite.Controllers
             string id = "";
             string rtnUrl = "";
 
-            if (Request.HttpMethod.ToLower() == "get")
+            // Cookie認証チケットからClaimsIdentityを取得しておく。
+            AuthenticateResult ticket = this.AuthenticationManager
+                .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
+            ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
+
+            string samlResponse = "";
+            SAML2Enum.StatusCode statusCode = SAML2Enum.StatusCode.Success;
+
+            try
             {
-                // DecodeRedirect
-                string rawUrl = Request.RawUrl;
-                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
-                decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
+                //// ここでエラーになった場合、返る？
+                //throw new Exception("test");
 
-                // XmlDocument
-                samlRequest2 = new XmlDocument();
-                samlRequest2.PreserveWhitespace = false;
-                samlRequest2.LoadXml(decodeSaml);
+                if (Request.HttpMethod.ToLower() == "get")
+                {
+                    // DecodeRedirect
+                    string rawUrl = Request.RawUrl;
+                    queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                    decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
 
-                // XmlNamespaceManager
-                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
+                    // XmlDocument
+                    samlRequest2 = new XmlDocument();
+                    samlRequest2.PreserveWhitespace = false;
+                    samlRequest2.LoadXml(decodeSaml);
 
-                // VerifySamlRequest
-                //if (SAML2Const.RSAwithSHA1 == sigAlg) // 無い場合も通るようにする。
-                verified = Saml.CmnEndpoints.VerifySamlRequest(
-                    queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                    // XmlNamespaceManager
+                    samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
+
+                    // VerifySamlRequest
+                    //if (SAML2Const.RSAwithSHA1 == sigAlg) // 無い場合も通るようにする。
+                    verified = Saml.CmnEndpoints.VerifySamlRequest(
+                        queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                }
+                else if (Request.HttpMethod.ToLower() == "post")
+                {
+                    // DecodePost
+                    decodeSaml = SAML2Bindings.DecodePost(samlRequest);
+
+                    // XmlDocument
+                    samlRequest2 = new XmlDocument();
+                    samlRequest2.PreserveWhitespace = false;
+                    samlRequest2.LoadXml(decodeSaml);
+
+                    // XmlNamespaceManager
+                    samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
+
+                    // VerifySamlRequest
+                    verified = Saml.CmnEndpoints.VerifySamlRequest(
+                        "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                }
+
+                //// ここでエラーになった場合、返る？
+                //throw new Exception("test");
+
+                // レスポンス生成
+                if (verified)
+                {
+                    // Assertion > AttributeStatement > Attribute > AttributeValueに
+                    // クレームを足すなら、ココで、identity.Claimsに値を詰めたりする。
+
+                    if (Saml.CmnEndpoints.CreateSamlResponse(identity,
+                        SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, statusCode,
+                        iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
+                        == SAML2Enum.ProtocolBinding.HttpRedirect)
+                    {
+                        // Redirect
+                        return Redirect(rtnUrl + "?" + queryString);
+                    }
+                    else
+                    {
+                        // Post
+                        ViewData["RelayState"] = relayState;
+                        ViewData["SAMLResponse"] = samlResponse;
+                        ViewData["Action"] = rtnUrl;
+
+                        return View("PostBinding");
+                    }
+                }
+                else
+                {
+                    // Error Response
+                    statusCode = SAML2Enum.StatusCode.Requester;
+                }
             }
-            else if (Request.HttpMethod.ToLower() == "post")
+            catch
             {
-                // DecodePost
-                decodeSaml = SAML2Bindings.DecodePost(samlRequest);
-
-                // XmlDocument
-                samlRequest2 = new XmlDocument();
-                samlRequest2.PreserveWhitespace = false;
-                samlRequest2.LoadXml(decodeSaml);
-
-                // XmlNamespaceManager
-                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
-
-                // VerifySamlRequest
-                verified = Saml.CmnEndpoints.VerifySamlRequest(
-                    "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                // Error Response
+                statusCode = SAML2Enum.StatusCode.Responder;
             }
 
-            // レスポンス生成
-            if (verified)
+            // Error Response
+            try
             {
-                string samlResponse = "";
-
-                // Cookie認証チケットからClaimsIdentityを取得しておく。
-                AuthenticateResult ticket = this.AuthenticationManager
-                    .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
-                ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
-
-                // Assertion > AttributeStatement > Attribute > AttributeValueに
-                // クレームを足すなら、ココで、identity.Claimsに値を詰めたりする。
-
-                if (Saml.CmnEndpoints.CreateSamlResponse(
-                    identity, SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, 
+                if (Saml.CmnEndpoints.CreateSamlResponse(identity,
+                    SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, statusCode,
                     iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
                     == SAML2Enum.ProtocolBinding.HttpRedirect)
                 {
@@ -2076,8 +2118,11 @@ namespace MultiPurposeAuthSite.Controllers
                     return View("PostBinding");
                 }
             }
-
-            return null;
+            catch
+            {
+                // issなどが取れていないと返せない。
+                return null;
+            }
         }
 
         #endregion
