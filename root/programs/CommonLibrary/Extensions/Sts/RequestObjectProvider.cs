@@ -194,5 +194,58 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         }
 
         #endregion
+
+        #region Delete
+
+        /// <summary>Delete</summary>
+        /// <param name="urn">string</param>
+        public static void Delete(string urn)
+        {
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    RequestObjectBean requestObject = null;
+                    RequestObjectProvider.RequestObjects.TryRemove(urn, out requestObject);
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "DELETE FROM [RequestObject] WHERE [Urn] = @Urn", new { Urn = urn });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"RequestObject\" WHERE \"Urn\" = :Urn", new { Urn = urn });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"requestobject\" WHERE \"urn\" = @Urn", new { Urn = urn });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        #endregion
     }
 }

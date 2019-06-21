@@ -89,11 +89,11 @@ namespace CreateJwtBearerTokenFlowAssertion
             #endregion
 
             #region Check
-            string jwtAssertion = JwtAssertion.CreateJwtBearerTokenFlowAssertionJWK(
+            string jwtAssertion = JwtAssertion.Create(
                 CmnClientParams.Isser, OAuth2AndOIDCParams.Audience, new TimeSpan(0, 30, 0), scopes,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPrivateKey), CustomEncode.us_ascii));
 
-            if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+            if (JwtAssertion.Verify(
                 jwtAssertion, out iss, out aud, out scopes, out jobj,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPublicKey), CustomEncode.us_ascii)))
             {

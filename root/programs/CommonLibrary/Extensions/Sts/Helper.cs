@@ -64,8 +64,8 @@ using Microsoft.AspNet.Identity.Owin;
 using Microsoft.AspNetCore.Identity;
 #endif
 
-
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
@@ -910,24 +910,25 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">string[]</param>
+        /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
-        public static ClaimsIdentity AddClaim(ClaimsIdentity claims,
-            string client_id, string state, IEnumerable<string> scopes, string nonce)
+        public static ClaimsIdentity AddClaim(ClaimsIdentity identity,
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
         {
             // 発行者の情報を含める。
 
             #region 標準
 
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, Config.IssuerId));
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Audience, client_id));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuerClaim, Config.IssuerId));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnAudienceClaim, client_id));
 
             foreach (string scope in scopes)
             {
                 // その他のscopeは、Claimの下記urnに組み込む。
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Scopes, scope));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnScopesClaim, scope));
             }
 
             #endregion
@@ -937,16 +938,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // OpenID Connect
             if (string.IsNullOrEmpty(nonce))
             {
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, state));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));
             }
             else
             {
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, nonce));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, nonce));
+            }
+
+            // FAPI2 (RequestObject)
+            if (claims != null)
+            {
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnClaimsClaim, claims.ToString()));
             }
 
             #endregion
 
-            return claims;
+            return identity;
         }
 
         #endregion

@@ -302,6 +302,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region AssembleOAuth2
 
+        #region OAuth2/OIDC
         /// <summary>OAuth2スターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたOAuth2スターター</returns>
@@ -357,7 +358,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             return temp;
         }
+        #endregion
 
+        #region FAPI
         /// <summary>FAPI1スターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたFAPI1スターター</returns>
@@ -454,8 +457,8 @@ namespace MultiPurposeAuthSite.Controllers
                         essential = true,
                         values = new string[]
                         {
-                            OAuth2AndOIDCConst.LoA1,
-                            OAuth2AndOIDCConst.LoA2
+                            OAuth2AndOIDCConst.UrnLoA1,
+                            OAuth2AndOIDCConst.UrnLoA2
                         }
                     }),
                 ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
@@ -468,10 +471,15 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // RequestObjectを登録する。
                 string response = await Helper.GetInstance().RegisterRequestObjectAsync(
-                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
+                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
+
+                // レスポンスを確認し、request_uriを抽出。
+                string request_uri = (string)((JObject)JsonConvert
+                    .DeserializeObject(response))[OAuth2AndOIDCConst.request_uri];
 
                 // request_uriの認可リクエストを投げる。
-                return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", "request_uri");
+                return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", request_uri);
             }
             else
             {
@@ -479,6 +487,7 @@ namespace MultiPurposeAuthSite.Controllers
                 return null;
             }
         }
+        #endregion
 
         #endregion
 

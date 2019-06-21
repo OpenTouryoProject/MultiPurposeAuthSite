@@ -89,26 +89,16 @@ namespace MultiPurposeAuthSite.Co
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_UserID;
+            + OAuth2AndOIDCConst.Scope_UserID + " "
+            + OAuth2AndOIDCConst.Scope_Roles;
 
         /// <summary>OIDCのscope</summary>
         public static readonly string OidcScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " "
-            + OAuth2AndOIDCConst.Scope_Profile + " "
-            + OAuth2AndOIDCConst.Scope_Email + " "
-            + OAuth2AndOIDCConst.Scope_Phone + " "
-            + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_UserID;
+            OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
         
         /// <summary>ID連携 scope</summary>
         public static readonly string IdFederationScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " "
-            + OAuth2AndOIDCConst.Scope_Profile + " "
-            + OAuth2AndOIDCConst.Scope_Email + " "
-            + OAuth2AndOIDCConst.Scope_Phone + " "
-            + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_UserID + " "
-            + OAuth2AndOIDCConst.Scope_Roles;
+            OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
 
         #endregion
 

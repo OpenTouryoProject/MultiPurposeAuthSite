@@ -221,7 +221,8 @@ namespace MultiPurposeAuthSite.Controllers
                     userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, sub);
 
                     // Scope
-                    IEnumerable<Claim> scopes = identity.Claims.Where(x => x.Type == OAuth2AndOIDCConst.Claim_Scopes);
+                    IEnumerable<Claim> scopes = identity.Claims.Where(
+                        x => x.Type == OAuth2AndOIDCConst.UrnScopesClaim);
 
                     // scope値によって、返す値を変更する。
                     foreach (Claim claim in scopes)
@@ -330,7 +331,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // jtiの取り出し
                             Claim jti = identity.Claims.Where(
-                                x => x.Type == OAuth2AndOIDCConst.Claim_JwtId).FirstOrDefault<Claim>();
+                                x => x.Type == OAuth2AndOIDCConst.UrnJwtIdClaim).FirstOrDefault<Claim>();
 
                             // access_token取消
                             RevocationProvider.Create(jti.Value);
@@ -465,15 +466,15 @@ namespace MultiPurposeAuthSite.Controllers
                         string scopes = "";
                         foreach (Claim claim in identity.Claims)
                         {
-                            if (claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_Base))
+                            if (claim.Type.StartsWith(OAuth2AndOIDCConst.UrnClaimBase))
                             {
-                                if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
+                                if (claim.Type == OAuth2AndOIDCConst.UrnScopesClaim)
                                 {
                                     scopes += claim.Value + " ";
                                 }
-                                else if(claim.Type.StartsWith(OAuth2AndOIDCConst.Claim_CnfX5t))
+                                else if(claim.Type.StartsWith(OAuth2AndOIDCConst.UrnCnfX5tClaim))
                                 {
-                                    string temp = OAuth2AndOIDCConst.x5t + claim.Type.Substring(OAuth2AndOIDCConst.Claim_CnfX5t.Length);
+                                    string temp = OAuth2AndOIDCConst.x5t + claim.Type.Substring(OAuth2AndOIDCConst.UrnCnfX5tClaim.Length);
                                     ret.Add(OAuth2AndOIDCConst.cnf, new Dictionary<string, string>()
                                     {
                                         { temp, claim.Value}
@@ -482,12 +483,12 @@ namespace MultiPurposeAuthSite.Controllers
                                 else
                                 {
                                     ret.Add(claim.Type.Substring(
-                                        OAuth2AndOIDCConst.Claim_Base.Length), claim.Value);
+                                        OAuth2AndOIDCConst.UrnClaimBase.Length), claim.Value);
                                 }
                             }
                         }
-                        ret.Add(OAuth2AndOIDCConst.Claim_Scopes.Substring(
-                            OAuth2AndOIDCConst.Claim_Base.Length), scopes.Trim());
+                        ret.Add(OAuth2AndOIDCConst.UrnScopesClaim.Substring(
+                            OAuth2AndOIDCConst.UrnClaimBase.Length), scopes.Trim());
 
                         return ret; // 成功
                     }
@@ -539,7 +540,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region /ros
+        #region /ros (RequestObject)
 
         /// <summary>
         /// RequestObjectを登録するWebAPI
@@ -549,34 +550,49 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public HttpResponseMessage RequestObjectUri()
         {
+            // RequestObjectを取り出す。
             string body = new StreamReader(
                 HttpContext.Current.Request.InputStream).ReadToEnd();
 
-            JObject requestObject = (JObject)JsonConvert.DeserializeObject(
-                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(body.Split('.')[1]), CustomEncode.us_ascii));
-
-            string iss = (string)requestObject[OAuth2AndOIDCConst.iss];
-            string pubKey = Helper.GetInstance().GetJwkRsaPublickey(iss);
-            pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-            if (RequestObject.Verify(body, out iss, pubKey))
+            if (!string.IsNullOrEmpty(body))
             {
-                return new HttpResponseMessage()
+                // 公開鍵取得にissが必要。
+                // - issを取り出す。
+                string requestObjectString = CustomEncode.ByteToString(
+                    CustomEncode.FromBase64UrlString(body.Split('.')[1]), CustomEncode.us_ascii);
+                JObject requestObject = (JObject)JsonConvert.DeserializeObject(requestObjectString);
+
+                // - 公開鍵取得を取り出す。
+                string iss = (string)requestObject[OAuth2AndOIDCConst.iss];
+                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(iss);
+                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                // 署名検証
+                if (RequestObject.Verify(body, out iss, pubKey))
                 {
-                    Content = new JsonContent(JsonConvert.SerializeObject(new
+                    string urn = Guid.NewGuid().ToString("N");
+                    string request_uri = OAuth2AndOIDCConst.UrnRequestUriBase + urn;
+
+                    // RequestObjectの登録
+                    RequestObjectProvider.Create(urn, requestObjectString);
+
+                    // 成功
+                    return new HttpResponseMessage()
                     {
-                        iss = Config.IssuerId,
-                        aud = iss,
-                        request_uri = "",
-                        exp = "" // 有効期限（存続期間は短く、好ましくは一回限
-                    }, Newtonsoft.Json.Formatting.None)),
-                    StatusCode = HttpStatusCode.Created
-                };
+                        Content = new JsonContent(JsonConvert.SerializeObject(new
+                        {
+                            iss = Config.IssuerId,
+                            aud = iss,
+                            request_uri = request_uri,
+                            exp = "" // 有効期限（存続期間は短く、好ましくは一回限
+                        }, Newtonsoft.Json.Formatting.None)),
+                        StatusCode = HttpStatusCode.Created
+                    };
+                }
             }
-            else
-            {
-                return new HttpResponseMessage(HttpStatusCode.BadRequest);
-            }            
+
+            // 失敗
+            return new HttpResponseMessage(HttpStatusCode.BadRequest);
         }
 
         #endregion

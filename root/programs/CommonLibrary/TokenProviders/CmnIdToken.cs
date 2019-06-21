@@ -73,7 +73,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 string[] temp = access_token.Split('.');
                 string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
-                Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+                JObject authTokenClaimSet = (JObject)JsonConvert.DeserializeObject(json);
 
                 // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
                 if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
@@ -84,12 +84,35 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // ・OpenID Connect : response_type=codeに対応する。
                     if (scopes.Any(x => x.ToString() == OAuth2AndOIDCConst.Scope_Openid))
                     {
-                        //・payloadからscopeを削除する。
-                        authTokenClaimSet.Remove(OAuth2AndOIDCConst.scopes);
+                        // claimsクレームを退避
+                        JObject claims = (JObject)authTokenClaimSet[OAuth2AndOIDCConst.claims];
+
+                        // IdTokenから不要なクレームを削除する。
+                        List<string> keys = new List<string>();
+                        foreach (KeyValuePair<string, JToken> item in authTokenClaimSet)
+                        {
+                            if ("iss sub aud client_id exp iat nonce".IndexOf(item.Key) == -1)
+                            {
+                                keys.Add(item.Key);
+                            }
+                        }
+                        foreach (string key in keys)
+                        {
+                            authTokenClaimSet.Remove(key);
+                        }
 
                         //・expをIdToken用のexpに差し替える。
                         authTokenClaimSet[OAuth2AndOIDCConst.exp] = DateTimeOffset.Now.AddMinutes(
                             Config.OidcIdTokenExpireTimeSpanFromMinutes.TotalMinutes).ToUnixTimeSeconds().ToString();
+
+                        if (claims != null)
+                        {
+                            // claims > id_tokenクレームの内容を格納
+                            // - auth_timeクレーム
+                            //   ...未サポート...
+                            // - acrクレーム
+                            //   ...未サポート...
+                        }
 
                         //Co.Config.;
 

@@ -469,12 +469,20 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region CreateCodeInAuthZNRes
 
         /// <summary>CreateCodeInAuthZNRes</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="queryString">NameValueCollection</param>
+        /// <param name="client_id">string</param>
+        /// <param name="state">string</param>
+        /// <param name="scopes">string</param>
+        /// <param name="claims">JObject</param>
+        /// <param name="nonce">string</param>
+        /// <returns>code</returns>
         public static string CreateCodeInAuthZNRes(
             ClaimsIdentity identity, NameValueCollection queryString,
-            string client_id, string state, IEnumerable<string> scopes, string nonce)
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         {
             // ClaimsIdentityに、その他、所定のClaimを追加する。
-            Helper.AddClaim(identity, client_id, state, scopes, nonce);
+            Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
 
             // Codeの生成
             string code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -500,12 +508,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">IEnumerable(string)</param>
+        /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="access_token">out string</param>
         /// <param name="id_token">out string</param>
         public static void CreateAuthZRes4ImplicitFlow(
             ClaimsIdentity identity, NameValueCollection queryString, string response_type,
-            string client_id, string state, IEnumerable<string> scopes, string nonce,
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce,
             out string access_token, out string id_token)
         {
             string jwkString = "";
@@ -535,7 +544,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, state, scopes, nonce);
+                Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
 
                 // AccessTokenの生成
                 access_token = CmnAccessToken.CreateFromClaims(
@@ -583,13 +592,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">IEnumerable(string)</param>
+        /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="access_token">out string</param>
         /// <param name="id_token">out string</param>
         /// <returns></returns>
         public static string CreateAuthNRes4HybridFlow(
             ClaimsIdentity identity, NameValueCollection queryString,
-            string client_id, string state, IEnumerable<string> scopes, string nonce,
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce,
             out string access_token, out string id_token)
         {
             string code = "";
@@ -629,7 +639,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, state, scopes, nonce);
+                Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
 
                 // Codeの生成
                 code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -1036,7 +1046,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
+                            identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), null, "");
 
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
@@ -1153,7 +1163,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                    identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
+                    identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), null, "");
 
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
@@ -1243,7 +1253,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                                identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
+                                identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), null, "");
 
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(

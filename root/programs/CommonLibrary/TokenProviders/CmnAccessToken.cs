@@ -78,7 +78,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>JWT文字列</returns>
         public static string CreateFromClaims(
             string clientId, string userName,
-            IEnumerable<Claim> claims, DateTimeOffset expiresUtc)
+            IEnumerable<Claim> identityClaims, DateTimeOffset expiresUtc)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -88,31 +88,36 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
             List<string> scopes = new List<string>();
-            List<string> roles = new List<string>();
+            string claims = null;
 
-            foreach (Claim claim in claims)
+            // カスタムクレームは含めない。
+            //bool haveRoles = false;
+            //List<string> roles = new List<string>();
+
+            foreach (Claim c in identityClaims)
             {
-                if (claim.Type == OAuth2AndOIDCConst.Claim_Issuer)
+                if (c.Type == OAuth2AndOIDCConst.UrnIssuerClaim)
                 {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, claim.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, c.Value);
                 }
-                else if (claim.Type == OAuth2AndOIDCConst.Claim_Audience)
+                else if (c.Type == OAuth2AndOIDCConst.UrnAudienceClaim)
                 {
-                    audience = claim.Value;
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, claim.Value);
+                    audience = c.Value;
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, c.Value);
                 }
-                else if (claim.Type == OAuth2AndOIDCConst.Claim_Nonce)
+                else if (c.Type == OAuth2AndOIDCConst.UrnNonceClaim)
                 {
-                    authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, claim.Value);
+                    authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, c.Value);
                 }
-                else if (claim.Type == OAuth2AndOIDCConst.Claim_Scopes)
+                else if (c.Type == OAuth2AndOIDCConst.UrnScopesClaim)
                 {
-                    scopes.Add(claim.Value);
+                    //if (c.Value.ToLower() == OAuth2AndOIDCConst.roles) haveRoles = true;
+                    scopes.Add(c.Value);
                 }
-                else if (claim.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                {
-                    roles.Add(claim.Value);
-                }
+                //else if (c.Type == OAuth2AndOIDCConst.UrnRolesClaim)
+                //{
+                //    roles.Add(c.Value);
+                //}
             }
 
             string sub = "";
@@ -129,12 +134,26 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, userName);
 
+            // scopes
+            authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
+
+            // claims
+            if (!string.IsNullOrEmpty(claims))
+            {
+                JObject _claims = JObject.Parse(claims);
+                // claimsからid_tokeの内容を削除する。
+                authTokenClaimSet.Remove(OAuth2AndOIDCConst.claims_id_token);
+                authTokenClaimSet.Add(OAuth2AndOIDCConst.claims, _claims);
+            }
+
+            //// roles
+            //if (haveRoles)
+            //    authTokenClaimSet.Add(OAuth2AndOIDCConst.roles, roles);
+
             authTokenClaimSet.Add(OAuth2AndOIDCConst.jti, jti);
             authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, expiresUtc.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
             authTokenClaimSet.Add(OAuth2AndOIDCConst.iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-
-            authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
 
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)
@@ -167,10 +186,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                         case OAuth2AndOIDCConst.Scope_UserID:
                             authTokenClaimSet.Add(OAuth2AndOIDCConst.Scope_UserID, user.Id);
                             break;
-                        case OAuth2AndOIDCConst.Scope_Roles:
-                            authTokenClaimSet.Add(
-                                OAuth2AndOIDCConst.Scope_Roles, CmnUserStore.GetRoles(user));
-                            break;
+                        //case OAuth2AndOIDCConst.Scope_Roles:
+                        //    authTokenClaimSet.Add(
+                        //        OAuth2AndOIDCConst.Scope_Roles, CmnUserStore.GetRoles(user));
+                        //    break;
 
                             #endregion
                     }
@@ -224,34 +243,53 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             Dictionary<string, object> authTokenClaimSet = new Dictionary<string, object>();
             List<string> scopes = new List<string>();
-            List<string> roles = new List<string>();
+            string claims = null;
+
+            // カスタムクレームは含めない。
+            //bool haveRoles = false;
+            //List<string> roles = new List<string>();
 
             foreach (Claim c in identity.Claims)
             {
-                if (c.Type == OAuth2AndOIDCConst.Claim_Issuer)
+                if (c.Type == OAuth2AndOIDCConst.UrnIssuerClaim)
                 {
                     authTokenClaimSet.Add(OAuth2AndOIDCConst.iss, c.Value);
                 }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Audience)
+                else if (c.Type == OAuth2AndOIDCConst.UrnAudienceClaim)
                 {
                     authTokenClaimSet.Add(OAuth2AndOIDCConst.aud, c.Value);
                 }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Nonce)
+                else if (c.Type == OAuth2AndOIDCConst.UrnNonceClaim)
                 {
                     authTokenClaimSet.Add(OAuth2AndOIDCConst.nonce, c.Value);
                 }
-                else if (c.Type == OAuth2AndOIDCConst.Claim_Scopes)
+                else if (c.Type == OAuth2AndOIDCConst.UrnScopesClaim)
                 {
+                    //if (c.Value.ToLower() == OAuth2AndOIDCConst.roles) haveRoles = true;
                     scopes.Add(c.Value);
                 }
-                else if (c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                else if (c.Type == OAuth2AndOIDCConst.UrnClaimsClaim)
                 {
-                    roles.Add(c.Value);
+                    claims = c.Value;
                 }
+                //else if (c.Type == OAuth2AndOIDCConst.UrnRolesClaim)
+                //{
+                //    roles.Add(c.Value);
+                //}
             }
 
             authTokenClaimSet.Add(OAuth2AndOIDCConst.sub, identity.Name);
+
+            // scopes
             authTokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
+
+            // claims
+            if (!string.IsNullOrEmpty(claims)) authTokenClaimSet.Add(
+                OAuth2AndOIDCConst.claims, JObject.Parse(claims));
+
+            //// roles
+            //if (haveRoles)
+            //    authTokenClaimSet.Add(OAuth2AndOIDCConst.roles, roles);
 
             // この時点では空にしておく。
             authTokenClaimSet.Add(OAuth2AndOIDCConst.exp, "");
@@ -287,13 +325,22 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region JSON編集
 
-            // access_token_payload の Dictionary化
-            Dictionary<string, object> payload =
-                JsonConvert.DeserializeObject<Dictionary<string, object>>(access_token_payload);
+            // access_token_payload の JObject化
+            JObject payload = (JObject)JsonConvert.DeserializeObject(access_token_payload);
 
             // 読取
             audience = (string)payload[OAuth2AndOIDCConst.aud];
             subject = (string)payload[OAuth2AndOIDCConst.sub];
+            
+            //// 削除（一部
+            //// claimsからid_tokeの内容を削除する。 -> 消すとCmnIdToken側で取得不可
+            //JObject claims = (JObject)payload[OAuth2AndOIDCConst.claims];
+            //if (claims != null)
+            //{
+                
+            //    claims.Remove(OAuth2AndOIDCConst.claims_id_token);
+            //    payload[OAuth2AndOIDCConst.claims] = claims;
+            //}
 
             // 書込１
             payload[OAuth2AndOIDCConst.jti] = jti;
@@ -305,7 +352,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // - cnf
             if (x509 != null)
             {
-                Dictionary<string, string> dic = new Dictionary<string, string>();
+                JObject dic = new JObject();
                 string key = OAuth2AndOIDCConst.x5t;
                 string val = x509.Thumbprint;
 
@@ -479,18 +526,16 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         /// <summary>AddClaims</summary>
-        /// <param name="authTokenClaimSet"></param>
-        /// <param name="identity"></param>
-        private static void AddClaims(
-            Dictionary<string, object> authTokenClaimSet,
-            ClaimsIdentity identity)
+        /// <param name="authTokenClaimSet">Dictionary(string, object)</param>
+        /// <param name="identity">ClaimsIdentity</param>
+        private static void AddClaims(Dictionary<string, object> authTokenClaimSet, ClaimsIdentity identity)
         {
             // 予約Claimを追加
             identity.AddClaim(new Claim(ClaimTypes.Name, (string)authTokenClaimSet[OAuth2AndOIDCConst.sub]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_ExpirationTime, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_NotBefore, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_IssuedAt, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_JwtId, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnExpirationTimeClaim, (string)authTokenClaimSet[OAuth2AndOIDCConst.exp]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNotBeforeClaim, (string)authTokenClaimSet[OAuth2AndOIDCConst.nbf]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuedAtClaim, (string)authTokenClaimSet[OAuth2AndOIDCConst.iat]));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnJwtIdClaim, (string)authTokenClaimSet[OAuth2AndOIDCConst.jti]));
 
             // 基本Claimを追加
             // scopes
@@ -500,7 +545,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 scopes.Add(s);
             }
             Helper.AddClaim(identity,
-                (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
+                (string)authTokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, null, (string)authTokenClaimSet[OAuth2AndOIDCConst.nonce]);
 
             // 拡張Claimを追加
             // - cnf
@@ -509,10 +554,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JObject cnf = (JObject)authTokenClaimSet[OAuth2AndOIDCConst.cnf];
 
                 if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256))
-                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + CmnAccessToken.S256,
+                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnCnfX5tClaim + CmnAccessToken.S256,
                         (string)cnf[OAuth2AndOIDCConst.x5t + CmnAccessToken.S256]));
                 else if(cnf.ContainsKey(OAuth2AndOIDCConst.x5t + CmnAccessToken.S512))
-                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_CnfX5t + CmnAccessToken.S512,
+                    identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnCnfX5tClaim + CmnAccessToken.S512,
                         (string)cnf[OAuth2AndOIDCConst.x5t + CmnAccessToken.S512]));
             }
             

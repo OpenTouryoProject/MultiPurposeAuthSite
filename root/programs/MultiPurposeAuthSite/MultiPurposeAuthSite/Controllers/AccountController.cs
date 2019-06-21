@@ -2137,79 +2137,89 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
-            bool verified = false;
-
-            string nameId = "";
-            string iss = "";
-            string aud = "";
-            string inResponseTo = "";
-            string recipient = "";
-            DateTime? notOnOrAfter = null;
-
-            SAML2Enum.StatusCode? statusCode = null;
-            SAML2Enum.NameIDFormat? nameIDFormat = null;
-            SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
-
-            XmlDocument samlResponse2 = null;
-
-            if (Request.HttpMethod.ToLower() == "get")
+            if (!Config.IsLockedDownRedirectEndpoint)
             {
-                string rawUrl = Request.RawUrl;
-                string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                bool verified = false;
 
-                if (SAML2Const.RSAwithSHA1 == sigAlg)
+                string nameId = "";
+                string iss = "";
+                string aud = "";
+                string inResponseTo = "";
+                string recipient = "";
+                DateTime? notOnOrAfter = null;
+
+                SAML2Enum.StatusCode? statusCode = null;
+                SAML2Enum.NameIDFormat? nameIDFormat = null;
+                SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
+
+                XmlDocument samlResponse2 = null;
+
+                if (Request.HttpMethod.ToLower() == "get")
+                {
+                    string rawUrl = Request.RawUrl;
+                    string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+
+                    if (SAML2Const.RSAwithSHA1 == sigAlg)
+                        if (SAML2Client.VerifyResponse(
+                            queryString, samlResponse, out nameId, out iss, out aud,
+                            out inResponseTo, out recipient, out notOnOrAfter,
+                            out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
+                        {
+                            if (iss == Config.IssuerId) verified = true;
+                        }
+                }
+                else if (Request.HttpMethod.ToLower() == "post")
+                {
                     if (SAML2Client.VerifyResponse(
-                        queryString, samlResponse, out nameId, out iss, out aud,
+                        "", samlResponse, out nameId, out iss, out aud,
                         out inResponseTo, out recipient, out notOnOrAfter,
                         out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
                     {
                         if (iss == Config.IssuerId) verified = true;
                     }
-            }
-            else if (Request.HttpMethod.ToLower() == "post")
-            {
-                if (SAML2Client.VerifyResponse(
-                    "", samlResponse, out nameId, out iss, out aud,
-                    out inResponseTo, out recipient, out notOnOrAfter,
-                    out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
-                {
-                    if (iss == Config.IssuerId) verified = true;
                 }
-            }
 
-            // LoadRequestParameters
-            string clientId_InSessionOrCookie = "";
-            string state_InSessionOrCookie = "";
-            string redirect_uri_InSessionOrCookie = "";
-            string nonce_InSessionOrCookie = "";
-            string code_verifier_InSessionOrCookie = "";
-            this.LoadRequestParameters(
-                out clientId_InSessionOrCookie,
-                out state_InSessionOrCookie,
-                out redirect_uri_InSessionOrCookie,
-                out nonce_InSessionOrCookie,
-                out code_verifier_InSessionOrCookie);
+                // LoadRequestParameters
+                string clientId_InSessionOrCookie = "";
+                string state_InSessionOrCookie = "";
+                string redirect_uri_InSessionOrCookie = "";
+                string nonce_InSessionOrCookie = "";
+                string code_verifier_InSessionOrCookie = "";
+                this.LoadRequestParameters(
+                    out clientId_InSessionOrCookie,
+                    out state_InSessionOrCookie,
+                    out redirect_uri_InSessionOrCookie,
+                    out nonce_InSessionOrCookie,
+                    out code_verifier_InSessionOrCookie);
 
-            // レスポンス生成
-            if (verified)
-            {
-                // 認証完了。
+                // レスポンス生成
+                if (verified)
+                {
+                    // 認証完了。
 
-                // 必要に応じてチェックしてもイイ
-                // relayStateをstateに利用したケース
-                if (relayState == state_InSessionOrCookie) { }
+                    // 必要に応じてチェックしてもイイ
+                    // relayStateをstateに利用したケース
+                    if (relayState == state_InSessionOrCookie) { }
 
-                // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
-                return Redirect(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + "?ret=認証完了（面倒なので画面は作成しませんが）");
+                    // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
+                    return Redirect(
+                        Config.OAuth2AuthorizationServerEndpointsRootURI
+                        + "?ret=認証完了（面倒なので画面は作成しませんが）");
+                }
+                else
+                {
+                    // 認証失敗。
+                    return Redirect(
+                        Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=認証失敗");
+                }
             }
             else
             {
-                // 認証失敗。
-                return Redirect(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=認証失敗");
+                // IsLockedDownRedirectEndpoint == true;
             }
+
+            // エラー
+            return View("Error");
         }
 
         #endregion
@@ -2238,7 +2248,27 @@ namespace MultiPurposeAuthSite.Controllers
             string scope, string state,
             string nonce, string prompt) // OpenID Connect
             // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
+            // string request_uri // FAPI2 : RequestObject // Request.QueryStringで直接参照
         {
+            JObject claims = null;
+            string request_uri = Request.QueryString[OAuth2AndOIDCConst.request_uri];
+            if (!string.IsNullOrEmpty(request_uri))
+            {
+                string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
+                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+
+                client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
+                redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
+                response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
+                response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
+                scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
+                state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
+                nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
+                claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+            }
+
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
@@ -2279,7 +2309,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                         // ★ Codeの生成
                         string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                            identity, Request.QueryString, client_id, state, scopes, nonce);
+                            identity, Request.QueryString, client_id, state, scopes, claims, nonce);
 
                         // RedirectエンドポイントへRedirect
                         if (string.IsNullOrEmpty(response_mode) ||
@@ -2323,7 +2353,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ★ Tokenの生成
                     Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
                         identity, Request.QueryString,
-                        response_type, client_id, state, scopes, nonce,
+                        response_type, client_id, state, scopes, claims, nonce,
                         out string access_token, out string id_token);
 
                     // RedirectエンドポイントへRedirect
@@ -2384,7 +2414,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // ★ Tokenの生成
                     string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
                         identity, Request.QueryString,
-                        client_id, state, scopes, nonce,
+                        client_id, state, scopes, claims, nonce,
                         out string access_token, out string id_token);
 
                     // RedirectエンドポイントへRedirect
@@ -2444,8 +2474,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // 不正なRequest
             }
 
-            // 再表示
-            return View();
+            // エラー画面
+            return View("Error");
         }
 
         /// <summary>
@@ -2470,7 +2500,29 @@ namespace MultiPurposeAuthSite.Controllers
             string response_type, string response_mode,
             string scope, string state,
             string nonce) // OpenID Connect
+            // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
+            // string request_uri // FAPI2 : RequestObject // Request.QueryStringで直接参照
         {
+            string prompt = ""; // ダミー
+            JObject claims = null;
+            string request_uri = Request.QueryString[OAuth2AndOIDCConst.request_uri];
+            if (!string.IsNullOrEmpty(request_uri))
+            {
+                string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
+                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+
+                client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
+                redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
+                response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
+                response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
+                scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
+                state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
+                nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
+                claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+            }
+
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
@@ -2500,7 +2552,7 @@ namespace MultiPurposeAuthSite.Controllers
                     
                     // ★ Codeの生成
                     string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                        identity, Request.QueryString, client_id, state, scopes, nonce);
+                        identity, Request.QueryString, client_id, state, scopes, claims, nonce);
 
                     // RedirectエンドポイントへRedirect
                     if (string.IsNullOrEmpty(response_mode) ||
@@ -2558,21 +2610,22 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
-            // LoadRequestParameters
-            string clientId_InSessionOrCookie = "";
-            string state_InSessionOrCookie = "";
-            string redirect_uri_InSessionOrCookie = "";
-            string nonce_InSessionOrCookie = "";
-            string code_verifier_InSessionOrCookie = "";
-            this.LoadRequestParameters(
-                out clientId_InSessionOrCookie,
-                out state_InSessionOrCookie,
-                out redirect_uri_InSessionOrCookie,
-                out nonce_InSessionOrCookie,
-                out code_verifier_InSessionOrCookie);
-
             if (!Config.IsLockedDownRedirectEndpoint)
             {
+                // LoadRequestParameters
+                string clientId_InSessionOrCookie = "";
+                string state_InSessionOrCookie = "";
+                string redirect_uri_InSessionOrCookie = "";
+                string nonce_InSessionOrCookie = "";
+                string code_verifier_InSessionOrCookie = "";
+                this.LoadRequestParameters(
+                    out clientId_InSessionOrCookie,
+                    out state_InSessionOrCookie,
+                    out redirect_uri_InSessionOrCookie,
+                    out nonce_InSessionOrCookie,
+                    out code_verifier_InSessionOrCookie);
+
+
                 // Tokenエンドポイントにアクセス
                 Uri tokenEndpointUri = new Uri(
                     Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
