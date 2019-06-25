@@ -71,7 +71,8 @@ namespace CreateJwtBearerTokenFlowAssertion
             #region PrivateKey
             Console.WriteLine("PrivateKey:");
 
-            jwkPrivateKey = PrivateKeyConverter.RsaParamToJwk(((RSA)dsX509.X509Certificate.PrivateKey).ExportParameters(true));
+            RsaPrivateKeyConverter rpvkc = new RsaPrivateKeyConverter(JWS_RSA.RS._256);
+            jwkPrivateKey = rpvkc.ParamToJwk(((RSA)dsX509.X509Certificate.PrivateKey).ExportParameters(true));
             jwkPrivateKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPrivateKey, CustomEncode.us_ascii));
 
             Console.WriteLine(jwkPrivateKey);
@@ -81,7 +82,8 @@ namespace CreateJwtBearerTokenFlowAssertion
             #region PublicKey
             Console.WriteLine("PublicKey:");
 
-            jwkPublicKey = RsaPublicKeyConverter.ParamToJwk(((RSA)dsX509.X509Certificate.PublicKey.Key).ExportParameters(false));
+            RsaPublicKeyConverter rpbkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+            jwkPublicKey = rpbkc.ParamToJwk(((RSA)dsX509.X509Certificate.PublicKey.Key).ExportParameters(false));
             jwkPublicKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPublicKey, CustomEncode.us_ascii));
 
             Console.WriteLine(jwkPublicKey);

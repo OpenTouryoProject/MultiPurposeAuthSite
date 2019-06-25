@@ -207,11 +207,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             // JWT_RS256_X509
             jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
 
+            // 鍵変換
+            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+
             // JWSHeaderのセット
             // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
+                    rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
@@ -386,10 +389,13 @@ namespace MultiPurposeAuthSite.TokenProviders
             // 署名
             jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
 
+            // 鍵変換
+            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+
             // JWSHeaderのセット
             Dictionary<string, string> jwk =
                 JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    RsaPublicKeyConverter.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
+                    rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
 
             jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
             jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
@@ -454,8 +460,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         else
                         {
                             // Jwkを使用
+                            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
                             jwsRS256 = new JWS_RS256_Param(
-                                RsaPublicKeyConverter.JwkToProvider(jwkObject).ExportParameters(false));
+                                rpkc.JwkToProvider(jwkObject).ExportParameters(false));
                         }
                     }
                 }

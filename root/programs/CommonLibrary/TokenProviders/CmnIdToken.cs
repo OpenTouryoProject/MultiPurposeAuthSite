@@ -175,8 +175,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             throw new NotSupportedException("FAPI2 is not supported in this dotnet version.");
 #else
                             // JWE(RsaOaepAesGcm)
+                            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
                             JWE_RsaOaepAesGcm_Param jweRsaOaep = new JWE_RsaOaepAesGcm_Param(
-                                EnumASymmetricAlgorithm.RsaCng, RsaPublicKeyConverter.JwkToParam(cerJwkString));
+                                EnumASymmetricAlgorithm.RsaCng, rpkc.JwkToParam(cerJwkString));
 
                             // JWS(ES256)
                             JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(pfxFilePath, pfxPassword);

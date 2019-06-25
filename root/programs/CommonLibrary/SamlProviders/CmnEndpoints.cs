@@ -87,11 +87,14 @@ namespace MultiPurposeAuthSite.SamlProviders
                 pubKey = CustomEncode.ByteToString(
                     CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
+                // 鍵変換
+                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+
                 if (!string.IsNullOrEmpty(queryString))
                 {
                     // VerifyRedirect
                     DigitalSignParam dsParam = new DigitalSignParam(
-                        RsaPublicKeyConverter.JwkToParam(pubKey),
+                        rpkc.JwkToParam(pubKey),
                         EnumDigitalSignAlgorithm.RsaCSP_SHA1);
 
                     if (SAML2Bindings.VerifyRedirect(queryString, dsParam))
@@ -108,7 +111,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                 else
                 {
                     // VerifyPost
-                    RSA rsa = RsaPublicKeyConverter.JwkToProvider(pubKey);
+                    RSA rsa = rpkc.JwkToProvider(pubKey);
 
                     if (SAML2Bindings.VerifyPost(decodeSaml, inResponseTo, rsa))
                     {
