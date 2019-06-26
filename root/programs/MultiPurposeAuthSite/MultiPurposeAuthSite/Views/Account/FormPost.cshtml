@@ -26,8 +26,15 @@
 <html>
 <body onload="javascript: document.forms[0].submit();">
     <form method="post" action="@ViewData["Action"]">
+@if (!string.IsNullOrEmpty((string)ViewData["Code"]))
+{
         <input type="hidden" name="code" value="@ViewData["Code"]" />
         <input type="hidden" name="state" value="@ViewData["State"]" />
+}
+else if (!string.IsNullOrEmpty((string)ViewData["Response"]))
+{
+    <input type="hidden" name="response" value="@ViewData["Response"]" />
+}
     </form>
 </body>
 </html>

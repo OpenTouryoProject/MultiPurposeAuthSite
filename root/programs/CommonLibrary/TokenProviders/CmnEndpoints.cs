@@ -1540,7 +1540,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // expires_in
-            ret.Add("expires_in", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
+            ret.Add(OAuth2AndOIDCConst.expires_in, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
 
             return ret;
         }
