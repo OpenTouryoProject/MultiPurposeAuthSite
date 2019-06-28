@@ -174,8 +174,8 @@ namespace MultiPurposeAuthSite.Controllers
                     break;
 
                 default:
-                    err.Add("error", "invalid_grant_type");
-                    err.Add("error_description", "Invalid grant_type.");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid grant_type.");
                     break;
             }
 
@@ -272,15 +272,15 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    err.Add("error", "invalid_request");
-                    err.Add("error_description", "invalid token.");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                 }
             }
             else
             {
                 // クライアント認証エラー（ヘッダ不正
-                err.Add("error", "invalid_request");
-                err.Add("error_description", "Invalid authentication header.");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description, "Invalid authentication header.");
             }
 
             return err; // 失敗
@@ -341,8 +341,8 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // 検証失敗
                             // 検証エラー
-                            err.Add("error", "invalid_request");
-                            err.Add("error_description", "invalid token.");
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                         }
                     }
                     else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
@@ -356,29 +356,29 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // 取り消し失敗
-                            err.Add("error", "invalid_request");
-                            err.Add("error_description", "invalid token.");
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                         }
                     }
                     else
                     {
                         // token_type_hint パラメタ・エラー
-                        err.Add("error", "invalid_request");
-                        err.Add("error_description", "invalid token_type_hint.");
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                        err.Add(OAuth2AndOIDCConst.error_description, "invalid token_type_hint.");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential.");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // クライアント認証エラー（ヘッダ不正
-                err.Add("error", "invalid_request");
-                err.Add("error_description", "Invalid authentication header.");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description, "Invalid authentication header.");
             }
 
             return err; // 失敗
@@ -450,8 +450,8 @@ namespace MultiPurposeAuthSite.Controllers
                     else
                     {
                         // token_type_hint パラメタ・エラー
-                        err.Add("error", "invalid_request");
-                        err.Add("error_description", "invalid token_type_hint.");
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid token_type_hint.");
                     }
 
                     // AccessToken化して共通化した処理
@@ -474,7 +474,8 @@ namespace MultiPurposeAuthSite.Controllers
                                 }
                                 else if(claim.Type.StartsWith(OAuth2AndOIDCConst.UrnCnfX5tClaim))
                                 {
-                                    string temp = OAuth2AndOIDCConst.x5t + claim.Type.Substring(OAuth2AndOIDCConst.UrnCnfX5tClaim.Length);
+                                    string temp = OAuth2AndOIDCConst.x5t 
+                                        + claim.Type.Substring(OAuth2AndOIDCConst.UrnCnfX5tClaim.Length);
                                     ret.Add(OAuth2AndOIDCConst.cnf, new Dictionary<string, string>()
                                     {
                                         { temp, claim.Value}
@@ -496,22 +497,22 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 検証失敗
                         // 検証エラー
-                        err.Add("error", "invalid_request");
-                        err.Add("error_description", "invalid token.");
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential.");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // クライアント認証エラー（ヘッダ不正
-                err.Add("error", "invalid_request");
-                err.Add("error_description", "Invalid authentication header.");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description, "Invalid authentication header.");
             }
 
             return err; // 失敗

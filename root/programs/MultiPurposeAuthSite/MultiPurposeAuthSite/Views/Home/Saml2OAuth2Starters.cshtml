@@ -51,6 +51,10 @@
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.ClientType, Model.DdlClientTypeItems, new { @class = "form-control" })
             </div>
+            @Html.LabelFor(m => m.ResponseMode, new { @class = "col-md-3 control-label" })
+            <div class="col-md-5">
+                @Html.DropDownListFor(model => model.ResponseMode, Model.DdlResponseModeItems, new { @class = "form-control" })
+            </div>
         </div>
         <ul>
             <li>
@@ -68,9 +72,7 @@
                 Authorization Code Flow
                 <ul>
                     <li><input type="submit" name="submit.AuthorizationCode" value="Test Authorization Code Flow" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCode_FormPost" value="Test Authorization Code Flow (form_post)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_OIDC" value="Test Authorization Code Flow (OIDC)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCode_OIDC_FormPost" value="Test Authorization Code Flow (OIDC, form_post)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_PKCE_Plain" value="Test Authorization Code Flow (PKCE plain)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_PKCE_S256" value="Test Authorization Code Flow (PKCE S256)" class="btn btn-link" /></li>
                 </ul>
@@ -96,7 +98,6 @@
                 <ul>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1" value="Test Authorization Code Flow (FAPI1 CC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1_OIDC" value="Test Authorization Code Flow (FAPI1 CC, OIDC)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCodeFAPI1_OIDC_FormPost" value="Test Authorization Code Flow (FAPI1 CC, OIDC, form_post)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_PKCE_S256" value="Test Authorization Code Flow (PKCE S256, FAPI1 PC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI2" value="Test Authorization Code Flow (FAPI2 CC)" class="btn btn-link" /></li>
                 </ul>

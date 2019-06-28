@@ -2336,7 +2336,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         options = new CredentialCreateOptions
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }
@@ -2371,7 +2371,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         result = new CredentialMakeResult
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }

@@ -29,12 +29,26 @@
 @if (!string.IsNullOrEmpty((string)ViewData["Code"]))
 {
         <input type="hidden" name="code" value="@ViewData["Code"]" />
-        <input type="hidden" name="state" value="@ViewData["State"]" />
 }
-else if (!string.IsNullOrEmpty((string)ViewData["Response"]))
+@if (!string.IsNullOrEmpty((string)ViewData["IdToken"]))
 {
-    <input type="hidden" name="response" value="@ViewData["Response"]" />
+        <input type="hidden" name="id_token" value="@ViewData["IdToken"]" />
 }
+@if (!string.IsNullOrEmpty((string)ViewData["AccessToken"]))
+{
+        <input type="hidden" name="access_token" value="@ViewData["AccessToken"]" />
+        <input type="hidden" name="token_type" value="@ViewData["TokenType"]" />
+        <input type="hidden" name="expires_in" value="@ViewData["ExpiresIn"]" />
+}
+if (!string.IsNullOrEmpty((string)ViewData["Response"]))
+{
+        <input type="hidden" name="response" value="@ViewData["Response"]" />
+}
+if (!string.IsNullOrEmpty((string)ViewData["Error"]))
+{
+        <input type="hidden" name="error" value="@ViewData["Error"]" />
+}
+        <input type="hidden" name="state" value="@ViewData["State"]" />
     </form>
 </body>
 </html>

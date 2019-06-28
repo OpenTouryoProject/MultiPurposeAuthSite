@@ -54,11 +54,18 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>response(JARM)</returns>
         public static string Create(
             Dictionary<string, string> responseDictionary,
-            string clientId, DateTimeOffset expiresUtc)
+            string clientId, DateTimeOffset? expiresUtc)
         {
-            responseDictionary.Add(OAuth2AndOIDCConst.iss, Config.IssuerId);
-            responseDictionary.Add(OAuth2AndOIDCConst.aud, clientId);
-            responseDictionary.Add(OAuth2AndOIDCConst.exp, expiresUtc.ToUnixTimeSeconds().ToString());
+            if (string.IsNullOrEmpty(clientId))
+            {
+                // error
+            }
+            else
+            {
+                responseDictionary.Add(OAuth2AndOIDCConst.iss, Config.IssuerId);
+                responseDictionary.Add(OAuth2AndOIDCConst.aud, clientId);
+                responseDictionary.Add(OAuth2AndOIDCConst.exp, expiresUtc.Value.ToUnixTimeSeconds().ToString());
+            }
 
             // 秘密鍵
             string pfxFilePath = Config.RsaPfxFilePath;

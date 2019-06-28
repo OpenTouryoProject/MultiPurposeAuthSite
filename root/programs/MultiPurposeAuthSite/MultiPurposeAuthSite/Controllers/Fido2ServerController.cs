@@ -53,6 +53,7 @@ using Fido2NetLib.Objects;
 using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Framework.Presentation;
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
@@ -104,7 +105,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 options = new CredentialCreateOptions
                 {
-                    Status = "error",
+                    Status = OAuth2AndOIDCConst.error,
                     ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }
@@ -147,7 +148,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 result = new CredentialMakeResult
                 {
-                    Status = "error",
+                    Status = OAuth2AndOIDCConst.error,
                     ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }
@@ -195,7 +196,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 options = new AssertionOptions
                 {
-                    Status = "error",
+                    Status = OAuth2AndOIDCConst.error,
                     ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }
@@ -238,7 +239,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 result = new AssertionVerificationResult
                 {
-                    Status = "error",
+                    Status = OAuth2AndOIDCConst.error,
                     ErrorMessage = WebAuthnHelper.FormatException(e)
                 };
             }

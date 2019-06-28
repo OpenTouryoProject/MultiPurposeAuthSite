@@ -304,6 +304,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   OAuth2/OIDC ResponseMode. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResponseMode {
+            get {
+                return ResourceManager.GetString("ResponseMode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Role name に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RoleName {

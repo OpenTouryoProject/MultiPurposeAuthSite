@@ -71,5 +71,41 @@ namespace MultiPurposeAuthSite.ViewModels
                 };
             }
         }
+
+        /// <summary>ResponseMode</summary>
+        [Display(Name = "ResponseMode", ResourceType = typeof(Resources.CommonViewModels))]
+        public string ResponseMode { get; set; }
+
+        /// <summary>ResponseModeアイテムリスト</summary>
+        public List<SelectListItem> DdlResponseModeItems
+        {
+            get
+            {
+                return new List<SelectListItem>()
+                {
+                    new SelectListItem() {
+                        Text = "default",
+                        Value = "" },
+                    new SelectListItem() {
+                        Text = OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit(),
+                        Value = OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit(),
+                        Value = OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit(),
+                        Value = OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit() },
+                                        new SelectListItem() {
+                        Text = OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit(),
+                        Value = OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit(),
+                        Value = OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit(),
+                        Value = OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit() }
+                };
+            }
+        }
     }
 }
