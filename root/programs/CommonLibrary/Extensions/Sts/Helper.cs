@@ -936,6 +936,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #region 拡張
 
             // OpenID Connect
+
+            // nonce
             if (string.IsNullOrEmpty(nonce))
             {
                 identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));
@@ -944,6 +946,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, nonce));
             }
+
+            // auth_time
+            // AccountControllerで追加
 
             // FAPI2 (RequestObject)
             if (claims != null)

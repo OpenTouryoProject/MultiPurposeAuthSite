@@ -140,6 +140,17 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region IdP (Identity Provider)
 
+        /// <summary>InitSessionAfterlogin</summary>
+        private void InitSessionAfterlogin()
+        {
+            // AppScan指摘の反映
+            this.FxSessionAbandon();
+            // SessionIDの切換にはこのコードが必要である模様。
+            // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+            Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
+            Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+        }
+
         #region サインイン
 
         /// <summary>
@@ -506,11 +517,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // テスト機能でSession["state"]のチェックを止めたので不要になった。
                     // また、ManageControllerの方はログイン済みアクセスになるので。
 
-                    // AppScan指摘の反映
-                    this.FxSessionAbandon();
-                    // SessionIDの切換にはこのコードが必要である模様。
-                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                    Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
+                    // セッションの初期化
+                    this.InitSessionAfterlogin();
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
@@ -1367,11 +1375,8 @@ namespace MultiPurposeAuthSite.Controllers
                     case SignInStatus.Success:
                         // サインイン成功
 
-                        // AppScan指摘の反映
-                        this.FxSessionAbandon();
-                        // SessionIDの切換にはこのコードが必要である模様。
-                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                        Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
+                        // セッションの初期化
+                        this.InitSessionAfterlogin();
 
                         //// オペレーション・トレース・ログ出力 できない（User.Identity.GetUserId() == null
                         //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1567,11 +1572,8 @@ namespace MultiPurposeAuthSite.Controllers
                                                  loginInfo: externalLoginInfo,
                                                  isPersistent: false); // 外部ログインの Cookie 永続化は常に false.
 
-                            // AppScan指摘の反映
-                            this.FxSessionAbandon();
-                            // SessionIDの切換にはこのコードが必要である模様。
-                            // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                            Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
+                            // セッションの初期化
+                            this.InitSessionAfterlogin();
 
                             // オペレーション・トレース・ログ出力
                             Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
@@ -1634,11 +1636,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     //// この外部ログイン・プロバイダでサインイン
                                     //signInStatus = await SignInManager.ExternalSignInAsync(
 
-                                    // AppScan指摘の反映
-                                    this.FxSessionAbandon();
-                                    // SessionIDの切換にはこのコードが必要である模様。
-                                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                    Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
+                                    // セッションの初期化
+                                    this.InitSessionAfterlogin();
 
                                     // オペレーション・トレース・ログ出力
                                     Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
@@ -1716,11 +1715,8 @@ namespace MultiPurposeAuthSite.Controllers
                                         //// この外部ログイン・プロバイダでサインイン
                                         // signInStatus = await SignInManager.ExternalSignInAsync(
 
-                                        // AppScan指摘の反映
-                                        this.FxSessionAbandon();
-                                        // SessionIDの切換にはこのコードが必要である模様。
-                                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                        Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
+                                        // セッションの初期化
+                                        this.InitSessionAfterlogin();
 
                                         // オペレーション・トレース・ログ出力
                                         Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
@@ -1950,11 +1946,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
                         await SignInManager.SignInAsync(user, isPersistent: false, rememberBrowser: false);
 
-                        // AppScan指摘の反映
-                        this.FxSessionAbandon();
-                        // SessionIDの切換にはこのコードが必要である模様。
-                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                        Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
+                        // セッションの初期化
+                        this.InitSessionAfterlogin();
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a id federation.", user.Id, user.UserName));
@@ -2230,6 +2223,80 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Authorize（認可エンドポイント）
 
+        #region max_age & auth_time
+        /// <summary>CheckAuthTime</summary>
+        /// <param name="max_age">string</param>
+        /// <returns>bool</returns>
+        private bool CheckAuthTime(string max_age)
+        {
+            if (string.IsNullOrEmpty(max_age))
+            {
+                // max_ageの指定ナシ
+                return true;
+            }
+            else
+            {
+                // max_ageの指定アリ
+                if (int.TryParse(max_age, out int maxAge))
+                {
+                    // max_ageが数値
+                    string auth_time = Request.Cookies[OAuth2AndOIDCConst.auth_time].Value;
+                    if (string.IsNullOrEmpty(auth_time))
+                    {
+                        // auth_timeナシ
+                        return false;
+                    }
+                    else
+                    {
+                        // auth_timeアリ
+                        DateTime now = DateTime.UtcNow;
+                        TimeSpan ts = now - FormatConverter.FromW3cTimestamp(auth_time);
+
+                        if (ts.TotalSeconds <= maxAge)
+                        {
+                            // max_age内
+                            return true;
+                        }
+                        else
+                        {
+                            // max_age外
+                            return false;
+                        }
+                    }
+                }
+                else
+                {
+                    // max_ageが数値以外
+                    return false;
+                }
+            }
+        }
+
+        /// <summary>auth_timeを追加</summary>
+        /// <param name="max_age">string</param>
+        /// <param name="claims">JObject</param>
+        /// <param name="identity">ClaimsIdentity</param>
+        private void AddAuthTimeClaim(string max_age, JObject claims, ClaimsIdentity identity)
+        {
+            // QueryString、Cookieなどに関連するのでController側で追加。
+            if (!string.IsNullOrEmpty(max_age) || (claims != null
+                && claims.ContainsKey(OAuth2AndOIDCConst.claims_id_token) 
+                && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
+            {
+                string auth_time = Request.Cookies[OAuth2AndOIDCConst.auth_time].Value;
+
+                if (string.IsNullOrEmpty(auth_time))
+                {
+                    auth_time = DateTimeOffset.MinValue.ToString();
+                }
+
+                identity.AddClaim(new Claim(
+                    OAuth2AndOIDCConst.UrnAuthTimeClaim,
+                    FormatConverter.ToW3cTimestamp(DateTime.Parse(auth_time))));
+            }
+        }
+        #endregion
+
         #region エンドポイント自体
         /// <summary>認可エンドポイント</summary>
         /// <param name="client_id">string（必須）</param>
@@ -2238,8 +2305,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="response_mode">string（任意）</param>
         /// <param name="scope">string（任意）</param>
         /// <param name="state">string（推奨）</param>
-        /// <param name="nonce">string（OIDC）</param>
-        /// <param name="prompt">string（OIDC）</param>
+        /// <param name="nonce">string（OIDC 推奨）</param>
+        /// <param name="max_age">string（OIDC 任意）</param>
+        /// <param name="prompt">string（OIDC 任意）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
@@ -2247,7 +2315,7 @@ namespace MultiPurposeAuthSite.Controllers
             string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
-            string nonce, string prompt) // OpenID Connect
+            string nonce, string max_age, string prompt) // OpenID Connect
         // Request.QueryStringで直接参照
         // - string code_challenge, string code_challenge_method) // OAuth PKCE
         // - string request_uri // FAPI2 : RequestObject
@@ -2267,110 +2335,120 @@ namespace MultiPurposeAuthSite.Controllers
                 scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
                 state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
                 nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
                 prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
                 claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
             }
 
-            if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                client_id, redirect_uri, response_type, scope, nonce,
-                out string valid_redirect_uri, out string err, out string errDescription))
-            {
-                // Cookie認証チケットからClaimsIdentityを取得しておく。
-                AuthenticateResult ticket = this.AuthenticationManager
-                    .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
-                ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
-
-                // scopeパラメタ
-                string[] scopes = (scope ?? "").Split(' ');
-
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+            if (this.CheckAuthTime(max_age)) {
+                if (Token.CmnEndpoints.ValidateAuthZReqParam(
+                    client_id, redirect_uri, response_type, scope, nonce,
+                    out string valid_redirect_uri, out string err, out string errDescription))
                 {
-                    // OAuth2/OIDC Authorization Code
-                    ViewBag.Name = identity.Name;
-                    ViewBag.Scopes = scopes;
+                    // Cookie認証チケットからClaimsIdentityを取得しておく。
+                    AuthenticateResult ticket = this.AuthenticationManager
+                        .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
+                    ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
 
-                    // 認証の場合、余計なscopeをfilterする。
-                    bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
+                    // auth_timeを追加
+                    this.AddAuthTimeClaim(max_age, claims, identity);
+    
+                    // scopeパラメタ
+                    string[] scopes = (scope ?? "").Split(' ');
 
-                    if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
-
-                    if (isAuth                           // OAuth2 拡張仕様
-                        || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                    if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                     {
-                        // 認可画面をスキップ
+                        // OAuth2/OIDC Authorization Code
+                        ViewBag.Name = identity.Name;
+                        ViewBag.Scopes = scopes;
+
+                        // 認証の場合、余計なscopeをfilterする。
+                        bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
+
+                        if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
+
+                        if (isAuth                           // OAuth2 拡張仕様
+                            || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                        {
+                            // 認可画面をスキップ
+
+                            // ClaimsIdentityを生成
+                            identity = new ClaimsIdentity(
+                                identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
+
+                            // ★ 必要に応じてスコープのフィルタ
+                            if (isAuth)
+                            {
+                                scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
+                            }
+
+                            // ★ Codeの生成
+                            string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
+                                identity, Request.QueryString, client_id, state, scopes, claims, nonce);
+
+                            // RedirectエンドポイントへCodeをRedirect
+                            ActionResult actionResult = this.RedirectCode(
+                                client_id, response_mode, valid_redirect_uri, code, state);
+                            if (actionResult != null) return actionResult;
+                        }
+                        else
+                        {
+                            // 認可画面を表示
+                            return View();
+                        }
+                    }
+                    else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType)
+                    {
+                        // OAuth2/OIDC Implicit
 
                         // ClaimsIdentityを生成
                         identity = new ClaimsIdentity(
                             identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
-                        // ★ 必要に応じてスコープのフィルタ
-                        if (isAuth)
-                        {
-                            scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
-                        }
+                        // ★ Tokenの生成
+                        Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
+                            identity, Request.QueryString,
+                            response_type, client_id, state, scopes, claims, nonce,
+                            out string access_token, out string id_token);
 
-                        // ★ Codeの生成
-                        string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                            identity, Request.QueryString, client_id, state, scopes, claims, nonce);
+                        // RedirectエンドポイントへTokenをRedirect
+                        ActionResult actionResult = this.RedirectToken(
+                            client_id, response_mode, response_type, valid_redirect_uri,
+                            access_token, id_token, state);
+                        if (actionResult != null) return actionResult;
+                    }
+                    else if (response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
+                    {
+                        // Hybrid Flow
 
-                        // RedirectエンドポイントへCodeをRedirect
-                        ActionResult actionResult = this.RedirectCode(
-                            client_id, response_mode, valid_redirect_uri, code, state);
+                        // アクセス要求を保存して、仲介コードを発行する。
+                        identity = new ClaimsIdentity(
+                            identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
+
+                        // ★ Tokenの生成
+                        string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
+                            identity, Request.QueryString,
+                            client_id, state, scopes, claims, nonce,
+                            out string access_token, out string id_token);
+
+                        // RedirectエンドポイントへRedirect
+                        ActionResult actionResult = this.RedirectCodeToken(
+                            client_id, response_mode, response_type, valid_redirect_uri,
+                            code, access_token, id_token, state);
                         if (actionResult != null) return actionResult;
                     }
                     else
                     {
-                        // 認可画面を表示
-                        return View();
+                        // 不正なresponse_type
                     }
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType)
-                {
-                    // OAuth2/OIDC Implicit
-
-                    // ClaimsIdentityを生成
-                    identity = new ClaimsIdentity(
-                        identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
-
-                    // ★ Tokenの生成
-                    Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
-                        identity, Request.QueryString,
-                        response_type, client_id, state, scopes, claims, nonce,
-                        out string access_token, out string id_token);
-
-                    // RedirectエンドポイントへTokenをRedirect
-                    ActionResult actionResult = this.RedirectToken(
-                        client_id, response_mode, response_type, valid_redirect_uri,
-                        access_token, id_token, state);
-                    if (actionResult != null) return actionResult;
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
-                {
-                    // Hybrid Flow
-
-                    // アクセス要求を保存して、仲介コードを発行する。
-                    identity = new ClaimsIdentity(
-                        identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
-
-                    // ★ Tokenの生成
-                    string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
-                        identity, Request.QueryString,
-                        client_id, state, scopes, claims, nonce,
-                        out string access_token, out string id_token);
-
-                    // RedirectエンドポイントへRedirect
-                    ActionResult actionResult = this.RedirectCodeToken(
-                        client_id, response_mode, response_type, valid_redirect_uri,
-                        code, access_token, id_token, state);
-                    if (actionResult != null) return actionResult;
                 }
                 else
                 {
-                    // 不正なresponse_type
+                    // 不正なRequest
                 }
             }
             else
@@ -2394,7 +2472,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="response_mode">string（任意）</param>
         /// <param name="scope">string（任意）</param>
         /// <param name="state">string（推奨）</param>
-        /// <param name="nonce">string（OIDC）</param>
+        /// <param name="nonce">string（OIDC 推奨）</param>
+        /// <param name="max_age">string（OIDC 任意）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
@@ -2403,7 +2482,7 @@ namespace MultiPurposeAuthSite.Controllers
             string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
-            string nonce) // OpenID Connect
+            string nonce, string max_age) // OpenID Connect
         // Request.QueryStringで直接参照
         // - string code_challenge, string code_challenge_method) // OAuth PKCE
         // - string request_uri // FAPI2 : RequestObject
@@ -2424,6 +2503,7 @@ namespace MultiPurposeAuthSite.Controllers
                 scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
                 state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
                 nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
                 prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
                 claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
             }
@@ -2436,6 +2516,9 @@ namespace MultiPurposeAuthSite.Controllers
                 AuthenticateResult ticket = this.AuthenticationManager
                 .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
                 ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
+
+                // auth_timeを追加
+                this.AddAuthTimeClaim(max_age, claims, identity);
 
                 // 次に、アクセス要求を保存して、仲介コードを発行する。
 

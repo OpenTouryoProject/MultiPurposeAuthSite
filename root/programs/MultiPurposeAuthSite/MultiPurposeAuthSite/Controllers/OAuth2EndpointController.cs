@@ -201,7 +201,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (AuthenticationHeader.GetCredentials(
                 HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
             {
-                if (CmnAccessToken.VerifyAccessToken(bearerToken, out ClaimsIdentity identity))
+                if (CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
                 {
                     ApplicationUser user = CmnUserStore.FindByName(identity.Name);
 
@@ -220,7 +220,7 @@ namespace MultiPurposeAuthSite.Controllers
                     Dictionary<string, object> userinfoClaimSet = new Dictionary<string, object>();
                     userinfoClaimSet.Add(OAuth2AndOIDCConst.sub, sub);
 
-                    // Scope
+                    // scope
                     IEnumerable<Claim> scopes = identity.Claims.Where(
                         x => x.Type == OAuth2AndOIDCConst.UrnScopesClaim);
 
@@ -264,6 +264,19 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     #endregion
                             }
+                        }
+                    }
+
+                    // claims
+                    foreach (KeyValuePair<string, JToken> item in claims)
+                    {
+                        if (item.Key == OAuth2AndOIDCConst.claims_userinfo)
+                        {
+                            // userinfoで追加する値
+                        }
+                        else if (item.Key == OAuth2AndOIDCConst.claims_id_token)
+                        {
+                            // ...
                         }
                     }
 

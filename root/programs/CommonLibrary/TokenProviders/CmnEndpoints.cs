@@ -104,25 +104,17 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region オプション
 
+            List<string> scopes_supported = new List<string>();
             List<string> grant_types_supported = new List<string>();
             List<string> response_types_supported = new List<string>();
-            List<string> scopes_supported = new List<string>();
+            List<string> response_modes_supported = new List<string>();
 
+            OpenIDConfig.Add("scopes_supported", scopes_supported);
             OpenIDConfig.Add("grant_types_supported", grant_types_supported);
             OpenIDConfig.Add("response_types_supported", response_types_supported);
-            OpenIDConfig.Add("scopes_supported", scopes_supported);
+            OpenIDConfig.Add("response_modes_supported", response_modes_supported);
 
             #region token
-
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
-            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
-
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
                 OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
                 OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
@@ -132,11 +124,20 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
                 "RS256"
             });
-
             #endregion
 
-            #region grant_types and response_types
+            #region scopes
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
+            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
+            #endregion
 
+            #region grant and response_types
             if (Config.EnableAuthorizationCodeGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
@@ -159,17 +160,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                 grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
             }
 
-            if (Config.EnableJwtBearerTokenFlowGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
-            }
-
             if (Config.EnableRefreshToken)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
             }
 
+            if (Config.EnableJwtBearerTokenFlowGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
+            }
+            #endregion
 
+            #region response_modes
+            response_modes_supported.Add(OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit());
+            response_modes_supported.Add(OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit());
+            response_modes_supported.Add(OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit());
             #endregion
 
             #region OpenID Connect
@@ -178,17 +183,30 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
 
+                #region response_types
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
+                #endregion
 
-                // subject_types_supported
+                #region id_token
+                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
+                    "RS256", "ES256"
+                });
+
+                OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
+                    "RSA-OAEP"
+                });
+                #endregion
+
+                // subject_types
                 OpenIDConfig.Add("subject_types_supported", new List<string> {
                     "public"
                 });
 
-                // claims_supported
+                #region claims
+                OpenIDConfig.Add("claims_parameter_supported", false); // RequestObjectでのみサポート
                 OpenIDConfig.Add("claims_supported", new List<string> {
                     //Jwt
                     OAuth2AndOIDCConst.iss,
@@ -212,58 +230,54 @@ namespace MultiPurposeAuthSite.TokenProviders
                     OAuth2AndOIDCConst.nonce,
                     OAuth2AndOIDCConst.at_hash,
                     OAuth2AndOIDCConst.c_hash,
-                    OAuth2AndOIDCConst.s_hash
+                    OAuth2AndOIDCConst.s_hash //,
+                    //OAuth2AndOIDCConst.auth
                 });
+                #endregion
 
-                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
-                    "RS256", "ES256"
+                #region RequestObject
+                OpenIDConfig.Add("request_object_signing_alg_values_supported", new List<string> {
+                    "RS256"
                 });
+                OpenIDConfig.Add("request_parameter_supported", false);
+                OpenIDConfig.Add("request_uri_parameter_supported", true);
+                OpenIDConfig.Add("request_object_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri);
+                #endregion
 
-                OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
-                    "RSA-OAEP"
-                });
-
-                OpenIDConfig.Add("jwks_uri",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
+                #region ResponseObject(JARM)
+                // 「.」がね...。
+                response_modes_supported.Add("query.jwt");
+                response_modes_supported.Add("fragment.jwt");
+                response_modes_supported.Add("form_post.jwt");
+                #endregion
             }
+
+            OpenIDConfig.Add("jwks_uri",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
 
             #endregion
 
             #region OAuth2拡張
 
-            #region response_modes
-            OpenIDConfig.Add("response_modes_supported", new List<string> {
-                OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit(),
-                OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit(),
-                OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit()
-            });
-            #endregion
-
-            #region revocation
-
-            OpenIDConfig.Add("revocation_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint
-            });
+            #region Revocation
+            OpenIDConfig.Add("revocation_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint);
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
             });
-
             #endregion
 
-            #region revocation
+            #region Introspect
+            OpenIDConfig.Add("introspection_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint);
 
-            OpenIDConfig.Add("introspection_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint
-            });
-
-            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
-            });
-
+            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported",
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit());
             #endregion
 
-            #region OAuth2拡張
+            #region OAuth PKCE
 
             OpenIDConfig.Add("code_challenge_methods_supported", new List<string> {
                 OAuth2AndOIDCConst.PKCE_plain,
@@ -277,10 +291,16 @@ namespace MultiPurposeAuthSite.TokenProviders
             #region FAPI
 
             OpenIDConfig.Add("mutual_tls_sender_constrained_access_tokens", "true");
-            
+
             #endregion
 
+            #region その他
+            OpenIDConfig.Add("display_values_supported", new List<string> {
+                "page"
+            });
+
             OpenIDConfig.Add("service_documentation", "・・・");
+            #endregion
 
             #endregion
 

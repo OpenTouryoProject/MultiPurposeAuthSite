@@ -26,6 +26,8 @@
 @using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.ViewModels
 
+@using Touryo.Infrastructure.Framework.Authentication
+
 @model HomeSaml2OAuth2StartersViewModel
 @{
     ViewBag.Title = "Saml2 & OAuth2 Starters";
@@ -124,6 +126,7 @@
             </li>
         </ul>
     }
+        <a href="@(Config.OAuth2ResourceServerEndpointsRootURI + "/.well-known/openid-configuration")">.well-known/openid-configuration</a><br />
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

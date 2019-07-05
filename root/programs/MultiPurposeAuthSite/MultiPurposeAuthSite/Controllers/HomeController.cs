@@ -355,7 +355,7 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes, this.State)
-                    + "&nonce=" + this.Nonce;
+                    + "&nonce=" + this.Nonce + "&max_age=600";
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
@@ -420,16 +420,18 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // テストコードで、clientを識別するために、Stateに細工する。
+            // TestCase（max_age, auth_time）: 無し, 不要、有り, 不要、無し, 必要
             string requestObject = RequestObject.Create(this.ClientId,
                 Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri,
                 response_type, this.ResponseMode, this.RedirectUri, Const.OidcScopes,
-                OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce, "", "",
+                OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
+                "600", "", "",
                 new ClaimsInRO(
                     // userinfo > claims
                     new Dictionary<string, object>()
                     {
                         {
-                            "hoge",
+                            "picture",
                             new
                             {
                                 essential = true
