@@ -104,25 +104,17 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region オプション
 
+            List<string> scopes_supported = new List<string>();
             List<string> grant_types_supported = new List<string>();
             List<string> response_types_supported = new List<string>();
-            List<string> scopes_supported = new List<string>();
+            List<string> response_modes_supported = new List<string>();
 
+            OpenIDConfig.Add("scopes_supported", scopes_supported);
             OpenIDConfig.Add("grant_types_supported", grant_types_supported);
             OpenIDConfig.Add("response_types_supported", response_types_supported);
-            OpenIDConfig.Add("scopes_supported", scopes_supported);
+            OpenIDConfig.Add("response_modes_supported", response_modes_supported);
 
             #region token
-
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
-            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
-
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
                 OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
                 OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
@@ -132,11 +124,20 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
                 "RS256"
             });
-
             #endregion
 
-            #region grant_types and response_types
+            #region scopes
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
+            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
+            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
+            #endregion
 
+            #region grant and response_types
             if (Config.EnableAuthorizationCodeGrantType)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.AuthorizationCodeGrantType);
@@ -159,17 +160,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                 grant_types_supported.Add(OAuth2AndOIDCConst.ClientCredentialsGrantType);
             }
 
-            if (Config.EnableJwtBearerTokenFlowGrantType)
-            {
-                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
-            }
-
             if (Config.EnableRefreshToken)
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.RefreshTokenGrantType);
             }
 
+            if (Config.EnableJwtBearerTokenFlowGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
+            }
+            #endregion
 
+            #region response_modes
+            response_modes_supported.Add(OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit());
+            response_modes_supported.Add(OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit());
+            response_modes_supported.Add(OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit());
             #endregion
 
             #region OpenID Connect
@@ -178,17 +183,30 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
 
+                #region response_types
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
+                #endregion
 
-                // subject_types_supported
+                #region id_token
+                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
+                    "RS256", "ES256"
+                });
+
+                OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
+                    "RSA-OAEP"
+                });
+                #endregion
+
+                // subject_types
                 OpenIDConfig.Add("subject_types_supported", new List<string> {
                     "public"
                 });
 
-                // claims_supported
+                #region claims
+                OpenIDConfig.Add("claims_parameter_supported", false); // RequestObjectでのみサポート
                 OpenIDConfig.Add("claims_supported", new List<string> {
                     //Jwt
                     OAuth2AndOIDCConst.iss,
@@ -212,58 +230,54 @@ namespace MultiPurposeAuthSite.TokenProviders
                     OAuth2AndOIDCConst.nonce,
                     OAuth2AndOIDCConst.at_hash,
                     OAuth2AndOIDCConst.c_hash,
-                    OAuth2AndOIDCConst.s_hash
+                    OAuth2AndOIDCConst.s_hash //,
+                    //OAuth2AndOIDCConst.auth
                 });
+                #endregion
 
-                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
-                    "RS256", "ES256"
+                #region RequestObject
+                OpenIDConfig.Add("request_object_signing_alg_values_supported", new List<string> {
+                    "RS256"
                 });
+                OpenIDConfig.Add("request_parameter_supported", false);
+                OpenIDConfig.Add("request_uri_parameter_supported", true);
+                OpenIDConfig.Add("request_object_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri);
+                #endregion
 
-                OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
-                    "RSA-OAEP"
-                });
-
-                OpenIDConfig.Add("jwks_uri",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
+                #region ResponseObject(JARM)
+                // 「.」がね...。
+                response_modes_supported.Add("query.jwt");
+                response_modes_supported.Add("fragment.jwt");
+                response_modes_supported.Add("form_post.jwt");
+                #endregion
             }
+
+            OpenIDConfig.Add("jwks_uri",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
 
             #endregion
 
             #region OAuth2拡張
 
-            #region response_modes
-            OpenIDConfig.Add("response_modes_supported", new List<string> {
-                OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit(),
-                OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit(),
-                OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit()
-            });
-            #endregion
-
-            #region revocation
-
-            OpenIDConfig.Add("revocation_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint
-            });
+            #region Revocation
+            OpenIDConfig.Add("revocation_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint);
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
                OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
             });
-
             #endregion
 
-            #region revocation
+            #region Introspect
+            OpenIDConfig.Add("introspection_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint);
 
-            OpenIDConfig.Add("introspection_endpoint", new List<string> {
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint
-            });
-
-            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
-            });
-
+            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported",
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit());
             #endregion
 
-            #region OAuth2拡張
+            #region OAuth PKCE
 
             OpenIDConfig.Add("code_challenge_methods_supported", new List<string> {
                 OAuth2AndOIDCConst.PKCE_plain,
@@ -277,10 +291,16 @@ namespace MultiPurposeAuthSite.TokenProviders
             #region FAPI
 
             OpenIDConfig.Add("mutual_tls_sender_constrained_access_tokens", "true");
-            
+
             #endregion
 
+            #region その他
+            OpenIDConfig.Add("display_values_supported", new List<string> {
+                "page"
+            });
+
             OpenIDConfig.Add("service_documentation", "・・・");
+            #endregion
 
             #endregion
 
@@ -469,12 +489,20 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region CreateCodeInAuthZNRes
 
         /// <summary>CreateCodeInAuthZNRes</summary>
+        /// <param name="identity">ClaimsIdentity</param>
+        /// <param name="queryString">NameValueCollection</param>
+        /// <param name="client_id">string</param>
+        /// <param name="state">string</param>
+        /// <param name="scopes">string</param>
+        /// <param name="claims">JObject</param>
+        /// <param name="nonce">string</param>
+        /// <returns>code</returns>
         public static string CreateCodeInAuthZNRes(
             ClaimsIdentity identity, NameValueCollection queryString,
-            string client_id, string state, IEnumerable<string> scopes, string nonce)
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         {
             // ClaimsIdentityに、その他、所定のClaimを追加する。
-            Helper.AddClaim(identity, client_id, state, scopes, nonce);
+            Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
 
             // Codeの生成
             string code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -500,12 +528,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">IEnumerable(string)</param>
+        /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="access_token">out string</param>
         /// <param name="id_token">out string</param>
         public static void CreateAuthZRes4ImplicitFlow(
             ClaimsIdentity identity, NameValueCollection queryString, string response_type,
-            string client_id, string state, IEnumerable<string> scopes, string nonce,
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce,
             out string access_token, out string id_token)
         {
             string jwkString = "";
@@ -535,10 +564,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, state, scopes, nonce);
+                Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
 
                 // AccessTokenの生成
-                access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                access_token = CmnAccessToken.CreateFromClaims(
+                	client_id, identity.Name, identity.Claims,
                     DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes));
 
                 JObject jObj = (JObject)JsonConvert.DeserializeObject(
@@ -582,13 +612,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">IEnumerable(string)</param>
+        /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="access_token">out string</param>
         /// <param name="id_token">out string</param>
         /// <returns></returns>
         public static string CreateAuthNRes4HybridFlow(
             ClaimsIdentity identity, NameValueCollection queryString,
-            string client_id, string state, IEnumerable<string> scopes, string nonce,
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce,
             out string access_token, out string id_token)
         {
             string code = "";
@@ -628,7 +659,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, state, scopes, nonce);
+                Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
 
                 // Codeの生成
                 code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -638,7 +669,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // ★ 必要に応じて、scopeを調整する。
 
                 // access_token
-                access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                access_token = CmnAccessToken.ProtectFromPayload(
+                	client_id, tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                     null, permittedLevel, out string aud, out string sub);
 
@@ -796,7 +828,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region 発行
 
                     // access_token
-                    string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                    string access_token = CmnAccessToken.ProtectFromPayload(
+                        client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                         x509, permittedLevel, out string aud, out string sub);
 
@@ -908,7 +941,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
                         // access_token
-                        string access_token = CmnAccessToken.ProtectFromPayload(tokenPayload,
+                        string access_token = CmnAccessToken.ProtectFromPayload(
+                            client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
                             x509, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
 
@@ -1032,10 +1066,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
+                            identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), null, "");
 
                             // access_token
-                            string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                            string access_token = CmnAccessToken.CreateFromClaims(
+                            	client_id, identity.Name, identity.Claims,
                                 DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                             // オペレーション・トレース・ログ出力
@@ -1148,10 +1183,11 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                    identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), "");
+                    identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), null, "");
 
                     // access_token
-                    string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                    string access_token = CmnAccessToken.CreateFromClaims(
+                        client_id, identity.Name, identity.Claims,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                     // オペレーション・トレース・ログ出力
@@ -1218,7 +1254,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (!string.IsNullOrEmpty(pubKey))
                 {
-                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+                    if (JwtAssertion.Verify(
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
@@ -1237,16 +1273,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                                identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), "");
+                                identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), null, "");
 
                                 // access_token
-                                string access_token = CmnAccessToken.CreateFromClaims(identity.Name, identity.Claims,
+                                string access_token = CmnAccessToken.CreateFromClaims(
+                                    iss, identity.Name, identity.Claims,
                                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format(
-                                    "Passed the 'jwt bearer token flow' by {0}({1}).",
-                                    iss, sub)); // Client Account
+                                    "Passed the 'jwt bearer token flow' by {0}({1}).", iss, sub)); // Client Account
 
                                 ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
                                 return true;
@@ -1360,7 +1396,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (!string.IsNullOrEmpty(pubKey))
                 {
                     // 署名検証 ≒ クライアント認証
-                    if (JwtAssertion.VerifyJwtBearerTokenFlowAssertionJWK(
+                    if (JwtAssertion.Verify(
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))
                     {
                         // aud 検証
@@ -1524,7 +1560,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // expires_in
-            ret.Add("expires_in", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
+            ret.Add(OAuth2AndOIDCConst.expires_in, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
 
             return ret;
         }

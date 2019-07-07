@@ -64,8 +64,8 @@ using Microsoft.AspNet.Identity.Owin;
 using Microsoft.AspNetCore.Identity;
 #endif
 
-
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
@@ -255,39 +255,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         {
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, client_id, client_secret, redirect_uri, code);
-        }
-
-        /// <summary>
-        /// PKCE : code, code_verifierからAccess Tokenを取得する。
-        /// </summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
-        /// <param name="client_id">client_id</param>
-        /// <param name="client_secret">client_secret</param>
-        /// <param name="redirect_uri">redirect_uri</param>
-        /// <param name="code">code</param>
-        /// <param name="code_verifier">code_verifier</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
-            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
-        {
-            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
-                tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
-        }
-
-        /// <summary>
-        /// FAPI1 : code, code_verifierからAccess Tokenを取得する。
-        /// </summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
-        /// <param name="redirect_uri">redirect_uri</param>
-        /// <param name="code">code</param>
-        /// <param name="assertion">assertion</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
-            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
-        {
-            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
-                tokenEndpointUri, redirect_uri, code, assertion);
-        }
+        }        
 
         /// <summary>
         /// Resource Owner Password Credentials Grant
@@ -322,6 +290,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 tokenEndpointUri, client_id, client_secret, scopes);
         }
 
+        #endregion
+
+        #region その他の 基本 WebAPI
+
         /// <summary>Refresh Tokenを使用してAccess Tokenを更新する。</summary>
         /// <param name="tokenEndpointUri">tokenEndpointUri</param>
         /// <param name="client_id">client_id</param>
@@ -352,6 +324,27 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #endregion
 
         #region 拡張フローのWebAPI
+
+        #region PKCE
+
+        /// <summary>
+        /// PKCE : code, code_verifierからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="code_verifier">code_verifier</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
+        }
+
+        #endregion
 
         #region Revoke & Introspect
 
@@ -388,14 +381,44 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         #region JWT Bearer Token Flow
 
         /// <summary>
-        /// Token2エンドポイントで、
+        /// Tokenエンドポイントで、
         /// JWT bearer token authorizationグラント種別の要求を行う。</summary>
-        /// <param name="token2EndpointUri">Token2エンドポイントのUri</param>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
         /// <param name="assertion">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> JwtBearerTokenFlowAsync(Uri token2EndpointUri, string assertion)
+        public async Task<string> JwtBearerTokenFlowAsync(Uri tokenEndpointUri, string assertion)
         {
-            return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(token2EndpointUri, assertion);
+            return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(tokenEndpointUri, assertion);
+        }
+
+        #endregion
+
+        #region FAPI (Financial-grade API) 
+
+        /// <summary>
+        /// FAPI1 : code, assertionからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, redirect_uri, code, assertion);
+        }
+
+        /// <summary>
+        /// FAPI2 : RequestObjectを登録する。
+        /// </summary>
+        /// <param name="requestObjectRegUri">Uri</param>
+        /// <param name="requestObject">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> RegisterRequestObjectAsync(Uri requestObjectRegUri, string requestObject)
+        {
+            return await OAuth2AndOIDCClient.RegisterRequestObjectAsync(requestObjectRegUri, requestObject);
         }
 
         #endregion
@@ -887,24 +910,25 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">string[]</param>
+        /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
-        public static ClaimsIdentity AddClaim(ClaimsIdentity claims,
-            string client_id, string state, IEnumerable<string> scopes, string nonce)
+        public static ClaimsIdentity AddClaim(ClaimsIdentity identity,
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
         {
             // 発行者の情報を含める。
 
             #region 標準
 
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, Config.IssuerId));
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Audience, client_id));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuerClaim, Config.IssuerId));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnAudienceClaim, client_id));
 
             foreach (string scope in scopes)
             {
                 // その他のscopeは、Claimの下記urnに組み込む。
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Scopes, scope));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnScopesClaim, scope));
             }
 
             #endregion
@@ -912,18 +936,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #region 拡張
 
             // OpenID Connect
+
+            // nonce
             if (string.IsNullOrEmpty(nonce))
             {
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, state));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));
             }
             else
             {
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, nonce));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, nonce));
+            }
+
+            // auth_time
+            // AccountControllerで追加
+
+            // FAPI2 (RequestObject)
+            if (claims != null)
+            {
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnClaimsClaim, claims.ToString()));
             }
 
             #endregion
 
-            return claims;
+            return identity;
         }
 
         #endregion

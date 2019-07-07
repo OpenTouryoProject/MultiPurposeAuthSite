@@ -87,11 +87,14 @@ namespace MultiPurposeAuthSite.SamlProviders
                 pubKey = CustomEncode.ByteToString(
                     CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
 
+                // 鍵変換
+                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+
                 if (!string.IsNullOrEmpty(queryString))
                 {
                     // VerifyRedirect
                     DigitalSignParam dsParam = new DigitalSignParam(
-                        RsaPublicKeyConverter.JwkToParam(pubKey),
+                        rpkc.JwkToParam(pubKey),
                         EnumDigitalSignAlgorithm.RsaCSP_SHA1);
 
                     if (SAML2Bindings.VerifyRedirect(queryString, dsParam))
@@ -108,7 +111,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                 else
                 {
                     // VerifyPost
-                    RSA rsa = RsaPublicKeyConverter.JwkToProvider(pubKey);
+                    RSA rsa = rpkc.JwkToProvider(pubKey);
 
                     if (SAML2Bindings.VerifyPost(decodeSaml, inResponseTo, rsa))
                     {
@@ -129,7 +132,8 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <summary>レスポンス作成</summary>
         /// <param name="identity">ClaimsIdentity</param>
         /// <param name="authnContextClassRef">SAML2Enum.AuthnContextClassRef</param>
-        /// <param name="iss">string</param>
+        /// <param name="statusCode">SAML2Enum.StatusCode</param>
+        /// <param name="iss">string ※ Requestのissを指定</param>
         /// <param name="relayState">string</param>
         /// <param name="inResponseTo">string</param>
         /// <param name="rtnUrl">out string</param>
@@ -139,7 +143,9 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="samlNsMgr">XmlNamespaceManager</param>
         /// <returns>SAML2Enum.ProtocolBinding?</returns>
         public static SAML2Enum.ProtocolBinding? CreateSamlResponse(
-            ClaimsIdentity identity, SAML2Enum.AuthnContextClassRef authnContextClassRef,
+            ClaimsIdentity identity,
+            SAML2Enum.AuthnContextClassRef authnContextClassRef,
+            SAML2Enum.StatusCode statusCode,
             string iss, string relayState, string inResponseTo,
             out string rtnUrl, out string samlResponse, out string queryString,
             XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
@@ -197,7 +203,7 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // SamlResponseを作成する。
             XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
-                Config.IssuerId, rtnUrl, inResponseTo, SAML2Enum.StatusCode.Success, out id1);
+                Config.IssuerId, rtnUrl, inResponseTo, statusCode, out id1);
 
             // SamlAssertionを作成する（nameIDFormat.Valueに合わせて処理）。
             XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(

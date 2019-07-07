@@ -198,6 +198,9 @@
   <data name="RememberMe" xml:space="preserve">
     <value>Remember me ?</value>
   </data>
+  <data name="ResponseMode" xml:space="preserve">
+    <value>OAuth2/OIDC ResponseMode.</value>
+  </data>
   <data name="RoleName" xml:space="preserve">
     <value>Role name</value>
   </data>

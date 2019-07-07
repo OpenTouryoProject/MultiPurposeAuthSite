@@ -334,6 +334,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (signInResult == SignInStatus.Success)
                         {
                             // Passwordが一致した。
+                            Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
                             // 処理を継続
                         }
                         else
@@ -619,6 +620,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result == SignInStatus.Success)
                         {
                             // Passwordが一致した。
+                            Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
                             // 処理を継続
                         }
                         else
@@ -726,6 +728,7 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result == SignInStatus.Success)
                         {
                             // Passwordが一致した。
+                            Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
                             // 処理を継続
                         }
                         else
@@ -1577,6 +1580,8 @@ namespace MultiPurposeAuthSite.Controllers
                                             isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
                                             rememberBrowser: true); // rememberBrowser は true 固定
 
+                                        Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+
                                         // リダイレクト
                                         return RedirectToAction("ManageLogins");
                                     }
@@ -2336,7 +2341,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         options = new CredentialCreateOptions
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }
@@ -2371,7 +2376,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         result = new CredentialMakeResult
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }
@@ -2869,6 +2874,8 @@ namespace MultiPurposeAuthSite.Controllers
                         user,
                         isPersistent: false,        // アカウント記憶    // 既定値
                         rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
+
+                Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
 
                 return true;
             }

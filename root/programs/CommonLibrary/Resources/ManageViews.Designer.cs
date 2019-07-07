@@ -115,33 +115,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add OAuth2 data form に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddSaml2OAuth2DataH4 {
-            get {
-                return ResourceManager.GetString("AddSaml2OAuth2DataH4", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Submit に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddSaml2OAuth2DataSubmit {
-            get {
-                return ResourceManager.GetString("AddSaml2OAuth2DataSubmit", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add OAuth2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddSaml2OAuth2DataTitle {
-            get {
-                return ResourceManager.GetString("AddSaml2OAuth2DataTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Add payment information に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentH4 {
@@ -192,6 +165,33 @@ namespace MultiPurposeAuthSite.Resources {
         public static string AddPhoneNumberTitle {
             get {
                 return ResourceManager.GetString("AddPhoneNumberTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add Saml2 and OAuth2 data form に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddSaml2OAuth2DataH4 {
+            get {
+                return ResourceManager.GetString("AddSaml2OAuth2DataH4", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Submit に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddSaml2OAuth2DataSubmit {
+            get {
+                return ResourceManager.GetString("AddSaml2OAuth2DataSubmit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add Saml2 and OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddSaml2OAuth2DataTitle {
+            get {
+                return ResourceManager.GetString("AddSaml2OAuth2DataTitle", resourceCulture);
             }
         }
         
@@ -565,42 +565,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   OAuth2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexSaml2OAuth2Data {
-            get {
-                return ResourceManager.GetString("IndexSaml2OAuth2Data", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add your OAuth2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexSaml2OAuth2DataAddActionLink {
-            get {
-                return ResourceManager.GetString("IndexSaml2OAuth2DataAddActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Change your OAuth2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexSaml2OAuth2DataChangeActionLink {
-            get {
-                return ResourceManager.GetString("IndexSaml2OAuth2DataChangeActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Remove your OAuth2 data に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexSaml2OAuth2DataRemoveButton {
-            get {
-                return ResourceManager.GetString("IndexSaml2OAuth2DataRemoveButton", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Get your OAuth2 access token に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexOAuth2TokenGetButton {
@@ -687,6 +651,42 @@ namespace MultiPurposeAuthSite.Resources {
         public static string IndexPhoneNumberRemoveButton {
             get {
                 return ResourceManager.GetString("IndexPhoneNumberRemoveButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Saml2 and OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexSaml2OAuth2Data {
+            get {
+                return ResourceManager.GetString("IndexSaml2OAuth2Data", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Add your Saml2 and OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexSaml2OAuth2DataAddActionLink {
+            get {
+                return ResourceManager.GetString("IndexSaml2OAuth2DataAddActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Change your Saml2 and OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexSaml2OAuth2DataChangeActionLink {
+            get {
+                return ResourceManager.GetString("IndexSaml2OAuth2DataChangeActionLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Remove your Saml2 and OAuth2 data に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexSaml2OAuth2DataRemoveButton {
+            get {
+                return ResourceManager.GetString("IndexSaml2OAuth2DataRemoveButton", resourceCulture);
             }
         }
         

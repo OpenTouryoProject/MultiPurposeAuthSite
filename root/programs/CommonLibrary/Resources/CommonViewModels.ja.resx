@@ -219,4 +219,7 @@
   <data name="RedirectUriSaml" xml:space="preserve">
     <value>redirect_uri_saml</value>
   </data>
+  <data name="ResponseMode" xml:space="preserve">
+    <value>OAuth2/OIDC の ResponseMode</value>
+  </data>
 </root>

@@ -97,15 +97,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your OAuth2 data has been added. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddSaml2OAuth2DataSuccess {
-            get {
-                return ResourceManager.GetString("AddSaml2OAuth2DataSuccess", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Your payment information has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddPaymentInformationSuccess {
@@ -120,6 +111,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string AddPhoneSuccess {
             get {
                 return ResourceManager.GetString("AddPhoneSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your Saml2 and OAuth2 data has been added. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string AddSaml2OAuth2DataSuccess {
+            get {
+                return ResourceManager.GetString("AddSaml2OAuth2DataSuccess", resourceCulture);
             }
         }
         
@@ -241,15 +241,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your OAuth2 has been removed. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string RemoveSaml2OAuth2DataSuccess {
-            get {
-                return ResourceManager.GetString("RemoveSaml2OAuth2DataSuccess", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Your payment information has been removed. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RemovePaymentInformationSuccess {
@@ -264,6 +255,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string RemovePhoneSuccess {
             get {
                 return ResourceManager.GetString("RemovePhoneSuccess", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Your Saml2 and OAuth2 has been removed. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RemoveSaml2OAuth2DataSuccess {
+            get {
+                return ResourceManager.GetString("RemoveSaml2OAuth2DataSuccess", resourceCulture);
             }
         }
         

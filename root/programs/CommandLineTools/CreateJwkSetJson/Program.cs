@@ -55,12 +55,15 @@ namespace CreateJwkSetJson
 #endif
 
             // 現在の証明書のJwk
+            RsaPublicKeyConverter rpbkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+            EccPublicKeyConverter epbkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
+
             JObject rsaJwkObject = 
                 JsonConvert.DeserializeObject<JObject>(
-                    RsaPublicKeyConverter.X509CerToJwk(CmnClientParams.RsaCerFilePath));
+                    rpbkc.X509CerToJwk(CmnClientParams.RsaCerFilePath));
             JObject ecdsaJwkObject =
                 JsonConvert.DeserializeObject<JObject>(
-                    EccPublicKeyConverter.X509CerToJwk(CmnClientParams.EcdsaCerFilePath));
+                    epbkc.X509CerToJwk(CmnClientParams.EcdsaCerFilePath));
 
             // JwkSet.jsonファイルの存在チェック
             if (!ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))
