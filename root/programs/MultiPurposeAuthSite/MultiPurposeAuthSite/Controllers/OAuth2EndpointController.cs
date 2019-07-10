@@ -61,6 +61,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
+using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.Presentation;
 using Touryo.Infrastructure.Public.IO;
@@ -80,6 +81,7 @@ namespace MultiPurposeAuthSite.Controllers
         methods: "*",
         // 
         SupportsCredentials = true)]
+    [MyBaseAsyncApiController()]
     public class OAuth2EndpointController : ApiController
     {
         #region /token
@@ -268,15 +270,18 @@ namespace MultiPurposeAuthSite.Controllers
                     }
 
                     // claims
-                    foreach (KeyValuePair<string, JToken> item in claims)
+                    if (claims != null)
                     {
-                        if (item.Key == OAuth2AndOIDCConst.claims_userinfo)
+                        foreach (KeyValuePair<string, JToken> item in claims)
                         {
-                            // userinfoで追加する値
-                        }
-                        else if (item.Key == OAuth2AndOIDCConst.claims_id_token)
-                        {
-                            // ...
+                            if (item.Key == OAuth2AndOIDCConst.claims_userinfo)
+                            {
+                                // userinfoで追加する値
+                            }
+                            else if (item.Key == OAuth2AndOIDCConst.claims_id_token)
+                            {
+                                // ...
+                            }
                         }
                     }
 

@@ -421,7 +421,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>検証結果</returns>
         public static bool VerifyAccessToken(string jwt, out ClaimsIdentity identity)
         {
-            return CmnAccessToken.VerifyAccessToken(jwt, out identity);
+            JObject claims = null;
+            return CmnAccessToken.VerifyAccessToken(jwt, out claims, out identity);
         }
         
         /// <summary>Verify</summary>
@@ -431,7 +432,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>検証結果</returns>
         public static bool VerifyAccessToken(string jwt, out JObject claims, out ClaimsIdentity identity)
         {
-            claims = null;
+            claims = null; // JObjectのnull対策は上手く行かない。
             identity = new ClaimsIdentity();
 
             if (!string.IsNullOrEmpty(jwt))
@@ -494,7 +495,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             && long.Parse((string)tokenClaimSet[OAuth2AndOIDCConst.exp]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
                         {
                             // claims
-                            claims = (JObject)tokenClaimSet[OAuth2AndOIDCConst.claims];
+                            if(tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.claims))
+                                claims = (JObject)tokenClaimSet[OAuth2AndOIDCConst.claims];
 
                             // subの検証
                             // ApplicationUser を取得する。
