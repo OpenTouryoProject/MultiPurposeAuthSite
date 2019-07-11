@@ -2539,7 +2539,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果の確認
                     if (result.Succeeded)
                     {
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
+                        return RedirectToAction("Index",
+                            new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
                     }
                 }
             }

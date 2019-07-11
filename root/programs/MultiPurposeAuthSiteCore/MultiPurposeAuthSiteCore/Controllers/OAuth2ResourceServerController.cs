@@ -69,7 +69,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="formData">code</param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
-        public async Task<Dictionary<string, string>> TestHybridFlow(IFormCollection formData)
+        public async Task<Dictionary<string, object>> TestHybridFlow(IFormCollection formData)
         {
             // 変数
             string code = formData[OAuth2AndOIDCConst.code];
@@ -79,7 +79,7 @@ namespace MultiPurposeAuthSite.Controllers
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
             // 結果を格納する変数。
-            Dictionary<string, string> dic = null;
+            Dictionary<string, object> dic = null;
 
             //  client_Idから、client_secretを取得。
             string client_id = Helper.GetInstance().GetClientIdByName("TestClient");
@@ -93,11 +93,11 @@ namespace MultiPurposeAuthSite.Controllers
             // Tokenエンドポイントにアクセス
             string response = await Helper.GetInstance()
             .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
-            dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(response);
+            dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(response);
 
             // UserInfoエンドポイントにアクセス
-            dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                await Helper.GetInstance().GetUserInfoAsync(dic[OAuth2AndOIDCConst.AccessToken]));
+            dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                await Helper.GetInstance().GetUserInfoAsync((string)dic[OAuth2AndOIDCConst.AccessToken]));
 
             return dic;
         }

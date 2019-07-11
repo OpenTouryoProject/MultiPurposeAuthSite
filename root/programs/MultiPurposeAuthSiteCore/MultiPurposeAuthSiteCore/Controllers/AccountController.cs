@@ -202,7 +202,18 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Action Method
 
-        #region IdP
+        #region IdP (Identity Provider)
+
+        /// <summary>InitSessionAfterlogin</summary>
+        private void InitSessionAfterlogin()
+        {
+            // AppScan指摘の反映
+            this.FxSessionAbandon();
+            // SessionIDの切換にはこのコードが必要である模様。
+            // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
+            Response.Cookies.Set(this.SessionCookieName, "");
+            Response.Cookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+        }
 
         #region サインイン
 
@@ -282,7 +293,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 sequenceNo = "0";
             }
-            else if(Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
+            else if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
             {
                 fido2Challenge = GetPassword.Generate(22, 0);
                 HttpContext.Session.SetString("fido2Challenge", fido2Challenge);
@@ -455,7 +466,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             options = new AssertionOptions
                             {
-                                Status = "error",
+                                Status = OAuth2AndOIDCConst.error,
                                 ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                             };
                         }
@@ -507,7 +518,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             result = new AssertionVerificationResult
                             {
-                                Status = "error",
+                                Status = OAuth2AndOIDCConst.error,
                                 ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                             };
                         }
@@ -610,11 +621,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // テスト機能でSession["state"]のチェックを止めたので不要になった。
                 // また、ManageControllerの方はログイン済みアクセスになるので。
 
-                // AppScan指摘の反映
-                this.FxSessionAbandon();
-                // SessionIDの切換にはこのコードが必要である模様。
-                // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                Response.Cookies.Set(this.SessionCookieName, "");
+                // セッションの初期化
+                this.InitSessionAfterlogin();
 
                 // オペレーション・トレース・ログ出力
                 Logging.MyOperationTrace(string.Format("{0}({1}) has signed in.", user.Id, user.UserName));
@@ -1303,7 +1311,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region 2FA (2 要素認証)
+        #region 2 要素認証 (2FA :2 factor authentication)
 
         #region Email, SMS
 
@@ -1498,11 +1506,8 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // サインイン成功
 
-                    // AppScan指摘の反映
-                    this.FxSessionAbandon();
-                    // SessionIDの切換にはこのコードが必要である模様。
-                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                    Response.Cookies.Set(this.SessionCookieName, "");
+                    // セッションの初期化
+                    this.InitSessionAfterlogin();
 
                     //// オペレーション・トレース・ログ出力 できない（User.Identity.GetUserId() == null
                     //ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
@@ -1669,7 +1674,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region 外部ログイン
+        #region 外部ログイン (ExternalLogin)
 
         /// <summary>
         /// 外部Login（Redirect）の開始
@@ -1797,11 +1802,8 @@ namespace MultiPurposeAuthSite.Controllers
                             externalLoginInfo.LoginProvider, externalLoginInfo.ProviderKey,
                             isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
 
-                        // AppScan指摘の反映
-                        this.FxSessionAbandon();
-                        // SessionIDの切換にはこのコードが必要である模様。
-                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                        Response.Cookies.Set(this.SessionCookieName, "");
+                        // セッションの初期化
+                        this.InitSessionAfterlogin();
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
@@ -1861,11 +1863,8 @@ namespace MultiPurposeAuthSite.Controllers
                                     isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
                                     //rememberBrowser: true); // rememberBrowser は true 固定
 
-                                // AppScan指摘の反映
-                                this.FxSessionAbandon();
-                                // SessionIDの切換にはこのコードが必要である模様。
-                                // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                Response.Cookies.Set(this.SessionCookieName, "");
+                                // セッションの初期化
+                                this.InitSessionAfterlogin();
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
@@ -1935,14 +1934,11 @@ namespace MultiPurposeAuthSite.Controllers
                                        isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
                                        //rememberBrowser: true); // rememberBrowser は true 固定
                                        
-                                    // AppScan指摘の反映
-                                    this.FxSessionAbandon();
-                                    // SessionIDの切換にはこのコードが必要である模様。
-                                    // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                                    Response.Cookies.Set(this.SessionCookieName, "");
+                                    // セッションの初期化
+                                    this.InitSessionAfterlogin();
 
                                     // オペレーション・トレース・ログ出力
-                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
+                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
 
                                     // リダイレクト
                                     return RedirectToLocal(returnUrl);
@@ -1977,7 +1973,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region ID連携
+        #region ID連携 (ID Federation)
 
         /// <summary>
         /// IDFederationRedirectEndPoint
@@ -2170,11 +2166,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
                         await SignInManager.SignInAsync(user, isPersistent: false);//, rememberBrowser: false);
 
-                        // AppScan指摘の反映
-                        this.FxSessionAbandon();
-                        // SessionIDの切換にはこのコードが必要である模様。
-                        // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
-                        Response.Cookies.Set(this.SessionCookieName, "");
+                        // セッションの初期化
+                        this.InitSessionAfterlogin();
 
                         // オペレーション・トレース・ログ出力
                         Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a id federation.", user.Id, user.UserName));
@@ -2227,63 +2220,103 @@ namespace MultiPurposeAuthSite.Controllers
             string id = "";
             string rtnUrl = "";
 
-            if (Request.Method.ToLower() == "get")
+            // Cookie認証チケットからClaimsPrincipalを取得しておく。
+            AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
+            ClaimsPrincipal principal = (ticket != null) ? ticket.Principal : null;
+
+            // ClaimsIdentityを生成
+            ClaimsIdentity identity = new ClaimsIdentity(principal.Claims,
+                 OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
+
+            string samlResponse = "";
+            SAML2Enum.StatusCode statusCode = SAML2Enum.StatusCode.Success;
+
+            try
             {
-                // DecodeRedirect
-                string rawUrl = Request.GetEncodedUrl();
-                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
-                decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
+                //// ここでエラーになった場合、返る？
+                //throw new Exception("test");
+                if (Request.Method.ToLower() == "get")
+                {
+                    // DecodeRedirect
+                    string rawUrl = Request.GetEncodedUrl();
+                    queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                    decodeSaml = SAML2Bindings.DecodeRedirect(queryString);
 
-                // XmlDocument
-                samlRequest2 = new XmlDocument();
-                samlRequest2.PreserveWhitespace = false;
-                samlRequest2.LoadXml(decodeSaml);
+                    // XmlDocument
+                    samlRequest2 = new XmlDocument();
+                    samlRequest2.PreserveWhitespace = false;
+                    samlRequest2.LoadXml(decodeSaml);
 
-                // XmlNamespaceManager
-                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
+                    // XmlNamespaceManager
+                    samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
 
-                // VerifySamlRequest
-                //if (SAML2Const.RSAwithSHA1 == sigAlg) // 無い場合も通るようにする。
-                verified = Saml.CmnEndpoints.VerifySamlRequest(
-                    queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                    // VerifySamlRequest
+                    //if (SAML2Const.RSAwithSHA1 == sigAlg) // 無い場合も通るようにする。
+                    verified = Saml.CmnEndpoints.VerifySamlRequest(
+                        queryString, decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                }
+                else if (Request.Method.ToLower() == "post")
+                {
+                    // DecodePost
+                    decodeSaml = SAML2Bindings.DecodePost(samlRequest);
+
+                    // XmlDocument
+                    samlRequest2 = new XmlDocument();
+                    samlRequest2.PreserveWhitespace = false;
+                    samlRequest2.LoadXml(decodeSaml);
+
+                    // XmlNamespaceManager
+                    samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
+
+                    // VerifySamlRequest
+                    verified = Saml.CmnEndpoints.VerifySamlRequest(
+                        "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                }
+
+                //// ここでエラーになった場合、返る？
+                //throw new Exception("test");
+
+                // レスポンス生成
+                if (verified)
+                {
+                    // Assertion > AttributeStatement > Attribute > AttributeValueに
+                    // クレームを足すなら、ココで、identity.Claimsに値を詰めたりする。
+
+                    if (Saml.CmnEndpoints.CreateSamlResponse(identity,
+                        SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, statusCode,
+                        iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
+                        == SAML2Enum.ProtocolBinding.HttpRedirect)
+                    {
+                        // Redirect
+                        return Redirect(rtnUrl + "?" + queryString);
+                    }
+                    else
+                    {
+                        // Post
+                        ViewData["RelayState"] = relayState;
+                        ViewData["SAMLResponse"] = samlResponse;
+                        ViewData["Action"] = rtnUrl;
+
+                        return View("PostBinding");
+                    }
+                }
+                else
+                {
+                    // Error Response
+                    statusCode = SAML2Enum.StatusCode.Requester;
+                }
             }
-            else if (Request.Method.ToLower() == "post")
+            catch
             {
-                // DecodePost
-                decodeSaml = SAML2Bindings.DecodePost(samlRequest);
-
-                // XmlDocument
-                samlRequest2 = new XmlDocument();
-                samlRequest2.PreserveWhitespace = false;
-                samlRequest2.LoadXml(decodeSaml);
-
-                // XmlNamespaceManager
-                samlNsMgr = SAML2Bindings.CreateNamespaceManager(samlRequest2);
-
-                // VerifySamlRequest
-                verified = Saml.CmnEndpoints.VerifySamlRequest(
-                    "", decodeSaml, out iss, out id, samlRequest2, samlNsMgr);
+                // Error Response
+                statusCode = SAML2Enum.StatusCode.Responder;
             }
 
-            // レスポンス生成
-            if (verified)
+            // Error Response
+            try
             {
-                string samlResponse = "";
-
-                // Cookie認証チケットからClaimsIdentityを取得しておく。
-                // Cookie認証チケットからClaimsPrincipalを取得しておく。
-                AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
-                ClaimsPrincipal principal = (ticket != null) ? ticket.Principal : null;
-
-                // ClaimsIdentityを生成
-                ClaimsIdentity identity = new ClaimsIdentity(principal.Claims,
-                        OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
-
-                // Assertion > AttributeStatement > Attribute > AttributeValueに
-                // クレームを足すなら、ココで、identity.Claimsに値を詰めたりする。
-
-                if (Saml.CmnEndpoints.CreateSamlResponse(
-                    identity, SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, 
+                if (Saml.CmnEndpoints.CreateSamlResponse(identity,
+                    SAML2Enum.AuthnContextClassRef.PasswordProtectedTransport, statusCode,
                     iss, relayState, id, out rtnUrl, out samlResponse, out queryString, samlRequest2, samlNsMgr)
                     == SAML2Enum.ProtocolBinding.HttpRedirect)
                 {
@@ -2300,8 +2333,11 @@ namespace MultiPurposeAuthSite.Controllers
                     return View("PostBinding");
                 }
             }
-
-            return null;
+            catch
+            {
+                // issなどが取れていないと返せない。
+                return null;
+            }
         }
 
         #endregion
@@ -2316,81 +2352,91 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
-            bool verified = false;
-
-            string nameId = "";
-            string iss = "";
-            string aud = "";
-            string inResponseTo = "";
-            string recipient = "";
-            DateTime? notOnOrAfter = null;
-
-            SAML2Enum.StatusCode? statusCode = null;
-            SAML2Enum.NameIDFormat? nameIDFormat = null;
-            SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
-
-            XmlDocument samlResponse2 = null;
-
-            if (Request.Method.ToLower() == "get")
+            if (!Config.IsLockedDownRedirectEndpoint)
             {
-                string rawUrl = Request.GetEncodedUrl();
-                string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+                bool verified = false;
 
-                if (SAML2Const.RSAwithSHA1 == sigAlg)
+                string nameId = "";
+                string iss = "";
+                string aud = "";
+                string inResponseTo = "";
+                string recipient = "";
+                DateTime? notOnOrAfter = null;
+
+                SAML2Enum.StatusCode? statusCode = null;
+                SAML2Enum.NameIDFormat? nameIDFormat = null;
+                SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
+
+                XmlDocument samlResponse2 = null;
+
+                if (Request.Method.ToLower() == "get")
+                {
+                    string rawUrl = Request.GetEncodedUrl();
+                    string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+
+                    if (SAML2Const.RSAwithSHA1 == sigAlg)
+                        if (SAML2Client.VerifyResponse(
+                            queryString, samlResponse, out nameId, out iss, out aud,
+                            out inResponseTo, out recipient, out notOnOrAfter,
+                            out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
+                        {
+                            if (iss == Config.IssuerId) verified = true;
+                        }
+                }
+                else if (Request.Method.ToLower() == "post")
+                {
                     if (SAML2Client.VerifyResponse(
-                        queryString, samlResponse, out nameId, out iss, out aud,
+                        "", samlResponse, out nameId, out iss, out aud,
                         out inResponseTo, out recipient, out notOnOrAfter,
                         out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
                     {
                         if (iss == Config.IssuerId) verified = true;
                     }
-            }
-            else if (Request.Method.ToLower() == "post")
-            {
-                if (SAML2Client.VerifyResponse(
-                    "", samlResponse, out nameId, out iss, out aud,
-                    out inResponseTo, out recipient, out notOnOrAfter,
-                    out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
-                {
-                    if (iss == Config.IssuerId) verified = true;
                 }
-            }
 
-            // LoadRequestParameters
-            string clientId_InSessionOrCookie = "";
-            string state_InSessionOrCookie = "";
-            string redirect_uri_InSessionOrCookie = "";
-            string nonce_InSessionOrCookie = "";
-            string code_verifier_InSessionOrCookie = "";
-            this.LoadRequestParameters(
-                out clientId_InSessionOrCookie,
-                out state_InSessionOrCookie,
-                out redirect_uri_InSessionOrCookie,
-                out nonce_InSessionOrCookie,
-                out code_verifier_InSessionOrCookie);
+                // LoadRequestParameters
+                string clientId_InSessionOrCookie = "";
+                string state_InSessionOrCookie = "";
+                string redirect_uri_InSessionOrCookie = "";
+                string nonce_InSessionOrCookie = "";
+                string code_verifier_InSessionOrCookie = "";
+                this.LoadRequestParameters(
+                    out clientId_InSessionOrCookie,
+                    out state_InSessionOrCookie,
+                    out redirect_uri_InSessionOrCookie,
+                    out nonce_InSessionOrCookie,
+                    out code_verifier_InSessionOrCookie);
 
-            // レスポンス生成
-            if (verified)
-            {
-                // 認証完了。
+                // レスポンス生成
+                if (verified)
+                {
+                    // 認証完了。
 
-                // 必要に応じてチェックしてもイイ
-                // relayStateをstateに利用したケース
-                if (relayState == state_InSessionOrCookie) { }
+                    // 必要に応じてチェックしてもイイ
+                    // relayStateをstateに利用したケース
+                    if (relayState == state_InSessionOrCookie) { }
 
-                // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
-                return Redirect(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret="
-                    + CustomEncode.UrlEncode("認証完了（面倒なので画面は作成しませんが）"));
+                    // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
+                    return Redirect(
+                        Config.OAuth2AuthorizationServerEndpointsRootURI
+                        + "?ret=" + CustomEncode.UrlEncode("認証完了（面倒なので画面は作成しませんが）"));
+                }
+                else
+                {
+                    // 認証失敗。
+                    return Redirect(
+                        Config.OAuth2AuthorizationServerEndpointsRootURI
+                        + "?ret=" + CustomEncode.UrlEncode("認証失敗"));
+                }
+                // ※ ASP.NET Coreだと、手動でUrlEncodeしないとダメっぽい。
             }
             else
             {
-                // 認証失敗。
-                return Redirect(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + "?ret=" + CustomEncode.UrlEncode("認証失敗"));
+                // IsLockedDownRedirectEndpoint == true;
             }
-            // ※ ASP.NET Coreだと、手動でUrlEncodeしないとダメっぽい。
+
+            // エラー
+            return View("Error");
         }
 
         #endregion
@@ -2401,6 +2447,83 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region Authorize（認可エンドポイント）
 
+        #region max_age & auth_time
+        /// <summary>CheckAuthTime</summary>
+        /// <param name="max_age">string</param>
+        /// <returns>bool</returns>
+        private bool CheckAuthTime(string max_age)
+        {
+            if (string.IsNullOrEmpty(max_age))
+            {
+                // max_ageの指定ナシ
+                return true;
+            }
+            else
+            {
+                // max_ageの指定アリ
+                if (int.TryParse(max_age, out int maxAge))
+                {
+                    // max_ageが数値
+                    IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
+                    string auth_time = requestCookies.Get(OAuth2AndOIDCConst.auth_time);
+                    if (string.IsNullOrEmpty(auth_time))
+                    {
+                        // auth_timeナシ
+                        return false;
+                    }
+                    else
+                    {
+                        // auth_timeアリ
+                        DateTime now = DateTime.UtcNow;
+                        TimeSpan ts = now - FormatConverter.FromW3cTimestamp(auth_time);
+
+                        if (ts.TotalSeconds <= maxAge)
+                        {
+                            // max_age内
+                            return true;
+                        }
+                        else
+                        {
+                            // max_age外
+                            return false;
+                        }
+                    }
+                }
+                else
+                {
+                    // max_ageが数値以外
+                    return false;
+                }
+            }
+        }
+
+        /// <summary>auth_timeを追加</summary>
+        /// <param name="max_age">string</param>
+        /// <param name="claims">JObject</param>
+        /// <param name="identity">ClaimsIdentity</param>
+        private void AddAuthTimeClaim(string max_age, JObject claims, ClaimsIdentity identity)
+        {
+            // QueryString、Cookieなどに関連するのでController側で追加。
+            if (!string.IsNullOrEmpty(max_age) || (claims != null
+                && claims.ContainsKey(OAuth2AndOIDCConst.claims_id_token) 
+                && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
+            {
+                IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
+                string auth_time = requestCookies.Get(OAuth2AndOIDCConst.auth_time);
+
+                if (string.IsNullOrEmpty(auth_time))
+                {
+                    auth_time = DateTimeOffset.MinValue.ToString();
+                }
+
+                identity.AddClaim(new Claim(
+                    OAuth2AndOIDCConst.UrnAuthTimeClaim,
+                    FormatConverter.ToW3cTimestamp(DateTime.Parse(auth_time))));
+            }
+        }
+        #endregion
+
+        #region エンドポイント自体
         /// <summary>認可エンドポイント</summary>
         /// <param name="client_id">string（必須）</param>
         /// <param name="redirect_uri">string（任意）</param>
@@ -2408,8 +2531,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="response_mode">string（任意）</param>
         /// <param name="scope">string（任意）</param>
         /// <param name="state">string（推奨）</param>
-        /// <param name="nonce">string（OIDC）</param>
-        /// <param name="prompt">string（OIDC）</param>
+        /// <param name="nonce">string（OIDC 推奨）</param>
+        /// <param name="max_age">string（OIDC 任意）</param>
+        /// <param name="prompt">string（OIDC 任意）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpGet]
@@ -2417,206 +2541,135 @@ namespace MultiPurposeAuthSite.Controllers
             string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
-            string nonce, string prompt) // OpenID Connect
-            // string code_challenge, string code_challenge_method) // OAuth PKCE // Request.QueryStringで直接参照
+            string nonce, string max_age, string prompt) // OpenID Connect
+        // Request.QueryStringで直接参照
+        // - string code_challenge, string code_challenge_method) // OAuth PKCE
+        // - string request_uri // FAPI2 : RequestObject
         {
-            if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                client_id, redirect_uri, response_type, scope, nonce,
-                out string valid_redirect_uri, out string err, out string errDescription))
+            JObject claims = null;
+            string request_uri = StringExtractor.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
+            if (!string.IsNullOrEmpty(request_uri))
             {
-                // Cookie認証チケットからClaimsPrincipalを取得しておく。
-                AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
-                ClaimsPrincipal principal = (ticket != null) ? ticket.Principal : null;
+                string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
+                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
 
-                // scopeパラメタ
-                string[] scopes = (scope ?? "").Split(' ');
+                client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
+                redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
+                response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
+                response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
+                scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
+                state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
+                nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
+                prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
+                claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+            }
 
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+            if (this.CheckAuthTime(max_age)) {
+                if (Token.CmnEndpoints.ValidateAuthZReqParam(
+                    client_id, redirect_uri, response_type, scope, nonce,
+                    out string valid_redirect_uri, out string err, out string errDescription))
                 {
-                    // OAuth2/OIDC Authorization Code
-                    ViewBag.Name = principal.Identity.Name;
-                    ViewBag.Scopes = scopes;
+                    // Cookie認証チケットからClaimsPrincipalを取得しておく。
+                    AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
+                    ClaimsPrincipal principal = (ticket != null) ? ticket.Principal : null;
 
-                    // 認証の場合、余計なscopeをfilterする。
-                    bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
+                    // ClaimsIdentityを生成
+                    ClaimsIdentity identity = new ClaimsIdentity(
+                        principal.Claims, OAuth2AndOIDCConst.Bearer,
+                        ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
-                    if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
+                    // auth_timeを追加
+                    this.AddAuthTimeClaim(max_age, claims, identity);
 
-                    if (isAuth                           // OAuth2 拡張仕様
-                        || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                    // scopeパラメタ
+                    string[] scopes = (scope ?? "").Split(' ');
+
+                    if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                     {
-                        // 認可画面をスキップ
+                        // OAuth2/OIDC Authorization Code
+                        ViewBag.Name = principal.Identity.Name;
+                        ViewBag.Scopes = scopes;
 
-                        // ClaimsIdentityを生成
-                        ClaimsIdentity identity = new ClaimsIdentity(principal.Claims,
-                            OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
+                        // 認証の場合、余計なscopeをfilterする。
+                        bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
 
-                        // ★ 必要に応じてスコープのフィルタ
-                        if (isAuth)
-                        {
-                            scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
-                        }
+                        if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
-                        // ★ Codeの生成
-                        string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(identity,
-                            HttpUtility.ParseQueryString(Request.QueryString.Value), client_id, state, scopes, nonce);
+                        if (isAuth                           // OAuth2 拡張仕様
+                            || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                        {
+                            // 認可画面をスキップ
 
-                        // RedirectエンドポイントへRedirect
-                        if (string.IsNullOrEmpty(response_mode) ||
-                            response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit())
-                        {
-                            return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
-                        }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
-                        {
-                            return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
-                        }
-                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
-                        {
-                            // form_post
-                            ViewData["Action"] = valid_redirect_uri;
-                            ViewData["Code"] = code;
-                            ViewData["State"] = state;
-                            return View("FormPost");
+                            // ★ 必要に応じてスコープのフィルタ
+                            if (isAuth)
+                            {
+                                scopes = Sts.Helper.FilterClaimAtAuth(scopes).ToArray();
+                            }
+
+                            // ★ Codeの生成
+                            string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
+                                identity, HttpUtility.ParseQueryString(Request.QueryString.Value),
+                                client_id, state, scopes, claims, nonce);
+
+                            // RedirectエンドポイントへCodeをRedirect
+                            ActionResult actionResult = this.RedirectCode(
+                                client_id, response_mode, valid_redirect_uri, code, state);
+                            if (actionResult != null) return actionResult;
                         }
                         else
                         {
-                            // 不正な操作
+                            // 認可画面を表示
+                            return View();
                         }
+                    }
+                    else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType)
+                    {
+                        // OAuth2/OIDC Implicit
+
+                        // ★ Tokenの生成
+                        Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
+                            identity, HttpUtility.ParseQueryString(Request.QueryString.Value),
+                            response_type, client_id, state, scopes, claims, nonce,
+                            out string access_token, out string id_token);
+
+                        // RedirectエンドポイントへTokenをRedirect
+                        ActionResult actionResult = this.RedirectToken(
+                            client_id, response_mode, response_type, valid_redirect_uri,
+                            access_token, id_token, state);
+                        if (actionResult != null) return actionResult;
+                    }
+                    else if (response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                        || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
+                    {
+                        // OIDC Hybrid Flow
+
+                        // ★ Tokenの生成
+                        string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
+                            identity,
+                            HttpUtility.ParseQueryString(Request.QueryString.Value),
+                            client_id, state, scopes, claims, nonce,
+                            out string access_token, out string id_token);
+
+                        // RedirectエンドポイントへRedirect
+                        ActionResult actionResult = this.RedirectCodeToken(
+                            client_id, response_mode, response_type, valid_redirect_uri,
+                            code, access_token, id_token, state);
+                        if (actionResult != null) return actionResult;
                     }
                     else
                     {
-                        // 認可画面を表示
-                        return View();
-                    }
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcImplicit2_ResponseType)
-                {
-                    // OAuth2/OIDC Implicit
-
-                    // ClaimsIdentityを生成
-                    ClaimsIdentity identity = new ClaimsIdentity(principal.Claims,
-                            OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
-
-                    // ★ Tokenの生成
-                    Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(identity,
-                        HttpUtility.ParseQueryString(Request.QueryString.Value),
-                        response_type, client_id, state, scopes, nonce,
-                        out string access_token, out string id_token);
-
-                    // RedirectエンドポイントへRedirect
-                    switch (response_type)
-                    {
-                        case OAuth2AndOIDCConst.ImplicitResponseType:
-                            if (string.IsNullOrEmpty(access_token))
-                            {
-                                return new RedirectResult(valid_redirect_uri
-                                    + string.Format("#error=access_denied&state={0}", state));
-                            }
-                            else
-                            {
-                                return new RedirectResult(valid_redirect_uri + string.Format(
-                                    "#access_token={0}&state={1}&token_type={2}&expires_in={3}",
-                                    access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
-                            }
-                            
-                        case OAuth2AndOIDCConst.OidcImplicit1_ResponseType:
-                            if (string.IsNullOrEmpty(id_token))
-                            {
-                                return new RedirectResult(valid_redirect_uri
-                                    + string.Format("#error=access_denied&state={0}", state));
-                            }
-                            else
-                            {
-                                return new RedirectResult(valid_redirect_uri
-                                    + string.Format("#id_token={0}&state={1}", id_token, state));
-                            }
-                            
-                        case OAuth2AndOIDCConst.OidcImplicit2_ResponseType:
-                            if (string.IsNullOrEmpty(id_token))
-                            {
-                                return new RedirectResult(valid_redirect_uri
-                                    + string.Format("#error=access_denied&state={0}", state));
-                            }
-                            else
-                            {
-                                return new RedirectResult(valid_redirect_uri + string.Format(
-                                    "#id_token={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
-                                    id_token, access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
-                            }
-                            
-                        default:
-                            break;
-                    }
-                }
-                else if (response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
-                    || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
-                {
-                    // Hybrid Flow
-
-                    // アクセス要求を保存して、仲介コードを発行する。
-                    ClaimsIdentity identity = new ClaimsIdentity(principal.Claims,
-                            OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
-
-                    // ★ Tokenの生成
-                    string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(identity,
-                        HttpUtility.ParseQueryString(Request.QueryString.Value),
-                        client_id, state, scopes, nonce,
-                        out string access_token, out string id_token);
-
-                    // RedirectエンドポイントへRedirect
-                    switch (response_type)
-                    {
-                        case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType:
-                            if (string.IsNullOrEmpty(access_token))
-                            {
-                                return new RedirectResult(valid_redirect_uri
-                                    + string.Format("#error=access_denied&state={0}", state));
-                            }
-                            else
-                            {
-                                return new RedirectResult(valid_redirect_uri + string.Format(
-                                    "#code={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
-                                    code, access_token, state, "bearer",
-                                    Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
-                            }
-                            
-                        case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType:
-                            if (string.IsNullOrEmpty(id_token))
-                            {
-                                return new RedirectResult(valid_redirect_uri
-                                    + string.Format("#error=access_denied&state={0}", state));
-                            }
-                            else
-                            {
-                                return new RedirectResult(valid_redirect_uri + string.Format(
-                                    "#code={0}&id_token={1}", code, id_token));
-                            }
-                            
-                        case OAuth2AndOIDCConst.OidcHybrid3_ResponseType:
-                            if (string.IsNullOrEmpty(id_token))
-                            {
-                                return new RedirectResult(valid_redirect_uri
-                                    + string.Format("#error=access_denied&state={0}", state));
-                            }
-                            else
-                            {
-                                return new RedirectResult(valid_redirect_uri + string.Format(
-                                    "#code={0}&access_token={1}&id_token={2}&state={3}&token_type={4}&expires_in={5}",
-                                    code, access_token, id_token, state, "bearer",
-                                    Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
-                            }
-                            
-                        default:
-                            break;
+                        // 不正なresponse_type
                     }
                 }
                 else
                 {
-                    // 不正なresponse_type
+                    // 不正なRequest
                 }
             }
             else
@@ -2624,8 +2677,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // 不正なRequest
             }
 
-            // 再表示
-            return View();
+            // エラー画面
+            return View("Error");
         }
 
         /// <summary>
@@ -2640,7 +2693,8 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="response_mode">string（任意）</param>
         /// <param name="scope">string（任意）</param>
         /// <param name="state">string（推奨）</param>
-        /// <param name="nonce">string（OIDC）</param>
+        /// <param name="nonce">string（OIDC 推奨）</param>
+        /// <param name="max_age">string（OIDC 任意）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
         [HttpPost]
@@ -2649,8 +2703,33 @@ namespace MultiPurposeAuthSite.Controllers
             string client_id, string redirect_uri,
             string response_type, string response_mode,
             string scope, string state,
-            string nonce) // OpenID Connect
+            string nonce, string max_age) // OpenID Connect
+        // Request.QueryStringで直接参照
+        // - string code_challenge, string code_challenge_method) // OAuth PKCE
+        // - string request_uri // FAPI2 : RequestObject
         {
+            string prompt = ""; // ダミー
+            JObject claims = null;
+            string request_uri = StringExtractor.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
+            if (!string.IsNullOrEmpty(request_uri))
+            {
+                string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
+                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+
+                client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
+                redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
+                response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
+                response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
+                scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
+                state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
+                nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
+                prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
+                claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+            }
+
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription))
@@ -2658,6 +2737,14 @@ namespace MultiPurposeAuthSite.Controllers
                 // Cookie認証チケットからClaimsPrincipalを取得しておく。
                 AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
                 ClaimsPrincipal principal = (ticket != null) ? ticket.Principal : null;
+
+                // ClaimsIdentityを生成
+                ClaimsIdentity identity = new ClaimsIdentity(
+                    principal.Claims, OAuth2AndOIDCConst.Bearer,
+                    ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
+
+                // auth_timeを追加
+                this.AddAuthTimeClaim(max_age, claims, identity);
 
                 // 次に、アクセス要求を保存して、仲介コードを発行する。
 
@@ -2673,36 +2760,17 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else if (!string.IsNullOrEmpty(MyHttpContext.Current.Request.Form["submit.Grant"]))
                 {
-                    // アクセス要求を保存して、仲介コードを発行する。
-                    ClaimsIdentity identity = new ClaimsIdentity(principal.Claims, 
-                        OAuth2AndOIDCConst.Bearer, ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
+                    // OAuth2/OIDC Authorization Code
 
                     // ★ Codeの生成
-                    string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(identity,
-                        HttpUtility.ParseQueryString(Request.QueryString.Value), client_id, state, scopes, nonce);
+                    string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
+                        identity, HttpUtility.ParseQueryString(Request.QueryString.Value),
+                        client_id, state, scopes, claims, nonce);
 
-                    // RedirectエンドポイントへRedirect
-                    if (string.IsNullOrEmpty(response_mode) ||
-                        response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit())
-                    {
-                        return new RedirectResult(valid_redirect_uri + string.Format("?code={0}&state={1}", code, state));
-                    }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
-                    {
-                        return new RedirectResult(valid_redirect_uri + string.Format("#code={0}&state={1}", code, state));
-                    }
-                    else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
-                    {
-                        // form_post
-                        ViewData["Action"] = valid_redirect_uri;
-                        ViewData["Code"] = code;
-                        ViewData["State"] = state;
-                        return View("FormPost");
-                    }
-                    else
-                    {
-                        // 不正な操作
-                    }
+                    // RedirectエンドポイントへCodeをRedirect
+                    ActionResult actionResult = this.RedirectCode(
+                        client_id, response_mode, valid_redirect_uri, code, state);
+                    if (actionResult != null) return actionResult;
                 }
                 else
                 {
@@ -2717,6 +2785,541 @@ namespace MultiPurposeAuthSite.Controllers
             // 再表示
             return View();
         }
+        #endregion
+
+        #region Redirect処理 (Response Mode & JARM)
+        /// <summary>
+        /// RedirectエンドポイントへCodeをRedirect
+        /// </summary>
+        /// <param name="client_id">string</param>
+        /// <param name="response_mode">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="code">string</param>
+        /// <param name="state">string</param>
+        /// <returns>ActionResult</returns>
+        private ActionResult RedirectCode(
+            string client_id, string response_mode,
+            string redirect_uri, string code, string state)
+        {
+            string response = ""; // JARM
+            DateTimeOffset expiresUtc = this.CreateJarmExp();
+
+            if (string.IsNullOrEmpty(response_mode)
+                || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.query.ToStringByEmit())
+            {
+                // query
+                return new RedirectResult(redirect_uri + string.Format("?code={0}&state={1}", code, state));
+            }
+            else if (response_mode.ToLower() 
+                == OAuth2AndOIDCEnum.ResponseMode.jwt.ToStringByEmit()
+                || response_mode.ToLower().Replace('.', '_')
+                == OAuth2AndOIDCEnum.ResponseMode.query_jwt.ToStringByEmit())
+            {
+                // jwt or query.jwt
+                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                {
+                    { "code" , code },
+                    { "state",  state }
+                }, client_id, expiresUtc);
+                return new RedirectResult(redirect_uri + string.Format("?response={0}", response));
+            }
+            else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+            {
+                // fragment
+                return new RedirectResult(redirect_uri + string.Format("#code={0}&state={1}", code, state));
+            }
+            else if (response_mode.ToLower().Replace('.', '_')
+                == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+            {
+                // fragment.jwt
+                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                {
+                    { "code" , code },
+                    { "state",  state }
+                }, client_id, expiresUtc);
+                return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+            }
+            else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+            {
+                // form_post
+                ViewData["Action"] = redirect_uri;
+                ViewData["Code"] = code;
+                ViewData["State"] = state;
+                return View("FormPost");
+            }
+            else if (response_mode.ToLower().Replace('.', '_')
+                == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+            {
+                // form_post.jwt
+                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                {
+                    { "code" , code },
+                    { "state",  state }
+                }, client_id, expiresUtc);
+                ViewData["Action"] = redirect_uri;
+                ViewData["Response"] = response;
+                return View("FormPost");
+            }
+            else
+            {
+                // 不正な操作
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// RedirectエンドポイントへTokenをRedirect
+        /// </summary>
+        /// <param name="client_id">string</param>
+        /// <param name="response_mode">string</param>
+        /// <param name="response_type">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="access_token">string</param>
+        /// <param name="id_token">string</param>
+        /// <param name="state">string</param>
+        /// <returns>ActionResult</returns>
+        private ActionResult RedirectToken(
+            string client_id, string response_mode, string response_type, string redirect_uri,
+            string access_token, string id_token, string state)
+        {
+            string response = ""; // JARM
+            DateTimeOffset expiresUtc = this.CreateJarmExp();
+
+            // 補足
+            // stateは、クライアントが指定した場合、基本的に必要になる。
+            // access_tokenを返す場合、token_type, expires_inが必要になる。
+            switch (response_type)
+            {
+                case OAuth2AndOIDCConst.ImplicitResponseType:
+                    if (string.IsNullOrEmpty(access_token))
+                    {
+                        return CreateErrorResponseForToken(response_mode, redirect_uri, state);
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(response_mode)
+                            || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+                        {
+                            // fragment
+                            return new RedirectResult(redirect_uri + string.Format(
+                                "#access_token={0}&state={1}&token_type={2}&expires_in={3}",
+                                access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        {
+                            // fragment.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, null, null);
+                            return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+                        {
+                            // form_post
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["AccessToken"] = access_token;
+                            ViewData["State"] = state;
+                            ViewData["TokenType"] = "bearer";
+                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            return View("FormPost");
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+                        {
+                            // form_post.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, null, null);
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Response"] = response;
+                            return View("FormPost");
+                        }
+                    }
+                    return null;
+
+                case OAuth2AndOIDCConst.OidcImplicit1_ResponseType:
+                    if (string.IsNullOrEmpty(id_token))
+                    {
+                        return CreateErrorResponseForToken(response_mode, redirect_uri, state);
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(response_mode)
+                            || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+                        {
+                            // fragment
+                            return new RedirectResult(redirect_uri
+                                + string.Format("#id_token={0}&state={1}", id_token, state));
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        {
+                            // fragment.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.state,  state }
+                            }, null, null);
+                            return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+                        {
+                            // form_post
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["IDToken"] = id_token;
+                            ViewData["State"] = state;
+                            return View("FormPost");
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+                        {
+                            // form_post.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.state,  state }
+                            }, null, null);
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Response"] = response;
+                            return View("FormPost");
+                        }
+                    }
+                    return null;
+
+                case OAuth2AndOIDCConst.OidcImplicit2_ResponseType:
+                    if (string.IsNullOrEmpty(id_token) || string.IsNullOrEmpty(access_token))
+                    {
+                        return CreateErrorResponseForToken(response_mode, redirect_uri, state);
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(response_mode)
+                            || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+                        {
+                            // fragment
+                            return new RedirectResult(redirect_uri + string.Format(
+                                "#id_token={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
+                                id_token, access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        {
+                            // fragment.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, null, null);
+                            return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+                        {
+                            // form_post
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["IDToken"] = id_token;
+                            ViewData["AccessToken"] = access_token;
+                            ViewData["State"] = state;
+                            ViewData["TokenType"] = "bearer";
+                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            return View("FormPost");
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+                        {
+                            // form_post.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, null, null);
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Response"] = response;
+                            return View("FormPost");
+                        }
+                    }
+                    return null;
+
+                default:
+                    // queryはNG
+                    return null;
+            }
+        }
+
+        /// <summary>RedirectエンドポイントへCode & TokenをRedirect</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="response_mode">string</param>
+        /// <param name="response_type">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="code">string</param>
+        /// <param name="access_token">string</param>
+        /// <param name="id_token">string</param>
+        /// <param name="state">string</param>
+        /// <returns></returns>
+        private ActionResult RedirectCodeToken(
+            string client_id, string response_mode, string response_type, string redirect_uri,
+            string code, string access_token, string id_token, string state)
+        {
+            string response = ""; // JARM
+            DateTimeOffset expiresUtc = this.CreateJarmExp();
+
+            // 補足
+            // stateは、クライアントが指定した場合、基本的に必要になる。
+            // access_tokenを返す場合、token_type, expires_inが必要になる。
+            switch (response_type)
+            {
+                case OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType:
+                    if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(access_token))
+                    {
+                        return CreateErrorResponseForToken(response_mode, redirect_uri, state);
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(response_mode)
+                            || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+                        {
+                            // fragment
+                            return new RedirectResult(redirect_uri + string.Format(
+                                "#code={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
+                                code, access_token, state, "bearer",
+                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        {
+                            // fragment.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.code , code },
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, client_id, expiresUtc);
+                            return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+                        {
+                            // form_post
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Code"] = code;
+                            ViewData["AccessToken"] = access_token;
+                            ViewData["State"] = state;
+                            ViewData["TokenType"] = "bearer";
+                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            return View("FormPost");
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+                        {
+                            // form_post.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.code , code },
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, client_id, expiresUtc);
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Response"] = response;
+                            return View("FormPost");
+                        }
+                    }
+                    return null;
+
+                case OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType:
+                    if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(id_token))
+                    {
+                        return CreateErrorResponseForToken(response_mode, redirect_uri, state);
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(response_mode)
+                            || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+                        {
+                            // fragment
+                            return new RedirectResult(redirect_uri + string.Format(
+                                "#code={0}&id_token={1}&state={2}", code, id_token, state));
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        {
+                            // fragment.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.code , code },
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.state,  state }
+                            }, client_id, expiresUtc);
+                            return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+                        {
+                            // form_post
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Code"] = code;
+                            ViewData["IDToken"] = id_token;
+                            ViewData["State"] = state;
+                            return View("FormPost");
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+                        {
+                            // form_post.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.code,  code },
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                            }, client_id, expiresUtc);
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Response"] = response;
+                            return View("FormPost");
+                        }
+                    }
+                    return null;
+
+                case OAuth2AndOIDCConst.OidcHybrid3_ResponseType:
+                    if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(access_token) || string.IsNullOrEmpty(id_token))
+                    {
+                        return CreateErrorResponseForToken(response_mode, redirect_uri, state);
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(response_mode)
+                            || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+                        {
+                            // fragment
+                            return new RedirectResult(redirect_uri + string.Format(
+                                "#code={0}&access_token={1}&id_token={2}&state={3}&token_type={4}&expires_in={5}",
+                                code, access_token, id_token, state, "bearer",
+                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+                        {
+                            // fragment.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.code , code },
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, client_id, expiresUtc);
+                            return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+                        }
+                        else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+                        {
+                            // form_post
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Code"] = code;
+                            ViewData["IDToken"] = id_token;
+                            ViewData["AccessToken"] = access_token;
+                            ViewData["State"] = state;
+                            ViewData["TokenType"] = "bearer";
+                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            return View("FormPost");
+                        }
+                        else if (response_mode.ToLower().Replace('.', '_')
+                            == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+                        {
+                            // form_post.jwt
+                            response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                            {
+                                { OAuth2AndOIDCConst.code , code },
+                                { OAuth2AndOIDCConst.IDToken , id_token },
+                                { OAuth2AndOIDCConst.AccessToken , access_token },
+                                { OAuth2AndOIDCConst.state,  state },
+                                { OAuth2AndOIDCConst.token_type , "bearer" },
+                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                            }, client_id, expiresUtc);
+                            ViewData["Action"] = redirect_uri;
+                            ViewData["Response"] = response;
+                            return View("FormPost");
+                        }
+                    }
+                    return null;
+
+                default:
+                    // queryはNG
+                    return null;
+            }
+        }
+
+        /// <summary>CreateJarmExp</summary>
+        /// <returns>DateTimeOffset</returns>
+        private DateTimeOffset CreateJarmExp()
+        {
+            return DateTimeOffset.Now.AddMinutes(10);
+        }
+
+        /// <summary>CreateErrorResponseForToken</summary>
+        /// <param name="response_mode">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="state">string</param>
+        private ActionResult CreateErrorResponseForToken(
+            string response_mode, string redirect_uri, string state)
+        {
+            string response = "";
+
+            if (string.IsNullOrEmpty(response_mode)
+                || response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.fragment.ToStringByEmit())
+            {
+                // fragment
+                return new RedirectResult(redirect_uri
+                    + string.Format("#error=access_denied&state={0}", state));
+            }
+            else if(response_mode.ToLower().Replace('.', '_')
+                == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
+            {
+                // fragment.jwt
+                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.error , OAuth2AndOIDCConst.access_denied },
+                    { OAuth2AndOIDCConst.state,  state }
+                }, null, null);
+                return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
+            }
+            else if(response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post.ToStringByEmit())
+            {
+                // form_post
+                ViewData["Action"] = redirect_uri;
+                ViewData["Error"] = OAuth2AndOIDCConst.access_denied;
+                ViewData["State"] = state;
+                return View("FormPost");
+            }
+            else if(response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
+            {
+                // form_post.jwt
+                response = Token.CmnResponseObject.Create(new Dictionary<string, string>()
+                {
+                    { OAuth2AndOIDCConst.error , OAuth2AndOIDCConst.access_denied },
+                    { OAuth2AndOIDCConst.state,  state }
+                }, null, null);
+                ViewData["Action"] = redirect_uri;
+                ViewData["Response"] = response;
+                return View("FormPost");
+            }
+
+            // queryはNG
+            return null;
+        }
+
+        #endregion
 
         #endregion
 
@@ -2729,195 +3332,226 @@ namespace MultiPurposeAuthSite.Controllers
         /// 認可レスポンス（仲介コード）を受け取って処理する。
         /// ・仲介コードを使用してAccess Token・Refresh Tokenを取得
         /// </summary>
-        /// <param name="code">仲介コード</param>
-        /// <param name="state">state</param>
+        /// <param name="code">string</param>
+        /// <param name="state">string</param>
+        /// <param name="response">string</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
+        // [HttpGet] // Response Mode & JARM 対応
         [AllowAnonymous]
-        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
+        public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state, string response)
         {
-            // LoadRequestParameters
-            string clientId_InSessionOrCookie = "";
-            string state_InSessionOrCookie = "";
-            string redirect_uri_InSessionOrCookie = "";
-            string nonce_InSessionOrCookie = "";
-            string code_verifier_InSessionOrCookie = "";
-            this.LoadRequestParameters(
-                out clientId_InSessionOrCookie,
-                out state_InSessionOrCookie,
-                out redirect_uri_InSessionOrCookie,
-                out nonce_InSessionOrCookie,
-                out code_verifier_InSessionOrCookie);
-
             if (!Config.IsLockedDownRedirectEndpoint)
             {
-                // Tokenエンドポイントにアクセス
-                Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-
-                // 結果を格納する変数。
-                Dictionary<string, string> dic = null;
-                OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
+                if (!string.IsNullOrEmpty(code)
+                    || !string.IsNullOrEmpty(response))
                 {
-                    ClientId = clientId_InSessionOrCookie,
-                    State = state,
-                    Code = code
-                };
+                    // query(.jwt)、form_post(.jwt)のカバレッジ
 
-                #region 仲介コードを使用してAccess, Refresh, Id Tokenを取得
-
-                string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":";
-                string fapi2Prefix = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":";
-
-                //stateの検証
-                if (state == state_InSessionOrCookie
-                    || state == fapi1Prefix + state_InSessionOrCookie  // specではなくテスト仕様
-                    || state == fapi2Prefix + state_InSessionOrCookie) // specではなくテスト仕様
-                {
-                    //state正常
-
-                    // 仲介コードからAccess Tokenを取得する。
-
-                    // redirect_uriを設定
-                    string redirect_uri = "";
-                    if (string.IsNullOrEmpty(redirect_uri_InSessionOrCookie))
+                    // JARM
+                    if (!string.IsNullOrEmpty(response))
                     {
-                        // 指定なしの場合のテストケース（指定不要
-                        //redirect_uri = Config.OAuth2ClientEndpointsRootURI
-                        //    + Config.OAuth2AuthorizationCodeGrantClient_Account;
-                    }
-                    else
-                    {
-                        // 指定ありの場合のテストケース（指定必要
-                        redirect_uri = redirect_uri_InSessionOrCookie;
-                    }
-
-                    // Tokenエンドポイントにアクセス
-                    if (state.StartsWith(fapi1Prefix))
-                    {
-                        // FAPI1
-
-                        // Tokenエンドポイントにアクセス
-                        string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
-                        // client_id(iss)
-                        string iss = clientId_InSessionOrCookie;
-
-                        // 秘密鍵
-                        DigitalSignX509 dsX509 = new DigitalSignX509(
-                            CmnClientParams.RsaPfxFilePath,
-                            CmnClientParams.RsaPfxPassword,
-                            HashAlgorithmName.SHA256);
-
-                        model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                            tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateJwtBearerTokenFlowAssertion(
-                                iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
-                                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
-                    }
-                    else if (state.StartsWith(fapi2Prefix))
-                    {
-                        // FAPI2
-
-                        //  client_Idと、クライアント証明書（TB）
-                        string client_id = clientId_InSessionOrCookie;
-
-                        model.Response = await Sts.Helper.GetInstance()
-                            .GetAccessTokenByCodeAsync(tokenEndpointUri,
-                            client_id, "", redirect_uri, code);
-                    }
-                    else
-                    {
-                        // OAuth2 / OIDC
-
-                        //  client_Idから、client_secretを取得。
-                        string client_id = clientId_InSessionOrCookie;
-                        string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
-
-                        if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
+                        // responseObject検証
+                        if (ResponseObject.Verify(response, out JObject responseObject))
                         {
-                            // 通常
-                            model.Response = await Sts.Helper.GetInstance()
-                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
-                                client_id, client_secret, redirect_uri, code);
+                            // OK
+                            code = (string)responseObject[OAuth2AndOIDCConst.code];
+                            state = (string)responseObject[OAuth2AndOIDCConst.state];
                         }
                         else
                         {
-                            // PKCE
-                            model.Response = await Sts.Helper.GetInstance()
-                               .GetAccessTokenByCodeAsync(tokenEndpointUri,
-                               client_id, client_secret, redirect_uri,
-                               code, code_verifier_InSessionOrCookie);
+                            // NG
                         }
                     }
 
-                    dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
-                }
-                else
-                {
-                    // state異常
-                }
+                    // LoadRequestParameters
+                    string clientId_InSessionOrCookie = "";
+                    string state_InSessionOrCookie = "";
+                    string redirect_uri_InSessionOrCookie = "";
+                    string nonce_InSessionOrCookie = "";
+                    string code_verifier_InSessionOrCookie = "";
+                    this.LoadRequestParameters(
+                        out clientId_InSessionOrCookie,
+                        out state_InSessionOrCookie,
+                        out redirect_uri_InSessionOrCookie,
+                        out nonce_InSessionOrCookie,
+                        out code_verifier_InSessionOrCookie);
 
-                #endregion
+                    // Tokenエンドポイントにアクセス
+                    Uri tokenEndpointUri = new Uri(
+                        Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
 
-                #region Access, Refresh, Id Tokenの検証と表示
-
-                if (!dic.ContainsKey("error"))
-                {
-                    string out_sub = "";
-                    JObject out_jobj = null;
-
-                    if (dic.ContainsKey(OAuth2AndOIDCConst.AccessToken))
+                    // 結果を格納する変数。
+                    Dictionary<string, string> dic = null;
+                    OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
                     {
-                        model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
-                        model.AccessTokenJwtToJson = CustomEncode.ByteToString(
-                               CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+                        ClientId = clientId_InSessionOrCookie,
+                        State = state,
+                        Code = code
+                    };
 
+                    #region 仲介コードを使用してAccess, Refresh, Id Tokenを取得
 
-                        if (!string.IsNullOrEmpty(model.AccessToken))
+                    string fapi1Prefix = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() + ":";
+                    string fapi2Prefix = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":";
+
+                    //stateの検証
+                    if (state == state_InSessionOrCookie
+                        || state == fapi1Prefix + state_InSessionOrCookie  // specではなくテスト仕様
+                        || state == fapi2Prefix + state_InSessionOrCookie) // specではなくテスト仕様
+                    {
+                        //state正常
+
+                        // 仲介コードからAccess Tokenを取得する。
+
+                        // redirect_uriを設定
+                        string redirect_uri = "";
+                        if (string.IsNullOrEmpty(redirect_uri_InSessionOrCookie))
                         {
-                            if (!AccessToken.Verify(model.AccessToken,
-                            out out_sub, out List<string> out_roles, out List<string> out_scopes, out out_jobj))
+                            // 指定なしの場合のテストケース（指定不要
+                            //redirect_uri = Config.OAuth2ClientEndpointsRootURI
+                            //    + Config.OAuth2AuthorizationCodeGrantClient_Account;
+                        }
+                        else
+                        {
+                            // 指定ありの場合のテストケース（指定必要
+                            redirect_uri = redirect_uri_InSessionOrCookie;
+                        }
+
+                        // Tokenエンドポイントにアクセス
+                        if (state.StartsWith(fapi1Prefix))
+                        {
+                            // FAPI1
+
+                            // Tokenエンドポイントにアクセス
+                            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+
+                            // client_id(iss)
+                            string iss = clientId_InSessionOrCookie;
+
+                            // 秘密鍵
+                            DigitalSignX509 dsX509 = new DigitalSignX509(
+                                CmnClientParams.RsaPfxFilePath,
+                                CmnClientParams.RsaPfxPassword,
+                                HashAlgorithmName.SHA256);
+
+                            model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                                tokenEndpointUri, redirect_uri, code, JwtAssertion.Create(
+                                    iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
+                                    ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
+                        }
+                        else if (state.StartsWith(fapi2Prefix))
+                        {
+                            // FAPI2
+
+                            //  client_Idと、クライアント証明書（TB）
+                            string client_id = clientId_InSessionOrCookie;
+
+                            model.Response = await Sts.Helper.GetInstance()
+                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                                client_id, "", redirect_uri, code);
+                        }
+                        else
+                        {
+                            // OAuth2 / OIDC
+
+                            //  client_Idから、client_secretを取得。
+                            string client_id = clientId_InSessionOrCookie;
+                            string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
+
+                            if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
+                            {
+                                // 通常
+                                model.Response = await Sts.Helper.GetInstance()
+                                    .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                                    client_id, client_secret, redirect_uri, code);
+                            }
+                            else
+                            {
+                                // PKCE
+                                model.Response = await Sts.Helper.GetInstance()
+                                   .GetAccessTokenByCodeAsync(tokenEndpointUri,
+                                   client_id, client_secret, redirect_uri,
+                                   code, code_verifier_InSessionOrCookie);
+                            }
+                        }
+
+                        dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
+                    }
+                    else
+                    {
+                        // state異常
+                        dic = new Dictionary<string, string>();
+                        dic.Add(OAuth2AndOIDCConst.error, "state error.");
+                    }
+
+                    #endregion
+
+                    #region Access, Refresh, Id Tokenの検証と表示
+
+                    if (!dic.ContainsKey(OAuth2AndOIDCConst.error))
+                    {
+                        string out_sub = "";
+                        JObject out_jobj = null;
+
+                        if (dic.ContainsKey(OAuth2AndOIDCConst.AccessToken))
+                        {
+                            model.AccessToken = dic[OAuth2AndOIDCConst.AccessToken];
+                            model.AccessTokenJwtToJson = CustomEncode.ByteToString(
+                                   CustomEncode.FromBase64UrlString(model.AccessToken.Split('.')[1]), CustomEncode.UTF_8);
+
+
+                            if (!string.IsNullOrEmpty(model.AccessToken))
+                            {
+                                if (!AccessToken.Verify(model.AccessToken,
+                                out out_sub, out List<string> out_roles, out List<string> out_scopes, out out_jobj))
+                                {
+                                    throw new Exception("AccessToken検証エラー");
+                                }
+                            }
+                            else
                             {
                                 throw new Exception("AccessToken検証エラー");
                             }
                         }
-                        else
-                        {
-                            throw new Exception("AccessToken検証エラー");
-                        }
-                    }
 
-                    if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
-                    {
-                        model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
-
-                        if (!string.IsNullOrEmpty(model.IdToken))
+                        if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                         {
-                            if (!IdToken.Verify(
-                                model.IdToken, model.AccessToken, code, state,
-                                out out_sub, out string out_nonce, out out_jobj)
-                                && out_nonce == nonce_InSessionOrCookie)
+                            model.IdToken = dic[OAuth2AndOIDCConst.IDToken];
+
+                            if (!string.IsNullOrEmpty(model.IdToken))
+                            {
+                                if (!IdToken.Verify(
+                                    model.IdToken, model.AccessToken, code, state,
+                                    out out_sub, out string out_nonce, out out_jobj)
+                                    && out_nonce == nonce_InSessionOrCookie)
+                                {
+                                    throw new Exception("IdToken検証エラー");
+                                }
+                            }
+                            else
                             {
                                 throw new Exception("IdToken検証エラー");
                             }
-                        }
-                        else
-                        {
-                            throw new Exception("IdToken検証エラー");
+
+                            // 暗号化解除のケースがあるので、jobjを使用。
+                            model.IdTokenJwtToJson = out_jobj.ToString();
                         }
 
-                        // 暗号化解除のケースがあるので、jobjを使用。
-                        model.IdTokenJwtToJson = out_jobj.ToString();
+                        model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
+
+                        // 画面の表示。
+                        return View(model);
                     }
-
-                    model.RefreshToken = dic.ContainsKey(OAuth2AndOIDCConst.RefreshToken) ? dic[OAuth2AndOIDCConst.RefreshToken] : "";
-
-                    // 画面の表示。
-                    return View(model);
+                    #endregion
                 }
-
-                #endregion
+                else
+                {
+                    // fragmentのカバレッジ
+                    // そのまま画面を出し、画面側でfragmentを処理
+                    return View(new OAuth2AuthorizationCodeGrantClientViewModel());
+                }
             }
             else
             {
@@ -3090,22 +3724,68 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#implicit-authz-resp"/>
-        [HttpGet]
+        // [HttpGet] // Response Mode & JARM 対応
         [AllowAnonymous]
-        public ActionResult OAuth2ImplicitGrantClient()
+        public ActionResult OAuth2ImplicitGrantClient(
+            string access_token, string id_token, string code, string state,
+            string token_type, string expires_in, string response)
         {
             if (!Config.IsLockedDownRedirectEndpoint)
             {
-                // ココでstateの検証を予定していたが、コメントヘッダに有るように、ココでは実装できなかった。
-                // stateは、JWTにnonce Claimとして格納してあるため、必要であれば、UserAgent側で検証できる。
+                // OAuth2のREQUIREDは、access_token, token_type, state
+                if (!string.IsNullOrEmpty(state)
+                   || !string.IsNullOrEmpty(response))
+                {
+                    // query(.jwt)、form_post(.jwt)のカバレッジ
 
-                // Access Token利用画面を返す。
-                return View();
+                    // JARM
+                    if (!string.IsNullOrEmpty(response))
+                    {
+                        // responseObject検証
+                        if (ResponseObject.Verify(response, out JObject responseObject))
+                        {
+                            // OK
+                            access_token = (string)responseObject[OAuth2AndOIDCConst.AccessToken];
+                            id_token = (string)responseObject[OAuth2AndOIDCConst.IDToken];
+                            code = (string)responseObject[OAuth2AndOIDCConst.code];
+                            state = (string)responseObject[OAuth2AndOIDCConst.state];
+                            token_type = (string)responseObject[OAuth2AndOIDCConst.token_type];
+                            expires_in = (string)responseObject[OAuth2AndOIDCConst.expires_in];
+                            //scope = (string)responseObject[OAuth2AndOIDCConst.scope];
+                        }
+                        else
+                        {
+                            // NG
+                        }
+                    }
+
+                    // 画面の表示。
+                    // form_post(.jwt)
+                    ViewData["FormPost"] = JsonConvert.SerializeObject(
+                        new
+                        {
+                            access_token,
+                            id_token,
+                            code,
+                            state,
+                            token_type,
+                            expires_in
+                        });
+                    return View();// model);
+                }
+                else
+                {
+                    // fragment(.jwt)のカバレッジ
+
+                    // ココでstateの検証を予定していたが、コメントヘッダに有るように、ココでは実装できなかった。
+                    // stateは、JWTにnonce Claimとして格納してあるため、必要であれば、UserAgent側で検証できる。
+
+                    // そのまま画面を出し、画面側でfragmentを処理
+                    return View();
+                }
             }
-            else
-            {
-                return View("Error");
-            }
+
+            return View("Error");
         }
 
         #endregion
@@ -3274,8 +3954,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
-        #region
-        
         #region メール送信処理
 
         #region メアド検証、パスワード リセット
@@ -3476,8 +4154,6 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
-        #endregion
-        
         #endregion
 
         #endregion

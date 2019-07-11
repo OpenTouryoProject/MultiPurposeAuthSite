@@ -33,7 +33,12 @@
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
+
+#if NETCORE
+//using MultiPurposeAuthSite;
+#else
 using MultiPurposeAuthSite.Entity;
+#endif
 
 using System;
 using System.Linq;

@@ -2350,9 +2350,14 @@ namespace MultiPurposeAuthSite.Controllers
                         .AuthenticateAsync(DefaultAuthenticationTypes.ApplicationCookie).Result;
                     ClaimsIdentity identity = (ticket != null) ? ticket.Identity : null;
 
+                    // ClaimsIdentityを生成
+                    identity = new ClaimsIdentity(
+                        identity.Claims, OAuth2AndOIDCConst.Bearer,
+                        identity.NameClaimType, identity.RoleClaimType);
+
                     // auth_timeを追加
                     this.AddAuthTimeClaim(max_age, claims, identity);
-    
+
                     // scopeパラメタ
                     string[] scopes = (scope ?? "").Split(' ');
 
@@ -2371,10 +2376,6 @@ namespace MultiPurposeAuthSite.Controllers
                             || prompt.ToLower() == "none")   // OIDC   RFC仕様
                         {
                             // 認可画面をスキップ
-
-                            // ClaimsIdentityを生成
-                            identity = new ClaimsIdentity(
-                                identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
                             // ★ 必要に応じてスコープのフィルタ
                             if (isAuth)
@@ -2403,10 +2404,6 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // OAuth2/OIDC Implicit
 
-                        // ClaimsIdentityを生成
-                        identity = new ClaimsIdentity(
-                            identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
-
                         // ★ Tokenの生成
                         Token.CmnEndpoints.CreateAuthZRes4ImplicitFlow(
                             identity, Request.QueryString,
@@ -2423,11 +2420,7 @@ namespace MultiPurposeAuthSite.Controllers
                         || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
                         || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                     {
-                        // Hybrid Flow
-
-                        // アクセス要求を保存して、仲介コードを発行する。
-                        identity = new ClaimsIdentity(
-                            identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
+                        // OIDC Hybrid Flow
 
                         // ★ Tokenの生成
                         string code = Token.CmnEndpoints.CreateAuthNRes4HybridFlow(
@@ -3107,8 +3100,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// 認可レスポンス（仲介コード）を受け取って処理する。
         /// ・仲介コードを使用してAccess Token・Refresh Tokenを取得
         /// </summary>
-        /// <param name="code">仲介コード</param>
-        /// <param name="state">state</param>
+        /// <param name="code">string</param>
+        /// <param name="state">string</param>
+        /// <param name="response">string</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
