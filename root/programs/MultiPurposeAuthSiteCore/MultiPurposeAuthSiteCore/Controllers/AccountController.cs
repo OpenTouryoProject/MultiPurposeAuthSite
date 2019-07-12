@@ -685,7 +685,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // オペレーション・トレース・ログ出力
                 ApplicationUser user = await UserManager.GetUserAsync(User);
-                Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
+                if (user != null)
+                    // .NET Coreのデバッガが、Cookieが別スコープになるように上げないので、
+                    // 「デバッグ時にユーザ登録していない状態で、ログインしている状態になる」の対策コード
+                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed out.", user.Id, user.UserName));
             }
 
             // リダイレクト "Index", "Home"へ
