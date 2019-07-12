@@ -1800,7 +1800,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // uid（e-mail or name情報）が一致している必要がある。
                             //   Manage（サインイン済み）なので、
                             //   RequireUniqueEmail == false時のname and e-mailまでの一致は不要。
-                            if (user.NormalizedUserName == uid) // ★ これでイイのか？
+                            if (user.NormalizedUserName == uid.ToUpper()) // ★ これでイイのか？
                             {
                                 // uid（e-mail, name情報）が一致している。
 

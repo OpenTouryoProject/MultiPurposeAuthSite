@@ -68,17 +68,6 @@ namespace MultiPurposeAuthSite.Co
         public const string Role_SystemAdminOrAdminOrUser
             = Role_SystemAdmin + ", " + Role_Admin + ", " + Role_User;
 
-#if NETCORE
-        // Normalizeのため
-        /// <summary>SystemAdministratorのrole</summary>
-        public const string Role_SystemAdmin = "SYSTEMADMIN";
-
-        /// <summary>Administratorのrole</summary>
-        public const string Role_Admin = "ADMIN";
-
-        /// <summary>Userのrole</summary>
-        public const string Role_User = "USER";
-#else
         /// <summary>SystemAdministratorのrole</summary>
         public const string Role_SystemAdmin = "SystemAdmin";
 
@@ -87,7 +76,6 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>Userのrole</summary>
         public const string Role_User = "User";    
-#endif
 
         #endregion
 
