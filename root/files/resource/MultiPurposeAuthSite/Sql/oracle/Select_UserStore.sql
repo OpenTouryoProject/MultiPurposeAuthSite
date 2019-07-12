@@ -9,3 +9,5 @@ SELECT * FROM "RefreshTokenDictionary";
 SELECT * FROM "CustomizedConfirmation";
 SELECT * FROM "Saml2OAuth2Data";
 SELECT * FROM "FIDO2Data";
+SELECT * FROM "IssuedToken";
+SELECT * FROM "RequestObject";

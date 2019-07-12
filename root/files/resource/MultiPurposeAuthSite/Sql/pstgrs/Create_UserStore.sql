@@ -111,6 +111,22 @@ CREATE TABLE OAuth2Revocation(
     CONSTRAINT PK_OAuth2Revocation PRIMARY KEY (Jti)
 );
 
+CREATE TABLE IssuedToken(
+    Jti varchar(38) NOT NULL,                -- PK, guid
+    Value varchar(2000) NOT NULL,
+    ClientID varchar(38) NOT NULL,
+    Audience varchar(38) NOT NULL,
+    CreatedDate timestamp NOT NULL,
+    CONSTRAINT PK_IssuedToken PRIMARY KEY (Jti)
+);
+
+CREATE TABLE RequestObject(
+    Urn varchar(38) NOT NULL,                -- PK, guid
+    Value varchar(2000) NOT NULL,
+    CreatedDate timestamp NOT NULL,
+    CONSTRAINT PK_RequestObject PRIMARY KEY (Urn)
+);
+
 -- INDEX
 ---- Users
 CREATE UNIQUE INDEX UserNameIndex ON Users (UserName);
