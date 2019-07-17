@@ -1,9 +1,9 @@
 -- For the information of using Oracle database and ODP.NET managed driver
 -- for the user store of multi-purpose authentication site, see the following site.
---     Oracle11gXE + ODP.NET Managed Driver - マイクロソフト系技術情報 Wiki
+--     Oracle11gXE + ODP.NET Managed Driver - �}�C�N���\�t�g�n�Z�p��� Wiki
 --     https://techinfoofmicrosofttech.osscons.jp/index.php?Oracle11gXE%20%2B%20ODP.NET%20Managed%20Driver
 
---UserClaimsのIDENTITY
+--UserClaims��IDENTITY
 
 CREATE TABLE "Users"(              -- Users
     "Id" NVARCHAR2(38) NOT NULL,             -- PK, guid
@@ -21,7 +21,7 @@ CREATE TABLE "Users"(              -- Users
     "LockoutEnabled" NUMBER(3) NOT NULL,
     "AccessFailedCount" NUMBER(10) NOT NULL,
     "TotpAuthenticatorKey" NVARCHAR2(256) NULL,
-    -- 追加の情報
+    -- �ǉ��̏��
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
@@ -38,7 +38,7 @@ CREATE TABLE "Roles"(              -- Roles
     CONSTRAINT "PK.Roles" PRIMARY KEY ("Id")
 );
 
-CREATE TABLE "UserRoles"(          -- 関連エンティティ (Users *--- UserRoles ---* Roles)
+CREATE TABLE "UserRoles"(          -- �֘A�G���e�B�e�B (Users *--- UserRoles ---* Roles)
     "UserId" NVARCHAR2(38) NOT NULL,         -- PK, guid
     "RoleId" NVARCHAR2(38) NOT NULL,         -- PK, guid
     CONSTRAINT "PK.UserRoles" PRIMARY KEY ("UserId", "RoleId")
@@ -53,7 +53,7 @@ CREATE TABLE "UserLogins"(       -- Users ---* UserLogins
 
 CREATE SEQUENCE TS_UserClaimID;    -- TS_UserClaimID.NEXTVAL
 CREATE TABLE "UserClaims"(       -- Users ---* UserClaims
-    "Id" NUMBER(10) NOT NULL,                  -- PK (キー長に問題があるため"Id" "NUMBER(10)"を使用)
+    "Id" NUMBER(10) NOT NULL,                  -- PK (�L�[���ɖ�肪���邽��"Id" "NUMBER(10)"���g�p)
     "UserId" NVARCHAR2(38) NOT NULL,           -- *PK
     "Issuer" NVARCHAR2(128) NOT NULL,          -- *PK
     "ClaimType" NVARCHAR2(1024) NULL,
@@ -128,13 +128,13 @@ CREATE TABLE "RequestObject"(
 -- INDEX
 --- UNIQUE INDEX
 ---- Users
-CREATE UNIQUE INDEX "UserNameIndex" ON "Users" ("UserName" ASC);
-ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName" ASC);
-ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail" ASC);
+ALTER TABLE "Users" ADD CONSTRAINT "UserNameIndex" UNIQUE ("UserName");
+ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName");
+ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail");
 ALTER TABLE "Users" ADD CONSTRAINT "ClientIDIndex" UNIQUE ("ClientID");
 ---- Roles
-CREATE UNIQUE INDEX "RoleNameIndex" ON "Roles" ("Name" ASC);
-ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName" ASC);
+ALTER TABLE "Roles" ADD CONSTRAINT "RoleNameIndex" UNIQUE ("Name");
+ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName");
 
 --- INDEX
 ---- UserRoles
@@ -150,7 +150,7 @@ CREATE INDEX "IX_TotpTokens.UserId" ON "TotpTokens" ("UserId" ASC);
 -- CONSTRAINT
 ---- UserRoles
 ALTER TABLE "UserRoles" ADD CONSTRAINT "FK.UserRoles.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
-ALTER TABLE "UserRoles" ADD CONSTRAINT "FK.UserRoles.Roles_RoleId" FOREIGN KEY("RoleId") REFERENCES "Roles" ("Id"); -- 使用中のRoleは削除できない。
+ALTER TABLE "UserRoles" ADD CONSTRAINT "FK.UserRoles.Roles_RoleId" FOREIGN KEY("RoleId") REFERENCES "Roles" ("Id"); -- �g�p����Role�͍폜�ł��Ȃ��B
 ---- UserLogins
 ALTER TABLE "UserLogins" ADD CONSTRAINT "FK.UserLogins.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- UserClaims
