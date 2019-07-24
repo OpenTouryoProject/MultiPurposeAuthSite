@@ -432,7 +432,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>検証結果</returns>
         public static bool VerifyAccessToken(string jwt, out JObject claims, out ClaimsIdentity identity)
         {
-            claims = null; // JObjectのnull対策は上手く行かない。
+            claims = null; // = new JObject();
+            // JObjectのnull対策は内包するCollectionの型自体が変わるので上手く行かない。
+            // ≒ OAuth2EndpointController.GetUserClaimsでのnullチェックは必要。
+
             identity = new ClaimsIdentity();
 
             if (!string.IsNullOrEmpty(jwt))
