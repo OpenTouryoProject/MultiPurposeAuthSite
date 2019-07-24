@@ -207,36 +207,73 @@ namespace MultiPurposeAuthSite.Data
                         break;
                 }
 
-                // PostgreSQL処理できる（大文字・小文字）？
+                // PostgreSQLだとdynamicが全部小文字になる。
 
                 foreach (dynamic d in claims)
                 {
-                    user.Claims.Add(new Claim(
-                        d.ClaimType, d.ClaimValue, null, d.Issuer));
+                    if (Config.UserStoreType == EnumUserStoreType.PostgreSQL)
+                    {
+                        user.Claims.Add(new Claim(
+                            d.claimtype, d.claimvalue, null, d.issuer));
+                    }
+                    else
+                    {
+                        user.Claims.Add(new Claim(
+                            d.ClaimType, d.ClaimValue, null, d.Issuer));
+                    }
                 }
 
 #if NETFX
                 foreach (dynamic d in userLogins)
                 {
-                    user.Logins.Add(new UserLoginInfo(
-                        d.LoginProvider, d.ProviderKey));
+                    if (Config.UserStoreType == EnumUserStoreType.PostgreSQL)
+                    {
+                        user.Logins.Add(new UserLoginInfo(
+                            d.loginprovider, d.providerkey));
+                    }
+                    else
+                    {
+                        user.Logins.Add(new UserLoginInfo(
+                            d.LoginProvider, d.ProviderKey));
+                    }
                 }
 #else
                 foreach (dynamic d in userLogins)
                 {
-                    user.Logins.Add(new UserLoginInfo(
-                        d.LoginProvider, d.ProviderKey, ""));
+                    if (Config.UserStoreType == EnumUserStoreType.PostgreSQL)
+                    {
+                        user.Logins.Add(new UserLoginInfo(
+                            d.loginprovider, d.providerkey, ""));
+                    }
+                    else
+                    {
+                        user.Logins.Add(new UserLoginInfo(
+                            d.LoginProvider, d.ProviderKey, ""));
+                    }
                 }
 
                 foreach (dynamic d in tokens)
                 {
-                    user.TotpTokens.Add(new IdentityUserToken<string>()
+                    if (Config.UserStoreType == EnumUserStoreType.PostgreSQL)
                     {
-                        UserId = user.Id,
-                        LoginProvider = d.LoginProvider,
-                        Name = d.Name,
-                        Value = d.Value
-                    });
+                        user.TotpTokens.Add(new IdentityUserToken<string>()
+                        {
+                            UserId = user.Id,
+                            LoginProvider = d.loginprovider,
+                            Name = d.name,
+                            Value = d.value
+                        });
+                    }
+                    else
+                    {
+                        user.TotpTokens.Add(new IdentityUserToken<string>()
+                        {
+                            UserId = user.Id,
+                            LoginProvider = d.LoginProvider,
+                            Name = d.Name,
+                            Value = d.Value
+                        });
+                    }
                 }
 #endif
 

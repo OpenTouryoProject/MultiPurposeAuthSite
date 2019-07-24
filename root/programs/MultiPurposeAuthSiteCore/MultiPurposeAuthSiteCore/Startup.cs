@@ -229,6 +229,11 @@ namespace MultiPurposeAuthSite
                     name: "JwksUri",
                     template: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" });
+
+                routes.MapRoute(
+                    name: "RequestObjectUri",
+                    template: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" });
                 #endregion
 
                 #region OAuth2ResourceServer

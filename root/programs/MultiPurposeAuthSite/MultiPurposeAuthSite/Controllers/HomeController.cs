@@ -315,16 +315,15 @@ namespace MultiPurposeAuthSite.Controllers
             if (this.ClarifyRedirectUri)
             {
                 this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
-                redirect += "&" + OAuth2AndOIDCConst.redirect_uri+ "=" + this.RedirectUri;
+                redirect += "&" + OAuth2AndOIDCConst.redirect_uri + "=" + this.RedirectUri;
             }
 
             if (!string.IsNullOrEmpty(this.ResponseMode))
             {
-                redirect += "&" + OAuth2AndOIDCConst.response_mode+ "=" + this.ResponseMode;
+                redirect += "&" + OAuth2AndOIDCConst.response_mode + "=" + this.ResponseMode;
             }
 
             return redirect;
-
         }
 
         /// <summary>OAuth2スターターを組み立てて返す</summary>

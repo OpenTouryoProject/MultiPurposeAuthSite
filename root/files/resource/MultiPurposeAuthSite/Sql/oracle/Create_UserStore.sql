@@ -109,16 +109,32 @@ CREATE TABLE "OAuth2Revocation"(
     CONSTRAINT "PK.OAuth2Revocation" PRIMARY KEY ("Jti")
 );
 
+CREATE TABLE "IssuedToken"(
+    "Jti" NVARCHAR2(38) NOT NULL,                -- PK, guid
+    "Value" NVARCHAR2(2000) NOT NULL,
+    "ClientID" NVARCHAR2(38) NOT NULL,
+    "Audience" NVARCHAR2(38) NOT NULL,
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.IssuedToken" PRIMARY KEY ("Jti")
+);
+
+CREATE TABLE "RequestObject"(
+    "Urn" NVARCHAR2(38) NOT NULL,                -- PK, guid
+    "Value" NVARCHAR2(2000) NOT NULL,
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.RequestObject" PRIMARY KEY ("Urn")
+);
+
 -- INDEX
 --- UNIQUE INDEX
 ---- Users
-CREATE UNIQUE INDEX "UserNameIndex" ON "Users" ("UserName" ASC);
-ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName" ASC);
-ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail" ASC);
+ALTER TABLE "Users" ADD CONSTRAINT "UserNameIndex" UNIQUE ("UserName");
+ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName");
+ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail");
 ALTER TABLE "Users" ADD CONSTRAINT "ClientIDIndex" UNIQUE ("ClientID");
 ---- Roles
-CREATE UNIQUE INDEX "RoleNameIndex" ON "Roles" ("Name" ASC);
-ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName" ASC);
+ALTER TABLE "Roles" ADD CONSTRAINT "RoleNameIndex" UNIQUE ("Name");
+ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName");
 
 --- INDEX
 ---- UserRoles

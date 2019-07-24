@@ -324,7 +324,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // モデルの生成
-                string oAuth2Data = Sts.DataProvider.Get(user.ClientID);
+                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
 
                 string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
                 ManageIndexViewModel model = new ManageIndexViewModel
@@ -347,7 +347,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 非構造化データ
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
+                    HasSaml2OAuth2Data = !string.IsNullOrEmpty(saml2OAuth2Data),
                     // FIDO2PublicKey
                     HasFIDO2Data = new Func<bool>(() =>
                     {
@@ -438,6 +438,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (signInResult.Succeeded)
                         {
                             // Passwordが一致した。
+                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
                             // 処理を継続
                         }
                         else
@@ -723,6 +725,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result.Succeeded)
                         {
                             // Passwordが一致した。
+                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
                             // 処理を継続
                         }
                         else
@@ -830,6 +834,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result.Succeeded)
                         {
                             // Passwordが一致した。
+                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
                             // 処理を継続
                         }
                         else
@@ -1182,7 +1188,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // ManageVerifyPhoneNumberViewModelの検証に成功
 
                     // 電話番号の検証（電話番号の登録の際に、SMSで送信した検証コードを検証）
-                    IdentityResult result = await UserManager.ChangePhoneNumberAsync(user, model.PhoneNumber, model.Code);
+                    IdentityResult result = await UserManager.ChangePhoneNumberAsync(
+                    	user, model.PhoneNumber, model.Code);
 
                     // 電話番号の検証結果の確認
                     if (result.Succeeded)
@@ -1793,7 +1800,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // uid（e-mail or name情報）が一致している必要がある。
                             //   Manage（サインイン済み）なので、
                             //   RequireUniqueEmail == false時のname and e-mailまでの一致は不要。
-                            if (user.NormalizedUserName == uid) // ★ これでイイのか？
+                            if (user.NormalizedUserName == uid.ToUpper()) // ★ これでイイのか？
                             {
                                 // uid（e-mail, name情報）が一致している。
 
@@ -1822,6 +1829,9 @@ namespace MultiPurposeAuthSite.Controllers
                                         isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
                                         //rememberBrowser: true); // rememberBrowser は true 固定
 
+                                    IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                                    responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+                            
                                     // リダイレクト
                                     return RedirectToAction("ManageLogins");
                                 }
@@ -1837,7 +1847,8 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // uid（e-mail, name情報）が一致していない。
                                 // 外部ログインのアカウントを間違えている。
-                                return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
+                                return RedirectToAction("ManageLogins",
+                                    new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
 
                             } // else処理済
                         } // else処理済
@@ -2579,7 +2590,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         options = new CredentialCreateOptions
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }
@@ -2614,7 +2625,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         result = new CredentialMakeResult
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }
@@ -2777,7 +2788,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果の確認
                     if (result.Succeeded)
                     {
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
+                        return RedirectToAction("Index",
+                            new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
                     }
                 }
             }
@@ -3095,6 +3107,9 @@ namespace MultiPurposeAuthSite.Controllers
                         user,
                         isPersistent: false);//,      // アカウント記憶    // 既定値
                         //rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
+
+                IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
 
                 return true;
             }
