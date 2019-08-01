@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/26  西野 大介         新規（分割
+//*  2019/08/01  西野 大介         ReceiveをReceive＋ReceiveChallengeに分割
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -139,17 +140,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>Receive</summary>
         /// <param name="code">string</param>
         /// <param name="redirect_uri">string</param>
-        /// <param name="code_challenge_method">string</param>
-        /// <param name="code_challenge">string</param>
         /// <returns>PayloadForCode</returns>
-        public static string Receive(
-            string code, string redirect_uri,
-            out string code_challenge_method, out string code_challenge)
+        public static string Receive(string code, string redirect_uri)
         {
             string value = "";
             string payload = "";
-            code_challenge_method = "";
-            code_challenge = "";
 
             switch (Config.UserStoreType)
             {
@@ -223,11 +218,94 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
-            code_challenge_method = (string)jobj[OAuth2AndOIDCConst.code_challenge_method];
-            code_challenge = (string)jobj[OAuth2AndOIDCConst.code_challenge]; 
             payload = (string)jobj["access_token_payload"];
 
             return payload;
+        }
+
+        #endregion
+
+        #region ReceiveChallenge
+
+        /// <summary>ReceiveChallenge</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="code">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="code_challenge_method">string</param>
+        /// <param name="code_challenge">string</param>
+        public static void ReceiveChallenge(
+            string client_id, string code, string redirect_uri,
+            out string code_challenge_method, out string code_challenge)
+        {
+            string value = "";
+            code_challenge_method = "";
+            code_challenge = "";
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    if (AuthorizationCodeProvider.AuthenticationCodes.TryGetValue(code, out value)) { }
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                value = cnn.ExecuteScalar<string>(
+                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
+
+                                //cnn.Execute(
+                                //    "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"Value\" FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
+
+                                //cnn.Execute(
+                                //    "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"Key\" = :Key", new { Key = code });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                value = cnn.ExecuteScalar<string>(
+                                    "SELECT \"value\" FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
+
+                                //cnn.Execute(
+                                //    "DELETE FROM \"authenticationcodedictionary\" WHERE \"key\" = @Key", new { Key = code });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+
+            JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
+            JObject payload = (JObject)JsonConvert.DeserializeObject((string)jobj["access_token_payload"]);
+
+            if (client_id == (string)payload[OAuth2AndOIDCConst.aud])
+            {
+                string _redirect_uri = 
+                    (string)payload[OAuth2AndOIDCConst.redirect_uri] ?? "";
+
+                if (redirect_uri == _redirect_uri )
+                {
+                    code_challenge_method = (string)jobj[OAuth2AndOIDCConst.code_challenge_method];
+                    code_challenge = (string)jobj[OAuth2AndOIDCConst.code_challenge];
+                }
+            }
         }
 
         #endregion

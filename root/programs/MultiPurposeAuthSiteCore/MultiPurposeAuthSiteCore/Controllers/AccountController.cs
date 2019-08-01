@@ -3413,8 +3413,6 @@ namespace MultiPurposeAuthSite.Controllers
                         if (string.IsNullOrEmpty(redirect_uri_InSessionOrCookie))
                         {
                             // 指定なしの場合のテストケース（指定不要
-                            //redirect_uri = Config.OAuth2ClientEndpointsRootURI
-                            //    + Config.OAuth2AuthorizationCodeGrantClient_Account;
                         }
                         else
                         {

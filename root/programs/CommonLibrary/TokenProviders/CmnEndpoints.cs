@@ -41,6 +41,8 @@
 //*                                    - GrantJwtBearerTokenCredentials
 //*                                - CheckClientModeの再チェック（PKCE、Hybrid部分
 //*  2019/02/08  西野 大介         - F-API2, Confidential Client実装
+//*  2019/08/01  西野 大介         - client_secret_postのサポートを追加
+//*  2019/08/01  西野 大介         - PKCEのClient認証方法を変更
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -117,6 +119,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             #region token
             OpenIDConfig.Add("token_endpoint_auth_methods_supported", new List<string> {
                 OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
+                OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit(),
                 OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit(),
                 OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
             });
@@ -265,7 +268,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2RevokeTokenEndpoint);
 
             OpenIDConfig.Add("revocation_endpoint_auth_methods_supported", new List<string> {
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit()
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit()
             });
             #endregion
 
@@ -273,8 +277,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("introspection_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2IntrospectTokenEndpoint);
 
-            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported",
-               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit());
+            OpenIDConfig.Add("introspection_endpoint_auth_methods_supported", new List<string> {
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_basic.ToStringByEmit(),
+               OAuth2AndOIDCEnum.AuthMethods.client_secret_post.ToStringByEmit()
+            });
             #endregion
 
             #region OAuth PKCE
@@ -751,11 +757,51 @@ namespace MultiPurposeAuthSite.TokenProviders
                 bool authned = false;
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeGrantType)
                 {
-                    if (!string.IsNullOrEmpty(client_id))
+                    if (string.IsNullOrEmpty(code_verifier) && string.IsNullOrEmpty(assertion))
                     {
                         // client_id & (client_secret or x509)
                         authned = CmnEndpoints.ClientAuthentication(
                             client_id, client_secret, ref x509, out permittedLevel);
+                    }
+                    else if (!string.IsNullOrEmpty(code_verifier)
+                        && string.IsNullOrEmpty(client_secret))
+                    {
+                        // PKCE (client_id & code_verifier)
+                        AuthorizationCodeProvider.ReceiveChallenge(
+                            client_id, code, redirect_uri,
+                            out string code_challenge_method, out string code_challenge);
+
+                        if (!string.IsNullOrEmpty(code_challenge_method))
+                        {
+                            if (!string.IsNullOrEmpty(code_challenge))
+                            {
+                                if (code_challenge_method.ToLower() == OAuth2AndOIDCConst.PKCE_plain)
+                                {
+                                    if (code_challenge == code_verifier)
+                                    {
+                                        // passed.
+                                        authned = true;
+                                    }
+                                }
+                                else if (code_challenge_method.ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
+                                {
+                                    if (code_challenge == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
+                                    {
+                                        // passed.
+                                        authned = true;
+                                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(code_verifier)
+                        && !string.IsNullOrEmpty(client_secret))
+                    {
+                        // "OAuth 2.0 authorization code flow with the PKCE extension"
+                        //  (client_id & client_secret & code_verifier)
+                        // これを実装する場合、client_id から Native か SPA否かを見極めて、
+                        // SPAの場合、通常のPKCE（前カバレッジ）を拒否する実装が必要になる。
                     }
                     else if (!string.IsNullOrEmpty(assertion))
                     {
@@ -769,45 +815,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (authned)
                 {
-                    #region  PKCE
-
-                    string tokenPayload = AuthorizationCodeProvider.Receive(code, redirect_uri,
-                        out string code_challenge_method, out string code_challenge);
-
-                    if (!string.IsNullOrEmpty(code_challenge_method))
-                    {
-                        bool hasPassedPKCE = false;
-
-                        if (!string.IsNullOrEmpty(code_challenge))
-                        {
-                            if (code_challenge_method.ToLower() == OAuth2AndOIDCConst.PKCE_plain)
-                            {
-                                if (code_challenge == code_verifier)
-                                {
-                                    // passed.
-                                    hasPassedPKCE = true;
-                                }
-                            }
-                            else if (code_challenge_method.ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
-                            {
-                                if (code_challenge == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
-                                {
-                                    // passed.
-                                    hasPassedPKCE = true;
-                                    permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                                }
-                            }
-                        }
-
-                        if (!hasPassedPKCE)
-                        {
-                            err.Add("error", "invalid_request");
-                            err.Add("error_description", "Invalid code_verifier.");
-                            return false;
-                        }
-                    }
-
-                    #endregion
+                    string tokenPayload = AuthorizationCodeProvider.Receive(code, redirect_uri);
 
                     #region CheckClientMode
 
