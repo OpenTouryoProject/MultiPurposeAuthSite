@@ -137,14 +137,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Receive
 
+        #region Receive
+
         /// <summary>Receive</summary>
         /// <param name="code">string</param>
+        /// <param name="client_id">string</param>
         /// <param name="redirect_uri">string</param>
         /// <returns>PayloadForCode</returns>
-        public static string Receive(string code, string redirect_uri)
+        public static string Receive(string code, string client_id, string redirect_uri)
         {
             string value = "";
-            string payload = "";
 
             switch (Config.UserStoreType)
             {
@@ -198,29 +200,16 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
-            string _redirect_uri = (string)jobj[OAuth2AndOIDCConst.redirect_uri];
+            JObject payload = (JObject)JsonConvert.DeserializeObject((string)jobj["access_token_payload"]);
 
-            if (string.IsNullOrEmpty(_redirect_uri))
+            if (AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, payload))
             {
-                // 指定なし（継続）
+                return (string)payload;
             }
             else
             {
-                // 指定あり
-                if (_redirect_uri == redirect_uri)
-                {
-                    // 一致（継続）
-                }
-                else
-                {
-                    // 不一致（中断）
-                    return "";
-                }
+                return "";
             }
-
-            payload = (string)jobj["access_token_payload"];
-
-            return payload;
         }
 
         #endregion
@@ -228,13 +217,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region ReceiveChallenge
 
         /// <summary>ReceiveChallenge</summary>
-        /// <param name="client_id">string</param>
         /// <param name="code">string</param>
+        /// <param name="client_id">string</param>
         /// <param name="redirect_uri">string</param>
         /// <param name="code_challenge_method">string</param>
         /// <param name="code_challenge">string</param>
         public static void ReceiveChallenge(
-            string client_id, string code, string redirect_uri,
+            string code, string client_id, string redirect_uri,
             out string code_challenge_method, out string code_challenge)
         {
             string value = "";
@@ -295,18 +284,38 @@ namespace MultiPurposeAuthSite.TokenProviders
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
             JObject payload = (JObject)JsonConvert.DeserializeObject((string)jobj["access_token_payload"]);
 
-            if (client_id == (string)payload[OAuth2AndOIDCConst.aud])
+            if (AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, payload))
             {
-                string _redirect_uri = 
-                    (string)payload[OAuth2AndOIDCConst.redirect_uri] ?? "";
-
-                if (redirect_uri == _redirect_uri )
-                {
-                    code_challenge_method = (string)jobj[OAuth2AndOIDCConst.code_challenge_method];
-                    code_challenge = (string)jobj[OAuth2AndOIDCConst.code_challenge];
-                }
+                code_challenge_method = (string)jobj[OAuth2AndOIDCConst.code_challenge_method];
+                code_challenge = (string)jobj[OAuth2AndOIDCConst.code_challenge];
             }
         }
+
+        /// <summary>CheckRedirectUri</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="payload">JObject</param>
+        /// <returns>bool</returns>
+        private static bool CheckClientIdAndRedirectUri(string client_id, string redirect_uri, JObject payload)
+        {
+            // client_idチェック
+            if (client_id == (string)payload[OAuth2AndOIDCConst.aud])
+            {
+                // client_id 一致
+                // 空文字列で標準化
+                redirect_uri = redirect_uri ?? "";
+                string _redirect_uri =
+                    (string)payload[OAuth2AndOIDCConst.redirect_uri] ?? "";
+
+                // redirect_uriチェック
+                if (string.IsNullOrEmpty(_redirect_uri)) return true; // 認可リクエスト時、指定無し
+                else if (_redirect_uri == redirect_uri) return true; // 認可リクエスト指定と一致
+                else return true; // 認可リクエスト指定と不一致
+            }
+            else return false; // client_id 不正
+        }
+
+        #endregion
 
         #endregion
 

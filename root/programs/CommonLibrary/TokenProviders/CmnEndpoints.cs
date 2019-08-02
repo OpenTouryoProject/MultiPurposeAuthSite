@@ -768,7 +768,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         // PKCE (client_id & code_verifier)
                         AuthorizationCodeProvider.ReceiveChallenge(
-                            client_id, code, redirect_uri,
+                            code, client_id, redirect_uri,
                             out string code_challenge_method, out string code_challenge);
 
                         if (!string.IsNullOrEmpty(code_challenge_method))
@@ -815,7 +815,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (authned)
                 {
-                    string tokenPayload = AuthorizationCodeProvider.Receive(code, redirect_uri);
+                    string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, redirect_uri);
 
                     #region CheckClientMode
 
