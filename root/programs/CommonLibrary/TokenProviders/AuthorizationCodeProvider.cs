@@ -204,7 +204,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, payload))
             {
-                return (string)payload;
+                return payload.ToString();
             }
             else
             {
