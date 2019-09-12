@@ -16,7 +16,6 @@ set BUILDFILEPATH=%BUILDFILEPATH15%
 @echo The choice of build configuration (Debug / Release).
 @echo --------------------------------------------------
 set BUILD_CONFIG=Debug
-set VisualStudioVersion=14.0
 
 @echo --------------------------------------------------
 @echo Creating a build command.

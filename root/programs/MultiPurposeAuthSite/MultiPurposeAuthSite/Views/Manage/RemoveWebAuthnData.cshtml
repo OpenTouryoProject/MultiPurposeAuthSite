@@ -25,7 +25,6 @@
 @using MultiPurposeAuthSite.Resources
 @using MultiPurposeAuthSite.ViewModels
 
-@using Fido2NetLib.Objects;
 @using Touryo.Infrastructure.Public.Str
 
 @{
@@ -48,15 +47,15 @@
     <h4>@ManageViews.RemoveWebAuthnDataH4</h4>
     <hr />
     @Html.ValidationSummary("", new { @class = "text-danger" })
-    foreach (PublicKeyCredentialDescriptor item in ViewBag.ExistingPubCredDescriptor)
+    foreach (string item in ViewBag.ExistingPubCredDescriptorId)
     {
         <div class="form-group">
             <p class="col-md-2 control-label">PublicKeyId</p>
             <div class="col-md-1">
                 <input class="form-control" type="checkbox" id="publicKeys" name="publicKeys"
-                       value="@CustomEncode.ToBase64UrlString(item.Id)" />
+                       value="@item" />
             </div>
-            @CustomEncode.ToBase64UrlString(item.Id)
+            @item
         </div>
     }
     <div class="form-group">

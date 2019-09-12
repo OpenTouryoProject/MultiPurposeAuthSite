@@ -2427,8 +2427,15 @@ namespace MultiPurposeAuthSite.Controllers
                 // 公開鍵の検索
                 List<PublicKeyCredentialDescriptor> existingPubCredDescriptor = FIDO.DataProvider.GetCredentialsByUser(user.UserName);
 
+                // 対策コード
+                List<string> existingPubCredDescriptorId = new List<string>();
+                foreach (PublicKeyCredentialDescriptor temp in existingPubCredDescriptor)
+                {
+                    existingPubCredDescriptorId.Add(CustomEncode.ToBase64UrlString(temp.Id));
+                }
+
                 // Htmlを返す。
-                ViewBag.ExistingPubCredDescriptor = existingPubCredDescriptor;
+                ViewBag.ExistingPubCredDescriptorId = existingPubCredDescriptorId;
                 return View();
             }
             else
