@@ -323,56 +323,57 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの取得
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
-                // モデルの生成
-                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
-
-                string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
-                ManageIndexViewModel model = new ManageIndexViewModel
+                if (user != null) // デバッガの仕様の変更による
                 {
-                    // パスワード
-                    HasPassword = await UserManager.HasPasswordAsync(user),
-                    // ログイン
-                    Logins = user.Logins,
-                    // E-mail
-                    Email = user.Email,
-                    // 電話番号
-                    PhoneNumber = user.PhoneNumber,
-                    // 2FA
-                    // Email, SMS
-                    TwoFactor = user.TwoFactorEnabled,
-                    // TOTP
-                    TwoFactorTOTP = !string.IsNullOrEmpty(totpAuthenticatorKey),
-                    // 支払元情報
-                    HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
-                    // 非構造化データ
-                    HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
-                    // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = !string.IsNullOrEmpty(saml2OAuth2Data),
-                    // FIDO2PublicKey
-                    HasFIDO2Data = new Func<bool>(() =>
-                    {
-                        if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                        {
-                            return !string.IsNullOrEmpty(user.FIDO2PublicKey);
-                        }
-                        else if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                        {
-                            return (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count);
-                        }
-                        else return false;                        
-                    })(),
-                    // Scopes
-                    Scopes = Const.StandardScopes
-                };
+                    // モデルの生成
+                    string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
 
-                // 管理画面の表示
-                return View(model);
+                    string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
+                    ManageIndexViewModel model = new ManageIndexViewModel
+                    {
+                        // パスワード
+                        HasPassword = await UserManager.HasPasswordAsync(user),
+                        // ログイン
+                        Logins = user.Logins,
+                        // E-mail
+                        Email = user.Email,
+                        // 電話番号
+                        PhoneNumber = user.PhoneNumber,
+                        // 2FA
+                        // Email, SMS
+                        TwoFactor = user.TwoFactorEnabled,
+                        // TOTP
+                        TwoFactorTOTP = !string.IsNullOrEmpty(totpAuthenticatorKey),
+                        // 支払元情報
+                        HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
+                        // 非構造化データ
+                        HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
+                        // Saml2OAuth2Data
+                        HasSaml2OAuth2Data = !string.IsNullOrEmpty(saml2OAuth2Data),
+                        // FIDO2PublicKey
+                        HasFIDO2Data = new Func<bool>(() =>
+                        {
+                            if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
+                            {
+                                return !string.IsNullOrEmpty(user.FIDO2PublicKey);
+                            }
+                            else if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+                            {
+                                return (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count);
+                            }
+                            else return false;
+                        })(),
+                        // Scopes
+                        Scopes = Const.StandardScopes
+                    };
+
+                    // 管理画面の表示
+                    return View(model);
+                }
             }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
