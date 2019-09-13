@@ -56,9 +56,10 @@ using Touryo.Infrastructure.Framework.Authentication;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuth2ResourceServerのApiController（ライブラリ）</summary>
-    [EnableCors("AllowAllOrigins")]
+    [EnableCors]
+    //[ApiController]
     [MyBaseAsyncApiController()]
-    public class OAuth2ResourceServerController : Controller
+    public class OAuth2ResourceServerController : ControllerBase
     {
         #region Hybrid Flow
 

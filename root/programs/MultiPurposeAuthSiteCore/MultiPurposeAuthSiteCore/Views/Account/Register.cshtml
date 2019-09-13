@@ -87,7 +87,7 @@
             @*ここに外部ログインを実装*@
             @AccountViews.ExternalLogins
             <section id="socialLoginForm">
-                @Html.Partial("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
+                @await Html.PartialAsync("_ExternalLoginsListPartial", new AccountExternalLoginListViewModel { ReturnUrl = ViewBag.ReturnUrl })
             </section>
         </div>
 }

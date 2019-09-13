@@ -73,8 +73,9 @@ using Touryo.Infrastructure.Public.Security;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuth2EndpointのApiController（ライブラリ）</summary>
-    [EnableCors("AllowAllOrigins")]
-    public class OAuth2EndpointController : Controller
+    [EnableCors]
+    //[ApiController]
+    public class OAuth2EndpointController : ControllerBase
     {
         #region /token
 

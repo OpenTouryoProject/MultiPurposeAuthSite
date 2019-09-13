@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
     <UserSecretsId>aspnet-MultiPurposeAuthSite-4D4ED842-8221-4C3E-A9D4-5295FF6E400D</UserSecretsId>
     <RootNamespace>MultiPurposeAuthSite</RootNamespace>
     <AssemblyName>MultiPurposeAuthSite</AssemblyName>
@@ -21,17 +21,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Fido2" Version="1.0.0-preview3" />
-    <PackageReference Include="log4net" Version="2.0.8" />
-    <PackageReference Include="Microsoft.AspNetCore.All" Version="2.0.9" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="3.0.0-preview9.19424.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Facebook" Version="3.0.0-preview9.19424.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="3.0.0-preview9.19424.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="3.0.0-preview9.19424.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Twitter" Version="3.0.0-preview9.19424.4" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Extensions" Version="2.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.2.0" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="2.0.4" PrivateAssets="All" />
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
     <PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
     <PackageReference Include="System.Security.Cryptography.Xml" Version="4.5.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
+    <PackageReference Include="log4net" Version="2.0.8" />
+    <PackageReference Include="Fido2" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,16 +51,16 @@
 
   <ItemGroup>
     <Reference Include="OpenTouryo.Business">
-      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Business.dll</HintPath>
+      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Business.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Framework">
-      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Framework.dll</HintPath>
+      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Framework.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public">
-      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Public.dll</HintPath>
+      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Public.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public.Security">
-      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Public.Security.dll</HintPath>
+      <HintPath>..\..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Public.Security.dll</HintPath>
     </Reference>
   </ItemGroup>
   
