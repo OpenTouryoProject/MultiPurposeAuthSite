@@ -111,8 +111,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             // Azure Web App Client Certificate Authentication with ASP.NET Core | Kirk Evans Blog
             // https://blogs.msdn.microsoft.com/kaevans/2016/04/13/azure-web-app-client-certificate-authentication-with-asp-net-core-2/
-            X509Certificate2 x509 = null; // Request.GetClientCertificate();
-
+            X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
             //if (x509 != null)
             //{
             //    //string thumbprint = x509.Thumbprint;
@@ -572,11 +571,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ActionResult</returns>
         [HttpPost]
-        public ActionResult RequestObjectUri()
+        public async Task<ActionResult> RequestObjectUri()
         {
             // RequestObjectを取り出す。
-            string body = new StreamReader(
-                MyHttpContext.Current.Request.Body).ReadToEnd();
+            // Synchronous operations are disallowed.
+            // Call WriteAsync or set AllowSynchronousIO to true instead.
+            string body = await (new StreamReader(
+                MyHttpContext.Current.Request.Body)).ReadToEndAsync();
 
             if (!string.IsNullOrEmpty(body))
             {
