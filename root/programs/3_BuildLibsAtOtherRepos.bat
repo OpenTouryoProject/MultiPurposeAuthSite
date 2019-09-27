@@ -10,7 +10,8 @@ setlocal
 set zipfilename=Temp.zip
 
 @rem GitHubのZIPパス
-set srcUrl=https://github.com/OpenTouryoProject/OpenTouryoTemplates/archive/master.zip
+set branchName=02-50
+set srcUrl=https://github.com/OpenTouryoProject/OpenTouryoTemplates/archive/%branchName%.zip
 
 @rem 解凍ディレクトリ
 set extDir=%CD%
@@ -34,28 +35,18 @@ if exist %extDir%\%tmpDir% GOTO Build
 
 :Build
 @rem ビルドがあるならコピーへ
-if exist "Temp\OpenTouryoTemplates-develop\root_VS2017\programs\CS\Frameworks\Infrastructure\Build_netcore30" GOTO Xcopy
+if exist "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\Frameworks\Infrastructure\Build_netcore30" GOTO Xcopy
 
 @rem batファイルを使用してビルド
-cd "Temp\OpenTouryoTemplates-develop\root_VS2017\programs\CS\"
-echo | call 2_Build_NuGet_net45.bat
-echo | call 2_Build_NuGet_net46.bat
-echo | call 2_Build_NuGet_net47.bat
-echo | call 2_Build_NuGet_netstd20.bat
-echo | call 3_Build_Business_net45.bat
-echo | call 3_Build_Business_net46.bat
-echo | call 3_Build_Business_net47.bat
-echo | call 3_Build_Business_netcore20.bat
+cd "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\"
+echo | call 3_Build_Business_net48.bat
 echo | call 3_Build_Business_netcore30.bat
 
 :Xcopy
 @rem ビルド出力をコピー
 cd %extDir%
-xcopy /Y /E "Temp\OpenTouryoTemplates-develop\root_VS2017\programs\CS\Frameworks\Infrastructure\Build_net45" "OpenTouryoAssemblies\Build_net45\"
-xcopy /Y /E "Temp\OpenTouryoTemplates-develop\root_VS2017\programs\CS\Frameworks\Infrastructure\Build_net46" "OpenTouryoAssemblies\Build_net46\"
-xcopy /Y /E "Temp\OpenTouryoTemplates-develop\root_VS2017\programs\CS\Frameworks\Infrastructure\Build_net47" "OpenTouryoAssemblies\Build_net47\"
-xcopy /Y /E "Temp\OpenTouryoTemplates-develop\root_VS2017\programs\CS\Frameworks\Infrastructure\Build_netcore20" "OpenTouryoAssemblies\Build_netcore20\"
-xcopy /Y /E "Temp\OpenTouryoTemplates-develop\root_VS2017\programs\CS\Frameworks\Infrastructure\Build_netcore30" "OpenTouryoAssemblies\Build_netcore30\"
+xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\Frameworks\Infrastructure\Build_net48" "OpenTouryoAssemblies\Build_net48\"
+xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\Frameworks\Infrastructure\Build_netcore30" "OpenTouryoAssemblies\Build_netcore30\"
 
 pause
 
