@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：DataProvider
-//* クラス日本語名  ：DataProvider（ライブラリ）
+//* クラス日本語名  ：Saml2OAuth2DataにUnstructuredDataを保存する。
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -40,19 +41,19 @@ using System.Collections.Concurrent;
 
 using Dapper;
 
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
     /// DataProvider
-    /// OAuth2DataにUnstructuredDataを保存する。
+    /// Saml2OAuth2DataにUnstructuredDataを保存する。
     /// </summary>
     public class DataProvider
     {
         /// <summary>
-        /// OAuth2Data
+        /// Saml2OAuth2Data
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, string> OAuth2Data = new ConcurrentDictionary<string, string>();
+        private static ConcurrentDictionary<string, string> Saml2OAuth2Data = new ConcurrentDictionary<string, string>();
 
         #region Create
 
@@ -64,7 +65,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    DataProvider.OAuth2Data.TryAdd(clientID, unstructuredData);
+                    DataProvider.Saml2OAuth2Data.TryAdd(clientID, unstructuredData);
                     break;
 
                 case EnumUserStoreType.SqlServer:
@@ -80,7 +81,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "INSERT INTO [OAuth2Data] ([ClientID], [UnstructuredData]) VALUES (@ClientID, @UnstructuredData)",
+                                    "INSERT INTO [Saml2OAuth2Data] ([ClientID], [UnstructuredData]) VALUES (@ClientID, @UnstructuredData)",
                                     new { ClientID = clientID, UnstructuredData = unstructuredData });
 
                                 break;
@@ -88,7 +89,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"OAuth2Data\" (\"ClientID\", \"UnstructuredData\") VALUES (:ClientID, :UnstructuredData)",
+                                    "INSERT INTO \"Saml2OAuth2Data\" (\"ClientID\", \"UnstructuredData\") VALUES (:ClientID, :UnstructuredData)",
                                     new { ClientID = clientID, UnstructuredData = unstructuredData });
 
                                 break;
@@ -96,7 +97,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.PostgreSQL:
 
                                 cnn.Execute(
-                                    "INSERT INTO \"oauth2data\" (\"clientid\", \"unstructureddata\") VALUES (@ClientID, @UnstructuredData)",
+                                    "INSERT INTO \"saml2oauth2data\" (\"clientid\", \"unstructureddata\") VALUES (@ClientID, @UnstructuredData)",
                                     new { ClientID = clientID, UnstructuredData = unstructuredData });
 
                                 break;
@@ -121,7 +122,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    DataProvider.OAuth2Data.TryGetValue(clientID, out unstructuredData);
+                    DataProvider.Saml2OAuth2Data.TryGetValue(clientID, out unstructuredData);
 
                     break;
 
@@ -138,21 +139,21 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.SqlServer:
 
                                 unstructuredData = cnn.ExecuteScalar<string>(
-                                    "SELECT [UnstructuredData] FROM [OAuth2Data] WHERE [ClientID] = @ClientID", new { ClientID = clientID });
+                                    "SELECT [UnstructuredData] FROM [Saml2OAuth2Data] WHERE [ClientID] = @ClientID", new { ClientID = clientID });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 unstructuredData = cnn.ExecuteScalar<string>(
-                                    "SELECT \"UnstructuredData\" FROM \"OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });
+                                    "SELECT \"UnstructuredData\" FROM \"Saml2OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
                                 unstructuredData = cnn.ExecuteScalar<string>(
-                                    "SELECT \"unstructureddata\" FROM \"oauth2data\" WHERE \"clientid\" = @ClientID", new { ClientID = clientID });
+                                    "SELECT \"unstructureddata\" FROM \"saml2oauth2data\" WHERE \"clientid\" = @ClientID", new { ClientID = clientID });
 
                                 break;
                         }
@@ -176,10 +177,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    // OAuth2DataProvider.OAuth2Data.TryUpdate が使えないので del -> ins にする。
+                    // TryUpdate が使えないので del -> ins にする。
                     string temp = "";
-                    DataProvider.OAuth2Data.TryRemove(clientID, out temp);
-                    DataProvider.OAuth2Data.TryAdd(clientID, unstructuredData);
+                    DataProvider.Saml2OAuth2Data.TryRemove(clientID, out temp);
+                    DataProvider.Saml2OAuth2Data.TryAdd(clientID, unstructuredData);
 
                     break;
 
@@ -196,7 +197,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "UPDATE [OAuth2Data] SET [UnstructuredData] = @UnstructuredData WHERE [ClientID] = @ClientID",
+                                    "UPDATE [Saml2OAuth2Data] SET [UnstructuredData] = @UnstructuredData WHERE [ClientID] = @ClientID",
                                     new { ClientID = clientID, UnstructuredData = unstructuredData });
 
                                 break;
@@ -204,7 +205,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
-                                    "UPDATE \"OAuth2Data\" SET \"UnstructuredData\" = :UnstructuredData WHERE \"ClientID\" = :ClientID",
+                                    "UPDATE \"Saml2OAuth2Data\" SET \"UnstructuredData\" = :UnstructuredData WHERE \"ClientID\" = :ClientID",
                                     new { ClientID = clientID, UnstructuredData = unstructuredData });
 
                                 break;
@@ -212,7 +213,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.PostgreSQL:
 
                                 cnn.Execute(
-                                    "UPDATE \"oauth2data\" SET \"unstructureddata\" = @UnstructuredData WHERE \"clientid\" = @ClientID",
+                                    "UPDATE \"saml2oauth2data\" SET \"unstructureddata\" = @UnstructuredData WHERE \"clientid\" = @ClientID",
                                     new { ClientID = clientID, UnstructuredData = unstructuredData });
 
                                 break;
@@ -235,7 +236,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             {
                 case EnumUserStoreType.Memory:
                     string unstructuredData = "";
-                    DataProvider.OAuth2Data.TryRemove(clientID, out unstructuredData);
+                    DataProvider.Saml2OAuth2Data.TryRemove(clientID, out unstructuredData);
 
                     break;
 
@@ -252,21 +253,21 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                             case EnumUserStoreType.SqlServer:
 
                                 cnn.Execute(
-                                    "DELETE FROM [OAuth2Data] WHERE [ClientID] = @ClientID", new { ClientID = clientID });
+                                    "DELETE FROM [Saml2OAuth2Data] WHERE [ClientID] = @ClientID", new { ClientID = clientID });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 cnn.Execute(
-                                    "DELETE FROM \"OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });
+                                    "DELETE FROM \"Saml2OAuth2Data\" WHERE \"ClientID\" = :ClientID", new { ClientID = clientID });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
                                 cnn.Execute(
-                                    "DELETE FROM \"oauth2data\" WHERE \"clientid\" = @ClientID", new { ClientID = clientID });
+                                    "DELETE FROM \"saml2oauth2data\" WHERE \"clientid\" = @ClientID", new { ClientID = clientID });
 
                                 break;
                         }

@@ -61,6 +61,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Specify redirect_uri at the time of test. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ClarifyRedirectUri {
+            get {
+                return ResourceManager.GetString("ClarifyRedirectUri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   client_id に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientID {
@@ -259,6 +268,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   redirect_uri_saml に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RedirectUriSaml {
+            get {
+                return ResourceManager.GetString("RedirectUriSaml", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   redirect_uri_token に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RedirectUriToken {
@@ -282,6 +300,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string RememberMe {
             get {
                 return ResourceManager.GetString("RememberMe", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   OAuth2/OIDC ResponseMode. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ResponseMode {
+            get {
+                return ResourceManager.GetString("ResponseMode", resourceCulture);
             }
         }
         

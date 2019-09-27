@@ -68,7 +68,6 @@ namespace MultiPurposeAuthSite.Co
         public const string Role_SystemAdminOrAdminOrUser
             = Role_SystemAdmin + ", " + Role_Admin + ", " + Role_User;
 
-#if NETFX
         /// <summary>SystemAdministratorのrole</summary>
         public const string Role_SystemAdmin = "SystemAdmin";
 
@@ -77,16 +76,6 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>Userのrole</summary>
         public const string Role_User = "User";    
-#else
-        /// <summary>SystemAdministratorのrole</summary>
-        public const string Role_SystemAdmin = "SYSTEMADMIN";
-
-        /// <summary>Administratorのrole</summary>
-        public const string Role_Admin = "ADMIN";
-
-        /// <summary>Userのrole</summary>
-        public const string Role_User = "USER";
-#endif
 
         #endregion
 
@@ -100,26 +89,16 @@ namespace MultiPurposeAuthSite.Co
             + OAuth2AndOIDCConst.Scope_Email + " "
             + OAuth2AndOIDCConst.Scope_Phone + " "
             + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_UserID;
+            + OAuth2AndOIDCConst.Scope_UserID + " "
+            + OAuth2AndOIDCConst.Scope_Roles;
 
         /// <summary>OIDCのscope</summary>
         public static readonly string OidcScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " "
-            + OAuth2AndOIDCConst.Scope_Profile + " "
-            + OAuth2AndOIDCConst.Scope_Email + " "
-            + OAuth2AndOIDCConst.Scope_Phone + " "
-            + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_UserID;
+            OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
         
         /// <summary>ID連携 scope</summary>
         public static readonly string IdFederationScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " "
-            + OAuth2AndOIDCConst.Scope_Profile + " "
-            + OAuth2AndOIDCConst.Scope_Email + " "
-            + OAuth2AndOIDCConst.Scope_Phone + " "
-            + OAuth2AndOIDCConst.Scope_Address + " "
-            + OAuth2AndOIDCConst.Scope_UserID + " "
-            + OAuth2AndOIDCConst.Scope_Roles;
+            OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
 
         #endregion
 

@@ -90,10 +90,10 @@ CREATE TABLE "CustomizedConfirmation"(
     CONSTRAINT "PK.CustomizedConfirmation" PRIMARY KEY ("UserId")
 );
 
-CREATE TABLE "OAuth2Data"(
+CREATE TABLE "Saml2OAuth2Data"(
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
     "UnstructuredData" NVARCHAR2(2000) NULL, -- OAuth2 Unstructured Data
-    CONSTRAINT "PK.OAuth2Data" PRIMARY KEY ("ClientID")
+    CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 
 CREATE TABLE "FIDO2Data"(
@@ -109,16 +109,32 @@ CREATE TABLE "OAuth2Revocation"(
     CONSTRAINT "PK.OAuth2Revocation" PRIMARY KEY ("Jti")
 );
 
+CREATE TABLE "IssuedToken"(
+    "Jti" NVARCHAR2(38) NOT NULL,                -- PK, guid
+    "Value" NVARCHAR2(2000) NOT NULL,
+    "ClientID" NVARCHAR2(38) NOT NULL,
+    "Audience" NVARCHAR2(38) NOT NULL,
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.IssuedToken" PRIMARY KEY ("Jti")
+);
+
+CREATE TABLE "RequestObject"(
+    "Urn" NVARCHAR2(38) NOT NULL,                -- PK, guid
+    "Value" NVARCHAR2(2000) NOT NULL,
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.RequestObject" PRIMARY KEY ("Urn")
+);
+
 -- INDEX
 --- UNIQUE INDEX
 ---- Users
-CREATE UNIQUE INDEX "UserNameIndex" ON "Users" ("UserName" ASC);
-ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName" ASC);
-ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail" ASC);
+ALTER TABLE "Users" ADD CONSTRAINT "UserNameIndex" UNIQUE ("UserName");
+ALTER TABLE "Users" ADD CONSTRAINT "NormalizedUserNameIndex" UNIQUE ("NormalizedUserName");
+ALTER TABLE "Users" ADD CONSTRAINT "NormalizedEmailIndex" UNIQUE ("NormalizedEmail");
 ALTER TABLE "Users" ADD CONSTRAINT "ClientIDIndex" UNIQUE ("ClientID");
 ---- Roles
-CREATE UNIQUE INDEX "RoleNameIndex" ON "Roles" ("Name" ASC);
-ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName" ASC);
+ALTER TABLE "Roles" ADD CONSTRAINT "RoleNameIndex" UNIQUE ("Name");
+ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName");
 
 --- INDEX
 ---- UserRoles
@@ -141,7 +157,7 @@ ALTER TABLE "UserLogins" ADD CONSTRAINT "FK.UserLogins.Users_UserId" FOREIGN KEY
 ALTER TABLE "UserClaims" ADD CONSTRAINT "FK.UserClaims.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
 ---- TotpTokens
 ALTER TABLE "TotpTokens" ADD CONSTRAINT "FK.TotpTokens.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;
----- OAuth2Data
-ALTER TABLE "OAuth2Data" ADD CONSTRAINT "FK.OAuth2Data.Users_ClientID" FOREIGN KEY("ClientID") REFERENCES "Users" ("ClientID") ON DELETE CASCADE;
+---- Saml2OAuth2Data
+ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_ClientID" FOREIGN KEY("ClientID") REFERENCES "Users" ("ClientID") ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE "FIDO2Data" ADD CONSTRAINT "FK.FIDO2Data.Users_UserName" FOREIGN KEY("UserName") REFERENCES "Users" ("UserName") ON DELETE CASCADE;

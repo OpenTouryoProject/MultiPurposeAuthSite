@@ -6,8 +6,8 @@
     // OAuth 2.0 テスト用 画面なので、必要に応じて流用 or 削除して下さい。
 
     //**********************************************************************************
-    //* クラス名        ：OAuth2 Starters
-    //* クラス日本語名  ：OAuth2 Starters
+    //* クラス名        ：Saml2 & OAuth2 Starters
+    //* クラス日本語名  ：Saml2 & OAuth2 Starters
     //*
     //* 作成日時        ：－
     //* 作成者          ：－
@@ -17,12 +17,20 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/12/14  西野 大介         新規
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
+    //*  2019/05/2*  西野 大介         SAML2対応実施
     //**********************************************************************************
 *@
 
-@model HomeOAuth2StartersViewModel
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
+@using Touryo.Infrastructure.Framework.Authentication
+
+@model HomeSaml2OAuth2StartersViewModel
 @{
-    ViewBag.Title = "OAuth2 Starters";
+    ViewBag.Title = "Saml2 & OAuth2 Starters";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
@@ -33,23 +41,40 @@
 
 <h2>@ViewBag.Title</h2>
 <div class="col-md-8">
-    @using (Html.BeginForm("OAuth2Starters", "Home", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+    @using (Html.BeginForm("Saml2OAuth2Starters", "Home", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
     {
         @Html.AntiForgeryToken()
         <div class="form-group">
+            @Html.LabelFor(m => m.ClarifyRedirectUri, new { @class = "col-md-3 control-label" })
+            <div class="col-md-5">
+                @Html.CheckBoxFor(model => model.ClarifyRedirectUri, new { @class = "form-control" })
+            </div>
             @Html.LabelFor(m => m.ClientType, new { @class = "col-md-3 control-label" })
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.ClientType, Model.DdlClientTypeItems, new { @class = "form-control" })
             </div>
+            @Html.LabelFor(m => m.ResponseMode, new { @class = "col-md-3 control-label" })
+            <div class="col-md-5">
+                @Html.DropDownListFor(model => model.ResponseMode, Model.DdlResponseModeItems, new { @class = "form-control" })
+            </div>
         </div>
         <ul>
+            <li>
+                SAML2
+                <ul>
+                    <li><input type="submit" name="submit.Saml2RedirectRedirectBinding" value="Saml2 Redirect Redirect Binding" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.Saml2RedirectPostBinding" value="Saml2 Redirect Post Binding" class="btn btn-link" /></li>
+                    <li>
+                        <input type="submit" name="submit.Saml2PostPostBinding" value="Saml2 Post Post Binding" class="btn btn-link" />
+                        <br />※ Saml2 Post Post Binding will not pass if you are not logged in. It is provided for library testing purposes.
+                    </li>
+                </ul>
+            </li>
             <li>
                 Authorization Code Flow
                 <ul>
                     <li><input type="submit" name="submit.AuthorizationCode" value="Test Authorization Code Flow" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCode_FormPost" value="Test Authorization Code Flow (form_post)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_OIDC" value="Test Authorization Code Flow (OIDC)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCode_OIDC_FormPost" value="Test Authorization Code Flow (OIDC, form_post)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_PKCE_Plain" value="Test Authorization Code Flow (PKCE plain)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_PKCE_S256" value="Test Authorization Code Flow (PKCE S256)" class="btn btn-link" /></li>
                 </ul>
@@ -75,7 +100,6 @@
                 <ul>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1" value="Test Authorization Code Flow (FAPI1 CC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1_OIDC" value="Test Authorization Code Flow (FAPI1 CC, OIDC)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCodeFAPI1_OIDC_FormPost" value="Test Authorization Code Flow (FAPI1 CC, OIDC, form_post)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_PKCE_S256" value="Test Authorization Code Flow (PKCE S256, FAPI1 PC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI2" value="Test Authorization Code Flow (FAPI2 CC)" class="btn btn-link" /></li>
                 </ul>
@@ -102,6 +126,7 @@
             </li>
         </ul>
     }
+        <a href="@(Config.OAuth2ResourceServerEndpointsRootURI + "/.well-known/openid-configuration")">.well-known/openid-configuration</a><br />
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

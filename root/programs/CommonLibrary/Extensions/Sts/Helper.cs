@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -63,13 +64,13 @@ using Microsoft.AspNet.Identity.Owin;
 using Microsoft.AspNetCore.Identity;
 #endif
 
-
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
 
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>Helper（ライブラリ）</summary>
     public class Helper
@@ -160,7 +161,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         #region ClientBuilder
 
         /// <summary>
-        /// TOAuth Serverにアクセスするための
+        /// AuthZ Serverにアクセスするための
         /// HttpClientを生成するメソッド
         /// </summary>
         /// <returns>
@@ -205,11 +206,15 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             };
 
             // Browser（Resource Owner）からではなくでClientから
-            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfx))
+            if (!string.IsNullOrEmpty(CmnClientParams.ClientCertPfxFilePath))
             {
-                handler.ClientCertificates.Add(new X509Certificate(
-                    OAuth2AndOIDCParams.ClientCertPfx,
-                    OAuth2AndOIDCParams.ClientCertPwd,
+                // 2019/06/12 : X509Certificate -> X509Certificate2
+                // Because following error was outputted :
+                // Unable to cast object of type 'System.Security.Cryptography.X509Certificates.X509Certificate'
+                //                to type 'System.Security.Cryptography.X509Certificates.X509Certificate2'.
+                handler.ClientCertificates.Add(new X509Certificate2(
+                    CmnClientParams.ClientCertPfxFilePath,
+                    CmnClientParams.ClientCertPfxPassword,
                     X509KeyStorageFlags.MachineKeySet));
             }
 #else
@@ -220,11 +225,11 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             };
 
             // Browser（Resource Owner）からではなくでClientから
-            if (!string.IsNullOrEmpty(OAuth2AndOIDCParams.ClientCertPfx))
+            if (!string.IsNullOrEmpty(CmnClientParams.ClientCertPfxFilePath))
             {
                 handler.ClientCertificates.Add(new X509Certificate(
-                    OAuth2AndOIDCParams.ClientCertPfx,
-                    OAuth2AndOIDCParams.ClientCertPwd,
+                    CmnClientParams.ClientCertPfxFilePath,
+                    CmnClientParams.ClientCertPfxPassword,
                     X509KeyStorageFlags.MachineKeySet));
             }
 #endif
@@ -250,39 +255,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         {
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, client_id, client_secret, redirect_uri, code);
-        }
-
-        /// <summary>
-        /// PKCE : code, code_verifierからAccess Tokenを取得する。
-        /// </summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
-        /// <param name="client_id">client_id</param>
-        /// <param name="client_secret">client_secret</param>
-        /// <param name="redirect_uri">redirect_uri</param>
-        /// <param name="code">code</param>
-        /// <param name="code_verifier">code_verifier</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
-            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
-        {
-            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
-                tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
-        }
-
-        /// <summary>
-        /// FAPI1 : code, code_verifierからAccess Tokenを取得する。
-        /// </summary>
-        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
-        /// <param name="redirect_uri">redirect_uri</param>
-        /// <param name="code">code</param>
-        /// <param name="assertion">assertion</param>
-        /// <returns>結果のJSON文字列</returns>
-        public async Task<string> GetAccessTokenByCodeAsync(
-            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
-        {
-            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
-                tokenEndpointUri, redirect_uri, code, assertion);
-        }
+        }        
 
         /// <summary>
         /// Resource Owner Password Credentials Grant
@@ -317,6 +290,10 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 tokenEndpointUri, client_id, client_secret, scopes);
         }
 
+        #endregion
+
+        #region その他の 基本 WebAPI
+
         /// <summary>Refresh Tokenを使用してAccess Tokenを更新する。</summary>
         /// <param name="tokenEndpointUri">tokenEndpointUri</param>
         /// <param name="client_id">client_id</param>
@@ -347,6 +324,27 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         #endregion
 
         #region 拡張フローのWebAPI
+
+        #region PKCE
+
+        /// <summary>
+        /// PKCE : code, code_verifierからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="code_verifier">code_verifier</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
+        }
+
+        #endregion
 
         #region Revoke & Introspect
 
@@ -383,14 +381,44 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         #region JWT Bearer Token Flow
 
         /// <summary>
-        /// Token2エンドポイントで、
+        /// Tokenエンドポイントで、
         /// JWT bearer token authorizationグラント種別の要求を行う。</summary>
-        /// <param name="token2EndpointUri">Token2エンドポイントのUri</param>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
         /// <param name="assertion">string</param>
         /// <returns>結果のJSON文字列</returns>
-        public async Task<string> JwtBearerTokenFlowAsync(Uri token2EndpointUri, string assertion)
+        public async Task<string> JwtBearerTokenFlowAsync(Uri tokenEndpointUri, string assertion)
         {
-            return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(token2EndpointUri, assertion);
+            return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(tokenEndpointUri, assertion);
+        }
+
+        #endregion
+
+        #region FAPI (Financial-grade API) 
+
+        /// <summary>
+        /// FAPI1 : code, assertionからAccess Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code">code</param>
+        /// <param name="assertion">assertion</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCodeAsync(
+            Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                tokenEndpointUri, redirect_uri, code, assertion);
+        }
+
+        /// <summary>
+        /// FAPI2 : RequestObjectを登録する。
+        /// </summary>
+        /// <param name="requestObjectRegUri">Uri</param>
+        /// <param name="requestObject">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> RegisterRequestObjectAsync(Uri requestObjectRegUri, string requestObject)
+        {
+            return await OAuth2AndOIDCClient.RegisterRequestObjectAsync(requestObjectRegUri, requestObject);
         }
 
         #endregion
@@ -475,12 +503,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 }
             }
 
-            // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(oAuth2Data))
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
             {
                 isResourceOwner = true;
-                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.ClientSecret;
             }
 
@@ -535,13 +563,13 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 }
             }
 
-            // OAuth2Dataを検索
-            string oAuth2Data = DataProvider.Get(client_id);
+            // Saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
 
-            if (!string.IsNullOrEmpty(oAuth2Data))
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
             {
                 isResourceOwner = true;
-                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 {
@@ -556,6 +584,49 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 {
                     return model.RedirectUriToken;
                 }
+            }
+
+            return "";
+        }
+
+        #endregion
+
+        #region GetAssertionConsumerServiceURL
+
+        /// <summary>client_idからAssertionConsumerServiceURLを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>AssertionConsumerServiceURL</returns>
+        public string GetAssertionConsumerServiceURL(string client_id)
+        {
+            return this.GetAssertionConsumerServiceURL(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからAssertionConsumerServiceURLを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>AssertionConsumerServiceURL</returns>
+        public string GetAssertionConsumerServiceURL(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_saml"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["redirect_uri_saml"];
+                }
+            }
+
+            // Saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                isResourceOwner = true;
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+                return model.RedirectUriSaml;
             }
 
             return "";
@@ -591,12 +662,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 }
             }
 
-            // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(oAuth2Data))
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
             {
                 isResourceOwner = true;
-                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.JwkRsaPublickey;
             }
 
@@ -633,12 +704,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 }
             }
 
-            // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(oAuth2Data))
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
             {
                 isResourceOwner = true;
-                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.TlsClientAuthSubjectDn;
             }
 
@@ -685,12 +756,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 }
             }
 
-            // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(oAuth2Data))
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
             {
                 isResourceOwner = true;
-                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 if (!string.IsNullOrEmpty(model.ClientMode))
                 {
@@ -736,12 +807,12 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 return this.Oauth2ClientsInfo[client_id]["client_name"];
             }
 
-            // oAuth2Dataを検索
-            string oAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(oAuth2Data))
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
             {
                 isResourceOwner = true;
-                ManageAddOAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.ClientName;
             }
 
@@ -839,24 +910,25 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// <param name="client_id">string</param>
         /// <param name="state">string</param>
         /// <param name="scopes">string[]</param>
+        /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
-        public static ClaimsIdentity AddClaim(ClaimsIdentity claims,
-            string client_id, string state, IEnumerable<string> scopes, string nonce)
+        public static ClaimsIdentity AddClaim(ClaimsIdentity identity,
+            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
         {
             // 発行者の情報を含める。
 
             #region 標準
 
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Issuer, Config.OAuth2IssuerId));
-            claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Audience, client_id));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuerClaim, Config.IssuerId));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnAudienceClaim, client_id));
 
             foreach (string scope in scopes)
             {
                 // その他のscopeは、Claimの下記urnに組み込む。
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Scopes, scope));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnScopesClaim, scope));
             }
 
             #endregion
@@ -864,18 +936,29 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
             #region 拡張
 
             // OpenID Connect
+
+            // nonce
             if (string.IsNullOrEmpty(nonce))
             {
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, state));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));
             }
             else
             {
-                claims.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_Nonce, nonce));
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, nonce));
+            }
+
+            // auth_time
+            // AccountControllerで追加
+
+            // FAPI2 (RequestObject)
+            if (claims != null)
+            {
+                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnClaimsClaim, claims.ToString()));
             }
 
             #endregion
 
-            return claims;
+            return identity;
         }
 
         #endregion

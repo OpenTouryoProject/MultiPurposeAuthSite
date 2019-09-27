@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -61,8 +62,8 @@ namespace MultiPurposeAuthSite.ViewModels
         /// <summary>HasUnstructuredData（非構造化データの有無）</summary>
         public bool HasUnstructuredData { get; set; }
 
-        /// <summary>HasOAuth2Data</summary>
-        public bool HasOAuth2Data { get; set; }
+        /// <summary>HasSaml2OAuth2Data</summary>
+        public bool HasSaml2OAuth2Data { get; set; }
 
         /// <summary>HasFIDO2Data</summary>
         public bool HasFIDO2Data { get; set; }

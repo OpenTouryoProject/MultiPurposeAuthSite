@@ -183,8 +183,9 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         }
 
         /// <summary>GetUserByCredential</summary>
-        /// <param name="publicKeyId">byte[]</param>
-        public static User GetUserByCredential(byte[] publicKeyId)
+        /// <param name="publicKeyId"></param>
+        /// <returns>Fido2User</returns>
+        public static Fido2User GetUserByCredential(byte[] publicKeyId)
         {
             string _publicKeyId = CustomEncode.ToBase64UrlString(publicKeyId);
 
@@ -201,7 +202,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
 
                 string username = CustomEncode.ByteToString(storedCredential.UserId, CustomEncode.UTF_8);
 
-                return new User
+                return new Fido2User
                 {
                     DisplayName = username,
                     Name = username,
@@ -357,7 +358,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             switch (Config.UserStoreType)
             {
                 case EnumUserStoreType.Memory:
-                    // OAuth2DataProvider.OAuth2Data.TryUpdate が使えないので del -> ins にする。
+                    // TryUpdate が使えないので del -> ins にする。
                     string temp = "";
                     DataProvider.FIDO2Data.TryRemove(publicKeyId, out temp);
                     DataProvider.FIDO2Data.TryAdd(publicKeyId, unstructuredData);

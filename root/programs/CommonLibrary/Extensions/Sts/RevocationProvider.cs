@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：RevocationProvider
-//* クラス日本語名  ：RevocationProvider（ライブラリ）
+//* クラス日本語名  ：RevocationしたOAuth2のaccess_tokenのjtiを保存する（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -40,10 +40,9 @@ using System.Collections.Concurrent;
 
 using Dapper;
 
-namespace MultiPurposeAuthSite.Extensions.OAuth2
+namespace MultiPurposeAuthSite.Extensions.Sts
 {
     /// <summary>
-    /// RevocationProvider
     /// RevocationしたOAuth2のaccess_tokenのjtiを保存する。
     /// </summary>
     public class RevocationProvider
@@ -52,7 +51,8 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
         /// OAuth2RevocationProvider
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, DateTime> OAuth2Revocation = new ConcurrentDictionary<string, DateTime>();
+        private static ConcurrentDictionary<string, DateTime>
+            OAuth2Revocation = new ConcurrentDictionary<string, DateTime>();
 
         #region Create
 
@@ -175,7 +175,7 @@ namespace MultiPurposeAuthSite.Extensions.OAuth2
                 return datetime;
             }
         }
-        
+
         #endregion
     }
 }

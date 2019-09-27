@@ -54,6 +54,10 @@
         <p><a class="btn btn-primary" href="#" id="TestHybridFlowWebAPI" url="@(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.TestHybridFlowWebAPI)">Test hybrid flow</a></p>
         <br />
         <div id="debug"></div>
+@if (!string.IsNullOrEmpty((string)ViewData["FormPost"]))
+{
+        <div id="form_post">Objected forms : @ViewData["FormPost"]</div>
+}
         <br />
         <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
         <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />

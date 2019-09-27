@@ -195,7 +195,7 @@ namespace MultiPurposeAuthSite.Data
             cancellationToken.ThrowIfCancellationRequested();
             this.ThrowIfDisposed();
 
-            role.Name = normalizedName;
+            role.NormalizedName = normalizedName;
             return Task.FromResult(0);
         }
 

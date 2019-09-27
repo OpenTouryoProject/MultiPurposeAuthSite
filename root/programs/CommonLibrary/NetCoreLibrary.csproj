@@ -1,7 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
     <RootNamespace>MultiPurposeAuthSite</RootNamespace>
     <AssemblyName>MultiPurposeAuthSite.NetCoreLibrary</AssemblyName>
   </PropertyGroup>
@@ -39,34 +39,34 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.NetCore" Version="1.8.3" />
-    <PackageReference Include="Dapper" Version="1.50.5" />
-    <PackageReference Include="Fido2" Version="1.0.0-preview3" />
-    <PackageReference Include="Microsoft.AspNetCore.All" Version="2.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="2.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="2.2.0" />
-    <PackageReference Include="MiniProfiler.AspNetCore.Mvc" Version="4.0.138" />
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Cng" Version="4.5.0" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
     <PackageReference Include="Npgsql" Version="4.0.3" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="2.18.3" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
-    <PackageReference Include="System.Security.Cryptography.Cng" Version="4.5.0" />
+    <PackageReference Include="Dapper" Version="1.50.5" />
+    <PackageReference Include="MiniProfiler.AspNetCore.Mvc" Version="4.0.138" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
+    <PackageReference Include="BouncyCastle.NetCore" Version="1.8.3" />
     <PackageReference Include="Twilio" Version="5.23.0" />
+    <PackageReference Include="Fido2" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="OpenTouryo.Business">
-      <HintPath>..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Business.dll</HintPath>
+      <HintPath>..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Business.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Framework">
-      <HintPath>..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Framework.dll</HintPath>
+      <HintPath>..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Framework.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public">
-      <HintPath>..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Public.dll</HintPath>
+      <HintPath>..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Public.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public.Security">
-      <HintPath>..\OpenTouryoAssemblies\Build_netcore20\netcoreapp2.0\OpenTouryo.Public.Security.dll</HintPath>
+      <HintPath>..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Public.Security.dll</HintPath>
     </Reference>
   </ItemGroup>
 

@@ -7,7 +7,7 @@
 
 //**********************************************************************************
 //* クラス名        ：ManageController
-//* クラス日本語名  ：ManageController
+//* クラス日本語名  ：ManageのController
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/11/30  西野 大介         新規
+//*  2019/05/2*  西野 大介         SAML2対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -29,7 +30,7 @@ using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.Extensions;
 using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
-using OAuth2 = MultiPurposeAuthSite.Extensions.OAuth2;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.IO;
@@ -118,10 +119,10 @@ namespace MultiPurposeAuthSite.Controllers
             AddUnstructuredDataSuccess,
             /// <summary>RemoveUnstructuredDataSuccess</summary>
             RemoveUnstructuredDataSuccess,
-            /// <summary>AddOAuth2DataSuccess</summary>
-            AddOAuth2DataSuccess,
-            /// <summary>RemoveOAuth2DataSuccess</summary>
-            RemoveOAuth2DataSuccess,
+            /// <summary>AddSaml2OAuth2DataSuccess</summary>
+            AddSaml2OAuth2DataSuccess,
+            /// <summary>RemoveSaml2OAuth2DataSuccess</summary>
+            RemoveSaml2OAuth2DataSuccess,
             /// <summary>AddMsPassDataSuccess</summary>
             AddMsPassDataSuccess,
             /// <summary>RemoveMsPassDataSuccess</summary>
@@ -310,8 +311,8 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemovePaymentInformationSuccess ? Resources.ManageController.RemovePaymentInformationSuccess
                 : message == EnumManageMessageId.AddUnstructuredDataSuccess ? Resources.ManageController.AddUnstructuredDataSuccess
                 : message == EnumManageMessageId.RemoveUnstructuredDataSuccess ? Resources.ManageController.RemoveUnstructuredDataSuccess
-                : message == EnumManageMessageId.AddOAuth2DataSuccess ? Resources.ManageController.AddOAuth2DataSuccess
-                : message == EnumManageMessageId.RemoveOAuth2DataSuccess ? Resources.ManageController.RemoveOAuth2DataSuccess
+                : message == EnumManageMessageId.AddSaml2OAuth2DataSuccess ? Resources.ManageController.AddSaml2OAuth2DataSuccess
+                : message == EnumManageMessageId.RemoveSaml2OAuth2DataSuccess ? Resources.ManageController.RemoveSaml2OAuth2DataSuccess
                 : message == EnumManageMessageId.AddMsPassDataSuccess ? Resources.ManageController.AddMsPassDataSuccess
                 : message == EnumManageMessageId.RemoveMsPassDataSuccess ? Resources.ManageController.RemoveMsPassDataSuccess
                 : message == EnumManageMessageId.AddWebAuthnDataSuccess ? Resources.ManageController.AddWebAuthnDataSuccess
@@ -322,56 +323,57 @@ namespace MultiPurposeAuthSite.Controllers
                 // ユーザの取得
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
-                // モデルの生成
-                string oAuth2Data = OAuth2.DataProvider.Get(user.ClientID);
-
-                string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
-                ManageIndexViewModel model = new ManageIndexViewModel
+                if (user != null) // デバッガの仕様の変更による
                 {
-                    // パスワード
-                    HasPassword = await UserManager.HasPasswordAsync(user),
-                    // ログイン
-                    Logins = user.Logins,
-                    // E-mail
-                    Email = user.Email,
-                    // 電話番号
-                    PhoneNumber = user.PhoneNumber,
-                    // 2FA
-                    // Email, SMS
-                    TwoFactor = user.TwoFactorEnabled,
-                    // TOTP
-                    TwoFactorTOTP = !string.IsNullOrEmpty(totpAuthenticatorKey),
-                    // 支払元情報
-                    HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
-                    // 非構造化データ
-                    HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
-                    // OAuth2Data
-                    HasOAuth2Data = !string.IsNullOrEmpty(oAuth2Data),
-                    // FIDO2PublicKey
-                    HasFIDO2Data = new Func<bool>(() =>
-                    {
-                        if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
-                        {
-                            return !string.IsNullOrEmpty(user.FIDO2PublicKey);
-                        }
-                        else if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
-                        {
-                            return (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count);
-                        }
-                        else return false;                        
-                    })(),
-                    // Scopes
-                    Scopes = Const.StandardScopes
-                };
+                    // モデルの生成
+                    string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
 
-                // 管理画面の表示
-                return View(model);
+                    string totpAuthenticatorKey = await UserManager.GetAuthenticatorKeyAsync(user);
+                    ManageIndexViewModel model = new ManageIndexViewModel
+                    {
+                        // パスワード
+                        HasPassword = await UserManager.HasPasswordAsync(user),
+                        // ログイン
+                        Logins = user.Logins,
+                        // E-mail
+                        Email = user.Email,
+                        // 電話番号
+                        PhoneNumber = user.PhoneNumber,
+                        // 2FA
+                        // Email, SMS
+                        TwoFactor = user.TwoFactorEnabled,
+                        // TOTP
+                        TwoFactorTOTP = !string.IsNullOrEmpty(totpAuthenticatorKey),
+                        // 支払元情報
+                        HasPaymentInformation = !string.IsNullOrEmpty(user.PaymentInformation),
+                        // 非構造化データ
+                        HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
+                        // Saml2OAuth2Data
+                        HasSaml2OAuth2Data = !string.IsNullOrEmpty(saml2OAuth2Data),
+                        // FIDO2PublicKey
+                        HasFIDO2Data = new Func<bool>(() =>
+                        {
+                            if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
+                            {
+                                return !string.IsNullOrEmpty(user.FIDO2PublicKey);
+                            }
+                            else if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
+                            {
+                                return (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count);
+                            }
+                            else return false;
+                        })(),
+                        // Scopes
+                        Scopes = Const.StandardScopes
+                    };
+
+                    // 管理画面の表示
+                    return View(model);
+                }
             }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
@@ -437,6 +439,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (signInResult.Succeeded)
                         {
                             // Passwordが一致した。
+                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
                             // 処理を継続
                         }
                         else
@@ -722,6 +726,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result.Succeeded)
                         {
                             // Passwordが一致した。
+                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
                             // 処理を継続
                         }
                         else
@@ -829,6 +835,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (result.Succeeded)
                         {
                             // Passwordが一致した。
+                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
                             // 処理を継続
                         }
                         else
@@ -1181,7 +1189,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // ManageVerifyPhoneNumberViewModelの検証に成功
 
                     // 電話番号の検証（電話番号の登録の際に、SMSで送信した検証コードを検証）
-                    IdentityResult result = await UserManager.ChangePhoneNumberAsync(user, model.PhoneNumber, model.Code);
+                    IdentityResult result = await UserManager.ChangePhoneNumberAsync(
+                    	user, model.PhoneNumber, model.Code);
 
                     // 電話番号の検証結果の確認
                     if (result.Succeeded)
@@ -1792,7 +1801,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // uid（e-mail or name情報）が一致している必要がある。
                             //   Manage（サインイン済み）なので、
                             //   RequireUniqueEmail == false時のname and e-mailまでの一致は不要。
-                            if (user.NormalizedUserName == uid) // ★ これでイイのか？
+                            if (user.NormalizedUserName == uid.ToUpper()) // ★ これでイイのか？
                             {
                                 // uid（e-mail, name情報）が一致している。
 
@@ -1821,6 +1830,9 @@ namespace MultiPurposeAuthSite.Controllers
                                         isPersistent: false);//,  // rememberMe は false 固定（外部ログインの場合）
                                         //rememberBrowser: true); // rememberBrowser は true 固定
 
+                                    IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                                    responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+                            
                                     // リダイレクト
                                     return RedirectToAction("ManageLogins");
                                 }
@@ -1836,7 +1848,8 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // uid（e-mail, name情報）が一致していない。
                                 // 外部ログインのアカウントを間違えている。
-                                return RedirectToAction("ManageLogins", new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
+                                return RedirectToAction("ManageLogins",
+                                    new { Message = EnumManageMessageId.AccountConflictInSocialLogin });
 
                             } // else処理済
                         } // else処理済
@@ -1994,7 +2007,7 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 課金のテスト処理
                 string ret = (string)JsonConvert.DeserializeObject(
-                    await OAuth2.Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
+                    await Sts.Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
                     (string)HttpContext.Session.GetString(OAuth2AndOIDCConst.AccessToken), "jpy", "1000"));
 
                 if (ret == "OK")
@@ -2239,26 +2252,26 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// OAuth2関連の非構造化データの追加・編集画面（初期表示）
-        /// GET: /Manage/AddOAuth2Data
+        /// GET: /Manage/AddSaml2OAuth2Data
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpGet]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> AddOAuth2Data()
+        public async Task<ActionResult> AddSaml2OAuth2Data()
         {
-            if (Config.CanEditOAuth2Data
+            if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
-                ManageAddOAuth2DataViewModel model = null;
+                ManageAddSaml2OAuth2DataViewModel model = null;
 
-                string oAuth2Data = OAuth2.DataProvider.Get(user.ClientID);
+                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
 
-                if (!string.IsNullOrEmpty(oAuth2Data))
+                if (!string.IsNullOrEmpty(saml2OAuth2Data))
                 {
-                    model = JsonConvert.DeserializeObject<ManageAddOAuth2DataViewModel>(oAuth2Data);
+                    model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                     if (string.IsNullOrEmpty(model.ClientID))
                     {
                         // 空（userから取得
@@ -2272,7 +2285,7 @@ namespace MultiPurposeAuthSite.Controllers
                 else
                 {
                     // 初期
-                    model = new ManageAddOAuth2DataViewModel();
+                    model = new ManageAddSaml2OAuth2DataViewModel();
                 }
 
                 return View(model);
@@ -2286,22 +2299,22 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// OAuth2関連の非構造化データの追加・編集画面（OAuth2関連の非構造化データ設定）
-        /// POST: /Manage/AddOAuth2Data
+        /// POST: /Manage/AddSaml2OAuth2Data
         /// </summary>
-        /// <param name="model">ManageAddOAuth2DataViewModel</param>
+        /// <param name="model">ManageAddSaml2OAuth2DataViewModel</param>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> AddOAuth2Data(ManageAddOAuth2DataViewModel model)
+        public async Task<ActionResult> AddSaml2OAuth2Data(ManageAddSaml2OAuth2DataViewModel model)
         {
-            if (Config.CanEditOAuth2Data
+            if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
             {
-                // ManageAddOAuth2DataViewModelの検証
+                // ManageAddSaml2OAuth2DataViewModelの検証
                 if (ModelState.IsValid)
                 {
-                    // ManageAddOAuth2DataViewModelの検証に成功
+                    // ManageAddSaml2OAuth2DataViewModelの検証に成功
                     if (!string.IsNullOrEmpty(Request.Form["submit.ClientID"]))
                     {
                         ModelState.Clear();
@@ -2326,11 +2339,11 @@ namespace MultiPurposeAuthSite.Controllers
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                OAuth2.DataProvider.Update(user.ClientID, unstructuredData);
+                                Sts.DataProvider.Update(user.ClientID, unstructuredData);
 
                                 // 再ログイン
                                 await this.ReSignInAsync(user.Id);
-                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                             }
                             else
                             {
@@ -2345,12 +2358,12 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 成功
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
-                                    if (!string.IsNullOrEmpty(temp)) OAuth2.DataProvider.Delete(temp);
-                                    OAuth2.DataProvider.Create(user.ClientID, unstructuredData);
+                                    if (!string.IsNullOrEmpty(temp)) Sts.DataProvider.Delete(temp);
+                                    Sts.DataProvider.Create(user.ClientID, unstructuredData);
 
                                     // 再ログイン
                                     await this.ReSignInAsync(user.Id);
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddOAuth2DataSuccess });
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                                 }
                                 else
                                 {
@@ -2371,7 +2384,7 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // ManageAddOAuth2DataViewModelの検証に失敗
+                    // ManageAddSaml2OAuth2DataViewModelの検証に失敗
                 }
 
                 // 再表示
@@ -2399,7 +2412,7 @@ namespace MultiPurposeAuthSite.Controllers
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
         public ActionResult GetOAuth2Token(ManageIndexViewModel model)
         {
-            if (Config.CanEditOAuth2Data
+            if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
             {
                 // OAuth2AuthorizationCodeGrantClientViewModelの検証
@@ -2411,7 +2424,7 @@ namespace MultiPurposeAuthSite.Controllers
                     + Config.OAuth2AuthorizeEndpoint;
 
                     // client_id
-                    string client_id = OAuth2.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
 
                     // redirect_uri
                     string redirect_uri = CustomEncode.UrlEncode2(
@@ -2443,22 +2456,22 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>
         /// OAuth2関連の非構造化データの削除
-        /// POST: /Manage/RemoveOAuth2Data
+        /// POST: /Manage/RemoveSaml2OAuth2Data
         /// </summary>
         /// <returns>ActionResultを非同期に返す</returns>
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = Const.Role_SystemAdminOrAdmin)]
-        public async Task<ActionResult> RemoveOAuth2Data()
+        public async Task<ActionResult> RemoveSaml2OAuth2Data()
         {
-            if (Config.CanEditOAuth2Data
+            if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの検索
                 ApplicationUser user = await UserManager.GetUserAsync(User);
 
                 // OAuth2関連の非構造化データのクリア
-                OAuth2.DataProvider.Delete(user.ClientID);
+                Sts.DataProvider.Delete(user.ClientID);
 
                 // ユーザーの保存（ClientIDのクリア）
                 //user.ClientID = ""; 一意制約エラーになるので
@@ -2473,7 +2486,7 @@ namespace MultiPurposeAuthSite.Controllers
                     if (await this.ReSignInAsync(user.Id))
                     {
                         // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveOAuth2DataSuccess });
+                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveSaml2OAuth2DataSuccess });
                     }
                     else
                     {
@@ -2578,7 +2591,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         options = new CredentialCreateOptions
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }
@@ -2613,7 +2626,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         result = new CredentialMakeResult
                         {
-                            Status = "error",
+                            Status = OAuth2AndOIDCConst.error,
                             ErrorMessage = FIDO.WebAuthnHelper.FormatException(e)
                         };
                     }
@@ -2776,7 +2789,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // 結果の確認
                     if (result.Succeeded)
                     {
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
+                        return RedirectToAction("Index",
+                            new { Message = EnumManageMessageId.RemoveMsPassDataSuccess });
                     }
                 }
             }
@@ -2942,7 +2956,7 @@ namespace MultiPurposeAuthSite.Controllers
         //[ValidateAntiForgeryToken] // response_mode=form_postで実装しているためハズす。
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state)
         {
-            if (Config.CanEditOAuth2Data
+            if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
             {
                 // Tokenエンドポイントにアクセス
@@ -2957,8 +2971,8 @@ namespace MultiPurposeAuthSite.Controllers
                 };
 
                 //  client_Idから、client_secretを取得。
-                string client_id = OAuth2.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
                 // stateの検証
                 if (state == (string)HttpContext.Session.GetString("get_oauth2_token_state"))
@@ -2974,7 +2988,7 @@ namespace MultiPurposeAuthSite.Controllers
                         + Config.OAuth2AuthorizationCodeGrantClient_Manage;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await OAuth2.Helper.GetInstance()
+                    model.Response = await Sts.Helper.GetInstance()
                         .GetAccessTokenByCodeAsync(tokenEndpointUri, client_id, client_secret, redirect_uri, code, "");
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -3018,7 +3032,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
         {
-            if (Config.CanEditOAuth2Data
+            if (Config.CanEditSaml2OAuth2Data
                 && Config.EnableEditingOfUserAttribute)
             {
                 // OAuthAuthorizationCodeGrantClientViewModelの検証
@@ -3035,10 +3049,10 @@ namespace MultiPurposeAuthSite.Controllers
                     // Tokenエンドポイントにアクセス
 
                     //  client_Idから、client_secretを取得。
-                    string client_id = OAuth2.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
-                    string client_secret = OAuth2.Helper.GetInstance().GetClientSecret(client_id);
+                    string client_id = Sts.Helper.GetInstance().GetClientIdByName(User.Identity.Name);
+                    string client_secret = Sts.Helper.GetInstance().GetClientSecret(client_id);
 
-                    model.Response = await OAuth2.Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
+                    model.Response = await Sts.Helper.GetInstance().UpdateAccessTokenByRefreshTokenAsync(
                         tokenEndpointUri, client_id, client_secret, model.RefreshToken);
                     dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(model.Response);
 
@@ -3094,6 +3108,9 @@ namespace MultiPurposeAuthSite.Controllers
                         user,
                         isPersistent: false);//,      // アカウント記憶    // 既定値
                         //rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
+
+                IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
+                responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
 
                 return true;
             }

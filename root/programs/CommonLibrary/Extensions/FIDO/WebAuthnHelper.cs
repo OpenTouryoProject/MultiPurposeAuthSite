@@ -100,7 +100,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             // this._mds = MDSMetadata.Instance("accesskey", "cachedirPath");
 
             Uri uri = new Uri(this._origin);
-            this._lib = new Fido2(new Configuration()
+            this._lib = new Fido2(new Fido2Configuration()
             {
                 ServerDomain = uri.GetDomain(),
                 ServerName = uri.GetHost(),
@@ -136,7 +136,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             if (_user == null)
                 throw new Exception(string.Format("{0} is not found.", username));
 
-            User user = new User
+            Fido2User user = new Fido2User
             {
                 DisplayName = username,
                 Name = username,
@@ -251,7 +251,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
             if (_user == null)
                 throw new Exception(string.Format("{0} is not founded.", username));
 
-            User user = new User
+            Fido2User user = new Fido2User
             {
                 DisplayName = username,
                 Name = username,

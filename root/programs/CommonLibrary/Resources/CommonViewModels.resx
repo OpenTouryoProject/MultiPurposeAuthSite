@@ -117,6 +117,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="ClarifyRedirectUri" xml:space="preserve">
+    <value>Specify redirect_uri at the time of test.</value>
+  </data>
   <data name="ClientID" xml:space="preserve">
     <value>client_id</value>
   </data>
@@ -183,6 +186,9 @@
   <data name="RedirectUriCode" xml:space="preserve">
     <value>redirect_uri_code</value>
   </data>
+  <data name="RedirectUriSaml" xml:space="preserve">
+    <value>redirect_uri_saml</value>
+  </data>
   <data name="RedirectUriToken" xml:space="preserve">
     <value>redirect_uri_token</value>
   </data>
@@ -191,6 +197,9 @@
   </data>
   <data name="RememberMe" xml:space="preserve">
     <value>Remember me ?</value>
+  </data>
+  <data name="ResponseMode" xml:space="preserve">
+    <value>OAuth2/OIDC ResponseMode.</value>
   </data>
   <data name="RoleName" xml:space="preserve">
     <value>Role name</value>

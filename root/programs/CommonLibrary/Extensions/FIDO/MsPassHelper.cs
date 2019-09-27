@@ -94,8 +94,8 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
                 // Challengeの一致
 
                 // Load public key
-                RSA rsa =
-                    RsaPublicKeyConverter.JwkToProvider(this.PublicKey);
+                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+                RSA rsa = rpkc.JwkToProvider(this.PublicKey);
 
                 // VerifyData
                 ret = rsa.VerifyData(

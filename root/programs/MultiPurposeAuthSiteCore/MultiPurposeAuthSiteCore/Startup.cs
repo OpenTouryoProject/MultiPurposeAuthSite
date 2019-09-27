@@ -26,22 +26,24 @@ using MultiPurposeAuthSite.Notifications;
 using System;
 using System.IO;
 
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Caching.Memory;
 
-using Microsoft.AspNetCore.Mvc.Cors.Internal;
+//using Microsoft.AspNetCore.Mvc.Cors.Internal;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.StdMigration;
@@ -59,31 +61,17 @@ namespace MultiPurposeAuthSite
     {
     	#region mem & prop & constructor
 
-        /// <summary>HostingEnvironment </summary>
-        public IHostingEnvironment HostingEnvironment { get; }
-
         /// <summary>Configuration</summary>
         public IConfiguration Configuration { get; }
         
         /// <summary>constructor</summary>
-        /// <param name="env">IConfiguration</param>
-        /// <param name="config">IConfiguration</param>
-        public Startup(IHostingEnvironment env, IConfiguration config)
+        /// <param name="configuration">IConfiguration</param>
+        public Startup(IConfiguration configuration)
         {
-            // 自前
-            //IConfigurationBuilder builder = new ConfigurationBuilder()
-            //    .SetBasePath(env.ContentRootPath)
-            //    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-            //    .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
-            //    .AddEnvironmentVariables();
-            //config = builder.Build();
-
-            // メンバに設定
-            this.HostingEnvironment = env;
-            this.Configuration = config;
+            Configuration = configuration;
 
             // ライブラリにも設定
-            GetConfigParameter.InitConfiguration(config);
+            GetConfigParameter.InitConfiguration(configuration);
             // Dockerで埋め込まれたリソースを使用する場合、
             // 以下のコメントアウトを解除し、appsettings.jsonのappSettings sectionに、
             // "Azure": "既定の名前空間" を指定し、設定ファイルを埋め込まれたリソースに変更する。
@@ -95,61 +83,33 @@ namespace MultiPurposeAuthSite
         #region Configure & ConfigureServices
         
         /// <summary>
-        /// Configure
-        /// ・必須
-        /// ・ConfigureServices メソッドの後に、WebHostに呼び出される。
-        /// ・アプリケーションの要求処理パイプラインを構成する。
+        /// This method gets called by the runtime.
+        /// Use this method to configure the HTTP request pipeline.
         /// </summary>
-        /// <param name="app">IApplicationBuilder</param>
-        /// <param name="loggerFactory">ILoggerFactory</param>
-        /// <remarks>
-        /// this.HostingEnvironmentやthis.Configurationを見て、パイプライン構成を切り替える。
-        /// </remarks>
-        public void Configure(IApplicationBuilder app, ILoggerFactory loggerFactory)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            // Development、Staging、Productionの
-            // 環境変数（ASPNETCORE_ENVIRONMENT）値を使用可能。
-            //bool flg = this.HostingEnvironment.IsDevelopment();
-            //flg = this.HostingEnvironment.IsStaging();
-            //flg = this.HostingEnvironment.IsProduction();
-
-            #region Development or それ以外のモード
-
-            if (this.HostingEnvironment.IsDevelopment())
+            
+            if (env.IsDevelopment())
             {
-                // Developmentモードの場合
-
-                // 開発用エラー画面
-                //app.UseDeveloperExceptionPage();
-                //app.UseDatabaseErrorPage();
-
-                // https://forums.asp.net/t/2114176.aspx?app+UseDeveloperExceptionPage+not+working
-                // UseDeveloperExceptionPageとUseIdentity、併用できない？
-                // UseStatusCodePagesWithRedirects＋自作開発用エラー画面？
-                //app.UseStatusCodePagesWithRedirects(
-                //    GetConfigParameter.GetConfigValue(FxLiteral.ERROR_SCREEN_PATH));
-
-                // 簡易ログ出力
-                loggerFactory.AddConsole(Configuration.GetSection("Logging"));
-                loggerFactory.AddDebug();
-
-                // ブラウザー リンク
-                // 開発環境と 1-n ブラウザの間の通信チャネルを作成
-                // https://blogs.msdn.microsoft.com/chack/2013/12/16/visual-studio-2013-1/
-                app.UseBrowserLink();
+                app.UseDeveloperExceptionPage();
             }
             else
             {
-                // Developmentモードでない場合
+                app.UseExceptionHandler("/Home/Error");
 
-                // カスタム例外処理ページ
-                // app.UseExceptionHandler("/Home/Error");
-                // MyMVCCoreFilterAttribute.OnExceptionで処理。
+                // The default HSTS value is 30 days.
+                // You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+                app.UseHsts();
             }
 
-            #endregion
+            // HttpContextのマイグレーション用
+            app._UseHttpContextAccessor();
 
-            #region パイプラインに追加
+            app.UseHttpsRedirection();
+
+            // /wwwroot（既定の）の
+            // 静的ファイルをパイプラインに追加
+            app.UseStaticFiles();
 
             // Cookieを使用する。
             app.UseCookiePolicy(new CookiePolicyOptions()
@@ -176,123 +136,118 @@ namespace MultiPurposeAuthSite
                 }
             });
 
-            // HttpContextのマイグレーション用
-            app._UseHttpContextAccessor();
-
-            // /wwwroot（既定の）の
-            // 静的ファイルをパイプラインに追加
-            app.UseStaticFiles();
-
-            // エラー画面
-            app.UseExceptionHandler("/Home/Error");
+            // Routing
+            app.UseRouting();
 
             // Identity
             app.UseAuthentication();
-
-            // MVCをパイプラインに追加（routesも設定）
-            app.UseMvc(routes =>
+            app.UseAuthorization();
+            
+            app.UseCors( //認証・認可の後ろ
+                builder => builder
+                    .AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader());
+                    
+            //.AllowCredentials());
+            
+            app.UseEndpoints(endpoints =>
             {
                 #region Account
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
+                   name: "Saml2Request",
+                   pattern: Config.Saml2RequestEndpoint.Substring(1), // 先頭の[/]を削除,
+                   defaults: new { controller = "Account", action = "Saml2Request" });
+
+                endpoints.MapControllerRoute(
                    name: "OAuth2Authorize",
-                   template: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
+                   pattern: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
                 #endregion
 
                 #region OAuth2Endpoint
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "OAuth2Token",
-                    template: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "OAuth2Token" });
 
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "GetUserClaims",
-                    template: Config.OAuth2UserInfoEndpoint.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.OAuth2UserInfoEndpoint.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "GetUserClaims" });
 
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "RevokeToken",
-                    template: Config.OAuth2RevokeTokenEndpoint.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.OAuth2RevokeTokenEndpoint.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "RevokeToken" });
 
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "IntrospectToken",
-                    template: Config.OAuth2IntrospectTokenEndpoint.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.OAuth2IntrospectTokenEndpoint.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "IntrospectToken" });
 
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "JwksUri",
-                    template: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除,
+                    pattern: OAuth2AndOIDCParams.JwkSetUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" });
+
+                endpoints.MapControllerRoute(
+                    name: "RequestObjectUri",
+                    pattern: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" });
                 #endregion
 
                 #region OAuth2ResourceServer
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "TestHybridFlow",
-                    template: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
 
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "TestChageToUser",
-                    template: Config.TestChageToUserWebAPI.Substring(1), // 先頭の[/]を削除,
+                    pattern: Config.TestChageToUserWebAPI.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2ResourceServer", action = "TestChageToUser" });
                 #endregion
 
-
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "default",
-                    template: "{controller=Home}/{action=Index}/{id?}");
+                    pattern: "{controller=Home}/{action=Index}/{id?}");
             });
-
-            // UseCorsでAllowAllOriginsを指定。
-            app.UseCors("AllowAllOrigins");
-
-            #endregion
         }
 
         /// <summary>
-        /// ConfigureServices
-        /// 必要に応じて、ミドルウェア /サービス / フレームワークを注入する。
-        /// ・実行は任意
-        /// ・Configure メソッドの前に、WebHostにより呼び出される。
-        /// ・規約によって構成オプションを設定する。
+        /// This method gets called by the runtime.
+        /// Use this method to add services to the container.
         /// </summary>
         /// <param name="services">IServiceCollection</param>
-        /// <remarks>
-        /// IServiceCollectionコンテナにサービスを追加すると、
-        /// Configure メソッドと、アプリケーション内でサービスを利用できるようになる。
-        /// サービスは、DI or IApplicationBuilder.ApplicationServices から解決される。
-        /// </remarks>
         public void ConfigureServices(IServiceCollection services)
         {
             // 構成情報から、AppConfiguration SectionをAppConfiguration Classへバインドするようなケース。
             //services.Configure<AppConfiguration>(Configuration.GetSection("AppConfiguration"));
 
-            #region Development or それ以外のモード
+            // HttpContextのマイグレーション用
+            services._AddHttpContextAccessor();
 
-            if (this.HostingEnvironment.IsDevelopment())
+            services.Configure<CookiePolicyOptions>(options =>
             {
-                // Developmentモードの場合
+                // This lambda determines whether user consent
+                // for non-essential cookies is needed for a given request.
+                options.CheckConsentNeeded = context => true;
+            });
 
                 // Sessionのモード
                 services.AddDistributedMemoryCache(); // 開発用
-            }
-            else
-            {
-                // Developmentモードでない場合
-
-                // Sessionのモード
                 //services.AddDistributedSqlServerCache();
                 //services.AddDistributedRedisCache();
-            }
-
-            #endregion
 
             // Sessionを使用する。
             services.AddSession();
 
-            // HttpContextのマイグレーション用
-            services._AddHttpContextAccessor();
+            // Core 3.0のテンプレートではUseMvcの
+            // 代わりにこれらを使用するようになった。
+            services
+                .AddControllersWithViews()// MVC & WebAPI
+                .AddNewtonsoftJson();// JSON シリアライザの変更
 
             #region Add Frameworks
 

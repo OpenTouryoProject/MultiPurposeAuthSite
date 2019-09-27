@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2019/05/2*  西野 大介         SAML2対応実施
     //**********************************************************************************
 *@
 @* マスタ・ページに相当 *@
@@ -111,24 +112,24 @@ else
                             <i class="fa fa-arrow-circle-right"></i> メニュートップ
                         </li>
                         <li>
-                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("OAuth Starters", "OAuth2Starters", "Home", null, new { style = "color:peachpuff" })
+                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("Saml2/OAuth2 Starters", "Saml2OAuth2Starters", "Home", null, new { style = "color:peachpuff" })
                         </li>
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("WebAuthn Starters", "WebAuthnStarters", "Home", null, new { style = "color:peachpuff" })
                         </li>
 @if (User.Identity.IsAuthenticated)
 {
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("Scroll", "Scroll", "Home", null, new { style = "color:peachpuff" })
-                        </li>
+                            <li>
+                                <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("Scroll", "Scroll", "Home", null, new { style = "color:peachpuff" })
+                            </li>
     if (canShowAdminScreen)
     {
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
-                        </li>
-                        <li>
-                            <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
-                        </li>
+                                <li>
+                                    <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
+                                </li>
+                                <li>
+                                    <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
+                                </li>
     }
 }
                     </ul>

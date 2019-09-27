@@ -32,6 +32,13 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Data;
+
+#if NETCORE
+//using MultiPurposeAuthSite;
+#else
+using MultiPurposeAuthSite.Entity;
+#endif
 
 using System;
 using System.Linq;
@@ -73,26 +80,70 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 string[] temp = access_token.Split('.');
                 string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
-                Dictionary<string, object> authTokenClaimSet = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+                JObject tokenClaimSet = (JObject)JsonConvert.DeserializeObject(json);
 
                 // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
-                if (authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
-                    && authTokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
+                if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
+                    && tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
                 {
-                    JArray scopes = (JArray)authTokenClaimSet[OAuth2AndOIDCConst.scopes];
+                    JArray scopes = (JArray)tokenClaimSet[OAuth2AndOIDCConst.scopes];
 
                     // ・OpenID Connect : response_type=codeに対応する。
                     if (scopes.Any(x => x.ToString() == OAuth2AndOIDCConst.Scope_Openid))
                     {
-                        //・payloadからscopeを削除する。
-                        authTokenClaimSet.Remove(OAuth2AndOIDCConst.scopes);
+                        // claimsクレームを退避
+                        JObject claims = (JObject)tokenClaimSet[OAuth2AndOIDCConst.claims];
+
+                        // IdTokenから不要なクレームを削除する。
+                        List<string> keys = new List<string>();
+                        foreach (KeyValuePair<string, JToken> item in tokenClaimSet)
+                        {
+                            if ("iss sub aud client_id exp iat nonce auth_time".IndexOf(item.Key) == -1)
+                            {
+                                keys.Add(item.Key);
+                            }
+                        }
+
+                        foreach (string key in keys)
+                        {
+                            tokenClaimSet.Remove(key);
+                        }
+
+                        //・expをIdToken用のexpに差し替える。
+                        tokenClaimSet[OAuth2AndOIDCConst.exp] = DateTimeOffset.Now.AddMinutes(
+                            Config.OidcIdTokenExpireTimeSpanFromMinutes.TotalMinutes).ToUnixTimeSeconds().ToString();
+
+                        if (claims != null)
+                        {
+                            // claims > id_tokenクレームの内容を格納
+                            foreach (KeyValuePair<string, JToken> item in claims)
+                            {
+                                if (item.Key == OAuth2AndOIDCConst.claims_userinfo)
+                                {
+                                    // ...
+                                }
+                                else if (item.Key == OAuth2AndOIDCConst.claims_id_token)
+                                {
+                                    // id_tokenに追加する値
+                                    // - auth_timeクレーム
+                                    //   max_age対応もあるので、対応済み。
+                                    // - acrクレーム
+                                    //   ...未サポート...
+                                    // - その他
+                                    //   任意の実装を追加可能
+                                    ApplicationUser user = CmnUserStore.FindByName((string)tokenClaimSet[OAuth2AndOIDCConst.sub]);
+                                }
+                            }
+                        }
+
+                        //Co.Config.;
 
                         //・payloadにat_hash, c_hash, s_hashを追加する。
 
                         if (hct.HasFlag(HashClaimType.AtHash))
                         {
                             // at_hash
-                            authTokenClaimSet.Add(
+                            tokenClaimSet.Add(
                                 OAuth2AndOIDCConst.at_hash,
                                 IdToken.CreateHash(access_token));
                         }
@@ -100,7 +151,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (hct.HasFlag(HashClaimType.CHash))
                         {
                             // c_hash
-                            authTokenClaimSet.Add(
+                            tokenClaimSet.Add(
                                 OAuth2AndOIDCConst.c_hash,
                                 IdToken.CreateHash(code));
                         }
@@ -108,13 +159,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (hct.HasFlag(HashClaimType.SHash))
                         {
                             // s_hash
-                            authTokenClaimSet.Add(
+                            tokenClaimSet.Add(
                                 OAuth2AndOIDCConst.s_hash,
                                 IdToken.CreateHash(state));
                         }
 
                         //・編集したpayloadを再度JWTとして署名する。
-                        string newPayload = JsonConvert.SerializeObject(authTokenClaimSet);
+                        string newPayload = JsonConvert.SerializeObject(tokenClaimSet);
 
                         // 署名
                         if (string.IsNullOrEmpty(cerJwkString))
@@ -122,8 +173,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             // 通常
 
                             // JWS(RS256)
-                            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(pfxFilePath, pfxPassword,
-                                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+                            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(pfxFilePath, pfxPassword);
 
                             // ヘッダ ... access_tokenと同じ
                             JWS_Header jwsHeader =
@@ -147,12 +197,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                             throw new NotSupportedException("FAPI2 is not supported in this dotnet version.");
 #else
                             // JWE(RsaOaepAesGcm)
+                            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
                             JWE_RsaOaepAesGcm_Param jweRsaOaep = new JWE_RsaOaepAesGcm_Param(
-                                EnumASymmetricAlgorithm.RsaCng, RsaPublicKeyConverter.JwkToParam(cerJwkString));
+                                EnumASymmetricAlgorithm.RsaCng, rpkc.JwkToParam(cerJwkString));
 
                             // JWS(ES256)
-                            JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(pfxFilePath, pfxPassword,
-                                X509KeyStorageFlags.Exportable); // | X509KeyStorageFlags.MachineKeySet);
+                            JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(pfxFilePath, pfxPassword);
+                            // X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+                            // ECDSAは、MachineKeySetに入らない & ExportableはDigitalSignECDsaX509の既定値に指定。
 
                             // ヘッダ ... access_tokenと同じではない。
 

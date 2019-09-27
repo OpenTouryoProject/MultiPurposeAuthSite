@@ -1418,7 +1418,11 @@ namespace MultiPurposeAuthSite.Data
                     case EnumUserStoreType.Memory:
 
                         // ロール情報を取得する
+#if NETCORE
+                        role = CmnStore._roles.FirstOrDefault(x => x.NormalizedName == roleName);
+#else
                         role = CmnStore._roles.FirstOrDefault(x => x.Name == roleName);
+#endif
 
                         if (role == null)
                         {

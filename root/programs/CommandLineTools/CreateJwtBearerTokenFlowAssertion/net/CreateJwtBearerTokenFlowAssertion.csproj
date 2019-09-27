@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>CreateJwtBearerTokenFlowAssertion</RootNamespace>
     <AssemblyName>CreateJwtBearerTokenFlowAssertion</AssemblyName>
-    <TargetFrameworkVersion>v4.7</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TargetFrameworkProfile />
@@ -35,16 +35,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Framework">
-      <HintPath>..\..\..\OpenTouryoAssemblies\Build_net47\OpenTouryo.Framework.dll</HintPath>
+      <HintPath>..\..\..\OpenTouryoAssemblies\Build_net48\OpenTouryo.Framework.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public">
-      <HintPath>..\..\..\OpenTouryoAssemblies\Build_net47\OpenTouryo.Public.dll</HintPath>
+      <HintPath>..\..\..\OpenTouryoAssemblies\Build_net48\OpenTouryo.Public.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public.Security">
-      <HintPath>..\..\..\OpenTouryoAssemblies\Build_net47\OpenTouryo.Public.Security.dll</HintPath>
+      <HintPath>..\..\..\OpenTouryoAssemblies\Build_net48\OpenTouryo.Public.Security.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
