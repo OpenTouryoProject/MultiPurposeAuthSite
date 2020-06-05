@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/11/30  西野 大介         新規
+//*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -87,8 +88,7 @@ namespace MultiPurposeAuthSite
         /// Use this method to configure the HTTP request pipeline.
         /// </summary>
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-        {
-            
+        {            
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -166,6 +166,9 @@ namespace MultiPurposeAuthSite
                 #endregion
 
                 #region OAuth2Endpoint
+
+                #region OAuth2 / OIDC
+
                 endpoints.MapControllerRoute(
                     name: "OAuth2Token",
                     pattern: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除,
@@ -195,6 +198,37 @@ namespace MultiPurposeAuthSite
                     name: "RequestObjectUri",
                     pattern: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" });
+
+                #endregion
+
+                #region CIBA FAPI2
+
+                endpoints.MapControllerRoute(
+                    name: "CibaAuthorize",
+                    pattern: Config.CibaAuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "CibaAuthorize" });
+
+                endpoints.MapControllerRoute(
+                    name: "CibaPushResult",
+                    pattern: Config.CibaPushResultEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "CibaPushResult" });
+
+                #endregion
+
+                #region Push Notification
+
+                endpoints.MapControllerRoute(
+                    name: "SetDeviceToken",
+                    pattern: Config.SetDeviceTokenWebAPI.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "SetDeviceToken" });
+
+                endpoints.MapControllerRoute(
+                    name: "TwoFactorAuthPushResult",
+                    pattern: Config.TwoFactorAuthPushResultWebAPI.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "TwoFactorAuthPushResult" });
+
+                #endregion
+
                 #endregion
 
                 #region OAuth2ResourceServer
@@ -204,9 +238,9 @@ namespace MultiPurposeAuthSite
                     defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
 
                 endpoints.MapControllerRoute(
-                    name: "TestChageToUser",
-                    pattern: Config.TestChageToUserWebAPI.Substring(1), // 先頭の[/]を削除,
-                    defaults: new { controller = "OAuth2ResourceServer", action = "TestChageToUser" });
+                    name: "ChageToUser",
+                    pattern: Config.ChageToUserWebAPI.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2ResourceServer", action = "ChageToUser" });
                 #endregion
 
                 endpoints.MapControllerRoute(

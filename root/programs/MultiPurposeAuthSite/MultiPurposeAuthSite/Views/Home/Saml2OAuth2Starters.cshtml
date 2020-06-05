@@ -18,6 +18,7 @@
     //*  2017/12/14  西野 大介         新規
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
     //*  2019/05/2*  西野 大介         SAML2対応実施
+    //*  2020/01/07  西野 大介         PKCE for SPA対応実施
     //**********************************************************************************
 *@
 
@@ -75,8 +76,6 @@
                 <ul>
                     <li><input type="submit" name="submit.AuthorizationCode" value="Test Authorization Code Flow" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_OIDC" value="Test Authorization Code Flow (OIDC)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCode_PKCE_Plain" value="Test Authorization Code Flow (PKCE plain)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCode_PKCE_S256" value="Test Authorization Code Flow (PKCE S256)" class="btn btn-link" /></li>
                 </ul>
             </li>
             <li>
@@ -96,12 +95,24 @@
                 </ul>
             </li>
             <li>
+                PKCE Flow
+                <ul>
+                    <li><input type="submit" name="submit.PKCE_Plain" value="PKCE plain" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.PKCE_S256" value="PKCE S256" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.PKCE_Plain_4SPA" value="PKCE plain for SPA" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.PKCE_S256_4SPA" value="PKCE S256 for SPA" class="btn btn-link" /></li>
+                </ul>
+                ※ In case of to continue testing with PKCE for SPA, when you get code with "#" then change this to "?".<br />
+                　　this is because send request to "redirect endpoint" by GET method with query.
+            </li>
+            <li>
                 Financial-grade API
                 <ul>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1" value="Test Authorization Code Flow (FAPI1 CC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1_OIDC" value="Test Authorization Code Flow (FAPI1 CC, OIDC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCode_PKCE_S256" value="Test Authorization Code Flow (PKCE S256, FAPI1 PC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI2" value="Test Authorization Code Flow (FAPI2 CC)" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.FAPI_CIBA_Profile" value="Test FAPI CIBA Profile (FAPI2)" class="btn btn-link" /></li>
                 </ul>
             </li>
             <li>
@@ -126,7 +137,12 @@
             </li>
         </ul>
     }
-        <a href="@(Config.OAuth2ResourceServerEndpointsRootURI + "/.well-known/openid-configuration")">.well-known/openid-configuration</a><br />
+    <hr/>
+    <ul>
+        <li><a href="@(Config.OAuth2AuthorizationServerEndpointsRootURI + "/samlmetadata")">samlmetadata</a></li>
+        <li><a href="@(Config.OAuth2AuthorizationServerEndpointsRootURI + "/.well-known/openid-configuration")">.well-known/openid-configuration</a></li>
+        <li><a href="@(Config.OAuth2AuthorizationServerEndpointsRootURI + "/jwkcerts")">jwkcerts</a></li>
+    </ul>
 </div>
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

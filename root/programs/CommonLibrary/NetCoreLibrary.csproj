@@ -13,6 +13,8 @@
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <OutputPath>bin\netcore\Release</OutputPath>
+    <PlatformTarget>x64</PlatformTarget>
+    <DefineConstants>TRACE;NETCORE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,6 +45,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FirebaseAdmin" Version="1.9.2" />
+    <PackageReference Include="Microsoft.AspNetCore" Version="2.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.2.0" />
     <PackageReference Include="System.Security.Cryptography.Cng" Version="4.5.0" />
     <PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
     <PackageReference Include="Npgsql" Version="4.0.3" />

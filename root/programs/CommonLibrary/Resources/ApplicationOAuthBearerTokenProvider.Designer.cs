@@ -19,7 +19,7 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "16.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class ApplicationOAuthBearerTokenProvider {
@@ -70,11 +70,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   client_id not sett. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string client_id_NotSett {
+            get {
+                return ResourceManager.GetString("client_id_NotSett", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Authorization Code grant type is not enabled. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string EnableAuthorizationCodeGrantType {
             get {
                 return ResourceManager.GetString("EnableAuthorizationCodeGrantType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   CIBA grant type is not enabled. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string EnableCibaGrantType {
+            get {
+                return ResourceManager.GetString("EnableCibaGrantType", resourceCulture);
             }
         }
         
@@ -115,11 +133,29 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Invalid client_id. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Invalid_client_id {
+            get {
+                return ResourceManager.GetString("Invalid_client_id", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Invalid redirect_uri. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string Invalid_redirect_uri {
             get {
                 return ResourceManager.GetString("Invalid_redirect_uri", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   redirect_uri not registered. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string redirect_uri_NotRegistered {
+            get {
+                return ResourceManager.GetString("redirect_uri_NotRegistered", resourceCulture);
             }
         }
         

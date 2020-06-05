@@ -31,10 +31,12 @@
 //*  2017/12/25  西野 大介         新規
 //*  2018/11/27  西野 大介         XML(Base64) ---> Jwk(Base64Url)に変更。
 //*  2019/02/13  西野 大介         自動生成から、証明書利用に変更。
+//*  2020/03/04  西野 大介         CIBA対応（ECDsaのJwt Assertion生成）
 //**********************************************************************************
 
 using System;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json.Linq;
 
@@ -58,21 +60,23 @@ namespace CreateJwtBearerTokenFlowAssertion
 
             string jwkPrivateKey = "";
             string jwkPublicKey = "";
+            string jwtAssertion = "";
 
             string iss = CmnClientParams.Isser;
             string aud = OAuth2AndOIDCParams.Audience;
             string scopes = "hoge1 hoge2 hoge3";
             JObject jobj = null;
 
-            DigitalSignX509 dsX509 = new DigitalSignX509(
+            #region RS256
+            DigitalSignX509 dsX509_RS256 = new DigitalSignX509(
                 CmnClientParams.RsaPfxFilePath,
                 CmnClientParams.RsaPfxPassword, HashAlgorithmName.SHA256);
 
             #region PrivateKey
-            Console.WriteLine("PrivateKey:");
+            Console.WriteLine("PrivateKey(RS256):");
 
             RsaPrivateKeyConverter rpvkc = new RsaPrivateKeyConverter(JWS_RSA.RS._256);
-            jwkPrivateKey = rpvkc.ParamToJwk(((RSA)dsX509.X509Certificate.PrivateKey).ExportParameters(true));
+            jwkPrivateKey = rpvkc.ParamToJwk(((RSA)dsX509_RS256.AsymmetricAlgorithm).ExportParameters(true));
             jwkPrivateKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPrivateKey, CustomEncode.us_ascii));
 
             Console.WriteLine(jwkPrivateKey);
@@ -80,10 +84,10 @@ namespace CreateJwtBearerTokenFlowAssertion
             #endregion
 
             #region PublicKey
-            Console.WriteLine("PublicKey:");
+            Console.WriteLine("PublicKey(RS256):");
 
             RsaPublicKeyConverter rpbkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-            jwkPublicKey = rpbkc.ParamToJwk(((RSA)dsX509.X509Certificate.PublicKey.Key).ExportParameters(false));
+            jwkPublicKey = rpbkc.ParamToJwk(((RSA)dsX509_RS256.AsymmetricAlgorithm).ExportParameters(false));
             jwkPublicKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPublicKey, CustomEncode.us_ascii));
 
             Console.WriteLine(jwkPublicKey);
@@ -91,7 +95,7 @@ namespace CreateJwtBearerTokenFlowAssertion
             #endregion
 
             #region Check
-            string jwtAssertion = JwtAssertion.Create(
+            jwtAssertion = JwtAssertion.Create(
                 CmnClientParams.Isser, OAuth2AndOIDCParams.Audience, new TimeSpan(0, 30, 0), scopes,
                 CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPrivateKey), CustomEncode.us_ascii));
 
@@ -102,18 +106,68 @@ namespace CreateJwtBearerTokenFlowAssertion
                 if (iss == CmnClientParams.Isser
                     && aud == OAuth2AndOIDCParams.Audience)
                 {
-                    Console.WriteLine("JwtAssertion:");
+                    Console.WriteLine("JwtAssertion(RS256):");
                     Console.WriteLine(jwtAssertion);
                     Console.WriteLine("");
-                    Console.ReadLine();
-
-                    return;
                 }
             }
 
             #endregion
 
-            Console.WriteLine("Error");
+            #endregion
+
+            #region ES256
+            DigitalSignECDsaX509 dsX509_ES256 = new DigitalSignECDsaX509(
+                CmnClientParams.EcdsaPfxFilePath,
+                CmnClientParams.EcdsaPfxPassword, HashAlgorithmName.SHA256);
+
+            #region PrivateKey
+            // ECDsa.ExportParameters(true)が動かないので実行不可能。
+            //Console.WriteLine("PrivateKey(ES256):");
+
+            //EccPrivateKeyConverter epvkc = new EccPrivateKeyConverter(JWS_ECDSA.ES._256);
+            //jwkPrivateKey = epvkc.ParamToJwk(((ECDsa)dsX509_ES256.AsymmetricAlgorithm).ExportParameters(true));
+            //jwkPrivateKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPrivateKey, CustomEncode.us_ascii));
+
+            //Console.WriteLine(jwkPrivateKey);
+            //Console.WriteLine("");
+            #endregion
+
+            #region PublicKey
+            Console.WriteLine("PublicKey(ES256):");
+
+            EccPublicKeyConverter epbkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
+            jwkPublicKey = epbkc.ParamToJwk(((ECDsa)dsX509_ES256.AsymmetricAlgorithm).ExportParameters(false));
+            jwkPublicKey = CustomEncode.ToBase64UrlString(CustomEncode.StringToByte(jwkPublicKey, CustomEncode.us_ascii));
+
+            Console.WriteLine(jwkPublicKey);
+            Console.WriteLine("");
+            #endregion
+
+            #region Check
+
+            jwtAssertion = JwtAssertion.CreateByECDsa(
+                CmnClientParams.Isser, OAuth2AndOIDCParams.Audience, new TimeSpan(0, 30, 0), scopes,
+                CmnClientParams.EcdsaPfxFilePath, CmnClientParams.EcdsaPfxPassword);
+                //CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPrivateKey), CustomEncode.us_ascii));
+
+            if (JwtAssertion.Verify(
+                jwtAssertion, out iss, out aud, out scopes, out jobj,
+                CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwkPublicKey), CustomEncode.us_ascii)))
+            {
+                if (iss == CmnClientParams.Isser
+                    && aud == OAuth2AndOIDCParams.Audience)
+                {
+                    Console.WriteLine("JwtAssertion(ES256):");
+                    Console.WriteLine(jwtAssertion);
+                    Console.WriteLine("");
+                }
+            }
+
+            #endregion
+
+            #endregion
+
             Console.ReadLine();
         }
     }

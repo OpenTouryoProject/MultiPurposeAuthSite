@@ -96,7 +96,7 @@ namespace MultiPurposeAuthSite.Util.IdP
             // DictionaryのXsrfKeyにUserIdを格納
             if (UserId != null)
             {
-                properties.Dictionary[Config.XsrfKey] = UserId;
+                properties.Dictionary[Config.SaltParameter] = UserId;
             }
 
             // 認証を実行するタスクを、OWIN ミドルウェアにデリゲート

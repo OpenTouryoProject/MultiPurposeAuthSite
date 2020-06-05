@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2018/12/26  西野 大介         分割
+//*  2020/02/27  西野 大介         課金エンドポイント（テスト用→解放）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -51,6 +52,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.Security;
 
 /// <summary>MultiPurposeAuthSite.Controllers</summary>
 namespace MultiPurposeAuthSite.Controllers
@@ -58,9 +60,13 @@ namespace MultiPurposeAuthSite.Controllers
     /// <summary>OAuth2ResourceServerのApiController（ライブラリ）</summary>
     [EnableCors]
     //[ApiController]
-    [MyBaseAsyncApiController()]
+    [MyBaseAsyncApiController(httpAuthHeader:
+        EnumHttpAuthHeader.None // 認証無くても通すので、
+        | EnumHttpAuthHeader.Bearer)] // Bearer認証の結果をGetClaimsで検証。
     public class OAuth2ResourceServerController : ControllerBase
     {
+        #region テスト用
+
         #region Hybrid Flow
 
         /// <summary>
@@ -105,11 +111,15 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
+        #region 機能
+
         #region Chage
 
         /// <summary>
-        /// 課金テスト用エンドポイント
-        /// POST: /TestChageToUser
+        /// 課金用エンドポイント
+        /// POST: /ChageToUser
         /// </summary>
         /// <param name="formData">
         /// - currency
@@ -117,7 +127,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>string</returns>
         [HttpPost]
-        public async Task<string> TestChageToUser(IFormCollection formData)
+        public async Task<string> ChageToUser(IFormCollection formData)
         {
             // Claimを取得する。
             MyBaseAsyncApiController.GetClaims(
@@ -133,10 +143,9 @@ namespace MultiPurposeAuthSite.Controllers
                 string amount = formData["amount"];
 
                 if (Config.CanEditPayment
-                    && Config.EnableEditingOfUserAttribute
-                    && Config.IsDebug)
+                    && Config.EnableEditingOfUserAttribute)
                 {
-                    // 課金のテスト処理
+                    // 課金の処理
                     JObject jobj = await WebAPIHelper.GetInstance()
                         .ChargeToOnlinePaymentCustomersAsync(user.PaymentInformation, currency, amount);
 
@@ -146,6 +155,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             return "NG";
         }
+
+        #endregion
 
         #endregion
     }

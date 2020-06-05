@@ -16,6 +16,9 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  201X/XX/XX  西野 大介         TotpAuthenticatorKey追加(Core)
+//*  201X/XX/XX  西野 大介         FIDO2PublicKey追加(WebAuthn)
+//*  2020/02/27  西野 大介         DeviceToken追加(プッシュ通知)
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -371,6 +374,11 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         /// FIDO2PublicKey
         /// </summary>
         public string FIDO2PublicKey { get; set; } = null;
+
+        /// <summary>
+        /// DeviceToken 
+        /// </summary>
+        public string DeviceToken { get; set; } = null;
 
         /// <summary>
         /// レコード生成日

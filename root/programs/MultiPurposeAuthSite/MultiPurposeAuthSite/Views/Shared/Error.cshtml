@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2020/02/28  西野 大介         エラーメッセージ通知の改善
     //**********************************************************************************
 *@
 
@@ -34,6 +35,12 @@
 
 <h2 class="text-danger">@ViewBag.Title</h2>
 <h4 class="text-danger">@SharedViews.ErrorH4</h4>
+
+@if (!string.IsNullOrEmpty(ViewBag.Err))
+{
+    <h5 class="text-danger">@ViewBag.Err</h5>
+    <h5 class="text-danger">@ViewBag.ErrDescription</h5>
+}
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{

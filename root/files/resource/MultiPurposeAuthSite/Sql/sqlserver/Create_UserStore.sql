@@ -36,6 +36,7 @@ CREATE TABLE [Users](              -- Users
     [PaymentInformation] [nvarchar](256) NULL,
     [UnstructuredData] [nvarchar](max) NULL,
     [FIDO2PublicKey] [nvarchar](max) NULL,
+    [DeviceToken] [nvarchar](max) NULL,
     [CreatedDate] [smalldatetime] NOT NULL,
     [PasswordChangeDate] [smalldatetime] NOT NULL,
     CONSTRAINT [PK.Users] PRIMARY KEY NONCLUSTERED ([Id] ASC)
@@ -118,7 +119,7 @@ CREATE TABLE [CustomizedConfirmation](
 
 CREATE TABLE [Saml2OAuth2Data](
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
-    [UnstructuredData] [nvarchar](max) NULL, -- OAuth2 Unstructured Data
+    [UnstructuredData] [nvarchar](max) NULL, -- Saml2/OAuth2 Unstructured Data
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
@@ -128,6 +129,18 @@ CREATE TABLE [FIDO2Data](
     [UserName] [nvarchar](256) NOT NULL,     -- Value
     [UnstructuredData] [nvarchar](max) NULL, -- FIDO2 Unstructured Data
     CONSTRAINT [PK.FIDO2Data] PRIMARY KEY NONCLUSTERED ([PublicKeyId] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
+CREATE TABLE [CibaData](
+    [Id] [int] IDENTITY(1,1) NOT NULL,                   -- PK (キー長に問題があるため[Id] [int]を使用)
+    [ClientNotificationToken] [nvarchar](1024) NOT NULL, -- 乱数(1024)
+    [AuthReqId] [nvarchar](1024) NOT NULL,               -- 乱数(1024)
+    [AuthReqExp] [bigint] NOT NULL,                      -- UNIX時刻(long)
+    [AuthZCode] [nvarchar](64) NOT NULL,                 -- AuthZCode
+    [UnstructuredData] [nvarchar](max) NULL,             -- binding_message, user_code, etc.
+    [Result] [bit] NULL,                                 -- Result of CIBA
+    CONSTRAINT [PK.CibaData] PRIMARY KEY NONCLUSTERED ([Id] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
@@ -165,6 +178,9 @@ CREATE UNIQUE NONCLUSTERED INDEX [ClientIDIndex] ON [Users] ([ClientID] ASC) WIT
 ---- Roles
 CREATE UNIQUE NONCLUSTERED INDEX [RoleNameIndex] ON [Roles] ([Name] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE UNIQUE NONCLUSTERED INDEX [NormalizedNameIndex] ON [Roles] ([NormalizedName] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+---- CibaData
+CREATE UNIQUE NONCLUSTERED INDEX [CibaClientNotificationTokenIndex] ON [CibaData] ([ClientNotificationToken] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+CREATE UNIQUE NONCLUSTERED INDEX [CibaAuthReqIdIndex] ON [CibaData] ([AuthReqId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ---- UserRoles
 CREATE NONCLUSTERED INDEX [IX_UserRoles.UserId] ON [UserRoles] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 CREATE NONCLUSTERED INDEX [IX_UserRoles.RoleId] ON [UserRoles] ([RoleId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]

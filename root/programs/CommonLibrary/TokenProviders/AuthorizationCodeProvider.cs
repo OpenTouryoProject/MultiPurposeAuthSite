@@ -167,7 +167,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             case EnumUserStoreType.SqlServer:
 
                                 value = cnn.ExecuteScalar<string>(
-                                  "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
+                                    "SELECT [Value] FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });
 
                                 cnn.Execute(
                                     "DELETE FROM [AuthenticationCodeDictionary] WHERE [Key] = @Key", new { Key = code });

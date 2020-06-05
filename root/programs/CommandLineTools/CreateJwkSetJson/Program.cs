@@ -61,6 +61,7 @@ namespace CreateJwkSetJson
             JObject rsaJwkObject = 
                 JsonConvert.DeserializeObject<JObject>(
                     rpbkc.X509CerToJwk(CmnClientParams.RsaCerFilePath));
+
             JObject ecdsaJwkObject =
                 JsonConvert.DeserializeObject<JObject>(
                     epbkc.X509CerToJwk(CmnClientParams.EcdsaCerFilePath));

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/04  西野 大介         新規
+//*  2020/02/27  西野 大介         DeviceToken追加(プッシュ通知)
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -111,12 +112,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Id], [UserName], [NormalizedUserName], [PasswordHash], " +
                                         "    [Email], [NormalizedEmail], [EmailConfirmed], [PhoneNumber], [PhoneNumberConfirmed], " +
                                         "    [LockoutEnabled], [AccessFailedCount], [LockoutEndDateUtc], [SecurityStamp], [TwoFactorEnabled], [TotpAuthenticatorKey], " +
-                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [CreatedDate], [PasswordChangeDate])" +
+                                        "    [ClientID], [PaymentInformation], [UnstructuredData], [FIDO2PublicKey], [DeviceToken], [CreatedDate], [PasswordChangeDate])" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
 
@@ -127,12 +128,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Id\", \"UserName\", \"NormalizedUserName\", \"PasswordHash\", " +
                                         "    \"Email\", \"NormalizedEmail\", \"EmailConfirmed\", \"PhoneNumber\", \"PhoneNumberConfirmed\", " +
                                         "    \"LockoutEnabled\", \"AccessFailedCount\", \"LockoutEndDateUtc\", \"SecurityStamp\", \"TwoFactorEnabled\", \"TotpAuthenticatorKey\", " +
-                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"CreatedDate\", \"PasswordChangeDate\")" +
+                                        "    \"ClientID\", \"PaymentInformation\", \"UnstructuredData\", \"FIDO2PublicKey\", \"DeviceToken\", \"CreatedDate\", \"PasswordChangeDate\")" +
                                         "    VALUES ( " +
                                         "        :Id, :UserName, :NormalizedUserName, :PasswordHash, " +
                                         "        :Email, :NormalizedEmail, :EmailConfirmed, :PhoneNumber, :PhoneNumberConfirmed, " +
                                         "        :LockoutEnabled, :AccessFailedCount, :LockoutEndDateUtc, :SecurityStamp, :TwoFactorEnabled, :TotpAuthenticatorKey, " +
-                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :CreatedDate, :PasswordChangeDate)",
+                                        "        :ClientID, :PaymentInformation, :UnstructuredData, :FIDO2PublicKey, :DeviceToken, :CreatedDate, :PasswordChangeDate)",
                                         new // 拡張メソッドで対策できる。
                                         {
                                             Id = user.Id,
@@ -154,6 +155,7 @@ namespace MultiPurposeAuthSite.Data
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
                                             FIDO2PublicKey = user.FIDO2PublicKey,
+                                            DeviceToken = user.DeviceToken,
                                             CreatedDate = user.CreatedDate,
                                             PasswordChangeDate = user.PasswordChangeDate
                                         });
@@ -167,12 +169,12 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"id\", \"username\", \"normalizedusername\", \"passwordhash\", " +
                                         "    \"email\", \"normalizedemail\", \"emailconfirmed\", \"phonenumber\", \"phonenumberconfirmed\", " +
                                         "    \"lockoutenabled\", \"accessfailedcount\", \"lockoutenddateutc\", \"securitystamp\", \"twofactorenabled\", \"totpauthenticatorkey\", " +
-                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"createddate\", \"passwordchangedate\")" +
+                                        "    \"clientid\", \"paymentinformation\", \"unstructureddata\", \"fido2publickey\", \"devicetoken\", \"createddate\", \"passwordchangedate\")" +
                                         "    VALUES ( " +
                                         "        @Id, @UserName, @NormalizedUserName, @PasswordHash, " +
                                         "        @Email, @NormalizedEmail, @EmailConfirmed, @PhoneNumber, @PhoneNumberConfirmed, " +
                                         "        @LockoutEnabled, @AccessFailedCount, @LockoutEndDateUtc, @SecurityStamp, @TwoFactorEnabled, @TotpAuthenticatorKey, " +
-                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @CreatedDate, @PasswordChangeDate)", user);
+                                        "        @ClientID, @PaymentInformation, @UnstructuredData, @FIDO2PublicKey, @DeviceToken, @CreatedDate, @PasswordChangeDate)", user);
 
                                     break;
                             }
@@ -625,7 +627,8 @@ namespace MultiPurposeAuthSite.Data
                                         "    [Email] = @Email, [NormalizedEmail] = @NormalizedEmail, [EmailConfirmed] = @EmailConfirmed, [PhoneNumber] = @PhoneNumber, [PhoneNumberConfirmed] = @PhoneNumberConfirmed, " +
                                         "    [LockoutEnabled] = @LockoutEnabled, [AccessFailedCount] = @AccessFailedCount, [LockoutEndDateUtc] = @LockoutEndDateUtc, " +
                                         "    [SecurityStamp] = @SecurityStamp, [TwoFactorEnabled] = @TwoFactorEnabled, [TotpAuthenticatorKey] = @TotpAuthenticatorKey, " +
-                                        "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, [FIDO2PublicKey] = @FIDO2PublicKey, [PasswordChangeDate] = @PasswordChangeDate " +
+                                        "    [ClientID] = @ClientID, [PaymentInformation] = @PaymentInformation, [UnstructuredData] = @UnstructuredData, " + 
+                                        "    [FIDO2PublicKey] = @FIDO2PublicKey, [DeviceToken] = @DeviceToken, [PasswordChangeDate] = @PasswordChangeDate " +
                                         "WHERE [Id] = @Id", user);
 
                                     break;
@@ -638,7 +641,8 @@ namespace MultiPurposeAuthSite.Data
                                         "    \"Email\" = :Email, \"NormalizedEmail\" = :NormalizedEmail, \"EmailConfirmed\" = :EmailConfirmed, \"PhoneNumber\" = :PhoneNumber, \"PhoneNumberConfirmed\" = :PhoneNumberConfirmed, " +
                                         "    \"LockoutEnabled\" = :LockoutEnabled, \"AccessFailedCount\" = :AccessFailedCount, \"LockoutEndDateUtc\" = :LockoutEndDateUtc, " +
                                         "    \"SecurityStamp\" = :SecurityStamp, \"TwoFactorEnabled\" = :TwoFactorEnabled, \"TotpAuthenticatorKey\" = :TotpAuthenticatorKey, " +
-                                        "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, \"FIDO2PublicKey\" = :FIDO2PublicKey, \"PasswordChangeDate\" = :PasswordChangeDate " +
+                                        "    \"ClientID\" = :ClientID, \"PaymentInformation\" = :PaymentInformation, \"UnstructuredData\" = :UnstructuredData, " +
+                                        "    \"FIDO2PublicKey\" = :FIDO2PublicKey, \"DeviceToken\" = :DeviceToken, \"PasswordChangeDate\" = :PasswordChangeDate " +
                                         "WHERE \"Id\" = :Id",
                                         new // 拡張メソッドで対策できる。
                                         {
@@ -661,6 +665,7 @@ namespace MultiPurposeAuthSite.Data
                                             PaymentInformation = user.PaymentInformation,
                                             UnstructuredData = user.UnstructuredData,
                                             FIDO2PublicKey = user.FIDO2PublicKey,
+                                            DeviceToken = user.DeviceToken,
                                             //CreatedDate = user.CreatedDate,
                                             PasswordChangeDate = user.PasswordChangeDate
                                         });
@@ -675,7 +680,8 @@ namespace MultiPurposeAuthSite.Data
                                        "    \"email\" = @Email, \"normalizedemail\" = @NormalizedEmail, \"emailconfirmed\" = @EmailConfirmed, \"phonenumber\" = @PhoneNumber, \"phonenumberconfirmed\" = @PhoneNumberConfirmed, " +
                                        "    \"lockoutenabled\" = @LockoutEnabled, \"accessfailedcount\" = @AccessFailedCount, \"lockoutenddateutc\" = @LockoutEndDateUtc, " +
                                        "    \"securitystamp\" = @SecurityStamp, \"twofactorenabled\" = @TwoFactorEnabled, \"totpauthenticatorkey\" = @TotpAuthenticatorKey, " +
-                                       "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, \"fido2publickey\" = @FIDO2PublicKey, \"passwordchangedate\" = @PasswordChangeDate " +
+                                       "    \"clientid\" = @ClientID, \"paymentinformation\" = @PaymentInformation, \"unstructureddata\" = @UnstructuredData, " +
+                                       "    \"fido2publickey\" = @FIDO2PublicKey, \"devicetoken\" = @DeviceToken, \"passwordchangedate\" = @PasswordChangeDate " +
                                        "WHERE \"id\" = @Id", user);
 
                                     break;

@@ -19,6 +19,8 @@
 //*  2019/02/08  西野 大介         OAuth2Starters改造
 //*  2019/02/18  西野 大介         FAPI2 CC対応実施
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2020/01/07  西野 大介         PKCE for SPA対応実施
+//*  2020/03/04  西野 大介         CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -49,6 +51,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.IO;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
@@ -462,6 +465,118 @@ namespace MultiPurposeAuthSite.Controllers
                 return null;
             }
         }
+
+        /// <summary>FAPI2 CIBA Profileスターターを組み立てて返す</summary>
+        /// <returns>組み立てたFAPI2 CIBA Profileスターター</returns>
+        private async Task<string> AssembleFAPICibaProfileStarterAsync()
+        {
+            string response = "";
+
+            // 秘密鍵
+            DigitalSignECDsaX509 dsX509 = new DigitalSignECDsaX509(
+                CmnClientParams.EcdsaPfxFilePath,
+                CmnClientParams.EcdsaPfxPassword,
+                HashAlgorithmName.SHA256);
+
+            string cibaAuthorizeEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint;
+            string client_notification_token = CustomEncode.ToBase64UrlString(GetPassword.RandomByte(160));
+
+            string requestObject = RequestObject.CreateCiba(
+                this.ClientId, // FAPI2用か自前のクライアント
+                cibaAuthorizeEndpoint, // RequestObjectRegUriではなく。
+                DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds().ToString(),
+                DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
+                "hoge " + OAuth2AndOIDCConst.Scope_Openid,
+                client_notification_token, GetPassword.Generate(4, 0), "", "",
+                "tanaka@gmail.com", // プッシュ通知の対象となるアカウント
+                null, // request_contextやintentなどを格納したDictionary (null)
+                CmnClientParams.EcdsaPfxFilePath, CmnClientParams.EcdsaPfxPassword);
+            //((ECDsa)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+
+            // 検証テスト
+            if (RequestObject.VerifyCiba(requestObject, out string iss,
+                ((ECDsa)dsX509.AsymmetricAlgorithm).ExportParameters(false)))
+            {
+                // 検証できた。
+
+                // RequestObjectを登録する。
+                response = await Helper.GetInstance().RegisterRequestObjectAsync(
+                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI
+                    + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
+
+                // レスポンスを確認し、request_uriを抽出。
+                string request_uri = (string)((JObject)JsonConvert
+                    .DeserializeObject(response))[OAuth2AndOIDCConst.request_uri];
+
+                // request_uriの認可リクエストを投げる（WebAPIで）。
+                response = await Helper.GetInstance().CibaAuthZRequestAsync(
+                    new Uri(cibaAuthorizeEndpoint), request_uri);
+
+                // レスポンスを確認し、auth_req_idを抽出。
+                string auth_req_id = (string)((JObject)JsonConvert
+                    .DeserializeObject(response))[OAuth2AndOIDCConst.auth_req_id];
+
+                // Tokenエンドポイントに対してポーリングを行う。
+
+                // Tokenエンドポイントにアクセス
+
+                // URL
+                Uri tokenEndpointUri = new Uri(
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
+                // Credential 
+                string client_id = this.ClientId;
+                string client_secret = Helper.GetInstance().GetClientSecret(client_id);
+
+                // Tokenリクエスト
+                bool continueLoop = true;
+                string result = "";
+                ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 5); // config化必要？
+
+                while (continueLoop)
+                {
+                    response = await Helper.GetInstance().GetAccessTokenByCibaAsync(
+                        tokenEndpointUri, client_id, client_secret, auth_req_id);
+                    JObject temp = (JObject)JsonConvert.DeserializeObject(response);
+
+                    if (!temp.ContainsKey(OAuth2AndOIDCConst.error))
+                    {
+                        // 正常系
+                        continueLoop = false;
+
+                        // UserInfoエンドポイントにアクセス
+                        string userInfo = await Helper.GetInstance().
+                            GetUserInfoAsync((string)temp[OAuth2AndOIDCConst.AccessToken]);
+
+                        result = "NORMAL_END";
+                    }
+                    else
+                    {
+                        // 異常系
+                        if ((string)temp[OAuth2AndOIDCConst.error] == OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
+                        {
+                            // authorization_pending
+                            // ExponentialBackoff.Sleep()
+                            continueLoop = exponentialBackoff.Sleep();
+                        }
+                        else
+                        {
+                            // authorization_pending以外
+                            // 終了
+                            continueLoop = false;
+                            result = "ABNORMAL_END";
+                        }
+                    }
+                }
+
+                // 完了（SAMLのテストコードっぽくした）
+                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK_" + result;
+            }
+            else
+            {
+                // 検証できなかった。
+                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=NG";
+            }
+        }
         #endregion
 
         #endregion
@@ -597,14 +712,6 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             return this.AuthorizationCode_OIDC();
                         }
-                        else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCode_PKCE_Plain"]))
-                        {
-                            return this.AuthorizationCode_PKCE_Plain();
-                        }
-                        else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCode_PKCE_S256"]))
-                        {
-                            return this.AuthorizationCode_PKCE_S256();
-                        }
                         #endregion
 
                         #region Implicit系
@@ -637,6 +744,25 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         #endregion
 
+                        #region PKCE系
+                        if (!string.IsNullOrEmpty(Request.Form["submit.PKCE_Plain"]))
+                        {
+                            return this.PKCE_Plain();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.PKCE_S256"]))
+                        {
+                            return this.PKCE_S256();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.PKCE_Plain_4SPA"]))
+                        {
+                            return this.PKCE_Plain(toSpa: true);
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.PKCE_S256_4SPA"]))
+                        {
+                            return this.PKCE_S256(toSpa: true);
+                        }
+                        #endregion
+
                         #region F-API系
                         if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI1"]))
                         {
@@ -649,6 +775,10 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2"]))
                         {
                             return await this.AuthorizationCodeFAPI2Async();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.FAPI_CIBA_Profile"]))
+                        {
+                            return await this.FAPICibaProfileAsync();
                         }
                         #endregion
 
@@ -795,10 +925,9 @@ namespace MultiPurposeAuthSite.Controllers
         #region PKCE
 
         /// <summary>Test Authorization Code Flow (PKCE plain)</summary>
+        /// <param name="toSpa">bool</param>
         /// <returns>ActionResult</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        public ActionResult AuthorizationCode_PKCE_Plain()
+        private ActionResult PKCE_Plain(bool toSpa = false)
         {
             this.InitOAuth2Params();
 
@@ -813,14 +942,18 @@ namespace MultiPurposeAuthSite.Controllers
                 + "&code_challenge=" + this.CodeChallenge
                 + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain;
 
+            // Authorization Code Grant Flow with PKCE
+            if (toSpa) redirect += "&response_mode=fragment";
+
             this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
 
         /// <summary>Test Authorization Code Flow (PKCE S256)</summary>
+        /// <param name="toSpa">bool</param>
         /// <returns>ActionResult</returns>
-        private ActionResult AuthorizationCode_PKCE_S256()
+        private ActionResult PKCE_S256(bool toSpa = false)
         {
             this.InitOAuth2Params();
 
@@ -834,6 +967,9 @@ namespace MultiPurposeAuthSite.Controllers
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
                 + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256;
+
+            // Authorization Code Grant Flow with PKCE
+            if (toSpa) redirect += "&response_mode=fragment";
 
             this.SaveOAuth2Params();
 
@@ -1010,6 +1146,24 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region CIBA
+
+        /// <summary>Test FAPI CIBA Profile</summary>
+        /// <returns>ActionResult</returns>
+        private async Task<ActionResult> FAPICibaProfileAsync()
+        {
+            this.InitOAuth2Params();
+
+            // Authorization Code Flow
+            string redirect = await this.AssembleFAPICibaProfileStarterAsync();
+
+            //this.SaveOAuth2Params();
+
+            return Redirect(redirect);
+        }
+
+        #endregion
+
         #endregion
 
         #region Another Flow
@@ -1086,7 +1240,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                JwtAssertion.Create(iss, aud,
+                JwtAssertion.CreateByRsa(iss, aud,
                     Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes,
                     ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
 

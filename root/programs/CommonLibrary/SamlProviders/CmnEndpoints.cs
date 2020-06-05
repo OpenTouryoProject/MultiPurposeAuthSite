@@ -29,9 +29,11 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/06/03  西野 大介         新規
+//*  2020/01/07  西野 大介         PPID対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Util;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System.Xml;
@@ -188,9 +190,14 @@ namespace MultiPurposeAuthSite.SamlProviders
 
             // NameIDPolicyFormat
             nameIdPolicy = SAML2Bindings.GetNameIDPolicyFormatInRequest(samlRequest, samlNsMgr);
+            
+            // 文字列から配列に変換
             SAML2Enum.NameIDFormat? nameIDFormat = null;
             SAML2Enum.StringToEnum(nameIdPolicy, out nameIDFormat);
             if (!nameIDFormat.HasValue) nameIDFormat = SAML2Enum.NameIDFormat.Unspecified;
+
+            // nameIDFormat.Valueに合わせて処理（PPID）
+            string sub = PPIDExtension.GetSubForSAML2(iss, identity.Name, nameIDFormat.Value);
 
             // rtnProtocol
             rtnProtocol = SAML2Bindings.GetProtocolBindingInRequest(samlRequest, samlNsMgr);
@@ -205,10 +212,10 @@ namespace MultiPurposeAuthSite.SamlProviders
             XmlDocument samlResponse2 = SAML2Bindings.CreateResponse(
                 Config.IssuerId, rtnUrl, inResponseTo, statusCode, out id1);
 
-            // SamlAssertionを作成する（nameIDFormat.Valueに合わせて処理）。
+            // SamlAssertionを作成する
             XmlDocument samlAssertion = SAML2Bindings.CreateAssertion(
                 inResponseTo, Config.IssuerId,
-                identity.Name, nameIDFormat.Value, authnContextClassRef,
+                sub, nameIDFormat.Value, authnContextClassRef,
                 Config.Saml2AssertionExpireTimeSpanFromMinutes, rtnUrl, out id2);
 
             // 必要に応じて、identity.Claimsを使用して、様々なクレームを追加できる。
@@ -240,6 +247,5 @@ namespace MultiPurposeAuthSite.SamlProviders
 
         // VerifySamlResponseはクライアントライブラリなので、
         // Touryo.Infrastructure.Framework.Authenticationに実装
-
     }
 }

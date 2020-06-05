@@ -21,6 +21,7 @@ CREATE TABLE Users(                -- Users
     PaymentInformation varchar(256) NULL,
     UnstructuredData varchar(2000) NULL,
     FIDO2PublicKey varchar(2000) NULL,
+    DeviceToken varchar(2000) NULL,
     CreatedDate timestamp NOT NULL,
     PasswordChangeDate timestamp NOT NULL,
     CONSTRAINT PK_Users PRIMARY KEY (Id)
@@ -94,7 +95,7 @@ CREATE TABLE CustomizedConfirmation(
 
 CREATE TABLE Saml2OAuth2Data(
     ClientID varchar(256) NOT NULL,          -- PK
-    UnstructuredData varchar(2000) NULL,     -- OAuth2 Unstructured Data
+    UnstructuredData varchar(2000) NULL,     -- Saml2/OAuth2 Unstructured Data
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

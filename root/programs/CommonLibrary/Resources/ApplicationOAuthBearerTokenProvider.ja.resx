@@ -144,4 +144,16 @@
   <data name="EnableImplicitGrantType" xml:space="preserve">
     <value>Implicitグラント種別は有効化されていません。</value>
   </data>
+  <data name="Invalid_client_id" xml:space="preserve">
+    <value>無効なclient_idです。</value>
+  </data>
+  <data name="redirect_uri_NotRegistered" xml:space="preserve">
+    <value>redirect_uriが登録されていません。</value>
+  </data>
+  <data name="client_id_NotSett" xml:space="preserve">
+    <value>client_idが設定されていません。</value>
+  </data>
+  <data name="EnableCibaGrantType" xml:space="preserve">
+    <value>CIBAグラント種別は有効化されていません。</value>
+  </data>
 </root>

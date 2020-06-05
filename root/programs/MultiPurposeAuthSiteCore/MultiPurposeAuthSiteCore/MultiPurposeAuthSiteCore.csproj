@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.0</TargetFramework>
+    <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
+    <AspNetCoreModuleName>AspNetCoreModule</AspNetCoreModuleName>
     <UserSecretsId>aspnet-MultiPurposeAuthSite-4D4ED842-8221-4C3E-A9D4-5295FF6E400D</UserSecretsId>
     <RootNamespace>MultiPurposeAuthSite</RootNamespace>
     <AssemblyName>MultiPurposeAuthSite</AssemblyName>
@@ -21,16 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="3.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Facebook" Version="3.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="3.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="3.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Twitter" Version="3.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Extensions" Version="2.0.3" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="2.0.4" PrivateAssets="All" />
     <PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
     <PackageReference Include="System.Security.Cryptography.Xml" Version="4.5.0" />
