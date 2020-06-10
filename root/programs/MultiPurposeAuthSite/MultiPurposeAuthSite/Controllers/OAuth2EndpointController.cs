@@ -699,7 +699,7 @@ namespace MultiPurposeAuthSite.Controllers
                            client_notification_token,
                            authReqExp, code, binding_message, out authReqId);
 
-                        // プッシュ通知を、login_hintに送信
+                        // プッシュ通知を、login_hint（に記載のユーザ）に送信
                         if (!Sts.CibaProvider.DebugModeWithOutAD)
                         {
                             // - login_hint（UserName）でユーザ取得。
@@ -714,6 +714,11 @@ namespace MultiPurposeAuthSite.Controllers
                                     { "auth_req_id", authReqId},
                                     { "binding_message", binding_message}
                                 });
+                        }
+                        else
+                        {
+                            // テストを通すため追加
+                            Sts.CibaProvider.ReceiveResult(authReqId, true);
                         }
 
                         // ココまでの結果をレスポンス
