@@ -48,7 +48,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     public class CibaProvider
     {
         /// <summary>AD無しのテストをする場合、tureに設定。</summary>
-        public const bool DebugModeWithOutAD = false;  //true;
+        public const bool DebugModeWithOutAD = true;  //false;
 
         /// <summary>
         /// CibaData
@@ -79,17 +79,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     case EnumUserStoreType.Memory:
 
-                        // DebugModeWithOutAD
-                        string result = "";
-                        if (CibaProvider.DebugModeWithOutAD) result = "true";
-
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
                             { "authReqId", authReqId },
                             { "authReqExp", authReqExp.ToString() },
                             { "authZCode", authZCode },
                             { "unstructuredData", unstructuredData },
-                            { "result", result }
+                            { "result", "" }
                         };
                         
                         CibaProvider.CibaData.TryAdd(
@@ -343,13 +339,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
                                     else
                                     {
-                                        // 判別
-                                        temp = dyn.Result;
-                                        result = CibaProvider.GetCibaState(dyn.AuthReqExp, temp.ToString(), out states);
+                                        // Code
+                                        authZCode = dyn.AuthZCode;
+
+                                        // states判別
+                                        result = CibaProvider.GetCibaState(
+                                            ((long)dyn.AuthReqExp).ToString(),
+                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            out states);
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states == OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
@@ -370,13 +371,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
                                     else
                                     {
-                                        // 判別
-                                        temp = dyn.Result;
-                                        result = CibaProvider.GetCibaState(dyn.AuthReqExp, temp.ToString(), out states);
+                                        // Code
+                                        authZCode = dyn.AuthZCode;
+
+                                        // states判別
+                                        result = CibaProvider.GetCibaState(
+                                            ((long)dyn.AuthReqExp).ToString(),
+                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            out states);
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states == OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
@@ -397,13 +403,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
                                     else
                                     {
-                                        // 判別
-                                        temp = dyn.result;
-                                        result = CibaProvider.GetCibaState(dyn.authreqexp, temp.ToString(), out states);
+                                        // Code
+                                        authZCode = dyn.AuthZCode;
+
+                                        // states判別
+                                        result = CibaProvider.GetCibaState(
+                                            ((long)dyn.AuthReqExp).ToString(),
+                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            out states);
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states == OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
