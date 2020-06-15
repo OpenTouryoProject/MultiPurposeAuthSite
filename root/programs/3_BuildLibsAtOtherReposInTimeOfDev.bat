@@ -38,7 +38,9 @@ if exist "Temp\OpenTouryo-develop\root\programs\CS\Frameworks\Infrastructure\Bui
 
 @rem batファイルを使用してビルド
 cd "Temp\OpenTouryo-develop\root\programs\CS\"
+echo | call 2_Build_NuGet_net48.bat
 echo | call 3_Build_Business_net48.bat
+echo | call 2_Build_NuGet_netstd21.bat
 echo | call 3_Build_Business_netcore30.bat
 
 :Xcopy
