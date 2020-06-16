@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/02/12  西野 大介         新規
+//*  2020/01/08  西野 大介         #126（Feedback）対応実施
+//*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -71,10 +73,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="pfxFilePath">string</param>
         /// <param name="pfxPassword">string</param>
         /// <param name="cerJwkString">string</param>
+        /// <param name="alg">string</param>
         /// <returns>id_token</returns>
         public static string ChangeToIdTokenFromAccessToken(
             string access_token, string code, string state, HashClaimType hct,
-            string pfxFilePath, string pfxPassword, string cerJwkString)
+            string pfxFilePath, string pfxPassword, string cerJwkString, string alg = JwtConst.RS256)
         {
             if (access_token.Contains("."))
             {
@@ -159,9 +162,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (hct.HasFlag(HashClaimType.SHash))
                         {
                             // s_hash
-                            tokenClaimSet.Add(
-                                OAuth2AndOIDCConst.s_hash,
-                                IdToken.CreateHash(state));
+                            if (!string.IsNullOrEmpty(state))
+                            {
+                                tokenClaimSet.Add(
+                                    OAuth2AndOIDCConst.s_hash,
+                                    IdToken.CreateHash(state));
+                            }
                         }
 
                         //・編集したpayloadを再度JWTとして署名する。
@@ -172,23 +178,40 @@ namespace MultiPurposeAuthSite.TokenProviders
                         {
                             // 通常
 
-                            // JWS(RS256)
-                            JWS_RS256_X509 jwsRS256 = new JWS_RS256_X509(pfxFilePath, pfxPassword);
-
                             // ヘッダ ... access_tokenと同じ
                             JWS_Header jwsHeader =
                                 JsonConvert.DeserializeObject<JWS_Header>(
                                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[0]), CustomEncode.UTF_8));
 
-                            if (!string.IsNullOrEmpty(jwsHeader.jku)
-                                && !string.IsNullOrEmpty(jwsHeader.kid))
+                            // JWS
+                            JWS jws = null;
+                            if (alg == JwtConst.ES256)
                             {
-                                jwsRS256.JWSHeader.jku = jwsHeader.jku;
-                                jwsRS256.JWSHeader.kid = jwsHeader.kid;
+                                // ES256
+                                jws = new JWS_ES256_X509(pfxFilePath, pfxPassword);
+
+                                if (!string.IsNullOrEmpty(jwsHeader.jku)
+                                && !string.IsNullOrEmpty(jwsHeader.kid))
+                                {
+                                    ((JWS_ES256)jws).JWSHeader.jku = jwsHeader.jku;
+                                    ((JWS_ES256)jws).JWSHeader.kid = jwsHeader.kid;
+                                }
+                            }
+                            else
+                            {
+                                // RS256
+                                jws = new JWS_RS256_X509(pfxFilePath, pfxPassword);
+
+                                if (!string.IsNullOrEmpty(jwsHeader.jku)
+                                && !string.IsNullOrEmpty(jwsHeader.kid))
+                                {
+                                    ((JWS_RS256)jws).JWSHeader.jku = jwsHeader.jku;
+                                    ((JWS_RS256)jws).JWSHeader.kid = jwsHeader.kid;
+                                }
                             }
 
                             // Create
-                            return jwsRS256.Create(newPayload);
+                            return jws.Create(newPayload);
                         }
                         else
                         {

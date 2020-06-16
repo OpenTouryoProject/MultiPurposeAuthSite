@@ -17,6 +17,11 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/11/30  西野 大介         新規
 //*  2019/02/18  西野 大介         FAPI2 CC対応実施
+//*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2020/01/07  西野 大介         PPID対応実施
+//*  2020/01/08  西野 大介         #126（Feedback）対応実施
+//*  2020/02/28  西野 大介         エラーメッセージ通知の改善
+//*  2020/03/04  西野 大介         CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2422,7 +2427,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
                     return Redirect(
                         Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + "?ret=" + CustomEncode.UrlEncode("認証完了（面倒なので画面は作成しませんが）"));
+                        + "?ret=" + CustomEncode.UrlEncode(string.Format("認証完了（nameId={0}）", nameId)));
                 }
                 else
                 {
@@ -2549,6 +2554,10 @@ namespace MultiPurposeAuthSite.Controllers
         // - string code_challenge, string code_challenge_method) // OAuth PKCE
         // - string request_uri // FAPI2 : RequestObject
         {
+            string valid_redirect_uri = ""; 
+            string err = "";
+            string errDescription = "";
+
             JObject claims = null;
             string request_uri = StringExtractor.GetParameterFromQueryString(
                 OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
@@ -2573,7 +2582,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (this.CheckAuthTime(max_age)) {
                 if (Token.CmnEndpoints.ValidateAuthZReqParam(
                     client_id, redirect_uri, response_type, scope, nonce,
-                    out string valid_redirect_uri, out string err, out string errDescription))
+                    out valid_redirect_uri, out err, out errDescription))
                 {
                     // Cookie認証チケットからClaimsPrincipalを取得しておく。
                     AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
@@ -2680,8 +2689,28 @@ namespace MultiPurposeAuthSite.Controllers
                 // 不正なRequest
             }
 
-            // エラー画面
-            return View("Error");
+            // ここまで来たらエラー。
+            if (!string.IsNullOrEmpty(valid_redirect_uri))
+            {
+                // valid_redirect_uri
+                return new RedirectResult(
+                    valid_redirect_uri + string.Format(
+                        "?err={0}&errDescription={1}", err, errDescription));
+            }
+            //else if (!string.IsNullOrEmpty(redirect_uri))
+            //{
+            //    // redirect_uri//オープンリダイレクター
+            //    return new RedirectResult(
+            //        redirect_uri + string.Format(
+            //            "?err={0}&errDescription={1}", err, errDescription));
+            //}
+            else
+            {
+                // エラー画面
+                ViewData["Err"] = err;
+                ViewData["ErrDescription"] = errDescription;
+                return View("Error");
+            }
         }
 
         /// <summary>
@@ -2785,8 +2814,32 @@ namespace MultiPurposeAuthSite.Controllers
                 // 不正なRequest
             }
 
-            // 再表示
-            return View();
+            if (string.IsNullOrEmpty(err))
+            {
+                // 再表示
+                return View();
+            }
+            else if (!string.IsNullOrEmpty(valid_redirect_uri))
+            {
+                // valid_redirect_uri
+                return new RedirectResult(
+                    valid_redirect_uri + string.Format(
+                        "?err={0}&errDescription={1}", err, errDescription));
+            }
+            //else if (!string.IsNullOrEmpty(redirect_uri))
+            //{
+            //    // redirect_uri//オープンリダイレクター
+            //    return new RedirectResult(
+            //        redirect_uri + string.Format(
+            //            "?err={0}&errDescription={1}", err, errDescription));
+            //}
+            else
+            {
+                // エラー画面
+                ViewData["Err"] = err;
+                ViewData["ErrDescription"] = errDescription;
+                return View("Error");
+            }
         }
         #endregion
 
@@ -3405,6 +3458,7 @@ namespace MultiPurposeAuthSite.Controllers
                         || state == fapi2Prefix + state_InSessionOrCookie) // specではなくテスト仕様
                     {
                         //state正常
+                        if (state == null) state = ""; // null対策（テスト）
 
                         // 仲介コードからAccess Tokenを取得する。
 
@@ -3438,7 +3492,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 HashAlgorithmName.SHA256);
 
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, redirect_uri, code, JwtAssertion.Create(
+                                tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateByRsa(
                                     iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
                                     ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
                         }

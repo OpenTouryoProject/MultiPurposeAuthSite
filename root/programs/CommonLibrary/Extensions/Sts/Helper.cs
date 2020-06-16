@@ -30,6 +30,9 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2020/01/07  西野 大介         PPID対応実施
+//*  2020/01/08  西野 大介         #126（Feedback）対応実施
+//*  2020/03/04  西野 大介         CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -290,10 +293,6 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 tokenEndpointUri, client_id, client_secret, scopes);
         }
 
-        #endregion
-
-        #region その他の 基本 WebAPI
-
         /// <summary>Refresh Tokenを使用してAccess Tokenを更新する。</summary>
         /// <param name="tokenEndpointUri">tokenEndpointUri</param>
         /// <param name="client_id">client_id</param>
@@ -307,6 +306,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 tokenEndpointUri, client_id, client_secret, refreshToken);
         }
 
+        #endregion
+
+        #region その他の 基本 WebAPI
+
         /// <summary>UserInfoエンドポイントで、認可ユーザのClaim情報を取得する。</summary>
         /// <param name="accessToken">accessToken</param>
         /// <returns>結果のJSON文字列（認可したユーザのClaim情報）</returns>
@@ -316,7 +319,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // 認可したユーザのClaim情報を取得するWebAPI
             Uri userInfoUri = new Uri(
-                Config.OAuth2ResourceServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
 
             return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
         }
@@ -421,6 +424,34 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return await OAuth2AndOIDCClient.RegisterRequestObjectAsync(requestObjectRegUri, requestObject);
         }
 
+        #region CIBA
+        /// <summary>
+        /// FAPI CIBA : RequestObjectを使用した認可リクエスト（WebAPI）
+        /// </summary>
+        /// <param name="cibaAuthZUri">Uri</param>
+        /// <param name="requestObjectUri">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> CibaAuthZRequestAsync(Uri cibaAuthZUri, string requestObjectUri)
+        {
+            return await OAuth2AndOIDCClient.CibaAuthZRequestAsyncAsync(cibaAuthZUri, requestObjectUri);
+        }
+
+        /// <summary>
+        /// FAPI2 : CIBA で Access Tokenを取得する。
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="auth_req_id">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByCibaAsync(
+            Uri tokenEndpointUri, string client_id, string client_secret, string auth_req_id)
+        {
+            return await OAuth2AndOIDCClient.GetAccessTokenByCibaAsync(
+                tokenEndpointUri, client_id, client_secret, auth_req_id);
+        }
+        #endregion
+
         #endregion
 
         #endregion
@@ -440,7 +471,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // 課金用のWebAPI
             Uri webApiEndpointUri = new Uri(
                 Config.OAuth2AuthorizationServerEndpointsRootURI
-                + Config.TestChageToUserWebAPI);
+                + Config.ChageToUserWebAPI);
 
             HttpRequestMessage httpRequestMessage = null;
             HttpResponseMessage httpResponseMessage = null;
@@ -542,8 +573,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // *.config内を検索
             if (this.Oauth2ClientsInfo.ContainsKey(client_id))
             {
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                if (string.IsNullOrEmpty(response_type))
                 {
+                    // ...
+                }
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                {
+                    // Code
                     if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_code"))
                     {
                         return this.Oauth2ClientsInfo[client_id]["redirect_uri_code"];
@@ -556,6 +592,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
+                    // Others
                     if (this.Oauth2ClientsInfo[client_id].ContainsKey("redirect_uri_token"))
                     {
                         return this.Oauth2ClientsInfo[client_id]["redirect_uri_token"];
@@ -571,8 +608,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 isResourceOwner = true;
                 ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
-                if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                if (string.IsNullOrEmpty(response_type))
                 {
+                    // ...
+                }
+                else if (response_type.ToLower() == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                {
+                    // Code
                     return model.RedirectUriCode;
                 }
                 else if (response_type.ToLower() == OAuth2AndOIDCConst.ImplicitResponseType
@@ -582,6 +624,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
                     || response_type.ToLower() == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
                 {
+                    // Others
                     return model.RedirectUriToken;
                 }
             }
@@ -634,6 +677,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region GetJwkPublickey
+
         #region GetJwkRsaPublickey
 
         /// <summary>client_idからjwk_rsa_publickeyを取得する（Client認証で使用する）。</summary>
@@ -673,6 +718,50 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return "";
         }
+
+        #endregion
+
+        #region GetJwkECDsaPublickey
+
+        /// <summary>client_idからjwk_ecdsa_publickeyを取得する（Client認証で使用する）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>jwk_ecdsa_publickey</returns>
+        public string GetJwkECDsaPublickey(string client_id)
+        {
+            return this.GetJwkECDsaPublickey(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからjwk_ecdsa_publickeyを取得する（Client認証で使用する）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>jwk_ecdsa_publickey</returns>
+        public string GetJwkECDsaPublickey(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("jwk_ecdsa_publickey"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["jwk_ecdsa_publickey"];
+                }
+            }
+
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                isResourceOwner = true;
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+                return model.JwkECDsaPublickey;
+            }
+
+            return "";
+        }
+
+        #endregion
 
         #endregion
 
@@ -717,6 +806,66 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         }
 
         #endregion
+
+        #endregion
+
+        #region Subject Types
+
+        /// <summary>client_idからSubjectTypesを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>SubjectTypes</returns>
+        public string GetSubjectTypes(string client_id)
+        {
+            return this.GetSubjectTypes(client_id, out bool isResourceOwner);
+        }
+
+        /// <summary>client_idからClientModeを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="isResourceOwner">bool</param>
+        /// <returns>ClientMode</returns>
+        public string GetSubjectTypes(string client_id, out bool isResourceOwner)
+        {
+            isResourceOwner = false;
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey("subject_types"))
+                {
+                    // 設定値
+                    return this.Oauth2ClientsInfo[client_id]["subject_types"];
+                }
+                else
+                {
+                    // 既定値
+                    return OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit();
+                }
+            }
+
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                isResourceOwner = true;
+                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+
+                if (!string.IsNullOrEmpty(model.SubjectTypes))
+                {
+                    // 設定値
+                    return model.SubjectTypes;
+                }
+                else
+                {
+                    // 既定値
+                    return OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit();
+                }
+            }
+
+            return ""; // エラーになる。
+        }
 
         #endregion
 
@@ -940,6 +1089,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // nonce
             if (string.IsNullOrEmpty(nonce))
             {
+                if (state == null) state = ""; // null対策
                 identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));
             }
             else

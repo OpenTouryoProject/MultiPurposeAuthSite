@@ -144,4 +144,16 @@
   <data name="EnableImplicitGrantType" xml:space="preserve">
     <value>Implicit grant type is not enabled.</value>
   </data>
+  <data name="Invalid_client_id" xml:space="preserve">
+    <value>Invalid client_id.</value>
+  </data>
+  <data name="redirect_uri_NotRegistered" xml:space="preserve">
+    <value>redirect_uri not registered.</value>
+  </data>
+  <data name="client_id_NotSett" xml:space="preserve">
+    <value>client_id not sett.</value>
+  </data>
+  <data name="EnableCibaGrantType" xml:space="preserve">
+    <value>CIBA grant type is not enabled.</value>
+  </data>
 </root>

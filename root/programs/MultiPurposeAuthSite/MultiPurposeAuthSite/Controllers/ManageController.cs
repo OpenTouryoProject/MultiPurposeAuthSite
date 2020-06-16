@@ -2095,7 +2095,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 await this.ReSignInAsync();
                                 return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
                             }
-                            else
+                            else if (!string.IsNullOrEmpty(model.ClientID))
                             {
                                 // ClientIDに変更がある場合、ユーザーを保存してから、
                                 string temp = user.ClientID;
@@ -2120,6 +2120,10 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 失敗
                                     this.AddErrors(result);
                                 }
+                            }
+                            else
+                            {
+                                // ClientIDが入力されていない（model.ClientID）。
                             }
                         }
                         else

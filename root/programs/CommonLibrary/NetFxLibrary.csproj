@@ -76,12 +76,14 @@
     <Compile Include="Extensions\FIDO\MsPassHelper.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
+    <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />
     <Compile Include="Extensions\Sts\DataProvider.cs" />
     <Compile Include="Extensions\Sts\Helper.cs" />
     <Compile Include="TokenProviders\CmnAccessToken.cs" />
     <Compile Include="TokenProviders\CmnResponseObject.cs" />
+    <Compile Include="Extensions\Sts\CibaProvider.cs" />
     <Compile Include="TokenProviders\RefreshTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RevocationProvider.cs" />
     <Compile Include="Notifications\CmnEmail.cs" />
@@ -93,6 +95,7 @@
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />
+    <Compile Include="Util\PPIDExtension.cs" />
     <Compile Include="Util\UriExtension.cs" />
     <Compile Include="Util\Sts\OnlySts.cs" />
     <Compile Include="Data\EnumUserStoreType.cs" />
@@ -254,6 +257,9 @@
     </PackageReference>
     <PackageReference Include="Fido2">
       <Version>1.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="FirebaseAdmin">
+      <Version>1.9.2</Version>
     </PackageReference>
     <PackageReference Include="Microsoft.AspNet.Identity.Core.ja">
       <Version>2.2.2</Version>

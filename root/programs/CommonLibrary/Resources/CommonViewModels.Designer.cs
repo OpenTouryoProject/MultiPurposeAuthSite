@@ -19,7 +19,7 @@ namespace MultiPurposeAuthSite.Resources {
     // または Visual Studio のようなツールを使用して自動生成されました。
     // メンバーを追加または削除するには、.ResX ファイルを編集して、/str オプションと共に
     // ResGen を実行し直すか、または VS プロジェクトをビルドし直します。
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "16.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class CommonViewModels {
@@ -106,7 +106,7 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Client type for tests. に類似しているローカライズされた文字列を検索します。
+        ///   Client type to restrict the flow. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ClientType {
             get {
@@ -174,6 +174,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string Email {
             get {
                 return ResourceManager.GetString("Email", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   JWK&apos;s ECDSA public key に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string JwkECDsaPublickey {
+            get {
+                return ResourceManager.GetString("JwkECDsaPublickey", resourceCulture);
             }
         }
         
@@ -327,6 +336,15 @@ namespace MultiPurposeAuthSite.Resources {
         public static string Search {
             get {
                 return ResourceManager.GetString("Search", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Subject Identifier types に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string SubjectTypes {
+            get {
+                return ResourceManager.GetString("SubjectTypes", resourceCulture);
             }
         }
         

@@ -30,21 +30,25 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/25  西野 大介         新規
 //*  2019/06/20  西野 大介         IssuedTokenProvider対応
+//*  2020/01/07  西野 大介         PPID対応実施
+//*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+
 #if NETFX
 using MultiPurposeAuthSite.Entity;
 #else
 using MultiPurposeAuthSite;
 #endif
-using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json;
@@ -119,21 +123,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                     auth_time = c.Value;
                 }
             }
-
-            string sub = "";
+            
+            // PPID対応
             ApplicationUser user = null;
-            if (!string.IsNullOrEmpty(userName))
-            {
-                sub = userName;
-                user = CmnUserStore.FindByName(userName);
-            }
-            else
-            {
-                sub = Helper.GetInstance().GetClientName((string)tokenClaimSet[OAuth2AndOIDCConst.aud]);
-            }
+            string sub = PPIDExtension.GetSubForOIDC(
+                (string)tokenClaimSet[OAuth2AndOIDCConst.aud], userName, out user);
 
             // sub
-            tokenClaimSet.Add(OAuth2AndOIDCConst.sub, userName);
+            tokenClaimSet.Add(OAuth2AndOIDCConst.sub, sub);
 
             // scopes
             tokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
@@ -278,8 +275,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
+            // PPID対応
+            ApplicationUser user = null;
+            string sub = PPIDExtension.GetSubForOIDC(
+                (string)tokenClaimSet[OAuth2AndOIDCConst.aud], identity.Name, out user);
+
             // sub
-            tokenClaimSet.Add(OAuth2AndOIDCConst.sub, identity.Name);
+            tokenClaimSet.Add(OAuth2AndOIDCConst.sub, sub);
 
             // scopes
             tokenClaimSet.Add(OAuth2AndOIDCConst.scopes, scopes);
@@ -313,12 +315,13 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
         /// <param name="audience">out string</param>
         /// <param name="subject">out string</param>
+        /// <param name="alg">string</param>
         /// <returns>AccessToken</returns>
         public static string ProtectFromPayload(
             string clientId, string access_token_payload,
             DateTimeOffset expiresUtc, X509Certificate2 x509,
             OAuth2AndOIDCEnum.ClientMode permittedLevel,
-            out string audience, out string subject)
+            out string audience, out string subject, string alg = JwtConst.RS256)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -381,30 +384,60 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region JWS化
 
-            JWS_RS256_X509 jwsRS256 = null;
+            if (alg == JwtConst.ES256)
+            {
+                JWS_ES256_X509 jwsES256 = null;
 
-            // 署名
-            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
+                // 署名
+                jwsES256 = new JWS_ES256_X509(Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword);
 
-            // 鍵変換
-            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+                // 鍵変換
+                EccPublicKeyConverter epkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
 
-            // JWSHeaderのセット
-            Dictionary<string, string> jwk =
-                JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
+                // JWSHeaderのセット
+                Dictionary<string, string> jwk =
+                    JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                        epkc.X509PfxToJwk(Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, HashAlgorithmName.SHA256));
 
-            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+                jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
+                jwsES256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
 
-            // ここでストアに登録
-            if (!string.IsNullOrEmpty(clientId))
-                // ... clientIdがnullのケースは、
-                // IntrospectTokenから処理共通化のために利用されるケース。
-                IssuedTokenProvider.Create(jti, json, clientId, audience);
+                // ここでストアに登録
+                if (!string.IsNullOrEmpty(clientId))
+                    // ... clientIdがnullのケースは、
+                    // IntrospectTokenから処理共通化のために利用されるケース。
+                    IssuedTokenProvider.Create(jti, json, clientId, audience);
 
-            // 署名
-            return jwsRS256.Create(json);
+                // 署名
+                return jwsES256.Create(json);
+            }
+            else // 既定 は RS256
+            {
+                JWS_RS256_X509 jwsRS256 = null;
+
+                // 署名
+                jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
+
+                // 鍵変換
+                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+
+                // JWSHeaderのセット
+                Dictionary<string, string> jwk =
+                    JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                        rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
+
+                jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
+                jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+
+                // ここでストアに登録
+                if (!string.IsNullOrEmpty(clientId))
+                    // ... clientIdがnullのケースは、
+                    // IntrospectTokenから処理共通化のために利用されるケース。
+                    IssuedTokenProvider.Create(jti, json, clientId, audience);
+
+                // 署名
+                return jwsRS256.Create(json);
+            }
 
             #endregion
         }
@@ -441,18 +474,29 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (!string.IsNullOrEmpty(jwt))
             {
                 // 検証
-                JWS_RS256 jwsRS256 = null;
-
+                JWS jws = null;
+                
                 // 証明書を使用するか、Jwkを使用するか判定
                 Dictionary<string, string> header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwt.Split('.')[0]), CustomEncode.UTF_8));
 
                 if (header.Keys.Any(s => s == JwtConst.kid))
                 {
+                    string alg = header[JwtConst.alg];
+
                     if (string.IsNullOrEmpty(header[JwtConst.kid]))
                     {
                         // 証明書を使用
-                        jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
+                        if (alg == JwtConst.ES256)
+                        {
+                            // ES256
+                            jws = new JWS_ES256_X509(CmnClientParams.EcdsaCerFilePath, "");
+                        }
+                        else
+                        {
+                            // RS256
+                            jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
+                        }
                     }
                     else
                     {
@@ -467,19 +511,29 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (jwkObject == null)
                         {
                             // 証明書を使用
-                            jwsRS256 = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
+                            jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
                         }
                         else
                         {
                             // Jwkを使用
-                            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-                            jwsRS256 = new JWS_RS256_Param(
-                                rpkc.JwkToProvider(jwkObject).ExportParameters(false));
+                            if ((string)jwkObject[JwtConst.alg] == JwtConst.ES256)
+                            {
+                                // ES256
+                                EccPublicKeyConverter epkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
+                                jws = new JWS_ES256_Param(epkc.JwkToParam(jwkObject), false);
+                            }
+                            else
+                            {
+                                // RS256
+                                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+                                jws = new JWS_RS256_Param(
+                                    rpkc.JwkToProvider(jwkObject).ExportParameters(false));
+                            }
                         }
                     }
                 }
 
-                if (jwsRS256.Verify(jwt))
+                if (jws.Verify(jwt))
                 {
                     // 検証できた。
 
@@ -495,7 +549,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // iss, expの検証
                         if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == Config.IssuerId
                             && Helper.GetInstance().GetClientSecret((string)tokenClaimSet[OAuth2AndOIDCConst.aud]) != null
-                            && long.Parse((string)tokenClaimSet[OAuth2AndOIDCConst.exp]) >= DateTimeOffset.Now.ToUnixTimeSeconds())
+                            && CmnJwtToken.VerifyExp((string)tokenClaimSet[OAuth2AndOIDCConst.exp]))
                         {
                             // claims
                             if(tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.claims))
@@ -503,24 +557,39 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                             // subの検証
                             // ApplicationUser を取得する。
-                            ApplicationUser user = CmnUserStore.FindByName((string)tokenClaimSet[OAuth2AndOIDCConst.sub]); // 同期版でOK。
-                            if (user != null)
+                            string subjectTypes = "";
+                            ApplicationUser user = PPIDExtension.GetUserFromSub(
+                                (string)tokenClaimSet[OAuth2AndOIDCConst.aud],
+                                (string)tokenClaimSet[OAuth2AndOIDCConst.sub],
+                                out subjectTypes);
+                            //CmnUserStore.FindByName((string)tokenClaimSet[OAuth2AndOIDCConst.sub]); // 同期版でOK。
+
+                            if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
                             {
-                                // User Accountの場合
+                                // PPIDの場合
                                 CmnAccessToken.AddClaims(tokenClaimSet, identity);
                                 return true;
                             }
                             else
                             {
-                                // Client Accountの場合
-
-                                // ClaimとStoreのAudience(aud)に対応するSubject(sub)が一致するかを確認し、一致する場合のみ、認証する。
-                                // ※ でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
-                                if ((string)tokenClaimSet[OAuth2AndOIDCConst.sub]
-                                    == Helper.GetInstance().GetClientName((string)tokenClaimSet[OAuth2AndOIDCConst.aud]))
+                                if (user != null)
                                 {
+                                    // User Accountの場合
                                     CmnAccessToken.AddClaims(tokenClaimSet, identity);
                                     return true;
+                                }
+                                else
+                                {
+                                    // Client Accountの場合
+
+                                    // ClaimとStoreのAudience(aud)に対応するSubject(sub)が一致するかを確認し、一致する場合のみ、認証する。
+                                    // ※ でないと、UserStoreから削除されたUser Accountが、Client Accountに化けることになる。
+                                    if ((string)tokenClaimSet[OAuth2AndOIDCConst.sub]
+                                        == Helper.GetInstance().GetClientName((string)tokenClaimSet[OAuth2AndOIDCConst.aud]))
+                                    {
+                                        CmnAccessToken.AddClaims(tokenClaimSet, identity);
+                                        return true;
+                                    }
                                 }
                             }
                         }
@@ -546,6 +615,12 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return false;
         }
+
+        #endregion
+
+        #region private
+
+        #region AddClaims
 
         /// <summary>AddClaims</summary>
         /// <param name="tokenClaimSet">Dictionary(string, object)</param>
@@ -589,6 +664,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             //    identity.AddClaim(new Claim(OAuth2AndOIDCConst.Claim_FApi, (string)tokenClaimSet[OAuth2AndOIDCConst.fapi]));
             //}
         }
+
+        #endregion
 
         #endregion
     }

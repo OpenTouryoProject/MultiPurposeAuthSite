@@ -43,6 +43,11 @@
 //*  2019/02/08  西野 大介         - F-API2, Confidential Client実装
 //*  2019/08/01  西野 大介         - client_secret_postのサポートを追加
 //*  2019/08/01  西野 大介         - PKCEのClient認証方法を変更
+//*  2019/12/25  西野 大介         PPID対応による見直し（Metadataにsubject_types_supportedを追加）
+//*  2020/01/07  西野 大介         PPID対応実施（ログ出力時のUser Account）
+//*  2020/01/08  西野 大介         #126（Feedback）対応実施
+//*  2020/02/28  西野 大介         エラーメッセージ通知の改善
+//*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -52,6 +57,8 @@ using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite;
 #endif
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Util;
+
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Extensions.Sts;
@@ -75,6 +82,7 @@ using Newtonsoft.Json.Linq;
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Str;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace MultiPurposeAuthSite.TokenProviders
 {
@@ -172,6 +180,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType);
             }
+
+            if (Config.EnableCibaGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.CibaGrantType);
+            }
             #endregion
 
             #region response_modes
@@ -203,10 +216,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 });
                 #endregion
 
-                // subject_types
+                #region subject_types
                 OpenIDConfig.Add("subject_types_supported", new List<string> {
-                    "public"
+                    OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit(),
+                    OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit(),
+                    OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit()
                 });
+                #endregion
 
                 #region claims
                 OpenIDConfig.Add("claims_parameter_supported", false); // RequestObjectでのみサポート
@@ -300,6 +316,25 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #endregion
 
+            #region CIBA
+
+            OpenIDConfig.Add("backchannel_authentication_endpoint",
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint);
+
+            OpenIDConfig.Add("backchannel_token_delivery_modes_supported ", new List<string> {
+               OAuth2AndOIDCEnum.CibaMode.poll.ToStringByEmit(),
+               //OAuth2AndOIDCEnum.CibaMode.ping.ToStringByEmit(),
+               //OAuth2AndOIDCEnum.CibaMode.push.ToStringByEmit()
+            });
+
+            // FAPI-CIBA プロファイルの
+            // RequestObjectの署名は、ES256 と PS256のみ許可
+            // ちなみに、Tokenの署名は、FAPI2に準拠する。
+            OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", "ES256");
+            OpenIDConfig.Add("backchannel_user_code_parameter_supported", "false");
+
+            #endregion
+
             #region その他
             OpenIDConfig.Add("display_values_supported", new List<string> {
                 "page"
@@ -315,7 +350,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region AuthZAuthNEndpoint
+        #region AuthZ(N)Endpoint
 
         #region ValidateAuthZReqParam
 
@@ -335,8 +370,31 @@ namespace MultiPurposeAuthSite.TokenProviders
             out string valid_redirect_uri, out string err, out string errDescription)
         {
             valid_redirect_uri = "";
-            err = "";
+            err = "server_error";
             errDescription = "";
+
+            #region client_id
+
+            // client_idチェック
+            if (string.IsNullOrEmpty(client_id))
+            {
+                //err = "server_error";
+                errDescription = Resources.ApplicationOAuthBearerTokenProvider.client_id_NotSett;
+                return false;
+            }
+            else
+            {
+                string clientName = Helper.GetInstance().GetClientName(client_id);
+
+                if (string.IsNullOrEmpty(clientName))
+                {
+                    //err = "server_error";
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
+                    return false;
+                }
+            }
+
+            #endregion
 
             #region response_type
 
@@ -347,7 +405,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (!Config.EnableAuthorizationCodeGrantType)
                     {
-                        err = "server_error";
+                        //err = "server_error";
                         errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType;
                         return false;
                     }
@@ -356,7 +414,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (!Config.EnableImplicitGrantType)
                     {
-                        err = "server_error";
+                        //err = "server_error";
                         errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType;
                         return false;
                     }
@@ -371,48 +429,230 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
                     {
                         // OIDC無効
-                        err = "server_error";
-                        errDescription = "This response_type is valid only for oidc.";
+                        //err = "server_error";
+                        errDescription = string.Format(
+                            "This response_type is required {0} value in scope param.",
+                            OAuth2AndOIDCConst.Scope_Openid);
+
                         return false;
                     }
                 }
                 else
                 {
-                    err = "server_error";
+                    //err = "server_error";
                     errDescription = "This response_type is unknown.";
                     return false;
                 }
             }
             else
             {
-                err = "server_error";
+                //err = "server_error";
                 errDescription = "response_type is empty.";
                 return false;
             }
 
-            // OIDCチェック２
-            if (scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
+            // 関数化して移動（valid_redirect_uri早期入手のため）
+            if (CmnEndpoints.CheckRedirectUri(
+                redirect_uri, client_id, response_type,
+                out valid_redirect_uri, ref err, ref errDescription))
             {
-                // OIDC有効
-                if (!Config.EnableOpenIDConnect)
+
+                // OIDCチェック２
+                if (scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
                 {
-                    err = "server_error";
-                    errDescription = "OIDC is not enabled.";
-                    return false;
+                    // OIDC有効
+                    if (!Config.EnableOpenIDConnect)
+                    {
+                        //err = "server_error";
+                        errDescription = "OIDC is not enabled.";
+                        return false;
+                    }
+
+                    // nonceパラメタ 必須 → 任意
+                    //if (string.IsNullOrEmpty(nonce))
+                    //{
+                    //    //err = "server_error";
+                    //    errDescription = "There was no nonce in query.";
+                    //    return false;
+                    //}
                 }
 
-                // nonceパラメタ 必須
-                if (string.IsNullOrEmpty(nonce))
-                {
-                    err = "server_error";
-                    errDescription = "There was no nonce in query.";
-                    return false;
-                }
+                return true;
             }
 
             #endregion
 
-            #region redirect_uri
+            // 結果を返す。
+            return false;
+        }
+
+        #endregion
+
+        #region ValidateAuthZCibaReqParam
+
+        /// <summary>ValidateCibaAuthZReqParam</summary>
+        /// <param name="json">JObject</param>
+        /// <param name="client_id">string</param>
+        /// <param name="scope">string</param>
+        /// <param name="client_notification_token">string</param>
+        /// <param name="binding_message">string</param>
+        /// <param name="user_code">string</param>
+        /// <param name="requested_expiry">string</param>
+        /// <param name="login_hint">string</param>
+        /// <param name="err">string</param>
+        /// <param name="errDescription">string</param>
+        /// <returns>成功 or 失敗</returns>
+        public static bool ValidateCibaAuthZReqParam(
+            JObject json, out string client_id, out string scope,
+            out string client_notification_token, out string binding_message,
+            out string user_code, out string requested_expiry, out string login_hint,
+            out string err, out string errDescription)
+        {
+            #region 定義
+            //string aud = "";
+            string exp = "";
+            //string iat = "";
+            string nbf = "";
+            //string jti = "";            
+            #endregion
+
+            #region 初期化
+            client_id = "";
+            scope = "";
+            client_notification_token = "";
+            binding_message = "";
+            user_code = "";
+            requested_expiry = "";
+            login_hint = "";
+
+            err = OAuth2AndOIDCConst.invalid_request;
+            errDescription = "";
+            #endregion
+
+            #region 取得 → チェック
+            // iss → client_id
+            if (!CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.iss,
+                out client_id, out err, out errDescription))
+            {
+                return false;
+            }
+            else
+            {
+                string clientName = Helper.GetInstance().GetClientName(client_id);
+
+                if (string.IsNullOrEmpty(clientName))
+                {
+                    //err = "server_error";
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
+                    return false;
+                }
+            }
+            // aud
+            // exp
+            if (!CmnJwtToken.CheckClaims(
+                    json, OAuth2AndOIDCConst.exp,
+                    out exp, out err, out errDescription))
+            {
+                return false;
+            }
+            else
+            {
+                if (!CmnJwtToken.VerifyExp(exp))
+                {
+                    //err = "server_error";
+                    errDescription = "This PAR is expired.";
+                    return false;
+                }
+            }
+            // iat
+            // nbf
+            if (!CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.nbf,
+                out nbf, out err, out errDescription))
+            {
+                return false;
+            }
+            else
+            {
+                if (!CmnJwtToken.VerifyNbf(nbf))
+                {
+                    //err = "server_error";
+                    errDescription = "This PAR is before enabled.";
+                    return false;
+                }
+            }
+            // jti
+            // scope
+            if (!CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.scope,
+                out scope, out err, out errDescription))
+            {
+                return false;
+            }
+            else
+            {
+                if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
+                {
+                    // OIDC無効
+                    //err = "server_error";
+                    errDescription = string.Format(
+                        "CIBA is required {0} value in scope param.",
+                        OAuth2AndOIDCConst.Scope_Openid);
+
+                    return false;
+                }
+            }
+            // client_notification_token
+            if (!CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.client_notification_token,
+                out client_notification_token, out err, out errDescription))
+            {
+                return false;
+            }
+            // binding_message
+            if (!CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.binding_message,
+                out binding_message, out err, out errDescription))
+            {
+                return false;
+            }
+            // user_code
+            CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.user_code,
+                out user_code, out err, out errDescription, nullable: true);
+            // requested_expiry
+            CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.requested_expiry,
+                out requested_expiry, out err, out errDescription, nullable: true);
+            // login_hint
+            if (!CmnJwtToken.CheckClaims(
+                json, OAuth2AndOIDCConst.login_hint,
+                out login_hint, out err, out errDescription))
+            {
+                return false;
+            }
+
+            return true;
+        }
+        #endregion
+
+        #endregion
+
+        #region CheckRedirectUri
+        /// <summary>CheckRedirectUri</summary>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="client_id">string</param>
+        /// <param name="response_type">string</param>
+        /// <param name="valid_redirect_uri">string</param>
+        /// <param name="err">string</param>
+        /// <param name="errDescription">string</param>
+        /// <returns>bool</returns>
+        private static bool CheckRedirectUri(
+            string redirect_uri, string client_id, string response_type,
+            out string valid_redirect_uri, ref string err, ref string errDescription)
+        {
+            valid_redirect_uri = "";
 
             // redirect_uriのチェック
             if (string.IsNullOrEmpty(redirect_uri))
@@ -448,6 +688,12 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     return true;
                 }
+                else
+                {
+                    err = "server_error";
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.redirect_uri_NotRegistered;
+                    return false;
+                }
             }
             else
             {
@@ -468,7 +714,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
 
                     //if (redirect_uri.StartsWith(preRegisteredUri))
-                    if (redirect_uri == preRegisteredUri)
+                    if (preRegisteredUri == null) preRegisteredUri = ""; // null対策
+                    if (redirect_uri.ToLower() == preRegisteredUri.ToLower()) // LowerCaseに揃える
                     {
                         // 完全一致する場合。
                         valid_redirect_uri = redirect_uri;
@@ -483,14 +730,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
                 }
             }
-
-            #endregion
-
-            // 結果を返す。
-            return false;
         }
-
         #endregion
+
+        #region Create Response
 
         #region CreateCodeInAuthZNRes
 
@@ -704,14 +947,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                 string name = Helper.GetInstance().GetClientName(client_id);
                 Logging.MyOperationTrace(string.Format(
                     "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
-                    client_id, name,                                    // Client Account
-                    Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
+                    client_id, name,                                         // Client Account
+                    PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
                 #endregion
             }
 
             return code;
         }
+
+        #endregion
 
         #endregion
 
@@ -855,8 +1100,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string name = Helper.GetInstance().GetClientName(client_id);
                     Logging.MyOperationTrace(string.Format(
                         "{0}({1}) passed the 'Authorization Code flow' by {2}({3}).",
-                        client_id, name,                                    // Client Account
-                        Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
+                        client_id, name,                                         // Client Account
+                        PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
                     ret = CmnEndpoints.CreateAccessTokenResponse(access_token, refresh_token, jwkString);
 
@@ -867,15 +1112,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential.");
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add("error", "not_supported");
-                err.Add("error_description", Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
+                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
             }
 
             return false;
@@ -967,8 +1212,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string name = Helper.GetInstance().GetClientName(client_id);
                         Logging.MyOperationTrace(string.Format(
                             "{0}({1}) passed the 'Refresh Token flow' by {2}({3}).",
-                            client_id, name,                                    // Client Account
-                            Helper.GetInstance().GetClientIdByName(sub), sub)); // User Account
+                            client_id, name,                                         // Client Account
+                            PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
 
                         ret = CmnEndpoints.CreateAccessTokenResponse(access_token, new_refresh_token, jwkString);
 
@@ -980,15 +1225,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential.");
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add("error", "not_supported");
-                err.Add("error_description", Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
+                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
             }
 
             return false;
@@ -1086,7 +1331,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             Logging.MyOperationTrace(string.Format(
                                 "{0}({1}) passed the 'resource owner password credentials flow' by {2}({3}).",
                                 user.Id, user.UserName, // User Account
-                                client_id, name)); // Client Account
+                                client_id, name));      // Client Account
 
                             ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", jwkString);
                             return true;
@@ -1094,15 +1339,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                         else
                         {
                             // パスワードが一致しない場合。
-                            err.Add("error", "access_denied");
-                            err.Add("error_description", Resources.ApplicationOAuthBearerTokenProvider.access_denied);
+                            err.Add(OAuth2AndOIDCConst.error, "access_denied");
+                            err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.access_denied);
                         }
                     }
                     else
                     {
                         // ユーザーが見つからない場合。
-                        err.Add("error", "access_denied");
-                        err.Add("error_description", Resources.ApplicationOAuthBearerTokenProvider.access_denied);
+                        err.Add(OAuth2AndOIDCConst.error, "access_denied");
+                        err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.access_denied);
                     }
 
                     #endregion
@@ -1110,15 +1355,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential.");
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add("error", "not_supported");
-                err.Add("error_description", Resources.ApplicationOAuthBearerTokenProvider.EnableResourceOwnerCredentialsGrantType);
+                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableResourceOwnerCredentialsGrantType);
             }
 
             return false;
@@ -1211,15 +1456,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential.");
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add("error", "not_supported");
-                err.Add("error_description", Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
+                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
             }
 
             return false;
@@ -1228,8 +1473,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region GrantJwtBearerTokenCredentials
-
-        /// <summary>GrantJwtBearerTokenCredentials</summary>
 
         /// <summary>
         /// GrantJwtBearerTokenCredentials
@@ -1303,23 +1546,165 @@ namespace MultiPurposeAuthSite.TokenProviders
                         else
                         {
                             // クライアント認証エラー（Credential（aud）不正
-                            err.Add("error", "invalid_client");
-                            err.Add("error_description", "Invalid credential.");
+                            err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                         }
                     }
                     else
                     {
                         // クライアント認証エラー（Credential（署名）不正
-                        err.Add("error", "invalid_client");
-                        err.Add("error_description", "Invalid credential.");
+                        err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential（iss or pubKey）不正
-                    err.Add("error", "invalid_client");
-                    err.Add("error_description", "Invalid credential or pubkey is not set.");
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential or pubkey is not set.");
                 }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region GrantCiba
+
+        /// <summary>GrantCiba（CIBA）</summary>
+        /// <param name="grant_type">string</param>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="auth_req_id">string</param>
+        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="err">Dictionary(string, string)</param>
+        /// <returns>成否</returns>
+        public static bool GrantCiba(
+            string grant_type, string client_id, string client_secret, X509Certificate2 x509, 
+            string auth_req_id, out Dictionary<string, string> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+
+            string jwkString = "";
+            err = new Dictionary<string, string>();
+
+            if (Config.EnableCibaGrantType)
+            {
+                #region 認証
+
+                bool authned = false;
+                if (grant_type.ToLower() == OAuth2AndOIDCConst.CibaGrantType)
+                {
+                    // client_id & (client_secret or x509)
+                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
+                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                }
+
+                #endregion
+
+                if (authned)
+                {
+                    #region CheckClientMode
+
+                    // このフローが認められるか？（fapi2に設定
+                    OAuth2AndOIDCEnum.ClientMode permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2; // 固定
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.fapi2, out jwkString, out err))
+                    {
+                        // 継続可
+                    }
+                    else
+                    {
+                        // 継続不可
+                        // err設定済み
+                        return false;
+                    }
+
+                    #endregion
+
+                    #region 発行
+
+                    // Tokenレスポンスを生成する。
+                    string code = ""; 
+                    OAuth2AndOIDCEnum.CibaState cibaState = OAuth2AndOIDCEnum.CibaState.not_found;
+
+                    if (CibaProvider.ReceiveTokenReq(auth_req_id, out code,  out cibaState))
+                    {
+                        // = OAuth2AndOIDCEnum.CibaState.access_permitted
+                        // Tokenレスポンス（正常）
+                        string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, "");
+
+                        // access_token
+                        string access_token = CmnAccessToken.ProtectFromPayload(
+                            client_id, tokenPayload,
+                            DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                            x509, permittedLevel, out string aud, out string sub, JwtConst.ES256);
+
+                        // Client認証のclient_idとToken類のaudをチェック
+                        if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+
+                        // 発行しないことに。
+                        // ・単純に要らんのと、
+                        // ・現状、refresh_token使った際、ES256にできない。
+                        // ので。
+
+                        //// refresh_token
+                        //string refresh_token = "";
+                        //if (Config.EnableRefreshToken)
+                        //{
+                        //    refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                        //}
+
+                        // オペレーション・トレース・ログ出力
+                        string name = Helper.GetInstance().GetClientName(client_id);
+                        Logging.MyOperationTrace(string.Format(
+                            "{0}({1}) passed the 'Authorization Code flow' by {2}({3}).",
+                            client_id, name,                                         // Client Account
+                            PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
+
+                        ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "");
+
+                        return true;
+                    }
+                    else
+                    {
+                        // ≠ OAuth2AndOIDCEnum.CibaState.access_permitted
+                        // Tokenレスポンス（異常）
+                        switch (cibaState)
+                        {
+                            case OAuth2AndOIDCEnum.CibaState.authorization_pending:
+                                
+                                // このケースだけ、slow_downを検討する（どうやって？）。
+
+                                //if() err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.slow_down.ToStringByEmit());
+                                //else
+                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit());
+                                break;
+
+                            default:
+                                err.Add(OAuth2AndOIDCConst.error, cibaState.ToStringByEmit());
+                                break;
+                        }
+                    }
+
+                    // オペレーション・トレース・ログ出力
+
+
+                    #endregion
+                }
+                else
+                {
+                    // クライアント認証エラー（Credential不正
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
+                }
+            }
+            else
+            {
+                // サポートされていない
+                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableCibaGrantType);
             }
 
             return false;
@@ -1329,7 +1714,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region Common (Private, etc.)
+        #region Common
+
+        #region Public
+
+        // ...
+
+        #endregion
+
+        #region Private
 
         #region　ClientAuthentication
 
@@ -1455,8 +1848,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             string clientModeString = "";
             if (string.IsNullOrEmpty(client_id))
             {
-                err.Add("error", "invalid_client");
-                err.Add("error_description", string.Format("client_id is not set."));
+                err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                err.Add(OAuth2AndOIDCConst.error_description, string.Format("client_id is not set."));
                 return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
             }
             else
@@ -1493,15 +1886,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (!retval)
             {
                 // エラーを追加
-                err.Add("error", "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, "not_supported");
 
                 if (string.IsNullOrEmpty(clientModeString))
                 {
-                    err.Add("error_description", string.Format("This client is not set the mode."));
+                    err.Add(OAuth2AndOIDCConst.error_description, string.Format("This client is not set the mode."));
                 }
                 else
                 {
-                    err.Add("error_description", string.Format(
+                    err.Add(OAuth2AndOIDCConst.error_description, string.Format(
                         "This client is set the {0} mode, but this flow permitted up to {1} mode.",
                         clientModeString, permittedLevel.ToStringByEmit()));
                 }
@@ -1536,12 +1929,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 ret.Add(OAuth2AndOIDCConst.RefreshToken, refresh_token);
             }
 
-            JObject jObj = (JObject)JsonConvert.DeserializeObject(
+            // ヘッダ
+            JObject jObjHeader = (JObject)JsonConvert.DeserializeObject(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                                access_token.Split('.')[0]), CustomEncode.us_ascii));
+            // ペイロード
+            JObject jObjPayload = (JObject)JsonConvert.DeserializeObject(
                             CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                                 access_token.Split('.')[1]), CustomEncode.us_ascii));
 
             // id_token
-            JArray jAry = (JArray)jObj["scopes"];
+            JArray jAry = (JArray)jObjPayload["scopes"];
+
             foreach (string s in jAry)
             {
                 if (s == OAuth2AndOIDCConst.Scope_Openid)
@@ -1549,12 +1948,26 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string id_token = "";
                     if (string.IsNullOrEmpty(jwkString))
                     {
-                        id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
-                            access_token, "", "", // c_hash, s_hash は /token で生成不可
-                            HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
+                        // JWS
+                        string alg = (string)jObjHeader[JwtConst.alg];
+                        if (alg == JwtConst.ES256)
+                        {
+                            // ES256
+                            id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                                access_token, "", "", // c_hash, s_hash は /token で生成不可
+                                HashClaimType.None, Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, "", alg);
+                        }
+                        else
+                        {
+                            // RS256
+                            id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                                access_token, "", "", // c_hash, s_hash は /token で生成不可
+                                HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "");
+                        }
                     }
                     else
                     {
+                        // JWE
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, "", "", // c_hash, s_hash は /token で生成不可
                             HashClaimType.None, Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, jwkString);
@@ -1572,6 +1985,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return ret;
         }
+
+        #endregion
 
         #endregion
 

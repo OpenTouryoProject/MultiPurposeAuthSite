@@ -17,6 +17,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2019/12/25  西野 大介         PPID、PKCE 4 SPA対応による見直し
+//*  2020/03/04  西野 大介         CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -88,11 +90,72 @@ namespace MultiPurposeAuthSite.ViewModels
         [JsonProperty(PropertyName = "jwk_rsa_publickey")]
         public string JwkRsaPublickey { get; set; }
 
+        /// <summary>JwkECDsaPublickey</summary>
+        [Display(Name = "JwkECDsaPublickey", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "jwk_ecdsa_publickey")]
+        public string JwkECDsaPublickey { get; set; }
+        
+
         /// <summary>TlsClientAuthSubjectDn</summary>
         [Display(Name = "TlsClientAuthSubjectDn", ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "tls_client_auth_subject_dn")]
         public string TlsClientAuthSubjectDn { get; set; }
 
+        #region SubjectTypes 
+        /// <summary>SubjectTypes</summary>
+        [Display(Name = "SubjectTypes", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "subject_types")]
+        public string SubjectTypes { get; set; }
+
+        /// <summary>SubjectTypesアイテムリスト</summary>
+        public List<SelectListItem> DdlSubjectTypesItems
+        {
+            get
+            {
+                return new List<SelectListItem>()
+                {
+                    new SelectListItem() {
+                        Text = "user name",
+                        Value = OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = "public",
+                        Value = OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = "pairwise",
+                        Value = OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit() }
+                };
+            }
+        }
+        #endregion
+
+        #region ClientType
+        ///// <summary>ClientType</summary>
+        //[Display(Name = "ClientType", ResourceType = typeof(Resources.CommonViewModels))]
+        //[JsonProperty(PropertyName = "client_type")]
+        //public string ClientType { get; set; }
+
+        ///// <summary>ClientTypeアイテムリスト</summary>
+        //public List<SelectListItem> DdlClientTypeItems
+        //{
+        //    get
+        //    {
+        //        return new List<SelectListItem>()
+        //        {
+        //            new SelectListItem() {
+        //                Text = "Confidential Client",
+        //                Value = OAuth2AndOIDCEnum.ClientType.confidential.ToStringByEmit() },
+        //            new SelectListItem() {
+        //                Text = "Public Client(SPA)",
+        //                Value = OAuth2AndOIDCEnum.ClientType.public_spa.ToStringByEmit() },
+        //            new SelectListItem() {
+        //                Text = "Public Client(Native)",
+        //                Value = OAuth2AndOIDCEnum.ClientType.public_native.ToStringByEmit() }
+        //        };
+        //    }
+        //}
+        #endregion
+
+        #region ClientMode
         /// <summary>ClientMode</summary>
         [Display(Name = "ClientMode", ResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "oauth2_oidc_mode")]
@@ -117,6 +180,7 @@ namespace MultiPurposeAuthSite.ViewModels
                 };
             }
         }
+        #endregion
 
         /// <summary>ClientName</summary>
         [Display(Name = "ClientName", ResourceType = typeof(Resources.CommonViewModels))]

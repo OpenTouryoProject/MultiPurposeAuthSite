@@ -133,7 +133,7 @@
     <value>client_secret</value>
   </data>
   <data name="ClientType" xml:space="preserve">
-    <value>Client type for tests.</value>
+    <value>Client type to restrict the flow.</value>
   </data>
   <data name="ConfirmNewEmail" xml:space="preserve">
     <value>Confirm new E-mail address</value>
@@ -155,6 +155,9 @@
   </data>
   <data name="Email" xml:space="preserve">
     <value>E-mail</value>
+  </data>
+  <data name="JwkECDsaPublickey" xml:space="preserve">
+    <value>JWK's ECDSA public key</value>
   </data>
   <data name="JwkRsaPublickey" xml:space="preserve">
     <value>JWK's RSA public key</value>
@@ -206,6 +209,9 @@
   </data>
   <data name="Search" xml:space="preserve">
     <value>Search</value>
+  </data>
+  <data name="SubjectTypes" xml:space="preserve">
+    <value>Subject Identifier types</value>
   </data>
   <data name="TlsClientAuthSubjectDn" xml:space="preserve">
     <value>The DN of the client certificate to use.</value>

@@ -208,7 +208,7 @@
     <value>Client の OAuth2/OIDCモード</value>
   </data>
   <data name="ClientType" xml:space="preserve">
-    <value>テスト用のClientタイプ</value>
+    <value>フローを制限するためのClientのタイプ。</value>
   </data>
   <data name="TlsClientAuthSubjectDn" xml:space="preserve">
     <value>使用するクライアント証明書のDN</value>
@@ -221,5 +221,11 @@
   </data>
   <data name="ResponseMode" xml:space="preserve">
     <value>OAuth2/OIDC の ResponseMode</value>
+  </data>
+  <data name="SubjectTypes" xml:space="preserve">
+    <value>サブジェクト識別子タイプ</value>
+  </data>
+  <data name="JwkECDsaPublickey" xml:space="preserve">
+    <value>JWKのECDSA公開鍵</value>
   </data>
 </root>

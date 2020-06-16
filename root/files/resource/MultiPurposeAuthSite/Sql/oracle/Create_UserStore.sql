@@ -26,6 +26,7 @@ CREATE TABLE "Users"(              -- Users
     "PaymentInformation" NVARCHAR2(256) NULL,
     "UnstructuredData" NVARCHAR2(2000) NULL,
     "FIDO2PublicKey" NVARCHAR2(2000) NULL,
+    "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
     "PasswordChangeDate" TIMESTAMP NOT NULL,
     CONSTRAINT "PK.Users" PRIMARY KEY ("Id")
@@ -92,7 +93,7 @@ CREATE TABLE "CustomizedConfirmation"(
 
 CREATE TABLE "Saml2OAuth2Data"(
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
-    "UnstructuredData" NVARCHAR2(2000) NULL, -- OAuth2 Unstructured Data
+    "UnstructuredData" NVARCHAR2(2000) NULL, -- Saml2/OAuth2 Unstructured Data
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 

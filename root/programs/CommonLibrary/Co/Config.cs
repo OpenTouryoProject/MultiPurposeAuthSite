@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2020/02/27  西野 大介         プッシュ通知、CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -387,6 +388,19 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region PushNotification (FCM)
+
+        /// <summary>FirebaseServiceAccountKey</summary>
+        public static string FirebaseServiceAccountKey
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("FirebaseServiceAccountKey");
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region ログイン
@@ -622,15 +636,12 @@ namespace MultiPurposeAuthSite.Co
 
         #region 外部ログイン
 
-        /// <summary>
-        /// Used for XSRF protection when adding external logins
-        /// 外部ログインの追加時に XSRF の防止に使用します
-        /// </summary>
-        public static string XsrfKey
+        /// <summary>本サイトでSaltとして機能する値</summary>
+        public static string SaltParameter
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("XsrfKey");
+                return GetConfigParameter.GetConfigValue("SaltParameter");
             }
         }
 
@@ -999,7 +1010,7 @@ namespace MultiPurposeAuthSite.Co
         // 基本的に、OAuth2/OIDCインフラを流用
 
         /// <summary>
-        /// SAML2 Assertionの有効期限
+        /// SAML2 Assertionの有効期限（分）
         /// </summary>
         public static double Saml2AssertionExpireTimeSpanFromMinutes
         {
@@ -1038,7 +1049,7 @@ namespace MultiPurposeAuthSite.Co
         #region OAuth2関連プロパティ
 
         /// <summary>
-        /// OAuth2のAccessTokenの有効期限
+        /// OAuth2のAccessTokenの有効期限（分）
         /// </summary>
         public static TimeSpan OAuth2AccessTokenExpireTimeSpanFromMinutes
         {
@@ -1049,7 +1060,18 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// OIDCのIdTokenの有効期限
+        /// OAuth2のRefreshTokenの有効期限（日）
+        /// </summary>
+        public static TimeSpan OAuth2RefreshTokenExpireTimeSpanFromDays
+        {
+            get
+            {
+                return TimeSpan.FromDays(int.Parse(GetConfigParameter.GetConfigValue("OAuth2RefreshTokenExpireTimeSpanFromDays")));
+            }
+        }
+
+        /// <summary>
+        /// OIDCのIdTokenの有効期限（分）
         /// </summary>
         public static TimeSpan OidcIdTokenExpireTimeSpanFromMinutes
         {
@@ -1060,13 +1082,24 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// OAuth2のRefreshTokenの有効期限
+        /// CIBAのauth_req_idの有効期限（秒）
         /// </summary>
-        public static TimeSpan OAuth2RefreshTokenExpireTimeSpanFromDays
+        public static int CibaExpireTimeSpanFromSeconds
         {
             get
             {
-                return TimeSpan.FromDays(int.Parse(GetConfigParameter.GetConfigValue("OAuth2RefreshTokenExpireTimeSpanFromDays")));
+                return int.Parse(GetConfigParameter.GetConfigValue("CibaExpireTimeSpanFromSeconds"));
+            }
+        }
+
+        /// <summary>
+        /// CIBAのPollingのInterval（秒）
+        /// </summary>
+        public static int CibaPollingIntervalSeconds
+        {
+            get
+            {
+                return int.Parse(GetConfigParameter.GetConfigValue("CibaPollingIntervalSeconds"));
             }
         }
 
@@ -1112,6 +1145,15 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>EnableRefreshToken</summary>
+        public static bool EnableRefreshToken
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableRefreshToken"));
+            }
+        }
+
         /// <summary>EnableJwtBearerTokenFlowGrantType</summary>
         public static bool EnableJwtBearerTokenFlowGrantType
         {
@@ -1121,12 +1163,12 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        /// <summary>EnableRefreshToken</summary>
-        public static bool EnableRefreshToken
+        /// <summary>EnableCibaGrantType</summary>
+        public static bool EnableCibaGrantType
         {
             get
             {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableRefreshToken"));
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableCibaGrantType"));
             }
         }
 
@@ -1181,6 +1223,33 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region OAuth2拡張
+
+        #region CIBA
+        /// <summary>
+        /// CIBAのAuthorizeエンドポイント 
+        /// </summary>
+        public static string CibaAuthorizeEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("CibaAuthorizeEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// CIBAのプッッシュ結果を受信するエンドポイント
+        /// </summary>
+        public static string CibaPushResultEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("CibaPushResultEndpoint");
+            }
+        }
+
+        // Tokenエンドポイントは共用。
+
+        #endregion
 
         #region WebAPI
 
@@ -1254,11 +1323,33 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>
         /// ユーザ情報に課金するWebAPI
         /// </summary>
-        public static string TestChageToUserWebAPI
+        public static string ChageToUserWebAPI
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("TestChageToUserWebAPI");
+                return GetConfigParameter.GetConfigValue("ChageToUserWebAPI");
+            }
+        }
+
+        /// <summary>
+        /// ユーザ情報にデバイス・トークンを追加するWebAPI
+        /// </summary>
+        public static string SetDeviceTokenWebAPI
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("SetDeviceTokenWebAPI");
+            }
+        }
+
+        /// <summary>
+        /// 2FAのプッッシュ結果を受信するWebAPI
+        /// </summary>
+        public static string TwoFactorAuthPushResultWebAPI
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("TwoFactorAuthPushResultWebAPI");
             }
         }
 
@@ -1329,7 +1420,7 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("OAuth2ImplicitGrantClient_Account");
             }
         }
-
+        
         /// <summary>
         /// Redirectエンドポイントがロックダウンされているかどうか。
         /// </summary>
@@ -1351,16 +1442,16 @@ namespace MultiPurposeAuthSite.Co
 
         #region エンドポイント
 
-        /// <summary>
-        /// OAuth2のResourceServerのEndpointのRootURI
-        /// </summary>
-        public static string OAuth2ResourceServerEndpointsRootURI
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("OAuth2ResourceServerEndpointsRootURI");
-            }
-        }
+        ///// <summary>
+        ///// OAuth2のResourceServerのEndpointのRootURI
+        ///// </summary>
+        //public static string OAuth2ResourceServerEndpointsRootURI
+        //{
+        //    get
+        //    {
+        //        return GetConfigParameter.GetConfigValue("OAuth2ResourceServerEndpointsRootURI");
+        //    }
+        //}
 
         #endregion
 

@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -70,6 +71,9 @@ namespace MultiPurposeAuthSite
             );
 
             #region OAuth2Endpoint
+
+            #region OAuth2 / OIDC
+
             config.Routes.MapHttpRoute(
                 name: "OAuth2Token",
                 routeTemplate: Config.OAuth2TokenEndpoint.Substring(1), // 先頭の[/]を削除
@@ -107,6 +111,36 @@ namespace MultiPurposeAuthSite
             );
             #endregion
 
+            #region CIBA FAPI2
+            config.Routes.MapHttpRoute(
+                name: "CibaAuthorize",
+                routeTemplate: Config.CibaAuthorizeEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "CibaAuthorize" }
+            );
+
+            config.Routes.MapHttpRoute(
+                name: "CibaPushResult",
+                routeTemplate: Config.CibaPushResultEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "CibaPushResult" }
+            );
+            #endregion
+
+            #region Push Notification
+            config.Routes.MapHttpRoute(
+                name: "SetDeviceToken",
+                routeTemplate: Config.SetDeviceTokenWebAPI.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "SetDeviceToken" }
+            );
+
+            config.Routes.MapHttpRoute(
+                name: "TwoFactorAuthPushResult",
+                routeTemplate: Config.TwoFactorAuthPushResultWebAPI.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "TwoFactorAuthPushResult" }
+            );
+            #endregion
+
+            #endregion
+
             #region OAuth2ResourceServer
 
             config.Routes.MapHttpRoute(
@@ -116,9 +150,9 @@ namespace MultiPurposeAuthSite
             );
 
             config.Routes.MapHttpRoute(
-                name: "TestChageToUser",
-                routeTemplate: Config.TestChageToUserWebAPI.Substring(1), // 先頭の[/]を削除
-                defaults: new { controller = "OAuth2ResourceServer", action = "TestChageToUser" }
+                name: "ChageToUser",
+                routeTemplate: Config.ChageToUserWebAPI.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2ResourceServer", action = "ChageToUser" }
             );
 
             #endregion
