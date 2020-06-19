@@ -31,6 +31,8 @@
 //*  2017/04/24  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2020/02/27  西野 大介         プッシュ通知、CIBA対応実施
+//*  2020/06/19  西野 大介         GetConfigSectionメソッドを廃止に伴う変更
+//*                                GetConfigSection → GetAnyConfigSection
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1376,7 +1378,9 @@ namespace MultiPurposeAuthSite.Co
                 return JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(
                     GetConfigParameter.GetConfigValue("OAuth2ClientsInformation"));
 #else
-                IConfigurationSection section = GetConfigParameter.GetConfigSection("OAuth2ClientsInformation");
+                IConfigurationSection section = GetConfigParameter
+                    .GetAnyConfigSection("appSettings:OAuth2ClientsInformation");
+
                 return section.Get<Dictionary<string, Dictionary<string, string>>>();
 #endif
             }
