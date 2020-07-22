@@ -31,11 +31,12 @@
 //*  2017/04/24  西野 大介         新規
 //*  2018/12/26  西野 大介         分割
 //*  2020/02/27  西野 大介         課金エンドポイント（テスト用→解放）
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Network;
 
 using MultiPurposeAuthSite.Extensions.Sts;
@@ -44,9 +45,12 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using System.Web;
 using System.Web.Http;
 using System.Web.Http.Cors;
 using System.Net.Http.Formatting;
+
+using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -73,6 +77,34 @@ namespace MultiPurposeAuthSite.Controllers
         | EnumHttpAuthHeader.Bearer)] // Bearer認証の結果をGetClaimsで検証。
     public class OAuth2ResourceServerController : ApiController
     {
+        #region constructor
+
+        /// <summary>constructor</summary>
+        public OAuth2ResourceServerController() { }
+
+        #endregion
+
+        #region property (GetOwinContext)
+
+        /// <summary>ApplicationUserManager</summary>
+        private ApplicationUserManager UserManager
+        {
+            get
+            {
+                return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            }
+        }
+
+        /// <summary>ApplicationRoleManager</summary>
+        private ApplicationRoleManager RoleManager
+        {
+            get
+            {
+                return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationRoleManager>();
+            }
+        }
+        #endregion
+
         #region テスト用
 
         #region Hybrid Flow
@@ -142,7 +174,7 @@ namespace MultiPurposeAuthSite.Controllers
             MyBaseAsyncApiController.GetClaims(out userName, out roles, out scopes, out ipAddress);
 
             // ユーザの検索
-            ApplicationUser user = CmnUserStore.FindByName(userName);
+            ApplicationUser user = await UserManager.FindByNameAsync(userName);
 
             if (user != null)
             {

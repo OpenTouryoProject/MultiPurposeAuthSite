@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/04  西野 大介         新規
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -59,7 +60,7 @@ using Dapper;
 namespace MultiPurposeAuthSite.Data
 {
     /// <summary>BaseStore</summary>
-    public class CmnStore
+    internal class CmnStore
     {
         #region Memory
 

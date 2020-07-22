@@ -36,6 +36,7 @@
 //*  2020/01/07  西野 大介         PPID対応実施（GetUserClaims）
 //*  2020/02/27  西野 大介         CIBA対応実施（CibaAuthorize, CibaPushResult）
 //*  2020/03/09  西野 大介         FormDataCollectionチェック処理の強化
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -64,6 +65,7 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Identity;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -86,6 +88,64 @@ namespace MultiPurposeAuthSite.Controllers
     [MyBaseAsyncApiController(httpAuthHeader: EnumHttpAuthHeader.None)] // 認証無し（自前）
     public class OAuth2EndpointController : ControllerBase
     {
+        #region DI(CA)対応
+        #region members & constructor
+
+        #region members
+
+        #region OwinContext
+        /// <summary>UserManager</summary>
+        private readonly UserManager<ApplicationUser> _userManager = null;
+        /// <summary>UserManager</summary>
+        private readonly RoleManager<ApplicationRole> _roleManager = null;
+        #endregion
+
+        #endregion
+
+        #region constructor
+        /// <summary>constructor</summary>
+        /// <param name="userManager">UserManager</param>
+        /// <param name="roleManager">RoleManager</param>
+        public OAuth2EndpointController(
+            UserManager<ApplicationUser> userManager,
+            RoleManager<ApplicationRole> roleManager)
+        {
+            // UserManager
+            this._userManager = userManager;
+            // RoleManager
+            this._roleManager = roleManager;
+        }
+        #endregion
+
+        #endregion
+
+        #region property
+
+        #region GetOwinContext
+
+        /// <summary>ApplicationUserManager</summary>
+        private UserManager<ApplicationUser> UserManager
+        {
+            get
+            {
+                return this._userManager;
+            }
+        }
+
+        /// <summary>ApplicationRoleManager</summary>
+        private RoleManager<ApplicationRole> RoleManager
+        {
+            get
+            {
+                return this._roleManager;
+            }
+        }
+
+        #endregion
+
+        #endregion        
+        #endregion
+
         #region /token
 
         /// <summary>
@@ -238,7 +298,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>Dictionary(string, object)</returns>
         [HttpGet]
-        public Dictionary<string, object> GetUserClaims()
+        public async Task<Dictionary<string, object>> GetUserClaims()
         {
             // 戻り値（エラー）
             Dictionary<string, object> err = new Dictionary<string, object>();
@@ -302,7 +362,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 case OAuth2AndOIDCConst.Scope_Roles:
                                     userinfoClaimSet.Add(
                                         OAuth2AndOIDCConst.Scope_Roles,
-                                        CmnUserStore.GetRoles(user));
+                                        await UserManager.GetRolesAsync(user));
                                     break;
 
                                     #endregion
@@ -693,6 +753,8 @@ namespace MultiPurposeAuthSite.Controllers
                            client_notification_token,
                            authReqExp, code, binding_message, out authReqId);
 
+#pragma warning disable 162
+
                         // プッシュ通知を、login_hint（に記載のユーザ）に送信
                         if (!Sts.CibaProvider.DebugModeWithOutAD)
                         {
@@ -714,6 +776,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // テストを通すため追加
                             Sts.CibaProvider.ReceiveResult(authReqId, true);
                         }
+
+#pragma warning restore 162
 
                         // ココまでの結果をレスポンス
                         return new Dictionary<string, string>()
@@ -980,7 +1044,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>string</returns>
         [HttpPost]
-        public string SetDeviceToken(IFormCollection formData)
+        public async Task<string> SetDeviceToken(IFormCollection formData)
         {
             string device_token = formData["device_token"];
 
@@ -1004,7 +1068,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // デバイストークンの保存
                             user.DeviceToken = device_token;
-                            CmnUserStore.Update(user);
+                            await UserManager.UpdateAsync(user);
 
                             return "OK";
                         }

@@ -36,11 +36,12 @@
 //*  2020/01/07  西野 大介         PPID対応実施（GetUserClaims）
 //*  2020/02/27  西野 大介         CIBA対応実施（CibaAuthorize, CibaPushResult）
 //*  2020/03/09  西野 大介         FormDataCollectionチェック処理の強化
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Util;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
@@ -65,6 +66,8 @@ using System.Web.Http.Cors;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
+
+using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -93,6 +96,34 @@ namespace MultiPurposeAuthSite.Controllers
     [MyBaseAsyncApiController(httpAuthHeader: EnumHttpAuthHeader.None)] // 認証無し（自前）
     public class OAuth2EndpointController : ApiController
     {
+        #region constructor
+
+        /// <summary>constructor</summary>
+        public OAuth2EndpointController() { }
+
+        #endregion
+
+        #region property (GetOwinContext)
+
+        /// <summary>ApplicationUserManager</summary>
+        private ApplicationUserManager UserManager
+        {
+            get
+            {
+                return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            }
+        }
+
+        /// <summary>ApplicationRoleManager</summary>
+        private ApplicationRoleManager RoleManager
+        {
+            get
+            {
+                return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationRoleManager>();
+            }
+        }
+        #endregion
+
         #region /token
 
         /// <summary>
@@ -248,7 +279,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>Dictionary(string, object)</returns>
         [HttpGet]
-        public Dictionary<string, object> GetUserClaims()
+        public async Task<Dictionary<string, object>> GetUserClaims()
         {
             // 戻り値（エラー）
             Dictionary<string, object> err = new Dictionary<string, object>();
@@ -312,7 +343,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 case OAuth2AndOIDCConst.Scope_Roles:
                                     userinfoClaimSet.Add(
                                         OAuth2AndOIDCConst.Scope_Roles,
-                                        CmnUserStore.GetRoles(user));
+                                        await UserManager.GetRolesAsync(user.Id));
                                     break;
 
                                 #endregion
@@ -699,6 +730,8 @@ namespace MultiPurposeAuthSite.Controllers
                            client_notification_token,
                            authReqExp, code, binding_message, out authReqId);
 
+#pragma warning disable 162
+
                         // プッシュ通知を、login_hint（に記載のユーザ）に送信
                         if (!Sts.CibaProvider.DebugModeWithOutAD)
                         {
@@ -720,6 +753,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // テストを通すため追加
                             Sts.CibaProvider.ReceiveResult(authReqId, true);
                         }
+
+#pragma warning restore 162
 
                         // ココまでの結果をレスポンス
                         return new Dictionary<string, string>()
@@ -992,7 +1027,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>string</returns>
         [HttpPost]
-        public string SetDeviceToken(FormDataCollection formData)
+        public async Task<string> SetDeviceToken(FormDataCollection formData)
         {
             string device_token = formData["device_token"];
 
@@ -1016,7 +1051,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // デバイストークンの保存
                             user.DeviceToken = device_token;
-                            CmnUserStore.Update(user);
+                            await UserManager.UpdateAsync(user);
 
                             return "OK";
                         }

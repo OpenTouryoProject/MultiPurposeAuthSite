@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/14  西野 大介         新規
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //**********************************************************************************
 
 using System;
@@ -40,7 +41,7 @@ using StackExchange.Profiling.Data;
 namespace MultiPurposeAuthSite.Log
 {
     /// <summary>CompositeDbProfiler</summary>
-    public class CompositeDbProfiler : IDbProfiler
+    internal class CompositeDbProfiler : IDbProfiler
     {
         /// <summary>DbProfilers</summary>
         readonly IDbProfiler[] profilers;
