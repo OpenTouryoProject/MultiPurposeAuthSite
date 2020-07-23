@@ -2005,15 +2005,20 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute
                 && Config.IsDebug)
             {
-                // 課金のテスト処理
-                string ret = (string)JsonConvert.DeserializeObject(
-                    await Sts.Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
-                    (string)HttpContext.Session.GetString(OAuth2AndOIDCConst.AccessToken), "jpy", "1000"));
+                string access_token = (string)HttpContext.Session.GetString(OAuth2AndOIDCConst.AccessToken);
 
-                if (ret == "OK")
+                if (!string.IsNullOrEmpty(access_token))
                 {
-                    // 元の画面に戻る
-                    return RedirectToAction("Index");
+                    // 課金のテスト処理
+                    string ret = await Sts.Helper.GetInstance().
+                        CallOAuth2ChageToUserWebAPIAsync(access_token, "jpy", "1000");
+
+                    if (ret == "OK")
+                    {
+                        // 元の画面に戻る
+                        return RedirectToAction("Index");
+                    }
+                    else { }
                 }
                 else { }
             }

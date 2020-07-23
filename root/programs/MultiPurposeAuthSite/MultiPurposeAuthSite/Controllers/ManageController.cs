@@ -1755,15 +1755,19 @@ namespace MultiPurposeAuthSite.Controllers
                 && Config.EnableEditingOfUserAttribute
                 && Config.IsDebug)
             {
-                // 課金のテスト処理
-                string ret = (string)JsonConvert.DeserializeObject(
-                    await Sts.Helper.GetInstance().CallOAuth2ChageToUserWebAPIAsync(
-                    (string)Session[OAuth2AndOIDCConst.AccessToken], "jpy", "1000"));
+                string access_token = (string)Session[OAuth2AndOIDCConst.AccessToken];
 
-                if (ret == "OK")
-                {
-                    // 元の画面に戻る
-                    return RedirectToAction("Index");
+                if (!string.IsNullOrEmpty(access_token)) {
+                    // 課金のテスト処理
+                    string ret = await Sts.Helper.GetInstance().
+                        CallOAuth2ChageToUserWebAPIAsync(access_token, "jpy", "1000");
+
+                    if (ret == "\"OK\"")
+                    {
+                        // 元の画面に戻る
+                        return RedirectToAction("Index");
+                    }
+                    else { }
                 }
                 else { }
             }
