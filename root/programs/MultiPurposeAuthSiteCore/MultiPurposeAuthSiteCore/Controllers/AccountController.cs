@@ -436,7 +436,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // nonce // 記号は入れない。
                     string nonce = GetPassword.Generate(20, 0);
-                    HttpContext.Session.SetString("id_federation_signin_nonce", state);
+                    HttpContext.Session.SetString("id_federation_signin_nonce", nonce);
 
                     // ID連携に必要なscope
                     string scope = Const.IdFederationScopes;
@@ -447,6 +447,7 @@ namespace MultiPurposeAuthSite.Controllers
                         "&response_type=code" +
                         "&scope=" + scope +
                         "&state=" + state +
+                        "&nonce=" + nonce +
                         "&redirect_uri=" + CustomEncode.UrlEncode(redirect_uri) +
                         "&response_mode=form_post" +
                         "&login_hint=" + uid + "&prompt=none");
@@ -2040,8 +2041,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                     string sub = "";
                     string nonce = "";
-                    List<string> roles = null;
-                    //List<string> scopes = null;
                     JObject jobj = null;
 
                     if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
