@@ -49,6 +49,7 @@
 //*  2020/02/28  西野 大介         エラーメッセージ通知の改善
 //*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+//*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1730,11 +1731,6 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                 ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
-            }
-            else if (constr.ToLower() == Const.IdFederationCode)
-            {
-                // ID連携時のエンドポイント
-                ret = Config.IdFederationRedirectEndPoint;
             }
             else
             {

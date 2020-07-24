@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+//*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -112,9 +113,6 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>tokenのテスト用のRedirectUri</summary>
         public const string TestSelfToken = "test_self_token";
-
-        /// <summary>ID連携用のRedirectUri（テスト用ではなく）</summary>
-        public const string IdFederationCode = "id_federation_code";
 
         #endregion
 
