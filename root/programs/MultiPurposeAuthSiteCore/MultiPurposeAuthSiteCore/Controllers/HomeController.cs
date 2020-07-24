@@ -21,11 +21,13 @@
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2020/01/07  西野 大介         PKCE for SPA対応実施
 //*  2020/03/04  西野 大介         CIBA対応実施
+//*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.ViewModels;
 using MultiPurposeAuthSite.Extensions.Sts;
+using MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.Collections.Generic;
@@ -183,7 +185,7 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region InitSaml2Params
 
-        /// <summary>初期化</summary>
+        /// <summary>テスト用にパラメタを初期化</summary>
         private void InitSaml2Params()
         {
             this.Saml2RequestEndpoint =
@@ -202,7 +204,7 @@ namespace MultiPurposeAuthSite.Controllers
             this.State = GetPassword.Generate(10, 0); // 記号は入れない。
         }
 
-        /// <summary>保存</summary>
+        /// <summary>テスト用にパラメタを保存</summary>
         private void SaveSaml2Params()
         {
             // テスト用にパラメタを、Session, Cookieに保存
@@ -211,23 +213,23 @@ namespace MultiPurposeAuthSite.Controllers
             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
 
             // client_id → Issuer
-            HttpContext.Session.SetString("test_client_id", this.ClientId);
-            responseCookies.Set("test_client_id", this.ClientId);
+            HttpContext.Session.SetString(Const.TestClientId, this.ClientId);
+            responseCookies.Set(Const.TestClientId, this.ClientId);
 
             // redirect_uri → AssertionConsumerService
-            HttpContext.Session.SetString("test_redirect_uri", this.RedirectUri);
-            responseCookies.Set("test_redirect_uri", this.RedirectUri);
+            HttpContext.Session.SetString(Const.TestRedirectUri, this.RedirectUri);
+            responseCookies.Set(Const.TestRedirectUri, this.RedirectUri);
 
             // state → RelayState
-            HttpContext.Session.SetString("test_state", this.State);
-            responseCookies.Set("test_state", this.State);
+            HttpContext.Session.SetString(Const.TestState, this.State);
+            responseCookies.Set(Const.TestState, this.State);
         }
 
         #endregion
 
         #region InitOAuth2Params
 
-        /// <summary>初期化</summary>
+        /// <summary>テスト用にパラメタを初期化</summary>
         private void InitOAuth2Params()
         {
             this.OAuth2AuthorizeEndpoint =
@@ -245,8 +247,9 @@ namespace MultiPurposeAuthSite.Controllers
             this.CodeChallenge = "";
         }
 
-        /// <summary>保存</summary>
-        private void SaveOAuth2Params()
+        /// <summary>テスト用にパラメタを保存</summary>
+        /// <param name="isOidc">OIDCの場合、true</param>
+        private void SaveOAuth2Params(bool isOidc)
         {
             // テスト用にパラメタを、Session, Cookieに保存
             // ・Session : サイト分割時
@@ -255,24 +258,28 @@ namespace MultiPurposeAuthSite.Controllers
             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
 
             // client_id
-            HttpContext.Session.SetString("test_client_id", this.ClientId);
-            responseCookies.Set("test_client_id", this.ClientId);
+            HttpContext.Session.SetString(Const.TestClientId, this.ClientId);
+            responseCookies.Set(Const.TestClientId, this.ClientId);
 
             // state
-            HttpContext.Session.SetString("test_state", this.State);
-            responseCookies.Set("test_state", this.State);
+            HttpContext.Session.SetString(Const.TestState, this.State);
+            responseCookies.Set(Const.TestState, this.State);
 
             // redirect_uri
-            HttpContext.Session.SetString("test_redirect_uri", this.RedirectUri);
-            responseCookies.Set("test_redirect_uri", this.RedirectUri);
+            if (!isOidc)
+            {
+                // OIDCはTokenリクエストにredirect_uriを指定しない。
+                HttpContext.Session.SetString(Const.TestRedirectUri, this.RedirectUri);
+                responseCookies.Set(Const.TestRedirectUri, this.RedirectUri);
+            }
 
             // nonce
-            HttpContext.Session.SetString("test_nonce", this.Nonce);
-            responseCookies.Set("test_nonce", this.Nonce);
+            HttpContext.Session.SetString(Const.TestNonce, this.Nonce);
+            responseCookies.Set(Const.TestNonce, this.Nonce);
 
             // code_verifier
-            HttpContext.Session.SetString("test_code_verifier", this.CodeVerifier);
-            responseCookies.Set("test_code_verifier", this.CodeVerifier);
+            HttpContext.Session.SetString(Const.TestCodeVerifier, this.CodeVerifier);
+            responseCookies.Set(Const.TestCodeVerifier, this.CodeVerifier);
         }
 
         #endregion
@@ -293,12 +300,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>OAuth2スターター</returns>
         private string AndAddAdditionalParamToOAuth2Starter(string redirect, string response_type)
         {
+            // RedirectUriの追加
             if (this.ClarifyRedirectUri)
             {
-                this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
                 redirect += "&" + OAuth2AndOIDCConst.redirect_uri + "=" + this.RedirectUri;
             }
 
+            // ResponseModeの指定
             if (!string.IsNullOrEmpty(this.ResponseMode))
             {
                 redirect += "&" + OAuth2AndOIDCConst.response_mode + "=" + this.ResponseMode;
@@ -772,6 +782,10 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             return this.AuthorizationCodeFAPI1_OIDC();
                         }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI1_PKCE"]))
+                        {
+                            return this.AuthorizationCodeFAPI1_PKCE();
+                        }
                         else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2"]))
                         {
                             return await this.AuthorizationCodeFAPI2Async();
@@ -895,7 +909,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(false);
 
             return Redirect(redirect);
         }
@@ -915,7 +929,7 @@ namespace MultiPurposeAuthSite.Controllers
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none";
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
@@ -934,7 +948,6 @@ namespace MultiPurposeAuthSite.Controllers
             // 追加のパラメタ
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = this.CodeVerifier;
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (PKCE plain)
             string redirect = this.AssembleOAuth2Starter(
@@ -945,7 +958,7 @@ namespace MultiPurposeAuthSite.Controllers
             // Authorization Code Grant Flow with PKCE
             if (toSpa) redirect += "&response_mode=fragment";
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(false);
 
             return Redirect(redirect);
         }
@@ -960,7 +973,6 @@ namespace MultiPurposeAuthSite.Controllers
             // 追加のパラメタ
             this.CodeVerifier = GetPassword.Base64UrlSecret(50);
             this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
-            this.SaveOAuth2Params();
 
             // Authorization Code Flow (PKCE S256)
             string redirect = this.AssembleOAuth2Starter(
@@ -971,7 +983,7 @@ namespace MultiPurposeAuthSite.Controllers
             // Authorization Code Grant Flow with PKCE
             if (toSpa) redirect += "&response_mode=fragment";
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(false);
 
             return Redirect(redirect);
         }
@@ -994,7 +1006,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.ImplicitResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(false);
 
             return Redirect(redirect);
         }
@@ -1013,7 +1025,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcImplicit1_ResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
@@ -1029,7 +1041,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
@@ -1052,7 +1064,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
@@ -1067,7 +1079,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
@@ -1082,7 +1094,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
@@ -1105,7 +1117,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleFAPI1Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
@@ -1120,11 +1132,32 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleFAPI1_OIDCStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }
-        
+
+        /// <summary>Test Authorization Code Flow (FAPI1 PC, PKCE)</summary>
+        /// <returns>ActionResult</returns>
+        private ActionResult AuthorizationCodeFAPI1_PKCE()
+        {
+            this.InitOAuth2Params();
+
+            // 追加のパラメタ
+            this.CodeVerifier = GetPassword.Base64UrlSecret(50);
+            this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
+
+            // Authorization Code Flow (FAPI1 PC, PKCE)
+            string redirect = this.AssembleFAPI1_OIDCStarter(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                + "&code_challenge=" + this.CodeChallenge
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain;
+
+            this.SaveOAuth2Params(true);
+
+            return Redirect(redirect);
+        }
+
         #endregion
 
         #region FAPI2
@@ -1139,7 +1172,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = await this.AssembleFAPI2CCStarterAsync(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params();
+            this.SaveOAuth2Params(true);
 
             return Redirect(redirect);
         }

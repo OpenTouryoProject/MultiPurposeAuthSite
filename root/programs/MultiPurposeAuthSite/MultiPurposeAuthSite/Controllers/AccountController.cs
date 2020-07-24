@@ -22,6 +22,7 @@
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/02/28  西野 大介         エラーメッセージ通知の改善
 //*  2020/03/04  西野 大介         CIBA対応実施
+//*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3627,77 +3628,77 @@ namespace MultiPurposeAuthSite.Controllers
             out string nonce, out string code_verifier)
         {
             // client_id
-            clientId = (string)Session["test_client_id"];
+            clientId = (string)Session[Const.TestClientId];
             if (!string.IsNullOrEmpty(clientId))
             {
-                Session.Remove("test_client_id");
+                Session.Remove(Const.TestClientId);
             }
             else
             {
-                clientId = Request.Cookies["test_client_id"]?.Value;
+                clientId = Request.Cookies[Const.TestClientId]?.Value;
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    Response.Cookies["test_client_id"].Value = "";
+                    Response.Cookies[Const.TestClientId].Value = "";
                 }
             }
 
             // state
-            state = (string)Session["test_state"];
+            state = (string)Session[Const.TestState];
             if (!string.IsNullOrEmpty(state))
             {
-                Session.Remove("test_state");
+                Session.Remove(Const.TestState);
             }
             else
             {
-                state = Request.Cookies["test_state"]?.Value;
+                state = Request.Cookies[Const.TestState]?.Value;
                 if (!string.IsNullOrEmpty(state))
                 {
-                    Response.Cookies["test_state"].Value = "";
+                    Response.Cookies[Const.TestState].Value = "";
                 }
             }
 
             // redirect_uri
-            redirect_uri = (string)Session["test_redirect_uri"];
+            redirect_uri = (string)Session[Const.TestRedirectUri];
             if (!string.IsNullOrEmpty(redirect_uri))
             {
-                Session.Remove("test_redirect_uri");
+                Session.Remove(Const.TestRedirectUri);
             }
             else
             {
-                redirect_uri = Request.Cookies["test_redirect_uri"]?.Value;
+                redirect_uri = Request.Cookies[Const.TestRedirectUri]?.Value;
                 if (!string.IsNullOrEmpty(redirect_uri))
                 {
-                    Response.Cookies["test_redirect_uri"].Value = "";
+                    Response.Cookies[Const.TestRedirectUri].Value = "";
                 }
             }
 
             // nonce
-            nonce = (string)Session["test_nonce"];
+            nonce = (string)Session[Const.TestNonce];
             if (!string.IsNullOrEmpty(nonce))
             {
-                Session.Remove("test_nonce");
+                Session.Remove(Const.TestNonce);
             }
             else
             {
-                nonce = Request.Cookies["test_nonce"]?.Value;
+                nonce = Request.Cookies[Const.TestNonce]?.Value;
                 if (!string.IsNullOrEmpty(nonce))
                 {
-                    Response.Cookies["test_nonce"].Value = "";
+                    Response.Cookies[Const.TestNonce].Value = "";
                 }
             }
 
             // code_verifier
-            code_verifier = (string)Session["test_code_verifier"];
+            code_verifier = (string)Session[Const.TestCodeVerifier];
             if (!string.IsNullOrEmpty(code_verifier))
             {
-                Session.Remove("test_code_verifier");
+                Session.Remove(Const.TestCodeVerifier);
             }
             else
             {
-                code_verifier = Request.Cookies["test_code_verifier"]?.Value;
+                code_verifier = Request.Cookies[Const.TestCodeVerifier]?.Value;
                 if (!string.IsNullOrEmpty(code_verifier))
                 {
-                    Response.Cookies["test_code_verifier"].Value = "";
+                    Response.Cookies[Const.TestCodeVerifier].Value = "";
                 }
             }
         }

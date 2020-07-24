@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/26  西野 大介         新規（分割
 //*  2019/08/01  西野 大介         ReceiveをReceive＋ReceiveChallengeに分割
+//*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -37,6 +38,7 @@ using MultiPurposeAuthSite.Data;
 
 using System;
 using System.Data;
+using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Collections.Specialized;
@@ -76,7 +78,13 @@ namespace MultiPurposeAuthSite.TokenProviders
             temp.Add("access_token_payload", access_token_payload);
 
             // redirect_uri 対応
-            temp.Add(OAuth2AndOIDCConst.redirect_uri, queryString[OAuth2AndOIDCConst.redirect_uri]);
+            string scope = queryString[OAuth2AndOIDCConst.scope];
+            scope = scope ?? ""; // 空文字列で標準化
+            if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
+            {
+                // OIDCの場合は、redirect_uriを保存しない。
+                temp.Add(OAuth2AndOIDCConst.redirect_uri, queryString[OAuth2AndOIDCConst.redirect_uri]);
+            }
 
             // OAuth PKCE 対応
             temp.Add(OAuth2AndOIDCConst.code_challenge, queryString[OAuth2AndOIDCConst.code_challenge]);
@@ -200,16 +208,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
-            JObject payload = (JObject)JsonConvert.DeserializeObject((string)jobj["access_token_payload"]);
-
-            if (AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, payload))
-            {
-                return payload.ToString();
-            }
-            else
-            {
-                return "";
-            }
+            return AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, jobj);
         }
 
         #endregion
@@ -282,9 +281,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
-            JObject payload = (JObject)JsonConvert.DeserializeObject((string)jobj["access_token_payload"]);
+            string payload = AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, jobj);
 
-            if (AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, payload))
+            if (!string.IsNullOrEmpty(payload))
             {
                 code_challenge_method = (string)jobj[OAuth2AndOIDCConst.code_challenge_method];
                 code_challenge = (string)jobj[OAuth2AndOIDCConst.code_challenge];
@@ -295,24 +294,33 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="redirect_uri">string</param>
         /// <param name="payload">JObject</param>
-        /// <returns>bool</returns>
-        private static bool CheckClientIdAndRedirectUri(string client_id, string redirect_uri, JObject payload)
+        /// <returns>payload</returns>
+        private static string CheckClientIdAndRedirectUri(string client_id, string redirect_uri, JObject jobj)
         {
+            // payload
+            JObject payload = (JObject)JsonConvert.
+                DeserializeObject((string)jobj["access_token_payload"]);
+
             // client_idチェック
             if (client_id == (string)payload[OAuth2AndOIDCConst.aud])
             {
                 // client_id 一致
+
                 // 空文字列で標準化
                 redirect_uri = redirect_uri ?? "";
+
                 string _redirect_uri =
-                    (string)payload[OAuth2AndOIDCConst.redirect_uri] ?? "";
+                    (string)jobj[OAuth2AndOIDCConst.redirect_uri] ?? "";
 
                 // redirect_uriチェック
-                if (string.IsNullOrEmpty(_redirect_uri)) return true; // 認可リクエスト時、指定無し
-                else if (_redirect_uri == redirect_uri) return true; // 認可リクエスト指定と一致
-                else return true; // 認可リクエスト指定と不一致
+                if (string.IsNullOrEmpty(_redirect_uri)) return payload.ToString(); // 認可リクエスト時、指定無し
+                else if (_redirect_uri == redirect_uri) return payload.ToString(); // 認可リクエスト指定と一致
+                else return ""; // 認可リクエスト指定と不一致
             }
-            else return false; // client_id 不正
+            else
+            {
+                return ""; // client_id 不正
+            }
         }
 
         #endregion

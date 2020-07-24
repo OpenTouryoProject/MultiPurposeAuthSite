@@ -48,6 +48,7 @@
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/02/28  西野 大介         エラーメッセージ通知の改善
 //*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
+//*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -468,6 +469,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                         return false;
                     }
 
+                    // redirect_uriパラメタ 必須
+                    if (string.IsNullOrEmpty(redirect_uri) 
+                        || string.IsNullOrEmpty(valid_redirect_uri))
+                    {
+                        //err = "server_error";
+                        errDescription = "OIDC is required the valid redirect_uri.";
+                        return false;
+                    }
+
                     // nonceパラメタ 必須 → 任意
                     //if (string.IsNullOrEmpty(nonce))
                     //{
@@ -665,31 +675,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (!string.IsNullOrEmpty(redirect_uri))
                 {
                     // 事前登録されている。
-                    if (redirect_uri.ToLower() == "test_self_code")
-                    {
-                        // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                        valid_redirect_uri = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
-                    }
-                    else if (redirect_uri.ToLower() == "test_self_token")
-                    {
-                        // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
-                        valid_redirect_uri = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
-                    }
-                    else if (redirect_uri.ToLower() == "id_federation_code")
-                    {
-                        // ID連携時のエンドポイント
-                        valid_redirect_uri = Config.IdFederationRedirectEndPoint;
-                    }
-                    else
-                    {
-                        // 事前登録した、redirect_uriをそのまま使用する。
-                        valid_redirect_uri = redirect_uri;
-                    }
-
+                    // 定数値は変換する。
+                    valid_redirect_uri = CmnEndpoints.GetRedirectUriFromConstr(redirect_uri);
                     return true;
                 }
                 else
                 {
+                    // 事前登録されていない。
                     err = "server_error";
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.redirect_uri_NotRegistered;
                     return false;
@@ -704,14 +696,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // self_code : Authorization Codeグラント種別
                     redirect_uri == (Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage))
                 {
-                    // 不特定多数のクライアント識別子に許可されたredirect_uri
+                    // 特別に、許可されたredirect_uri
                     valid_redirect_uri = redirect_uri;
                     return true;
                 }
                 else
                 {
-                    // クライアント識別子に対応する事前登録したredirect_uriに
+                    // クライアント識別子に対応する事前登録したredirect_uri
                     string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
+                    
+                    // 定数値は変換する。
+                    preRegisteredUri = CmnEndpoints.GetRedirectUriFromConstr(preRegisteredUri);
 
                     //if (redirect_uri.StartsWith(preRegisteredUri))
                     if (preRegisteredUri == null) preRegisteredUri = ""; // null対策
@@ -1718,7 +1713,37 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Public
 
-        // ...
+        /// <summary>定数文字列からRedirectUriを取得する。</summary>
+        /// <param name="constr">定数文字列</param>
+        /// <returns>RedirectUri</returns>
+        public static string GetRedirectUriFromConstr(string constr)
+        {
+            string ret = "";
+
+            // 事前登録されている。
+            if (constr.ToLower() == Const.TestSelfCode)
+            {
+                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
+            }
+            else if (constr.ToLower() == Const.TestSelfToken)
+            {
+                // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
+            }
+            else if (constr.ToLower() == Const.IdFederationCode)
+            {
+                // ID連携時のエンドポイント
+                ret = Config.IdFederationRedirectEndPoint;
+            }
+            else
+            {
+                // そのまま使用する。
+                ret = constr;
+            }
+
+            return ret;
+        }
 
         #endregion
 

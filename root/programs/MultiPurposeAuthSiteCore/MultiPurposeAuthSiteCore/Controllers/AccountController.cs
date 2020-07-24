@@ -22,6 +22,7 @@
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/02/28  西野 大介         エラーメッセージ通知の改善
 //*  2020/03/04  西野 大介         CIBA対応実施
+//*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3866,77 +3867,77 @@ namespace MultiPurposeAuthSite.Controllers
             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
 
             // client_id
-            clientId = HttpContext.Session.GetString("test_client_id");
+            clientId = HttpContext.Session.GetString(Const.TestClientId);
             if (!string.IsNullOrEmpty(clientId))
             {
-                HttpContext.Session.SetString("test_client_id", "");
+                HttpContext.Session.SetString(Const.TestClientId, "");
             }
             else
             {
-                clientId = requestCookies.Get("test_client_id");
+                clientId = requestCookies.Get(Const.TestClientId);
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    responseCookies.Set("test_client_id", "");
+                    responseCookies.Set(Const.TestClientId, "");
                 }
             }
 
             // state
-            state = HttpContext.Session.GetString("test_state");
+            state = HttpContext.Session.GetString(Const.TestState);
             if (!string.IsNullOrEmpty(state))
             {
-                HttpContext.Session.SetString("test_state", "");
+                HttpContext.Session.SetString(Const.TestState, "");
             }
             else
             {
-                state = requestCookies.Get("test_state");
+                state = requestCookies.Get(Const.TestState);
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    responseCookies.Set("test_state", "");
+                    responseCookies.Set(Const.TestState, "");
                 }
             }
 
             // redirect_uri
-            redirect_uri = HttpContext.Session.GetString("test_redirect_uri");
+            redirect_uri = HttpContext.Session.GetString(Const.TestRedirectUri);
             if (!string.IsNullOrEmpty(redirect_uri))
             {
-                HttpContext.Session.SetString("test_redirect_uri", "");
+                HttpContext.Session.SetString(Const.TestRedirectUri, "");
             }
             else
             {
-                redirect_uri = requestCookies.Get("test_redirect_uri");
+                redirect_uri = requestCookies.Get(Const.TestRedirectUri);
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    responseCookies.Set("test_redirect_uri", "");
+                    responseCookies.Set(Const.TestRedirectUri, "");
                 }
             }
 
             // nonce
-            nonce = HttpContext.Session.GetString("test_nonce");
+            nonce = HttpContext.Session.GetString(Const.TestNonce);
             if (!string.IsNullOrEmpty(nonce))
             {
-                HttpContext.Session.SetString("test_nonce", "");
+                HttpContext.Session.SetString(Const.TestNonce, "");
             }
             else
             {
-                nonce = requestCookies.Get("test_nonce");
+                nonce = requestCookies.Get(Const.TestNonce);
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    responseCookies.Set("test_nonce", "");
+                    responseCookies.Set(Const.TestNonce, "");
                 }
             }
 
             // code_verifier
-            code_verifier = HttpContext.Session.GetString("test_code_verifier");
+            code_verifier = HttpContext.Session.GetString(Const.TestCodeVerifier);
             if (!string.IsNullOrEmpty(code_verifier))
             {
-                HttpContext.Session.SetString("test_code_verifier", "");
+                HttpContext.Session.SetString(Const.TestCodeVerifier, "");
             }
             else
             {
-                code_verifier = requestCookies.Get("test_code_verifier");
+                code_verifier = requestCookies.Get(Const.TestCodeVerifier);
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    responseCookies.Set("test_code_verifier", "");
+                    responseCookies.Set(Const.TestCodeVerifier, "");
                 }
             }
         }
