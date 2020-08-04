@@ -33,6 +33,7 @@
 //*  2020/02/27  西野 大介         プッシュ通知、CIBA対応実施
 //*  2020/06/19  西野 大介         GetConfigSectionメソッドを廃止に伴う変更
 //*                                GetConfigSection → GetAnyConfigSection
+//*  2020/08/04  西野 大介         コンテナ化対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -439,6 +440,17 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Convert.ToBoolean(GetConfigParameter.GetConfigValue("DisplayAgreementScreen"));
+            }
+        }
+
+        /// <summary>
+        /// 約款画面などに表示するテキスト・ファイルのフォルダ
+        /// </summary>
+        public static string ContentOfLetterFilePath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ContentOfLetterFilePath");
             }
         }
 
@@ -1195,6 +1207,17 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("OAuth2AuthorizationServerEndpointsRootURI");
+            }
+        }
+
+        /// <summary>
+        /// OAuth2ContainerizatedAuthSvrFqdnAndPort
+        /// </summary>
+        public static string OAuth2ContainerizatedAuthSvrFqdnAndPort
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("OAuth2ContainerizatedAuthSvrFqdnAndPort");
             }
         }
 

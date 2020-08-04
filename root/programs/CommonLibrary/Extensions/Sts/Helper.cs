@@ -33,6 +33,7 @@
 //*  2020/01/07  西野 大介         PPID対応実施
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/03/04  西野 大介         CIBA対応実施
+//*  2020/08/04  西野 大介         コンテナ化対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -256,9 +257,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> GetAccessTokenByCodeAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, client_id, client_secret, redirect_uri, code);
-        }        
+        }
 
         /// <summary>
         /// Resource Owner Password Credentials Grant
@@ -274,6 +279,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             Uri tokenEndpointUri, string client_id, string client_secret,
             string username, string password, string scopes)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.ResourceOwnerPasswordCredentialsGrantAsync(
                 tokenEndpointUri, client_id, client_secret, username, password, scopes);
         }
@@ -289,6 +298,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> ClientCredentialsGrantAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string scopes)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.ClientCredentialsGrantAsync(
                 tokenEndpointUri, client_id, client_secret, scopes);
         }
@@ -302,6 +315,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> UpdateAccessTokenByRefreshTokenAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string refreshToken)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.UpdateAccessTokenByRefreshTokenAsync(
                 tokenEndpointUri, client_id, client_secret, refreshToken);
         }
@@ -321,6 +338,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             Uri userInfoUri = new Uri(
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2UserInfoEndpoint);
 
+            // コンテナ化サポート
+            userInfoUri = Helper.GetContainerizatedAuthZServerUri(userInfoUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetUserInfoAsync(userInfoUri, accessToken);
         }
 
@@ -343,6 +364,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> GetAccessTokenByCodeAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string redirect_uri, string code, string code_verifier)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, client_id, client_secret, redirect_uri, code, code_verifier);
         }
@@ -361,6 +386,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> RevokeTokenAsync(
             Uri revokeTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
         {
+            // コンテナ化サポート
+            revokeTokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(revokeTokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.RevokeTokenAsync(
                 revokeTokenEndpointUri, client_id, client_secret, token, token_type_hint);
         }
@@ -375,6 +404,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> IntrospectTokenAsync(
             Uri introspectTokenEndpointUri, string client_id, string client_secret, string token, string token_type_hint)
         {
+            // コンテナ化サポート
+            introspectTokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(introspectTokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.IntrospectTokenAsync(
                 introspectTokenEndpointUri, client_id, client_secret, token, token_type_hint);
         }
@@ -391,6 +424,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>結果のJSON文字列</returns>
         public async Task<string> JwtBearerTokenFlowAsync(Uri tokenEndpointUri, string assertion)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.JwtBearerTokenFlowAsync(tokenEndpointUri, assertion);
         }
 
@@ -409,6 +446,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> GetAccessTokenByCodeAsync(
             Uri tokenEndpointUri, string redirect_uri, string code, string assertion)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
                 tokenEndpointUri, redirect_uri, code, assertion);
         }
@@ -421,6 +462,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>結果のJSON文字列</returns>
         public async Task<string> RegisterRequestObjectAsync(Uri requestObjectRegUri, string requestObject)
         {
+            // コンテナ化サポート
+            requestObjectRegUri = Helper.GetContainerizatedAuthZServerUri(requestObjectRegUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.RegisterRequestObjectAsync(requestObjectRegUri, requestObject);
         }
 
@@ -433,6 +478,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>結果のJSON文字列</returns>
         public async Task<string> CibaAuthZRequestAsync(Uri cibaAuthZUri, string requestObjectUri)
         {
+            // コンテナ化サポート
+            cibaAuthZUri = Helper.GetContainerizatedAuthZServerUri(cibaAuthZUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.CibaAuthZRequestAsyncAsync(cibaAuthZUri, requestObjectUri);
         }
 
@@ -447,6 +496,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         public async Task<string> GetAccessTokenByCibaAsync(
             Uri tokenEndpointUri, string client_id, string client_secret, string auth_req_id)
         {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.GetAccessTokenByCibaAsync(
                 tokenEndpointUri, client_id, client_secret, auth_req_id);
         }
@@ -470,8 +523,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // 課金用のWebAPI
             Uri webApiEndpointUri = new Uri(
-                Config.OAuth2AuthorizationServerEndpointsRootURI
-                + Config.ChageToUserWebAPI);
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.ChageToUserWebAPI);
+
+            // コンテナ化サポート
+            webApiEndpointUri = Helper.GetContainerizatedAuthZServerUri(webApiEndpointUri);
 
             HttpRequestMessage httpRequestMessage = null;
             HttpResponseMessage httpResponseMessage = null;
@@ -1109,6 +1164,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             #endregion
 
             return identity;
+        }
+
+        #endregion
+
+        #region コンテナ化サポート
+
+        /// <summary>GetContainerizatedAuthZServerUri</summary>
+        /// <param name="orgUri">Uri</param>
+        /// <returns>Uri</returns>
+        public static Uri GetContainerizatedAuthZServerUri(Uri orgUri)
+        {
+            string fqdnAndPort = Config.OAuth2ContainerizatedAuthSvrFqdnAndPort;
+
+            if (string.IsNullOrEmpty(fqdnAndPort))
+            {
+                // そのまま
+                return orgUri;
+            }
+            else
+            {
+                // 置換
+                string orgStr = orgUri.ToString();
+                return new Uri(orgStr.Replace(orgUri.Authority, fqdnAndPort));
+            }
         }
 
         #endregion
