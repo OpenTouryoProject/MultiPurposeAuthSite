@@ -1175,19 +1175,34 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>Uri</returns>
         public static Uri GetContainerizatedAuthZServerUri(Uri orgUri)
         {
-            string fqdnAndPort = Config.OAuth2ContainerizatedAuthSvrFqdnAndPort;
-
-            if (string.IsNullOrEmpty(fqdnAndPort))
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
             {
-                // そのまま
-                return orgUri;
+                // コンテナではない
             }
             else
             {
+                string temp = "";
+
+                // コンテナの可能性
+                temp = Config.OAuth2ContainerizatedAuthSvrFqdnAndPort;
+                if (!string.IsNullOrEmpty(temp))
+            {
+                    // 置換
+                    string orgStr = orgUri.ToString();
+                    return new Uri(orgStr.Replace(orgUri.Authority, temp));
+            }
+
+                temp = Config.OAuth2ContainerizatedAuthSvrEPRootURI;
+                if (!string.IsNullOrEmpty(temp))
+            {
                 // 置換
                 string orgStr = orgUri.ToString();
-                return new Uri(orgStr.Replace(orgUri.Authority, fqdnAndPort));
+                    return new Uri(orgStr.Replace(orgUri.Scheme + "://" + orgUri.Authority, temp));
             }
+            }
+
+            // 置換条件に合致しなかった場合。
+            return orgUri;
         }
 
         #endregion

@@ -1221,6 +1221,17 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
+        /// <summary>
+        /// OAuth2ContainerizatedAuthSvrEPRootURI
+        /// </summary>
+        public static string OAuth2ContainerizatedAuthSvrEPRootURI
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("OAuth2ContainerizatedAuthSvrEPRootURI");
+            }
+        }
+
         #region 既定
 
         /// <summary>
