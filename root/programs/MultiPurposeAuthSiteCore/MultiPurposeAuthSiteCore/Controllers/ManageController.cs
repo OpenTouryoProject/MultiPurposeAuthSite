@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/11/30  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2020/11/12  西野 大介         SameSiteCookie対応 (.NET Fx側は対策不要)
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -157,14 +158,18 @@ namespace MultiPurposeAuthSite.Controllers
         private readonly SignInManager<ApplicationUser> _signInManager = null;
         #endregion
 
-        #region Else
+        #region IXXXSender
         /// <summary>IEmailSender</summary>
         private readonly IEmailSender _emailSender = null;
         /// <summary>ISmsSender</summary>
         private readonly ISmsSender _smsSender = null;
+        #endregion
+
         /// <summary>UrlEncoder</summary>
         private readonly UrlEncoder _urlEncoder = null;
-        #endregion
+
+        //  <summary>CookieOptions</summary>
+        private readonly CookieOptions _cookieOptions = null;
 
         #endregion
 
@@ -190,12 +195,21 @@ namespace MultiPurposeAuthSite.Controllers
             this._roleManager = roleManager;
             // SignInManager
             this._signInManager = signInManager;
+
             // IEmailSender
             this._emailSender = emailSender;
             // ISmsSender
             this._smsSender = smsSender;
+            
             // UrlEncoder
             this._urlEncoder = urlEncoder;
+
+            // CookieOptions
+            CookieOptions co = new CookieOptions();
+            co.HttpOnly = true;
+            co.Secure = true;
+            co.SameSite = SameSiteMode.None;
+            this._cookieOptions = co;
         }
         #endregion
 
@@ -440,7 +454,8 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                                FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
                         else
@@ -727,7 +742,8 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                                FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
                         else
@@ -836,7 +852,8 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                                FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
                         else
@@ -1831,7 +1848,8 @@ namespace MultiPurposeAuthSite.Controllers
                                         //rememberBrowser: true); // rememberBrowser は true 固定
 
                                     IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                                    responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+                                    responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                                        FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             
                                     // リダイレクト
                                     return RedirectToAction("ManageLogins");
@@ -3119,7 +3137,8 @@ namespace MultiPurposeAuthSite.Controllers
                         //rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
 
                 IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                responseCookies.Set(OAuth2AndOIDCConst.auth_time, FormatConverter.ToW3cTimestamp(DateTime.UtcNow));
+                responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                    FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
 
                 return true;
             }

@@ -22,6 +22,7 @@
 //*  2020/01/07  西野 大介         PKCE for SPA対応実施
 //*  2020/03/04  西野 大介         CIBA対応実施
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+//*  2020/11/12  西野 大介         redirect_uri、ROへの対策漏れ。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -428,7 +429,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (this.ClarifyRedirectUri)
             {
-                this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                //this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
             }
 
             // テストコードで、clientを識別するために、Stateに細工する。

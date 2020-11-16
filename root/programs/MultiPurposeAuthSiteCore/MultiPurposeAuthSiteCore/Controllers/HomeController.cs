@@ -22,6 +22,8 @@
 //*  2020/01/07  西野 大介         PKCE for SPA対応実施
 //*  2020/03/04  西野 大介         CIBA対応実施
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+//*  2020/11/12  西野 大介         redirect_uri、ROへの対策漏れ。
+//*  2020/11/12  西野 大介         SameSiteCookie対応 (.NET Fx側は対策不要)
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -78,6 +80,13 @@ namespace MultiPurposeAuthSite.Controllers
         {
             // UserManager
             this._userManager = userManager;
+            
+            // CookieOptions
+            CookieOptions co = new CookieOptions();
+            co.HttpOnly = true;
+            co.Secure = true;
+            co.SameSite = SameSiteMode.None;
+            this._cookieOptions = co;
         }
 
         #endregion
@@ -86,6 +95,9 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>UserManager</summary>
         private readonly UserManager<ApplicationUser> _userManager = null;
+
+        //  <summary>CookieOptions</summary>
+        private readonly CookieOptions _cookieOptions = null;
 
         #endregion
 
@@ -214,15 +226,15 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id → Issuer
             HttpContext.Session.SetString(Const.TestClientId, this.ClientId);
-            responseCookies.Set(Const.TestClientId, this.ClientId);
+            responseCookies.Set(Const.TestClientId, this.ClientId, this._cookieOptions);
 
             // redirect_uri → AssertionConsumerService
             HttpContext.Session.SetString(Const.TestRedirectUri, this.RedirectUri);
-            responseCookies.Set(Const.TestRedirectUri, this.RedirectUri);
+            responseCookies.Set(Const.TestRedirectUri, this.RedirectUri, this._cookieOptions);
 
             // state → RelayState
             HttpContext.Session.SetString(Const.TestState, this.State);
-            responseCookies.Set(Const.TestState, this.State);
+            responseCookies.Set(Const.TestState, this.State, this._cookieOptions);
         }
 
         #endregion
@@ -259,27 +271,27 @@ namespace MultiPurposeAuthSite.Controllers
 
             // client_id
             HttpContext.Session.SetString(Const.TestClientId, this.ClientId);
-            responseCookies.Set(Const.TestClientId, this.ClientId);
+            responseCookies.Set(Const.TestClientId, this.ClientId, this._cookieOptions);
 
             // state
             HttpContext.Session.SetString(Const.TestState, this.State);
-            responseCookies.Set(Const.TestState, this.State);
+            responseCookies.Set(Const.TestState, this.State, this._cookieOptions);
 
             // redirect_uri
             if (!isOidc)
             {
                 // OIDCはTokenリクエストにredirect_uriを指定しない。
                 HttpContext.Session.SetString(Const.TestRedirectUri, this.RedirectUri);
-                responseCookies.Set(Const.TestRedirectUri, this.RedirectUri);
+                responseCookies.Set(Const.TestRedirectUri, this.RedirectUri, this._cookieOptions);
             }
 
             // nonce
             HttpContext.Session.SetString(Const.TestNonce, this.Nonce);
-            responseCookies.Set(Const.TestNonce, this.Nonce);
+            responseCookies.Set(Const.TestNonce, this.Nonce, this._cookieOptions);
 
             // code_verifier
             HttpContext.Session.SetString(Const.TestCodeVerifier, this.CodeVerifier);
-            responseCookies.Set(Const.TestCodeVerifier, this.CodeVerifier);
+            responseCookies.Set(Const.TestCodeVerifier, this.CodeVerifier, this._cookieOptions);
         }
 
         #endregion
@@ -405,8 +417,10 @@ namespace MultiPurposeAuthSite.Controllers
                 HashAlgorithmName.SHA256);
 
             if (this.ClarifyRedirectUri)
-        {
-                this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+            {
+                //this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
             }
 
             // テストコードで、clientを識別するために、Stateに細工する。
