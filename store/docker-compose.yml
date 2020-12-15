@@ -1,0 +1,38 @@
+version: '3.4'
+
+services:
+  postgres:
+    image: postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=seigi@123
+    ports:
+      - 5432:5432
+    volumes:
+      #- ./postgres/data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - common_link
+
+  sqlserver:
+    image: microsoft/mssql-server-linux:latest
+    restart: always
+    command: "sh -c '/init/start-up.sh & /opt/mssql/bin/sqlservr;'"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=seigi@123
+      - MSSQL_PID=Express
+      - MSSQL_LCID=1041
+      - MSSQL_COLLATION=Japanese_CI_AS
+    ports:
+      - 1433:1433
+    volumes:
+      #- ./sqlserver/mssql-db:/var/opt/mssql
+      - ./sqlserver/init:/init
+    networks:
+      - common_link
+
+networks:
+  common_link:
+    external: true
