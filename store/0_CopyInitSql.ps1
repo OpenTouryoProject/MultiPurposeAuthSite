@@ -1,4 +1,7 @@
+####################################################################################################
 # pstgrs
+####################################################################################################
+echo "pstgrs"
 echo "copy"
 copy "..\root\files\resource\MultiPurposeAuthSite\Sql\pstgrs\Create_UserStore.sql" "postgres\init\Create_UserStore.sql"
 pause
@@ -13,7 +16,10 @@ pause
 
 pop-location
 
+####################################################################################################
 # sqlserver
+####################################################################################################
+echo "sqlserver"
 echo "copy"
 copy "..\root\files\resource\MultiPurposeAuthSite\Sql\sqlserver\Create_UserStore.sql" "sqlserver\init\Create_UserStore.sql"
 pause
@@ -28,7 +34,9 @@ pause
 
 pop-location
 
+####################################################################################################
 # function
+####################################################################################################
 function Pause
 {
     if ($psISE) {
