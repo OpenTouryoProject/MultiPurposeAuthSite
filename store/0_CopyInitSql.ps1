@@ -3,7 +3,7 @@
 ####################################################################################################
 echo "pstgrs"
 echo "copy"
-copy "..\root\files\resource\MultiPurposeAuthSite\Sql\pstgrs\Create_UserStore.sql" "postgres\init\Create_UserStore.sql"
+copy "..\root\files\resource\MultiPurposeAuthSite\Sql\pstgrs\Create_UserStore.sql" "postgres\init\1_Create_UserStore.sql"
 pause
 
 echo "cd"
@@ -21,7 +21,7 @@ pop-location
 ####################################################################################################
 echo "sqlserver"
 echo "copy"
-copy "..\root\files\resource\MultiPurposeAuthSite\Sql\sqlserver\Create_UserStore.sql" "sqlserver\init\Create_UserStore.sql"
+copy "..\root\files\resource\MultiPurposeAuthSite\Sql\sqlserver\Create_UserStore.sql" "sqlserver\init\1_Create_UserStore.sql"
 pause
 
 echo "cd"

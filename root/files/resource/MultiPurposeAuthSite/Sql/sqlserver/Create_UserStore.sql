@@ -134,8 +134,8 @@ CREATE TABLE [FIDO2Data](
 
 CREATE TABLE [CibaData](
     [Id] [int] IDENTITY(1,1) NOT NULL,                   -- PK (キー長に問題があるため[Id] [int]を使用)
-    [ClientNotificationToken] [nvarchar](800) NOT NULL, -- 乱数(800)
-    [AuthReqId] [nvarchar](800) NOT NULL,               -- 乱数(800)
+    [ClientNotificationToken] [nvarchar](800) NOT NULL,  -- 乱数(800)
+    [AuthReqId] [nvarchar](800) NOT NULL,                -- 乱数(800)
     [AuthReqExp] [bigint] NOT NULL,                      -- UNIX時刻(long)
     [AuthZCode] [nvarchar](64) NOT NULL,                 -- AuthZCode
     [UnstructuredData] [nvarchar](max) NULL,             -- binding_message, user_code, etc.
