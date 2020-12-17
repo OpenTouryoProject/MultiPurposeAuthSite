@@ -7,6 +7,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=seigi@123
+      - POSTGRES_DB=UserStore
     ports:
       - 5432:5432
     volumes:

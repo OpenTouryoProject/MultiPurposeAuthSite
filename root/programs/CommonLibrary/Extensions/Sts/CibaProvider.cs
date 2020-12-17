@@ -25,6 +25,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2020/03/02  西野 大介         新規
+//*  2020/12/16  西野 大介         PostgreSQL疎通（Debugモード）
 //**********************************************************************************
 
 using System;
@@ -404,12 +405,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     else
                                     {
                                         // Code
-                                        authZCode = dyn.AuthZCode;
+                                        authZCode = dyn.authzcode;
 
                                         // states判別
                                         result = CibaProvider.GetCibaState(
-                                            ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            ((long)dyn.authreqexp).ToString(),
+                                            ((bool)dyn.result).ToString().ToLower(),
                                             out states);
                                     }
 
