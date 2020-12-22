@@ -15,8 +15,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：CibaProvider
-//* クラス日本語名  ：CibaProvider（ライブラリ）
+//* クラス名        ：DeviceAuthZProvider
+//* クラス日本語名  ：DeviceAuthZProvider（ライブラリ）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -24,17 +24,27 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2020/03/02  西野 大介         新規
-//*  2020/12/16  西野 大介         PostgreSQL疎通（Debugモード）
+//*  2020/12/18  西野 大介         新規
 //**********************************************************************************
 
 using System;
 using System.Data;
+using System.Security.Claims;
+using System.Security.Principal;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Collections.Specialized;
 
-using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.Data;
+#if NETFX
+using MultiPurposeAuthSite.Entity;
+#else
+using MultiPurposeAuthSite;
+#endif
+using MultiPurposeAuthSite.Util;
+using Token = MultiPurposeAuthSite.TokenProviders;
+using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using Newtonsoft.Json;
 using Dapper;
@@ -45,52 +55,50 @@ using Touryo.Infrastructure.Public.Security.Pwd;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
-    /// <summary>CibaProvider</summary>
-    public class CibaProvider
+    /// <summary>DeviceAuthZProvider</summary>
+    public class DeviceAuthZProvider
     {
-        /// <summary>AD無しのテストをする場合、tureに設定。</summary>
-        public const bool DebugModeWithOutAD = true;  //false;
-
         /// <summary>
-        /// CibaData
+        /// DeviceAuthZData
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
         private static ConcurrentDictionary<string, string>
-            CibaData = new ConcurrentDictionary<string, string>();
+            DeviceAuthZData = new ConcurrentDictionary<string, string>();
 
-        #region Create
+#region Create
 
         /// <summary>Create</summary>
-        /// <param name="clientNotificationToken">string</param>
         /// <param name="authReqExp">long</param>
-        /// <param name="authZCode">string</param>
-        /// <param name="unstructuredData">string</param>
-        /// <param name="authReqId">string</param>
-        public static void Create(string clientNotificationToken,
-            long authReqExp, string authZCode, string unstructuredData, out string authReqId)
+        /// <param name="tempData">string</param>
+        /// <param name="deviceCode">string</param>
+        /// <param name="userCode">string</param>
+        public static void Create(long authReqExp, string tempData,
+            out string deviceCode, out string userCode)
         {
-            authReqId = ""; // 初期化
+            // 初期化
+            deviceCode = ""; 
+            userCode = "";
 
-            if (Config.EnableCibaGrantType)
+            if (Config.EnableDeviceAuthZGrantType)
             {
-                authReqId = CustomEncode.ToBase64UrlString(GetPassword.RandomByte(160));
+                deviceCode = Guid.NewGuid().ToString("N");
+                userCode = GetPassword.Generate(8, 0);
 
-                // EnableCibaGrantType == true
+                // EnableDeviceAuthZGrantType == true
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
                         Dictionary<string, string> temp = new Dictionary<string, string>()
                         { 
-                            { "authReqId", authReqId },
+                            { "userCode", userCode },
                             { "authReqExp", authReqExp.ToString() },
-                            { "authZCode", authZCode },
-                            { "unstructuredData", unstructuredData },
+                            { "tempData", tempData },
                             { "result", "" }
                         };
-                        
-                        CibaProvider.CibaData.TryAdd(
-                            clientNotificationToken, JsonConvert.SerializeObject(temp));
+
+                        DeviceAuthZProvider.DeviceAuthZData.TryAdd(
+                            deviceCode, JsonConvert.SerializeObject(temp));
 
                         break;
 
@@ -107,31 +115,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.SqlServer:
 
                                     cnn.Execute(
-                                        "INSERT INTO [CibaData]"
-                                        + " ([ClientNotificationToken], [AuthReqId], [AuthReqExp], [AuthZCode], [UnstructuredData])"
-                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData)",
+                                        "INSERT INTO [DeviceAuthZData]"
+                                        + " ([DeviceCode], [UserCode], [AuthReqExp], [TempData])"
+                                        + " VALUES (@DeviceCode, @UserCode, @AuthReqExp, @TempData)",
                                         new {
-                                            ClientNotificationToken = clientNotificationToken,
-                                            AuthReqId = authReqId,
+                                            DeviceCode = deviceCode,
+                                            UserCode = userCode,
                                             AuthReqExp = authReqExp,
-                                            AuthZCode = authZCode,
-                                            UnstructuredData = unstructuredData
+                                            TempData = tempData
                                         });
                                      break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"CibaData\""
-                                        + " (\"ClientNotificationToken\", \"AuthReqId\", \"AuthReqExp\", \"AuthZCode\", \"UnstructuredData\")"
-                                        + " VALUES (:ClientNotificationToken, :AuthReqId, :AuthReqExp, :AuthZCode, :UnstructuredData)",
+                                        "INSERT INTO \"DeviceAuthZData\""
+                                        + " (\"DeviceCode\", \"UserCode\", \"AuthReqExp\", \"TempData\")"
+                                        + " VALUES (:DeviceCode, :UserCode, :AuthReqExp, :TempData)",
                                         new
                                         {
-                                            ClientNotificationToken = clientNotificationToken,
-                                            AuthReqId = authReqId,
+                                            DeviceCode = deviceCode,
+                                            UserCode = userCode,
                                             AuthReqExp = authReqExp,
-                                            AuthZCode = authZCode,
-                                            UnstructuredData = unstructuredData
+                                            TempData = tempData
                                         });
 
                                     break;
@@ -139,16 +145,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.PostgreSQL:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"cibadata\""
-                                        + " (\"clientnotificationtoken\", \"authreqid\", \"authreqexp\", \"authzcode\", \"unstructureddata\")"
-                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData)",
+                                        "INSERT INTO \"deviceauthzdata\""
+                                        + " (\"devicecode\", \"usercode\", \"authreqexp\", \"tempdata\")"
+                                        + " VALUES (@DeviceCode, @UserCode, @AuthReqExp, @TempData)",
                                          new
                                          {
-                                             ClientNotificationToken = clientNotificationToken,
-                                             AuthReqId = authReqId,
+                                             DeviceCode = deviceCode,
+                                             UserCode = userCode,
                                              AuthReqExp = authReqExp,
-                                             AuthZCode = authZCode,
-                                             UnstructuredData = unstructuredData
+                                             TempData = tempData
                                          });
 
                                     break;
@@ -160,50 +165,65 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
             else
             {
-                // EnableCibaGrantType == false
+                // EnableDeviceAuthZGrantType == false
             }
 
             return;
         }
 
-        #endregion
+#endregion
 
-        #region ReceiveResult
+#region ReceiveResult
 
         /// <summary>ReceiveResult</summary>
-        /// <param name="authReqId">string</param>
+        /// <param name="userCode">string</param>
+        /// <param name="userName">string</param>
         /// <param name="result">bool</param>
-        public static void ReceiveResult(string authReqId, bool result)
+        public static bool ReceiveResult(string userCode, string userName, bool result)
         {
-            if (Config.EnableCibaGrantType)
+            bool retVal = false;
+
+            if (Config.EnableDeviceAuthZGrantType)
             {
-                // EnableCibaGrantType == true
+                // EnableDeviceAuthZGrantType == true
 
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
-                        foreach (string clientNotificationToken in CibaProvider.CibaData.Keys)
+                        foreach (string deviceCode in DeviceAuthZProvider.DeviceAuthZData.Keys)
                         {
-                            if (CibaProvider.CibaData.ContainsKey(clientNotificationToken))
+                            string temp = DeviceAuthZProvider.DeviceAuthZData[deviceCode];
+
+                            Dictionary<string, string> dic
+                                = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
+
+                            string _userCode = dic["userCode"];
+
+                            if (userCode == _userCode)
                             {
-                                string temp = CibaProvider.CibaData[clientNotificationToken];
-                                if (string.IsNullOrEmpty(temp))
-                                {
-                                    // 異常レコード
-                                    CibaProvider.CibaData.TryRemove(clientNotificationToken, out temp);
-                                }
-                                else
-                                {
-                                    // 正常レコード
-                                    Dictionary<string, string> dic
-                                        = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
+                                string tempData = dic["tempData"];
 
-                                    // 結果の登録
-                                    dic["result"] = result.ToString();
-                                    CibaProvider.CibaData[clientNotificationToken] = JsonConvert.SerializeObject(dic);
+                                Dictionary<string, string> tempdic
+                                     = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
 
-                                }
+                                string client_id = tempdic["client_id"];
+                                string scope = tempdic["scope"];
+
+                                ApplicationUser user = null;
+                                string sub = PPIDExtension.GetSubForOIDC(client_id, userName, out user);
+
+                                string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
+                                    new ClaimsIdentity(new GenericIdentity(sub)), new NameValueCollection(),
+                                    client_id, "", (scope ?? "").Split(' '), null, "");
+
+                                // 更新
+                                dic["authZCode"] = code;
+                                dic["result"] = result.ToString();
+
+                                DeviceAuthZProvider.DeviceAuthZData[deviceCode] = JsonConvert.SerializeObject(dic);
+                                retVal = true;
+                                break;
                             }
                         }
                         break;
@@ -215,7 +235,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-
+                            /*
                             switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
@@ -241,7 +261,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         new { AuthReqId = authReqId, Result = result });
 
                                     break;
-                            }
+                            }*/
                         }
 
                         break;
@@ -249,72 +269,63 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
             else
             {
-                // EnableCibaGrantType == false
+                // EnableDeviceAuthZGrantType == false
             }
 
-            // 空振っても呼び出し元は気にしない。
-            // （このプロファイルにはuserCodeが無いので）
-            return;
+            return retVal;
         }
 
-        #endregion
+#endregion
 
-        #region ReceiveTokenReq
+#region ReceiveTokenReq
 
         /// <summary>ReceiveTokenReq</summary>
-        /// <param name="authReqId">string</param>
+        /// <param name="deviceCode">string</param>
         /// <param name="authZCode">string</param>
-        /// <param name="states">CibaState</param>
+        /// <param name="states">DeviceAuthZState</param>
         /// <returns>結果</returns>
-        public static bool ReceiveTokenReq(string authReqId, out string authZCode, out OAuth2AndOIDCEnum.CibaState states)
+        public static bool ReceiveTokenReq(string deviceCode, out string authZCode, out OAuth2AndOIDCEnum.DeviceAuthZState states)
         {
             bool retVal = false;
             authZCode = "";
-            states = OAuth2AndOIDCEnum.CibaState.not_found;
+            states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
 
-            if (Config.EnableCibaGrantType)
+            if (Config.EnableDeviceAuthZGrantType)
             {
-                // EnableCibaGrantType == true
+                // EnableDeviceAuthZGrantType == true
 
                 string temp = "";
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
 
-                        string clientNotificationToken = "";
+                        temp = DeviceAuthZProvider.DeviceAuthZData[deviceCode];
 
-                        foreach (string _clientNotificationToken in CibaProvider.CibaData.Keys)
+                        if (string.IsNullOrEmpty(temp))
                         {
-                            clientNotificationToken = _clientNotificationToken;
-
-                            // レコードあり。
-                            temp = CibaProvider.CibaData[_clientNotificationToken];
-
-                            if (string.IsNullOrEmpty(temp))
+                            // 異常レコード
+                            states = OAuth2AndOIDCEnum.DeviceAuthZState.irregularity_data;
+                        }
+                        else
+                        {
+                            // 正常レコード
+                            Dictionary<string, string> dic
+                                = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
+                            
+                            // 結果の判別
+                            if (DeviceAuthZProvider.GetState(dic["authReqExp"], dic["result"], out states))
                             {
-                                // 異常レコード
-                                states = OAuth2AndOIDCEnum.CibaState.irregularity_data;
-                            }
-                            else
-                            {
-                                // 正常レコード
-                                Dictionary<string, string> dic
-                                    = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
-
-                                if (authReqId == dic["authReqId"])
-                                {
-                                    // Code
-                                    authZCode = dic["authZCode"];
-                                    // CibaState
-                                    retVal = CibaProvider.GetState(dic["authReqExp"], dic["result"], out states);
-                                }
+                                // Code
+                                authZCode = dic["authZCode"];
+                                // retVal
+                                retVal = true;
                             }
                         }
 
                         // 削除（pendingのケースを除いて）
-                        if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                        if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                         {
-                            CibaProvider.CibaData.TryRemove(clientNotificationToken, out temp);
+                            DeviceAuthZProvider.DeviceAuthZData.TryRemove(deviceCode, out temp);
                         }
 
                         break;
@@ -326,7 +337,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-
+                            /*
                             dynamic dyn = null;
                             switch (Config.UserStoreType)
                             {   
@@ -338,7 +349,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     if (dyn == null)
                                     {
                                         // レコードなし。
-                                        states = OAuth2AndOIDCEnum.CibaState.not_found;
+                                        states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
                                     }
                                     else
                                     {
@@ -346,14 +357,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
-                                        retVal = CibaProvider.GetState(
+                                        result = DeviceAuthZProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
                                             ((bool)dyn.Result).ToString().ToLower(),
                                             out states);
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
@@ -370,7 +381,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     if (dyn == null)
                                     {
                                         // レコードなし。
-                                        states = OAuth2AndOIDCEnum.CibaState.not_found;
+                                        states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
                                     }
                                     else
                                     {
@@ -378,14 +389,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
-                                        retVal = CibaProvider.GetState(
+                                        result = DeviceAuthZProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
                                             ((bool)dyn.Result).ToString().ToLower(),
                                             out states);
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
@@ -402,7 +413,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     if (dyn == null)
                                     {
                                         // レコードなし。
-                                        states = OAuth2AndOIDCEnum.CibaState.not_found;
+                                        states = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
                                     }
                                     else
                                     {
@@ -410,14 +421,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.authzcode;
 
                                         // states判別
-                                        retVal = CibaProvider.GetState(
+                                        result = DeviceAuthZProvider.GetState(
                                             ((long)dyn.authreqexp).ToString(),
                                             ((bool)dyn.result).ToString().ToLower(),
                                             out states);
                                     }
 
                                     // 削除（pendingのケースを除いて）
-                                    if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                                    if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                                     {
                                         cnn.Execute(
                                             "DELETE FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
@@ -425,7 +436,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
 
                                     break;
-                            }
+                            }*/
                         }
 
                         break;
@@ -433,29 +444,29 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
             else
             {
-                // EnableCibaGrantType == false
+                // EnableDeviceAuthZGrantType == false
             }
 
             return retVal;
         }
 
-        #endregion
+#endregion
 
-        #region GetState
+#region GetState
 
         /// <summary>GetState</summary>
         /// <param name="authReqExp">string</param>
         /// <param name="result">string</param>
-        /// <param name="states">CibaState</param>
+        /// <param name="states">DeviceAuthZState</param>
         /// <returns>bool</returns>
-        private static bool GetState(string authReqExp, string result, out OAuth2AndOIDCEnum.CibaState states)
+        private static bool GetState(string authReqExp, string result, out OAuth2AndOIDCEnum.DeviceAuthZState states)
         {
             bool _result = false;
 
             if (string.IsNullOrEmpty(authReqExp))
             {
                 // 異常
-                states = OAuth2AndOIDCEnum.CibaState.irregularity_data;
+                states = OAuth2AndOIDCEnum.DeviceAuthZState.irregularity_data;
             }
             else
             {
@@ -466,7 +477,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     if (string.IsNullOrEmpty(result))
                     {
                         // 未応答
-                        states = OAuth2AndOIDCEnum.CibaState.authorization_pending;
+                        states = OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending;
                     }
                     else
                     {
@@ -476,31 +487,31 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             // = bool
                             if (_result)
                             {
-                                states = OAuth2AndOIDCEnum.CibaState.access_permitted;
+                                states = OAuth2AndOIDCEnum.DeviceAuthZState.access_permitted;
                                 _result = true; // 唯一の正常ケース
                             }
                             else
                             {
-                                states = OAuth2AndOIDCEnum.CibaState.access_denied;
+                                states = OAuth2AndOIDCEnum.DeviceAuthZState.access_denied;
                             }
                         }
                         else
                         {
                             // ≠ bool
-                            states = OAuth2AndOIDCEnum.CibaState.irregularity_data;
+                            states = OAuth2AndOIDCEnum.DeviceAuthZState.irregularity_data;
                         }
                     }
                 }
                 else
                 {
                     // 期限外
-                    states = OAuth2AndOIDCEnum.CibaState.expired_token;
+                    states = OAuth2AndOIDCEnum.DeviceAuthZState.expired_token;
                 }
             }
 
             return _result;
         }
 
-        #endregion
+#endregion
     }
 }

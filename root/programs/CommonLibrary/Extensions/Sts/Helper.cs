@@ -32,8 +32,9 @@
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2020/01/07  西野 大介         PPID対応実施
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
-//*  2020/03/04  西野 大介         CIBA対応実施
+//*  2020/03/04  西野 大介         FAPI CIBA対応実施
 //*  2020/08/04  西野 大介         コンテナ化対応実施
+//*  2020/12/18  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -433,6 +434,41 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region Device AuthZ
+        /// <summary>
+        /// Device AuthZの認可リクエスト（WebAPI）
+        /// </summary>
+        /// <param name="deviceAuthZUri">Uri</param>
+        /// <param name="clientId">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> DeviceAuthZRequestAsync(Uri deviceAuthZUri, string clientId)
+        {
+            // コンテナ化サポート
+            deviceAuthZUri = Helper.GetContainerizatedAuthZServerUri(deviceAuthZUri);
+
+            // WebAPI呼び出し。
+            return await OAuth2AndOIDCClient.DeviceAuthZRequestAsync(deviceAuthZUri, clientId);
+        }
+
+        /// <summary>
+        /// Device AuthZのTokenリクエスト（WebAPI）
+        /// </summary>
+        /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="device_code">string</param>
+        /// <returns>結果のJSON文字列</returns>
+        public async Task<string> GetAccessTokenByDeviceAuthZAsync(
+            Uri tokenEndpointUri, string client_id, string device_code)
+        {
+            // コンテナ化サポート
+            tokenEndpointUri = Helper.GetContainerizatedAuthZServerUri(tokenEndpointUri);
+
+            // WebAPI呼び出し。
+            return await OAuth2AndOIDCClient.GetAccessTokenByDeviceAuthZAsync(
+                tokenEndpointUri, client_id, device_code);
+        }
+        #endregion
+
         #region FAPI (Financial-grade API) 
 
         /// <summary>
@@ -482,11 +518,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             cibaAuthZUri = Helper.GetContainerizatedAuthZServerUri(cibaAuthZUri);
 
             // WebAPI呼び出し。
-            return await OAuth2AndOIDCClient.CibaAuthZRequestAsyncAsync(cibaAuthZUri, requestObjectUri);
+            return await OAuth2AndOIDCClient.CibaAuthZRequestAsync(cibaAuthZUri, requestObjectUri);
         }
 
         /// <summary>
-        /// FAPI2 : CIBA で Access Tokenを取得する。
+        /// FAPI2 CIBAのTokenリクエスト（WebAPI）
         /// </summary>
         /// <param name="tokenEndpointUri">TokenエンドポイントのUri</param>
         /// <param name="client_id">client_id</param>

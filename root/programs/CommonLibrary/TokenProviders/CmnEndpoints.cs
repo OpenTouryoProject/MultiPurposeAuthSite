@@ -47,9 +47,11 @@
 //*  2020/01/07  西野 大介         PPID対応実施（ログ出力時のUser Account）
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/02/28  西野 大介         エラーメッセージ通知の改善
-//*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
+//*  2020/02/28  西野 大介         プッシュ通知、FAPI CIBA対応実施
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
+//*  2020/12/18  西野 大介         Device AuthZ対応実施
+//*  2020/12/21  西野 大介         ClientMode追加対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1566,6 +1568,118 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region GrantDeviceAuthZ
+
+        /// <summary>GrantDeviceAuthZ（OAuth 2.0 Device Authorization Grant）</summary>
+        /// <param name="grant_type">string</param>
+        /// <param name="client_id">string</param>
+        /// <param name="device_code">string</param>
+        /// <param name="ret">Dictionary(string, string)</param>
+        /// <param name="err">Dictionary(string, string)</param>
+        /// <returns>成否</returns>
+        public static bool GrantDeviceAuthZ(
+            string grant_type, string client_id, string device_code,
+            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+            err = new Dictionary<string, string>();
+
+            if (Config.EnableDeviceAuthZGrantType)
+            {
+                // 認証は無し（Client認証のclient_idとToken類のaudをチェック
+
+                //#region 認証
+                // ...
+                //#endregion
+
+                //if (authned)
+                //{
+
+                //#region CheckClientMode
+                // ...
+                //#endregion
+
+                #region 発行
+
+                // Tokenレスポンスを生成する。
+                string code = "";
+                OAuth2AndOIDCEnum.DeviceAuthZState deviceState = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
+
+                if (DeviceAuthZProvider.ReceiveTokenReq(device_code, out code, out deviceState))
+                {
+                    // = OAuth2AndOIDCEnum.CibaState.access_permitted
+                    // Tokenレスポンス（正常）
+                    string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, "");
+
+                    // access_token
+                    string access_token = CmnAccessToken.ProtectFromPayload(
+                        client_id, tokenPayload,
+                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                        null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub);
+
+                    // Client認証のclient_idとToken類のaudをチェック
+                    if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+
+                    // refresh_token
+                    string refresh_token = "";
+                    if (Config.EnableRefreshToken)
+                    {
+                        refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                    }
+
+                    // オペレーション・トレース・ログ出力
+                    string name = Helper.GetInstance().GetClientName(client_id);
+                    Logging.MyOperationTrace(string.Format(
+                        "{0}({1}) passed the 'Authorization Code flow' by {2}({3}).",
+                        client_id, name,                                         // Client Account
+                        PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
+
+                    ret = CmnEndpoints.CreateAccessTokenResponse(access_token, "", "");
+
+                    return true;
+                }
+                else
+                {
+                    // ≠ OAuth2AndOIDCEnum.DeviceAuthZState.access_permitted
+                    // Tokenレスポンス（異常）
+                    switch (deviceState)
+                    {
+                        case OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending:
+
+                            // このケースだけ、slow_downを検討する（どうやって？）。
+
+                            //if() err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.slow_down.ToStringByEmit());
+                            //else
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending.ToStringByEmit());
+                            break;
+
+                        default:
+                            err.Add(OAuth2AndOIDCConst.error, deviceState.ToStringByEmit());
+                            break;
+                    }
+                }
+
+                #endregion
+                //}
+                //else
+                //{
+                //    // クライアント認証エラー（Credential不正
+                //    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                //    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
+                //}
+            }
+            else
+            {
+                // サポートされていない
+                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableCibaGrantType);
+            }
+
+            return false;
+        }
+
+        #endregion
+
         #region GrantCiba
 
         /// <summary>GrantCiba（CIBA）</summary>
@@ -1605,8 +1719,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？（fapi2に設定
-                    OAuth2AndOIDCEnum.ClientMode permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2; // 固定
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.fapi2, out jwkString, out err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -1635,7 +1748,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            x509, permittedLevel, out string aud, out string sub, JwtConst.ES256);
+                            x509, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out string aud, out string sub, JwtConst.ES256);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud) { throw new Exception("[client_id != aud]"); }
@@ -1683,9 +1796,6 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 break;
                         }
                     }
-
-                    // オペレーション・トレース・ログ出力
-
 
                     #endregion
                 }
@@ -1891,17 +2001,38 @@ namespace MultiPurposeAuthSite.TokenProviders
                     jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
                         Helper.GetInstance().GetJwkRsaPublickey(client_id)), CustomEncode.us_ascii);
                 }
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit())
+                {
+                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.device;
+                }
+                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit())
+                {
+                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi_ciba;
+                }
             }
 
-            if ((int)clientModeEnum <= (int)permittedLevel)
+            if ((int)permittedLevel <= (int)OAuth2AndOIDCEnum.ClientMode.fapi2)
             {
-                // permittedLevel == normal
-                retval = true;
+                // permittedLevelがfapi2以下の場合
+                if ((int)clientModeEnum <= (int)permittedLevel)
+                {
+                    // permittedLevelがclientMode以上
+                    retval = true;
+                }
+                else
+                {
+                    // permittedLevelがclientMode未満
+                    retval = false;
+                }
             }
             else
             {
-                // permittedLevel != normal
-                retval = false;
+                // permittedLevelがfapi2より大きい場合
+                // 大小関係は意味を持たず、一致している必要がある。
+                if ((int)clientModeEnum == (int)permittedLevel)
+                    retval = true;
+                else
+                    retval = false;
             }
 
             if (!retval)

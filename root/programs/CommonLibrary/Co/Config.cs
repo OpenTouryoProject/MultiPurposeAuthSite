@@ -30,10 +30,11 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
-//*  2020/02/27  西野 大介         プッシュ通知、CIBA対応実施
+//*  2020/02/27  西野 大介         プッシュ通知、FAPI CIBA対応実施
 //*  2020/06/19  西野 大介         GetConfigSectionメソッドを廃止に伴う変更
 //*                                GetConfigSection → GetAnyConfigSection
 //*  2020/08/04  西野 大介         コンテナ化対応実施
+//*  2020/12/18  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1062,6 +1063,8 @@ namespace MultiPurposeAuthSite.Co
 
         #region OAuth2関連プロパティ
 
+        #region ExpireTime
+
         /// <summary>
         /// OAuth2のAccessTokenの有効期限（分）
         /// </summary>
@@ -1096,6 +1099,17 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// Device AuthZのdevice_codeの有効期限（秒）
+        /// </summary>
+        public static int DeviceAuthZExpireTimeSpanFromSeconds
+        {
+            get
+            {
+                return int.Parse(GetConfigParameter.GetConfigValue("DeviceAuthZExpireTimeSpanFromSeconds"));
+            }
+        }        
+
+        /// <summary>
         /// CIBAのauth_req_idの有効期限（秒）
         /// </summary>
         public static int CibaExpireTimeSpanFromSeconds
@@ -1103,6 +1117,21 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return int.Parse(GetConfigParameter.GetConfigValue("CibaExpireTimeSpanFromSeconds"));
+            }
+        }
+
+        #endregion
+
+        #region Interval
+
+        /// <summary>
+        /// Device AuthZのPollingのInterval（秒）
+        /// </summary>
+        public static int DeviceAuthZPollingIntervalSeconds
+        {
+            get
+            {
+                return int.Parse(GetConfigParameter.GetConfigValue("DeviceAuthZPollingIntervalSeconds"));
             }
         }
 
@@ -1116,6 +1145,8 @@ namespace MultiPurposeAuthSite.Co
                 return int.Parse(GetConfigParameter.GetConfigValue("CibaPollingIntervalSeconds"));
             }
         }
+
+        #endregion
 
         #endregion
 
@@ -1174,6 +1205,15 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableJwtBearerTokenFlowGrantType"));
+            }
+        }
+
+        /// <summary>EnableDeviceAuthZGrantType</summary>
+        public static bool EnableDeviceAuthZGrantType
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnableDeviceAuthZGrantType"));
             }
         }
 
@@ -1259,6 +1299,33 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region OAuth2拡張
+
+        #region Device AuthZ
+        /// <summary>
+        /// Device AuthZのAuthorizeエンドポイント 
+        /// </summary>
+        public static string DeviceAuthZAuthorizeEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("DeviceAuthZAuthorizeEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// Device AuthZの検証用エンドポイント
+        /// </summary>
+        public static string DeviceAuthZVerifyEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("DeviceAuthZVerifyEndpoint");
+            }
+        }
+
+        // Tokenエンドポイントは共用。
+
+        #endregion
 
         #region CIBA
         /// <summary>
