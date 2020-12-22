@@ -25,6 +25,7 @@
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //*  2020/11/12  西野 大介         SameSiteCookie対応 (.NET Fx側は対策不要)
+//*  2020/12/21  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3963,6 +3964,43 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
+        #region Device AuthZ
+        /// <summary>
+        /// DeviceAuthZVerify画面（初期表示）
+        /// GET: /device_verify
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult DeviceAuthZVerify()
+        {
+            ViewBag.ReceiveResult = false;
+            ViewBag.UserCode = StringExtractor.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.user_code, Request.GetEncodedUrl());
+
+            return View("DeviceAuthZVerify");
+        }
+
+        /// <summary>
+        /// DeviceAuthZVerify画面
+        /// POST: /device_verify
+        /// </summary>
+        /// <param name="formData">IFormCollection</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        public ActionResult DeviceAuthZVerify(IFormCollection formData)
+        {
+            ViewBag.ReceiveResult = false;
+
+            if (formData != null)
+            {
+                string userCode = formData[OAuth2AndOIDCConst.user_code];
+                ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(userCode, User.Identity.Name, formData.ContainsKey("allow"));
+            }
+            
+            return View("DeviceAuthZVerify");
+        }
         #endregion
 
         #region テスト用

@@ -18,6 +18,7 @@
 //*  2018/11/30  西野 大介         新規
 //*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
 //*  2020/07/29  西野 大介         SecurityStamp対応
+//*  2020/12/18  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -154,7 +155,9 @@ namespace MultiPurposeAuthSite
             
             app.UseEndpoints(endpoints =>
             {
-                #region Account
+                #region AuthZ(N)Server
+
+                #region Initial Request
                 endpoints.MapControllerRoute(
                    name: "Saml2Request",
                    pattern: Config.Saml2RequestEndpoint.Substring(1), // 先頭の[/]を削除,
@@ -166,9 +169,7 @@ namespace MultiPurposeAuthSite
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
                 #endregion
 
-                #region OAuth2Endpoint
-
-                #region OAuth2 / OIDC
+                #region WebAPI Endpoint
 
                 endpoints.MapControllerRoute(
                     name: "OAuth2Token",
@@ -202,6 +203,22 @@ namespace MultiPurposeAuthSite
 
                 #endregion
 
+                #region Back Channel
+
+                #region Device AuthZ
+
+                endpoints.MapControllerRoute(
+                    name: "DeviceAuthZAuthorize",
+                    pattern: Config.DeviceAuthZAuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "DeviceAuthZAuthorize" });
+
+                endpoints.MapControllerRoute(
+                    name: "DeviceAuthZVerify",
+                    pattern: Config.DeviceAuthZVerifyEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "Account", action = "DeviceAuthZVerify" });
+
+                #endregion
+
                 #region CIBA FAPI2
 
                 endpoints.MapControllerRoute(
@@ -213,6 +230,8 @@ namespace MultiPurposeAuthSite
                     name: "CibaPushResult",
                     pattern: Config.CibaPushResultEndpoint.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "CibaPushResult" });
+
+                #endregion
 
                 #endregion
 
@@ -232,7 +251,7 @@ namespace MultiPurposeAuthSite
 
                 #endregion
 
-                #region OAuth2ResourceServer
+                #region ResourceServer
                 endpoints.MapControllerRoute(
                     name: "TestHybridFlow",
                     pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,

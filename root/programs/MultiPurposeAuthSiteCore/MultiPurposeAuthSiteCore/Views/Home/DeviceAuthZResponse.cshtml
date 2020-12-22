@@ -1,0 +1,49 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：DeviceAuthZResponse.Index
+    //* クラス日本語名  ：DeviceAuthZResponse.Index
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2020/12/21  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@{
+    ViewBag.Title = "DeviceAuthZResponse";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<ul>
+    <li>ClientId : @ViewBag.ClientId</li>
+    <li>DeviceCode : @ViewBag.DeviceCode</li>
+    <li>UserCode : @ViewBag.UserCode</li>
+    <li><a href="@ViewBag.VerificationUri" target="_blank">VerificationUri</a></li>
+    <li><a href="@ViewBag.VerificationUriComplete" target="_blank">VerificationUriComplete</a></li>
+</ul>
+@using (Html.BeginForm("DeviceAuthZResponse", "Home", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+{
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="@OAuth2AndOIDCConst.client_id" name="@OAuth2AndOIDCConst.client_id" value="@ViewBag.ClientId" />
+    <input type="hidden" id="@OAuth2AndOIDCConst.device_code" name="@OAuth2AndOIDCConst.device_code" value="@ViewBag.DeviceCode" />
+    <input type="submit" class="btn btn-primary" value="Start polling." />
+}
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

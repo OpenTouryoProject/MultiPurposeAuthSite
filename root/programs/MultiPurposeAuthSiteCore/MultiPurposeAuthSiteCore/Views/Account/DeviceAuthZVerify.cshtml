@@ -1,0 +1,60 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：DeviceAuthZVerify.Index
+    //* クラス日本語名  ：DeviceAuthZVerify.Index
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2020/12/18  西野 大介         新規
+    //**********************************************************************************
+*@
+
+@{
+    ViewBag.Title = "DeviceAuthZVerify";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+@if (ViewBag.ReceiveResult)
+{
+    <text>Accepted.</text>
+}
+else
+{
+<div class="col-md-8">
+    @using (Html.BeginForm(FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
+    {
+        @Html.AntiForgeryToken()
+        <div class="form-group">
+            @Html.Label(null, "UserCode", new { @class = "col-md-2 control-label" })
+            <div class="col-md-10">
+                @Html.TextBox(OAuth2AndOIDCConst.user_code, (string)ViewBag.UserCode, new { @class = "form-control" })
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="col-md-offset-2 col-md-10">
+                <input type="submit" class="btn btn-primary" name="allow" value="Allow" />
+                <input type="submit" class="btn btn-primary" name="deny" value="Deny" />
+            </div>
+        </div>
+    }
+</div>
+}
+@section FooterScriptsSection{
+<!-- Footer 部の section -->
+}
