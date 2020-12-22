@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
+//*  2020/12/18  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -70,7 +71,7 @@ namespace MultiPurposeAuthSite
                 defaults: new { id = RouteParameter.Optional }
             );
 
-            #region OAuth2Endpoint
+            #region AuthZ(N)Server
 
             #region OAuth2 / OIDC
 
@@ -111,11 +112,21 @@ namespace MultiPurposeAuthSite
             );
             #endregion
 
+            #region Back Channel
+
+            #region Device AuthZ
+            config.Routes.MapHttpRoute(
+                name: "DeviceAuthZAuthorize",
+                routeTemplate: Config.DeviceAuthZAuthorizeEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "DeviceAuthZAuthorize" }
+            );
+            #endregion
+
             #region CIBA FAPI2
             config.Routes.MapHttpRoute(
                 name: "CibaAuthorize",
                 routeTemplate: Config.CibaAuthorizeEndpoint.Substring(1), // 先頭の[/]を削除
-                defaults: new { controller = "OAuth2Endpoint", action = "CibaAuthorize" }
+                defaults: new { controller = "OAuth2Endpoint", action = "CibaAuthorizeAsync" }
             );
 
             config.Routes.MapHttpRoute(
@@ -123,6 +134,8 @@ namespace MultiPurposeAuthSite
                 routeTemplate: Config.CibaPushResultEndpoint.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "CibaPushResult" }
             );
+            #endregion
+
             #endregion
 
             #region Push Notification
@@ -141,7 +154,7 @@ namespace MultiPurposeAuthSite
 
             #endregion
 
-            #region OAuth2ResourceServer
+            #region ResourceServer
 
             config.Routes.MapHttpRoute(
                 name: "TestHybridFlow",

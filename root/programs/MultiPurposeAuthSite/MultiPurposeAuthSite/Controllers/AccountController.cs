@@ -24,6 +24,7 @@
 //*  2020/03/04  西野 大介         CIBA対応実施
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
+//*  2020/12/21  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -55,6 +56,9 @@ using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
 using System.Web.Configuration;
+//using System.Net;
+//using System.Net.Http;
+using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -3723,6 +3727,45 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #endregion
+
+        #region Device AuthZ
+        /// <summary>
+        /// DeviceAuthZVerify画面（初期表示）
+        /// GET: /device_verify
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult DeviceAuthZVerify()
+        {
+            ViewBag.ReceiveResult = false;
+            ViewBag.UserCode = StringExtractor.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.user_code, Request.RawUrl);
+
+            return View("DeviceAuthZVerify");
+        }
+
+        /// <summary>
+        /// DeviceAuthZVerify画面
+        /// POST: /device_verify
+        /// </summary>
+        /// <param name="formData">FormDataCollection</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        public ActionResult DeviceAuthZVerify(string dummy)
+        {
+            // FormDataCollectionは、WebAPI専用らしい。
+            ViewBag.ReceiveResult = false;
+
+            if (2 <= Request.Form.Count)
+            {
+                string userCode = Request.Form[OAuth2AndOIDCConst.user_code];
+                ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(
+                    userCode, User.Identity.Name, !string.IsNullOrEmpty(Request.Form["allow"]));
+            }
+
+            return View("DeviceAuthZVerify");
+        }
         #endregion
 
         #region テスト用
