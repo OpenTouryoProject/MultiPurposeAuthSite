@@ -106,6 +106,17 @@ CREATE TABLE FIDO2Data(
     CONSTRAINT PK_FIDO2Data PRIMARY KEY (PublicKeyId)
 );
 
+CREATE TABLE DeviceAuthZData(
+    Id serial NOT NULL,                               -- PK (キー長に問題があるためId intを使用)
+    DeviceCode varchar(38) NOT NULL,                  -- device_code(guid)
+    UserCode varchar(10) NOT NULL,                    -- user_code(10文字以下)
+    AuthReqExp bigint NOT NULL,                       -- UNIX時刻(long)
+    TempData varchar(256) NOT NULL,                   -- TempData
+    AuthZCode varchar(64) NULL,                       -- AuthZCode
+    Result boolean NULL,                              -- Result of Verify
+    CONSTRAINT PK_DeviceAuthZData PRIMARY KEY (Id)
+);
+
 CREATE TABLE CibaData(
     Id serial NOT NULL,                               -- PK (キー長に問題があるためId intを使用)
     ClientNotificationToken varchar(800) NOT NULL,    -- 乱数(800)
@@ -148,6 +159,9 @@ CREATE UNIQUE INDEX ClientIDIndex ON Users (ClientID);
 ---- Roles
 CREATE UNIQUE INDEX RoleNameIndex ON Roles (Name);
 CREATE UNIQUE INDEX NormalizedNameIndex ON Roles (NormalizedName);
+---- DeviceAuthZData
+CREATE UNIQUE INDEX DeviceAuthZDeviceCodeIndex ON CibaData (DeviceAuthZData);
+CREATE UNIQUE INDEX DeviceAuthZUserCodeIndex ON CibaData (DeviceAuthZData);
 ---- CibaData
 CREATE UNIQUE INDEX CibaClientNotificationTokenIndex ON CibaData (ClientNotificationToken);
 CREATE UNIQUE INDEX CibaAuthReqIdIndex ON CibaData (AuthReqId);

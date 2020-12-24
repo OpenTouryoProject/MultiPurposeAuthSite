@@ -19,7 +19,7 @@ services:
   sqlserver:
     image: microsoft/mssql-server-linux:latest
     restart: always
-    command: "sh -c '/init/start-up.sh & /opt/mssql/bin/sqlservr;'"
+    command: "sh -c '/init/0_start-up.sh & /opt/mssql/bin/sqlservr;'"
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=seigi@123

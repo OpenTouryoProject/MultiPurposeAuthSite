@@ -65,7 +65,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         private static ConcurrentDictionary<string, string>
             DeviceAuthZData = new ConcurrentDictionary<string, string>();
 
-#region Create
+        #region Public
+
+        #region Create
 
         /// <summary>Create</summary>
         /// <param name="authReqExp">long</param>
@@ -171,9 +173,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return;
         }
 
-#endregion
+        #endregion
 
-#region ReceiveResult
+        #region ReceiveResult
 
         /// <summary>ReceiveResult</summary>
         /// <param name="userCode">string</param>
@@ -207,15 +209,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 Dictionary<string, string> tempdic
                                      = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
 
-                                string client_id = tempdic["client_id"];
-                                string scope = tempdic["scope"];
-
-                                ApplicationUser user = null;
-                                string sub = PPIDExtension.GetSubForOIDC(client_id, userName, out user);
-
-                                string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                                    new ClaimsIdentity(new GenericIdentity(sub)), new NameValueCollection(),
-                                    client_id, "", (scope ?? "").Split(' '), null, "");
+                                string code = DeviceAuthZProvider.GetCode(userName, tempdic);
 
                                 // 更新
                                 dic["authZCode"] = code;
@@ -235,33 +229,112 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            /*
+
+                            dynamic dyn = null;
                             switch (Config.UserStoreType)
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
-                                        "UPDATE [CibaData] SET [Result] = @Result WHERE [AuthReqId] = @AuthReqId",
-                                        new { AuthReqId = authReqId, Result = result });
+                                    // 参照
+                                    dyn = cnn.QueryFirst(
+                                        "SELECT [TempData]"
+                                         + " FROM [DeviceAuthZData]"
+                                         + " WHERE [UserCode] = @UserCode",
+                                        new { UserCode = userCode });
+
+                                    if (dyn == null)
+                                    {
+                                        // レコードなし。
+                                    }
+                                    else
+                                    {
+                                        // レコードあり。
+                                        string tempData = dyn.TempData;
+
+                                        Dictionary<string, string> tempdic
+                                             = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
+
+                                        string code = DeviceAuthZProvider.GetCode(userName, tempdic);
+
+                                        // 更新
+                                        cnn.Execute(
+                                            "UPDATE [DeviceAuthZData]"
+                                            + " SET [AuthZCode] = @AuthZCode, [Result] = @Result"
+                                            + " WHERE [UserCode] = @UserCode",
+                                            new { UserCode = userCode, AuthZCode = code, Result = result });
+                                        retVal = true;
+                                    }
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
-                                    cnn.Execute(
-                                        "UPDATE \"CibaData\" SET \"Result\" = :Result WHERE \"AuthReqId\" = :AuthReqId",
-                                        new { AuthReqId = authReqId, Result = result });
+                                    // 参照
+                                    dyn = cnn.QueryFirst(
+                                        "SELECT \"TempData\""
+                                         + " FROM \"DeviceAuthZData\""
+                                         + " WHERE \"UserCode\" = :UserCode",
+                                        new { UserCode = userCode });
+
+                                    if (dyn == null)
+                                    {
+                                        // レコードなし。
+                                    }
+                                    else
+                                    {
+                                        // レコードあり。
+                                        string tempData = dyn.TempData;
+
+                                        Dictionary<string, string> tempdic
+                                             = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
+
+                                        string code = DeviceAuthZProvider.GetCode(userName, tempdic);
+
+                                        // 更新
+                                        cnn.Execute(
+                                            "UPDATE \"DeviceAuthZData\""
+                                            + " SET \"AuthZCode\" = :AuthZCode, \"Result\" = :Result"
+                                            + " WHERE \"UserCode\" = :UserCode",
+                                            new { UserCode = userCode, AuthZCode = code, Result = result });
+                                        retVal = true;
+                                    }
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    cnn.Execute(
-                                        "UPDATE \"cibadata\" SET \"result\" = @Result WHERE \"authreqid\" = @AuthReqId",
-                                        new { AuthReqId = authReqId, Result = result });
+                                    // 参照
+                                    dyn = cnn.QueryFirst(
+                                        "SELECT \"tempdata\""
+                                         + " FROM \"deviceauthzdata\""
+                                         + " WHERE \"usercode\" = @UserCode",
+                                        new { UserCode = userCode });
+
+                                    if (dyn == null)
+                                    {
+                                        // レコードなし。
+                                    }
+                                    else
+                                    {
+                                        // レコードあり。
+                                        string tempData = dyn.tempdata;
+
+                                        Dictionary<string, string> tempdic
+                                             = JsonConvert.DeserializeObject<Dictionary<string, string>>(tempData);
+
+                                        string code = DeviceAuthZProvider.GetCode(userName, tempdic);
+
+                                        // 更新
+                                        cnn.Execute(
+                                            "UPDATE \"deviceauthzdata\""
+                                            + " SET \"authzcode\" = @AuthZCode, \"result\" = @Result"
+                                            + " WHERE \"usercode\" = @UserCode",
+                                            new { UserCode = userCode, AuthZCode = code, Result = result });
+                                        retVal = true;
+                                    }
 
                                     break;
-                            }*/
+                            }
                         }
 
                         break;
@@ -275,9 +348,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return retVal;
         }
 
-#endregion
+        #endregion
 
-#region ReceiveTokenReq
+        #region ReceiveTokenReq
 
         /// <summary>ReceiveTokenReq</summary>
         /// <param name="deviceCode">string</param>
@@ -337,14 +410,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         using (IDbConnection cnn = DataAccess.CreateConnection())
                         {
                             cnn.Open();
-                            /*
+                            
                             dynamic dyn = null;
                             switch (Config.UserStoreType)
                             {   
                                 case EnumUserStoreType.SqlServer:
+
+                                    // 参照
                                     dyn = cnn.QueryFirst(
-                                        "SELECT [AuthReqExp], [AuthZCode], [Result] FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
-                                        new { AuthReqId = authReqId });
+                                        "SELECT [AuthReqExp], [AuthZCode], [Result]"
+                                        + " FROM [DeviceAuthZData]"
+                                        + " WHERE [DeviceCode] = @DeviceCode",
+                                        new { DeviceCode = deviceCode });
 
                                     if (dyn == null)
                                     {
@@ -353,30 +430,40 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
                                     else
                                     {
-                                        // Code
-                                        authZCode = dyn.AuthZCode;
+                                        // レコードあり。
+                                        long authReqExp = dyn.AuthReqExp;
+                                        bool result = dyn.Result;
 
-                                        // states判別
-                                        result = DeviceAuthZProvider.GetState(
-                                            ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
-                                            out states);
+                                        // 結果の判別
+                                        if (DeviceAuthZProvider.GetState(
+                                            authReqExp.ToString(), result.ToString(), out states))
+                                        {
+                                            // Code
+                                            authZCode = dyn.AuthZCode;
+                                            // retVal
+                                            retVal = true;
+                                        }
                                     }
 
                                     // 削除（pendingのケースを除いて）
                                     if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                                     {
                                         cnn.Execute(
-                                            "DELETE FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
-                                            new { AuthReqId = authReqId });
+                                            "DELETE FROM [DeviceAuthZData]" +
+                                            " WHERE [DeviceCode] = @DeviceCode",
+                                            new { DeviceCode = deviceCode });
                                     }
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
+
+                                    // 参照
                                     dyn = cnn.QueryFirst(
-                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\" FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
-                                        new { AuthReqId = authReqId });
+                                        "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\""
+                                        + " FROM \"DeviceAuthZData\""
+                                        + " WHERE \"DeviceCode\" = :DeviceCode",
+                                        new { DeviceCode = deviceCode });
 
                                     if (dyn == null)
                                     {
@@ -385,30 +472,40 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
                                     else
                                     {
-                                        // Code
-                                        authZCode = dyn.AuthZCode;
+                                        // レコードあり。
+                                        long authReqExp = dyn.AuthReqExp;
+                                        bool result = dyn.Result;
 
-                                        // states判別
-                                        result = DeviceAuthZProvider.GetState(
-                                            ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
-                                            out states);
+                                        // 結果の判別
+                                        if (DeviceAuthZProvider.GetState(
+                                            authReqExp.ToString(), result.ToString(), out states))
+                                        {
+                                            // Code
+                                            authZCode = dyn.AuthZCode;
+                                            // retVal
+                                            retVal = true;
+                                        }
                                     }
 
                                     // 削除（pendingのケースを除いて）
                                     if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                                     {
                                         cnn.Execute(
-                                            "DELETE FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
-                                            new { AuthReqId = authReqId });
+                                            "DELETE FROM \"DeviceAuthZData\"" +
+                                            " WHERE \"DeviceCode\" = :DeviceCode",
+                                            new { DeviceCode = deviceCode });
                                     }
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
+
+                                    // 参照
                                     dyn = cnn.QueryFirst(
-                                        "SELECT \"authreqexp\", \"authzcode\", \"result\" FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
-                                        new { AuthReqId = authReqId });
+                                        "SELECT \"authreqexp\", \"authzcode\", \"result\""
+                                        + " FROM \"deviceauthzdata\""
+                                        + " WHERE \"devicecode\" = @DeviceCode",
+                                        new { DeviceCode = deviceCode });
 
                                     if (dyn == null)
                                     {
@@ -417,26 +514,32 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     }
                                     else
                                     {
-                                        // Code
-                                        authZCode = dyn.authzcode;
+                                        // レコードあり。
+                                        long authReqExp = dyn.authreqexp;
+                                        bool result = dyn.result;
 
-                                        // states判別
-                                        result = DeviceAuthZProvider.GetState(
-                                            ((long)dyn.authreqexp).ToString(),
-                                            ((bool)dyn.result).ToString().ToLower(),
-                                            out states);
+                                        // 結果の判別
+                                        if (DeviceAuthZProvider.GetState(
+                                            authReqExp.ToString(), result.ToString(), out states))
+                                        {
+                                            // Code
+                                            authZCode = dyn.authzcode;
+                                            // retVal
+                                            retVal = true;
+                                        }
                                     }
 
                                     // 削除（pendingのケースを除いて）
                                     if (states != OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending)
                                     {
                                         cnn.Execute(
-                                            "DELETE FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
-                                            new { AuthReqId = authReqId });
+                                            "DELETE FROM \"deviceauthzdata\"" +
+                                            " WHERE \"devicecode\" = @DeviceCode",
+                                            new { DeviceCode = deviceCode });
                                     }
 
                                     break;
-                            }*/
+                            }
                         }
 
                         break;
@@ -450,9 +553,34 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return retVal;
         }
 
-#endregion
+        #endregion
 
-#region GetState
+        #endregion
+
+        #region Private
+
+        #region GetCode
+
+        /// <summary>GetCode</summary>
+        /// <param name="userName">string</param>
+        /// <param name="tempdic">Dictionary(string, string)</param>
+        /// <returns>Code</returns>
+        private static string GetCode(string userName, Dictionary<string, string> tempdic)
+        {
+            string client_id = tempdic["client_id"];
+            string scope = tempdic["scope"];
+
+            ApplicationUser user = null;
+            string sub = PPIDExtension.GetSubForOIDC(client_id, userName, out user);
+
+            return Token.CmnEndpoints.CreateCodeInAuthZNRes(
+                new ClaimsIdentity(new GenericIdentity(sub)), new NameValueCollection(),
+                client_id, "", (scope ?? "").Split(' '), null, "");
+        }
+
+        #endregion
+
+        #region GetState
 
         /// <summary>GetState</summary>
         /// <param name="authReqExp">string</param>
@@ -512,6 +640,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return _result;
         }
 
-#endregion
+        #endregion
+        
+        #endregion
     }
 }
