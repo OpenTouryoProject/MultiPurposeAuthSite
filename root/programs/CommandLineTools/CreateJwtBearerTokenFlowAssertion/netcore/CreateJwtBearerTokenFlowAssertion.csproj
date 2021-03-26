@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -27,13 +27,13 @@
 
   <ItemGroup>
     <Reference Include="OpenTouryo.Framework">
-      <HintPath>..\..\..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Framework.dll</HintPath>
+      <HintPath>..\..\..\OpenTouryoAssemblies\Build_netcore50\net5.0\OpenTouryo.Framework.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public">
-      <HintPath>..\..\..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Public.dll</HintPath>
+      <HintPath>..\..\..\OpenTouryoAssemblies\Build_netcore50\net5.0\OpenTouryo.Public.dll</HintPath>
     </Reference>
     <Reference Include="OpenTouryo.Public.Security">
-      <HintPath>..\..\..\OpenTouryoAssemblies\Build_netcore30\netcoreapp3.0\OpenTouryo.Public.Security.dll</HintPath>
+      <HintPath>..\..\..\OpenTouryoAssemblies\Build_netcore50\net5.0\OpenTouryo.Public.Security.dll</HintPath>
     </Reference>
   </ItemGroup>
 
