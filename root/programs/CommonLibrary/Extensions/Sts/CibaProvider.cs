@@ -25,6 +25,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2020/03/02  西野 大介         新規
+//*  2020/12/16  西野 大介         PostgreSQL疎通（Debugモード）
 //**********************************************************************************
 
 using System;
@@ -251,7 +252,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // EnableCibaGrantType == false
             }
 
-            return; // 空振っても呼び出し元は気にしない。
+            // 空振っても呼び出し元は気にしない。
+            // （このプロファイルにはuserCodeが無いので）
+            return;
         }
 
         #endregion
@@ -265,7 +268,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <returns>結果</returns>
         public static bool ReceiveTokenReq(string authReqId, out string authZCode, out OAuth2AndOIDCEnum.CibaState states)
         {
-            bool result = false;
+            bool retVal = false;
             authZCode = "";
             states = OAuth2AndOIDCEnum.CibaState.not_found;
 
@@ -302,8 +305,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 {
                                     // Code
                                     authZCode = dic["authZCode"];
-                                    // states判別
-                                    result = CibaProvider.GetCibaState(dic["authReqExp"], dic["result"], out states);
+                                    // CibaState
+                                    retVal = CibaProvider.GetState(dic["authReqExp"], dic["result"], out states);
                                 }
                             }
                         }
@@ -343,7 +346,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
-                                        result = CibaProvider.GetCibaState(
+                                        retVal = CibaProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
                                             ((bool)dyn.Result).ToString().ToLower(),
                                             out states);
@@ -375,7 +378,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
-                                        result = CibaProvider.GetCibaState(
+                                        retVal = CibaProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
                                             ((bool)dyn.Result).ToString().ToLower(),
                                             out states);
@@ -404,12 +407,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     else
                                     {
                                         // Code
-                                        authZCode = dyn.AuthZCode;
+                                        authZCode = dyn.authzcode;
 
                                         // states判別
-                                        result = CibaProvider.GetCibaState(
-                                            ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
+                                        retVal = CibaProvider.GetState(
+                                            ((long)dyn.authreqexp).ToString(),
+                                            ((bool)dyn.result).ToString().ToLower(),
                                             out states);
                                     }
 
@@ -433,15 +436,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // EnableCibaGrantType == false
             }
 
-            return result;
+            return retVal;
         }
 
-        /// <summary>hogehoge</summary>
+        #endregion
+
+        #region GetState
+
+        /// <summary>GetState</summary>
         /// <param name="authReqExp">string</param>
         /// <param name="result">string</param>
         /// <param name="states">CibaState</param>
         /// <returns>bool</returns>
-        private static bool GetCibaState(string authReqExp, string result, out OAuth2AndOIDCEnum.CibaState states)
+        private static bool GetState(string authReqExp, string result, out OAuth2AndOIDCEnum.CibaState states)
         {
             bool _result = false;
 

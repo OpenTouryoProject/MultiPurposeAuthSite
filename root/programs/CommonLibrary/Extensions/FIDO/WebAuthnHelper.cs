@@ -88,7 +88,7 @@ namespace MultiPurposeAuthSite.Extensions.FIDO
         /// FIDO Alliance MetaData Service
         /// https://techinfoofmicrosofttech.osscons.jp/index.php?FIDO%E8%AA%8D%E8%A8%BC%E5%99%A8#d6659b25
         /// </summary>
-        private IMetadataService _mds;
+        private IMetadataService _mds = null;
 
         #endregion
 

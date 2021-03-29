@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+//*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -102,6 +104,35 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #endregion
+
+        #region RedirectUri
+
+        /// <summary>codeのテスト用のRedirectUri</summary>
+        public const string TestSelfCode = "test_self_code";
+
+        /// <summary>tokenのテスト用のRedirectUri</summary>
+        public const string TestSelfToken = "test_self_token";
+
+        #endregion
+
+        #region テスト用
+
+        /// <summary>テスト用ClientIdを保存するSession, CookieのKey</summary>
+        public const string TestClientId = "test_client_id";
+
+        /// <summary>テスト用Stateを保存するSession, CookieのKey</summary>
+        public const string TestState = "test_state";
+
+        /// <summary>テスト用RedirectUriを保存するSession, CookieのKey</summary>
+        public const string TestRedirectUri = "test_redirect_uri";
+
+        /// <summary>テスト用Nonceを保存するSession, CookieのKey</summary>
+        public const string TestNonce = "test_nonce";
+
+        /// <summary>テスト用CodeVerifierを保存するSession, CookieのKey</summary>
+        public const string TestCodeVerifier = "test_code_verifier";
+        
         #endregion
     }
 }

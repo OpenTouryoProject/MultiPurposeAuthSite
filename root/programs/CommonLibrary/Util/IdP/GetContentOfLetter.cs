@@ -29,7 +29,10 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/18  西野 大介         新規
+//*  2020/08/04  西野 大介         GetConfigParameter → Config
 //**********************************************************************************
+
+using MultiPurposeAuthSite.Co;
 
 using System.Text;
 using System.Threading;
@@ -74,7 +77,7 @@ namespace MultiPurposeAuthSite.Util.IdP
 
                 uICultureName = currentUICulture.Name;
 
-                string path = GetConfigParameter.GetConfigValue("ContentOfLetterFilePath") + "\\" + fileName + string.Format(".{0}.txt", uICultureName);
+                string path = Config.ContentOfLetterFilePath + "\\" + fileName + string.Format(".{0}.txt", uICultureName);
                 if (ResourceLoader.Exists(path, false))
                 {
                     contentOfLetter = ResourceLoader.LoadAsString(path, Encoding.GetEncoding(codePage));
@@ -87,7 +90,7 @@ namespace MultiPurposeAuthSite.Util.IdP
             
             if(string.IsNullOrEmpty(contentOfLetter)) // 既定（英語）
             {
-                string path = GetConfigParameter.GetConfigValue("ContentOfLetterFilePath") + "\\" + fileName + ".txt";
+                string path = Config.ContentOfLetterFilePath + "\\" + fileName + ".txt";
                 if (ResourceLoader.Exists(path, false))
                 {
                     contentOfLetter = ResourceLoader.LoadAsString(path, Encoding.GetEncoding(codePage));

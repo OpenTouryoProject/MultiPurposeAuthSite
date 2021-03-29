@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/04  西野 大介         新規
 //*  2020/02/27  西野 大介         DeviceToken追加(プッシュ通知)
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
+//*  2020/12/23  西野 大介         NormalizedUserNamenの所、userName.ToUpper()
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -65,7 +67,7 @@ using Dapper;
 namespace MultiPurposeAuthSite.Data
 {
     /// <summary>BaseUserStore</summary>
-    public class CmnUserStore : CmnStore
+    internal class CmnUserStore : CmnStore
     {
         #region CRUD(共通)
 
@@ -379,7 +381,7 @@ namespace MultiPurposeAuthSite.Data
                                             "SELECT * FROM [Users] WHERE [UserName] = @userName", new { userName = userName });
 #else
                                         users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM [Users] WHERE [NormalizedUserName] = @userName", new { userName = userName });
+                                            "SELECT * FROM [Users] WHERE [NormalizedUserName] = @userName", new { userName = userName.ToUpper() });
 #endif
                                         break;
 
@@ -389,7 +391,7 @@ namespace MultiPurposeAuthSite.Data
                                             "SELECT * FROM \"Users\" WHERE \"UserName\" = :userName", new { userName = userName });
 #else
                                         users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM \"Users\" WHERE \"NormalizedUserName\" = :userName", new { userName = userName });
+                                            "SELECT * FROM \"Users\" WHERE \"NormalizedUserName\" = :userName", new { userName = userName.ToUpper() });
 #endif
                                         break;
 
@@ -399,7 +401,7 @@ namespace MultiPurposeAuthSite.Data
                                             "SELECT * FROM \"users\" WHERE \"username\" = :userName", new { userName = userName });
 #else
                                         users = cnn.Query<ApplicationUser>(
-                                            "SELECT * FROM \"users\" WHERE \"normalizedusername\" = :userName", new { userName = userName });
+                                            "SELECT * FROM \"users\" WHERE \"normalizedusername\" = :userName", new { userName = userName.ToUpper() });
 #endif
                                         break;
                                 }

@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/02/16  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2020/12/21  西野 大介         Enum追加対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -65,6 +66,12 @@ namespace MultiPurposeAuthSite.ViewModels
                     new SelectListItem() {
                         Text = "Financial-grade API - Part2用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = "Device Authorization Grant用 Client",
+                        Value = OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = "Financial-grade API - CIBA用 Client",
+                        Value = OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "ログイン・ユーザの Client",
                         Value = "login User" }

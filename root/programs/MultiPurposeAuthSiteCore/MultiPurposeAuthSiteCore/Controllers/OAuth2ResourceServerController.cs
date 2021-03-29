@@ -31,6 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //*  2018/12/26  西野 大介         分割
 //*  2020/02/27  西野 大介         課金エンドポイント（テスト用→解放）
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -46,6 +47,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Identity;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -65,6 +67,64 @@ namespace MultiPurposeAuthSite.Controllers
         | EnumHttpAuthHeader.Bearer)] // Bearer認証の結果をGetClaimsで検証。
     public class OAuth2ResourceServerController : ControllerBase
     {
+        #region DI(CA)対応
+        #region members & constructor
+
+        #region members
+
+        #region OwinContext
+        /// <summary>UserManager</summary>
+        private readonly UserManager<ApplicationUser> _userManager = null;
+        /// <summary>UserManager</summary>
+        private readonly RoleManager<ApplicationRole> _roleManager = null;
+        #endregion
+
+        #endregion
+
+        #region constructor
+        /// <summary>constructor</summary>
+        /// <param name="userManager">UserManager</param>
+        /// <param name="roleManager">RoleManager</param>
+        public OAuth2ResourceServerController(
+            UserManager<ApplicationUser> userManager,
+            RoleManager<ApplicationRole> roleManager)
+        {
+            // UserManager
+            this._userManager = userManager;
+            // RoleManager
+            this._roleManager = roleManager;
+        }
+        #endregion
+
+        #endregion
+
+        #region property
+
+        #region GetOwinContext
+
+        /// <summary>ApplicationUserManager</summary>
+        private UserManager<ApplicationUser> UserManager
+        {
+            get
+            {
+                return this._userManager;
+            }
+        }
+
+        /// <summary>ApplicationRoleManager</summary>
+        private RoleManager<ApplicationRole> RoleManager
+        {
+            get
+            {
+                return this._roleManager;
+            }
+        }
+
+        #endregion
+
+        #endregion        
+        #endregion
+
         #region テスト用
 
         #region Hybrid Flow
@@ -134,7 +194,7 @@ namespace MultiPurposeAuthSite.Controllers
                 out string userName, out string roles, out string scopes, out string ipAddress);
 
             // ユーザの検索
-            ApplicationUser user = CmnUserStore.FindByName(userName);
+            ApplicationUser user = await UserManager.FindByNameAsync(userName);
 
             if (user != null)
             {

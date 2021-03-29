@@ -17,6 +17,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/11/30  西野 大介         新規
 //*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
+//*  2020/07/29  西野 大介         SecurityStamp対応
+//*  2020/12/18  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -153,7 +155,9 @@ namespace MultiPurposeAuthSite
             
             app.UseEndpoints(endpoints =>
             {
-                #region Account
+                #region AuthZ(N)Server
+
+                #region Initial Request
                 endpoints.MapControllerRoute(
                    name: "Saml2Request",
                    pattern: Config.Saml2RequestEndpoint.Substring(1), // 先頭の[/]を削除,
@@ -165,9 +169,7 @@ namespace MultiPurposeAuthSite
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
                 #endregion
 
-                #region OAuth2Endpoint
-
-                #region OAuth2 / OIDC
+                #region WebAPI Endpoint
 
                 endpoints.MapControllerRoute(
                     name: "OAuth2Token",
@@ -201,6 +203,22 @@ namespace MultiPurposeAuthSite
 
                 #endregion
 
+                #region Back Channel
+
+                #region Device AuthZ
+
+                endpoints.MapControllerRoute(
+                    name: "DeviceAuthZAuthorize",
+                    pattern: Config.DeviceAuthZAuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "DeviceAuthZAuthorize" });
+
+                endpoints.MapControllerRoute(
+                    name: "DeviceAuthZVerify",
+                    pattern: Config.DeviceAuthZVerifyEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "Account", action = "DeviceAuthZVerify" });
+
+                #endregion
+
                 #region CIBA FAPI2
 
                 endpoints.MapControllerRoute(
@@ -212,6 +230,8 @@ namespace MultiPurposeAuthSite
                     name: "CibaPushResult",
                     pattern: Config.CibaPushResultEndpoint.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "CibaPushResult" });
+
+                #endregion
 
                 #endregion
 
@@ -231,7 +251,7 @@ namespace MultiPurposeAuthSite
 
                 #endregion
 
-                #region OAuth2ResourceServer
+                #region ResourceServer
                 endpoints.MapControllerRoute(
                     name: "TestHybridFlow",
                     pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
@@ -293,10 +313,25 @@ namespace MultiPurposeAuthSite
             //services.AddDbContext<ApplicationDbContext>(options =>
             //    options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 
-            // Identity
+            // AddMvc
+            services.AddMvc();
+
+            // AddCors
+            services.AddCors(
+                o => o.AddPolicy("AllowAllOrigins",
+                builder =>
+                {
+                    builder
+                    .AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+                }));
+
+            #region ASP.NET Core Identity
 
             // must be added before AddIdentity()
             services.AddScoped<IPasswordHasher<ApplicationUser>, CustomPasswordHasher<ApplicationUser>>();
+            services.AddScoped<ISecurityStampValidator, SecurityStampValidator<ApplicationUser>>();
 
             services.AddIdentity<ApplicationUser, ApplicationRole>()
                 //.AddEntityFrameworkStores<ApplicationDbContext>()
@@ -310,22 +345,7 @@ namespace MultiPurposeAuthSite
             services.AddTransient<IEmailSender, EmailSender>();
             services.AddTransient<ISmsSender, SmsSender>();
 
-            // AddMvc
-            services.AddMvc();
-
-            // AddCors
-            services.AddCors(
-                o => o.AddPolicy("AllowAllOrigins", 
-                builder =>
-                {
-                    builder
-                    .AllowAnyOrigin()
-                    .AllowAnyMethod()
-                    .AllowAnyHeader();
-                }));
-
-
-            #region ASP.NET Core Identity認証
+            #region 認証
 
             #region IdentityOptions
 
@@ -364,7 +384,7 @@ namespace MultiPurposeAuthSite
                 });
 
             services.Configure<IdentityOptions>(IdentityOptionsConf);
-            
+
             #endregion
 
             #region AuthOptions
@@ -376,17 +396,20 @@ namespace MultiPurposeAuthSite
             authenticationBuilder.AddCookie(options =>
                 {
                     // https://community.auth0.com/t/asp-net-core-2-intermittent-correlation-failed-errors/11918/18
-                    options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
                     options.LoginPath = "/MultiPurposeAuthSite/Account/Login";
                     options.LogoutPath = "/MultiPurposeAuthSite/Account/LogOff";
+                    options.ReturnUrlParameter = CookieAuthenticationDefaults.ReturnUrlParameter; 
+                    options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
+                    options.SlidingExpiration = true;
+
                     //options.AccessDeniedPath = "/Identity/Account/AccessDenied";
                     //options.Cookie.Name = "YourAppCookieName";
-                    //options.Cookie.HttpOnly = true;
-                    //options.ExpireTimeSpan = TimeSpan.FromMinutes(60);
-                    // ReturnUrlParameter requires 
-                    //using Microsoft.AspNetCore.Authentication.Cookies;
-                    //options.ReturnUrlParameter = CookieAuthenticationDefaults.ReturnUrlParameter;
-                    //options.SlidingExpiration = true;
+                    options.Cookie.HttpOnly = true;
+                    
+                    options.Events = options.Events = new CookieAuthenticationEvents()
+                    {
+                        OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync
+                    };
                 });
 
             #endregion
@@ -432,6 +455,13 @@ namespace MultiPurposeAuthSite
             // スクラッチ実装
 
             #endregion
+
+            #endregion
+
+            services.Configure<SecurityStampValidatorOptions>(options =>
+            {
+                options.ValidationInterval = Config.SecurityStampValidateIntervalFromSeconds;
+            });
 
             #endregion
 

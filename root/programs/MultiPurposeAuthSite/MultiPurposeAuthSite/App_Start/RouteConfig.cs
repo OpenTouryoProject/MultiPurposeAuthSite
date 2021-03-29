@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2020/12/18  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using System.Web.Mvc;
@@ -63,6 +64,13 @@ namespace MultiPurposeAuthSite
                 name: "OAuth2Authorize",
                 url: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "Account", action = "OAuth2Authorize" }
+            );
+
+            // Device AuthZ
+            routes.MapRoute(
+                name: "DeviceAuthZVerify",
+                url: Config.DeviceAuthZVerifyEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "Account", action = "DeviceAuthZVerify" }
             );
 
             // Defaultルートを定義

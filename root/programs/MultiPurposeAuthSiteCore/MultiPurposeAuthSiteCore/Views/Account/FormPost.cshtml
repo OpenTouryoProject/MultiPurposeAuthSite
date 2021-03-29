@@ -40,11 +40,11 @@
         <input type="hidden" name="token_type" value="@ViewData["TokenType"]" />
         <input type="hidden" name="expires_in" value="@ViewData["ExpiresIn"]" />
 }
-if (!string.IsNullOrEmpty((string)ViewData["Response"]))
+@if (!string.IsNullOrEmpty((string)ViewData["Response"]))
 {
         <input type="hidden" name="response" value="@ViewData["Response"]" />
 }
-if (!string.IsNullOrEmpty((string)ViewData["Error"]))
+@if (!string.IsNullOrEmpty((string)ViewData["Error"]))
 {
         <input type="hidden" name="error" value="@ViewData["Error"]" />
 }

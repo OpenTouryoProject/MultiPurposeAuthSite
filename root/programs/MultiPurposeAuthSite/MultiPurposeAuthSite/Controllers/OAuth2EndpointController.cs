@@ -34,13 +34,18 @@
 //*  2019/08/01  西野 大介         client_secret_postのサポートを追加
 //*  2019/12/25  西野 大介         PPID対応による見直し（SamlMetadata）
 //*  2020/01/07  西野 大介         PPID対応実施（GetUserClaims）
-//*  2020/02/27  西野 大介         CIBA対応実施（CibaAuthorize, CibaPushResult）
+//*  2020/02/27  西野 大介         FAPI CIBA対応実施（CibaAuthorize, CibaPushResult）
 //*  2020/03/09  西野 大介         FormDataCollectionチェック処理の強化
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
+//*  2020/12/18  西野 大介         Device AuthZ対応実施（DeviceAuthZAuthorize）
+//*                                ・DeviceAuthZResponse画面 → HomeControllerに。
+//*                                ・DeviceAuthZVerify画面 → AccountControllerに。
+//*  2020/12/21  西野 大介         CIBAのTokenのsubを認可ユーザに変更
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
-using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Util;
 
 using Token = MultiPurposeAuthSite.TokenProviders;
@@ -65,6 +70,8 @@ using System.Web.Http.Cors;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Formatting;
+
+using Microsoft.AspNet.Identity.Owin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -93,6 +100,35 @@ namespace MultiPurposeAuthSite.Controllers
     [MyBaseAsyncApiController(httpAuthHeader: EnumHttpAuthHeader.None)] // 認証無し（自前）
     public class OAuth2EndpointController : ApiController
     {
+        #region constructor
+
+        /// <summary>constructor</summary>
+        public OAuth2EndpointController() { }
+
+        #endregion
+
+        #region property (GetOwinContext)
+
+        /// <summary>ApplicationUserManager</summary>
+        private ApplicationUserManager UserManager
+        {
+            get
+            {
+                return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationUserManager>();
+            }
+        }
+
+        /// <summary>ApplicationRoleManager</summary>
+        private ApplicationRoleManager RoleManager
+        {
+            get
+            {
+                return HttpContext.Current.GetOwinContext().GetUserManager<ApplicationRoleManager>();
+            }
+        }
+
+        #endregion
+
         #region /token
 
         /// <summary>
@@ -204,6 +240,15 @@ namespace MultiPurposeAuthSite.Controllers
                             }
                             break;
 
+                        case OAuth2AndOIDCConst.DeviceAuthZGrantType:
+                            string device_code = formData[OAuth2AndOIDCConst.device_code];
+                            if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
+                                client_id, device_code, out ret, out err))
+                            {
+                                return ret;
+                            }
+                            break;
+
                         case OAuth2AndOIDCConst.CibaGrantType:
                             string auth_req_id = formData[OAuth2AndOIDCConst.auth_req_id];
                             if (Token.CmnEndpoints.GrantCiba(grant_type, 
@@ -248,7 +293,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>Dictionary(string, object)</returns>
         [HttpGet]
-        public Dictionary<string, object> GetUserClaims()
+        public async Task<Dictionary<string, object>> GetUserClaims()
         {
             // 戻り値（エラー）
             Dictionary<string, object> err = new Dictionary<string, object>();
@@ -312,7 +357,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 case OAuth2AndOIDCConst.Scope_Roles:
                                     userinfoClaimSet.Add(
                                         OAuth2AndOIDCConst.Scope_Roles,
-                                        CmnUserStore.GetRoles(user));
+                                        await UserManager.GetRolesAsync(user.Id));
                                     break;
 
                                 #endregion
@@ -625,10 +670,94 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region /device
+
+        /// <summary>
+        /// Device AuthZの認可リクエストを受信
+        /// POST: /device_authz
+        /// </summary>
+        /// <param name="formData">FormDataCollection</param>
+        /// <returns>Device AuthZの認可レスポンス</returns>
+        [HttpPost]
+        public async Task<Dictionary<string, string>> DeviceAuthZAuthorize(FormDataCollection formData)
+        {
+            string err = "";
+            string errDescription = "";
+
+            if (formData != null)
+            {
+                // client_id, client_secret
+
+                // client_secret_basic
+                if (!AuthenticationHeader.GetCredentials(
+                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                    out string client_id, out string client_secret))
+                {
+                    // client_secret_post
+                    client_id = formData[OAuth2AndOIDCConst.client_id];
+                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
+                }
+
+                // AccountControllerからの移行なので...。
+                string name = Sts.Helper.GetInstance().GetClientName(client_id);
+
+                // scopeパラメタ
+                string scope = formData[OAuth2AndOIDCConst.scope];
+
+                // codeの生成は先送り
+                Dictionary<string, string> tempDic = new Dictionary<string, string>()
+                {
+                    {"client_id", client_id},
+                    {"scope", scope}
+                };
+
+                //string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(...);
+                string tempData = JsonConvert.SerializeObject(tempDic);
+
+                // authReqExp
+                int requested_expiry = Config.DeviceAuthZExpireTimeSpanFromSeconds;
+                long authReqExp = DateTimeOffset.Now.AddSeconds(
+                    Config.DeviceAuthZExpireTimeSpanFromSeconds).ToUnixTimeSeconds();
+
+                // DeviceAuthZ情報をストア
+                string deviceCode;
+                string userCode;
+                Sts.DeviceAuthZProvider.Create(authReqExp, tempData, out deviceCode, out userCode);
+
+                // ココまでの結果をレスポンス
+                return new Dictionary<string, string>()
+                {
+                    {OAuth2AndOIDCConst.device_code, deviceCode},
+                    {OAuth2AndOIDCConst.user_code, userCode},
+                    {OAuth2AndOIDCConst.verification_uri, Config.DeviceAuthZVerifyEndpoint},
+                    {OAuth2AndOIDCConst.verification_uri_complete, Config.DeviceAuthZVerifyEndpoint + "?user_code=" + userCode},
+                    {OAuth2AndOIDCConst.expires_in, requested_expiry.ToString()},
+                    {OAuth2AndOIDCConst.PollingInterval, Config.DeviceAuthZPollingIntervalSeconds.ToString()}
+                };
+            }
+            else
+            {
+                // 検証失敗
+                // err, errDescriptionは設定済み。
+            }
+
+            // エラー
+            return new Dictionary<string, string>()
+            {
+                {OAuth2AndOIDCConst.error, err},
+                {OAuth2AndOIDCConst.error_description, errDescription}
+            };
+        }
+
+        // DeviceAuthZResponse画面 → HomeControllerに。
+        // DeviceAuthZVerify画面 → AccountControllerに。
+
+        #endregion
+
         #region /ciba
 
         /// <summary>
-        /// CIBAの認可リクエストを受信
+        /// FAPI CIBAの認可リクエストを受信
         /// POST: /ciba_authz
         /// </summary>
         /// <param name="formData">
@@ -636,7 +765,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>CIBAの認可レスポンス</returns>
         [HttpPost]
-        public async Task<Dictionary<string, string>> CibaAuthorize(FormDataCollection formData)
+        public async Task<Dictionary<string, string>> CibaAuthorizeAsync(FormDataCollection formData)
         {
             string err = "";
             string errDescription = "";
@@ -647,7 +776,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                 string authReqId = "";
 
-                JObject claims = null;
                 if (!string.IsNullOrEmpty(request_uri))
                 {
                     string jsonStr = Sts.RequestObjectProvider.Get(
@@ -674,61 +802,65 @@ namespace MultiPurposeAuthSite.Controllers
                         // AccountControllerからの移行なので...。
                         string name = Sts.Helper.GetInstance().GetClientName(client_id);
 
-                        // ClaimsIdentityを生成
-                        ClaimsIdentity identity = new ClaimsIdentity(new GenericIdentity(name));
-
-                        // NameValueCollectionを生成
-                        NameValueCollection queryString = new NameValueCollection();
-
                         // scopeパラメタ
                         string[] scopes = (scope ?? "").Split(' ');
 
-                        // codeの生成
-                        string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                            identity, queryString, client_id, "", scopes, claims, "");
+                        // login_hintから、userとsubを取得。
+                        ApplicationUser user = null;
+                        string sub = PPIDExtension.GetSubForOIDC(client_id, login_hint, out user);
 
-                        // requested_expiry → UnixTime化
-                        int _requested_expiry = Config.CibaExpireTimeSpanFromSeconds; // 初期値
-                        if (!string.IsNullOrEmpty(requested_expiry))                  // requested_expiry値
-                            int.TryParse(requested_expiry, out _requested_expiry);
-
-                        long authReqExp = DateTimeOffset.Now.AddSeconds(_requested_expiry).ToUnixTimeSeconds();
-
-                        // CIBA情報をストア
-                        Sts.CibaProvider.Create(
-                           client_notification_token,
-                           authReqExp, code, binding_message, out authReqId);
-
-                        // プッシュ通知を、login_hint（に記載のユーザ）に送信
-                        if (!Sts.CibaProvider.DebugModeWithOutAD)
+                        if (user != null)
                         {
-                            // - login_hint（UserName）でユーザ取得。
-                            ApplicationUser user = PPIDExtension.GetUserFromSub(client_id, login_hint);
-                            string deviceToken = user.DeviceToken;
+                            // codeの生成
+                            string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
+                                new ClaimsIdentity(new GenericIdentity(sub)),
+                                new NameValueCollection(),
+                                client_id, "", scopes, null, "");
 
-                            // - DeviceTokenを使用してプッシュ通知
-                            string temp = await FcmService.GetInstance().SendAsync(
-                                user.DeviceToken, "CIBA", "Allow / Deny",
-                                new Dictionary<string, string>()
-                                {
-                                    { "auth_req_id", authReqId},
-                                    { "binding_message", binding_message}
-                                });
+                            // requested_expiry → UnixTime化
+                            int _requested_expiry = Config.CibaExpireTimeSpanFromSeconds; // 初期値
+                            if (!string.IsNullOrEmpty(requested_expiry))                  // requested_expiry値
+                                int.TryParse(requested_expiry, out _requested_expiry);
+
+                            long authReqExp = DateTimeOffset.Now.AddSeconds(_requested_expiry).ToUnixTimeSeconds();
+
+                            // CIBA情報をストア
+                            Sts.CibaProvider.Create(
+                               client_notification_token,
+                               authReqExp, code, binding_message, out authReqId);
+
+#pragma warning disable 162
+
+                            // プッシュ通知を、userに送信
+                            if (!Sts.CibaProvider.DebugModeWithOutAD)
+                            {
+                                string deviceToken = user.DeviceToken;
+
+                                // - DeviceTokenを使用してプッシュ通知
+                                string temp = await FcmService.GetInstance().SendAsync(
+                                    user.DeviceToken, "CIBA", "Allow / Deny",
+                                    new Dictionary<string, string>()
+                                    {
+                                        { OAuth2AndOIDCConst.auth_req_id, authReqId},
+                                        { OAuth2AndOIDCConst.binding_message, binding_message}
+                                    });
+                            }
+                            else
+                            {
+                                // テストを通すため追加
+                                Sts.CibaProvider.ReceiveResult(authReqId, true);
+                            }
+
+#pragma warning restore 162
+
+                            // ココまでの結果をレスポンス
+                            return new Dictionary<string, string>()
+                            {
+                                {OAuth2AndOIDCConst.auth_req_id, authReqId},
+                                {OAuth2AndOIDCConst.expires_in, _requested_expiry.ToString()},
+                                {OAuth2AndOIDCConst.PollingInterval, Config.CibaPollingIntervalSeconds.ToString()}
+                            };
                         }
-                        else
-                        {
-                            // テストを通すため追加
-                            Sts.CibaProvider.ReceiveResult(authReqId, true);
-                        }
-
-                        // ココまでの結果をレスポンス
-                        return new Dictionary<string, string>()
-                        {
-                            {OAuth2AndOIDCConst.auth_req_id, authReqId},
-                            {OAuth2AndOIDCConst.expires_in, _requested_expiry.ToString()},
-                            {OAuth2AndOIDCConst.PollingInterval, Config.CibaPollingIntervalSeconds.ToString()}
-                        };
-
                         // 以降で、下記を束ねる。
                         // - プッシュ通知の応答結果
                         // - Tokenリクエスト（polling）
@@ -992,7 +1124,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </param>
         /// <returns>string</returns>
         [HttpPost]
-        public string SetDeviceToken(FormDataCollection formData)
+        public async Task<string> SetDeviceToken(FormDataCollection formData)
         {
             string device_token = formData["device_token"];
 
@@ -1016,7 +1148,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // デバイストークンの保存
                             user.DeviceToken = device_token;
-                            CmnUserStore.Update(user);
+                            await UserManager.UpdateAsync(user);
 
                             return "OK";
                         }

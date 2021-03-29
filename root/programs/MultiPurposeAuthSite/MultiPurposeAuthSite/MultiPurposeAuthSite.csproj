@@ -422,6 +422,8 @@
     <Content Include="Scripts\popper.js.map" />
     <Content Include="Scripts\popper-utils.min.js.map" />
     <Content Include="Scripts\popper-utils.js.map" />
+    <Content Include="Views\Account\DeviceAuthZVerify.cshtml" />
+    <Content Include="Views\Home\DeviceAuthZResponse.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config">

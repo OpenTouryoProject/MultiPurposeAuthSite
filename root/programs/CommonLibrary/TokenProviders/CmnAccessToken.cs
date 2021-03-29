@@ -32,6 +32,7 @@
 //*  2019/06/20  西野 大介         IssuedTokenProvider対応
 //*  2020/01/07  西野 大介         PPID対応実施
 //*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
+//*  2020/12/21  西野 大介         ClientMode追加対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -372,9 +373,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 payload[OAuth2AndOIDCConst.cnf] = dic;
             }
 
-            // - fapi
-            if (permittedLevel != OAuth2AndOIDCEnum.ClientMode.normal)
+            if (permittedLevel == OAuth2AndOIDCEnum.ClientMode.normal)
             {
+                // ...
+            }
+            else if (permittedLevel == OAuth2AndOIDCEnum.ClientMode.device)
+            {
+                // - device
+                payload["device"] = permittedLevel.ToStringByEmit();
+            }
+            else // fapi1, fapi2, fapi_ciba
+            {
+                // - fapi
                 payload[OAuth2AndOIDCConst.fapi] = permittedLevel.ToStringByEmit();
             }
 

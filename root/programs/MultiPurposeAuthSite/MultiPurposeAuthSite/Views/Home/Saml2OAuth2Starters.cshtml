@@ -19,6 +19,8 @@
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
     //*  2019/05/2*  西野 大介         SAML2対応実施
     //*  2020/01/07  西野 大介         PKCE for SPA対応実施
+    //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+    //*  2020/12/18  西野 大介         Device AuthZ対応実施
     //**********************************************************************************
 *@
 
@@ -110,7 +112,7 @@
                 <ul>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1" value="Test Authorization Code Flow (FAPI1 CC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1_OIDC" value="Test Authorization Code Flow (FAPI1 CC, OIDC)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.AuthorizationCode_PKCE_S256" value="Test Authorization Code Flow (PKCE S256, FAPI1 PC)" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.AuthorizationCodeFAPI1_PKCE" value="Test Authorization Code Flow (FAPI1 PC, PKCE)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI2" value="Test Authorization Code Flow (FAPI2 CC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.FAPI_CIBA_Profile" value="Test FAPI CIBA Profile (FAPI2)" class="btn btn-link" /></li>
                 </ul>
@@ -118,15 +120,16 @@
             <li>
                 ResourceOwner Password Credentials Flow<br />
                 <ul>
-                    <li><input type="submit" name="submit.TestResourceOwnerPasswordCredentialsFlow" value="Test ResourceOwner Password Credentials Flow" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.ResourceOwnerPasswordCredentialsFlow" value="Test ResourceOwner Password Credentials Flow" class="btn btn-link" /></li>
                 </ul>
             </li>
             <li>
                 Client Authentication Flow<br />
                 ※ If you use a user account for client authentication in the following flows, registration of OAuth2 secret data is necessary to the account.
                 <ul>
-                    <li><input type="submit" name="submit.TestClientCredentialsFlow" value="Test Client Credentials Flow" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.TestJWTBearerTokenFlow" value="Test JWT Bearer Token Flow" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.ClientCredentialsFlow" value="Test Client Credentials Flow" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.JWTBearerTokenFlow" value="Test JWT Bearer Token Flow" class="btn btn-link" /></li>
+                    <li><input type="submit" name="submit.DeviceAuthZGrant" value="Test Device Authorization Grant" class="btn btn-link" /></li>
                 </ul>
             </li>
             <li>
@@ -137,7 +140,7 @@
             </li>
         </ul>
     }
-    <hr/>
+    <hr />
     <ul>
         <li><a href="@(Config.OAuth2AuthorizationServerEndpointsRootURI + "/samlmetadata")">samlmetadata</a></li>
         <li><a href="@(Config.OAuth2AuthorizationServerEndpointsRootURI + "/.well-known/openid-configuration")">.well-known/openid-configuration</a></li>

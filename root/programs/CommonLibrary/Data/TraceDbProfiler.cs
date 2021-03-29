@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/14  西野 大介         新規
+//*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
 //**********************************************************************************
 
 using System;
@@ -45,7 +46,7 @@ using Touryo.Infrastructure.Public.Str;
 namespace MultiPurposeAuthSite.Log
 {
     /// <summary>TraceDbProfiler</summary>
-    public class TraceDbProfiler : IDbProfiler
+    internal class TraceDbProfiler : IDbProfiler
     {
         /// <summary>StopWatch</summary>
         Stopwatch _stopwatch;

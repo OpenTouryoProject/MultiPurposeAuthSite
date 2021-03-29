@@ -22,6 +22,9 @@
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/02/28  西野 大介         エラーメッセージ通知の改善
 //*  2020/03/04  西野 大介         CIBA対応実施
+//*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+//*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
+//*  2020/12/21  西野 大介         Device AuthZ対応実施
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -53,6 +56,9 @@ using System.Web;
 using System.Web.Mvc;
 using System.Net.Http;
 using System.Web.Configuration;
+//using System.Net;
+//using System.Net.Http;
+using System.Net.Http.Formatting;
 
 using Microsoft.Owin.Security;
 using Microsoft.AspNet.Identity;
@@ -313,8 +319,8 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // 認可エンドポイント
                     string oAuthAuthorizeEndpoint =
-                    Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + Config.OAuth2AuthorizeEndpoint;
+                        Config.OAuth2AuthorizationServerEndpointsRootURI
+                        + Config.OAuth2AuthorizeEndpoint;
 
                     // client_id
                     string client_id = OAuth2AndOIDCParams.ClientID;
@@ -324,9 +330,12 @@ namespace MultiPurposeAuthSite.Controllers
                     string state = GetPassword.Generate(10, 0);
                     Session["id_federation_signin_state"] = state;
 
+                    // redirect_uri
+                    string redirect_uri = Config.IdFederationRedirectEndPoint;
+
                     // nonce // 記号は入れない。
                     string nonce = GetPassword.Generate(20, 0);
-                    Session["id_federation_signin_nonce"] = state;
+                    Session["id_federation_signin_nonce"] = nonce;
 
                     // ID連携に必要なscope
                     string scope = Const.IdFederationScopes;
@@ -337,9 +346,10 @@ namespace MultiPurposeAuthSite.Controllers
                         "&response_type=code" +
                         "&scope=" + scope +
                         "&state=" + state +
+                        "&nonce=" + nonce +
+                        "&redirect_uri=" + CustomEncode.UrlEncode(redirect_uri) +
                         "&response_mode=form_post" +
-                        "&login_hint=" + uid +
-                        "&prompt=none");
+                        "&login_hint=" + uid + "&prompt=none");
                 }
                 else if (submitButtonName == "webauthn_signin"
                     && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
@@ -1810,17 +1820,17 @@ namespace MultiPurposeAuthSite.Controllers
                     #region id_tokenの検証コード
 
                     string sub = "";
-                    List<string> roles = null;
-                    List<string> scopes = null;
+                    string nonce = "";
                     JObject jobj = null;
 
                     if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
                         // id_tokenがある。
                         string id_token = dic[OAuth2AndOIDCConst.IDToken];
+                        string access_token = dic[OAuth2AndOIDCConst.AccessToken];
 
-                        if (AccessToken.Verify(id_token, out sub, out roles, out scopes, out jobj)
-                            && jobj[OAuth2AndOIDCConst.nonce].ToString() == (string)Session["id_federation_signin_nonce"])
+                        if (IdToken.Verify(id_token, access_token, code, state, out sub, out nonce, out jobj)
+                            && nonce == (string)Session["id_federation_signin_nonce"])
                         {
                             // id_token検証OK。
                         }
@@ -1841,138 +1851,244 @@ namespace MultiPurposeAuthSite.Controllers
                     #endregion
 
                     #region /userinfoエンドポイント
-                    //// /userinfoエンドポイントにアクセスする場合
-                    //string response = await OAuth2AndOIDCClient.CallUserInfoEndpointAsync(
-                    //    new Uri(Config.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
+                    // /userinfoエンドポイントにアクセスする場合
+                    string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
+                        new Uri(Config.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
 
                     #region ユーザの登録・更新
 
-                    // {
-                    //     "aud": " = ClientID", 
-                    //     "email": "e-mail address", 
-                    //     "email_verified": "True or False", 
-                    //     "exp": "nnnnnnnnnn", 
-                    //     "iat": "nnnnnnnnnn", 
-                    //     "iss": "http://jwtssoauth.opentouryo.com", 
-                    //     "nonce": "xxxxxxxx", 
-                    //     "phone_number": "xxxxxxxx", 
-                    //     "phone_number_verified": "True or False", 
-                    //     "sub": "uid", 
-                    //     "userid": "・・・guid・・・"
-                    //     "parentid": "・・・guid・・・"
-                    //     "roles": [
-                    //         "aaa", 
-                    //         "bbb", 
-                    //         "ccc"
-                    //     ], 
-                    // }
-
                     IdentityResult result = null;
-                    ApplicationUser user = await UserManager.FindByIdAsync((string)jobj[OAuth2AndOIDCConst.Scope_UserID]);
+                    SignInStatus signInStatus = SignInStatus.Failure;
 
-                    if (user == null)
+                    // クレーム情報（ID情報とe-mail, name情報）を抽出
+                    jobj = (JObject)JsonConvert.DeserializeObject(response);
+                    string id = (string)jobj[OAuth2AndOIDCConst.Scope_UserID];
+                    string name = (string)jobj[OAuth2AndOIDCConst.sub];
+                    string email = (string)jobj[OAuth2AndOIDCConst.Scope_Email];
+
+                    Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
+                    Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
+
+                    string uid = "";
+                    if (Config.RequireUniqueEmail)
                     {
-                        // 新規作成
-                        user = new ApplicationUser()
-                        {
-                            Id = (string)jobj[OAuth2AndOIDCConst.Scope_UserID],
-
-                            UserName = sub,
-
-                            Email = (string)jobj[OAuth2AndOIDCConst.Scope_Email],
-                            EmailConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.email_verified]),
-
-                            PhoneNumber = (string)jobj[OAuth2AndOIDCConst.phone_number],
-                            PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.phone_number_verified]),
-
-                            CreatedDate = DateTime.Now
-                        };
-
-                        result = await UserManager.CreateAsync(user);
-
-                        // Roles(追加)
-                        foreach (string roleName in roles)
-                        {
-                            await this.UserManager.AddToRoleAsync(user.Id, roleName);
-                        }
+                        uid = email;
                     }
                     else
                     {
-                        // 属性更新
-                        user.UserName = sub;
-
-                        user.Email = (string)jobj[OAuth2AndOIDCConst.Scope_Email];
-                        user.EmailConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.email_verified]);
-
-                        user.PhoneNumber = (string)jobj[OAuth2AndOIDCConst.phone_number];
-                        user.PhoneNumberConfirmed = (bool)Convert.ToBoolean((string)jobj[OAuth2AndOIDCConst.phone_number_verified]);
-
-                        result = await UserManager.UpdateAsync(user);
-
-                        // Roles
-                        IList<string> currentRoles = await UserManager.GetRolesAsync(user.Id);
-
-                        // 追加
-                        foreach (string roleName in roles)
-                        {
-                            if (currentRoles.Any(x => x == roleName))
-                            {
-                                // currentにある ---> 何もしない
-                            }
-                            else
-                            {
-                                // currentにない ---> 追加
-                                await this.UserManager.AddToRoleAsync(user.Id, roleName);
-                            }
-                        }
-
-                        // 削除
-                        foreach (string roleName in currentRoles)
-                        {
-                            if (roles.Any(x => x == roleName))
-                            {
-                                // 連携先にある ---> 何もしない
-                            }
-                            else
-                            {
-                                // 連携先にない ---> 削除
-                                await this.UserManager.RemoveFromRoleAsync(user.Id, roleName);
-                            }
-                        }
+                        uid = name;
                     }
 
-                    #region サインイン
+                    UserLoginInfo login = new UserLoginInfo("MultiPurposeAuthSite", id);
+                    ExternalLoginInfo externalLoginInfo = new ExternalLoginInfo();
+                    externalLoginInfo.Login = login;
+                    externalLoginInfo.Email = email;
 
-                    if (result.Succeeded == true)
+                    if (!string.IsNullOrWhiteSpace(email)
+                        && !string.IsNullOrWhiteSpace(name))
                     {
-                        // EmailConfirmed == true の場合、
-                        // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
-                        await SignInManager.SignInAsync(user, isPersistent: false, rememberBrowser: false);
+                        // クレーム情報（e-mail, name情報）を取得できた。
 
-                        // セッションの初期化
-                        this.InitSessionAfterlogin();
+                        // 既存の外部ログインを確認する。
+                        ApplicationUser user = await UserManager.FindAsync(login);
 
-                        // オペレーション・トレース・ログ出力
-                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a id federation.", user.Id, user.UserName));
-                    }
+                        if (user != null)
+                        {
+                            // 既存の外部ログインがある場合。
 
-                    #endregion
+                            // ユーザーが既に外部ログインしている場合は、クレームをRemove, Addで更新し、
+                            result = await UserManager.RemoveClaimAsync(user.Id, emailClaim); // del-ins
+                            result = await UserManager.AddClaimAsync(user.Id, emailClaim);
+                            result = await UserManager.RemoveClaimAsync(user.Id, nameClaim); // del-ins
+                            result = await UserManager.AddClaimAsync(user.Id, nameClaim);
 
-                    return RedirectToAction("Index", "Home");
+                            // SignInAsyncより、ExternalSignInAsyncが適切。
+
+                            //// 通常のサインイン
+                            //await SignInManager.SignInAsync(
+
+                            // 既存の外部ログイン・プロバイダでサインイン
+                            signInStatus = await SignInManager.ExternalSignInAsync(
+                                                 loginInfo: externalLoginInfo,
+                                                 isPersistent: false); // 外部ログインの Cookie 永続化は常に false.
+
+                            // セッションの初期化
+                            this.InitSessionAfterlogin();
+
+                            // オペレーション・トレース・ログ出力
+                            Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+
+                            return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                        }
+                        else
+                        {
+                            // 既存の外部ログインがない。
+
+                            // AccountControllerで、ユーザーが既に外部ログインしていない場合は、
+                            // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
+
+                            // サインアップ済みの可能性を探る
+                            user = await UserManager.FindByNameAsync(uid);
+
+                            if (user != null)
+                            {
+                                // サインアップ済み → 外部ログイン追加だけで済む
+
+                                // 外部ログイン（ = UserLoginInfo ）の追加
+                                if (Config.RequireUniqueEmail)
+                                {
+                                    result = await UserManager.AddLoginAsync(user.Id, login);
+                                }
+                                else
+                                {
+                                    if (email == user.Email)
+                                    {
+                                        // メアドも一致
+                                        result = await UserManager.AddLoginAsync(user.Id, login);
+                                    }
+                                    else
+                                    {
+                                        // メアド不一致
+                                        result = new IdentityResult();
+                                    }
+                                }
+
+                                // クレーム（emailClaim, nameClaim, etc.）の追加
+                                if (result.Succeeded)
+                                {
+                                    result = await UserManager.AddClaimAsync(user.Id, emailClaim);
+                                    result = await UserManager.AddClaimAsync(user.Id, nameClaim);
+                                    // ・・・
+                                    // ・・・
+                                    // ・・・
+                                }
+
+                                // 上記の結果の確認
+                                if (result.Succeeded)
+                                {
+                                    // SignInAsync、ExternalSignInAsync
+                                    // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                                    await SignInManager.SignInAsync(
+                                        user,
+                                        isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
+                                        rememberBrowser: true); // rememberBrowser は true 固定
+
+                                    //// この外部ログイン・プロバイダでサインイン
+                                    //signInStatus = await SignInManager.ExternalSignInAsync(
+
+                                    // セッションの初期化
+                                    this.InitSessionAfterlogin();
+
+                                    // オペレーション・トレース・ログ出力
+                                    Logging.MyOperationTrace(string.Format("{0}({1}) has signed in with a verified external account.", user.Id, user.UserName));
+
+                                    // リダイレクト
+                                    return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                                }
+                                else
+                                {
+                                    // 外部ログインの追加に失敗した場合
+
+                                    // 結果のエラー情報を追加
+                                    this.AddErrors(result);
+                                }
+                            }
+                            else
+                            {
+                                // サインアップ済みでない → サインアップから行なう。
+                                // If the user does not have an account, then prompt the user to create an account
+                                // ユーザがアカウントを持っていない場合、アカウントを作成するようにユーザに促します。
+                                ViewBag.ReturnUrl = Config.OAuth2AuthorizationServerEndpointsRootURI;
+                                ViewBag.LoginProvider = login.LoginProvider;
+
+                                //// メアドを返さないので、ExternalLoginConfirmationで
+                                //// メアドを手入力して外部ログインと関連付けを行なう。
+                                ////return View("ExternalLoginConfirmation");
+                                //return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
+
+                                // 外部ログイン プロバイダのユーザー情報でユーザを作成
+                                // uid = 連携先メアドの場合、E-mail confirmationはしない（true）。
+                                user = ApplicationUser.CreateUser(uid, true);
+
+                                // サインアップ時のみ、メアドも追加
+                                //（RequireUniqueEmail = false時を想定）
+                                user.Email = email;
+                                user.EmailConfirmed = true;
+
+                                // ユーザの新規作成（パスワードは不要）
+                                result = await UserManager.CreateAsync(user);
+
+                                // 結果の確認
+                                if (result.Succeeded)
+                                {
+                                    // ユーザの新規作成が成功した場合
+
+                                    // ロールに追加。
+                                    await this.UserManager.AddToRoleAsync(user.Id, Const.Role_User);
+                                    await this.UserManager.AddToRoleAsync(user.Id, Const.Role_Admin);
+
+                                    // 外部ログイン（ = idClaim）の追加
+                                    result = await UserManager.AddLoginAsync(user.Id, login);
+
+                                    // クレーム（emailClaim, nameClaim, etc.）の追加
+                                    if (result.Succeeded)
+                                    {
+                                        result = await UserManager.AddClaimAsync(user.Id, emailClaim);
+                                        result = await UserManager.AddClaimAsync(user.Id, nameClaim);
+                                        // ・・・
+                                        // ・・・
+                                        // ・・・
+                                    }
+
+                                    // 結果の確認
+                                    if (result.Succeeded)
+                                    {
+                                        // 外部ログインの追加に成功した場合 → サインイン
+
+                                        // SignInAsync、ExternalSignInAsync
+                                        // 通常のサインイン（外部ログイン「追加」時はSignInAsyncを使用する）
+                                        await SignInManager.SignInAsync(
+                                           user: user,
+                                           isPersistent: false,    // rememberMe は false 固定（外部ログインの場合）
+                                           rememberBrowser: true); // rememberBrowser は true 固定
+
+                                        //// この外部ログイン・プロバイダでサインイン
+                                        // signInStatus = await SignInManager.ExternalSignInAsync(
+
+                                        // セッションの初期化
+                                        this.InitSessionAfterlogin();
+
+                                        // オペレーション・トレース・ログ出力
+                                        Logging.MyOperationTrace(string.Format("{0}({1}) has signed up with a verified external account.", user.Id, user.UserName));
+
+                                        // リダイレクト
+                                        return RedirectToLocal(Config.OAuth2AuthorizationServerEndpointsRootURI);
+                                    }
+                                    else
+                                    {
+                                        // 外部ログインの追加に失敗した場合
+
+                                        // 結果のエラー情報を追加
+                                        this.AddErrors(result);
+                                    }
+                                }
+                                else
+                                {
+                                    // ユーザの新規作成が失敗した場合
+
+                                    // 結果のエラー情報を追加
+                                    this.AddErrors(result);
+                                } // else処理済
+                            } // else処理済
+                        } // else処理済
+                    } // クレーム情報（e-mail, name情報）を取得できなかった。
 
                     #endregion
                 }
-                else
-                {
-                    // state異常
-                    return View("Error");
-                }
             }
-            else
-            {
-                return View("Error");
-            }
+            
+            return View("Error");
         }
 
         #endregion
@@ -3613,6 +3729,45 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region Device AuthZ
+        /// <summary>
+        /// DeviceAuthZVerify画面（初期表示）
+        /// GET: /device_verify
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        [HttpGet]
+        public ActionResult DeviceAuthZVerify()
+        {
+            ViewBag.ReceiveResult = false;
+            ViewBag.UserCode = StringExtractor.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.user_code, Request.RawUrl);
+
+            return View("DeviceAuthZVerify");
+        }
+
+        /// <summary>
+        /// DeviceAuthZVerify画面
+        /// POST: /device_verify
+        /// </summary>
+        /// <param name="formData">FormDataCollection</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        public ActionResult DeviceAuthZVerify(string dummy)
+        {
+            // FormDataCollectionは、WebAPI専用らしい。
+            ViewBag.ReceiveResult = false;
+
+            if (2 <= Request.Form.Count)
+            {
+                string userCode = Request.Form[OAuth2AndOIDCConst.user_code];
+                ViewBag.ReceiveResult = Sts.DeviceAuthZProvider.ReceiveResult(
+                    userCode, User.Identity.Name, !string.IsNullOrEmpty(Request.Form["allow"]));
+            }
+
+            return View("DeviceAuthZVerify");
+        }
+        #endregion
+
         #region テスト用
 
         /// <summary>LoadRequestParameters</summary>
@@ -3627,77 +3782,77 @@ namespace MultiPurposeAuthSite.Controllers
             out string nonce, out string code_verifier)
         {
             // client_id
-            clientId = (string)Session["test_client_id"];
+            clientId = (string)Session[Const.TestClientId];
             if (!string.IsNullOrEmpty(clientId))
             {
-                Session.Remove("test_client_id");
+                Session.Remove(Const.TestClientId);
             }
             else
             {
-                clientId = Request.Cookies["test_client_id"]?.Value;
+                clientId = Request.Cookies[Const.TestClientId]?.Value;
                 if (!string.IsNullOrEmpty(clientId))
                 {
-                    Response.Cookies["test_client_id"].Value = "";
+                    Response.Cookies[Const.TestClientId].Value = "";
                 }
             }
 
             // state
-            state = (string)Session["test_state"];
+            state = (string)Session[Const.TestState];
             if (!string.IsNullOrEmpty(state))
             {
-                Session.Remove("test_state");
+                Session.Remove(Const.TestState);
             }
             else
             {
-                state = Request.Cookies["test_state"]?.Value;
+                state = Request.Cookies[Const.TestState]?.Value;
                 if (!string.IsNullOrEmpty(state))
                 {
-                    Response.Cookies["test_state"].Value = "";
+                    Response.Cookies[Const.TestState].Value = "";
                 }
             }
 
             // redirect_uri
-            redirect_uri = (string)Session["test_redirect_uri"];
+            redirect_uri = (string)Session[Const.TestRedirectUri];
             if (!string.IsNullOrEmpty(redirect_uri))
             {
-                Session.Remove("test_redirect_uri");
+                Session.Remove(Const.TestRedirectUri);
             }
             else
             {
-                redirect_uri = Request.Cookies["test_redirect_uri"]?.Value;
+                redirect_uri = Request.Cookies[Const.TestRedirectUri]?.Value;
                 if (!string.IsNullOrEmpty(redirect_uri))
                 {
-                    Response.Cookies["test_redirect_uri"].Value = "";
+                    Response.Cookies[Const.TestRedirectUri].Value = "";
                 }
             }
 
             // nonce
-            nonce = (string)Session["test_nonce"];
+            nonce = (string)Session[Const.TestNonce];
             if (!string.IsNullOrEmpty(nonce))
             {
-                Session.Remove("test_nonce");
+                Session.Remove(Const.TestNonce);
             }
             else
             {
-                nonce = Request.Cookies["test_nonce"]?.Value;
+                nonce = Request.Cookies[Const.TestNonce]?.Value;
                 if (!string.IsNullOrEmpty(nonce))
                 {
-                    Response.Cookies["test_nonce"].Value = "";
+                    Response.Cookies[Const.TestNonce].Value = "";
                 }
             }
 
             // code_verifier
-            code_verifier = (string)Session["test_code_verifier"];
+            code_verifier = (string)Session[Const.TestCodeVerifier];
             if (!string.IsNullOrEmpty(code_verifier))
             {
-                Session.Remove("test_code_verifier");
+                Session.Remove(Const.TestCodeVerifier);
             }
             else
             {
-                code_verifier = Request.Cookies["test_code_verifier"]?.Value;
+                code_verifier = Request.Cookies[Const.TestCodeVerifier]?.Value;
                 if (!string.IsNullOrEmpty(code_verifier))
                 {
-                    Response.Cookies["test_code_verifier"].Value = "";
+                    Response.Cookies[Const.TestCodeVerifier].Value = "";
                 }
             }
         }
