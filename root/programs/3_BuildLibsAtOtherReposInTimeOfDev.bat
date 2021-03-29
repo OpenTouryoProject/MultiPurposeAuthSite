@@ -34,20 +34,20 @@ if exist %extDir%\%tmpDir% GOTO Build
 
 :Build
 @rem ビルドがあるならコピーへ
-if exist "Temp\OpenTouryo-develop\root\programs\CS\Frameworks\Infrastructure\Build_netcore30" GOTO Xcopy
+if exist "Temp\OpenTouryo-develop\root\programs\CS\Frameworks\Infrastructure\Build_netcore50" GOTO Xcopy
 
 @rem batファイルを使用してビルド
 cd "Temp\OpenTouryo-develop\root\programs\CS\"
 echo | call 2_Build_NuGet_net48.bat
 echo | call 3_Build_Business_net48.bat
 echo | call 2_Build_NuGet_netstd21.bat
-echo | call 3_Build_Business_netcore30.bat
+echo | call 3_Build_Business_netcore50.bat
 
 :Xcopy
 @rem ビルド出力をコピー
 cd %extDir%
 xcopy /Y /E "Temp\OpenTouryo-develop\root\programs\CS\Frameworks\Infrastructure\Build_net48" "OpenTouryoAssemblies\Build_net48\"
-xcopy /Y /E "Temp\OpenTouryo-develop\root\programs\CS\Frameworks\Infrastructure\Build_netcore30" "OpenTouryoAssemblies\Build_netcore30\"
+xcopy /Y /E "Temp\OpenTouryo-develop\root\programs\CS\Frameworks\Infrastructure\Build_netcore50" "OpenTouryoAssemblies\Build_netcore50\"
 
 pause
 
