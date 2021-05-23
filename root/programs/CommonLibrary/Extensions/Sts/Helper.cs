@@ -1222,19 +1222,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // コンテナの可能性
                 temp = Config.OAuth2ContainerizatedAuthSvrFqdnAndPort;
                 if (!string.IsNullOrEmpty(temp))
-            {
+                {
                     // 置換
                     string orgStr = orgUri.ToString();
                     return new Uri(orgStr.Replace(orgUri.Authority, temp));
-            }
+                }
 
                 temp = Config.OAuth2ContainerizatedAuthSvrEPRootURI;
                 if (!string.IsNullOrEmpty(temp))
-            {
-                // 置換
-                string orgStr = orgUri.ToString();
+                {
+                    // 置換
+                    string orgStr = orgUri.ToString();
                     return new Uri(orgStr.Replace(orgUri.Scheme + "://" + orgUri.Authority, temp));
-            }
+                }
             }
 
             // 置換条件に合致しなかった場合。
