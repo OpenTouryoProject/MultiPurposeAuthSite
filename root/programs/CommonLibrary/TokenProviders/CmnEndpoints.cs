@@ -52,6 +52,7 @@
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2020/12/21  西野 大介         ClientMode追加対応実施
+//*  2021/05/24  西野 大介         LIRでPKCEを使用した場合の例外措置
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2022,7 +2023,20 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // permittedLevelがclientMode未満
-                    retval = false;
+                    if (clientModeEnum == OAuth2AndOIDCEnum.ClientMode.device
+                        && permittedLevel == OAuth2AndOIDCEnum.ClientMode.fapi1)
+                    {
+                        // LIRでPKCEを使用した場合、
+                        // ・clientModeEnum = device
+                        // ・permittedLevel = fapi1
+                        // ...となるので例外措置を施す。
+                        retval = true;
+                    }
+                    else
+                    {
+                        // 上記以外の場合、
+                        retval = false;
+                    }
                 }
             }
             else
