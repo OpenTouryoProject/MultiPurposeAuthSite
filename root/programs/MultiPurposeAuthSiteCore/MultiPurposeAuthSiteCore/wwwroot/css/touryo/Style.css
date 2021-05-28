@@ -251,15 +251,18 @@
     line-height: 1.5;
     border-radius: 3px;
   }
+  #body-bk {
+    padding-top: 0px;
+  }
+  #contents {
+    padding-top: 60px;
+  }
   .nav-side-menu {
     position: fixed;
     width: 100%;
     height: auto;
     z-index: 100;
     margin-bottom: 10px;
-  }
-  #body-bk {
-      padding-top: 110px;
   }
   .nav-side-menu .toggle-btn {
     display: block;
