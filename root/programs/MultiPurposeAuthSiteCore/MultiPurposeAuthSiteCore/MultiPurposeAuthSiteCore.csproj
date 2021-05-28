@@ -2,9 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-    <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
-    <AspNetCoreModuleName>AspNetCoreModule</AspNetCoreModuleName>
-    <UserSecretsId>aspnet-MultiPurposeAuthSite-4D4ED842-8221-4C3E-A9D4-5295FF6E400D</UserSecretsId>
     <RootNamespace>MultiPurposeAuthSite</RootNamespace>
     <AssemblyName>MultiPurposeAuthSite</AssemblyName>
     <PreserveCompilationContext>true</PreserveCompilationContext>
