@@ -102,12 +102,11 @@ namespace MultiPurposeAuthSite
                 // The default HSTS value is 30 days.
                 // You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
+                //app.UseHttpsRedirection();
             }
 
             // HttpContextのマイグレーション用
             app._UseHttpContextAccessor();
-
-            app.UseHttpsRedirection();
 
             // /wwwroot（既定の）の
             // 静的ファイルをパイプラインに追加
