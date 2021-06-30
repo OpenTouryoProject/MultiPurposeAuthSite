@@ -14,3 +14,9 @@ To change the authentication server to be used,
 change the URL and parameters in the following file.
 
 - /lib/configs/app_auth.dart
+
+For the settings of Private-Use URI Scheme Redirection and  
+Claimed Https Scheme URI Redirection, please set them in the following files.
+
+- /android/app/src/main/AndroidManifest.xml
+- /android/app/build.gradle

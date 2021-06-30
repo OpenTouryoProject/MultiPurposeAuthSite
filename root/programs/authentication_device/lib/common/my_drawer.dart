@@ -15,7 +15,7 @@ class MyDrawer extends StatelessWidget {
             ),
           ),
           ListTile(
-            title: Text("root"),
+            title: Text("top"),
             trailing: Icon(Icons.arrow_forward),
             onTap: () {
               while(Navigator.of(context).canPop()){
@@ -24,43 +24,13 @@ class MyDrawer extends StatelessWidget {
             },
           ),
           ListTile(
-            title: Text("appauth"),
+            title: Text("mypage"),
             trailing: Icon(Icons.arrow_forward),
             onTap: () {
               while(Navigator.of(context).canPop()){
                 Navigator.of(context).pop();
               }
-              Navigator.of(context).pushNamed("/appauth");
-            },
-          ),
-          ListTile(
-            title: Text("fcm"),
-            trailing: Icon(Icons.arrow_forward),
-            onTap: () {
-              while(Navigator.of(context).canPop()){
-                Navigator.of(context).pop();
-              }
-              Navigator.of(context).pushNamed("/fcm");
-            },
-          ),
-          ListTile(
-            title: Text("gyomu"),
-            trailing: Icon(Icons.arrow_forward),
-            onTap: () {
-              while(Navigator.of(context).canPop()){
-                Navigator.of(context).pop();
-              }
-              Navigator.of(context).pushNamed("/gyomu");
-            },
-          ),
-          ListTile(
-            title: Text("crud"),
-            trailing: Icon(Icons.arrow_forward),
-            onTap: () {
-              while(Navigator.of(context).canPop()){
-                Navigator.of(context).pop();
-              }
-              Navigator.of(context).pushNamed("/crud");
+              Navigator.of(context).pushNamed("/mypage");
             },
           ),
         ],

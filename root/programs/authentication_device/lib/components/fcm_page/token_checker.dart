@@ -1,6 +1,8 @@
 /// FCMテスト画面のトークン情報
 
-import 'package:flutter/material.dart';
+import '../importer.dart';
+
+// ...
 import 'package:authentication_device/configs/app_fcm.dart';
 
 /// Manages & returns the users FCM token.

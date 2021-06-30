@@ -1,7 +1,8 @@
 /// FCMテスト画面のpermissions情報
 
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import '../importer.dart';
+
+// プッシュ通知
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 /// Requests & displays the current user permissions for this device.

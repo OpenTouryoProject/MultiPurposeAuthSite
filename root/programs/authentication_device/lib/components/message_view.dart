@@ -1,4 +1,9 @@
-import 'package:flutter/material.dart';
+import 'importer.dart';
+
+// WebAPI呼出
+import 'package:http/http.dart' as http;
+
+// プッシュ通知
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 // ...
@@ -6,10 +11,15 @@ import 'package:authentication_device/models/message_arguments.dart';
 
 /// Displays information about a [RemoteMessage].
 class MessageView extends StatelessWidget {
+
   /// A single data row.
-  Widget row(String? title, String? value) {
+  Widget _row(String? title, String? value, [double leftPadding = 0]) {
+    if(30 < value!.length)
+      value = value.substring(0, 30) + "...";
+
     return Padding(
-      padding: const EdgeInsets.only(left: 8, right: 8, top: 8),
+      padding: EdgeInsets.only(
+          left: 8 + leftPadding, right: 8, top: 8),
       child: Row(children: [
         Text('$title: '),
         Text(value ?? 'N/A'),
@@ -17,123 +27,92 @@ class MessageView extends StatelessWidget {
     );
   }
 
+  /// Push Ciba Result
+  void _pushCibaResultApi(bool result, RemoteMessage? message) async {
+    var response = await http.post(
+      Uri.parse(AppAuth.cibaPushResultEndpoint),
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": "Bearer ${AppAuth.accessToken}",
+      },
+      body: {
+        "auth_req_id" : message?.data["auth_req_id"],
+        "result" : result.toString(),
+      });
+
+    if (response.statusCode == 200) {
+    } else {
+      print('Request failed with status: ${response.statusCode}.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     MessageArguments? args =
-    ModalRoute.of(context)?.settings.arguments as MessageArguments;
+      ModalRoute.of(context)?.settings.arguments as MessageArguments;
 
-    RemoteMessage? message = args?.message;
-    RemoteNotification? notification = message?.notification;
+    RemoteMessage? message = args.message;
+    RemoteNotification? notification = message.notification;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(message?.messageId ?? ""),
+        title: Text(notification?.title ?? ""),
       ),
       body: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(children: [
-              row('Triggered application open', args.openedApplication.toString()),
-              row('Message ID', message?.messageId ?? ""),
-              row('Sender ID', message?.senderId ?? ""),
-              row('Category', message?.category ?? ""),
-              row('Collapse Key', message?.collapseKey ?? ""),
-              row('Content Available', message?.contentAvailable.toString()),
-              row('Data', message?.data.toString()),
-              row('From', message?.from ?? ""),
-              row('Message ID', message?.messageId ?? ""),
-              row('Sent Time', message?.sentTime?.toString() ?? ""),
-              row('Thread ID', message?.threadId ?? ""),
-              row('Time to Live (TTL)', message?.ttl?.toString() ?? ""),
-              if (notification != null) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Column(children: [
-                    const Text(
-                      'Remote Notification',
-                      style: TextStyle(fontSize: 18),
-                    ),
-                    row(
-                      'Title',
-                      notification.title ?? "",
-                    ),
-                    row(
-                      'Body',
-                      notification.body ?? "",
-                    ),
-                    if (notification.android != null) ...[
-                      const Text(
-                        'Android Properties',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      row(
-                        'Channel ID',
-                        notification.android?.channelId ?? "",
-                      ),
-                      row(
-                        'Click Action',
-                        notification.android?.clickAction ?? "",
-                      ),
-                      row(
-                        'Color',
-                        notification.android?.color ?? "",
-                      ),
-                      row(
-                        'Count',
-                        notification.android?.count?.toString() ?? "",
-                      ),
-                      row(
-                        'Image URL',
-                        notification.android?.imageUrl ?? "",
-                      ),
-                      row(
-                        'Link',
-                        notification.android?.link ?? "",
-                      ),
-                      row(
-                        'Priority',
-                        notification.android?.priority?.toString() ?? "",
-                      ),
-                      row(
-                        'Small Icon',
-                        notification.android?.smallIcon ?? "",
-                      ),
-                      row(
-                        'Sound',
-                        notification.android?.sound ?? "",
-                      ),
-                      row(
-                        'Ticker',
-                        notification.android?.ticker ?? "",
-                      ),
-                      row(
-                        'Visibility',
-                        notification.android?.visibility?.toString() ?? "",
-                      ),
-                    ],
-                    if (notification.apple != null) ...[
-                      const Text(
-                        'Apple Properties',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      row(
-                        'Subtitle',
-                        notification.apple?.subtitle ?? "",
-                      ),
-                      row(
-                        'Badge',
-                        notification.apple?.badge ?? "",
-                      ),
-                      row(
-                        'Sound',
-                        notification.apple?.sound?.name ?? "",
-                      ),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(children: [
+            this._row('Sent Time', message.sentTime?.toString() ?? ""),
+            if (notification != null) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(children: [
+                  const Text(
+                    'Remote Notification',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  this._row(
+                    'Title',
+                    notification.title ?? "",
+                  ),
+                  this._row(
+                    'Body',
+                    notification.body ?? "",
+                  )
+                ]),
+              )
+            ],
+            if(notification?.title == "CIBA") ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(children: [
+                  const Text(
+                    'Remote Notification Data',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  this._row('Data', message.data.keys.toString()),
+                  this._row('binding_message', message.data["binding_message"], 12),
+                  this._row('auth_req_id', message.data["auth_req_id"], 12),
+                  SpaceBox.height(16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      MyElevatedButton('Allow Button', () => {
+                        this._pushCibaResultApi(true, message)
+                      }),
+                      SpaceBox.width(16),
+                      MyElevatedButton('Deny Button', () => {
+                        this._pushCibaResultApi(false, message)
+                      }),
                     ]
-                  ]),
-                )
-              ]
-            ]),
-          )),
+                  ),
+                ]),
+              )
+            ]
+          ]),
+        )
+      ),
     );
   }
 }
