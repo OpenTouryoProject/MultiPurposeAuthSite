@@ -2,6 +2,9 @@
 
 import 'package:flutter/material.dart';
 
+// ...
+import 'package:authentication_device/configs/app_config.dart';
+
 class MyDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -27,10 +30,12 @@ class MyDrawer extends StatelessWidget {
             title: Text("mypage"),
             trailing: Icon(Icons.arrow_forward),
             onTap: () {
-              while(Navigator.of(context).canPop()){
-                Navigator.of(context).pop();
+              if(AppConfig.initialized) {
+                while (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
+                Navigator.of(context).pushNamed("/mypage");
               }
-              Navigator.of(context).pushNamed("/mypage");
             },
           ),
         ],

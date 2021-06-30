@@ -49,7 +49,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     public class CibaProvider
     {
         /// <summary>AD無しのテストをする場合、tureに設定。</summary>
-        public const bool DebugModeWithOutAD = true;  //false;
+        public const bool DebugModeWithOutAD = false;
 
         /// <summary>
         /// CibaData
@@ -426,7 +426,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     break;
                             }
-                        }
+                        }                        
 
                         break;
                 }

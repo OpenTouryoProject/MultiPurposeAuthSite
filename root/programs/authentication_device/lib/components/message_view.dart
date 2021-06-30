@@ -29,12 +29,13 @@ class MessageView extends StatelessWidget {
 
   /// Push Ciba Result
   void _pushCibaResultApi(bool result, RemoteMessage? message) async {
+    String? accessToken = await AppAuth.getTokenValue();
     var response = await http.post(
       Uri.parse(AppAuth.cibaPushResultEndpoint),
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": "Bearer ${AppAuth.accessToken}",
+        "Authorization": "Bearer ${accessToken}",
       },
       body: {
         "auth_req_id" : message?.data["auth_req_id"],

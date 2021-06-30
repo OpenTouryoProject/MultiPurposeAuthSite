@@ -175,6 +175,8 @@ class _AppAuthPageState extends State<AppAuthPage> {
     if (response.statusCode == 200) {
       if(response.body == "\"OK\"") // AuthZ(N)の仕様による
       {
+        // 初期化完了
+        AppConfig.initialized = true;
         // 画面遷移
         while (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
