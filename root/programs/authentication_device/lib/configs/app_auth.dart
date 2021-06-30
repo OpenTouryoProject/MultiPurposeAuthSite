@@ -1,3 +1,8 @@
+
+// トークン永続化
+import 'package:shared_preferences/shared_preferences.dart';
+
+// ...
 import 'package:authentication_device/configs/app_config.dart';
 
 class AppAuth {
@@ -19,5 +24,19 @@ class AppAuth {
   static const String discoveryUrl =
     "https://${AppConfig.serverFqdn}/MultiPurposeAuthSite/.well-known/openid-configuration";
 
-  static String? accessToken = "hoge";
+  static Future<String?> getTokenValue() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('access_token');
+    return token ?? "";
+  }
+
+  static Future<void> setTokenValue(String? token) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString('access_token', token ?? "");
+  }
+
+  static Future<void> removeTokenValue() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.remove('access_token');
+  }
 }

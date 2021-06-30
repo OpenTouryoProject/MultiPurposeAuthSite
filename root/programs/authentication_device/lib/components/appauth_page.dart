@@ -47,7 +47,7 @@ class _AppAuthPageState extends State<AppAuthPage> {
         if (message != null) {
           // メッセージ詳細画面へ遷移
           Navigator.pushNamed(context, '/message',
-          arguments: MessageArguments(message, true));
+            arguments: MessageArguments(message, true));
         }
       });
 
@@ -59,7 +59,7 @@ class _AppAuthPageState extends State<AppAuthPage> {
       print("ローカル通知で擬似的に通知メッセージを表示");
       RemoteNotification? notification = message?.notification;
       AndroidNotification? android = message?.notification?.android;
-      if (AppFcm.channel != null && AppFcm.flutterLocalNotificationsPlugin != null
+      if (AppFcm.flutterLocalNotificationsPlugin != null
           && notification != null && android != null && !kIsWeb) {
 
         AppFcm.flutterLocalNotificationsPlugin?.show(
@@ -75,7 +75,8 @@ class _AppAuthPageState extends State<AppAuthPage> {
               //      one that already exists in example app.
               icon: 'notification_icon',
             ),
-          ));
+          )
+        );
       }
     });
 
@@ -87,17 +88,26 @@ class _AppAuthPageState extends State<AppAuthPage> {
         arguments: MessageArguments(message, true));
     });
 
-    // トークンの取得
+    // FCMトークンの取得
     FirebaseMessaging.instance
       .getToken(vapidKey: AppFcm.vapidKey)
       .then(setToken);
 
-    // トークンの更新
+    // FCMトークンの更新
     AppFcm.tokenStream = FirebaseMessaging.instance.onTokenRefresh;
     AppFcm.tokenStream?.listen(setToken);
+
+    // Accessトークンの確認と処理
+    Future(() async {
+      this._accessToken = await AppAuth.getTokenValue();
+      if(this._accessToken != null)
+      {
+        await this._registerFcmTokenApi();
+      }
+    });
   }
 
-  // トークンの設定
+  // FCMトークンの設定
   void setToken(String? token) {
     print('FCM Token: $token');
     AppFcm.token = token;
@@ -139,7 +149,7 @@ class _AppAuthPageState extends State<AppAuthPage> {
       );
       if (result != null) {
         this._accessToken = result.accessToken;
-        AppAuth.accessToken = this._accessToken;
+        await AppAuth.setTokenValue(this._accessToken);
         await this._registerFcmTokenApi();
       }
       else {
@@ -151,22 +161,29 @@ class _AppAuthPageState extends State<AppAuthPage> {
   }
 
   Future<void> _registerFcmTokenApi() async {
+    String? accessToken = await AppAuth.getTokenValue();
     var response = await http.post(
       Uri.parse(AppAuth.setDeviceTokenEndpoint),
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": "Bearer ${AppAuth.accessToken}",
+        "Authorization": "Bearer ${accessToken}",
       },
       body: {
         "device_token" : AppFcm.token,
       });
     if (response.statusCode == 200) {
-      // 画面遷移
-      while(Navigator.of(context).canPop()){
-        Navigator.of(context).pop();
+      if(response.body == "\"OK\"") // AuthZ(N)の仕様による
+      {
+        // 画面遷移
+        while (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        Navigator.of(context).pushNamed("/mypage");
       }
-      Navigator.of(context).pushNamed("/mypage");
+      else {
+        print('Request failed with body: ${response.body}.');
+      }
     } else {
       print('Request failed with status: ${response.statusCode}.');
     }
