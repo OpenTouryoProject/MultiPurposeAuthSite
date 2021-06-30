@@ -1754,6 +1754,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 
+                        #region refresh_token
                         // 発行しないことに。
                         // ・単純に要らんのと、
                         // ・現状、refresh_token使った際、ES256にできない。
@@ -1765,6 +1766,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //{
                         //    refresh_token = RefreshTokenProvider.Create(tokenPayload);
                         //}
+                        #endregion
 
                         // オペレーション・トレース・ログ出力
                         string name = Helper.GetInstance().GetClientName(client_id);
