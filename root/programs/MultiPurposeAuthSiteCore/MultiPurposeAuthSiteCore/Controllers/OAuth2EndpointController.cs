@@ -41,6 +41,7 @@
 //*                                ・DeviceAuthZResponse画面 → HomeControllerに。
 //*                                ・DeviceAuthZVerify画面 → AccountControllerに。
 //*  2020/12/21  西野 大介         CIBAのTokenのsubを認可ユーザに変更
+//*  2021/07/10  西野 大介         2FAにプッシュ通知を追加（AspNetCore.Identityのみ
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -857,10 +858,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // プッシュ通知を、userに送信
                             if (!Sts.CibaProvider.DebugModeWithOutAD)
                             {
-                                string deviceToken = user.DeviceToken;
-
                                 // - DeviceTokenを使用してプッシュ通知
-                                string temp = await FcmService.GetInstance().SendAsync(
+                                await FcmService.GetInstance().SendAsync(
                                     user.DeviceToken, "CIBA", "Allow / Deny",
                                     new Dictionary<string, string>()
                                     {

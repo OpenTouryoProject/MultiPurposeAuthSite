@@ -84,6 +84,19 @@ class MessageView extends StatelessWidget {
                 ]),
               )
             ],
+            if(notification?.title == "2FA") ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(children: [
+                  const Text(
+                    'Remote Notification Data',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  this._row('Data', message.data.keys.toString()),
+                  this._row('code', message.data["code"], 12)
+                ]),
+              )
+            ],
             if(notification?.title == "CIBA") ...[
               Padding(
                 padding: const EdgeInsets.only(top: 16),
@@ -97,16 +110,16 @@ class MessageView extends StatelessWidget {
                   this._row('auth_req_id', message.data["auth_req_id"], 12),
                   SpaceBox.height(16),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      MyElevatedButton('Allow Button', () => {
-                        this._pushCibaResultApi(true, message)
-                      }),
-                      SpaceBox.width(16),
-                      MyElevatedButton('Deny Button', () => {
-                        this._pushCibaResultApi(false, message)
-                      }),
-                    ]
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        MyElevatedButton('Allow Button', () => {
+                          this._pushCibaResultApi(true, message)
+                        }),
+                        SpaceBox.width(16),
+                        MyElevatedButton('Deny Button', () => {
+                          this._pushCibaResultApi(false, message)
+                        }),
+                      ]
                   ),
                 ]),
               )
