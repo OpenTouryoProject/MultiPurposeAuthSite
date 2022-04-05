@@ -26,6 +26,7 @@
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //*  2020/11/12  西野 大介         SameSiteCookie対応 (.NET Fx側は対策不要)
 //*  2020/12/21  西野 大介         Device AuthZ対応実施
+//*  2021/07/10  西野 大介         2FAにプッシュ通知を追加（AspNetCore.Identityのみ
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1341,7 +1342,14 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region 2 要素認証 (2FA :2 factor authentication)
 
-        #region Email, SMS
+        #region Email, SMS, MobileApp
+
+        #region 
+        /// <summary>プッシュ通知</summary>
+        private string _2FA_Email = "Email";
+        private string _2FA_SMS = "Phone";
+        private string _2FA_MobileApp = "MobileApp";
+        #endregion
 
         #region 2FA画面のコード送信
 
@@ -1377,6 +1385,17 @@ namespace MultiPurposeAuthSite.Controllers
                 List<SelectListItem> factorOptions = userFactors.Select(
                     purpose => new SelectListItem { Text = purpose, Value = purpose }).ToList();
 
+                #region 2FAのラインナップに追加
+                // プッシュ通知
+                if (user.DeviceToken != null)
+                {
+                    factorOptions.Add(new SelectListItem { 
+                        Text = this._2FA_MobileApp,
+                        Value = this._2FA_MobileApp });
+                }
+                // , etc.
+                #endregion
+
                 // 2FA画面のコード送信画面に遷移
                 return View(new AccountSendCodeViewModel
                 {
@@ -1407,21 +1426,31 @@ namespace MultiPurposeAuthSite.Controllers
                 // 検証されたアカウントのUIDを取得
                 ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
 
-                // Generate the token and send it
-                // トークンを生成して送信します。
-                string code = await UserManager.GenerateTwoFactorTokenAsync(user, model.SelectedProvider);
+                // Generate the token and send it. トークンを生成して送信します。
+                // SelectedProviderではなく、Emailに固定（MobileAppだとエラーになる。
+                string code = await UserManager.GenerateTwoFactorTokenAsync(user, this._2FA_Email); //model.SelectedProvider);
 
                 // Identity2.0 では、GenerateTwoFactorTokenAsyncの中で
                 // 自動送信されていたが3.0では手動送信に変更された模様。
-                if (model.SelectedProvider == "Email")
+                if (model.SelectedProvider == this._2FA_Email)
                 {
                     // Email
                     await EmailSender.SendAsync(user.Email, "Two factor authentication code", code);
                 }
-                else if (model.SelectedProvider == "Phone")
+                else if (model.SelectedProvider == this._2FA_SMS)
                 {
                     // SMS
                     await SmsSender.SendAsync(user.PhoneNumber, code);
+                }
+                else if (model.SelectedProvider == this._2FA_MobileApp)
+                {
+                    // MobileApp
+                    await FcmService.GetInstance().SendAsync(
+                        user.DeviceToken, "2FA", "Two factor authentication",
+                        new Dictionary<string, string>()
+                        {
+                            { "code", code}
+                        });
                 }
                 else
                 {
@@ -1523,10 +1552,10 @@ namespace MultiPurposeAuthSite.Controllers
                 // 指定時間の間にコード入力の誤りが指定の回数に達すると、アカウントは、指定時間の間ロックアウトされる。
                 // IdentityConfig.cs(ApplicationUserManager.Create)でアカウントロックアウトの設定を行うことができる。
                 AspNetId.SignInResult result = await SignInManager.TwoFactorSignInAsync(
-                    provider: model.Provider,                                  // 2FAプロバイダ
-                    code: model.Code,                                          // 2FAコ－ド
-                    isPersistent: model.RememberBrowser, // model.RememberMe,  // アカウント記憶 ( ・・・仕様として解り難いので、RememberBrowserを使用 )
-                    rememberClient: model.RememberBrowser                      // ブラウザ記憶(2FA)
+                        provider: this._2FA_Email, // model.Provider,              // 2FAプロバイダ (固定
+                        code: model.Code,                                          // 2FAコ－ド
+                        isPersistent: model.RememberBrowser, // model.RememberMe,  // アカウント記憶 ( ・・・仕様として解り難いので、RememberBrowserを使用 )
+                        rememberClient: model.RememberBrowser                      // ブラウザ記憶 (2FA)
                     );
 
                 // SignInStatus

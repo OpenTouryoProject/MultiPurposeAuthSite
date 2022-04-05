@@ -52,6 +52,7 @@
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2020/12/21  西野 大介         ClientMode追加対応実施
+//*  2021/05/24  西野 大介         LIRでPKCEを使用した場合の例外措置
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1753,6 +1754,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 
+                        #region refresh_token
                         // 発行しないことに。
                         // ・単純に要らんのと、
                         // ・現状、refresh_token使った際、ES256にできない。
@@ -1764,6 +1766,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //{
                         //    refresh_token = RefreshTokenProvider.Create(tokenPayload);
                         //}
+                        #endregion
 
                         // オペレーション・トレース・ログ出力
                         string name = Helper.GetInstance().GetClientName(client_id);
@@ -2022,7 +2025,20 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // permittedLevelがclientMode未満
-                    retval = false;
+                    if (clientModeEnum == OAuth2AndOIDCEnum.ClientMode.device
+                        && permittedLevel == OAuth2AndOIDCEnum.ClientMode.fapi1)
+                    {
+                        // LIRでPKCEを使用した場合、
+                        // ・clientModeEnum = device
+                        // ・permittedLevel = fapi1
+                        // ...となるので例外措置を施す。
+                        retval = true;
+                    }
+                    else
+                    {
+                        // 上記以外の場合、
+                        retval = false;
+                    }
                 }
             }
             else

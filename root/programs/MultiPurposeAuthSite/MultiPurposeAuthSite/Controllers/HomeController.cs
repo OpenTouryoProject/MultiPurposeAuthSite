@@ -613,7 +613,8 @@ namespace MultiPurposeAuthSite.Controllers
                     else
                     {
                         // 異常系
-                        if ((string)temp[OAuth2AndOIDCConst.error] == OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
+                        if ((string)temp[OAuth2AndOIDCConst.error]
+                            == OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
                         {
                             // authorization_pending
                             System.Threading.Thread.Sleep(30);

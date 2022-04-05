@@ -35,6 +35,7 @@
 //*  2020/03/04  西野 大介         FAPI CIBA対応実施
 //*  2020/08/04  西野 大介         コンテナ化対応実施
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
+//*  2021/06/02  西野 大介         テスト用 証明書 検証 無効化コード追加
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -238,6 +239,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     X509KeyStorageFlags.MachineKeySet));
             }
 #endif
+            //// 無効な証明書を無視（テスト用）
+            //handler.ServerCertificateCustomValidationCallback
+            //    = (message, cert, chain, errors) => { return true; };
+
             return new HttpClient(handler);
             //return new HttpClient();
         }
@@ -1222,19 +1227,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // コンテナの可能性
                 temp = Config.OAuth2ContainerizatedAuthSvrFqdnAndPort;
                 if (!string.IsNullOrEmpty(temp))
-            {
+                {
                     // 置換
                     string orgStr = orgUri.ToString();
                     return new Uri(orgStr.Replace(orgUri.Authority, temp));
-            }
+                }
 
                 temp = Config.OAuth2ContainerizatedAuthSvrEPRootURI;
                 if (!string.IsNullOrEmpty(temp))
-            {
-                // 置換
-                string orgStr = orgUri.ToString();
+                {
+                    // 置換
+                    string orgStr = orgUri.ToString();
                     return new Uri(orgStr.Replace(orgUri.Scheme + "://" + orgUri.Authority, temp));
-            }
+                }
             }
 
             // 置換条件に合致しなかった場合。
