@@ -35,18 +35,18 @@ if exist %extDir%\%tmpDir% GOTO Build
 
 :Build
 @rem ビルドがあるならコピーへ
-if exist "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\Frameworks\Infrastructure\Build_netcore50" GOTO Xcopy
+if exist "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\Frameworks\Infrastructure\Build_netcore60" GOTO Xcopy
 
 @rem batファイルを使用してビルド
-cd "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\"
+cd "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\"
 echo | call 3_Build_Business_net48.bat
-echo | call 3_Build_Business_netcore50.bat
+echo | call 3_Build_Business_netcore60.bat
 
 :Xcopy
 @rem ビルド出力をコピー
 cd %extDir%
-xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\Frameworks\Infrastructure\Build_net48" "OpenTouryoAssemblies\Build_net48\"
-xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2019\programs\CS\Frameworks\Infrastructure\Build_netcore50" "OpenTouryoAssemblies\Build_netcore50\"
+xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\Frameworks\Infrastructure\Build_net48" "OpenTouryoAssemblies\Build_net48\"
+xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\Frameworks\Infrastructure\Build_netcore60" "OpenTouryoAssemblies\Build_netcore60\"
 
 pause
 
