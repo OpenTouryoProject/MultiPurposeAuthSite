@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28010.2016
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.32126.317
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CreateClientsIdentity", "CreateClientsIdentity\netcore\CreateClientsIdentity.csproj", "{AA6CE5AB-B764-4E84-A5D9-0F49DFD312E4}"
 EndProject
