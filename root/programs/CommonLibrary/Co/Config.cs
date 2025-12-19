@@ -38,7 +38,7 @@
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
-using MultiPurposeAuthSite.Extensions.FIDO;
+//using MultiPurposeAuthSite.Extensions.FIDO;
 
 using System;
 using System.Collections.Generic;
@@ -929,7 +929,7 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region FIDO
-
+        /*
         /// <summary>
         /// FIDOServerMode
         /// </summary>
@@ -949,7 +949,7 @@ namespace MultiPurposeAuthSite.Co
                 }
             }
         }
-
+        */
         #endregion
 
         #region STS

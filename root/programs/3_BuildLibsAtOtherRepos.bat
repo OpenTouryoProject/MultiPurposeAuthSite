@@ -10,8 +10,8 @@ setlocal
 set zipfilename=Temp.zip
 
 @rem GitHubのZIPパス
-set branchName=03-00
-set srcUrl=https://github.com/OpenTouryoProject/OpenTouryoTemplates/archive/%branchName%.zip
+set branchName=03-20
+set srcUrl=https://github.com/OpenTouryoProject/OpenTouryo/archive/%branchName%.zip
 
 @rem 解凍ディレクトリ
 set extDir=%CD%
@@ -35,18 +35,20 @@ if exist %extDir%\%tmpDir% GOTO Build
 
 :Build
 @rem ビルドがあるならコピーへ
-if exist "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\Frameworks\Infrastructure\Build_netcore60" GOTO Xcopy
+if exist "Temp\OpenTouryo-%branchName%\root\programs\CS\Frameworks\Infrastructure\Build_netcore100" GOTO Xcopy
 
 @rem batファイルを使用してビルド
-cd "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\"
+cd "Temp\OpenTouryo-%branchName%\root\programs\CS\"
+echo | call 2_Build_NuGet_net48.bat
 echo | call 3_Build_Business_net48.bat
-echo | call 3_Build_Business_netcore60.bat
+echo | call 2_Build_NuGet_netcore100.bat
+echo | call 3_Build_Business_netcore100.bat
 
 :Xcopy
 @rem ビルド出力をコピー
 cd %extDir%
-xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\Frameworks\Infrastructure\Build_net48" "OpenTouryoAssemblies\Build_net48\"
-xcopy /Y /E "Temp\OpenTouryoTemplates-%branchName%\root_VS2022\programs\CS\Frameworks\Infrastructure\Build_netcore60" "OpenTouryoAssemblies\Build_netcore60\"
+xcopy /Y /E "Temp\OpenTouryo-%branchName%\root\programs\CS\Frameworks\Infrastructure\Build_net48" "OpenTouryoAssemblies\Build_net48\"
+xcopy /Y /E "Temp\OpenTouryo-%branchName%\root\programs\CS\Frameworks\Infrastructure\Build_netcore100" "OpenTouryoAssemblies\Build_netcore100\"
 
 pause
 

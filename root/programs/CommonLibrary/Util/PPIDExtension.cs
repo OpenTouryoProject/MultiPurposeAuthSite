@@ -210,7 +210,7 @@ namespace MultiPurposeAuthSite.Util
         {
             // sub = SHA-256 ( sector_identifier || local_account_id || salt )
             byte[] asb = CustomEncode.StringToByte(clientId + userId + Config.SaltParameter, CustomEncode.UTF_8);
-            return CustomEncode.ToBase64UrlString(GetHash.GetHashBytes(asb, EnumHashAlgorithm.SHA256_M));
+            return CustomEncode.ToBase64UrlString(GetHash.GetHashBytes(asb, EnumHashAlgorithm.SHA256)); // SHA256_M
         }
         #endregion
     }

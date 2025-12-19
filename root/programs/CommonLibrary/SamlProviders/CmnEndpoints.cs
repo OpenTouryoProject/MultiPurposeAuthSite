@@ -97,7 +97,7 @@ namespace MultiPurposeAuthSite.SamlProviders
                     // VerifyRedirect
                     DigitalSignParam dsParam = new DigitalSignParam(
                         rpkc.JwkToParam(pubKey),
-                        EnumDigitalSignAlgorithm.RsaCSP_SHA1);
+                        EnumDigitalSignAlgorithm.Rsa_SHA256); // RsaCSP_SHA1
 
                     if (SAML2Bindings.VerifyRedirect(queryString, dsParam))
                     {

@@ -3,6 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# Ignore configuration file
+/root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config
+/root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
+
+# Ignore the Temp folder
+Temp/
+OpenTouryoAssemblies/
+
 # User-specific files
 *.suo
 *.user

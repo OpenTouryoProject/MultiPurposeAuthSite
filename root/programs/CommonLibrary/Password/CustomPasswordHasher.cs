@@ -207,7 +207,7 @@ namespace MultiPurposeAuthSite.Password
             if (GetPasswordHashV1.EqualSaltedPassword(
                 providedPassword,
                 hashedPassword.Substring(4),
-                EnumKeyedHashAlgorithm.MACTripleDES))
+                (EnumHashAlgorithm)EnumKeyedHashAlgorithm.MACTripleDES))
             {
                 return PasswordVerificationResult.Success;
             }

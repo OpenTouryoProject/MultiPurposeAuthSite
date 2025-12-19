@@ -40,7 +40,7 @@ namespace MultiPurposeAuthSite
         {
             // see : https://www.asp.net/ajax/cdn
 
-            string jqueryVersion = "3.4.1";
+            string jqueryVersion = "3.7.1";
 
             BundleTable.EnableOptimizations = !Config.IsDebug;
             BundleTable.Bundles.UseCdn = true; // same as: bundles.UseCdn = true;
@@ -70,14 +70,14 @@ namespace MultiPurposeAuthSite
 
             bundles.Add(new ScriptBundle(
                 "~/bundles/jqueryval",
-                "//ajax.aspnetcdn.com/ajax/jquery.validate/1.16.0/jquery.validate.min.js")
+                "//cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.21.0/jquery.validate.min.js")
                 {
                     CdnFallbackExpression = "window.jQuery.validator"
                 }.Include("~/Scripts/jquery.validate.js"));
 
             bundles.Add(new ScriptBundle(
                 "~/bundles/jqueryvaluno",
-                "//ajax.aspnetcdn.com/ajax/mvc/5.2.3/jquery.validate.unobtrusive.min.js")
+                "//cdnjs.cloudflare.com/ajax/libs/jquery-validation-unobtrusive/4.0.0/jquery.validate.unobtrusive.min.js")
                 {
                     CdnFallbackExpression = "window.jQuery.validator.unobtrusive"
                 }.Include("~/Scripts/jquery.validate.unobtrusive.js"));
@@ -96,10 +96,10 @@ namespace MultiPurposeAuthSite
 
             bundles.Add(new ScriptBundle(
                 "~/bundles/bootstrap",
-                "//ajax.aspnetcdn.com/ajax/bootstrap/3.3.7/bootstrap.min.js")
+                "//cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js")
                 {
                     CdnFallbackExpression = "window.jQuery.fn.modal"
-                }.Include("~/Scripts/bootstrap.js"));
+                });//.Include("~/Scripts/bootstrap.bundle.min.js")); // minifierがES6構文を処理できないらしい。
 
             bundles.Add(new ScriptBundle(
                 "~/bundles/respond",

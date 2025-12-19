@@ -40,7 +40,10 @@ using System.Data.SqlClient;
 using System.Reflection;
 using System.Threading.Tasks;
 using Oracle.ManagedDataAccess.Client;
+#if NETCORE
 using Npgsql;
+#endif
+
 
 using Dapper;
 using StackExchange.Profiling.Data;
@@ -72,18 +75,20 @@ namespace MultiPurposeAuthSite.Data
                         new OracleConnection(GetConfigParameter.GetConnectionString("ConnectionString_ODP")),
                         new TraceDbProfiler());
 
+#if NETCORE
                 case EnumUserStoreType.PostgreSQL:
                     //return new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS"));
                     return new ProfiledDbConnection(
                         new NpgsqlConnection(GetConfigParameter.GetConnectionString("ConnectionString_NPS")),
                         new TraceDbProfiler());
+#endif
 
                 default:
                     return null;
             }
         }
 
-        #endregion
+#endregion
 
         #region 初期化
 
