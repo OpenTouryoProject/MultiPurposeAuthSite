@@ -21,7 +21,7 @@
     //**********************************************************************************
 *@
 
-@using MultiPurposeAuthSite.Extensions.FIDO
+@*using MultiPurposeAuthSite.Extensions.FIDO*@
 
 @model ManageIndexViewModel
 @inject UserManager<ApplicationUser> UserManager
@@ -344,13 +344,12 @@
             {
                 // OAuth2データの変更が許可されていない場合。
             }
-
+@*
             @if (Config.FIDOServerMode != EnumFidoType.None)
             {
                 // FIDO2データの変更が許可されている場合。
                 <dt>EditFIDO2Data :</dt>
                 <dd>
-                    @*"Add" and "Remove or Change"*@
                     @if (Config.FIDOServerMode == EnumFidoType.MsPass)
                     {
                         // Microsoft Passport
@@ -393,7 +392,7 @@
             {
                 // FIDO2データの変更が許可されていない場合。
             }
-
+*@
             @if (Config.CanUseGdprFunction)
             {
                 // GDPR 個人情報管理が許可されている場合。
@@ -404,7 +403,7 @@
             }
             else
             {
-                // FIDO2データの変更が許可されていない場合。
+                // GDPR 個人情報管理が許可されていない場合。
             }
         </dl>
     </div>

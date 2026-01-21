@@ -22,6 +22,7 @@ using System.Net.Http;
 
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
@@ -43,6 +44,7 @@ namespace MultiPurposeAuthSite
             Program.BuildWebHost(args).Run();
         }
 
+        /*
         /// <summary>BuildWebHost</summary>
         /// <param name="args">コマンドライン引数</param>
         /// <returns>IWebHost</returns>
@@ -53,6 +55,27 @@ namespace MultiPurposeAuthSite
             return WebHost.CreateDefaultBuilder(args) //  IWebHostBuilderを取得する。
                 .UseStartup<Startup>() // IWebHostBuilder.UseStartup<TStartup> メソッドにStartupクラスを指定。
                 .Build(); // IWebHostBuilder.Build メソッドでIWebHostクラスインスタンスを返す。
+        }
+        */
+
+        /// <summary>BuildWebHost</summary>
+        /// <param name="args">コマンドライン引数</param>
+        /// <returns>IHost</returns>
+        public static IHost BuildWebHost(string[] args)
+        {
+            // WebHost経由で、IWebHost, IWebHostBuilderにアクセスする。
+            // Host経由で、IHost, IHostBuilderにアクセスする。
+
+            //return WebHost.CreateDefaultBuilder(args) //  IWebHostBuilderを取得する。
+            //    .UseStartup<Startup>() // IWebHostBuilder.UseStartup<TStartup> メソッドにStartupクラスを指定。
+            //    .Build(); // IWebHostBuilder.Build メソッドでIWebHostクラスインスタンスを返す。
+
+            return Host.CreateDefaultBuilder(args) // IHostBuilderを取得する。
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder.UseStartup<Startup>(); // Startupクラスを指定
+                })
+                .Build(); // IHostを返す
         }
     }
 }

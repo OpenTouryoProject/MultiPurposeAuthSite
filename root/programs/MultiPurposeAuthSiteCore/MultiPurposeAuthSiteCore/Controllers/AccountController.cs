@@ -40,7 +40,7 @@ using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Saml = MultiPurposeAuthSite.SamlProviders;
-using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
+//using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -70,9 +70,9 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using Fido2NetLib;
-using Fido2NetLib.Objects;
-using static Fido2NetLib.Fido2;
+//using Fido2NetLib;
+//using Fido2NetLib.Objects;
+//using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
@@ -311,6 +311,7 @@ namespace MultiPurposeAuthSite.Controllers
             string fido2Challenge = "";
             string sequenceNo = "";
 
+            /*
             if (Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
             {
                 sequenceNo = "0";
@@ -320,6 +321,7 @@ namespace MultiPurposeAuthSite.Controllers
                 fido2Challenge = GetPassword.Generate(22, 0);
                 HttpContext.Session.SetString("fido2Challenge", fido2Challenge);
             }
+            */
 
             // サインアップしたユーザを取得
             if (Config.RequireUniqueEmail)
@@ -467,6 +469,7 @@ namespace MultiPurposeAuthSite.Controllers
                         "&response_mode=form_post" +
                         "&login_hint=" + uid + "&prompt=none");
                 }
+                /*
                 else if (submitButtonName == "webauthn_signin"
                     && Config.FIDOServerMode == FIDO.EnumFidoType.WebAuthn)
                 {
@@ -617,6 +620,7 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                     }
                 }
+                */
                 else
                 {
                     // 不明なボタン

@@ -30,7 +30,7 @@ using MultiPurposeAuthSite.Util;
 using MultiPurposeAuthSite.Util.IdP;
 using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.Extensions;
-using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
+//using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
@@ -60,9 +60,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
-using Fido2NetLib;
-using Fido2NetLib.Objects;
-using static Fido2NetLib.Fido2;
+//using Fido2NetLib;
+//using Fido2NetLib.Objects;
+//using static Fido2NetLib.Fido2;
 
 using Touryo.Infrastructure.Business.Presentation;
 using Touryo.Infrastructure.Framework.StdMigration;
@@ -365,7 +365,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // Saml2OAuth2Data
                         HasSaml2OAuth2Data = !string.IsNullOrEmpty(saml2OAuth2Data),
                         // FIDO2PublicKey
-                        HasFIDO2Data = new Func<bool>(() =>
+                        /*HasFIDO2Data = new Func<bool>(() =>
                         {
                             if (Config.FIDOServerMode == FIDO.EnumFidoType.MsPass)
                             {
@@ -376,7 +376,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 return (0 < FIDO.DataProvider.GetCredentialsByUser(user.UserName).Count);
                             }
                             else return false;
-                        })(),
+                        })(),*/
                         // Scopes
                         Scopes = Const.StandardScopes
                     };
@@ -2542,7 +2542,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region FIDO Data
 
         #region WebAuthn
-
+        /*
         /// <summary>
         /// WebAuthn関連の非構造化データの追加・編集画面（初期表示）
         /// GET: /Manage/AddWebAuthnData
@@ -2714,11 +2714,11 @@ namespace MultiPurposeAuthSite.Controllers
                 return View("Error");
             }
         }
-
+        */
         #endregion
 
         #region MsPass
-
+        /*
         /// <summary>
         /// MsPass関連の非構造化データの追加・編集画面（初期表示）
         /// GET: /Manage/AddMsPassData
@@ -2825,7 +2825,7 @@ namespace MultiPurposeAuthSite.Controllers
             // エラー画面
             return View("Error");
         }
-
+        */
         #endregion
 
         #endregion

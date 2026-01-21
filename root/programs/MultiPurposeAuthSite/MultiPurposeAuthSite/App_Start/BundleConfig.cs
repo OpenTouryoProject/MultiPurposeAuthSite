@@ -61,52 +61,25 @@ namespace MultiPurposeAuthSite
                         "~/Scripts/touryo/msWebauthn.js",
                         "~/Scripts/touryo/ffWebauthn.js"));
 
-            bundles.Add(new ScriptBundle(
-                "~/bundles/jquery",
-                string.Format("//ajax.aspnetcdn.com/ajax/jquery/jquery-{0}.min.js", jqueryVersion))
-                {
-                    CdnFallbackExpression = "window.jQuery"
-                }.Include(string.Format("~/Scripts/jquery-{0}.js", jqueryVersion)));
+            //jquery、jqueryvalを新規作成テンプレ準拠に
+            bundles.Add(new ScriptBundle("~/bundles/jquery").Include(
+                        "~/Scripts/jquery-{version}.js"));
 
-            bundles.Add(new ScriptBundle(
-                "~/bundles/jqueryval",
-                "//cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.21.0/jquery.validate.min.js")
-                {
-                    CdnFallbackExpression = "window.jQuery.validator"
-                }.Include("~/Scripts/jquery.validate.js"));
+            bundles.Add(new ScriptBundle("~/bundles/jqueryval").Include(
+                        "~/Scripts/jquery.validate*"));
 
-            bundles.Add(new ScriptBundle(
-                "~/bundles/jqueryvaluno",
-                "//cdnjs.cloudflare.com/ajax/libs/jquery-validation-unobtrusive/4.0.0/jquery.validate.unobtrusive.min.js")
-                {
-                    CdnFallbackExpression = "window.jQuery.validator.unobtrusive"
-                }.Include("~/Scripts/jquery.validate.unobtrusive.js"));
+            // jqueryvaluno、jqueryunoajax (削除)
 
-            bundles.Add(new ScriptBundle("~/bundles/jqueryunoajax").Include(
-                "~/Scripts/jquery.unobtrusive-ajax.js")); // CDNで提供されていない。
-            
-            // 開発と学習には、Modernizr の開発バージョンを使用します。次に、実稼働の準備ができたら、
-            // http://modernizr.com にあるビルド ツールを使用して、必要なテストのみを選択します。
-            bundles.Add(new ScriptBundle(
-                "~/bundles/modernizr",
-                "//ajax.aspnetcdn.com/ajax/modernizr/modernizr-2.8.3.js") // min 無し
-                {
-                    CdnFallbackExpression = "window.Modernizr"
-                }.Include("~/Scripts/modernizr-*"));
+            //modernizr、bootstrapを新規作成テンプレ準拠に
+            // 開発と学習には、Modernizr の開発バージョンを使用します。次に、実稼働の準備が
+            // 運用の準備が完了したら、https://modernizr.com のビルド ツールを使用し、必要なテストのみを選択します。
+            bundles.Add(new ScriptBundle("~/bundles/modernizr").Include(
+                        "~/Scripts/modernizr-*"));
 
-            bundles.Add(new ScriptBundle(
-                "~/bundles/bootstrap",
-                "//cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js")
-                {
-                    CdnFallbackExpression = "window.jQuery.fn.modal"
-                });//.Include("~/Scripts/bootstrap.bundle.min.js")); // minifierがES6構文を処理できないらしい。
+            bundles.Add(new Bundle("~/bundles/bootstrap").Include(
+                      "~/Scripts/bootstrap.js"));
 
-            bundles.Add(new ScriptBundle(
-                "~/bundles/respond",
-                "//ajax.aspnetcdn.com/ajax/respond/1.4.2/respond.min.js")
-                {
-                    CdnFallbackExpression = "window.respond"
-                }.Include("~/Scripts/respond.js"));
+            // respond (削除)
 
             bundles.Add(new StyleBundle("~/bundles/css").Include(
                         "~/Content/bootstrap.css",

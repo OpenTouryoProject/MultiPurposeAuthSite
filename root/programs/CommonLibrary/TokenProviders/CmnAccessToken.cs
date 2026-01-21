@@ -234,7 +234,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static string CreatePayloadForCode(ClaimsIdentity identity, DateTimeOffset issuedUtc)
         {
             // チェック
-            if (identity == null || issuedUtc == null)
+            if (identity == null)// || issuedUtc == null)
             {
                 throw new ArgumentNullException();
             }

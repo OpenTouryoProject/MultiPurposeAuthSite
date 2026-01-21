@@ -36,12 +36,15 @@ using MultiPurposeAuthSite.Log;
 
 using System;
 using System.Data;
-using System.Data.SqlClient;
 using System.Reflection;
 using System.Threading.Tasks;
 using Oracle.ManagedDataAccess.Client;
+
 #if NETCORE
 using Npgsql;
+using Microsoft.Data.SqlClient;
+#else
+using System.Data.SqlClient;
 #endif
 
 
