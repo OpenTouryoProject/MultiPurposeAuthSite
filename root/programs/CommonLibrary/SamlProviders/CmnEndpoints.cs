@@ -62,7 +62,8 @@ namespace MultiPurposeAuthSite.SamlProviders
         public static bool VerifySamlRequest(
             string queryString, string decodeSaml,
             out string iss, out string inResponseTo,
-            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
+            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr,
+            EnumDigitalSignAlgorithm? enumDigitalSignAlgorithm = null) // 既定値の変更 Rsa_SHA1 → Rsa_SHA256
         {
             bool verified = false;
 
@@ -95,10 +96,9 @@ namespace MultiPurposeAuthSite.SamlProviders
                 if (!string.IsNullOrEmpty(queryString))
                 {
                     // VerifyRedirect
-                    DigitalSignParam dsParam = new DigitalSignParam(
-                        rpkc.JwkToParam(pubKey),
-                        EnumDigitalSignAlgorithm.Rsa_SHA256); // RsaCSP_SHA1
-
+                    EnumDigitalSignAlgorithm dSigAlg = enumDigitalSignAlgorithm ?? EnumDigitalSignAlgorithm.Rsa_SHA256; // Rsa_SHA1
+                    DigitalSignParam dsParam = new DigitalSignParam(rpkc.JwkToParam(pubKey), dSigAlg); 
+                    
                     if (SAML2Bindings.VerifyRedirect(queryString, dsParam))
                     {
                         // XSDスキーマによる検証
@@ -143,6 +143,7 @@ namespace MultiPurposeAuthSite.SamlProviders
         /// <param name="queryString">out string</param>
         /// <param name="samlRequest">XmlDocument</param>
         /// <param name="samlNsMgr">XmlNamespaceManager</param>
+        /// <param name="hashAlgorithmName">HashAlgorithmName</param>
         /// <returns>SAML2Enum.ProtocolBinding?</returns>
         public static SAML2Enum.ProtocolBinding? CreateSamlResponse(
             ClaimsIdentity identity,
@@ -150,7 +151,8 @@ namespace MultiPurposeAuthSite.SamlProviders
             SAML2Enum.StatusCode statusCode,
             string iss, string relayState, string inResponseTo,
             out string rtnUrl, out string samlResponse, out string queryString,
-            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr)
+            XmlDocument samlRequest, XmlNamespaceManager samlNsMgr,
+            HashAlgorithmName? hashAlgorithmName = null) // 既定値の変更 SHA1 → SHA256
         {
             string rtnProtocol = "";
             string nameIdPolicy = "";
@@ -160,10 +162,8 @@ namespace MultiPurposeAuthSite.SamlProviders
             queryString = "";
 
             // DigitalSignX509
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                Config.RsaPfxFilePath,
-                Config.RsaPfxPassword,
-                HashAlgorithmName.SHA1);
+            HashAlgorithmName han = hashAlgorithmName ?? HashAlgorithmName.SHA256;
+            DigitalSignX509 dsX509 = new DigitalSignX509(Config.RsaPfxFilePath, Config.RsaPfxPassword, han);
 
             // rtnUrl
             string temp1 = SAML2Bindings.GetAssertionConsumerServiceURLInRequest(samlRequest, samlNsMgr);

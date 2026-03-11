@@ -337,7 +337,11 @@ namespace MultiPurposeAuthSite.Data
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
+#if NETFX
                     if (userName == Config.AdministratorUID)
+#else
+                    if (userName.ToUpper() == Config.AdministratorUID.ToUpper())
+#endif
                     {
                         user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
 #if NETFX
