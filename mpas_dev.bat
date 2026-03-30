@@ -9,4 +9,6 @@
 @rem 当該フォルダに本バッチファイルをコピーして実行することを想定している。
 
 xcopy /E /Y /I "OpenTouryo\root\programs\CS\Frameworks\Infrastructure\Build_net48" "MultiPurposeAuthSite\root\programs\OpenTouryoAssemblies\Build_net48\"
-xcopy /E /Y /I "OpenTouryo\root\programs\CS\Frameworks\Infrastructure\Build_netcore60" "MultiPurposeAuthSite\root\programs\OpenTouryoAssemblies\Build_netcore60\"
+xcopy /E /Y /I "OpenTouryo\root\programs\CS\Frameworks\Infrastructure\Build_netcore100" "MultiPurposeAuthSite\root\programs\OpenTouryoAssemblies\Build_netcore100\"
+
+pause
