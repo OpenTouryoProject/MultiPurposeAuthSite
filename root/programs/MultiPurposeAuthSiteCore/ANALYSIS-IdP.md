@@ -171,7 +171,7 @@ OIDC Core §5.1 は **boolean** と定めている。JSON 的にも `"True"` は
 
 **修正:** `.ToString()` を外した。access_token / id_token と `/userinfo` の計 4 箇所。
 
-### A-5. OIDC のとき `redirect_uri` が code に紐付かない（条件が反転している） **[Lib]**
+### A-5. OIDC のとき `redirect_uri` が code に紐付かない（条件が反転している） **[Lib][Core]** — **✅ 修正済み（#186）**
 
 ```csharp
 // CommonLibrary/TokenProviders/AuthorizationCodeProvider.cs:83-87
@@ -190,8 +190,27 @@ if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
 → **OIDC フローでは `/token` の `redirect_uri` が検証されない。**
 RFC 6749 §4.1.3 / OIDC Core §3.1.3.1 が要求する照合が効いていない。
 
-**修正:** 条件を外して常に保存する（あるいは OIDC のときこそ保存する）。
-**net48 版と共通コードなので、両系統の回帰確認が要る。**
+**対応（#186）:** 条件を外し、認可リクエストの `redirect_uri` を常に code に紐付けるようにした。
+
+**サーバだけ直すと自己テストが壊れる**点が要だった。
+`HomeController.SaveOAuth2Params` に
+
+```csharp
+if (!isOidc) { /* OIDCはTokenリクエストにredirect_uriを指定しない。 */ }
+```
+
+という分岐があり、**クライアント側も送らない実装**になっていた。
+このコメントは仕様の誤解で、**OIDC Core §3.1.3.1 は Token リクエストの `redirect_uri` を
+REQUIRED としている**（RFC 6749 §4.1.3 の「認可リクエストに含めた場合は必須」より厳しい）。
+両アプリの分岐を外し、意味を失った `isOidc` 引数も廃止した（呼び出し 14 箇所 × 2 アプリ）。
+
+Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_uri` は null のままとなり、
+`CheckClientIdAndRedirectUri` の「認可リクエスト時、指定無し」経路に入る。影響しない。
+
+> **残っている穴:** `request_uri`（Request Object / FAPI2）の経路では、
+> `redirect_uri` が **JWT の中**にあって `queryString` には無いため、**紐付けが効かない。**
+> PKCE の `code_challenge` も同じ理由で拾えていない。
+> `CreateCodeInAuthZNRes` に実効値を渡す形にする必要がある。**別 Issue。**
 
 ### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]**
 
