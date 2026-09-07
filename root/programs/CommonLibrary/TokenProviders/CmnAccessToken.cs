@@ -33,6 +33,9 @@
 //*  2020/01/07  西野 大介         PPID対応実施
 //*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
 //*  2020/12/21  西野 大介         ClientMode追加対応実施
+//*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
+//*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
+//*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -150,9 +153,10 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             tokenClaimSet.Add(OAuth2AndOIDCConst.jti, jti);
-            tokenClaimSet.Add(OAuth2AndOIDCConst.exp, expiresUtc.ToUnixTimeSeconds().ToString());
-            tokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
-            tokenClaimSet.Add(OAuth2AndOIDCConst.iat, DateTimeOffset.Now.ToUnixTimeSeconds().ToString());
+            // exp/nbf/iat は NumericDate（RFC 7519 2章）＝JSONの数値。文字列にしない。
+            tokenClaimSet.Add(OAuth2AndOIDCConst.exp, expiresUtc.ToUnixTimeSeconds());
+            tokenClaimSet.Add(OAuth2AndOIDCConst.nbf, DateTimeOffset.Now.ToUnixTimeSeconds());
+            tokenClaimSet.Add(OAuth2AndOIDCConst.iat, DateTimeOffset.Now.ToUnixTimeSeconds());
 
             // scope値によって、返す値を変更する。
             foreach (string scope in scopes)
@@ -168,11 +172,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                             break;
                         case OAuth2AndOIDCConst.Scope_Email:
                             tokenClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
-                            tokenClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
+                            tokenClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed);
                             break;
                         case OAuth2AndOIDCConst.Scope_Phone:
                             tokenClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
-                            tokenClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed.ToString());
+                            tokenClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed);
                             break;
                         case OAuth2AndOIDCConst.Scope_Address:
                             // ・・・
@@ -348,9 +352,10 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 書込１
             payload[OAuth2AndOIDCConst.jti] = jti;
-            payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds().ToString();
-            payload[OAuth2AndOIDCConst.nbf] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
-            payload[OAuth2AndOIDCConst.iat] = DateTimeOffset.Now.ToUnixTimeSeconds().ToString();
+            // exp/nbf/iat は NumericDate（RFC 7519 2章）＝JSONの数値。文字列にしない。
+            payload[OAuth2AndOIDCConst.exp] = expiresUtc.ToUnixTimeSeconds();
+            payload[OAuth2AndOIDCConst.nbf] = DateTimeOffset.Now.ToUnixTimeSeconds();
+            payload[OAuth2AndOIDCConst.iat] = DateTimeOffset.Now.ToUnixTimeSeconds();
             
             // 書込２
             // - cnf
@@ -487,10 +492,26 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JWS jws = null;
                 
                 // 証明書を使用するか、Jwkを使用するか判定
-                Dictionary<string, string> header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwt.Split('.')[0]), CustomEncode.UTF_8));
+                // ヘッダの解析は、JWTでない文字列を渡されても例外にしない（#185）。
+                Dictionary<string, string> header = null;
+                try
+                {
+                    string[] segments = jwt.Split('.');
+                    if (segments.Length == 3)
+                    {
+                        header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
+                    }
+                }
+                catch
+                {
+                    // Base64Url、JSONとして壊れている ＝ 検証失敗として扱う。
+                    header = null;
+                }
 
-                if (header.Keys.Any(s => s == JwtConst.kid))
+                if (header != null
+                    && header.ContainsKey(JwtConst.kid)
+                    && header.ContainsKey(JwtConst.alg))
                 {
                     string alg = header[JwtConst.alg];
 
@@ -543,7 +564,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
                 }
 
-                if (jws.Verify(jwt))
+                // jwsが決まらなかった場合（kid無し、ヘッダ破損など）は検証失敗（#185）。
+                if (jws != null && jws.Verify(jwt))
                 {
                     // 検証できた。
 
@@ -559,7 +581,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // iss, expの検証
                         if ((string)tokenClaimSet[OAuth2AndOIDCConst.iss] == Config.IssuerId
                             && Helper.GetInstance().GetClientSecret((string)tokenClaimSet[OAuth2AndOIDCConst.aud]) != null
-                            && CmnJwtToken.VerifyExp((string)tokenClaimSet[OAuth2AndOIDCConst.exp]))
+                            // CmnJwtToken.VerifyExpはstring引数のみ。expは数値になったのでToStringで渡す
+                            // （文字列で発行された過去のTokenも、そのまま通る）。
+                            && CmnJwtToken.VerifyExp(tokenClaimSet[OAuth2AndOIDCConst.exp].ToString()))
                         {
                             // claims
                             if(tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.claims))
@@ -639,9 +663,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         {
             // 予約Claimを追加
             identity.AddClaim(new Claim(ClaimTypes.Name, (string)tokenClaimSet[OAuth2AndOIDCConst.sub]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnExpirationTimeClaim, (string)tokenClaimSet[OAuth2AndOIDCConst.exp]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNotBeforeClaim, (string)tokenClaimSet[OAuth2AndOIDCConst.nbf]));
-            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuedAtClaim, (string)tokenClaimSet[OAuth2AndOIDCConst.iat]));
+            // exp/nbf/iatは数値。Claimの値はstringなのでToStringで変換する。
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnExpirationTimeClaim, tokenClaimSet[OAuth2AndOIDCConst.exp].ToString()));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNotBeforeClaim, tokenClaimSet[OAuth2AndOIDCConst.nbf].ToString()));
+            identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnIssuedAtClaim, tokenClaimSet[OAuth2AndOIDCConst.iat].ToString()));
             identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnJwtIdClaim, (string)tokenClaimSet[OAuth2AndOIDCConst.jti]));
 
             // 基本Claimを追加
@@ -651,8 +676,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 scopes.Add(s);
             }
+            // nonceは、認可リクエストで指定されなかった場合、Tokenに含まれない（#191）。
+            tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.nonce, out object nonce);
+
             Helper.AddClaim(identity,
-                (string)tokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, null, (string)tokenClaimSet[OAuth2AndOIDCConst.nonce]);
+                (string)tokenClaimSet[OAuth2AndOIDCConst.aud], scopes, null, (string)nonce);
 
             // 拡張Claimを追加
             // - cnf

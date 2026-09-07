@@ -11,7 +11,12 @@
 各項目に **[Core]** / **[Lib]**（＝両系統に影響）を付けた。
 
 プロジェクト・ポリシーは リポジトリ ルートの `AGENTS.md` に定義済み。
-→ **エージェントは git 操作を行わない。** 本書は分析結果であり、修正は未実施。
+→ **エージェントは git 操作を行わない。**
+
+**凡例:** 対応済みの項目は、見出しに **✅ 修正済み（#Issue 番号）** を付ける。
+**分析が誤りだった項目は ⚠️ 誤検出（#Issue 番号）** を付け、
+**なぜ見誤ったかを残す**（消さない。同じ誤りを繰り返さないため）。
+本書は分析の記録であると同時に、**対応状況の一覧**でもある。
 
 ---
 
@@ -28,6 +33,11 @@
 
 「最新の IdP に近づける」うえでの最短経路は、**新機能の追加ではなく、
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
+
+**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-6 / C-14）。
+A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
+nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
+見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
 
 ---
 
@@ -66,10 +76,10 @@
 
 > このグループは**外から見える振る舞いが仕様と違う**もの。修正の費用対効果が最も高い。
 
-### A-1. `expires_in` が常に `0` になる **[Lib][Core]** ★最優先
+### A-1. `expires_in` が常に `0` になる **[Lib][Core]** — **✅ 修正済み（#182）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnEndpoints.cs:2152
+// 修正前: CommonLibrary/TokenProviders/CmnEndpoints.cs
 ret.Add(OAuth2AndOIDCConst.expires_in,
         Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
 ```
@@ -80,41 +90,53 @@ ret.Add(OAuth2AndOIDCConst.expires_in,
 
 仕様に従う RP は「発行と同時に期限切れ」と解釈するため、即座に再取得ループに入るか失敗する。
 
-該当は `.Seconds` を使っている **34 箇所**。
+該当は `.Seconds` を使っている **33 箇所**。
 
 | 場所 | 件数 |
 |---|---|
 | `CommonLibrary/TokenProviders/CmnEndpoints.cs:2152` | 1 |
-| `MultiPurposeAuthSiteCore/.../AccountController.cs`（Implicit / Hybrid の各 response_mode） | 17 |
+| `MultiPurposeAuthSiteCore/.../AccountController.cs`（Implicit / Hybrid の各 response_mode） | 16 |
 | `MultiPurposeAuthSite/.../AccountController.cs`（net48 版・同上） | 16 |
 
 **修正:** `.Seconds` → `.TotalSeconds`（`(int)` にキャストして整数化）。
 併せて `expires_in` は RFC 6749 §5.1 で**数値**なので、応答の型も見直す（A-3 と同根）。
 
-### A-2. `nonce` が無いと `id_token` が発行されない **[Lib]** ★最優先
+### A-2. ~~`nonce` が無いと `id_token` が発行されない~~ **[Lib]** — **⚠️ 誤検出（#183）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnIdToken.cs:89
+// 修正前: CommonLibrary/TokenProviders/CmnIdToken.cs
 if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
     && tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
 ```
 
+> **この指摘は誤りだった。** 条件だけを見て「`nonce` が無ければ `id_token` を打ち切る」と判断したが、
+> **呼び出し元を辿っていなかった。**
+> `Helper.AddClaim`（`Extensions/Sts/Helper.cs`）は **`nonce` 未指定時に `state` を代入して
+> 無条件に nonce クレームを追加する**。トークンを発行する 6 経路
+> （code / implicit / hybrid / ROPC / client_credentials / JWT bearer）はすべてここを通るため、
+> payload には **常に** `nonce` キーが存在し、上の条件は**常に真**だった。
+> → **`nonce` 無しでも `id_token` は返っていた。**
+>
+> #183 のコミットは、**可読性のため**「常に真の条件を外した簡素化」として残してある
+> （挙動は変わらない）。
+> **注意: コミット メッセージは `fixed #183` だが、不具合修正ではない。**
+> git log だけを見ると誤読するので、経緯は #183 のコメントを参照すること。
+>
+> **本当の問題は fallback の側にある。** → **C-16（#191）**
+
+当初の記述（誤り）は次のとおり。
 `nonce` は **Authorization Code フローでは OPTIONAL**（OIDC Core §3.1.2.1）。
-しかし本実装は access_token の payload に `nonce` クレームが無いと id_token 生成を打ち切り、
-`CreateAccessTokenResponse` は空文字列を受け取って `id_token` を応答に載せない。
+本実装は access_token の payload に `nonce` クレームが無いと id_token 生成を打ち切る、と読んだ。
+`nonce` 必須チェックが `ValidateAuthZReqParam` 側でコメント アウトされていた点は事実で、
+**#190 で implicit / hybrid のみ必須に戻した。** C-14 参照。
 
-→ **`scope=openid` かつ `nonce` なしの認可コード フローで、`id_token` が返らない。**
-OIDC Core §3.1.3.3 は id_token を REQUIRED としており、明確な違反。
-（`nonce` 必須チェックは `ValidateAuthZReqParam` 側でコメント アウトされているため、
-「nonce なし」は普通に通る。C-14 参照。）
+**対応:** 判定条件から `nonce` を外し、`scope` に `openid` が含まれるかだけで判断するようにした
+（#183）。挙動は変わらないが、条件と実態が一致した。
 
-**修正:** 判定条件から `nonce` を外し、`scope` に `openid` が含まれるかだけで判断する。
-
-### A-3. JWT の `exp` / `nbf` / `iat` が文字列 **[Lib]**
+### A-3. JWT の `exp` / `nbf` / `iat` が文字列 **[Lib]** — **✅ 修正済み（#184）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnAccessToken.cs:153-155, 351-353
-// CommonLibrary/TokenProviders/CmnIdToken.cs:117
+// 修正前: CommonLibrary/TokenProviders/CmnAccessToken.cs、CmnIdToken.cs
 tokenClaimSet.Add(OAuth2AndOIDCConst.exp, expiresUtc.ToUnixTimeSeconds().ToString());
 ```
 
@@ -123,20 +145,31 @@ RFC 7519 §2 の **NumericDate は JSON の数値**。`"exp": "1789..."` は仕�
 自前の `CmnJwtToken.VerifyExp(string)` が文字列前提になっているため、
 **自分自身では検証が通ってしまい、外部 RP だけが落ちる**という気付きにくい形になっている。
 
-**修正:** `.ToString()` を外して `long` を代入する。併せて `VerifyExp` 側の受け口も見直す。
+**修正:** `.ToString()` を外して `long` を代入した。
 
-### A-4. `email_verified` / `phone_number_verified` が文字列 **[Lib][Core]**
+**検証側も併せて直した。** `CmnJwtToken.VerifyExp` は Open棟梁側に
+**`string` 引数のオーバーロードしか無い**（実測）ため、`(string)` キャストのままだと
+数値になった `exp` で `InvalidCastException` になる。`.ToString()` を通す形に変えてある。
+`CmnAccessToken.AddClaims` の `exp` / `nbf` / `iat` も同様
+（`Claim` の値は `string` なので変換が要る）。この書き方なら、
+**文字列で発行済みの古いトークンもそのまま検証を通る。**
+
+> **残っている同種の箇所:** JARM の Response Object（`CmnResponseObject.Create`）も
+> `exp` を文字列で入れている。ただし引数が `Dictionary<string, string>` なので、
+> 直すにはシグネチャ変更と両アプリの呼び出し側 12 箇所の修正を伴う。**本 Issue の範囲外**とした。
+
+### A-4. `email_verified` / `phone_number_verified` が文字列 **[Lib][Core]** — **✅ 修正済み（#184）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnAccessToken.cs:171,175
-// MultiPurposeAuthSiteCore/.../OAuth2EndpointController.cs:360,364
+// 修正前: CommonLibrary/TokenProviders/CmnAccessToken.cs
+//         MultiPurposeAuthSiteCore/.../OAuth2EndpointController.cs（net48 版も同じ）
 tokenClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
 ```
 
 `bool.ToString()` は `"True"` / `"False"`（先頭大文字）。
 OIDC Core §5.1 は **boolean** と定めている。JSON 的にも `"True"` は真偽値ではない。
 
-**修正:** `.ToString()` を外す。
+**修正:** `.ToString()` を外した。access_token / id_token と `/userinfo` の計 4 箇所。
 
 ### A-5. OIDC のとき `redirect_uri` が code に紐付かない（条件が反転している） **[Lib]**
 
@@ -205,15 +238,21 @@ redirect_uri 不一致・scope 不正のいずれでも `server_error` を返す
 `/token` 側も `"not_supported"`（未登録の値。正しくは `unsupported_grant_type`）や
 未知の grant_type に `invalid_grant`（正しくは `unsupported_grant_type`）を使っている。
 
-### A-9. discovery のキー名に末尾スペース **[Lib]**
+### A-9. discovery のキー名に末尾スペース **[Lib]** — **✅ 修正済み（#189 の一部）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnEndpoints.cs:329
+// 修正前: CommonLibrary/TokenProviders/CmnEndpoints.cs
 OpenIDConfig.Add("backchannel_token_delivery_modes_supported ", ...)
 //                                                          ↑
 ```
 
 CIBA クライアントはこのキーを見つけられない。
+
+**対応:** 末尾スペースを除去した。併せて `OpenIDConfig.Add` する **32 個のキーを全数確認**し、
+**前後に空白のあるキーは他に無い**ことを確かめてある。
+このキーを読んでいるコードはリポジトリ内に無い（外部の CIBA クライアントだけが読む）。
+
+> **#189 はこの 1 件だけ対応済みで、他の項目（A-10）は未対応のまま。**
 
 ### A-10. discovery のその他の不整合 **[Lib]**
 
@@ -239,8 +278,13 @@ CIBA クライアントはこのキーを見つけられない。
 
 > いずれも**外部から容易に到達できる**。適合性テストは異常系を大量に投げるため、
 > ここを直さないとテスト自体が完走しない。
+>
+> **#185 で 6 件とも対応済み。** 着手前に到達性を 1 件ずつ確認した結果、
+> **B-3 は資格情報なしで到達する**ことが分かった
+> （`grant_type=authorization_code` ＋ 任意の `code` ＋ `code_verifier`、`client_secret` なし
+> → `ReceiveChallenge` で NRE）。この経路が最も深刻だった。
 
-### B-1. `kid` の無い JWT で `NullReferenceException` **[Lib]** ★
+### B-1. `kid` の無い JWT で `NullReferenceException` **[Lib]** — **✅ 修正済み（#185）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnAccessToken.cs:487, 546
@@ -257,7 +301,7 @@ if (jws.Verify(jwt))                            // ← ここで NRE
 
 **修正:** `jws == null` を「検証失敗」として扱う。
 
-### B-2. `/token` の異常系で `err` が null **[Core]**
+### B-2. `/token` の異常系で `err` が null **[Core]** — **✅ 修正済み（#185）**
 
 ```csharp
 // MultiPurposeAuthSiteCore/.../OAuth2EndpointController.cs:166-167
@@ -273,7 +317,7 @@ default:
 
 **修正:** `err = new Dictionary<string, string>();` で初期化する。net48 版も同型。
 
-### B-3. 使用済み・不正な `code` で `NullReferenceException` **[Lib]**
+### B-3. 使用済み・不正な `code` で `NullReferenceException` **[Lib]** — **✅ 修正済み（#185）**
 
 ```csharp
 // CommonLibrary/TokenProviders/AuthorizationCodeProvider.cs:Receive()
@@ -288,7 +332,7 @@ return CheckClientIdAndRedirectUri(client_id, redirect_uri, jobj); // → jobj[.
 → **code の再利用・改ざんが `invalid_grant` ではなく HTTP 500。**
 `GetAccessTokenPayload` も同型（`temp["access_token_payload"]`）。
 
-### B-4. 他クライアントの refresh_token で未処理例外 **[Lib]**
+### B-4. 他クライアントの refresh_token で未処理例外 **[Lib]** — **✅ 修正済み（#185）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs（Grant*Credentials 共通）
@@ -298,13 +342,13 @@ if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 クライアント A が B の refresh_token を提示すると、`throw` がそのまま上がって HTTP 500。
 **チェック自体は正しい**ので、`invalid_grant` を返す形に変えるだけでよい。
 
-### B-5. 存在しない `request_uri` で `NullReferenceException` **[Core]**
+### B-5. 存在しない `request_uri` で `NullReferenceException` **[Core]** — **✅ 修正済み（#185）**
 
 `AccountController.OAuth2Authorize`（GET / POST 両方）と
 `OAuth2EndpointController.CibaAuthorizeAsync` は、
 `RequestObjectProvider.Get()` の戻り値を null チェックせずに `JObject` として添字アクセスする。
 
-### B-6. 応答が空になる経路 **[Lib]**
+### B-6. 応答が空になる経路 **[Lib]** — **✅ 修正済み（#185）**
 
 `GrantRefreshTokenCredentials` は、`RefreshTokenProvider.Receive` が空を返したとき
 （＝ローテーション済み・存在しない refresh_token）に `err` を設定せず `false` を返す。
@@ -487,10 +531,10 @@ Core 側は設定を無視して 2 分固定。SlidingExpiration があるので
 `AddDistributedMemoryCache`（[`ANALYSIS.md`](ANALYSIS.md) 4.3 節）と併せて、
 **現状はスケールアウトできない構成**である。
 
-### C-14. `nonce` が implicit / hybrid でも必須になっていない **[Lib]**
+### C-14. `nonce` が implicit / hybrid でも必須になっていない **[Lib]** — **✅ 修正済み（#190）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnEndpoints.cs:475-482
+// 修正前: CommonLibrary/TokenProviders/CmnEndpoints.cs
 // nonceパラメタ 必須 → 任意
 //if (string.IsNullOrEmpty(nonce)) { ... return false; }
 ```
@@ -499,11 +543,62 @@ OIDC Core §3.2.2.1（implicit）/ §3.3.2.11（hybrid）は `nonce` を REQUIRE
 A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce 無しでも id_token を出す」かを
 どちらかに寄せないと整合しない。** 仕様どおりなら**両方**（code は任意・implicit/hybrid は必須）。
 
+**#190 で対応。** `response_type` が implicit / hybrid のときだけ `nonce` を必須にし、
+無ければ `invalid_request` を返すようにした（Authorization Code フローは OPTIONAL のまま）。
+このブロックは `scope=openid` の内側に在るため、**単純にコメントを外すと
+Authorization Code フローまで必須になってしまう**点が要だった。
+
 ### C-15. `response_type` の照合が文字列完全一致 **[Lib]**
 
 `response_type` は**順不同の空白区切り集合**（OAuth 2.0 Multiple Response Types §3）。
 現状は `response_type.ToLower() == "code id_token"` のような完全一致なので、
 `id_token code` と書く RP を弾く。
+
+### C-16. 送られていない `nonce` を `state` から捏造している **[Lib]** — **✅ 修正済み（#191）**
+
+```csharp
+// 修正前: CommonLibrary/Extensions/Sts/Helper.cs  AddClaim()
+if (string.IsNullOrEmpty(nonce))
+{
+    if (state == null) state = ""; // null対策
+    identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));  // ← state を nonce にする
+}
+```
+
+**クライアントが `nonce` を送っていないとき、`state` の値を `nonce` クレームとして埋め込む。**
+トークンを発行する 6 経路（code / implicit / hybrid / ROPC / client_credentials / JWT bearer）は
+すべてここを通るため、**access_token と id_token の両方**に影響する。
+
+問題は 3 つ。
+
+1. **RP が送っていない `nonce` が id_token に入る。** OIDC Core §3.1.3.7 は
+   「id_token に `nonce` があれば検証せよ」としており、`nonce` を送っていない RP が
+   厳密に実装していると検証に失敗する。
+2. **`nonce` のリプレイ防止が黙って無効化される。** 認可サーバが値を作っているので、
+   `nonce` は「クライアントが生成した一度きりの値」ではなくなる。
+3. **`state` がトークンに混入する。** `state` は RP 側の不透明な値であり、
+   署名済みトークンに載って転送・保存されるべきものではない。
+
+C-14（#190）で Implicit / Hybrid は `nonce` 必須にしたので弾けるようになったが、
+**Authorization Code フローでは `nonce` は OPTIONAL のため、この捏造が残る。**
+
+**修正の注意:** fallback を外すと `nonce` キーが存在しなくなるため、
+`CmnAccessToken.AddClaims` の
+
+```csharp
+Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
+                (string)tokenClaimSet[OAuth2AndOIDCConst.nonce]);
+```
+
+が **`KeyNotFoundException`** になる。`TryGetValue` などに変える必要がある。
+
+**対応（#191）:** fallback を外し、`nonce` の指定があるときだけクレームを作るようにした。
+`AddClaims` は `TryGetValue` に変更。併せて、**使い道が無くなった `Helper.AddClaim` の
+`state` 引数を削除**した（呼び出し 7 箇所）。残すと同じ実装に戻りやすいため。
+自己テスト用クライアント（`HomeController`）は常に `nonce` を送るので影響しない。
+
+> A-2（#183）を誤検出と判断する過程で見つかった。**A-2 の「真の問題」はこちら。**
+> #183 は close 済み。
 
 ---
 
@@ -552,12 +647,17 @@ A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce �
 
 | 順 | 項目 | 規模 | 影響範囲 |
 |---|---|---|---|
-| 1 | **A-1 `expires_in`（`.Seconds` → `.TotalSeconds`）** | 34 行 | Lib ＋ 両アプリ |
-| 2 | **A-2 `nonce` 無しでも `id_token` を発行** | 1 行 | Lib |
-| 3 | **A-3 / A-4 JSON の型（`exp`/`nbf`/`iat`/`*_verified`）** | 10 行前後 | Lib ＋ Core |
-| 4 | **B-1 / B-2 / B-3 / B-4 / B-6 異常系の NRE と未処理例外** | 中 | Lib ＋ 両アプリ |
-| 5 | **A-8 discovery の末尾スペース** | 1 行 | Lib |
+| 1 | ✅ **A-1 `expires_in`（`.Seconds` → `.TotalSeconds`）** #182 | 33 行 | Lib ＋ 両アプリ |
+| 2 | ⚠️ **A-2 は誤検出だった** #183（変更は簡素化として保持） | 1 行 | Lib |
+| 3 | ✅ **A-3 / A-4 JSON の型（`exp`/`nbf`/`iat`/`*_verified`）** #184 | 検証側含め 20 行前後 | Lib ＋ 両アプリ |
+| 4 | ✅ **B-1 〜 B-6 異常系の NRE と未処理例外** #185 | 82 行 | Lib ＋ 両アプリ |
+| 5 | ✅ **A-9 discovery の末尾スペース** #189 の一部 | 1 行 | Lib |
+| 6 | ✅ **C-14 implicit / hybrid で `nonce` を必須化** #190 | 15 行 | Lib |
 
+> 6 は本来フェーズ 2（セキュリティ）の項目だが、**2 と表裏の関係**にあり、
+> 片方だけ直すと「nonce 無しの implicit / hybrid が nonce クレームの無い id_token を得る」
+> という中途半端な状態になるため、続けて実施した。
+>
 > このフェーズだけで、**OIDC の Basic / Config プロファイルの適合性テストが通る見込みが立つ。**
 > 逆にここを飛ばすと、以降の機能追加をテストで裏付けられない。
 
@@ -567,7 +667,7 @@ A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce �
 |---|
 | A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消） |
 | A-7 エラーの HTTP ステータス（400 / 401） |
-| A-9 エラー コードの返し分け（`server_error` 一辺倒をやめる） |
+| A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる） |
 | A-10 discovery の項目整備 |
 
 ### フェーズ 2 — セキュリティの底上げ

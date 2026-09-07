@@ -31,6 +31,8 @@
 //*  2019/02/12  西野 大介         新規
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
+//*  2026/09/07  玄人 幸道         nonce無しでもid_tokenを発行するよう修正（#183）
+//*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -85,9 +87,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 string json = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[1]), CustomEncode.UTF_8);
                 JObject tokenClaimSet = (JObject)JsonConvert.DeserializeObject(json);
 
-                // ・access_tokenがJWTで、payloadに"nonce" and "scope=openidクレームが存在する場合、
-                if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
-                    && tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
+                // ・access_tokenがJWTで、payloadに"scope=openid"クレームが存在する場合、
+                //   nonceは、Authorization Codeフローでは任意（OIDC Core 3.1.2.1）なので条件にしない。
+                if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
                 {
                     JArray scopes = (JArray)tokenClaimSet[OAuth2AndOIDCConst.scopes];
 
@@ -114,7 +116,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                         //・expをIdToken用のexpに差し替える。
                         tokenClaimSet[OAuth2AndOIDCConst.exp] = DateTimeOffset.Now.AddMinutes(
-                            Config.OidcIdTokenExpireTimeSpanFromMinutes.TotalMinutes).ToUnixTimeSeconds().ToString();
+                            Config.OidcIdTokenExpireTimeSpanFromMinutes.TotalMinutes).ToUnixTimeSeconds();
 
                         if (claims != null)
                         {
