@@ -43,6 +43,7 @@
 //*  2020/12/21  西野 大介         CIBAのTokenのsubを認可ユーザに変更
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
+//*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -246,7 +247,7 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.DeviceAuthZGrantType:
                             string device_code = formData[OAuth2AndOIDCConst.device_code];
                             if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
-                                client_id, device_code, out ret, out err))
+                                client_id, client_secret, x509, device_code, out ret, out err))
                             {
                                 return ret;
                             }
@@ -701,8 +702,17 @@ namespace MultiPurposeAuthSite.Controllers
                     client_secret = formData[OAuth2AndOIDCConst.client_secret];
                 }
 
-                // AccountControllerからの移行なので...。
-                string name = Sts.Helper.GetInstance().GetClientName(client_id);
+                // クライアント認証（RFC 8628 3.1）（#193）
+                // パブリック クライアントは、client_idの確認のみ。
+                X509Certificate2 x509 = null;
+                if (!Token.CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
+                {
+                    return new Dictionary<string, string>()
+                    {
+                        {OAuth2AndOIDCConst.error, "invalid_client"},
+                        {OAuth2AndOIDCConst.error_description, "Invalid credential."}
+                    };
+                }
 
                 // scopeパラメタ
                 string scope = formData[OAuth2AndOIDCConst.scope];
@@ -722,6 +732,10 @@ namespace MultiPurposeAuthSite.Controllers
                 long authReqExp = DateTimeOffset.Now.AddSeconds(
                     Config.DeviceAuthZExpireTimeSpanFromSeconds).ToUnixTimeSeconds();
 
+                // 検証用エンドポイントの絶対URI
+                string verificationUri =
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.DeviceAuthZVerifyEndpoint;
+
                 // DeviceAuthZ情報をストア
                 string deviceCode;
                 string userCode;
@@ -732,16 +746,18 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     {OAuth2AndOIDCConst.device_code, deviceCode},
                     {OAuth2AndOIDCConst.user_code, userCode},
-                    {OAuth2AndOIDCConst.verification_uri, Config.DeviceAuthZVerifyEndpoint},
-                    {OAuth2AndOIDCConst.verification_uri_complete, Config.DeviceAuthZVerifyEndpoint + "?user_code=" + userCode},
+                    // RFC 8628 3.2 : ユーザが辿れるURIを返す（#193）。
+                    {OAuth2AndOIDCConst.verification_uri, verificationUri},
+                    {OAuth2AndOIDCConst.verification_uri_complete, verificationUri + "?user_code=" + userCode},
                     {OAuth2AndOIDCConst.expires_in, requested_expiry.ToString()},
                     {OAuth2AndOIDCConst.PollingInterval, Config.DeviceAuthZPollingIntervalSeconds.ToString()}
                 };
             }
             else
             {
-                // 検証失敗
-                // err, errDescriptionは設定済み。
+                // フォームデータ無し（#193）
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "Form data is null.";
             }
 
             // エラー
