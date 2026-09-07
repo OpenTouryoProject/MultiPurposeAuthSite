@@ -41,6 +41,7 @@
 //*                                ・DeviceAuthZResponse画面 → HomeControllerに。
 //*                                ・DeviceAuthZVerify画面 → AccountControllerに。
 //*  2020/12/21  西野 大介         CIBAのTokenのsubを認可ユーザに変更
+//*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -337,11 +338,11 @@ namespace MultiPurposeAuthSite.Controllers
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Email:
                                     userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed.ToString());
+                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.email_verified, user.EmailConfirmed);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Phone:
                                     userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number, user.PhoneNumber);
-                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed.ToString());
+                                    userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Address:
                                     // ・・・

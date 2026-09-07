@@ -32,6 +32,7 @@
 //*  2020/01/08  西野 大介         #126（Feedback）対応実施
 //*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
 //*  2026/09/07  玄人 幸道         nonce無しでもid_tokenを発行するよう修正（#183）
+//*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -115,7 +116,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                         //・expをIdToken用のexpに差し替える。
                         tokenClaimSet[OAuth2AndOIDCConst.exp] = DateTimeOffset.Now.AddMinutes(
-                            Config.OidcIdTokenExpireTimeSpanFromMinutes.TotalMinutes).ToUnixTimeSeconds().ToString();
+                            Config.OidcIdTokenExpireTimeSpanFromMinutes.TotalMinutes).ToUnixTimeSeconds();
 
                         if (claims != null)
                         {
