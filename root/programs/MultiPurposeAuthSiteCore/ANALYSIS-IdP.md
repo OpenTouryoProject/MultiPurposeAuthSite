@@ -11,7 +11,11 @@
 各項目に **[Core]** / **[Lib]**（＝両系統に影響）を付けた。
 
 プロジェクト・ポリシーは リポジトリ ルートの `AGENTS.md` に定義済み。
-→ **エージェントは git 操作を行わない。** 本書は分析結果であり、修正は未実施。
+→ **エージェントは git 操作を行わない。**
+
+**凡例:** 対応済みの項目は、見出しに **✅ 修正済み（#Issue 番号）** を付ける。
+本書は分析の記録であると同時に、**対応状況の一覧**でもある。
+修正済みの項目も記述は消さず、「何が問題だったか」を残したまま印を付ける。
 
 ---
 
@@ -28,6 +32,9 @@
 
 「最新の IdP に近づける」うえでの最短経路は、**新機能の追加ではなく、
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
+
+**対応状況:** フェーズ 0 の 6 項目のうち 3 件（A-1 / A-2 / C-14）が対応済み。
+残りは A-3・A-4・A-8 と B 群。見出しの **✅ 修正済み** で個別に追える（7 節も参照）。
 
 ---
 
@@ -66,10 +73,10 @@
 
 > このグループは**外から見える振る舞いが仕様と違う**もの。修正の費用対効果が最も高い。
 
-### A-1. `expires_in` が常に `0` になる **[Lib][Core]** ★最優先
+### A-1. `expires_in` が常に `0` になる **[Lib][Core]** — **✅ 修正済み（#182）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnEndpoints.cs:2152
+// 修正前: CommonLibrary/TokenProviders/CmnEndpoints.cs
 ret.Add(OAuth2AndOIDCConst.expires_in,
         Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
 ```
@@ -91,10 +98,10 @@ ret.Add(OAuth2AndOIDCConst.expires_in,
 **修正:** `.Seconds` → `.TotalSeconds`（`(int)` にキャストして整数化）。
 併せて `expires_in` は RFC 6749 §5.1 で**数値**なので、応答の型も見直す（A-3 と同根）。
 
-### A-2. `nonce` が無いと `id_token` が発行されない **[Lib]** ★最優先
+### A-2. `nonce` が無いと `id_token` が発行されない **[Lib]** — **✅ 修正済み（#183）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnIdToken.cs:89
+// 修正前: CommonLibrary/TokenProviders/CmnIdToken.cs
 if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
     && tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.scopes))
 ```
@@ -105,8 +112,8 @@ if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
 
 → **`scope=openid` かつ `nonce` なしの認可コード フローで、`id_token` が返らない。**
 OIDC Core §3.1.3.3 は id_token を REQUIRED としており、明確な違反。
-（`nonce` 必須チェックは `ValidateAuthZReqParam` 側でコメント アウトされているため、
-「nonce なし」は普通に通る。C-14 参照。）
+（当時、`nonce` 必須チェックは `ValidateAuthZReqParam` 側でコメント アウトされていたため、
+「nonce なし」が普通に通っていた。**#190 で implicit / hybrid のみ必須に戻した。** C-14 参照。）
 
 **修正:** 判定条件から `nonce` を外し、`scope` に `openid` が含まれるかだけで判断する。
 
@@ -487,10 +494,10 @@ Core 側は設定を無視して 2 分固定。SlidingExpiration があるので
 `AddDistributedMemoryCache`（[`ANALYSIS.md`](ANALYSIS.md) 4.3 節）と併せて、
 **現状はスケールアウトできない構成**である。
 
-### C-14. `nonce` が implicit / hybrid でも必須になっていない **[Lib]**
+### C-14. `nonce` が implicit / hybrid でも必須になっていない **[Lib]** — **✅ 修正済み（#190）**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnEndpoints.cs:475-482
+// 修正前: CommonLibrary/TokenProviders/CmnEndpoints.cs
 // nonceパラメタ 必須 → 任意
 //if (string.IsNullOrEmpty(nonce)) { ... return false; }
 ```
@@ -498,6 +505,11 @@ Core 側は設定を無視して 2 分固定。SlidingExpiration があるので
 OIDC Core §3.2.2.1（implicit）/ §3.3.2.11（hybrid）は `nonce` を REQUIRED としている。
 A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce 無しでも id_token を出す」かを
 どちらかに寄せないと整合しない。** 仕様どおりなら**両方**（code は任意・implicit/hybrid は必須）。
+
+**#190 で対応。** `response_type` が implicit / hybrid のときだけ `nonce` を必須にし、
+無ければ `invalid_request` を返すようにした（Authorization Code フローは OPTIONAL のまま）。
+このブロックは `scope=openid` の内側に在るため、**単純にコメントを外すと
+Authorization Code フローまで必須になってしまう**点が要だった。
 
 ### C-15. `response_type` の照合が文字列完全一致 **[Lib]**
 
@@ -552,12 +564,17 @@ A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce �
 
 | 順 | 項目 | 規模 | 影響範囲 |
 |---|---|---|---|
-| 1 | **A-1 `expires_in`（`.Seconds` → `.TotalSeconds`）** | 34 行 | Lib ＋ 両アプリ |
-| 2 | **A-2 `nonce` 無しでも `id_token` を発行** | 1 行 | Lib |
+| 1 | ✅ **A-1 `expires_in`（`.Seconds` → `.TotalSeconds`）** #182 | 33 行 | Lib ＋ 両アプリ |
+| 2 | ✅ **A-2 `nonce` 無しでも `id_token` を発行** #183 | 1 行 | Lib |
 | 3 | **A-3 / A-4 JSON の型（`exp`/`nbf`/`iat`/`*_verified`）** | 10 行前後 | Lib ＋ Core |
 | 4 | **B-1 / B-2 / B-3 / B-4 / B-6 異常系の NRE と未処理例外** | 中 | Lib ＋ 両アプリ |
 | 5 | **A-8 discovery の末尾スペース** | 1 行 | Lib |
+| 6 | ✅ **C-14 implicit / hybrid で `nonce` を必須化** #190 | 15 行 | Lib |
 
+> 6 は本来フェーズ 2（セキュリティ）の項目だが、**2 と表裏の関係**にあり、
+> 片方だけ直すと「nonce 無しの implicit / hybrid が nonce クレームの無い id_token を得る」
+> という中途半端な状態になるため、続けて実施した。
+>
 > このフェーズだけで、**OIDC の Basic / Config プロファイルの適合性テストが通る見込みが立つ。**
 > 逆にここを飛ばすと、以降の機能追加をテストで裏付けられない。
 

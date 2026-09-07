@@ -54,6 +54,7 @@
 //*  2020/12/21  西野 大介         ClientMode追加対応実施
 //*  2021/05/24  西野 大介         LIRでPKCEを使用した場合の例外措置
 //*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
+//*  2026/09/07  玄人 幸道         Implicit / Hybridでnonceを必須化（#190）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -483,13 +484,24 @@ namespace MultiPurposeAuthSite.TokenProviders
                         return false;
                     }
 
-                    // nonceパラメタ 必須 → 任意
-                    //if (string.IsNullOrEmpty(nonce))
-                    //{
-                    //    //err = "server_error";
-                    //    errDescription = "There was no nonce in query.";
-                    //    return false;
-                    //}
+                    // nonceパラメタ
+                    // - Authorization Codeフロー（response_type=code）では任意（OIDC Core 3.1.2.1）
+                    // - Implicit / Hybridフローでは必須（OIDC Core 3.2.2.1 / 3.3.2.1）
+                    if (string.IsNullOrEmpty(nonce))
+                    {
+                        string _response_type = response_type.ToLower();
+
+                        if (_response_type == OAuth2AndOIDCConst.OidcImplicit1_ResponseType
+                            || _response_type == OAuth2AndOIDCConst.OidcImplicit2_ResponseType
+                            || _response_type == OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType
+                            || _response_type == OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType
+                            || _response_type == OAuth2AndOIDCConst.OidcHybrid3_ResponseType)
+                        {
+                            err = OAuth2AndOIDCConst.invalid_request;
+                            errDescription = "There was no nonce in query.";
+                            return false;
+                        }
+                    }
                 }
 
                 return true;
