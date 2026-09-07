@@ -358,7 +358,7 @@ if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 
 ## 4. C. セキュリティ上の弱点
 
-### C-1. `/device_authz` にクライアント認証が無い **[Core]** ★
+### C-1. `/device_authz` にクライアント認証が無い **[Core][Lib]** — **✅ 修正済み（#193）**
 
 ```csharp
 // MultiPurposeAuthSiteCore/.../OAuth2EndpointController.cs:706
@@ -372,10 +372,46 @@ public Dictionary<string, string> DeviceAuthZAuthorize(IFormCollection formData)
 RFC 8628 §3.1 は「クライアントの識別」を要求し、コンフィデンシャル クライアントには
 トークン エンドポイントと同等の認証を求める。
 
+**`/token`（device_code グラント）側にも認証が無い。**
+`CmnEndpoints.GrantDeviceAuthZ` は**認証ブロックが丸ごとコメント アウトされている**
+（`// 認証は無し（Client認証のclient_idとToken類のaudをチェック`）。
+呼び出し側もこのグラントに限って `client_secret` / `assertion` / クライアント証明書を渡していない。
+唯一のチェック `if (client_id != aud)` は、`aud` が**攻撃者の指定した `client_id`** から
+作られた code に由来するため常に一致し、**機能していない**
+（#185 で `throw` は `invalid_grant` 応答に変えたが、判定自体は素通りのまま）。
+
+→ **資格情報を持たない第三者が、公開情報である `client_id` だけでフローを最後まで通せる。**
+
+**対応（#193）:** `CmnEndpoints.DeviceAuthZClientAuthentication` を新設し、
+`/device_authz`（両アプリ）と `GrantDeviceAuthZ` の双方から呼ぶようにした。
+
+| クライアント | 扱い |
+|---|---|
+| 未登録の `client_id` | **拒否**（`invalid_client`） |
+| コンフィデンシャル（`client_secret` 登録済み、または x509 提示） | **認証必須**。`ClientAuthentication` に委譲 |
+| パブリック（`client_secret` 未登録） | `client_id` の確認のみ（RFC 8628 は公開クライアントを許す） |
+
+**パブリックを一律で弾かないのが要点。** 実測では、登録済み 10 クライアントのうち
+`oauth2_oidc_mode: device` の `ae5a1798…`（TestClient3）**だけが `client_secret` を持たない**。
+一律に認証必須にすると、同梱の自己テストが動かなくなる。
+
+`device_code` と `client_id` の紐付けは、`AuthorizationCodeProvider.Receive(code, client_id, "")` が
+`aud` を照合することで既に効いている（#185 で `invalid_grant` を返すようになった）。
+
+併せて次も直した。
+
+- `formData == null` のときの `error` / `error_description` が空文字列だったのを設定
+- `verification_uri` がパスだけだったのを絶対 URI に（RFC 8628 §3.2）
+- 使われていなかった `string name = GetClientName(client_id);` を削除
+
+> **未対応:** `GrantDeviceAuthZ` は `refresh_token` を生成しているが
+> `CreateAccessTokenResponse(access_token, "", "")` と空を渡すため応答に載らない。
+> 「返す」か「作らない」かは挙動の判断を伴うので別途。
+
 現状は user_code の無制限発行が可能で、ユーザに `user_code` を入力させるフィッシングや、
 `DeviceAuthZData` テーブルの肥大化に使える。
 
-### C-2. `/revoke` `/introspect` がトークンの所有者を確認しない **[Core]**
+### C-2. `/revoke` `/introspect` がトークンの所有者を確認しない **[Core][Lib]** — **✅ 修正済み（#194）**
 
 呼び出し元のクライアント認証は行うが、**そのクライアントとトークンの `aud` を突き合わせていない。**
 `VerifyAccessToken` も `aud` が「登録済みの何らかのクライアント」であることしか見ない。
@@ -386,6 +422,19 @@ RFC 7009 §2.1 / RFC 7662 §2.1 はいずれも所有者確認を要求してい
 併せて、`/revoke` `/introspect` は **mTLS クライアント認証が無効化されている**
 （`X509Certificate2 x509 = null; // Request.GetClientCertificate();`）ため、
 `tls_client_auth` のクライアントはこの 2 つを使えない。`/token` とは非対称。
+**これは .NET (Core) 版だけの問題**で、net48 版は `Request.GetClientCertificate()` を読んでいた。
+
+**対応（#194）:** `CmnEndpoints.CheckTokenOwner`（access_token / ClaimsIdentity 用）と
+`CheckRefreshTokenOwner`（refresh_token / payload 用）を新設し、
+両アプリの `/revoke`・`/introspect` から呼ぶようにした。併せて Core 側の mTLS を有効化。
+
+| エンドポイント | 所有者が違う場合 |
+|---|---|
+| `/revoke` | `invalid_grant` を返す（RFC 7009 §2.1 が検証を要求） |
+| `/introspect` | **`{"active": false}` を返す**（RFC 7662 §2.2 / §5。エラーにするとトークンの存否を漏らす） |
+
+`/introspect` の `active` が **`"true"` という文字列**だったのも真偽値に直した
+（A-3 / A-4 と同じ defect だが #184 では未列挙だった分）。
 
 ### C-3. `prompt=none` が同意画面を無条件にスキップする **[Core]**
 

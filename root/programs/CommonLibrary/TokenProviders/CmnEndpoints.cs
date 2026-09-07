@@ -58,6 +58,8 @@
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/07  玄人 幸道         discoveryのキー名の末尾スペースを除去（#189）
+//*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
+//*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1619,7 +1621,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantDeviceAuthZ(
-            string grant_type, string client_id, string device_code,
+            string grant_type, string client_id, string client_secret,
+            X509Certificate2 x509, string device_code,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -1627,18 +1630,20 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (Config.EnableDeviceAuthZGrantType)
             {
-                // 認証は無し（Client認証のclient_idとToken類のaudをチェック
+                #region 認証
 
-                //#region 認証
-                // ...
-                //#endregion
+                // RFC 8628 3.4 : コンフィデンシャル クライアントは認証する（#193）。
+                // ※ device_codeとclient_idの紐付けは、この先の
+                //    AuthorizationCodeProvider.Receive(code, client_id, "")で確認される。
+                if (!CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
+                {
+                    // クライアント認証エラー（Credential不正
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
+                    return false;
+                }
 
-                //if (authned)
-                //{
-
-                //#region CheckClientMode
-                // ...
-                //#endregion
+                #endregion
 
                 #region 発行
 
@@ -1966,6 +1971,81 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return false;
+        }
+
+        #endregion
+
+        #region Device AuthZ
+
+        /// <summary>Device AuthZのクライアント認証</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <returns>bool</returns>
+        /// <remarks>
+        /// RFC 8628
+        /// - 3.1 : デバイス認可要求で、クライアントを識別する。
+        /// - 3.4 : トークン要求で、コンフィデンシャル クライアントは認証する。
+        /// パブリック クライアント（client_secret未登録）は、client_idの確認だけを行う。
+        /// </remarks>
+        public static bool DeviceAuthZClientAuthentication(
+            string client_id, string client_secret, ref X509Certificate2 x509)
+        {
+            // client_idは必須
+            if (string.IsNullOrEmpty(client_id)) return false;
+
+            // 未登録のclient_idは拒否
+            if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
+
+            // コンフィデンシャル クライアントは認証必須
+            // - client_secretを登録済み
+            // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
+            // - x509を提示してきた
+            if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                || x509 != null)
+            {
+                return CmnEndpoints.ClientAuthentication(
+                    client_id, client_secret, ref x509,
+                    out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+            }
+
+            // パブリック クライアントは、client_idの確認のみ
+            return true;
+        }
+
+        #endregion
+
+        #region Token所有者の確認
+
+        /// <summary>Tokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="identity">ClaimsIdentity（VerifyAccessTokenの結果）</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1 / RFC 7662 2.1（#194）</remarks>
+        public static bool CheckTokenOwner(string client_id, ClaimsIdentity identity)
+        {
+            if (string.IsNullOrEmpty(client_id) || identity == null) return false;
+
+            Claim aud = identity.Claims.Where(
+                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+            return (aud != null && aud.Value == client_id);
+        }
+
+        /// <summary>RefreshTokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="tokenPayload">RefreshTokenProvider.Referの結果</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1（#194）</remarks>
+        public static bool CheckRefreshTokenOwner(string client_id, string tokenPayload)
+        {
+            if (string.IsNullOrEmpty(client_id) || string.IsNullOrEmpty(tokenPayload)) return false;
+
+            JObject payload = (JObject)JsonConvert.DeserializeObject(tokenPayload);
+
+            return (payload != null
+                && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
         }
 
         #endregion
