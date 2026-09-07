@@ -9,6 +9,7 @@
 
 # Ignore the Temp folder
 Temp/
+_Temp/
 OpenTouryoAssemblies/
 
 # User-specific files
