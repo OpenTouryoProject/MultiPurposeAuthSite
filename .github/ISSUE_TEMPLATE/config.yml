@@ -1,0 +1,23 @@
+# Issue テンプレートの設定
+#
+# blank_issues_enabled: true にしてあるため、**テンプレートは任意**である。
+# 「Open a blank issue」から、素の Issue も起票できる。
+#
+# 本ファイルの主目的は contact_links であり、
+# **「セキュリティに関する問題は公開の Issue ではなく Private vulnerability reporting へ」**
+# という SECURITY.md の方針を、New issue の画面で実際に案内すること。
+# SECURITY.md を置くだけでは、この導線は出ない。
+blank_issues_enabled: true
+
+contact_links:
+  - name: 脆弱性の報告（Security）
+    url: https://github.com/OpenTouryoProject/MultiPurposeAuthSite/security/advisories/new
+    about: セキュリティに関する問題は、公開の Issue ではなく Private vulnerability reporting へ。SECURITY.md / Security.ja.md を参照。
+
+  - name: フレームワーク本体（Open棟梁）の問題
+    url: https://github.com/OpenTouryoProject/OpenTouryo/issues
+    about: OpenTouryo.* 側の不具合・要望は、フレームワークのリポジトリへ。脆弱性はそちらの Private vulnerability reporting へ。
+
+  - name: 質問・相談
+    url: https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues?q=is%3Aissue
+    about: 同じ問題が既に挙がっていないか、先に検索してください。

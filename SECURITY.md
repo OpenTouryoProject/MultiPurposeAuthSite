@@ -97,10 +97,16 @@ Reports that show a **concrete exploit** for any of the above are still welcome.
 |---|---|
 | Private vulnerability reporting | Enabled |
 | Dependabot alerts / security updates | Enabled |
-| Secret scanning ＋ Push protection | Not enabled |
+| Secret scanning ＋ Push protection | Enabled |
 | Code scanning (CodeQL) | Not enabled |
 | Branch protection (`master`) | 1 approving review required |
 | Branch protection (`develop`) | Force pushes and deletion blocked |
 
 The settings themselves live on GitHub and are not visible from the files in this repository,
 so they are written down here.
+
+Test-only material — the self-signed certificates under `root/files/resource/X509/` and the
+third-party minified assets — is excluded from secret scanning **alerts** by
+[`.github/secret_scanning.yml`](.github/secret_scanning.yml), so that the Security tab shows
+real findings. **That exclusion does not apply to push protection**, which still blocks a
+push when it detects a secret.

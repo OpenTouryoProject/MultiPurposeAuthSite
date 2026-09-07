@@ -98,9 +98,14 @@
 |---|---|
 | Private vulnerability reporting | 有効 |
 | Dependabot alerts / security updates | 有効 |
-| Secret scanning ＋ Push protection | 未設定 |
+| Secret scanning ＋ Push protection | 有効 |
 | Code scanning（CodeQL） | 未設定 |
 | ブランチ保護（`master`） | レビュー 1 名必須 |
 | ブランチ保護（`develop`） | force push と削除を禁止 |
 
 設定の実体は GitHub 側にあり、**リポジトリのファイルからは見えない**ため、ここに記録する。
+
+テスト専用の資材（`root/files/resource/X509/` の自己署名証明書、第三者製の minified 資産）は、
+[`.github/secret_scanning.yml`](.github/secret_scanning.yml) で
+secret scanning の**アラートから**除外している。Security タブに本物だけを残すためである。
+**この除外は push protection には効かない。** push protection は検知すれば push を止める。
