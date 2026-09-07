@@ -45,6 +45,7 @@
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
+//*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -455,7 +456,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // クライアント証明書
                     // Azure Web App Client Certificate Authentication with ASP.NET Core | Kirk Evans Blog
                     // https://blogs.msdn.microsoft.com/kaevans/2016/04/13/azure-web-app-client-certificate-authentication-with-asp-net-core-2/
-                    X509Certificate2 x509 = null; // Request.GetClientCertificate();
+                    // tls_client_authのクライアントも利用できるよう有効化（#194）。
+                    X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
 
                     // Credentials (client_id, client_secret)
 
@@ -481,6 +483,15 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // 検証成功
 
+                                // Tokenが呼び出し元に発行されたものかを確認（RFC 7009 2.1）（#194）
+                                if (!Token.CmnEndpoints.CheckTokenOwner(client_id, identity))
+                                {
+                                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                                    err.Add(OAuth2AndOIDCConst.error_description,
+                                        "The token was not issued to this client.");
+                                    return err;
+                                }
+
                                 // jtiの取り出し
                                 Claim jti = identity.Claims.Where(
                                     x => x.Type == OAuth2AndOIDCConst.UrnJwtIdClaim).FirstOrDefault<Claim>();
@@ -499,6 +510,16 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                         else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
                         {
+                            // Tokenが呼び出し元に発行されたものかを確認（RFC 7009 2.1）（#194）
+                            if (!Token.CmnEndpoints.CheckRefreshTokenOwner(
+                                client_id, Token.RefreshTokenProvider.Refer(token)))
+                            {
+                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                                err.Add(OAuth2AndOIDCConst.error_description,
+                                    "The token was not issued to this client.");
+                                return err;
+                            }
+
                             // refresh_token取消
                             if (Token.RefreshTokenProvider.Delete(token))
                             {
@@ -576,7 +597,8 @@ namespace MultiPurposeAuthSite.Controllers
                     // クライアント証明書
                     // Azure Web App Client Certificate Authentication with ASP.NET Core | Kirk Evans Blog
                     // https://blogs.msdn.microsoft.com/kaevans/2016/04/13/azure-web-app-client-certificate-authentication-with-asp-net-core-2/
-                    X509Certificate2 x509 = null; // Request.GetClientCertificate();
+                    // tls_client_authのクライアントも利用できるよう有効化（#194）。
+                    X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
 
                     // Credentials (client_id, client_secret)
 
@@ -629,9 +651,17 @@ namespace MultiPurposeAuthSite.Controllers
                         if (!string.IsNullOrEmpty(token)
                             && Token.CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
                         {
+                            // Tokenが呼び出し元に発行されたものでなければ、
+                            // メタデータを返さない（RFC 7662 2.2 / 5）（#194）。
+                            if (!Token.CmnEndpoints.CheckTokenOwner(client_id, identity))
+                            {
+                                ret.Add("active", false);
+                                return ret;
+                            }
+
                             // 検証成功
                             // メタデータの返却
-                            ret.Add("active", "true");
+                            ret.Add("active", true);
                             ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
 
                             string scopes = "";
@@ -728,7 +758,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 // クライアント認証（RFC 8628 3.1）（#193）
                 // パブリック クライアントは、client_idの確認のみ。
-                X509Certificate2 x509 = null;
+                X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
                 if (!Token.CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
                 {
                     return new Dictionary<string, string>()

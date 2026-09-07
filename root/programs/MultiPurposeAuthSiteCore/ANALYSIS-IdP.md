@@ -411,7 +411,7 @@ RFC 8628 §3.1 は「クライアントの識別」を要求し、コンフィ�
 現状は user_code の無制限発行が可能で、ユーザに `user_code` を入力させるフィッシングや、
 `DeviceAuthZData` テーブルの肥大化に使える。
 
-### C-2. `/revoke` `/introspect` がトークンの所有者を確認しない **[Core]** — **未対応（#194）**
+### C-2. `/revoke` `/introspect` がトークンの所有者を確認しない **[Core][Lib]** — **✅ 修正済み（#194）**
 
 呼び出し元のクライアント認証は行うが、**そのクライアントとトークンの `aud` を突き合わせていない。**
 `VerifyAccessToken` も `aud` が「登録済みの何らかのクライアント」であることしか見ない。
@@ -422,6 +422,19 @@ RFC 7009 §2.1 / RFC 7662 §2.1 はいずれも所有者確認を要求してい
 併せて、`/revoke` `/introspect` は **mTLS クライアント認証が無効化されている**
 （`X509Certificate2 x509 = null; // Request.GetClientCertificate();`）ため、
 `tls_client_auth` のクライアントはこの 2 つを使えない。`/token` とは非対称。
+**これは .NET (Core) 版だけの問題**で、net48 版は `Request.GetClientCertificate()` を読んでいた。
+
+**対応（#194）:** `CmnEndpoints.CheckTokenOwner`（access_token / ClaimsIdentity 用）と
+`CheckRefreshTokenOwner`（refresh_token / payload 用）を新設し、
+両アプリの `/revoke`・`/introspect` から呼ぶようにした。併せて Core 側の mTLS を有効化。
+
+| エンドポイント | 所有者が違う場合 |
+|---|---|
+| `/revoke` | `invalid_grant` を返す（RFC 7009 §2.1 が検証を要求） |
+| `/introspect` | **`{"active": false}` を返す**（RFC 7662 §2.2 / §5。エラーにするとトークンの存否を漏らす） |
+
+`/introspect` の `active` が **`"true"` という文字列**だったのも真偽値に直した
+（A-3 / A-4 と同じ defect だが #184 では未列挙だった分）。
 
 ### C-3. `prompt=none` が同意画面を無条件にスキップする **[Core]**
 

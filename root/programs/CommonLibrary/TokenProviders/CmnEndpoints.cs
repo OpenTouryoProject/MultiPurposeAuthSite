@@ -59,6 +59,7 @@
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/07  玄人 幸道         discoveryのキー名の末尾スペースを除去（#189）
 //*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
+//*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1996,8 +1997,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             // 未登録のclient_idは拒否
             if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
 
-            // コンフィデンシャル クライアント（client_secret登録済み、またはx509提示）は認証必須
+            // コンフィデンシャル クライアントは認証必須
+            // - client_secretを登録済み
+            // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
+            // - x509を提示してきた
             if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
                 || x509 != null)
             {
                 return CmnEndpoints.ClientAuthentication(
@@ -2007,6 +2012,40 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // パブリック クライアントは、client_idの確認のみ
             return true;
+        }
+
+        #endregion
+
+        #region Token所有者の確認
+
+        /// <summary>Tokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="identity">ClaimsIdentity（VerifyAccessTokenの結果）</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1 / RFC 7662 2.1（#194）</remarks>
+        public static bool CheckTokenOwner(string client_id, ClaimsIdentity identity)
+        {
+            if (string.IsNullOrEmpty(client_id) || identity == null) return false;
+
+            Claim aud = identity.Claims.Where(
+                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+            return (aud != null && aud.Value == client_id);
+        }
+
+        /// <summary>RefreshTokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="tokenPayload">RefreshTokenProvider.Referの結果</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1（#194）</remarks>
+        public static bool CheckRefreshTokenOwner(string client_id, string tokenPayload)
+        {
+            if (string.IsNullOrEmpty(client_id) || string.IsNullOrEmpty(tokenPayload)) return false;
+
+            JObject payload = (JObject)JsonConvert.DeserializeObject(tokenPayload);
+
+            return (payload != null
+                && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
         }
 
         #endregion
