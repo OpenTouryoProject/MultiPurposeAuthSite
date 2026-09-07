@@ -55,6 +55,7 @@
 //*  2021/05/24  西野 大介         LIRでPKCEを使用した場合の例外措置
 //*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
 //*  2026/09/07  玄人 幸道         Implicit / Hybridでnonceを必須化（#190）
+//*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -763,7 +764,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         {
             // ClaimsIdentityに、その他、所定のClaimを追加する。
-            Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
+            Helper.AddClaim(identity, client_id, scopes, claims, nonce);
 
             // Codeの生成
             string code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -825,7 +826,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
+                Helper.AddClaim(identity, client_id, scopes, claims, nonce);
 
                 // AccessTokenの生成
                 access_token = CmnAccessToken.CreateFromClaims(
@@ -920,7 +921,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, state, scopes, claims, nonce);
+                Helper.AddClaim(identity, client_id, scopes, claims, nonce);
 
                 // Codeの生成
                 code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -1331,7 +1332,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), null, "");
+                            identity = Helper.AddClaim(identity, client_id, scopes.Split(' '), null, "");
 
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
@@ -1448,7 +1449,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                    identity = Helper.AddClaim(identity, client_id, "", scopes.Split(' '), null, "");
+                    identity = Helper.AddClaim(identity, client_id, scopes.Split(' '), null, "");
 
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
@@ -1536,7 +1537,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                                identity = Helper.AddClaim(identity, iss, "", scopes.Split(' '), null, "");
+                                identity = Helper.AddClaim(identity, iss, scopes.Split(' '), null, "");
 
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(

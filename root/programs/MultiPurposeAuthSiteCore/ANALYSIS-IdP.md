@@ -14,8 +14,9 @@
 → **エージェントは git 操作を行わない。**
 
 **凡例:** 対応済みの項目は、見出しに **✅ 修正済み（#Issue 番号）** を付ける。
+**分析が誤りだった項目は ⚠️ 誤検出（#Issue 番号）** を付け、
+**なぜ見誤ったかを残す**（消さない。同じ誤りを繰り返さないため）。
 本書は分析の記録であると同時に、**対応状況の一覧**でもある。
-修正済みの項目も記述は消さず、「何が問題だったか」を残したまま印を付ける。
 
 ---
 
@@ -34,6 +35,7 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** フェーズ 0 の 6 項目のうち 3 件（A-1 / A-3・A-4 / C-14）が対応済み。
+nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
 **A-2 は誤検出だった**（下記）。残りは A-8 と B 群。
 見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
 
@@ -115,8 +117,12 @@ if (tokenClaimSet.ContainsKey(OAuth2AndOIDCConst.nonce)
 > payload には **常に** `nonce` キーが存在し、上の条件は**常に真**だった。
 > → **`nonce` 無しでも `id_token` は返っていた。**
 >
-> #183 のコミットは「常に真の条件を外した簡素化」として残してある（挙動は変わらない）。
-> **本当の問題は fallback の側にある。** → **C-16**
+> #183 のコミットは、**可読性のため**「常に真の条件を外した簡素化」として残してある
+> （挙動は変わらない）。
+> **注意: コミット メッセージは `fixed #183` だが、不具合修正ではない。**
+> git log だけを見ると誤読するので、経緯は #183 のコメントを参照すること。
+>
+> **本当の問題は fallback の側にある。** → **C-16（#191）**
 
 当初の記述（誤り）は次のとおり。
 `nonce` は **Authorization Code フローでは OPTIONAL**（OIDC Core §3.1.2.1）。
@@ -536,6 +542,52 @@ Authorization Code フローまで必須になってしまう**点が要だっ�
 `response_type` は**順不同の空白区切り集合**（OAuth 2.0 Multiple Response Types §3）。
 現状は `response_type.ToLower() == "code id_token"` のような完全一致なので、
 `id_token code` と書く RP を弾く。
+
+### C-16. 送られていない `nonce` を `state` から捏造している **[Lib]** — **✅ 修正済み（#191）**
+
+```csharp
+// 修正前: CommonLibrary/Extensions/Sts/Helper.cs  AddClaim()
+if (string.IsNullOrEmpty(nonce))
+{
+    if (state == null) state = ""; // null対策
+    identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));  // ← state を nonce にする
+}
+```
+
+**クライアントが `nonce` を送っていないとき、`state` の値を `nonce` クレームとして埋め込む。**
+トークンを発行する 6 経路（code / implicit / hybrid / ROPC / client_credentials / JWT bearer）は
+すべてここを通るため、**access_token と id_token の両方**に影響する。
+
+問題は 3 つ。
+
+1. **RP が送っていない `nonce` が id_token に入る。** OIDC Core §3.1.3.7 は
+   「id_token に `nonce` があれば検証せよ」としており、`nonce` を送っていない RP が
+   厳密に実装していると検証に失敗する。
+2. **`nonce` のリプレイ防止が黙って無効化される。** 認可サーバが値を作っているので、
+   `nonce` は「クライアントが生成した一度きりの値」ではなくなる。
+3. **`state` がトークンに混入する。** `state` は RP 側の不透明な値であり、
+   署名済みトークンに載って転送・保存されるべきものではない。
+
+C-14（#190）で Implicit / Hybrid は `nonce` 必須にしたので弾けるようになったが、
+**Authorization Code フローでは `nonce` は OPTIONAL のため、この捏造が残る。**
+
+**修正の注意:** fallback を外すと `nonce` キーが存在しなくなるため、
+`CmnAccessToken.AddClaims` の
+
+```csharp
+Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
+                (string)tokenClaimSet[OAuth2AndOIDCConst.nonce]);
+```
+
+が **`KeyNotFoundException`** になる。`TryGetValue` などに変える必要がある。
+
+**対応（#191）:** fallback を外し、`nonce` の指定があるときだけクレームを作るようにした。
+`AddClaims` は `TryGetValue` に変更。併せて、**使い道が無くなった `Helper.AddClaim` の
+`state` 引数を削除**した（呼び出し 7 箇所）。残すと同じ実装に戻りやすいため。
+自己テスト用クライアント（`HomeController`）は常に `nonce` を送るので影響しない。
+
+> A-2（#183）を誤検出と判断する過程で見つかった。**A-2 の「真の問題」はこちら。**
+> #183 は close 済み。
 
 ---
 

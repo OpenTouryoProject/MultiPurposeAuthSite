@@ -34,6 +34,7 @@
 //*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
 //*  2020/12/21  西野 大介         ClientMode追加対応実施
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
+//*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -657,8 +658,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 scopes.Add(s);
             }
+            // nonceは、認可リクエストで指定されなかった場合、Tokenに含まれない（#191）。
+            tokenClaimSet.TryGetValue(OAuth2AndOIDCConst.nonce, out object nonce);
+
             Helper.AddClaim(identity,
-                (string)tokenClaimSet[OAuth2AndOIDCConst.aud], "", scopes, null, (string)tokenClaimSet[OAuth2AndOIDCConst.nonce]);
+                (string)tokenClaimSet[OAuth2AndOIDCConst.aud], scopes, null, (string)nonce);
 
             // 拡張Claimを追加
             // - cnf

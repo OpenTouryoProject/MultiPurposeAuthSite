@@ -36,6 +36,7 @@
 //*  2020/08/04  西野 大介         コンテナ化対応実施
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2021/06/02  西野 大介         テスト用 証明書 検証 無効化コード追加
+//*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1150,14 +1151,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// </summary>
         /// <param name="claims">ClaimsIdentity</param>
         /// <param name="client_id">string</param>
-        /// <param name="state">string</param>
         /// <param name="scopes">string[]</param>
         /// <param name="claims">JObject</param>
         /// <param name="nonce">string</param>
         /// <param name="jti">string</param>
         /// <returns>ClaimsIdentity</returns>
         public static ClaimsIdentity AddClaim(ClaimsIdentity identity,
-            string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
+            string client_id, IEnumerable<string> scopes, JObject claims, string nonce)
         // string exp, string nbf, string iat, string jtiは不要（Unprotectで決定、読取専用）。
         {
             // 発行者の情報を含める。
@@ -1180,12 +1180,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             // OpenID Connect
 
             // nonce
-            if (string.IsNullOrEmpty(nonce))
-            {
-                if (state == null) state = ""; // null対策
-                identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, state));
-            }
-            else
+            // 認可リクエストで指定された場合だけ、その値をそのまま入れる（OIDC Core 3.1.3.6）。
+            // 指定が無ければ、nonceクレーム自体を作らない。
+            // ※ 以前はstateを代入していたが、送られていない値をnonceとして返すことになる（#191）。
+            if (!string.IsNullOrEmpty(nonce))
             {
                 identity.AddClaim(new Claim(OAuth2AndOIDCConst.UrnNonceClaim, nonce));
             }
