@@ -207,6 +207,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     break;
             }
 
+            // 存在しない、または使用済みのcodeでは空になる（#185）。
+            if (string.IsNullOrEmpty(value)) return "";
+
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
             return AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, jobj);
         }
@@ -279,6 +282,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     break;
             }
+
+            // 存在しないcodeでは空になる（#185）。out引数は空のままで返す。
+            if (string.IsNullOrEmpty(value)) return;
 
             JObject jobj = (JObject)JsonConvert.DeserializeObject(value);
             string payload = AuthorizationCodeProvider.CheckClientIdAndRedirectUri(client_id, redirect_uri, jobj);
@@ -374,6 +380,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     break;
             }
+
+            // 存在しないcodeでは空になる（#185）。
+            if (string.IsNullOrEmpty(value)) return "";
 
             Dictionary<string, string> temp = JsonConvert.DeserializeObject<Dictionary<string, string>>(value);
 

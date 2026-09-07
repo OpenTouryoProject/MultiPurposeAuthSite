@@ -56,6 +56,8 @@
 //*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
 //*  2026/09/07  玄人 幸道         Implicit / Hybridでnonceを必須化（#190）
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
+//*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
+//*  2026/09/07  玄人 幸道         discoveryのキー名の末尾スペースを除去（#189）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -329,7 +331,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             OpenIDConfig.Add("backchannel_authentication_endpoint",
                 Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint);
 
-            OpenIDConfig.Add("backchannel_token_delivery_modes_supported ", new List<string> {
+            OpenIDConfig.Add("backchannel_token_delivery_modes_supported", new List<string> {
                OAuth2AndOIDCEnum.CibaMode.poll.ToStringByEmit(),
                //OAuth2AndOIDCEnum.CibaMode.ping.ToStringByEmit(),
                //OAuth2AndOIDCEnum.CibaMode.push.ToStringByEmit()
@@ -1093,6 +1095,14 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     #region 発行
 
+                    // codeが不正（存在しない・使用済み・別Clientのもの）ならpayloadは空になる（#185）。
+                    if (string.IsNullOrEmpty(tokenPayload))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid code.");
+                        return false;
+                    }
+
                     // access_token
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
@@ -1100,7 +1110,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         x509, permittedLevel, out string aud, out string sub);
 
                     // Client認証のclient_idとToken類のaudをチェック
-                    if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+                    if (client_id != aud)
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "The code was not issued to this client.");
+                        return false;
+                    }
 
                     // refresh_token
                     string refresh_token = "";
@@ -1213,7 +1228,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                             x509, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
 
                         // Client認証のclient_idとToken類のaudをチェック
-                        if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+                        if (client_id != aud)
+                        {
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                            err.Add(OAuth2AndOIDCConst.error_description, "The refresh_token was not issued to this client.");
+                            return false;
+                        }
 
                         string new_refresh_token = "";
                         if (Config.EnableRefreshToken)
@@ -1231,6 +1251,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         ret = CmnEndpoints.CreateAccessTokenResponse(access_token, new_refresh_token, jwkString);
 
                         return true;
+                    }
+                    else
+                    {
+                        // refresh_tokenが不正（ローテーション済み・存在しない）（#185）。
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid refresh_token.");
                     }
 
                     #endregion
@@ -1626,6 +1652,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // Tokenレスポンス（正常）
                     string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, "");
 
+                    // codeが不正（別Clientのものなど）ならpayloadは空になる（#185）。
+                    if (string.IsNullOrEmpty(tokenPayload))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "Invalid device_code.");
+                        return false;
+                    }
+
                     // access_token
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
@@ -1633,7 +1667,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub);
 
                     // Client認証のclient_idとToken類のaudをチェック
-                    if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+                    if (client_id != aud)
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "The device_code was not issued to this client.");
+                        return false;
+                    }
 
                     // refresh_token
                     string refresh_token = "";
@@ -1759,6 +1798,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // Tokenレスポンス（正常）
                         string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, "");
 
+                        // codeが不正（別Clientのものなど）ならpayloadは空になる（#185）。
+                        if (string.IsNullOrEmpty(tokenPayload))
+                        {
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid auth_req_id.");
+                            return false;
+                        }
+
                         // access_token
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
@@ -1766,7 +1813,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                             x509, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out string aud, out string sub, JwtConst.ES256);
 
                         // Client認証のclient_idとToken類のaudをチェック
-                        if (client_id != aud) { throw new Exception("[client_id != aud]"); }
+                        if (client_id != aud)
+                        {
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                            err.Add(OAuth2AndOIDCConst.error_description, "The auth_req_id was not issued to this client.");
+                            return false;
+                        }
 
                         #region refresh_token
                         // 発行しないことに。

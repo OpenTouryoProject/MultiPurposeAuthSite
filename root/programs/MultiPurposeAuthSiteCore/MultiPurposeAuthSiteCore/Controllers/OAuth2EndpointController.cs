@@ -43,6 +43,7 @@
 //*  2020/12/21  西野 大介         CIBAのTokenのsubを認可ユーザに変更
 //*  2021/07/10  西野 大介         2FAにプッシュ通知を追加（AspNetCore.Identityのみ
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
+//*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -165,7 +166,8 @@ namespace MultiPurposeAuthSite.Controllers
         public Dictionary<string, string> OAuth2Token(IFormCollection formData)
         {
             Dictionary<string, string> ret = null;
-            Dictionary<string, string> err = null;
+            // grant_typeが未知・未指定、フォームデータ無しの経路でも使うので初期化する（#185）。
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             if (formData != null)
             {
@@ -806,6 +808,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string jsonStr = Sts.RequestObjectProvider.Get(
                         request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
 
+                    // 存在しないrequest_uriではnullになる（#185）。
                     JObject jsonObj = (JObject)JsonConvert.DeserializeObject(jsonStr);
 
                     string client_id = "";
@@ -816,7 +819,13 @@ namespace MultiPurposeAuthSite.Controllers
                     string requested_expiry = "";
                     string login_hint = "";
 
-                    if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
+                    if (jsonObj == null)
+                    {
+                        // 不正なrequest_uri
+                        err = OAuth2AndOIDCConst.invalid_request;
+                        errDescription = "Invalid request_uri.";
+                    }
+                    else if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
                         jsonObj, out client_id, out scope,
                         out client_notification_token, out binding_message,
                         out user_code, out requested_expiry, out login_hint,

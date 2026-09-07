@@ -25,6 +25,7 @@
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //*  2020/12/21  西野 大介         Device AuthZ対応実施
+//*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
 //**********************************************************************************
 
@@ -2455,18 +2456,23 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
                     request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                // 存在しないrequest_uriではnullになる（#185）。
+                // その場合は上書きせず、後続のValidateAuthZReqParamでエラーにする。
                 JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
 
-                client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
-                redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
-                response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
-                response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
-                scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
-                state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
-                nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
-                max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
-                prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
-                claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+                if (requestObjectPayload != null)
+                {
+                    client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
+                    redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
+                    response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
+                    response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
+                    scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
+                    state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
+                    nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                    max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
+                    prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
+                    claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+                }
             }
 
             if (this.CheckAuthTime(max_age)) {
@@ -2636,18 +2642,23 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
                     request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                // 存在しないrequest_uriではnullになる（#185）。
+                // その場合は上書きせず、後続のValidateAuthZReqParamでエラーにする。
                 JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
 
-                client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
-                redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
-                response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
-                response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
-                scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
-                state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
-                nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
-                max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
-                prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
-                claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+                if (requestObjectPayload != null)
+                {
+                    client_id = (string)requestObjectPayload[OAuth2AndOIDCConst.client_id];
+                    redirect_uri = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
+                    response_type = (string)requestObjectPayload[OAuth2AndOIDCConst.response_type];
+                    response_mode = (string)requestObjectPayload[OAuth2AndOIDCConst.response_mode];
+                    scope = (string)requestObjectPayload[OAuth2AndOIDCConst.scope];
+                    state = (string)requestObjectPayload[OAuth2AndOIDCConst.state];
+                    nonce = (string)requestObjectPayload[OAuth2AndOIDCConst.nonce];
+                    max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
+                    prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
+                    claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+                }
             }
 
             if (Token.CmnEndpoints.ValidateAuthZReqParam(

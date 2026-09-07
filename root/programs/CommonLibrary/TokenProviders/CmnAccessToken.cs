@@ -35,6 +35,7 @@
 //*  2020/12/21  西野 大介         ClientMode追加対応実施
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
+//*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -491,10 +492,26 @@ namespace MultiPurposeAuthSite.TokenProviders
                 JWS jws = null;
                 
                 // 証明書を使用するか、Jwkを使用するか判定
-                Dictionary<string, string> header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(jwt.Split('.')[0]), CustomEncode.UTF_8));
+                // ヘッダの解析は、JWTでない文字列を渡されても例外にしない（#185）。
+                Dictionary<string, string> header = null;
+                try
+                {
+                    string[] segments = jwt.Split('.');
+                    if (segments.Length == 3)
+                    {
+                        header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
+                    }
+                }
+                catch
+                {
+                    // Base64Url、JSONとして壊れている ＝ 検証失敗として扱う。
+                    header = null;
+                }
 
-                if (header.Keys.Any(s => s == JwtConst.kid))
+                if (header != null
+                    && header.ContainsKey(JwtConst.kid)
+                    && header.ContainsKey(JwtConst.alg))
                 {
                     string alg = header[JwtConst.alg];
 
@@ -547,7 +564,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
                 }
 
-                if (jws.Verify(jwt))
+                // jwsが決まらなかった場合（kid無し、ヘッダ破損など）は検証失敗（#185）。
+                if (jws != null && jws.Verify(jwt))
                 {
                     // 検証できた。
 
