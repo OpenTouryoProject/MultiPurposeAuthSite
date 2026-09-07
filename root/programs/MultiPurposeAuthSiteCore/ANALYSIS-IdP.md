@@ -80,12 +80,12 @@ ret.Add(OAuth2AndOIDCConst.expires_in,
 
 仕様に従う RP は「発行と同時に期限切れ」と解釈するため、即座に再取得ループに入るか失敗する。
 
-該当は `.Seconds` を使っている **34 箇所**。
+該当は `.Seconds` を使っている **33 箇所**。
 
 | 場所 | 件数 |
 |---|---|
 | `CommonLibrary/TokenProviders/CmnEndpoints.cs:2152` | 1 |
-| `MultiPurposeAuthSiteCore/.../AccountController.cs`（Implicit / Hybrid の各 response_mode） | 17 |
+| `MultiPurposeAuthSiteCore/.../AccountController.cs`（Implicit / Hybrid の各 response_mode） | 16 |
 | `MultiPurposeAuthSite/.../AccountController.cs`（net48 版・同上） | 16 |
 
 **修正:** `.Seconds` → `.TotalSeconds`（`(int)` にキャストして整数化）。

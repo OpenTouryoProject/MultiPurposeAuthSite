@@ -53,6 +53,7 @@
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2020/12/21  西野 大介         ClientMode追加対応実施
 //*  2021/05/24  西野 大介         LIRでPKCEを使用した場合の例外措置
+//*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2149,7 +2150,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // expires_in
-            ret.Add(OAuth2AndOIDCConst.expires_in, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString());
+            ret.Add(OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString());
 
             return ret;
         }

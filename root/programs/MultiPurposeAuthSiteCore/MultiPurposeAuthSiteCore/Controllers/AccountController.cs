@@ -27,6 +27,7 @@
 //*  2020/11/12  西野 大介         SameSiteCookie対応 (.NET Fx側は対策不要)
 //*  2020/12/21  西野 大介         Device AuthZ対応実施
 //*  2021/07/10  西野 大介         2FAにプッシュ通知を追加（AspNetCore.Identityのみ
+//*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3109,7 +3110,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // fragment
                             return new RedirectResult(redirect_uri + string.Format(
                                 "#access_token={0}&state={1}&token_type={2}&expires_in={3}",
-                                access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                                access_token, state, "bearer", (int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -3120,7 +3121,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
                         }
@@ -3131,7 +3132,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
                             ViewData["TokenType"] = "bearer";
-                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
@@ -3142,7 +3143,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
@@ -3212,7 +3213,7 @@ namespace MultiPurposeAuthSite.Controllers
                             // fragment
                             return new RedirectResult(redirect_uri + string.Format(
                                 "#id_token={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
-                                id_token, access_token, state, "bearer", Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                                id_token, access_token, state, "bearer", (int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -3224,7 +3225,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
                         }
@@ -3236,7 +3237,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
                             ViewData["TokenType"] = "bearer";
-                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
                         else if (response_mode.ToLower() == OAuth2AndOIDCEnum.ResponseMode.form_post_jwt.ToStringByEmit())
@@ -3248,7 +3249,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, null, null);
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
@@ -3299,7 +3300,7 @@ namespace MultiPurposeAuthSite.Controllers
                             return new RedirectResult(redirect_uri + string.Format(
                                 "#code={0}&access_token={1}&state={2}&token_type={3}&expires_in={4}",
                                 code, access_token, state, "bearer",
-                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                                (int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -3311,7 +3312,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
                         }
@@ -3323,7 +3324,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
                             ViewData["TokenType"] = "bearer";
-                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
@@ -3336,7 +3337,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
@@ -3411,7 +3412,7 @@ namespace MultiPurposeAuthSite.Controllers
                             return new RedirectResult(redirect_uri + string.Format(
                                 "#code={0}&access_token={1}&id_token={2}&state={3}&token_type={4}&expires_in={5}",
                                 code, access_token, id_token, state, "bearer",
-                                Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds));
+                                (int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds));
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
                             == OAuth2AndOIDCEnum.ResponseMode.fragment_jwt.ToStringByEmit())
@@ -3424,7 +3425,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             return new RedirectResult(redirect_uri + string.Format("#response={0}", response));
                         }
@@ -3437,7 +3438,7 @@ namespace MultiPurposeAuthSite.Controllers
                             ViewData["AccessToken"] = access_token;
                             ViewData["State"] = state;
                             ViewData["TokenType"] = "bearer";
-                            ViewData["ExpiresIn"] = Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString();
+                            ViewData["ExpiresIn"] = ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString();
                             return View("FormPost");
                         }
                         else if (response_mode.ToLower().Replace('.', '_')
@@ -3451,7 +3452,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 { OAuth2AndOIDCConst.AccessToken , access_token },
                                 { OAuth2AndOIDCConst.state,  state },
                                 { OAuth2AndOIDCConst.token_type , "bearer" },
-                                { OAuth2AndOIDCConst.expires_in , Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.Seconds.ToString() }
+                                { OAuth2AndOIDCConst.expires_in , ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString() }
                             }, client_id, expiresUtc);
                             ViewData["Action"] = redirect_uri;
                             ViewData["Response"] = response;
