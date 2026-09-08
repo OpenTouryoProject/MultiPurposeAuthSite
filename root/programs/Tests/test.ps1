@@ -32,6 +32,13 @@
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
+.PARAMETER TrxPath
+    テスト結果を TRX（XML）でも書き出す先。
+    上位の ..\..\2_RunAllTests.ps1 が集計に使う。
+
+    コンソール出力の集計行（"テストの合計数: ..."）はロケールで変わるため、
+    機械で読むときはこちらを使う。
+
 .EXAMPLE
     .\test.ps1 -Launch
     .\test.ps1 -Filter "FullyQualifiedName~RequestObjectTests"
@@ -42,7 +49,8 @@ param(
     [string] $Url = 'https://localhost:44300',
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
-    [string] $Configuration = 'Debug'
+    [string] $Configuration = 'Debug',
+    [string] $TrxPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -74,12 +82,27 @@ try {
             -WorkingDirectory $appDir -PassThru -WindowStyle Hidden
 
         # 起動を待つ（Discovery 文書が返るまで）。
+        #
+        # 開発用の自己署名証明書を通す。
+        # -SkipCertificateCheck は PowerShell 6 以降にしかないため、
+        # Windows PowerShell 5.1 ではコールバックを差し替える。
+        $iwr = @{}
+
+        if ($PSVersionTable.PSVersion.Major -ge 6) {
+            $iwr.SkipCertificateCheck = $true
+        }
+        else {
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+            [System.Net.ServicePointManager]::SecurityProtocol =
+                [System.Net.SecurityProtocolType]::Tls12
+        }
+
         $discovery = "$Url/.well-known/openid-configuration"
         $ready = $false
 
         for ($i = 0; $i -lt 60; $i++) {
             try {
-                $res = Invoke-WebRequest -Uri $discovery -SkipCertificateCheck -TimeoutSec 3
+                $res = Invoke-WebRequest -Uri $discovery -TimeoutSec 3 @iwr
                 if ($res.StatusCode -eq 200) { $ready = $true; break }
             }
             catch {
@@ -100,6 +123,20 @@ try {
 
     if ($Filter) {
         $args += @('--filter', $Filter)
+    }
+
+    if ($TrxPath) {
+        # --logger trx は --results-directory の下に書く。
+        # 呼び出し側が指定したパスにそのまま置きたいので、分解して渡す。
+        $trxDir  = Split-Path -Parent $TrxPath
+        $trxName = Split-Path -Leaf $TrxPath
+
+        if ($trxDir) {
+            New-Item -ItemType Directory -Force $trxDir | Out-Null
+            $args += @('--results-directory', $trxDir)
+        }
+
+        $args += @('--logger', "trx;LogFileName=$trxName")
     }
 
     & dotnet @args

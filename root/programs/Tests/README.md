@@ -8,9 +8,18 @@ MultiPurposeAuthSite の**ビルド確認**と **E2E テスト**。
 
 | | |
 |---|---|
-| `build.ps1` | net10.0 版 / net48 版 / テストを非対話でビルドし、警告とエラーを数える |
 | `test.ps1` | サイトを起動して E2E テストを実行する |
 | `E2ETests/` | xUnit のテスト プロジェクト（net10.0） |
+
+**通しで回すときは `root` のスクリプトを使う。**
+OpenTouryo が `root/programs/*.ps1` から `CS/*.bat` を呼ぶのと同じ構造で、
+`root/*.ps1` が `programs/` のビルド bat と、この `test.ps1` を呼ぶ。
+
+| | |
+|---|---|
+| `..\..\..\0_RunAll.ps1` | ビルド → テストの通し |
+| `..\..\..\1_BuildAll.ps1` | ビルド bat を呼び、エラー・警告を集約する |
+| `..\..\..\2_RunAllTests.ps1` | この `test.ps1` を呼び、TRX を読んで集約する |
 
 ## 方針
 
@@ -64,11 +73,14 @@ net10.0 版を `https://localhost:44300` で起動し、テストを流して、
 叩き先は、既定では**構成ファイルの `OAuth2AuthorizationServerEndpointsRootURI`**。
 つまり、Visual Studio（IIS Express）で起動していれば、そのまま繋がる。
 
-### ビルドだけ
+### 通しで回す
 
 ```powershell
-.\build.ps1              # net10.0 / net48 / テスト
-.\build.ps1 -Target core # net10.0 だけ
+cd root
+.\0_RunAll.ps1           # ビルド → テスト
+.\1_BuildAll.ps1         # ビルドだけ
+.\1_BuildAll.ps1 -List   # ビルドの対象一覧
+.\2_RunAllTests.ps1 -Launch
 ```
 
 ## 起動する URL について（重要）

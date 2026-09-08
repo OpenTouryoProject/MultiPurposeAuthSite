@@ -20,16 +20,16 @@ call %CURRENT_DIR%z_Common.bat
 @rem MultiPurposeAuthSite\MultiPurposeAuthSite\packages.config cannot be
 @rem restored by MSBuild -t:Restore.
 @rem
-@rem Warn instead of stopping. The build still works when packages\ has
-@rem already been restored, for example by opening the solution in
-@rem Visual Studio.
+@rem nuget.exe is kept next to this batch file, so this normally holds.
+@rem Warn instead of stopping, for a working tree where it is missing:
+@rem the build still works when packages\ has already been restored,
+@rem for example by opening the solution in Visual Studio.
 @rem --------------------------------------------------
 if not defined NUGET_EXE (
   echo [WARNING] nuget.exe was not found. packages.config is not restored.
   echo           The build below works only when packages\ is already
-  echo           in place. The OpenTouryo repository keeps nuget.exe at
-  echo           root/programs/nuget.exe; putting it next to this batch
-  echo           file, or on PATH, removes this warning.
+  echo           in place. Restore nuget.exe next to this batch file,
+  echo           or put it on PATH.
   pause
 )
 

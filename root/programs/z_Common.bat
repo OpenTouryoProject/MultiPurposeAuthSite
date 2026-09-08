@@ -131,9 +131,9 @@ echo NUGET_MSBUILD %NUGET_MSBUILD%
 @rem (MultiPurposeAuthSite\MultiPurposeAuthSite\packages.config), which
 @rem MSBuild -t:Restore does not handle, so nuget.exe restore is needed.
 @rem
-@rem The OpenTouryo repository keeps nuget.exe next to its build batches
-@rem (root/programs/nuget.exe) and calls it as "..\nuget.exe". This
-@rem repository does not carry it, so PATH is searched as well.
+@rem nuget.exe is kept next to this file, as the OpenTouryo repository
+@rem does (root/programs/nuget.exe). PATH is searched as a fallback, for
+@rem a working tree where it is missing.
 @rem
 @rem Not an error here. The batches that build net48 check it themselves;
 @rem the net10.0 side does not need it.
