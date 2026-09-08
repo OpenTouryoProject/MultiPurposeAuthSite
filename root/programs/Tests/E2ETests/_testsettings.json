@@ -1,0 +1,45 @@
+﻿{
+  // ---------------------------------------------------------------------------
+  // E2E テストの設定（雛形）
+  //
+  // このファイルをコピーして testsettings.json を作成し、環境に合わせて編集します。
+  // testsettings.json は .gitignore 済みです（app.config / appsettings.json と同じ扱い）。
+  // ファイルが無い場合は、下記の既定値がそのまま使われます。
+  //
+  // 資格情報（TestUserPWD / client_secret / pfx のパスワード）は、ここには書きません。
+  // アプリの構成ファイル（configPath）から実行時に読み出します。
+  //
+  // 環境変数でも上書きできます（CI やエージェント実行向け）。
+  //   MPAS_CORE_BASEURL / MPAS_CORE_CONFIG
+  //   MPAS_NETFX_BASEURL / MPAS_NETFX_CONFIG
+  //   MPAS_TESTUSER
+  // ---------------------------------------------------------------------------
+
+  "targets": {
+
+    // 主要部（net10.0 / Kestrel）
+    "core": {
+      "enabled": true,
+      // baseUrl を省略すると、configPath の
+      // OAuth2AuthorizationServerEndpointsRootURI をそのまま使う。
+      //
+      // 自己テスト（FAPI2 / CIBA / Device AuthZ）は、サーバ自身が
+      // 構成ファイルに書かれたURLへHTTPで折り返すため、
+      // テストの叩き先を別のURLにすると、その折り返しが失敗する。
+      // 省略したままにしておくのが安全。
+      // "baseUrl": "https://localhost:44300/MultiPurposeAuthSite",
+
+      // root/programs からの相対パス
+      "configPath": "MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json"
+    },
+
+    // 下位互換版（net48 / IIS Express）
+    "netfx": {
+      "enabled": true,
+      "configPath": "MultiPurposeAuthSite/MultiPurposeAuthSite/app.config"
+    }
+  },
+
+  // 既定で作成されるテスト ユーザ（UserStoreType=mem のとき初回アクセスで作られる）
+  "testUserName": "super_tanaka@gmail.com"
+}

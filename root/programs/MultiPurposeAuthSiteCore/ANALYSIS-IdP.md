@@ -35,6 +35,8 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-6 / C-14）。
+**フェーズ 1 は A-6 / A-8 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
+セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
 見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
@@ -212,7 +214,7 @@ Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_ur
 > PKCE の `code_challenge` も同じ理由で拾えていない。
 > `CreateCodeInAuthZNRes` に実効値を渡す形にする必要がある。**別 Issue。**
 
-### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]**
+### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]** — **✅ 修正済み（#187）**
 
 ```csharp
 // MultiPurposeAuthSiteCore/.../AccountController.cs:2848, 2977
@@ -228,9 +230,24 @@ RFC 6749 §4.1.2.1 が要求するのは `error` / `error_description`、
 
 - `redirect_uri` が既にクエリを持つ場合でも無条件に `?` を付ける（URL が壊れる）
 - `err` / `errDescription` を URL エンコードしていない
-- `err` は事実上いつも `server_error`（A-7 / C-15 参照）
+- `err` は事実上いつも `server_error`（A-8 参照）
 
-### A-7. エラーの HTTP ステータスが 200 **[Core]**
+**対応（#187）:** `CmnEndpoints.BuildRedirectUrl` を新設し、**両アプリの 36 箇所**を置き換えた。
+
+- パラメタ名を `error` / `error_description` にし、**`state` は要求にあった場合のみ返す**（RFC 6749 §4.1.2）
+- 既にクエリ文字列を持つ `redirect_uri` でも壊れないよう、区切りを `?` と `&` で切り替える
+- **値を必ず URL エンコードする。** `state` はクライアントが自由に決められるため、
+  生で連結するとリダイレクト先 URL にパラメタを注入できた（**C-6 の解消**）
+
+実機で確認済み。`state="a&b=c d"` が分割されずに復元されること、
+`state` を送らなければ応答にも入らないこと、`client_id` / `response_type` が不正なときは
+**リダイレクトせずエラー画面**になること（RFC 6749 §4.1.2.1）を確かめた。
+
+> **`?` と `&` の切り替えは、コードの読みでしか確認できていない。**
+> 登録済みクライアントの `redirect_uri` にクエリ文字列を持つものが無く、
+> `CheckRedirectUri` は完全一致を要求するため、実機で試せなかった。単体テスト向き。
+
+### A-7. エラーの HTTP ステータスが 200 **[Core]** — **未対応（#196）**
 
 `/token` `/userinfo` `/revoke` `/introspect` はいずれも
 `Dictionary<string,string>` を返すだけなので、**エラーでも HTTP 200** になる。
@@ -240,7 +257,11 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 **修正:** `IActionResult` に変えて `BadRequest(...)` / `Unauthorized(...)` を返す。
 **net48 版（`ApiController` / `HttpResponseMessage`）とは書き方が違うので、両系統で別実装になる。**
 
-### A-8. 認可エラーのコードが全て `server_error` **[Lib]**
+> **#187 から #196 に分離した。** 戻り値の型変更を伴い両系統で実装が分かれること、
+> **HTTP ステータスはクライアントの期待そのもの**でテスト整備後に着手したいことが理由。
+> `/revoke` は RFC 7009 §2.2 により**エラーでも 200 が正**（例外）である点に注意。
+
+### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs:378-380
@@ -256,6 +277,21 @@ redirect_uri 不一致・scope 不正のいずれでも `server_error` を返す
 
 `/token` 側も `"not_supported"`（未登録の値。正しくは `unsupported_grant_type`）や
 未知の grant_type に `invalid_grant`（正しくは `unsupported_grant_type`）を使っている。
+
+**対応（#187）:** `OAuth2AndOIDCConst` に標準コードが揃っていたので、それを使って返し分けた。
+
+| 失敗の内容 | 返すコード |
+|---|---|
+| `client_id` 未設定 | `invalid_request` |
+| `client_id` 不正 | `unauthorized_client` |
+| `response_type` 空 | `invalid_request` |
+| `response_type` 不明 / グラント種別が無効 | `unsupported_response_type` |
+| OIDC が無効なのに `scope=openid` | `invalid_scope` |
+| OIDC で `redirect_uri` 欠落 / `redirect_uri` 不一致・未登録 | `invalid_request` |
+| Grant\* の `"not_supported"` | `unsupported_grant_type` |
+
+> **未知の `grant_type` に `invalid_grant` を返している件は、まだ直していない**
+> （`OAuth2EndpointController` 側。正しくは `unsupported_grant_type`）。#196 で扱う。
 
 ### A-9. discovery のキー名に末尾スペース **[Lib]** — **✅ 修正済み（#189 の一部）**
 
@@ -733,10 +769,10 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 
 | 項目 |
 |---|
-| A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消） |
-| A-7 エラーの HTTP ステータス（400 / 401） |
-| A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる） |
-| A-10 discovery の項目整備 |
+| ✅ **A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消）** #187 |
+| ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
+| A-7 エラーの HTTP ステータス（400 / 401） → **#196 に分離。テスト整備後** |
+| A-10 discovery の項目整備 → **#189 の残り 13 項目** |
 
 ### フェーズ 2 — セキュリティの底上げ
 

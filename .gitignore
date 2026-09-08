@@ -6,6 +6,7 @@
 # Ignore configuration file
 /root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/app.config
 /root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
+/root/programs/Tests/E2ETests/testsettings.json
 
 # Ignore the Temp folder
 Temp/
