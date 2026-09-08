@@ -21,17 +21,19 @@ rem --------------------------------------------------
 dotnet restore "CommandLineTools\CommandLineToolsCore.sln"
 dotnet msbuild %COMMANDLINE% "CommandLineTools\CommandLineToolsCore.sln"
 
+pause
+
 rem --------------------------------------------------
 rem Batch build of MultiPurposeAuthSiteCore.
+rem
+rem The npm / grunt restore of the client libraries was removed.
+rem   - wwwroot\lib is committed to the repository
+rem   - there is no package.json and no Gruntfile
+rem   - RestoreLib1.bat / RestoreLib2.bat no longer exist, so the calls
+rem     here failed
+rem This follows the same move made in the OpenTouryo repository
+rem (10_Build_WebAppCore_sample.bat).
 rem --------------------------------------------------
-
-set CURRENTDIR=%cd%
-cd "MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore"
-if exist "node_modules" rd /s /q "node_modules"
-call RestoreLib1.bat
-call RestoreLib2.bat
-cd %CURRENTDIR%
-
 dotnet restore "MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.sln"
 dotnet msbuild %COMMANDLINE% "MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.sln"
 

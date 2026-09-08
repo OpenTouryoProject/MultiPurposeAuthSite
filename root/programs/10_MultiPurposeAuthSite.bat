@@ -15,17 +15,46 @@ set CURRENT_DIR="%~dp0"
 @rem --------------------------------------------------
 call %CURRENT_DIR%z_Common.bat
 
+@rem --------------------------------------------------
+@rem nuget.exe is needed on the net48 side.
+@rem MultiPurposeAuthSite\MultiPurposeAuthSite\packages.config cannot be
+@rem restored by MSBuild -t:Restore.
+@rem
+@rem Warn instead of stopping. The build still works when packages\ has
+@rem already been restored, for example by opening the solution in
+@rem Visual Studio.
+@rem --------------------------------------------------
+if not defined NUGET_EXE (
+  echo [WARNING] nuget.exe was not found. packages.config is not restored.
+  echo           The build below works only when packages\ is already
+  echo           in place. The OpenTouryo repository keeps nuget.exe at
+  echo           root/programs/nuget.exe; putting it next to this batch
+  echo           file, or on PATH, removes this warning.
+  pause
+)
+
 rem --------------------------------------------------
 rem Batch build of CommandLineTools.
 rem --------------------------------------------------
-nuget.exe restore "CommandLineTools\CommandLineTools.sln"
+if defined NUGET_EXE %NUGET_EXE% restore "CommandLineTools\CommandLineTools.sln" %NUGET_MSBUILD%
 %BUILDFILEPATH% %COMMANDLINE% "CommandLineTools\CommandLineTools.sln"
+
+pause
 
 rem --------------------------------------------------
 rem Batch build of MultiPurposeAuthSite.
+rem
+rem Restore twice, then build.
+rem - nuget.exe restore  : packages.config of the web app
+rem - MSBuild -t:Restore : PackageReference of CommonLibrary
+rem                        (NetFxLibrary.csproj)
+rem
+rem NOTE: the build line used to carry /t:Restore, so this solution was
+rem       only restored and never built.
 rem --------------------------------------------------
-nuget.exe restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
+if defined NUGET_EXE %NUGET_EXE% restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln" %NUGET_MSBUILD%
 %BUILDFILEPATH% %COMMANDLINE% /t:Restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
+%BUILDFILEPATH% %COMMANDLINE% "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
 
 pause
 
