@@ -131,6 +131,11 @@ OpenTouryo の `root/programs/CS/z_Common.bat` の移植。**足並みを揃え�
 `BUILD_CONFIG` と `DEBUG_TYPE` は `if not defined` で、**呼び出し側が先に設定していればそれを尊重する。**
 `1_BuildAll.ps1 -Configuration Release` はこれを使っている。
 
+> **Release を回すようになったのは新しい。** バッチは長く `Debug` 固定だったため、
+> Release でしか出ない不具合が埋もれていた（`NetFxLibrary.csproj` の
+> `DefineConstants` に `NETFX` が無く、net48 が通らなかった。修正済み）。
+> **構成を変えたら、両方で建てて確かめること。**
+
 > **このファイルは純 ASCII にすること。** 理由は [`CODING.md`](CODING.md) 4 節。
 
 ## 6. nuget.exe と packages.config

@@ -93,23 +93,29 @@ Git のコミット著者は人であり、これとは別。**エージェン�
 `NetFxLibrary.csproj` に `Include` を足し忘れると、
 net10.0 では通るのに net48 でだけ「型が無い」になる。
 
-> **既知の不具合: `NetFxLibrary.csproj` の Release 構成に `NETFX` が無い。**
->
-> ```xml
-> <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
->   <DefineConstants>TRACE;DEBUG;NETFX</DefineConstants>
-> <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
->   <DefineConstants>TRACE</DefineConstants>   ← NETFX が無い
-> ```
->
-> このため **Release では `#else`（Core 側）が採られ、コンパイルが通らない。**
+### 構成ごとにシンボルを書き落とさない
+
+**`DefineConstants` は構成（Debug / Release）ごとに別々に書く。** 片方に書き忘れられる。
+
+```xml
+<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <DefineConstants>TRACE;DEBUG;NETFX</DefineConstants>
+<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  <DefineConstants>TRACE;NETFX</DefineConstants>
+```
+
+> **実際に踏んだ。** `NetFxLibrary.csproj` の Release に `NETFX` が無く、
+> `#else`（Core 側）が採られてコンパイルが通らなかった。
 >
 > ```
 > Co/Config.cs(49,28): error CS0234: 'Configuration' が名前空間 'Microsoft.Extensions' に存在しません
 > Data/CmnUserStore.cs(59,17): error CS0234: 'AspNetCore' が名前空間 'Microsoft' に存在しません
 > ```
 >
-> **net48 版は Debug でしかビルドできない。** `1_BuildAll.ps1 -Configuration Release` は通らない。
+> ビルド バッチが `BUILD_CONFIG=Debug` 固定だったため、長く露見しなかった。
+> `1_BuildAll.ps1 -Configuration Release` を入れて初めて出た。**修正済み。**
+
+`CommandLineTools` の net 版は、Debug / Release の両方に `NET` を持っている。そちらが手本。
 
 ## 3. 改行コードは混在している
 

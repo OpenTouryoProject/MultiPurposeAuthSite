@@ -115,7 +115,7 @@ gh issue comment <番号> --repo OpenTouryoProject/MultiPurposeAuthSite --body-f
 |---|---|---|
 | net48 が「パッケージがありません」 | `packages` を消した。`packages.config` は `nuget.exe restore` が要る | [`BUILDING.md`](BUILDING.md) 6 節 |
 | net48 だけ「型が無い」 | `NetFxLibrary.csproj` に `<Compile Include>` を足し忘れた | [`CODING.md`](CODING.md) 2 節 |
-| **`-Configuration Release` で net48 が通らない** | `NetFxLibrary.csproj` の Release に `NETFX` が無い（既知） | [`CODING.md`](CODING.md) 2 節 |
+| 片方の構成だけコンパイルが通らない | `DefineConstants` に条件シンボルを書き落とした | [`CODING.md`](CODING.md) 2 節 |
 | `-Only` で片方だけ建てると復元がおかしい | `CommonLibrary` の `obj` は 2 つの csproj で共有 | [`BUILDING.md`](BUILDING.md) 7 節 |
 | 自己テスト（FAPI2 / CIBA）が HTTP 500 | 待ち受け URL と構成のルート URI が違う | [`CONFIGURATION.md`](CONFIGURATION.md) 5 節 |
 | http だと認可でエラー画面 | Cookie が `SameSite=None`。http では保持されない | [`CONFIGURATION.md`](CONFIGURATION.md) 5 節 |
