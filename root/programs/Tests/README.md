@@ -156,13 +156,13 @@ appSettings__OAuth2ClientEndpointsRootURI
 - `ErrorResponseTests.未知のresponse_typeはunsupported_response_typeでリダイレクトする`
   未知の `response_type` が、リダイレクトではなくエラー画面（HTTP 200）になる。
   認可コードは発行されないので、安全側には倒れている。
-- `RequestObjectTests.request_uri経路でもredirect_uriが照合される`
+- `RequestObjectTests.request_uri経路でもredirect_uriが照合される`（#197）
   `request_uri`（JAR）経路では `redirect_uri` が認可コードに紐付かず、
   **誤った `redirect_uri` を送ってもトークンが発行される。** #186 の対応が及んでいない。
 
 ## 分かっていること（実測）
 
-`request_uri` 経路について、2026/09/08 に net10.0 版で測った結果。
+`request_uri` 経路について、net10.0 版で測った結果（#197）。
 
 | | 実測 |
 |---|---|

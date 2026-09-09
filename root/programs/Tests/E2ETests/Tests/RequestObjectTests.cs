@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/09  玄人 幸道         redirect_uriの実測結果を#197として起票
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -51,9 +52,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     /// 一方 AuthorizationCodeProvider.Create は、認可コードに紐付ける
     /// redirect_uri / code_challenge / code_challenge_method を
     /// **クエリ文字列から**読んでいる。request_uri 経路では、これらは
-    /// クエリ文字列に無いので null になる、というのがコードを読んだ限りの推測。
+    /// クエリ文字列に無いため null になる。
     ///
-    /// 推測のままにしないために、ここで実際の応答を測る。
+    /// コードを読んだだけでは確からしさが分からないので、ここで実際の応答を測る。
+    /// 測った結果は #197 に記録した。
     /// </summary>
     public class RequestObjectTests : TargetTestBase
     {
@@ -192,7 +194,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
         /// </summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/08, net10.0）では、"
+        [SkippableTheory(Skip = "未修正（#197）。実測（2026/09/09, net10.0）では、"
             + "誤った redirect_uri を送ってもトークンが発行される。")]
         [MemberData(nameof(AllTargets))]
         public async Task request_uri経路でもredirect_uriが照合される(string targetKey)

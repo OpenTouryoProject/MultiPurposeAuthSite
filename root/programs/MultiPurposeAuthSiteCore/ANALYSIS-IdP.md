@@ -209,10 +209,22 @@ REQUIRED としている**（RFC 6749 §4.1.3 の「認可リクエストに含�
 Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_uri` は null のままとなり、
 `CheckClientIdAndRedirectUri` の「認可リクエスト時、指定無し」経路に入る。影響しない。
 
-> **残っている穴:** `request_uri`（Request Object / FAPI2）の経路では、
+> **残っている穴（#197）:** `request_uri`（Request Object / JAR）の経路では、
 > `redirect_uri` が **JWT の中**にあって `queryString` には無いため、**紐付けが効かない。**
-> PKCE の `code_challenge` も同じ理由で拾えていない。
-> `CreateCodeInAuthZNRes` に実効値を渡す形にする必要がある。**別 Issue。**
+> `CreateCodeInAuthZNRes` に実効値を渡す形にする必要がある。
+>
+> E2E テストで実測した（2026/09/09, net10.0）。**推測ではない。**
+>
+> ```
+> 誤った redirect_uri: HTTP 200 / keys=[access_token, expires_in, id_token, ...] / error=-
+> ```
+>
+> PKCE の `code_challenge` も同じ理由で拾えていないが、**向きは逆**で、
+> 記録されないため `code_verifier` を送ると `invalid_client` になる（素通りではなく拒否）。
+> 安全側だが、`request_uri` ＋ PKCE のパブリック クライアントは機能しない。
+>
+> 再現するテストが `root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs` にある
+> （`Skip` を外すと落ちる）。
 
 ### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]** — **✅ 修正済み（#187）**
 
