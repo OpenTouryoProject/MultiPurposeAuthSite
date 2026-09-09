@@ -183,20 +183,53 @@ cmd.exe はバッチを**バイト オフセットで読み進める**ため、�
 
 | 事象 | 原因 | 対処 |
 |---|---|---|
-| 構文エラー・文字化け | 5.1 は BOM 無しの `.ps1` を **ANSI（Shift_JIS）**として読む | **UTF-8 BOM ＋ CRLF** で保存する |
+| 構文エラー・文字化け（`繧ｵ繧､繝`） | 5.1 は BOM 無しの `.ps1` を **ANSI（Shift_JIS）**として読む | **UTF-8 BOM ＋ CRLF** で保存する |
 | `Get-Content` の結果が違う | 既定エンコードが 5.1 は ANSI、7 は UTF-8 | **`-Encoding UTF8`** を明示する |
-| HTTPS で必ず失敗 | **`-SkipCertificateCheck` は 6 以降にしかない** | バージョンで分岐する |
+| 自己署名証明書の HTTPS が叩けない | **API ごとに、動く版が違う**（下の表） | 版で分岐する |
 | 表の見出し・罫線・データがずれる | 5.1 の `Format-Table` は**桁数ではなく文字数**で幅を決める（全角は 1 文字で 2 桁） | `SummaryTable.ps1` の `Write-SummaryTable` を使う |
 
+> **1 行目は実際に踏んだ。** `test.ps1` だけ BOM 無しで作ってしまい、
+> 5.1 から `0_RunAll.ps1` を実行すると日本語コメントが化けて
+> **クォートの対応が壊れ、構文エラーになった。**
+> ここに書いてある落とし穴を、この文書を書いた本人が踏んでいる。
+> **`.ps1` を足したら、必ず 5.1 でも構文検査すること。**
+
+### 自己署名証明書の HTTPS（5.1 / 7 で API を分ける）
+
+**同じ書き方で両方は通らなかった。** 開発用証明書の Kestrel に対する実測。
+
+| 方法 | 5.1 | 7 |
+|---|---|---|
+| `Invoke-WebRequest` | **NG** | OK（`-SkipCertificateCheck`） |
+| `HttpWebRequest` ＋ `ServicePointManager` のコールバック | **OK** | NG |
+| `HttpWebRequest` ＋ 個別のコールバック | － | NG |
+| `HttpClient` ＋ コールバック | **NG** | OK |
+
+- 5.1 の NG : `接続が切断されました: 送信時に、予期しないエラーが発生しました。`
+- 7 の NG : `The SSL connection could not be established`
+
+**生の `SslStream` は 5.1 でも TLS 1.2 / 1.3 の両方で成功する。TLS そのものの問題ではない。**
+`-UseBasicParsing` / `-Proxy $null` / `-DisableKeepAlive` のいずれでも変わらなかった。
+
+原因を追うより、**それぞれで通ることを確認した方法を使う。**
+
 ```powershell
-# 7 専用の引数は、バージョンを見て付け外しする
 if ($PSVersionTable.PSVersion.Major -ge 6)
 {
-    $iwr.SkipCertificateCheck = $true
+    $res  = Invoke-WebRequest -Uri $url -TimeoutSec 5 -SkipCertificateCheck
+    $code = [int]$res.StatusCode
 }
 else
 {
     [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    [System.Net.ServicePointManager]::SecurityProtocol =
+        [System.Net.SecurityProtocolType]::Tls12
+
+    $req = [System.Net.HttpWebRequest]::Create($url)
+    $req.Timeout = 5000
+    $res  = $req.GetResponse()
+    $code = [int]$res.StatusCode
+    $res.Close()
 }
 ```
 
@@ -213,10 +246,21 @@ Write-SummaryTable $results
 - **`$PSScriptRoot` で組み立てる。** ダブル クリック起動でカレントに依存しないようにする
 - **`Read-Host` で締める**のは、ダブル クリックする最上位（`0_RunAll.ps1`）だけ。
   途中のスクリプトに入れると、通しで回せなくなる
+- **例外を握り潰さない。** 再試行する `catch` でも**最後の理由は残す。**
+  時間切れになったとき、理由が無いと原因が分からない
+- **子プロセスの出力はファイルへ残す**（`-RedirectStandardOutput` / `-RedirectStandardError`）。
+  「応答しません」だけでは、落ちたのか起動中なのかも分からない
+- **待ち時間は回数ではなく実時間で測る。** 接続拒否は即座に返るが、
+  起動中は `Timeout` まで待つため、回数だと上限が数倍変わる
 - **変更したら 5.1 でも実行して確かめること**
 
 ```powershell
-powershell.exe -NoProfile -File "root\1_BuildAll.ps1" -List
+# 構文検査
+powershell.exe -NoProfile -Command "$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile('root\1_BuildAll.ps1',[ref]$null,[ref]$e); $e"
+
+# 通し（5.1 / 7 の両方で）
+powershell.exe -NoProfile -File "root\0_RunAll.ps1" -SkipClean
+pwsh           -NoProfile -File "root\0_RunAll.ps1" -SkipClean
 ```
 
 ### 書式

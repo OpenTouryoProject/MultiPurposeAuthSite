@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     E2E テストを実行する。必要なら net10.0 版のサイトを起動してから実行する。
 
@@ -32,6 +32,10 @@
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
+.PARAMETER LogDir
+    サイトの起動ログ（MpasSite.out.log / MpasSite.err.log）の出力先。
+    既定は E2ETests\Result（.gitignore 済み）。
+
 .PARAMETER TrxPath
     テスト結果を TRX（XML）でも書き出す先。
     上位の ..\..\2_RunAllTests.ps1 が集計に使う。
@@ -50,7 +54,8 @@ param(
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
-    [string] $TrxPath
+    [string] $TrxPath,
+    [string] $LogDir = (Join-Path $PSScriptRoot 'E2ETests\Result')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -77,21 +82,37 @@ try {
         $env:appSettings__OAuth2AuthorizationServerEndpointsRootURI = $Url
         $env:appSettings__OAuth2ClientEndpointsRootURI = $Url
 
+        # サイトの出力をファイルへ残す。
+        # 起動に失敗したとき、これが無いと「応答しません」しか分からない。
+        New-Item -ItemType Directory -Force $LogDir | Out-Null
+        $appOut = Join-Path $LogDir 'MpasSite.out.log'
+        $appErr = Join-Path $LogDir 'MpasSite.err.log'
+
         $app = Start-Process -FilePath 'dotnet' `
             -ArgumentList @('run', '--no-build', '-c', $Configuration, '--urls', $Url) `
-            -WorkingDirectory $appDir -PassThru -WindowStyle Hidden
+            -WorkingDirectory $appDir -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $appOut -RedirectStandardError $appErr
 
         # 起動を待つ（Discovery 文書が返るまで）。
         #
-        # 開発用の自己署名証明書を通す。
-        # -SkipCertificateCheck は PowerShell 6 以降にしかないため、
-        # Windows PowerShell 5.1 ではコールバックを差し替える。
-        $iwr = @{}
+        # **開発用の自己署名証明書を通す方法を、5.1 と 7 で分ける。**
+        # 同じ書き方で両方を通せなかった。この環境で実測した結果は次のとおり。
+        #
+        #   方法                                    5.1   7
+        #   --------------------------------------  ----  ----
+        #   Invoke-WebRequest                       NG    OK  （7 は -SkipCertificateCheck）
+        #   HttpWebRequest + ServicePointManager    OK    NG
+        #   HttpWebRequest + 個別のコールバック     -     NG
+        #   HttpClient + コールバック               NG    OK
+        #
+        #   5.1 の NG : 「接続が切断されました: 送信時に、予期しないエラーが発生しました。」
+        #   7   の NG : 「The SSL connection could not be established」
+        #
+        # 生の SslStream は 5.1 でも 1.2 / 1.3 の両方で成功するので、
+        # **TLS そのものの問題ではない。**
+        # 版差の原因を追うより、それぞれで通ることを確認した方法を使う。
 
-        if ($PSVersionTable.PSVersion.Major -ge 6) {
-            $iwr.SkipCertificateCheck = $true
-        }
-        else {
+        if ($PSVersionTable.PSVersion.Major -lt 6) {
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
             [System.Net.ServicePointManager]::SecurityProtocol =
                 [System.Net.SecurityProtocolType]::Tls12
@@ -99,19 +120,54 @@ try {
 
         $discovery = "$Url/.well-known/openid-configuration"
         $ready = $false
+        $lastError = ''
 
-        for ($i = 0; $i -lt 60; $i++) {
+        # 待ち時間は「回数 × タイムアウト」ではなく、実時間で測る。
+        # 接続が拒否されるうちは即座に返るが、起動中は TimeoutSec まで待つため、
+        # 回数で数えると条件によって上限が数倍変わる。
+        $deadline = (Get-Date).AddSeconds(90)
+
+        while ((Get-Date) -lt $deadline) {
+
+            # **落ちていたら、待たずに止める。**
+            # 起動に失敗しているのに待ち続けても、上限まで無駄に待つだけになる。
+            if ($app.HasExited) {
+                throw ("サイトが起動できませんでした（終了コード {0}）。" -f $app.ExitCode) `
+                    + "`n  標準出力 : $appOut" `
+                    + "`n  標準エラー : $appErr"
+            }
+
             try {
-                $res = Invoke-WebRequest -Uri $discovery -TimeoutSec 3 @iwr
-                if ($res.StatusCode -eq 200) { $ready = $true; break }
+                if ($PSVersionTable.PSVersion.Major -ge 6) {
+                    $res = Invoke-WebRequest -Uri $discovery -TimeoutSec 5 -SkipCertificateCheck
+                    $code = [int]$res.StatusCode
+                }
+                else {
+                    $req = [System.Net.HttpWebRequest]::Create($discovery)
+                    $req.Timeout = 5000
+                    $res = $req.GetResponse()
+                    $code = [int]$res.StatusCode
+                    $res.Close()
+                }
+
+                if ($code -eq 200) { $ready = $true; break }
+
+                $lastError = "HTTP $code"
             }
             catch {
-                Start-Sleep -Seconds 1
+                # 起動中は接続拒否・タイムアウトのどちらもあり得るので、ここでは止めない。
+                # **ただし理由は残す。** 握り潰すと、時間切れの原因が分からなくなる。
+                $lastError = $_.Exception.Message
             }
+
+            Start-Sleep -Seconds 1
         }
 
         if (-not $ready) {
-            throw "サイトが $Url で応答しません。"
+            throw "サイトが $Url で応答しません（90 秒待機）。" `
+                + "`n  最後の理由 : $lastError" `
+                + "`n  標準出力 : $appOut" `
+                + "`n  標準エラー : $appErr"
         }
 
         Write-Host '起動しました。' -ForegroundColor Green

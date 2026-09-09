@@ -8,6 +8,9 @@
 /root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/appsettings.json
 /root/programs/Tests/E2ETests/testsettings.json
 
+# Ignore the test / build log folder
+/root/programs/Tests/E2ETests/Result/
+
 # Ignore the Temp folder
 Temp/
 _Temp/

@@ -41,7 +41,7 @@ cd root
 | `-SkipClean` | クリーン処理を省略する |
 | `-WarnDetail` | 警告を種類ごとに集計して出す |
 | `-IgnoreErrors` | 既知のエラーとして合否から外す正規表現。**除外分は別枠で必ず表示する** |
-| `-OutputDir` | ログの保存先。既定は `%TEMP%\MpasBuildLogs` |
+| `-OutputDir` | ログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
 
 ## 2. なぜラッパーが必要か
 
@@ -232,7 +232,7 @@ net48        OK        0    0   45 126.8
 net10.0      OK        0    0   39  58.9
 
   所要時間 : 3.2 分
-  ログ     : C:\Users\...\AppData\Local\Temp\MpasBuildLogs
+  ログ     : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result
 
   全ステップ OK
 ```
@@ -258,7 +258,12 @@ net48 版は旧形式の csproj と ASPNETCOMPILER を使うため、**MSBuild �
 どちらも `.gitignore` 済み。雛形（`_appsettings.json` / `_app.config`）から作る。
 詳細は [`CONFIGURATION.md`](CONFIGURATION.md)。
 
-### `*.bak` は消える
+### `*.bak` と `*.log` は消える
 
-`2_DeleteFile.bat` の対象に `*.bak` が入っている。
-手元の控えをリポジトリ内に置くと、クリーン時に消える。
+`2_DeleteFile.bat` は `root\programs` 配下を再帰的に走査して
+`*.suo` `*.user` `*.tmp` `*.log` `*.bak` `*.skrold` を削除する。
+
+- 手元の控え（`*.bak`）をリポジトリ内に置くと、クリーン時に消える
+- **ログの保存先（`Tests\E2ETests\Result`）の `*.log` も消える。**
+  毎回きれいになるのは都合がよいが、
+  **失敗したログを読む前に建て直すと、その内容を失う**（`.trx` は残る）

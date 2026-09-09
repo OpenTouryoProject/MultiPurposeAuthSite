@@ -49,7 +49,11 @@
     環境変数として渡すことで、バッチ側の構成を切り替えられる。
 
 .PARAMETER OutputDir
-    各ステップの出力ログの保存先。既定は %TEMP%\MpasBuildLogs。
+    各ステップの出力ログの保存先。
+    既定は root\programs\Tests\E2ETests\Result（.gitignore 済み）。
+
+    ビルドとテストのログを 1 か所に集める。散らばっていると、
+    失敗したときに「どれを見るのか」から始めることになる。
 
 .PARAMETER IgnoreErrors
     「既知のエラー」として合否判定から除外する正規表現。複数指定できる。
@@ -79,7 +83,7 @@ param(
     [switch]$List,
     [switch]$SkipClean,
     [switch]$WarnDetail,
-    [string]$OutputDir = (Join-Path $env:TEMP "MpasBuildLogs"),
+    [string]$OutputDir = (Join-Path $PSScriptRoot "programs\Tests\E2ETests\Result"),
     [string[]]$IgnoreErrors = @()
 )
 

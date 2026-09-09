@@ -35,7 +35,27 @@ cd root\programs\Tests
 
 合否の読み方 → [`BUILDING.md`](BUILDING.md) 3 節 / [`TESTING.md`](TESTING.md) 5 節
 
-## 2. バッチを直接使う
+## 2. ログの置き場所
+
+**すべて 1 か所に出る。** `root\programs\Tests\E2ETests\Result`（`.gitignore` 済み）。
+
+| ファイル | 中身 |
+|---|---|
+| `net48.log` / `net10_0.log` / `Clean__*.log` | ビルド（ステップごと。`-v:d` の全出力） |
+| `E2ETests.log` | `dotnet test` の画面出力 |
+| `E2ETests.trx` | テスト結果の XML。**合否はこれで判定する** |
+| `MpasSite.out.log` / `MpasSite.err.log` | `-Launch` で起動したサイトの出力 |
+
+**「サイトが応答しません」と出たら、まず `MpasSite.out.log`。**
+`Now listening on: ...` があればサイトは正常で、原因は叩く側にある。
+
+保存先は `-OutputDir` で変えられる。実行の最後にもパスが表示される。
+
+> **クリーンすると、前回の `*.log` は消える。**
+> `2_DeleteFile.bat` が `root\programs` 配下の `*.log` を再帰削除するため
+> （`.trx` は残る）。**失敗したログを読む前に、建て直さないこと。**
+
+## 3. バッチを直接使う
 
 ```
 root\programs\0_ExecAllBat.bat             通し（クリーン → net48 → net10.0）
@@ -47,7 +67,7 @@ root\programs\2_DeleteFile.bat             *.suo / *.user / *.bak ... を消す
 
 構成 → [`BUILDING.md`](BUILDING.md) 4 節
 
-## 3. サイトを起動する
+## 4. サイトを起動する
 
 Visual Studio（IIS Express）が素直。既定は `https://localhost:44300/MultiPurposeAuthSite`。
 
@@ -64,7 +84,7 @@ dotnet run --urls https://localhost:44300
 **構成のルート URI と待ち受け URL を揃えること。https で動かすこと。**
 理由 → [`CONFIGURATION.md`](CONFIGURATION.md) 5 節
 
-## 4. 初回の準備
+## 5. 初回の準備
 
 ```
 1. OpenTouryo のアセンブリを用意する
@@ -84,7 +104,7 @@ dotnet run --urls https://localhost:44300
 
 詳細 → [`CONFIGURATION.md`](CONFIGURATION.md)
 
-## 5. コードを書く前に
+## 6. コードを書く前に
 
 | 見るもの | 場所 |
 |---|---|
@@ -96,7 +116,7 @@ dotnet run --urls https://localhost:44300
 
 **ファイル ヘッダの更新者名は、Claude Code なら「玄人 幸道」。**
 
-## 6. GitHub
+## 7. GitHub
 
 ```
 gh issue list   --repo OpenTouryoProject/MultiPurposeAuthSite
@@ -109,7 +129,7 @@ gh issue comment <番号> --repo OpenTouryoProject/MultiPurposeAuthSite --body-f
 テンプレート（`.github/ISSUE_TEMPLATE/`）は `--body-file` と併用しても効かないので、
 **読んで、その構成に沿って書く。**
 
-## 7. よく踏む落とし穴
+## 8. よく踏む落とし穴
 
 | 症状 | 原因 | 見るもの |
 |---|---|---|
@@ -125,7 +145,7 @@ gh issue comment <番号> --repo OpenTouryoProject/MultiPurposeAuthSite --body-f
 | ps1 が 5.1 で落ちる / 表がずれる | BOM 無し、または 7 専用の引数、`Format-Table` | [`CODING.md`](CODING.md) 5 節 |
 | `*.bak` の控えが消えた | `2_DeleteFile.bat` の削除対象 | [`BUILDING.md`](BUILDING.md) 10 節 |
 
-## 8. エージェントとして守ること
+## 9. エージェントとして守ること
 
 **一次情報は [`../AGENTS.md`](../AGENTS.md)。** ここは要点だけ。
 

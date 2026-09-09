@@ -41,7 +41,10 @@
     Debug（既定）または Release。
 
 .PARAMETER OutputDir
-    TRX と実行ログの保存先。既定は %TEMP%\MpasTestResults。
+    TRX と実行ログの保存先。
+    既定は root\programs\Tests\E2ETests\Result（.gitignore 済み）。
+
+    サイトの起動ログ（MpasSite.*.log）も、ここへ出すよう test.ps1 に渡す。
 
 .EXAMPLE
     .\2_RunAllTests.ps1 -Launch
@@ -63,7 +66,7 @@ param(
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
-    [string]$OutputDir = (Join-Path $env:TEMP "MpasTestResults")
+    [string]$OutputDir = (Join-Path $PSScriptRoot "programs\Tests\E2ETests\Result")
 )
 
 # 本スクリプトは root に置き、その配下の programs\Tests を対象とする。
@@ -93,6 +96,7 @@ Remove-Item $trx -EA SilentlyContinue
 $splat = @{
     Configuration = $Configuration
     TrxPath       = $trx
+    LogDir        = $OutputDir
 }
 if ($Launch) { $splat.Launch = $true }
 if ($Url)    { $splat.Url    = $Url }

@@ -40,7 +40,7 @@ cd root\programs\Tests
 | `-Url` | `-Launch` のときに待ち受ける URL。既定 `https://localhost:44300` |
 | `-Filter` | `dotnet test` の `--filter` |
 | `-Configuration` | `Debug`（既定）/ `Release` |
-| `-OutputDir` | TRX とログの保存先。既定は `%TEMP%\MpasTestResults` |
+| `-OutputDir` | TRX とログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
 
 ## 2. 構造
 
@@ -158,8 +158,8 @@ E2ETests OK     28    0   30 42.3
          2  (対象なし)
 
   所要時間 : 0.7 分
-  TRX      : C:\Users\...\AppData\Local\Temp\MpasTestResults\E2ETests.trx
-  ログ     : C:\Users\...\AppData\Local\Temp\MpasTestResults\E2ETests.log
+  TRX      : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.trx
+  ログ     : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.log
 
   全テスト OK
 ```
