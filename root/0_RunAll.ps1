@@ -11,14 +11,20 @@
     ※ ダブル クリック起動でもカレント ディレクトリに依存しないよう $PSScriptRoot を使う。
 
 .PARAMETER Launch
-    2_RunAllTests.ps1 に渡す。net10.0 版を起動してからテストする。
+    2_RunAllTests.ps1 に渡す。net10.0 版と net48 版を起動してからテストする。
 
     **既定で付ける。** 通しで回すときにサイトの起動を人に任せると、
     起動し忘れが「全件 Skip」になり、合否として読めなくなる。
     既に起動しているサイトを使いたいときは -Launch:$false を渡す。
 
 .PARAMETER Url
-    -Launch のときに待ち受ける URL。
+    net10.0 版が待ち受ける URL（既定 https://localhost:44300）。
+
+.PARAMETER NetFxUrl
+    net48 版が待ち受ける URL（既定 https://localhost:44302）。
+
+.PARAMETER NoNetFx
+    net48 版を起動しない。その分のテストは Skip される。
 
 .PARAMETER Configuration
     Debug（既定）または Release。
@@ -46,6 +52,8 @@
 param(
     [switch]$Launch = $true,
     [string]$Url = 'https://localhost:44300',
+    [string]$NetFxUrl = 'https://localhost:44302',
+    [switch]$NoNetFx,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
     [switch]$SkipClean,
@@ -84,8 +92,10 @@ foreach ($s in $scripts)
 
     if ($s.UseTest)
     {
-        $splat.Launch = $Launch
-        $splat.Url    = $Url
+        $splat.Launch   = $Launch
+        $splat.Url      = $Url
+        $splat.NetFxUrl = $NetFxUrl
+        if ($NoNetFx) { $splat.NoNetFx = $true }
     }
 
     # **実行時間を測る。** 通しは長い。合計だけ見ても、どこを短くすればよいかが分からない。

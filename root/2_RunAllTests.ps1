@@ -29,10 +29,16 @@
       ・-Launch を付けない場合は、サイトを起動しておくこと
 
 .PARAMETER Launch
-    net10.0 版を起動してからテストする（test.ps1 に渡す）。
+    net10.0 版と net48 版を起動してからテストする（test.ps1 に渡す）。
 
 .PARAMETER Url
-    -Launch のときに待ち受ける URL（test.ps1 に渡す）。
+    net10.0 版が待ち受ける URL（test.ps1 に渡す。既定 https://localhost:44300）。
+
+.PARAMETER NetFxUrl
+    net48 版が待ち受ける URL（test.ps1 に渡す。既定 https://localhost:44302）。
+
+.PARAMETER NoNetFx
+    net48 版を起動しない（test.ps1 に渡す）。その分のテストは Skip される。
 
 .PARAMETER Filter
     dotnet test の --filter に渡す式（test.ps1 に渡す）。
@@ -70,6 +76,8 @@ param(
     [switch]$Launch,
     [switch]$UpdateTestCases,
     [string]$Url = 'https://localhost:44300',
+    [string]$NetFxUrl = 'https://localhost:44302',
+    [switch]$NoNetFx,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
@@ -123,9 +131,11 @@ $splat = @{
     TrxPath       = $trx
     LogDir        = $OutputDir
 }
-if ($Launch) { $splat.Launch = $true }
-if ($Url)    { $splat.Url    = $Url }
-if ($Filter) { $splat.Filter = $Filter }
+if ($Launch)   { $splat.Launch   = $true }
+if ($NoNetFx)  { $splat.NoNetFx  = $true }
+if ($Url)      { $splat.Url      = $Url }
+if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
+if ($Filter)   { $splat.Filter   = $Filter }
 
 Write-Host "=== E2ETests ===" -ForegroundColor Cyan
 if (-not $Launch)
@@ -747,7 +757,7 @@ Write-Host ""
 if ($passed.Count -eq 0)
 {
     Write-Host "  1 件も実行されていません。サイトが起動しているか確認してください。" -ForegroundColor Red
-    Write-Host "  （-Launch を付けると net10.0 版を起動してから流します）"
+    Write-Host "  （-Launch を付けると net10.0 版と net48 版を起動してから流します）"
     exit 1
 }
 
