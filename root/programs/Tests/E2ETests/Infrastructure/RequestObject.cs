@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/10  玄人 幸道         署名鍵の読み込みを JwtBearerAssertion と共用（internal 化）
 //**********************************************************************************
 
 using System;
@@ -155,10 +156,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return client.Target.Url("/authorize?request_uri=" + requestUri);
         }
 
-        /// <summary>署名鍵（クライアントの秘密鍵）を読む</summary>
+        /// <summary>署名鍵（クライアントの秘密鍵）を読む（JwtBearerAssertion と共用）</summary>
         /// <param name="client">IdPClient</param>
         /// <returns>RSA</returns>
-        private static RSA LoadSigningKey(IdPClient client)
+        internal static RSA LoadSigningKey(IdPClient client)
         {
             string path = client.Config.Get("SpRp_RsaPfxFilePath");
             string password = client.Config.Get("SpRp_RsaPfxPassword");
@@ -186,7 +187,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>BASE64URL にする</summary>
         /// <param name="value">バイト列</param>
         /// <returns>BASE64URL文字列</returns>
-        private static string ToBase64Url(byte[] value)
+        internal static string ToBase64Url(byte[] value)
         {
             return Convert.ToBase64String(value)
                 .TrimEnd('=').Replace('+', '-').Replace('/', '_');

@@ -113,15 +113,17 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 |---|---|---|
 | `SM-n` | 疎通（テスト基盤そのものの確認） | `Tests/SmokeTests.cs` |
 | `TC-n.n` | 基本テストケース（OAuth 2.0 / OIDC の基本的な検証項目） | `Tests/Basic/` |
+| `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer） | `Tests/Extended/` |
 | `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/*.cs` |
 
-報告書の一覧と詳細、原本は、この順（**SM → TC → RT**）に並ぶ。
+報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT**）に並ぶ。
 
 **土台から順に並べる。**
 SM が倒れていれば、TC の合否は読む意味がない。
 サイトに届いていない・サインインできていない、という話であって、
 **仕様に適合しているかどうか以前**だからである。
-同じ理由で、TC が倒れている状態の RT は、回帰かどうかを判断できない。
+同じ理由で、拡張（EX）は基本（TC）の上に乗っている。
+TC が倒れている状態の EX は、拡張の問題なのか土台の問題なのかを判断できない。RT も同じ。
 
 先に出る群が倒れていたら、**後ろは読まずに原因を潰す。**
 
@@ -295,15 +297,15 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 
 対象     結果 成功 失敗 Skip   秒
 -------- ---- ---- ---- ---- ----
-E2ETests OK     94    0    3 42.2
+E2ETests OK    142    0   11 34.9
 
-  Skip 3 件の内訳
-         3  (対象なし)
+  Skip 11 件の内訳
+        11  (対象なし)
 
   対象ごとの Skip は、そのサイトが起動していないだけのことが多い。
   (対象なし) は、未修正として Skip 指定しているもの（Tests\README.md）。
 
-  所要時間 : 0.7 分
+  所要時間 : 0.6 分
   TRX      : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.trx
   ログ     : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.log
   報告書   : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.report.md

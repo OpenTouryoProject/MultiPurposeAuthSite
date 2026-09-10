@@ -346,8 +346,22 @@ try {
         $testArgs += @('--logger', "trx;LogFileName=$trxName")
     }
 
-    & dotnet @testArgs
-    $exitCode = $LASTEXITCODE
+    # **ここだけ $ErrorActionPreference を Continue にし、標準エラーを文字列にして流す。**
+    # Windows PowerShell 5.1 は、出力をリダイレクトしているとき、ネイティブ コマンドの
+    # 標準エラー出力を 1 行ずつ ErrorRecord（NativeCommandError）に包む。
+    # xUnit は失敗したテストの [FAIL] 行を標準エラーに書くため、Stop のままだと
+    # **最初の失敗でスクリプトが止まり、集計も報告書も作られない**（実際に止まった）。
+    # 全件成功している間は標準エラーに何も出ないので、表面化しない。
+    # 合否は $LASTEXITCODE と TRX で判定するので、ここで止める必要は無い。
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & dotnet @testArgs 2>&1 | ForEach-Object { "$_" }
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $eap
+    }
 }
 finally {
     foreach ($p in @($core, $netFx)) {

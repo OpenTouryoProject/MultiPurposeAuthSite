@@ -29,9 +29,11 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/10  玄人 幸道         c_hash / at_hash の計算を追加（拡張仕様のテスト）
 //**********************************************************************************
 
 using System;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -96,6 +98,28 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return (value.ValueKind == JsonValueKind.String) ? value.GetString() : value.ToString();
+        }
+
+        /// <summary>
+        /// c_hash / at_hash / s_hash に入るべき値を計算する。
+        ///
+        /// OIDC Core §3.3.2.11 : 値の ASCII 表現を、id_token の alg に対応するハッシュ
+        /// （RS256 なら SHA-256）にかけ、**左半分**を BASE64URL にしたもの。
+        /// 実装側の IdToken.CreateHash は使わない（同じコードで作って同じコードで確かめないため）。
+        /// </summary>
+        /// <param name="value">code / access_token / state</param>
+        /// <returns>ハッシュ値（BASE64URL）</returns>
+        public static string HalfHash(string value)
+        {
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.ASCII.GetBytes(value));
+                byte[] half = new byte[hash.Length / 2];
+                Array.Copy(hash, half, half.Length);
+
+                return Convert.ToBase64String(half)
+                    .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            }
         }
 
         /// <summary>指定位置のパートをJSONとして返す</summary>

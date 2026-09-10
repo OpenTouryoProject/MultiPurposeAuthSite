@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/10  玄人 幸道         JSON の null など、オブジェクトでない本文でも落ちないよう修正
 //**********************************************************************************
 
 using System;
@@ -192,7 +193,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <returns>値</returns>
         public string String(string name)
         {
-            if (!this.IsJson)
+            // オブジェクトでない JSON（net48 の /revoke は成功時に null を返す）は、項目なしとみなす。
+            if (!this.IsJson || this.Json.ValueKind != JsonValueKind.Object)
             {
                 return null;
             }
@@ -211,7 +213,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <returns>JsonValueKind</returns>
         public JsonValueKind KindOf(string name)
         {
-            if (!this.IsJson)
+            if (!this.IsJson || this.Json.ValueKind != JsonValueKind.Object)
             {
                 return JsonValueKind.Undefined;
             }
@@ -259,6 +261,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 return string.Format("HTTP {0} / 非JSON ({1}, {2} bytes)",
                     (int)this.StatusCode, this.ContentType ?? "-",
                     this.Body == null ? 0 : this.Body.Length);
+            }
+
+            if (this.Json.ValueKind != JsonValueKind.Object)
+            {
+                return string.Format("HTTP {0} / JSON の {1}（オブジェクトではない）",
+                    (int)this.StatusCode, this.Json.ValueKind);
             }
 
             List<string> names = new List<string>();

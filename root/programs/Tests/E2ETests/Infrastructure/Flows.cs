@@ -29,10 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/10  玄人 幸道         JWK Set の取得を追加（拡張仕様のテスト）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
@@ -255,6 +257,33 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return await ExchangeCodeAsync(client, registration, authz.Code, registration.RedirectUri);
+        }
+
+        /// <summary>
+        /// Discovery の jwks_uri から JWK Set を取得する。
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <returns>JWK Set（keys 配列を持つ JSON）</returns>
+        public static async Task<JsonElement> JwkSetAsync(IdPClient client)
+        {
+            JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
+            string jwksUri = discovery.String("jwks_uri");
+
+            if (string.IsNullOrEmpty(jwksUri))
+            {
+                throw new InvalidOperationException(
+                    "Discovery に jwks_uri がありません: " + discovery.ToString());
+            }
+
+            JsonResponse jwks = await client.GetJsonAsync(client.ToLocalUrl(jwksUri));
+
+            if (!jwks.IsJson)
+            {
+                throw new InvalidOperationException(
+                    "JWK Set を取得できませんでした: " + jwks.ToString());
+            }
+
+            return jwks.Json;
         }
     }
 }

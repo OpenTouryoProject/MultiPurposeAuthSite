@@ -157,6 +157,21 @@ OAuth2ClientEndpointsRootURI
 | `Tests/Basic/PasswordAndClientCredentialsTests.cs` | TC-4・TC-5 パスワード / クライアント資格情報 |
 | `Tests/Basic/OidcTests.cs` | TC-6 id_token の中身と署名 / alg:none の拒否 / UserInfo |
 
+**その次が `Tests/Extended/`。** 基本テストケースに含まれない、追加の仕様・拡張仕様（EX-1 〜 EX-7）。
+
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/Extended/RefreshTokenTests.cs` | `EX-1` | refresh_token の更新・ローテーション・発行先との結び付け（RFC 6749 §6 / RFC 9700） |
+| `Tests/Extended/RevocationTests.cs` | `EX-2` | トークンの失効（RFC 7009） |
+| `Tests/Extended/IntrospectionTests.cs` | `EX-3` | トークンの問い合わせ（RFC 7662） |
+| `Tests/Extended/DeviceAuthorizationTests.cs` | `EX-4` | Device Authorization Grant（RFC 8628） |
+| `Tests/Extended/HybridFlowTests.cs` | `EX-5` | OIDC Hybrid フロー（c_hash / at_hash） |
+| `Tests/Extended/ResponseModeTests.cs` | `EX-6` | response_mode（fragment / form_post / JARM） |
+| `Tests/Extended/JwtBearerTests.cs` | `EX-7` | JWT Bearer グラント（RFC 7523） |
+
+CIBA と PAR / JAR は扱っていない。CIBA は ECDSA で署名した要求と通知の受け口が要り、
+PAR / JAR（`request_uri`）は RT-197 で測っている。
+
 以下は、個別の Issue に対応する回帰テスト。
 
 | ファイル | 識別子 | 対象 |
@@ -211,6 +226,23 @@ cd root
 - `RT-197.5`（`RequestObjectTests`、#197）
   `request_uri`（JAR）経路では `redirect_uri` が認可コードに紐付かず、
   **誤った `redirect_uri` を送ってもトークンが発行される。** #186 の対応が及んでいない。
+
+以下は拡張仕様（EX）で見つかったもの。**Issue は未起票。**
+
+- `EX-2.4` / `EX-2.5`（`Extended.RevocationTests`）
+  `token_type_hint` を省略すると失効を断る。存在しないトークンの失効要求をエラーにする。
+  RFC 7009 では、ヒントは任意で、無効なトークンでも 200 を返す。
+- `EX-3.2` / `EX-3.4`（`Extended.IntrospectionTests`）
+  存在しないトークンに `active=false` ではなく `invalid_request` を返す。
+  refresh_token の問い合わせは、実行ごとに成否が揺れる（net48 で観測）。
+- `EX-4.5`（`Extended.DeviceAuthorizationTests`）
+  使用済みの `device_code` で **HTTP 500**（`KeyNotFoundException`）。トークンは出ない。
+- `EX-5.1` / `EX-5.3`（`Extended.HybridFlowTests`）
+  **`at_hash` / `c_hash` / `s_hash` の計算方法が OIDC と違う。** SHA-256 の左半分ではなく、
+  左右を XOR で畳んでいる（Open棟梁 の `ArrayOperator.ShortenByteArray`）。
+  標準の RP ライブラリは、Hybrid / Implicit で受け取った id_token を検証できない。
+- `EX-6.4`（`Extended.ResponseModeTests`）
+  JARM の `exp` が文字列になっている（id_token / access_token では #184 で直した問題）。
 
 ## 分かっていること（実測）
 

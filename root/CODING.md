@@ -322,6 +322,32 @@ powershell.exe -NoProfile -File "root\1_BuildAll.ps1" -List
 powershell.exe -NoProfile -File "root\2_RunAllTests.ps1" -Launch
 ```
 
+### ネイティブ コマンドの標準エラーで止まる（5.1）
+
+**Windows PowerShell 5.1 は、出力をリダイレクトしているとき、ネイティブ コマンドの
+標準エラー出力を 1 行ずつ ErrorRecord（`NativeCommandError`）に包む。**
+`$ErrorActionPreference = 'Stop'` のスクリプトでは、**その 1 行目でスクリプトが止まる。**
+
+xUnit は、失敗したテストの `[FAIL]` 行を標準エラーに書く。このため `test.ps1` は、
+**テストが 1 件でも失敗すると、集計も報告書も作らずに止まっていた。**
+全件成功している間は標準エラーに何も出ないので、表面化しなかった。
+（`> log 2>&1` で出力を取っていて、はじめて起きた。）
+
+```powershell
+$eap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+    & dotnet @testArgs 2>&1 | ForEach-Object { "$_" }
+    $exitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $eap
+}
+```
+
+合否は `$LASTEXITCODE` と TRX で判定する。`"$_"` で文字列にすると、
+`At line:...` の付記も付かず、ログがテストの出力だけになる。
+
 ### 書式
 
 `SummaryTable.ps1` は OpenTouryo リポジトリからの移植。**あちらと足並みを揃える。**

@@ -177,6 +177,7 @@ function Get-TrxResults([string]$path)
         #
         #   SM-n          疎通（スモーク）
         #   TC-n.n        基本テストケース（input.md 由来）
+        #   EX-n.n        拡張仕様（Revocation / Introspection / Device / Hybrid など）
         #   RT-<Issue>.n  個別 Issue の回帰
         $tc = ""
         $m = [regex]::Match($stdout, '\[([A-Z]{2}-[0-9]+(?:\.[0-9]+)?)\]')
@@ -397,12 +398,13 @@ $null = $md.AppendLine("| ID | テスト | 対象 | 結果 |")
 $null = $md.AppendLine("|---|---|---|---|")
 
 # 識別子を持つものを先、持たないものを後ろに。
-# 群の順は SM（疎通）→ TC（基本）→ RT（回帰）。群の中は番号順。
+# 群の順は SM（疎通）→ TC（基本）→ EX（拡張）→ RT（回帰）。群の中は番号順。
 #
 # **土台から順に読めるようにする。**
 # SM が倒れていれば TC の合否は読む意味がない（サイトに届いていない、
 # サインインできていない、という話であって、仕様の適合とは別）。
-# 同様に、TC が倒れている状態の RT は、回帰かどうかを判断できない。
+# 同様に、拡張（EX）は基本（TC）の上に乗っている。TC が倒れている状態の
+# EX は、拡張の問題なのか土台の問題なのかを判断できない。RT も同じ。
 # 先に出る群が倒れていたら、後ろは読まずに済む。
 function Get-IdRank
 {
@@ -414,7 +416,8 @@ function Get-IdRank
     {
         "SM"    { return 0 }
         "TC"    { return 1 }
-        "RT"    { return 2 }
+        "EX"    { return 2 }
+        "RT"    { return 3 }
         default { return 8 }
     }
 }
@@ -583,6 +586,7 @@ if ($UpdateTestCases)
             {
                 "SM"    { "SM. 疎通（テスト基盤そのものの確認）" }
                 "TC"    { "TC. 基本テストケース" }
+                "EX"    { "EX. 拡張仕様" }
                 "RT"    { "RT. 個別 Issue の回帰" }
                 default { $group }
             }

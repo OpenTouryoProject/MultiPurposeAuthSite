@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/10  玄人 幸道         Device Authorization Grant の検証画面の操作を追加（拡張仕様のテスト）
 //**********************************************************************************
 
 using System;
@@ -475,6 +476,52 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return result;
+        }
+
+        #endregion
+
+        #region Device Authorization Grant（/device_verify）
+
+        /// <summary>
+        /// 検証画面（/device_verify）で user_code を入力し、許可または拒否を押す。
+        /// RFC 8628 §3.3 で、ユーザが**機器とは別の端末で**行う操作に当たる。
+        /// サインイン済みであること。
+        /// </summary>
+        /// <param name="userCode">user_code</param>
+        /// <param name="allow">true : 許可 / false : 拒否</param>
+        /// <returns>画面が受け付けたか（"Accepted." を表示したか）</returns>
+        public async Task<bool> SubmitDeviceUserCodeAsync(string userCode, bool allow)
+        {
+            HttpResponseMessage get = await this.GetAsync("/device_verify");
+            string html = await get.Content.ReadAsStringAsync();
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "user_code", userCode }
+            };
+
+            // 画面は AntiForgeryToken を埋めている。検証していなくても、画面どおりに送る。
+            Match m = AntiforgeryRegex.Match(html);
+
+            if (m.Success)
+            {
+                form.Add("__RequestVerificationToken", m.Groups["value"].Value);
+            }
+
+            // どちらのボタンを押したかは、ボタンの name が送られるかで判別される。
+            if (allow)
+            {
+                form.Add("allow", "Allow");
+            }
+            else
+            {
+                form.Add("deny", "Deny");
+            }
+
+            HttpResponseMessage post = await this.PostFormAsync("/device_verify", form);
+            string body = await post.Content.ReadAsStringAsync();
+
+            return post.StatusCode == HttpStatusCode.OK && body.Contains("Accepted.");
         }
 
         #endregion

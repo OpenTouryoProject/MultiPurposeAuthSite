@@ -573,6 +573,546 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - email_verified が真偽値である
 - Bearer トークン無しではユーザ情報を返さない
 
+# EX. 拡張仕様
+
+## EX-1.1 refresh_token で、新しい access_token を得られる
+
+| | |
+|---|---|
+| 観点 | access_token の期限が切れても、**ユーザに再び認可を求めずに**取り直せること。refresh_token の存在理由そのもの。取り直したトークンは、**同じユーザの、同じ範囲の**ものでなければならない。 |
+| 根拠 | RFC 6749 §6（scope を省略したら、元と同じ範囲とみなす）/ §1.5 |
+| テスト | `EX0101_refresh_tokenで新しいaccess_tokenを得られる` |
+
+**手順**
+
+1. 認可コード フローで access_token と refresh_token を得る
+1. POST /token に grant_type=refresh_token を送る（scope は省略）
+
+**検証（合否を判定する）**
+
+- エラーにならない
+- access_token が返る
+- 元とは別の access_token である
+- 同じユーザのトークンである（sub）
+- 元と同じ範囲である（scopes）
+
+**観測（判定しない）**
+
+- 新しい refresh_token
+  - 発行し直すかどうかは任意（RFC 6749 §6）。発行し直すなら、古い方は使えなくするのが望ましい（EX-1.2）。
+
+## EX-1.2 一度使った refresh_token は、もう使えない（ローテーション）
+
+| | |
+|---|---|
+| 観点 | この実装は、更新のたびに新しい refresh_token を発行する（ローテーション）。**ならば古い方は使えなくなっていなければならない。**使えるなら、漏れた refresh_token を、正規のクライアントと並行して使い続けられる。 |
+| 根拠 | RFC 9700（OAuth 2.0 Security BCP）§4.14.2 / RFC 6749 §10.4 |
+| テスト | `EX0102_使用済みのrefresh_tokenは再利用できない` |
+
+**手順**
+
+1. 認可コード フローで refresh_token（旧）を得る
+1. 旧で更新し、新しい refresh_token（新）を得る
+1. 旧を、もう一度使う
+1. 新で更新する
+
+**検証（合否を判定する）**
+
+- invalid_grant で拒否される
+- トークンを発行しない
+
+**観測（判定しない）**
+
+- 旧が再び提示された後も、新は使えるか
+  - BCP は、使用済みの refresh_token が再び提示されたら、**どちらが正規か分からないので、有効な方も失効させる**ことを勧めている。
+
+## EX-1.3 別のクライアントに発行された refresh_token は使えない
+
+| | |
+|---|---|
+| 観点 | refresh_token は、発行先のクライアントに結び付いている。他のクライアントが（自分の正しい資格情報で認証したうえで）提示しても、トークンを出してはならない。 |
+| 根拠 | RFC 6749 §6（提示したクライアントが発行先であることを確かめる）/ §10.4 |
+| テスト | `EX0103_他のクライアントのrefresh_tokenは使えない` |
+
+**手順**
+
+1. MVC_Sample で refresh_token を得る
+1. TestClient の資格情報で、その refresh_token を提示する
+1. 発行先の MVC_Sample が、その refresh_token を使う
+
+**検証（合否を判定する）**
+
+- invalid_grant で拒否される
+- トークンを発行しない
+
+**観測（判定しない）**
+
+- 他者に提示された後も、正規のクライアントが使えるか
+  - 拒否する前に refresh_token を消費していると、正規の利用者が巻き添えで失う。他者はトークンを奪えないが、正規の利用を妨害できることになる。
+
+## EX-2.1 access_token を失効させると、以後そのトークンは使えない
+
+| | |
+|---|---|
+| 観点 | ログアウトや漏えいのときに、**期限を待たずに**トークンを無効にできること。失効の応答が成功しても、実際に使えてしまっては意味がないので、**使えなくなったことまで確かめる。** |
+| 根拠 | RFC 7009 §2.1 / §2.2 |
+| テスト | `EX0201_access_tokenを失効させると使えなくなる` |
+
+**手順**
+
+1. 認可コード フローで access_token を得て、/userinfo が応答することを確かめる
+1. POST /revoke に token と token_type_hint=access_token を送る
+1. 同じ access_token で、もう一度 /userinfo を叩く
+
+**検証（合否を判定する）**
+
+- 失効要求がエラーにならない
+- 失効後は /userinfo がユーザ情報を返さない
+
+**観測（判定しない）**
+
+- 失効要求の HTTP ステータス
+  - RFC 7009 §2.2 は、成功したら 200 を返すとしている。
+
+## EX-2.2 refresh_token を失効させると、以後それで更新できない
+
+| | |
+|---|---|
+| 観点 | refresh_token は長く生きるので、**失効できることの重みは access_token より大きい。**失効させた refresh_token で、新しいトークンが出てはならない。 |
+| 根拠 | RFC 7009 §2.1 / §2.2 |
+| テスト | `EX0202_refresh_tokenを失効させると更新できなくなる` |
+
+**手順**
+
+1. 認可コード フローで access_token と refresh_token を得る
+1. POST /revoke に token と token_type_hint=refresh_token を送る
+1. 失効させた refresh_token で更新を試みる
+1. 一緒に発行されていた access_token で /userinfo を叩く
+
+**検証（合否を判定する）**
+
+- 失効要求がエラーにならない
+- トークンを発行しない
+
+**観測（判定しない）**
+
+- 同じ認可から出た access_token は、まだ使えるか
+  - RFC 7009 §2.1 は、refresh_token を失効させたら、同じ認可に基づく access_token も無効にすべき（SHOULD）としている。
+
+## EX-2.3 他のクライアントに発行されたトークンは、失効させられない
+
+| | |
+|---|---|
+| 観点 | 失効は、そのトークンの発行先だけが行える。誰でも失効させられるなら、**他人のトークンを無効にして利用を妨害できる。** |
+| 根拠 | RFC 7009 §2.1（発行先のクライアントかを確かめ、違えば要求を拒否する）/ #194 |
+| テスト | `EX0203_他のクライアントのトークンは失効させられない` |
+
+**手順**
+
+1. MVC_Sample で access_token を得る
+1. TestClient の資格情報で、その access_token の失効を要求する
+1. 元の access_token で /userinfo を叩く
+
+**検証（合否を判定する）**
+
+- 要求を拒否する（error を返す）
+- トークンは失効していない（/userinfo が応答する）
+
+## EX-3.1 有効な access_token について、active=true と答える
+
+| | |
+|---|---|
+| 観点 | リソース サーバが「このトークンは今使えるか」を認可サーバに問い合わせる口。**active は必ず返す真偽値。**それ以外の項目（scope / sub / exp など）は任意。 |
+| 根拠 | RFC 7662 §2.1 / §2.2（active は REQUIRED の boolean） |
+| テスト | `EX0301_有効なaccess_tokenはactiveがtrue` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. POST /introspect に token と token_type_hint=access_token を送る（発行先の資格情報で）
+
+**検証（合否を判定する）**
+
+- active が true（JSON の真偽値）
+
+**観測（判定しない）**
+
+- 返った項目
+  - active 以外は任意（§2.2）。
+- scope
+
+## EX-3.3 他のクライアントに発行されたトークンには、active=false とだけ答える
+
+| | |
+|---|---|
+| 観点 | 問い合わせ元に知る権限の無いトークンについて、**中身（ユーザや範囲）を漏らさない。**active=false だけを返すのが仕様の答え方。 |
+| 根拠 | RFC 7662 §2.2（知る権限が無ければ active=false）/ §4 / #194 |
+| テスト | `EX0303_他のクライアントのトークンはactiveがfalseだけ` |
+
+**手順**
+
+1. MVC_Sample で access_token を得る
+1. TestClient の資格情報で、その access_token を問い合わせる
+
+**検証（合否を判定する）**
+
+- active が false
+- active 以外を返さない
+
+## EX-3.5 token_type_hint を省略しても、答えられる
+
+| | |
+|---|---|
+| 観点 | token_type_hint は**任意のヒント**。省略されたら、サーバが種類を調べて答える。ヒントが無いことを理由に答えないと、リソース サーバはトークンを確かめられない。 |
+| 根拠 | RFC 7662 §2.1（token_type_hint は OPTIONAL） |
+| テスト | `EX0305_token_type_hintを省略しても答えられる` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. POST /introspect に token だけを送る（token_type_hint なし）
+
+**検証（合否を判定する）**
+
+- active が true（JSON の真偽値）
+
+## EX-3.6 クライアント認証の無い問い合わせには、トークンの情報を返さない
+
+| | |
+|---|---|
+| 観点 | イントロスペクションは、トークンの中身（ユーザ・範囲）を明かす口。**誰でも問い合わせられると、拾ったトークンの持ち主や権限を調べられる。** |
+| 根拠 | RFC 7662 §2.1（問い合わせ元の認可を要求する。MUST）/ §4 |
+| テスト | `EX0306_クライアント認証が無ければトークンの情報を返さない` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. client_id / client_secret を付けずに POST /introspect を送る
+
+**検証（合否を判定する）**
+
+- active=true を返さない
+- sub や scope を返さない
+
+**観測（判定しない）**
+
+- 拒否のしかた
+  - RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196）。
+
+## EX-4.1 デバイス認可の応答に、必須の項目が揃っている
+
+| | |
+|---|---|
+| 観点 | 入力手段の乏しい機器（TV など）が、**別の端末でユーザに承認してもらう**ための起点。機器はこの応答だけを頼りに、ユーザへの案内とポーリングを行う。 |
+| 根拠 | RFC 8628 §3.1 / §3.2（device_code / user_code / verification_uri / expires_in は REQUIRED） |
+| テスト | `EX0401_デバイス認可の応答に必須の項目が揃っている` |
+
+**手順**
+
+1. POST /device_authz に client_id と scope を送る
+1. （参考）Discovery に、このエンドポイントが載っているかを見る
+
+**検証（合否を判定する）**
+
+- device_code がある
+- user_code がある
+- verification_uri がある
+- expires_in がある
+
+**観測（判定しない）**
+
+- verification_uri
+  - ユーザが別の端末で開く URL。
+- 任意の項目
+- expires_in / interval の JSON 型
+  - 秒数なので数値（Number）が自然（§3.2 の例も数値）。文字列だと、型に厳しいクライアントは読めない。
+- Discovery での広告
+  - RFC 8628 §4 の認可サーバ メタデータ。Discovery の不備は #189 で扱っている。
+
+## EX-4.2 ユーザが承認する前のポーリングには、authorization_pending を返す
+
+| | |
+|---|---|
+| 観点 | 機器は、ユーザの操作を待ちながらトークン エンドポイントを繰り返し叩く。**まだ承認されていないこと**を、失敗とは区別できる形で伝える必要がある。 |
+| 根拠 | RFC 8628 §3.4 / §3.5（authorization_pending） |
+| テスト | `EX0402_承認前のポーリングはauthorization_pending` |
+
+**手順**
+
+1. 機器 : POST /device_authz で device_code を得る
+1. 機器 : ユーザが何もしないうちに、grant_type=device_code でトークンを要求する
+
+**検証（合否を判定する）**
+
+- authorization_pending を返す
+- トークンを発行しない
+
+## EX-4.3 ユーザが承認すると、機器はトークンを取得できる
+
+| | |
+|---|---|
+| 観点 | **フローの骨格。** トークンを受け取る機器（device_code を持つ）と、承認するユーザ（user_code を入力する）は、別の端末である。承認したユーザの権限で、機器にトークンが出ること。 |
+| 根拠 | RFC 8628 §3.3（ユーザの操作）/ §3.4 / §3.5 |
+| テスト | `EX0403_ユーザが承認すると機器はトークンを取得できる` |
+
+**手順**
+
+1. 機器 : POST /device_authz で device_code と user_code を得る
+1. ユーザ : サインインした端末で /device_verify を開き、user_code を入力して許可する
+1. 機器 : grant_type=device_code でトークンを要求する
+
+**検証（合否を判定する）**
+
+- 検証画面が承認を受け付ける
+- エラーにならない
+- access_token が返る
+- 承認したユーザのトークンである（sub）
+
+**観測（判定しない）**
+
+- refresh_token / id_token
+  - この実装は refresh_token を生成・保存するが、応答には含めていない（CmnEndpoints.GrantDeviceAuthZ）。渡さないなら、生成しない方がよい。
+
+**補足**
+
+- このテストでは 1 つの HTTP クライアントが両方の役を務める。機器側の要求（/device_authz と /token）は Cookie に依存しないので、役の区別には影響しない。
+
+## EX-4.4 ユーザが拒否すると、機器には access_denied を返す
+
+| | |
+|---|---|
+| 観点 | 拒否されたら、機器はポーリングをやめる必要がある。**pending のままだと、期限が切れるまで叩き続ける。** |
+| 根拠 | RFC 8628 §3.5（access_denied） |
+| テスト | `EX0404_ユーザが拒否すると機器にはaccess_deniedを返す` |
+
+**手順**
+
+1. 機器 : device_code と user_code を得る
+1. ユーザ : /device_verify で user_code を入力して拒否する
+1. 機器 : トークンを要求する
+
+**検証（合否を判定する）**
+
+- access_denied を返す
+- トークンを発行しない
+
+## EX-4.6 登録されていない client_id では、デバイス認可を始められない
+
+| | |
+|---|---|
+| 観点 | 未登録のクライアントの名義で user_code を発行すると、ユーザは**誰に権限を渡すのか分からないまま**承認させられる。 |
+| 根拠 | RFC 8628 §3.1 / RFC 6749 §5.2（invalid_client）/ #193 |
+| テスト | `EX0406_登録されていないclient_idでは始められない` |
+
+**手順**
+
+1. POST /device_authz に、登録されていない client_id を送る
+
+**検証（合否を判定する）**
+
+- invalid_client で拒否される
+- device_code を発行しない
+
+## EX-5.2 response_type=code token : code と access_token がフラグメントで返る
+
+| | |
+|---|---|
+| 観点 | access_token を返すなら、**token_type も添える**（Implicit と同じ規則）。id_token は要求していないので返さない。 |
+| 根拠 | OIDC Core §3.3.2.5 / RFC 6749 §4.2.2（token_type は REQUIRED、大小文字を区別しない。expires_in は RECOMMENDED） |
+| テスト | `EX0502_code_tokenでcodeとaccess_tokenが返る` |
+
+**手順**
+
+1. GET /authorize に response_type=code token を付けて送る
+
+**検証（合否を判定する）**
+
+- フラグメント（#）で返る
+- code が返る
+- access_token が返る
+- token_type が Bearer
+- id_token は返さない（response_type に id_token が無い）
+
+**観測（判定しない）**
+
+- expires_in
+  - RECOMMENDED。
+
+## EX-5.4 Hybrid で受け取った code をトークンに交換でき、両方の id_token が同じユーザを指す
+
+| | |
+|---|---|
+| 観点 | code の交換で得る id_token は、認可エンドポイントで受け取ったものと**同じ発行者・同じユーザ**でなければならない。違えば、RP はどちらを信じればよいか分からない。 |
+| 根拠 | OIDC Core §3.3.3.6（iss と sub は、認可エンドポイントの id_token と同一。MUST） |
+| テスト | `EX0504_Hybridのcodeを交換でき両方のid_tokenが同じユーザを指す` |
+
+**手順**
+
+1. response_type=code id_token で code と id_token を受け取る
+1. その code を、同じ redirect_uri でトークンに交換する
+
+**検証（合否を判定する）**
+
+- エラーにならない
+- access_token が返る
+- id_token が返る
+- iss が同じ
+- sub が同じ
+
+## EX-6.1 response_mode=fragment : 認可コードがフラグメントで返る
+
+| | |
+|---|---|
+| 観点 | response_mode は、応答パラメタの**置き場所**をクライアントが選ぶ仕組み。code は既定ではクエリで返るが、fragment を指定すればフラグメントで返る（フラグメントはサーバへ送られないので、リダイレクト先のアクセス ログに残らない）。 |
+| 根拠 | OAuth 2.0 Multiple Response Type Encoding Practices §2.1（response_mode） |
+| テスト | `EX0601_response_modeがfragmentならcodeがフラグメントで返る` |
+
+**手順**
+
+1. GET /authorize に response_mode=fragment を付けて送る
+
+**検証（合否を判定する）**
+
+- フラグメント（#）で返る
+- code が返る
+- state がそのまま返る
+- クエリには code を載せない
+
+## EX-6.2 response_mode=form_post : redirect_uri へ自動送信する HTML フォームで返る
+
+| | |
+|---|---|
+| 観点 | パラメタを URL に載せずに返す方法。**ブラウザの履歴・Referer・アクセス ログに code が残らない。**応答はリダイレクトではなく、redirect_uri へ POST される HTML フォームになる。 |
+| 根拠 | OAuth 2.0 Form Post Response Mode §2（HTML フォームを自動送信し、パラメタは hidden で送る） |
+| テスト | `EX0602_response_modeがform_postなら自動送信フォームで返る` |
+
+**手順**
+
+1. GET /authorize に response_mode=form_post を付けて送る
+1. フォームで受け取った code を、トークンに交換する
+
+**検証（合否を判定する）**
+
+- リダイレクトしない（HTML を返す）
+- フォームの送信先が redirect_uri
+- フォームは POST で送る
+- 読み込んだら自動で送信する
+- code を hidden で送る
+- state がそのまま返る
+- トークンに交換できる
+
+## EX-6.3 response_mode=query.jwt（JARM）: 応答が署名付き JWT 1 つにまとまり、検証できる
+
+| | |
+|---|---|
+| 観点 | 応答パラメタ（code / state）を**認可サーバの署名付き JWT に包んで**返す。RP は署名・iss・aud・exp を確かめることで、応答の差し替えや、別の RP 向けの応答の流用を検知できる。 |
+| 根拠 | JARM（JWT Secured Authorization Response Mode for OAuth 2.0）§2.1（iss / aud / exp は REQUIRED）/ §2.3.1（query.jwt）/ §4（検証） |
+| テスト | `EX0603_JARMの応答は署名付きJWTで検証できる` |
+
+**手順**
+
+1. GET /authorize に response_mode=query.jwt を付けて送る
+1. JWT の署名を JWKS で確かめ、中身を読む
+1. JWT から取り出した code を、トークンに交換する
+
+**検証（合否を判定する）**
+
+- クエリで返る
+- response パラメタ（JWT）が返る
+- code を URL に直接載せない
+- 署名を JWKS で検証できる
+- iss が Discovery の issuer と一致する
+- aud が client_id と一致する
+- exp がある
+- state が送った値と一致する
+- code が JWT の中にある
+- トークンに交換できる
+
+## EX-7.1 クライアントが署名した JWT（assertion）で、トークンを取得できる
+
+| | |
+|---|---|
+| 観点 | パスワードやシークレットを送らずに、**秘密鍵による署名**で自分を証明してトークンを得る。サーバは、登録済みの公開鍵で署名を確かめる。 |
+| 根拠 | RFC 7523 §2.1（grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer）/ §3（JWT の要件） |
+| テスト | `EX0701_署名したassertionでトークンを取得できる` |
+
+**手順**
+
+1. iss=sub=client_id、aud=トークン エンドポイント、exp=5 分後 の JWT を RS256 で署名する
+1. POST /token に grant_type と assertion を送る
+1. 同じ assertion を、もう一度送る
+
+**検証（合否を判定する）**
+
+- エラーにならない
+- access_token が返る
+
+**観測（判定しない）**
+
+- access_token の sub
+  - ユーザの文脈を持たないので、クライアント自身を指すのが自然。
+- 同じ assertion の再利用
+  - jti による再利用の防止は任意（RFC 7523 §3 (7) : MAY）。
+
+**補足**
+
+- この実装は scope を assertion の中から読む。RFC 7523 §2.1 では、scope はトークン要求のパラメタである。
+
+## EX-7.2 aud が認可サーバを指していない assertion は拒否される
+
+| | |
+|---|---|
+| 観点 | **他のサーバ向けに作られた assertion の流用**を防ぐ。aud が自分（トークン エンドポイント）でなければ、受け付けてはならない。 |
+| 根拠 | RFC 7523 §3 (3)（aud に自分が含まれなければ拒否。MUST） |
+| テスト | `EX0702_audが違うassertionは拒否される` |
+
+**手順**
+
+1. aud=https://attacker.example.com/token の assertion を送る（署名は正しい）
+
+**検証（合否を判定する）**
+
+- トークンを発行しない
+
+**観測（判定しない）**
+
+- error
+  - RFC 7523 §3.1 は invalid_grant としている。
+
+## EX-7.3 署名が正しくない assertion（改ざん / alg=none）は拒否される
+
+| | |
+|---|---|
+| 観点 | 署名が合わない JWT を受け付けるなら、**誰でも任意のクライアントを名乗れる。** |
+| 根拠 | RFC 7523 §3（署名または MAC が必須。検証できなければ拒否）/ RFC 8725 §3.1（alg=none） |
+| テスト | `EX0703_署名が正しくないassertionは拒否される` |
+
+**手順**
+
+1. ペイロードだけを書き換え、署名はそのままの assertion を送る
+1. alg=none に書き換え、署名を落とした assertion を送る
+
+**検証（合否を判定する）**
+
+- 改ざんした assertion : トークンを発行しない
+- alg=none の assertion : トークンを発行しない
+
+## EX-7.4 期限切れの assertion は拒否される
+
+| | |
+|---|---|
+| 観点 | assertion は短命であることが前提。**古い assertion が使えると、漏れたものを後から使われる。** |
+| 根拠 | RFC 7523 §3 (4)（exp を過ぎていれば拒否。MUST） |
+| テスト | `EX0704_期限切れのassertionは拒否される` |
+
+**手順**
+
+1. exp=10 分前 の assertion を送る（署名は正しい）
+
+**検証（合否を判定する）**
+
+- トークンを発行しない
+
 # RT. 個別 Issue の回帰
 
 ## RT-182.1 expires_in が 0 にならない
@@ -1027,6 +1567,14 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
+| `EX0204_token_type_hintを省略しても失効できる` | 未修正。実測（2026/09/10, net10.0 / net48）では、token_type_hint を省略すると invalid_request（invalid token_type_hint.）で拒否され、失効しない。 |
+| `EX0205_無効なトークンの失効要求はエラーにしない` | 未修正。実測（2026/09/10, net10.0 / net48）では、存在しないトークンの失効要求に invalid_request（Invalid token.）を返す。 |
+| `EX0302_有効なrefresh_tokenもactiveがtrue` | 未修正。実測（2026/09/10）では、同じテストが通る回と、invalid_request（Invalid token.）になる回がある（net48 で観測）。refresh_token を、有効期限が現在時刻の access_token に変換してから検証しているため、秒をまたぐと失効扱いになると見られる（IntrospectToken）。 |
+| `EX0304_無効なトークンにはactiveがfalseで答える` | 未修正。実測（2026/09/10, net10.0 / net48）では、存在しないトークンに active=false ではなく invalid_request（Invalid token.）を返す。 |
+| `EX0405_トークンを受け取った後のdevice_codeは使えない` | 未修正。実測（2026/09/10, net10.0 / net48）では、使用済みの device_code で HTTP 500 になる（DeviceAuthZProvider.ReceiveTokenReq の KeyNotFoundException）。 |
+| `EX0501_code_id_tokenでc_hashがcodeと一致する` | 未修正。実測（2026/09/10, net10.0 / net48）では、c_hash が code から計算した値と一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
+| `EX0503_code_id_token_tokenでat_hashとc_hashが一致する` | 未修正。実測（2026/09/10, net10.0 / net48）では、at_hash / c_hash が一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
+| `EX0604_JARMのexpはNumericDateである` | 未修正。実測（2026/09/10, net10.0 / net48）では、JARM の exp が JSON の文字列になっている。 |
 | `RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする` | 未修正。実測（2026/09/09, net10.0）では、リダイレクトではなくエラー画面（HTTP 200）になる。 |
 | `RT197_05_request_uri経路でもredirect_uriが照合される` | 未修正（#197）。実測（2026/09/09, net10.0）では、誤った redirect_uri を送ってもトークンが発行される。 |
 | `TC0104_未定義のスコープの扱い` | 未修正（#198）。実測（2026/09/09, net10.0）では、scopes_supported に無い任意の文字列がそのまま発行される。 |
