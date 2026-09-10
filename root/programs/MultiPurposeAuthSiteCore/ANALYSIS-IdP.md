@@ -36,7 +36,7 @@
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
 **フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
-セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186）が完了。
+セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
 見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
@@ -218,9 +218,8 @@ REQUIRED としている**（RFC 6749 §4.1.3 の「認可リクエストに含�
 Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_uri` は null のままとなり、
 `CheckClientIdAndRedirectUri` の「認可リクエスト時、指定無し」経路に入る。影響しない。
 
-> **残っている穴（#197）:** `request_uri`（Request Object / JAR）の経路では、
-> `redirect_uri` が **JWT の中**にあって `queryString` には無いため、**紐付けが効かない。**
-> `CreateCodeInAuthZNRes` に実効値を渡す形にする必要がある。
+> **残っていた穴 — ✅ 修正済み（#197）:** `request_uri`（Request Object / JAR）の経路では、
+> `redirect_uri` が **JWT の中**にあって `queryString` には無いため、**紐付けが効かなかった。**
 >
 > E2E テストで実測した（2026/09/09, net10.0）。**推測ではない。**
 >
@@ -228,12 +227,31 @@ Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_ur
 > 誤った redirect_uri: HTTP 200 / keys=[access_token, expires_in, id_token, ...] / error=-
 > ```
 >
-> PKCE の `code_challenge` も同じ理由で拾えていないが、**向きは逆**で、
-> 記録されないため `code_verifier` を送ると `invalid_client` になる（素通りではなく拒否）。
-> 安全側だが、`request_uri` ＋ PKCE のパブリック クライアントは機能しない。
+> PKCE の `code_challenge` も同じ理由で拾えていなかったが、**向きは逆**で、
+> 記録されないため `code_verifier` を送ると `invalid_client` になっていた（素通りではなく拒否）。
+> 安全側だが、`request_uri` ＋ PKCE のパブリック クライアントは機能しなかった。
 >
-> 再現するテストが `root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs` にある
-> （`Skip` を外すと落ちる）。
+> ```csharp
+> // 修正前: CommonLibrary/TokenProviders/AuthorizationCodeProvider.cs（Create）
+> temp.Add(OAuth2AndOIDCConst.redirect_uri,          queryString[OAuth2AndOIDCConst.redirect_uri]);
+> temp.Add(OAuth2AndOIDCConst.code_challenge,        queryString[OAuth2AndOIDCConst.code_challenge]);
+> temp.Add(OAuth2AndOIDCConst.code_challenge_method, queryString[OAuth2AndOIDCConst.code_challenge_method]);
+> ```
+>
+> **対応（#197）:** 当時は「`CreateCodeInAuthZNRes` に実効値を渡す形にする」としたが、
+> 呼び出し側（両アプリの Controller）を変えずに済むよう、
+> **`AuthorizationCodeProvider.Create` の中で値の出どころを決める**形にした。
+> クエリ文字列に `request_uri` があれば Request Object を読み、その中の 3 つの値だけを使う（RFC 9101 §5）。
+> `request_uri` が無い、または Request Object が見つからないときは、従来どおりクエリ文字列から読む
+> （見つからないときの扱いは Controller と揃えた）。
+> 認可コード フローと Hybrid フローの両方がこの関数を通るので、1 か所で両方に効く。
+>
+> Request Object は Controller でも読んでいるが、`RequestObjectProvider.Get` は消費しない（C-11）ので読み直せる。
+> **C-11 でワンタイム化するときは、読む回数を 1 回にまとめる必要がある。**
+>
+> E2E テスト（`root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs`）:
+> `RT-197.5`（誤った `redirect_uri` → `invalid_grant`）/
+> `RT-197.6`（正しい検証子で通り、誤った検証子は拒否）。net48 / net10.0 の両方で確認した。
 
 ### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]** — **✅ 修正済み（#187）**
 
@@ -703,6 +721,10 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 - 認可エンドポイントで消費した後も **`Delete` が呼ばれない**（`Delete` メソッドは在るが未使用）。
 
 コード中のコメント「存続期間は短く、好ましくは一回限」がそのまま未実装項目になっている。
+
+> **注意（#197）:** `AuthorizationCodeProvider.Create` も、`redirect_uri` / PKCE の値を得るために
+> Request Object を読むようになった（Controller と合わせて 2 回読む）。
+> ワンタイム化するときは、読む回数を 1 回にまとめること（A-5 を参照）。
 
 ### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]**
 

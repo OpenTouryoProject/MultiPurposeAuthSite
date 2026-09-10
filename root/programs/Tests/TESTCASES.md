@@ -1755,13 +1755,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーにならない
 - access_token が返る
 
-## RT-197.6 request_uri 経路の PKCE が、どう振る舞うかを測る
+## RT-197.5 request_uri 経路でも、redirect_uri が認可コードに紐付いている
 
 | | |
 |---|---|
-| 観点 | `code_challenge` も redirect_uri と同じ理由で記録されない。ただし**向きが逆で、素通りではなく拒否になる**（`code_verifier` を示しても `invalid_client`）。安全側に倒れてはいるが、**`request_uri` ＋ PKCE のパブリック クライアントは機能しない。**ここで必ず満たすべきなのは「誤った検証子でトークンが出ないこと」だけ。 |
-| 根拠 | RFC 7636 §4.6 / RFC 9101 / #197 |
-| テスト | `RT197_06_request_uri経路のPKCEの実測` |
+| 観点 | Request Object には redirect_uri が入っている。**クエリ文字列で渡したときと扱いが変わってはならない。**以前は `AuthorizationCodeProvider.Create` がクエリ文字列だけを読んだため、この経路では null が保存され、照合が素通りになっていた（#186 の対応が及んでいなかった。#197 で修正）。 |
+| 根拠 | RFC 6749 §4.1.3 / OIDC Core §3.1.3.1 / #197 |
+| テスト | `RT197_05_request_uri経路でもredirect_uriが照合される` |
+
+**手順**
+
+1. Request Object に正しい redirect_uri を入れて認可する
+1. https://attacker.example.com/callback を指定して交換する
+
+**検証（合否を判定する）**
+
+- トークンを発行しない
+- invalid_grant で拒否される
+
+## RT-197.6 request_uri 経路でも PKCE が働く（正しい検証子で通り、誤った検証子で拒否される）
+
+| | |
+|---|---|
+| 観点 | `code_challenge` は redirect_uri と同じく Request Object の中にある。以前は記録されず、正しい `code_verifier` を示しても `invalid_client` になっていた（安全側だが、`request_uri` ＋ PKCE のパブリック クライアントが機能しない）。**正しい検証子で通り、誤った検証子では通らないこと**の両方を確かめる。片方だけでは、常に拒否する実装も常に通す実装も見逃す。 |
+| 根拠 | RFC 7636 §4.5 / §4.6 / RFC 9101 / #197 |
+| テスト | `RT197_06_request_uri経路でもPKCEが働く` |
 
 **手順**
 
@@ -1772,12 +1790,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - 認可コードが発行される
+- 正しい code_verifier でトークンが発行される
 - 誤った code_verifier ではトークンを発行しない
-
-**観測（判定しない）**
-
-- 正しい code_verifier のときの結果
-  - **拒否されるのが現状。** code_challenge が記録されていないため、PKCE 分岐がクライアントを認証できず invalid_client になる。安全側の失敗だが、この組み合わせは機能しない。
 
 # 保留中のテストケース（Skip）
 
@@ -1790,6 +1804,5 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
 | `RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする` | 未修正。実測（2026/09/09, net10.0）では、リダイレクトではなくエラー画面（HTTP 200）になる。 |
-| `RT197_05_request_uri経路でもredirect_uriが照合される` | 未修正（#197）。実測（2026/09/09, net10.0）では、誤った redirect_uri を送ってもトークンが発行される。 |
 | `TC0104_未定義のスコープの扱い` | 未修正（#198）。実測（2026/09/09, net10.0）では、scopes_supported に無い任意の文字列がそのまま発行される。 |
 

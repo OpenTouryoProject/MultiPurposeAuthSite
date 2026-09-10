@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/09  玄人 幸道         redirect_uriの実測結果を#197として起票
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-197）
+//*  2026/09/11  玄人 幸道         #197 の修正に合わせ、RT-197.5 の Skip を解除し、RT-197.6 を検証に変更
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -50,12 +51,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     /// JAR（RFC 9101）では、認可パラメタをクエリ文字列ではなく署名付き JWT に入れ、
     /// PAR で登録して request_uri で参照する。
     ///
-    /// 一方 AuthorizationCodeProvider.Create は、認可コードに紐付ける
-    /// redirect_uri / code_challenge / code_challenge_method を
-    /// **クエリ文字列から**読んでいる。request_uri 経路では、これらは
-    /// クエリ文字列に無いため null になる。
+    /// AuthorizationCodeProvider.Create は、認可コードに紐付ける
+    /// redirect_uri / code_challenge / code_challenge_method を、以前は
+    /// **クエリ文字列からだけ**読んでいた。request_uri 経路では、これらは
+    /// クエリ文字列に無いため null が保存され、redirect_uri の照合が素通りになっていた。
     ///
-    /// 測った結果は #197 に記録した。
+    /// #197 で、request_uri 経路では Request Object の値を使うように直した。
     /// </summary>
     public class RequestObjectTests : TargetTestBase
     {
@@ -238,8 +239,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
         /// <summary>RT-197.5 request_uri 経路でも redirect_uri が照合される</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#197）。実測（2026/09/09, net10.0）では、"
-            + "誤った redirect_uri を送ってもトークンが発行される。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task RT197_05_request_uri経路でもredirect_uriが照合される(string targetKey)
         {
@@ -249,9 +249,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                     "request_uri 経路でも、redirect_uri が認可コードに紐付いている",
                     "Request Object には redirect_uri が入っている。"
                     + "**クエリ文字列で渡したときと扱いが変わってはならない。**"
-                    + "`AuthorizationCodeProvider.Create` がクエリ文字列だけを読むため、"
-                    + "この経路では null が保存され、照合が素通りになる。"
-                    + "#186 の対応が及んでいない箇所。",
+                    + "以前は `AuthorizationCodeProvider.Create` がクエリ文字列だけを読んだため、"
+                    + "この経路では null が保存され、照合が素通りになっていた"
+                    + "（#186 の対応が及んでいなかった。#197 で修正）。",
                     "RFC 6749 §4.1.3 / OIDC Core §3.1.3.1 / #197");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
@@ -278,12 +278,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
             }
         }
 
-        /// <summary>RT-197.6 request_uri 経路の PKCE の実測</summary>
+        /// <summary>RT-197.6 request_uri 経路でも PKCE が働く</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task RT197_06_request_uri経路のPKCEの実測(string targetKey)
+        public async Task RT197_06_request_uri経路でもPKCEが働く(string targetKey)
         {
             // RFC 7636 附録 B の例。
             const string Verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
@@ -292,14 +292,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("RT-197.6",
-                    "request_uri 経路の PKCE が、どう振る舞うかを測る",
-                    "`code_challenge` も redirect_uri と同じ理由で記録されない。"
-                    + "ただし**向きが逆で、素通りではなく拒否になる**"
-                    + "（`code_verifier` を示しても `invalid_client`）。"
-                    + "安全側に倒れてはいるが、"
-                    + "**`request_uri` ＋ PKCE のパブリック クライアントは機能しない。**"
-                    + "ここで必ず満たすべきなのは「誤った検証子でトークンが出ないこと」だけ。",
-                    "RFC 7636 §4.6 / RFC 9101 / #197");
+                    "request_uri 経路でも PKCE が働く（正しい検証子で通り、誤った検証子で拒否される）",
+                    "`code_challenge` は redirect_uri と同じく Request Object の中にある。"
+                    + "以前は記録されず、正しい `code_verifier` を示しても `invalid_client` になっていた"
+                    + "（安全側だが、`request_uri` ＋ PKCE のパブリック クライアントが機能しない）。"
+                    + "**正しい検証子で通り、誤った検証子では通らないこと**の両方を確かめる。"
+                    + "片方だけでは、常に拒否する実装も常に通す実装も見逃す。",
+                    "RFC 7636 §4.5 / §4.6 / RFC 9101 / #197");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
@@ -332,13 +331,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
 
                 JsonResponse token = await client.TokenAsync(form);
 
-                r.Observe("正しい code_verifier のときの結果",
-                    string.IsNullOrEmpty(token.Error)
-                        ? "トークンが発行された"
-                        : "拒否された（error=" + token.Error + "）",
-                    "**拒否されるのが現状。** code_challenge が記録されていないため、"
-                    + "PKCE 分岐がクライアントを認証できず invalid_client になる。"
-                    + "安全側の失敗だが、この組み合わせは機能しない。");
+                r.Verify("正しい code_verifier でトークンが発行される",
+                    !string.IsNullOrEmpty(token.AccessToken),
+                    "access_token あり",
+                    token.AccessToken == null
+                        ? "**発行されない**（error=" + (token.Error ?? "なし") + "）"
+                        : "あり（値は伏せる）");
 
                 r.Step("(3) 誤った code_verifier で交換する（別の code を取り直す）");
 

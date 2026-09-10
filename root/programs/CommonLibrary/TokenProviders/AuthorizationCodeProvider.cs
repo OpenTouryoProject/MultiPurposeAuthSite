@@ -32,10 +32,12 @@
 //*  2019/08/01  西野 大介         ReceiveをReceive＋ReceiveChallengeに分割
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
+//*  2026/09/11  玄人 幸道         request_uri 経路でも redirect_uri / PKCE を code に紐付ける（#197）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Data;
@@ -65,6 +67,59 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Create
 
+        /// <summary>
+        /// 認可コードに紐付ける値（redirect_uri / code_challenge / code_challenge_method）の出どころを決める。
+        /// </summary>
+        /// <param name="queryString">認可リクエストのクエリ文字列</param>
+        /// <returns>値を読む NameValueCollection</returns>
+        /// <remarks>
+        /// request_uri（JAR / PAR）で認可した場合、これらの値は署名付きの Request Object の中にあり、
+        /// クエリ文字列には無い。クエリ文字列から読むと null が保存され、
+        /// redirect_uri の照合（#186）が素通りになり、PKCE も検証できなくなっていた（#197）。
+        /// RFC 9101 5 : Request Object を使うときは、その中の値だけを使う（クエリ文字列の同名の値は使わない）。
+        ///
+        /// Request Object が見つからないときは、Controller も同じくクエリ文字列の値で処理を続ける
+        /// （その後の ValidateAuthZReqParam で弾かれる）。ここもクエリ文字列に戻して、扱いを揃える。
+        ///
+        /// ※ Request Object は Controller でも読んでいる（RequestObjectProvider.Get）。
+        ///    ここで読み直せるのは、Get が消費しない（削除しない）ため。
+        ///    ワンタイム化（ANALYSIS-IdP.md の C-11）するときは、読む回数を 1 回にまとめること。
+        /// </remarks>
+        private static NameValueCollection GetAuthorizationRequestParams(NameValueCollection queryString)
+        {
+            string request_uri = queryString[OAuth2AndOIDCConst.request_uri];
+
+            if (string.IsNullOrEmpty(request_uri))
+            {
+                // クエリ文字列の経路
+                return queryString;
+            }
+
+            string requestObjectPayloadString = RequestObjectProvider.Get(
+                request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+
+            if (string.IsNullOrEmpty(requestObjectPayloadString))
+            {
+                // 見つからない request_uri（Controller と同じく、クエリ文字列の値で続ける）
+                return queryString;
+            }
+
+            JObject requestObjectPayload = (JObject)JsonConvert.DeserializeObject(requestObjectPayloadString);
+
+            if (requestObjectPayload == null)
+            {
+                return queryString;
+            }
+
+            // Request Object の値だけを使う（入っていなければ null のまま）。
+            NameValueCollection ret = new NameValueCollection();
+            ret[OAuth2AndOIDCConst.redirect_uri] = (string)requestObjectPayload[OAuth2AndOIDCConst.redirect_uri];
+            ret[OAuth2AndOIDCConst.code_challenge] = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
+            ret[OAuth2AndOIDCConst.code_challenge_method] = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge_method];
+
+            return ret;
+        }
+
         /// <summary>CreateAuthenticationCode</summary>
         /// <param name="identity">ClaimsIdentity</param>
         /// <returns>code</returns>
@@ -85,11 +140,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             // - OIDC Core 3.1.3.1 : OIDCでは必須
             // ※ 認可リクエストに指定が無い場合（事前登録のみ）はnullが入り、照合はスキップされる。
             //    Device AuthZ / CIBAは空のqueryStringを渡すので、この経路に入る。
-            temp.Add(OAuth2AndOIDCConst.redirect_uri, queryString[OAuth2AndOIDCConst.redirect_uri]);
+            // ※ request_uri（JAR / PAR）の経路では、値を Request Object から読む（#197）。
+            NameValueCollection authZReq = AuthorizationCodeProvider.GetAuthorizationRequestParams(queryString);
+
+            temp.Add(OAuth2AndOIDCConst.redirect_uri, authZReq[OAuth2AndOIDCConst.redirect_uri]);
 
             // OAuth PKCE 対応
-            temp.Add(OAuth2AndOIDCConst.code_challenge, queryString[OAuth2AndOIDCConst.code_challenge]);
-            temp.Add(OAuth2AndOIDCConst.code_challenge_method, queryString[OAuth2AndOIDCConst.code_challenge_method]);
+            temp.Add(OAuth2AndOIDCConst.code_challenge, authZReq[OAuth2AndOIDCConst.code_challenge]);
+            temp.Add(OAuth2AndOIDCConst.code_challenge_method, authZReq[OAuth2AndOIDCConst.code_challenge_method]);
 
             // 新しいCodeのticketをストアに保存
             string jsonString = JsonConvert.SerializeObject(temp);

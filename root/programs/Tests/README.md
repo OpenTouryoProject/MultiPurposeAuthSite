@@ -223,22 +223,20 @@ cd root
   **要求した `scope` が、そのままトークンに載る。** 許可された一覧との突き合わせも、
   クライアントごとの権限の確認も無い。`scopes_supported` に無い任意の文字列
   （`admin` など）も、認可サーバの署名付きで発行される。
-- `RT-197.5`（`RequestObjectTests`、#197）
-  `request_uri`（JAR）経路では `redirect_uri` が認可コードに紐付かず、
-  **誤った `redirect_uri` を送ってもトークンが発行される。** #186 の対応が及んでいない。
 
 ## 分かっていること（実測）
 
-`request_uri` 経路について、net10.0 版で測った結果（#197）。
+`request_uri` 経路について測った結果（#197）。
 
-| | 実測 |
-|---|---|
-| 認可コードの発行 | できる |
-| `redirect_uri` の照合 | **効いていない。** 誤った値でもトークンが出る |
-| PKCE（`code_challenge`） | 記録されないため、`code_verifier` を送ると `invalid_client` になる（**素通りではなく拒否**） |
+| | 修正前（2026/09/09, net10.0） | 修正後（2026/09/11, net10.0 / net48） |
+|---|---|---|
+| 認可コードの発行 | できる | できる |
+| `redirect_uri` の照合 | **効いていない。** 誤った値でもトークンが出る | 誤った値は `invalid_grant` |
+| PKCE（`code_challenge`） | 記録されないため、`code_verifier` を送ると `invalid_client`（**素通りではなく拒否**） | 正しい検証子で通り、誤った検証子は `invalid_client` |
 
-いずれも `AuthorizationCodeProvider.Create` が、これらの値を
-**Request Object ではなくクエリ文字列から**読んでいることによる。
+修正前は、`AuthorizationCodeProvider.Create` がこれらの値を
+**Request Object ではなくクエリ文字列から**読んでいたことによる。
+#197 で、`request_uri` 経路では Request Object の値を使うように直した。
 
 ## 制約
 
