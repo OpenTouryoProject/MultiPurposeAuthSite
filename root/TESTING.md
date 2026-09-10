@@ -11,6 +11,7 @@
 >
 > | 内容 | 一次情報 |
 > |---|---|
+> | **各テストが何を確かめるのか** | [`programs/Tests/TESTCASES.md`](programs/Tests/TESTCASES.md) |
 > | テストの方針・構成・未修正項目 | [`programs/Tests/README.md`](programs/Tests/README.md) |
 > | 適合上の穴の一覧 | [`programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md`](programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md) |
 > | ビルド | [`BUILDING.md`](BUILDING.md) |
@@ -41,6 +42,7 @@ cd root\programs\Tests
 | `-Filter` | `dotnet test` の `--filter` |
 | `-Configuration` | `Debug`（既定）/ `Release` |
 | `-OutputDir` | TRX とログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
+| `-UpdateTestCases` | テストケースの原本（`programs\Tests\TESTCASES.md`）を作り直す |
 
 ## 2. 構造
 
@@ -89,6 +91,42 @@ appSettings__OAuth2ClientEndpointsRootURI
 詳細は [`CONFIGURATION.md`](CONFIGURATION.md)。
 
 ## 5. 判定基準
+
+### 識別子
+
+テストには識別子が付いている。**原本と報告は、これで突き合わせる。**
+
+| 接頭辞 | 対象 | 置き場所 |
+|---|---|---|
+| `TC-n.n` | 基本テストケース（OAuth 2.0 / OIDC の基本的な検証項目） | `Tests/Basic/` |
+| `SM-n` | 疎通（テスト基盤そのものの確認） | `Tests/SmokeTests.cs` |
+| `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/*.cs` |
+
+報告書の一覧と詳細は、この順（TC → SM → RT）に並ぶ。
+
+### 報告は 2 つに分かれている
+
+**説明と結果を混ぜない。**
+
+| | 場所 | いつ変わるか |
+|---|---|---|
+| **原本**（何を・何を根拠に確かめるのか） | `programs\Tests\TESTCASES.md` | **テストを変えたときだけ**。リポジトリに入れる |
+| **報告**（その回に何が起きたか） | `Result\E2ETests.report.md` | 実行のたび。`.gitignore` 済み |
+
+観点・根拠・手順は実行しても変わらないので、毎回刷り直さない。
+報告は「検証・観測の期待と実測」だけを持ち、冒頭から原本へリンクする。
+
+**妥当性を評価するときは、両方を渡すこと。**
+
+原本はテストの記録から生成する。**テスト コードが一次情報**である。
+
+**`Skip` にしているテストは実行されないので、記録が出ない。**
+そのぶんは「保留中のテストケース」として、`Skip` の理由から別枠で載る。
+このため **`Skip` の理由は「未修正」で始め、Issue 番号・実測日・実測結果を書く**
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -UpdateTestCases
+```
 
 ### TRX を読む
 

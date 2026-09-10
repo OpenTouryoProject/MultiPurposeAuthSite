@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：TokenClaimTests
-//* クラス日本語名  ：トークンの値と型の回帰テスト（#182 / #184）
+//* クラス日本語名  ：RT トークンの値と型の回帰（#182 / #184）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-182 / RT-184）
 //**********************************************************************************
 
 using System.Text.Json;
@@ -42,7 +43,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests
 {
     /// <summary>
-    /// トークンに載る値と型の回帰テスト。
+    /// RT-182 / RT-184. トークンに載る値と型の回帰テスト。
     /// </summary>
     public class TokenClaimTests : TargetTestBase
     {
@@ -52,48 +53,67 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
         {
         }
 
-        /// <summary>
-        /// expires_in が 0 にならない（#182）。
-        ///
-        /// TimeSpan.Seconds（分内の秒＝0）を返していたため、常に 0 だった。
-        /// RFC 6749 5.1 の expires_in は「有効期間の秒数」。
-        /// </summary>
+        /// <summary>RT-182.1 expires_in が 0 にならない</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue182_expires_inが0でない(string targetKey)
+        public async Task RT182_01_expires_inが0でない(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                TestReport r = this.Report("RT-182.1",
+                    "expires_in が 0 にならない",
+                    "expires_in は「トークンの有効期間の秒数」。"
+                    + "0 だと RP は「即座に期限切れ」と解釈し、"
+                    + "受け取った直後に再取得へ回るか、トークンを捨てる。",
+                    "RFC 6749 §5.1（expires_in は有効期間の秒数）"
+                    + " / 修正前は TimeSpan.Seconds（分内の秒）を返しており常に 0 だった（#182）");
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("認可コード フローでトークンを取得し、expires_in を見る");
+
                 JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
 
-                Assert.Null(token.Error);
+                Assert.True(string.IsNullOrEmpty(token.Error), "前提: トークンが取得できること");
 
                 string expiresIn = token.String("expires_in");
-                this.Output.WriteLine("expires_in = " + expiresIn);
+                int seconds = 0;
+                bool parsed = int.TryParse(expiresIn, out seconds);
 
-                Assert.False(string.IsNullOrEmpty(expiresIn), "expires_in がありません。");
-                Assert.True(int.Parse(expiresIn) > 0, "expires_in が 0 以下です: " + expiresIn);
+                r.Verify("expires_in が存在する", !string.IsNullOrEmpty(expiresIn),
+                    "expires_in あり", expiresIn ?? "なし");
+
+                r.Verify("expires_in が正の整数である", parsed && seconds > 0,
+                    "1 以上の整数", "expires_in = " + (expiresIn ?? "なし"));
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// JWTの時刻クレームが数値である（#184）。
-        ///
-        /// RFC 7519 の NumericDate は JSON の数値。文字列で入れていた。
-        /// </summary>
+        /// <summary>RT-184.1 JWTの時刻クレームが数値である</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue184_時刻クレームが数値である(string targetKey)
+        public async Task RT184_01_時刻クレームが数値である(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                TestReport r = this.Report("RT-184.1",
+                    "JWT の exp / nbf / iat が JSON の数値である",
+                    "NumericDate は **JSON の数値**と定められている。"
+                    + "文字列で入れると、仕様どおりに実装された RP のライブラリが"
+                    + "型エラーで検証に失敗する。",
+                    "RFC 7519 §2（NumericDate は JSON number）/ §4.1.4・4.1.5・4.1.6"
+                    + " / 修正前は文字列だった（#184）");
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("認可コード フローで access_token と id_token を取得し、型を見る");
+
                 JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
 
-                Assert.Null(token.Error);
+                Assert.True(string.IsNullOrEmpty(token.Error), "前提: トークンが取得できること");
 
                 JsonElement accessToken = Jwt.Payload(token.AccessToken);
                 JsonElement idToken = Jwt.Payload(token.IdToken);
@@ -102,42 +122,50 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                 {
                     if (Jwt.Has(accessToken, claim))
                     {
-                        this.Output.WriteLine("access_token." + claim
-                            + " = " + Jwt.KindOf(accessToken, claim));
-
-                        Assert.Equal(JsonValueKind.Number, Jwt.KindOf(accessToken, claim));
+                        r.Verify("access_token の " + claim + " が数値である",
+                            Jwt.KindOf(accessToken, claim) == JsonValueKind.Number,
+                            "JSON の数値", claim + " の型 = " + Jwt.KindOf(accessToken, claim));
                     }
 
                     if (Jwt.Has(idToken, claim))
                     {
-                        this.Output.WriteLine("id_token." + claim
-                            + " = " + Jwt.KindOf(idToken, claim));
-
-                        Assert.Equal(JsonValueKind.Number, Jwt.KindOf(idToken, claim));
+                        r.Verify("id_token の " + claim + " が数値である",
+                            Jwt.KindOf(idToken, claim) == JsonValueKind.Number,
+                            "JSON の数値", claim + " の型 = " + Jwt.KindOf(idToken, claim));
                     }
                 }
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// JWTの真偽値クレームが真偽値である（#184）。
-        ///
-        /// OIDC Core 5.1 の email_verified / phone_number_verified は boolean。
-        /// </summary>
+        /// <summary>RT-184.2 JWTの真偽値クレームが真偽値である</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue184_真偽値クレームが真偽値である(string targetKey)
+        public async Task RT184_02_真偽値クレームが真偽値である(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                TestReport r = this.Report("RT-184.2",
+                    "access_token の email_verified / phone_number_verified が真偽値である",
+                    "OIDC はこれらを boolean と定めている。"
+                    + "文字列の \"true\" は、**JavaScript では \"false\" も真**になるため、"
+                    + "RP 側で検証の意味が反転しうる。",
+                    "OIDC Core §5.1（email_verified / phone_number_verified は boolean）"
+                    + " / 修正前は文字列だった（#184）");
+
+                r.Target("client_name=" + KnownClients.MvcSample + " / scope=openid email phone");
+                r.Step("scope に email と phone を含めてトークンを取得し、型を見る");
+
                 JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
                     client, KnownClients.MvcSample, "openid email phone");
 
-                Assert.Null(token.Error);
+                Assert.True(string.IsNullOrEmpty(token.Error), "前提: トークンが取得できること");
 
                 JsonElement accessToken = Jwt.Payload(token.AccessToken);
+                int seen = 0;
 
                 foreach (string claim in new string[] { "email_verified", "phone_number_verified" })
                 {
@@ -146,34 +174,55 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                         continue;
                     }
 
+                    seen++;
                     JsonValueKind kind = Jwt.KindOf(accessToken, claim);
-                    this.Output.WriteLine("access_token." + claim + " = " + kind);
 
-                    Assert.True(kind == JsonValueKind.True || kind == JsonValueKind.False,
-                        claim + " が真偽値ではありません: " + kind);
+                    r.Verify(claim + " が真偽値である",
+                        kind == JsonValueKind.True || kind == JsonValueKind.False,
+                        "boolean", claim + " の型 = " + kind);
                 }
+
+                if (seen == 0)
+                {
+                    r.Observe("対象のクレーム", "どちらも含まれていなかった",
+                        "スコープの絞り込み次第で載らないことがある。その場合は型を確かめようがない。");
+                }
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// UserInfoの真偽値クレームが真偽値である（#184）。
-        /// </summary>
+        /// <summary>RT-184.3 UserInfoの真偽値クレームが真偽値である</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue184_UserInfoの真偽値クレームが真偽値である(string targetKey)
+        public async Task RT184_03_UserInfoの真偽値クレームが真偽値である(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                TestReport r = this.Report("RT-184.3",
+                    "UserInfo の email_verified / phone_number_verified が真偽値である",
+                    "**JWT と UserInfo は別の経路**で組み立てられる。"
+                    + "片方だけ直っている状態があり得るので、両方を見る。",
+                    "OIDC Core §5.1 / §5.3.2（UserInfo の応答は JSON）"
+                    + " / 修正前は文字列だった（#184）");
+
+                r.Target("client_name=" + KnownClients.MvcSample + " / scope=openid email phone");
+                r.Step("(1) scope に email と phone を含めてトークンを取得する");
+                r.Step("(2) そのトークンで GET /userinfo を叩き、型を見る");
+
                 JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
                     client, KnownClients.MvcSample, "openid email phone");
 
-                Assert.Null(token.Error);
+                Assert.True(string.IsNullOrEmpty(token.Error), "前提: トークンが取得できること");
 
                 JsonResponse userInfo = await client.UserInfoAsync(token.AccessToken);
 
-                Assert.True(userInfo.IsJson, "UserInfoの応答がJSONではありません: " + userInfo.ToString());
+                r.Verify("UserInfo が JSON を返す", userInfo.IsJson,
+                    "JSON", userInfo.ToString());
+
+                int seen = 0;
 
                 foreach (string claim in new string[] { "email_verified", "phone_number_verified" })
                 {
@@ -184,11 +233,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                         continue;
                     }
 
-                    this.Output.WriteLine("userinfo." + claim + " = " + kind);
+                    seen++;
 
-                    Assert.True(kind == JsonValueKind.True || kind == JsonValueKind.False,
-                        claim + " が真偽値ではありません: " + kind);
+                    r.Verify(claim + " が真偽値である",
+                        kind == JsonValueKind.True || kind == JsonValueKind.False,
+                        "boolean", claim + " の型 = " + kind);
                 }
+
+                if (seen == 0)
+                {
+                    r.Observe("対象のクレーム", "どちらも含まれていなかった",
+                        "スコープの絞り込み次第で載らないことがある。");
+                }
+
+                r.Done();
             }
         }
     }

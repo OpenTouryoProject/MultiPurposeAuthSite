@@ -156,6 +156,26 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>Content-Type</summary>
         public string ContentType { get; set; }
 
+        /// <summary>
+        /// 応答ヘッダ（Cache-Control / Pragma / WWW-Authenticate を見るため）。
+        /// 同名が複数あるときは ", " で連結する。
+        /// </summary>
+        public Dictionary<string, string> Headers { get; set; }
+
+        /// <summary>ヘッダを返す（無ければ null）</summary>
+        /// <param name="name">ヘッダ名</param>
+        /// <returns>値</returns>
+        public string Header(string name)
+        {
+            if (this.Headers == null)
+            {
+                return null;
+            }
+
+            string value;
+            return this.Headers.TryGetValue(name, out value) ? value : null;
+        }
+
         /// <summary>JSONとして解釈できたか</summary>
         public bool IsJson { get; set; }
 

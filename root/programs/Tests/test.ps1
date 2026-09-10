@@ -55,10 +55,27 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
     [string] $TrxPath,
-    [string] $LogDir = (Join-Path $PSScriptRoot 'E2ETests\Result')
+    [string] $LogDir
 )
 
 $ErrorActionPreference = 'Stop'
+
+# ------------------------------------------------------------------
+# パスの既定値は、param() ではなく本体で決める
+# ------------------------------------------------------------------
+# **$PSScriptRoot を param() の既定値で使わない。**
+# [CmdletBinding()] を付けたスクリプトを Windows PowerShell 5.1 で
+# -File 起動すると、既定値を評価する時点では $PSScriptRoot が空で、
+#   Join-Path : Cannot bind argument to parameter 'Path' because it is an empty string.
+# になる（[CmdletBinding()] が無ければ入る。PowerShell 7 では両方とも入る）。
+#
+# 0_RunAll.ps1 から & で呼ぶ分には呼び出し元の値が見えるため表面化せず、
+# **単体で -File 起動したときだけ落ちる。**
+# ------------------------------------------------------------------
+
+if (-not $LogDir) {
+    $LogDir = Join-Path $PSScriptRoot 'E2ETests\Result'
+}
 
 $programs = Split-Path -Parent $PSScriptRoot
 $csproj = Join-Path $PSScriptRoot 'E2ETests\E2ETests.csproj'

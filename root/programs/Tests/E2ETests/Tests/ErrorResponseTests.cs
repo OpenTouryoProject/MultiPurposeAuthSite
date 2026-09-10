@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：ErrorResponseTests
-//* クラス日本語名  ：エラー応答の回帰テスト（#185 / #187）
+//* クラス日本語名  ：RT エラー応答の回帰（#185 / #187）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-185 / RT-187）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -43,10 +44,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests
 {
     /// <summary>
-    /// エラー応答の回帰テスト。
-    ///
-    /// - #185: 不正な入力で未処理の例外（HTTP 500 / HTMLのエラー画面）にしない
-    /// - #187: 認可エンドポイントのエラーを RFC 6749 4.1.2.1 / 4.2.2.1 の形で返す
+    /// RT-185 / RT-187. エラー応答の回帰テスト。
     /// </summary>
     public class ErrorResponseTests : TargetTestBase
     {
@@ -56,20 +54,28 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
         {
         }
 
-        #region #185 トークン エンドポイント
+        #region RT-185 トークン エンドポイント
 
-        /// <summary>
-        /// トークン エンドポイントに不正な入力を送っても、JSONのエラー応答になる（#185）。
-        /// </summary>
+        /// <summary>RT-185.1 不正な入力でも JSON のエラーを返す</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue185_不正な入力でもJSONのエラーを返す(string targetKey)
+        public async Task RT185_01_不正な入力でもJSONのエラーを返す(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.MvcSample);
+                TestReport r = this.Report("RT-185.1",
+                    "トークン エンドポイントに不正な入力を送っても、JSON のエラー応答になる",
+                    "**未処理の例外（HTTP 500 や HTML のエラー画面）にしない。**"
+                    + "RP はエラーを JSON として解釈する。HTML が返ると解析に失敗し、"
+                    + "何が悪かったのかを利用者に伝えられない。"
+                    + "加えて、例外のスタック トレースが外に出る恐れがある。",
+                    "RFC 6749 §5.2（エラー応答は error を含む JSON）/ #185");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
 
                 List<KeyValuePair<string, Dictionary<string, string>>> cases =
                     new List<KeyValuePair<string, Dictionary<string, string>>>()
@@ -83,23 +89,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                         new Dictionary<string, string>() { { "grant_type", "urn:example:bogus" } }),
 
                     new KeyValuePair<string, Dictionary<string, string>>(
-                        "code が存在しない（PKCE経路）",
+                        "code が存在しない（PKCE 経路）",
                         new Dictionary<string, string>()
                         {
                             { "grant_type", "authorization_code" },
                             { "code", "NOT-A-REAL-CODE" },
                             { "code_verifier", "x" },
-                            { "client_id", registration.ClientId }
+                            { "client_id", reg.ClientId }
                         }),
 
                     new KeyValuePair<string, Dictionary<string, string>>(
-                        "code が存在しない（client_secret経路）",
+                        "code が存在しない（client_secret 経路）",
                         new Dictionary<string, string>()
                         {
                             { "grant_type", "authorization_code" },
                             { "code", "NOT-A-REAL-CODE" },
-                            { "client_id", registration.ClientId },
-                            { "client_secret", registration.ClientSecret }
+                            { "client_id", reg.ClientId },
+                            { "client_secret", reg.ClientSecret }
                         }),
 
                     new KeyValuePair<string, Dictionary<string, string>>(
@@ -108,164 +114,226 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                         {
                             { "grant_type", "refresh_token" },
                             { "refresh_token", "NOT-A-REAL-TOKEN" },
-                            { "client_id", registration.ClientId },
-                            { "client_secret", registration.ClientSecret }
+                            { "client_id", reg.ClientId },
+                            { "client_secret", reg.ClientSecret }
                         })
                 };
+
+                r.Step("POST /token に、次の 5 通りの不正な入力を順に送る："
+                    + string.Join(" / ", cases.ConvertAll(c => c.Key)));
 
                 foreach (KeyValuePair<string, Dictionary<string, string>> c in cases)
                 {
                     JsonResponse res = await client.TokenAsync(c.Value);
 
-                    this.Output.WriteLine(c.Key + " -> " + res.ToString());
+                    r.Verify(c.Key + " で HTTP 500 にならない",
+                        res.StatusCode != HttpStatusCode.InternalServerError,
+                        "500 以外", "HTTP " + (int)res.StatusCode);
 
-                    Assert.True(res.StatusCode != HttpStatusCode.InternalServerError,
-                        c.Key + " で HTTP 500 になりました。");
+                    r.Verify(c.Key + " の応答が JSON である", res.IsJson,
+                        "JSON", res.IsJson ? "JSON" : "非 JSON（" + (res.ContentType ?? "不明") + "）");
 
-                    Assert.True(res.IsJson, c.Key + " の応答がJSONではありません。");
-                    Assert.False(string.IsNullOrEmpty(res.Error), c.Key + " に error がありません。");
+                    r.Verify(c.Key + " に error が含まれる",
+                        !string.IsNullOrEmpty(res.Error),
+                        "error あり", "error = " + (res.Error ?? "なし"));
                 }
+
+                r.Note("**HTTP ステータス自体は 200 のまま**である"
+                    + "（RFC 6749 §5.2 は 400 / 401 を求める）。これは #196 で別途扱う。");
+
+                r.Done();
             }
         }
 
         #endregion
 
-        #region #187 認可エンドポイント
+        #region RT-187 認可エンドポイント
 
-        /// <summary>
-        /// state に区切り文字が含まれていても、そのまま往復する（#187）。
-        ///
-        /// 以前は文字列連結で URL を組み立てていたため、
-        /// state に &amp; や = が含まれるとパラメタの境界が壊れた。
-        /// </summary>
+        /// <summary>RT-187.1 state に区切り文字があっても壊れない</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue187_stateに区切り文字があっても壊れない(string targetKey)
+        public async Task RT187_01_stateに区切り文字があっても壊れない(string targetKey)
         {
             const string State = "a&b=c d";
 
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.MvcSample);
+                TestReport r = this.Report("RT-187.1",
+                    "state に & や = や空白が含まれていても、そのまま往復する",
+                    "**修正前は文字列連結でリダイレクト URL を組み立てていた。**"
+                    + "state に区切り文字が入るとパラメタの境界が壊れ、"
+                    + "後続のパラメタ（code など）まで読み違える。"
+                    + "RP が state に構造化した値（JSON や URL）を入れると踏む。",
+                    "RFC 3986 §2.2（予約文字はパーセント符号化する）"
+                    + " / RFC 6749 §4.1.2（state はそのまま返す）/ #187");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("GET /authorize に state=\"" + State + "\" を付けて送る");
 
                 AuthZResponse res = await Flows.AuthorizeCodeAsync(
-                    client, registration, state: State, redirectUri: registration.RedirectUri);
+                    client, reg, state: State, redirectUri: reg.RedirectUri);
 
-                this.Output.WriteLine(res.ToString());
+                r.Verify("認可コードが発行される", !string.IsNullOrEmpty(res.Code),
+                    "code あり", string.IsNullOrEmpty(res.Code) ? res.ToString() : "code あり");
 
-                Assert.False(string.IsNullOrEmpty(res.Code), "認可コードがありません。");
-                Assert.Equal(State, res.State);
+                r.VerifyEqual("state が送信値と完全一致する", State, res.State);
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// state を送らなければ、応答にも state を含めない（#187）。
-        /// </summary>
+        /// <summary>RT-187.2 state を送らなければ返さない</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue187_stateを送らなければ返さない(string targetKey)
+        public async Task RT187_02_stateを送らなければ返さない(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.MvcSample);
+                TestReport r = this.Report("RT-187.2",
+                    "state を送らなければ、応答にも state を含めない",
+                    "**送っていないものを返してはならない。**"
+                    + "空の state を返すと、RP 側の照合処理が"
+                    + "「空文字どうしで一致した」と誤判定しうる。",
+                    "RFC 6749 §4.1.2（state は、あったときに返す）/ #187");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("GET /authorize を state 無しで送る");
 
                 AuthZResponse res = await Flows.AuthorizeCodeAsync(
-                    client, registration, state: null, redirectUri: registration.RedirectUri);
+                    client, reg, state: null, redirectUri: reg.RedirectUri);
 
-                this.Output.WriteLine(res.ToString());
+                r.Verify("認可コードが発行される", !string.IsNullOrEmpty(res.Code),
+                    "code あり", string.IsNullOrEmpty(res.Code) ? res.ToString() : "code あり");
 
-                Assert.False(string.IsNullOrEmpty(res.Code), "認可コードがありません。");
-                Assert.False(res.Parameters.ContainsKey("state"),
-                    "state を送っていないのに state が返っています。");
+                r.Verify("応答に state が含まれない",
+                    !res.Parameters.ContainsKey("state"),
+                    "state なし",
+                    res.Parameters.ContainsKey("state")
+                        ? "**state=\"" + res.State + "\" が返った**" : "返らなかった");
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// 未知の response_type では認可コードを発行しない。
-        /// </summary>
+        /// <summary>RT-187.3 未知の response_type では認可コードを発行しない</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task 未知のresponse_typeでは認可コードを発行しない(string targetKey)
+        public async Task RT187_03_未知のresponse_typeでは認可コードを発行しない(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.MvcSample);
+                TestReport r = this.Report("RT-187.3",
+                    "未知の response_type では認可コードを発行しない",
+                    "**どのフローを要求されたのか決まらない以上、何も発行してはならない。**"
+                    + "エラーの返し方（リダイレクトか画面か）は RT-187.4 で別に見る。",
+                    "RFC 6749 §3.1.1 / §4.1.2.1（unsupported_response_type）/ #187");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("GET /authorize に response_type=bogus を指定する");
 
                 Dictionary<string, string> q = new Dictionary<string, string>()
                 {
                     { "response_type", "bogus" },
-                    { "client_id", registration.ClientId },
+                    { "client_id", reg.ClientId },
                     { "scope", "openid" },
                     { "state", "state1" },
-                    { "redirect_uri", registration.RedirectUri },
+                    { "redirect_uri", reg.RedirectUri },
                     { "prompt", "none" }
                 };
 
                 AuthZResponse res = await client.AuthorizeAsync(q);
 
-                this.Output.WriteLine(res.ToString());
+                r.Verify("認可コードを発行しない", string.IsNullOrEmpty(res.Code),
+                    "code を返さない",
+                    string.IsNullOrEmpty(res.Code) ? "返さなかった" : "**返してしまった**");
 
-                Assert.True(string.IsNullOrEmpty(res.Code),
-                    "未知の response_type で認可コードが発行されました。");
+                r.Observe("エラーの返し方",
+                    res.Redirected
+                        ? "リダイレクトして error=" + (res.Error ?? "なし")
+                        : "リダイレクトせず HTTP " + (int)res.StatusCode + "（画面表示）",
+                    "RFC 6749 §4.1.2.1 は、redirect_uri が妥当ならリダイレクトして"
+                    + "error を返すことを求める。RT-187.4 を参照。");
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// 未知の response_type は unsupported_response_type でリダイレクトする
-        /// （RFC 6749 4.1.2.1）。
-        ///
-        /// 実測（2026/09/08, net10.0）では、リダイレクトせずエラー画面（HTTP 200）になる。
-        /// client_id と redirect_uri は妥当なので、本来はリダイレクトしてエラーを返せる。
-        /// 安全側に倒れている（コードは発行されない）ため、緊急性は低い。
-        /// </summary>
+        /// <summary>RT-187.4 未知の response_type は unsupported_response_type でリダイレクトする</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。未知の response_type がリダイレクトではなくエラー画面になる。")]
+        [SkippableTheory(Skip = "未修正。実測（2026/09/09, net10.0）では、"
+            + "リダイレクトではなくエラー画面（HTTP 200）になる。")]
         [MemberData(nameof(AllTargets))]
-        public async Task 未知のresponse_typeはunsupported_response_typeでリダイレクトする(string targetKey)
+        public async Task RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.MvcSample);
+                TestReport r = this.Report("RT-187.4",
+                    "未知の response_type を unsupported_response_type でリダイレクトする",
+                    "client_id と redirect_uri が妥当なら、エラーは**リダイレクトで RP へ返す。**"
+                    + "画面で止めると、RP は何が起きたのか分からない。"
+                    + "ただし認可コードは発行されない（RT-187.3）ので、**安全側には倒れている。**",
+                    "RFC 6749 §4.1.2.1（redirect_uri が妥当ならリダイレクトして error を返す）");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("GET /authorize に response_type=bogus を指定する（妥当な redirect_uri 付き）");
 
                 Dictionary<string, string> q = new Dictionary<string, string>()
                 {
                     { "response_type", "bogus" },
-                    { "client_id", registration.ClientId },
+                    { "client_id", reg.ClientId },
                     { "scope", "openid" },
                     { "state", "state1" },
-                    { "redirect_uri", registration.RedirectUri },
+                    { "redirect_uri", reg.RedirectUri },
                     { "prompt", "none" }
                 };
 
                 AuthZResponse res = await client.AuthorizeAsync(q);
 
-                this.Output.WriteLine(res.ToString());
+                r.VerifyEqual("unsupported_response_type が返る",
+                    "unsupported_response_type", res.Error);
 
-                Assert.Equal("unsupported_response_type", res.Error);
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// client_id が不正なときは、リダイレクトしない（RFC 6749 4.1.2.1）。
-        ///
-        /// redirect_uri を検証できない以上、そこへエラーを返してはならない。
-        /// </summary>
+        /// <summary>RT-187.5 不正な client_id ではリダイレクトしない</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task Issue187_不正なclient_idではリダイレクトしない(string targetKey)
+        public async Task RT187_05_不正なclient_idではリダイレクトしない(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.MvcSample);
+                TestReport r = this.Report("RT-187.5",
+                    "client_id が不正なときは、指定された redirect_uri へリダイレクトしない",
+                    "**client_id が分からなければ、redirect_uri を検証できない。**"
+                    + "検証できない URI へエラーを返すと、"
+                    + "認可サーバがオープン リダイレクタになる。"
+                    + "この場合は画面で知らせるのが正しい。",
+                    "RFC 6749 §4.1.2.1（redirect_uri が不正・未検証なら"
+                    + "リダイレクトせず、利用者に知らせる）/ #187");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample
+                    + "（その redirect_uri を、存在しない client_id と組み合わせる）");
+                r.Step("GET /authorize に client_id=deadbeef…（未登録）を指定する");
 
                 Dictionary<string, string> q = new Dictionary<string, string>()
                 {
@@ -273,18 +341,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                     { "client_id", "deadbeefdeadbeefdeadbeefdeadbeef" },
                     { "scope", "openid" },
                     { "state", "state1" },
-                    { "redirect_uri", registration.RedirectUri },
+                    { "redirect_uri", reg.RedirectUri },
                     { "prompt", "none" }
                 };
 
                 AuthZResponse res = await client.AuthorizeAsync(q);
 
-                this.Output.WriteLine(res.ToString());
+                r.Verify("認可コードを発行しない", string.IsNullOrEmpty(res.Code),
+                    "code を返さない",
+                    string.IsNullOrEmpty(res.Code) ? "返さなかった" : "**返してしまった**");
 
-                Assert.True(string.IsNullOrEmpty(res.Code),
-                    "不正な client_id で認可コードが発行されました。");
+                r.Verify("指定された redirect_uri へリダイレクトしない",
+                    res.RedirectTo != reg.RedirectUri,
+                    "その URI へ飛ばさない",
+                    "リダイレクト先 = " + (res.RedirectTo ?? "（リダイレクト無し）"));
 
-                Assert.NotEqual(registration.RedirectUri, res.RedirectTo);
+                r.Done();
             }
         }
 

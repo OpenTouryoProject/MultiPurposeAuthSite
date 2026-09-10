@@ -447,6 +447,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 ? null : res.Content.Headers.ContentType.MediaType;
             result.Body = await res.Content.ReadAsStringAsync();
 
+            // 応答ヘッダを拾う。Cache-Control のように、
+            // 本文ではなくヘッダで確かめる項目がある（RFC 6749 §5.1）。
+            result.Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Headers)
+            {
+                result.Headers[h.Key] = string.Join(", ", h.Value);
+            }
+
+            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Content.Headers)
+            {
+                result.Headers[h.Key] = string.Join(", ", h.Value);
+            }
+
             try
             {
                 using (JsonDocument doc = JsonDocument.Parse(result.Body))

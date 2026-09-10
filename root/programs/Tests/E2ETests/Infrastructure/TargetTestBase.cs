@@ -79,6 +79,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         }
 
         /// <summary>
+        /// テストの内容と結果を書き出すレポータを作る。
+        /// **何を・何を根拠に確かめたのかを残す**（TestReport の説明を参照）。
+        /// </summary>
+        /// <param name="id">識別子（TC-1.1 など）</param>
+        /// <param name="title">何を確かめるテストか</param>
+        /// <param name="viewpoint">観点</param>
+        /// <param name="basis">根拠（RFC / OIDC の該当箇所）</param>
+        /// <returns>TestReport</returns>
+        protected TestReport Report(string id, string title, string viewpoint, string basis)
+        {
+            return new TestReport(this.Output, id, title, viewpoint, basis);
+        }
+
+        /// <summary>
         /// テスト対象のクライアントを返す。
         /// 対象が起動していなければ、テストを Skip する。
         /// </summary>

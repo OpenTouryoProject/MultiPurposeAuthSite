@@ -186,6 +186,7 @@ cmd.exe はバッチを**バイト オフセットで読み進める**ため、�
 | 構文エラー・文字化け（`繧ｵ繧､繝`） | 5.1 は BOM 無しの `.ps1` を **ANSI（Shift_JIS）**として読む | **UTF-8 BOM ＋ CRLF** で保存する |
 | `Get-Content` の結果が違う | 既定エンコードが 5.1 は ANSI、7 は UTF-8 | **`-Encoding UTF8`** を明示する |
 | 自己署名証明書の HTTPS が叩けない | **API ごとに、動く版が違う**（下の表） | 版で分岐する |
+| `-File` で単体起動したときだけ `Join-Path` が落ちる | **`[CmdletBinding()]` があると、5.1 は `param()` の既定値を評価する時点で `$PSScriptRoot` が空** | パスの既定値は `param()` に書かず、本体で決める |
 | 表の見出し・罫線・データがずれる | 5.1 の `Format-Table` は**桁数ではなく文字数**で幅を決める（全角は 1 文字で 2 桁） | `SummaryTable.ps1` の `Write-SummaryTable` を使う |
 
 > **1 行目は実際に踏んだ。** `test.ps1` だけ BOM 無しで作ってしまい、
@@ -193,6 +194,37 @@ cmd.exe はバッチを**バイト オフセットで読み進める**ため、�
 > **クォートの対応が壊れ、構文エラーになった。**
 > ここに書いてある落とし穴を、この文書を書いた本人が踏んでいる。
 > **`.ps1` を足したら、必ず 5.1 でも構文検査すること。**
+
+### `$PSScriptRoot` を `param()` の既定値で使わない
+
+**実測（Windows PowerShell 5.1 / PowerShell 7）。**
+
+| スクリプトの形 | 5.1 `-File` | 7 `-File` |
+|---|---|---|
+| `param(...)` だけ | 入る | 入る |
+| **`[CmdletBinding()]` ＋ `param(...)`** | **空** | 入る |
+
+```
+Join-Path : Cannot bind argument to parameter 'Path' because it is an empty string.
+```
+
+**`0_RunAll.ps1` から `&` で呼ぶ分には呼び出し元の値が見えるため表面化しない。**
+単体で `-File` 起動したときだけ落ちるので、通しの確認では見つからない。
+
+```powershell
+# 悪い
+[CmdletBinding()]
+param([string]$OutputDir = (Join-Path $PSScriptRoot "logs"))
+
+# 良い
+[CmdletBinding()]
+param([string]$OutputDir)
+
+if (-not $OutputDir)
+{
+    $OutputDir = Join-Path $PSScriptRoot "logs"
+}
+```
 
 ### 自己署名証明書の HTTPS（5.1 / 7 で API を分ける）
 
@@ -261,6 +293,10 @@ powershell.exe -NoProfile -Command "$e=$null; [void][System.Management.Automatio
 # 通し（5.1 / 7 の両方で）
 powershell.exe -NoProfile -File "root\0_RunAll.ps1" -SkipClean
 pwsh           -NoProfile -File "root\0_RunAll.ps1" -SkipClean
+
+# **単体でも起動してみること。** 通しでは表面化しない不具合がある
+powershell.exe -NoProfile -File "root\1_BuildAll.ps1" -List
+powershell.exe -NoProfile -File "root\2_RunAllTests.ps1" -Launch
 ```
 
 ### 書式

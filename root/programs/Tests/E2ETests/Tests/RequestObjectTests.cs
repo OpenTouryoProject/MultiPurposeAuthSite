@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：RequestObjectTests
-//* クラス日本語名  ：Request Object（request_uri）経路の実測
+//* クラス日本語名  ：RT Request Object（request_uri）経路の実測（#197）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/09  玄人 幸道         redirect_uriの実測結果を#197として起票
+//*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-197）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -44,17 +45,16 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests
 {
     /// <summary>
-    /// Request Object（request_uri）を使う認可リクエストの実測。
+    /// RT-197. Request Object（request_uri）を使う認可リクエストの実測。
     ///
-    /// JAR（RFC 9101）では、認可パラメタをクエリ文字列ではなく署名付きJWTに入れ、
-    /// PARで登録して request_uri で参照する。
+    /// JAR（RFC 9101）では、認可パラメタをクエリ文字列ではなく署名付き JWT に入れ、
+    /// PAR で登録して request_uri で参照する。
     ///
     /// 一方 AuthorizationCodeProvider.Create は、認可コードに紐付ける
     /// redirect_uri / code_challenge / code_challenge_method を
     /// **クエリ文字列から**読んでいる。request_uri 経路では、これらは
     /// クエリ文字列に無いため null になる。
     ///
-    /// コードを読んだだけでは確からしさが分からないので、ここで実際の応答を測る。
     /// 測った結果は #197 に記録した。
     /// </summary>
     public class RequestObjectTests : TargetTestBase
@@ -67,177 +67,241 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
 
         #region アプリ同梱の自己テスト（FAPI2）
 
-        /// <summary>
-        /// FAPI2 の自己テストが request_uri の認可リクエストまで到達する。
-        /// </summary>
+        /// <summary>RT-197.1 FAPI2 の自己テストが request_uri を組み立てる</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task FAPI2の自己テストがrequest_uriを組み立てる(string targetKey)
+        public async Task RT197_01_FAPI2の自己テストがrequest_uriを組み立てる(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                TestReport r = this.Report("RT-197.1",
+                    "FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する",
+                    "**以降のテストの前提。** アプリ同梱の自己テストが、"
+                    + "Request Object を作って PAR（`/ros`）へ登録し、"
+                    + "`request_uri` 付きの認可リクエストを組み立てられること。"
+                    + "ここで止まる場合、原因は経路の不備ではなく"
+                    + "**起動 URL の食い違い**であることが多い。",
+                    "RFC 9101（JAR）/ RFC 9126（PAR。ただしこの実装の `/ros` は独自仕様）");
+
+                r.Target("client_name=" + KnownClients.TestClient2 + "（oauth2_oidc_mode=fapi2）");
+                r.Step("POST /Home/Saml2OAuth2Starters に submit.AuthorizationCodeFAPI2 を送る");
+
                 HttpResponseMessage starter = await client.StartSelfTestAsync(
                     "AuthorizationCodeFAPI2", "fapi2");
 
                 string location = (starter.Headers.Location == null)
                     ? null : starter.Headers.Location.OriginalString;
 
-                this.Output.WriteLine("HTTP " + (int)starter.StatusCode);
-                this.Output.WriteLine("Location = " + (location ?? "(なし)"));
+                r.Verify("リダイレクトする", !string.IsNullOrEmpty(location),
+                    "Location ヘッダあり",
+                    string.IsNullOrEmpty(location)
+                        ? "HTTP " + (int)starter.StatusCode + " / Location なし"
+                          + "（PAR への登録に失敗した可能性）"
+                        : "HTTP " + (int)starter.StatusCode);
 
-                Assert.False(string.IsNullOrEmpty(location),
-                    "FAPI2 スターターがリダイレクトしませんでした（PAR への登録に失敗した可能性）。");
+                r.Verify("リダイレクト先に request_uri が付く",
+                    location.Contains("request_uri="),
+                    "request_uri= を含む",
+                    "Location = " + location);
 
-                Assert.Contains("request_uri=", location);
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// FAPI2 クライアントは、client_secret だけのトークン要求を受け付けない。
-        ///
-        /// oauth2_oidc_mode=fapi2 のクライアントは、より強いクライアント認証
-        /// （mTLS / private_key_jwt）を要求する。
-        /// このため FAPI2 の経路だけでは、redirect_uri の照合まで到達しない。
-        /// redirect_uri の照合は、normalモードのクライアント＋自前の Request Object で測る。
-        /// </summary>
+        /// <summary>RT-197.2 FAPI2 クライアントは client_secret のトークン要求を拒否する</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task FAPI2クライアントはclient_secretのトークン要求を拒否する(string targetKey)
+        public async Task RT197_02_FAPI2クライアントはclient_secretのトークン要求を拒否する(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.TestClient2);
+                TestReport r = this.Report("RT-197.2",
+                    "FAPI2 クライアントは、client_secret だけのトークン要求を受け付けない",
+                    "`oauth2_oidc_mode=fapi2` のクライアントは、より強いクライアント認証"
+                    + "（mTLS / private_key_jwt）を要求する。"
+                    + "**この性質のため、FAPI2 の経路では redirect_uri の照合まで到達しない。**"
+                    + "照合そのものは RT-197.4 で、normal モードのクライアントを使って測る。",
+                    "FAPI 2.0 Security Profile（クライアント認証は mTLS または"
+                    + " private_key_jwt）/ RFC 6749 §5.2");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+
+                r.Target("client_name=" + KnownClients.TestClient2);
+                r.Step("(1) FAPI2 の自己テストで request_uri 経路の code を得る");
+                r.Step("(2) client_secret を添えてトークンに交換する");
 
                 AuthZResponse authz = await this.RunFAPI2SelfTestAsync(client);
 
-                Assert.False(string.IsNullOrEmpty(authz.Code),
-                    "FAPI2 の request_uri 経路で認可コードが発行されませんでした: " + authz.ToString());
+                r.Verify("request_uri 経路で認可コードが発行される",
+                    !string.IsNullOrEmpty(authz.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(authz.Code) ? authz.ToString() : "code あり");
 
                 JsonResponse token = await Flows.ExchangeCodeAsync(
-                    client, registration, authz.Code, registration.RedirectUri);
+                    client, reg, authz.Code, reg.RedirectUri);
 
-                this.Output.WriteLine(token.ToString());
+                r.Verify("トークンを発行しない", string.IsNullOrEmpty(token.AccessToken),
+                    "access_token を返さない",
+                    token.AccessToken == null ? "返さなかった" : "**返してしまった**");
 
-                Assert.Null(token.AccessToken);
-                Assert.Equal("unsupported_grant_type", token.Error);
+                r.VerifyEqual("unsupported_grant_type で拒否される",
+                    "unsupported_grant_type", token.Error);
+
+                r.Done();
             }
         }
 
         #endregion
 
-        #region 自前で組み立てた Request Object（normalモードのクライアント）
+        #region 自前で組み立てた Request Object（normal モードのクライアント）
 
-        /// <summary>
-        /// request_uri の認可リクエストで、認可コードが発行される。
-        /// </summary>
+        /// <summary>RT-197.3 request_uri の認可リクエストで認可コードが発行される</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task request_uriの認可リクエストで認可コードが発行される(string targetKey)
+        public async Task RT197_03_request_uriの認可リクエストで認可コードが発行される(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.TestClient);
+                TestReport r = this.Report("RT-197.3",
+                    "自前で署名した Request Object でも、認可コードが発行される",
+                    "**RT-197.4 / 197.5 の前提。** 実装側の JWS クラスを使わず、"
+                    + "テスト側で RS256 の署名を作って PAR に登録し、認可まで通せること。"
+                    + "normal モードのクライアントを使うのは、"
+                    + "FAPI2 だとクライアント認証で先に弾かれる（RT-197.2）ため。",
+                    "RFC 9101 §4（Request Object の署名）/ OIDC Core §6.2（request_uri）");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient
+                    + "（jwk_rsa_publickey 登録済み、oauth2_oidc_mode 指定なし）");
+                r.Step("(1) SpRp_RsaPfxFilePath の秘密鍵で Request Object に署名する");
+                r.Step("(2) POST /ros に登録して request_uri を得る");
+                r.Step("(3) GET /authorize?request_uri=… で認可する");
 
                 AuthZResponse authz = await this.AuthorizeViaRequestUriAsync(
-                    client, registration, registration.RedirectUri);
+                    client, reg, reg.RedirectUri);
 
-                this.Output.WriteLine(authz.ToString());
+                r.Verify("認可コードが発行される", !string.IsNullOrEmpty(authz.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(authz.Code) ? authz.ToString() : "code あり");
 
-                Assert.False(string.IsNullOrEmpty(authz.Code),
-                    "request_uri 経路で認可コードが発行されませんでした。");
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// request_uri 経路でも、同じ redirect_uri なら成功する（対照）。
-        /// </summary>
+        /// <summary>RT-197.4 request_uri 経路で同じ redirect_uri なら成功する</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task request_uri経路で同じredirect_uriなら成功する(string targetKey)
+        public async Task RT197_04_request_uri経路で同じredirect_uriなら成功する(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.TestClient);
+                TestReport r = this.Report("RT-197.4",
+                    "request_uri 経路でも、同じ redirect_uri ならトークンが取得できる",
+                    "**RT-197.5 の対照。** この経路が機能していること自体を先に示す。"
+                    + "これが通らなければ、RT-197.5 の結果は"
+                    + "「照合が効いていない」ではなく「経路が壊れている」になる。",
+                    "RFC 6749 §4.1.3 / OIDC Core §3.1.3.1");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient);
+                r.Step("(1) Request Object に redirect_uri を入れて認可する");
+                r.Step("(2) 同じ redirect_uri でトークンに交換する");
 
                 AuthZResponse authz = await this.AuthorizeViaRequestUriAsync(
-                    client, registration, registration.RedirectUri);
+                    client, reg, reg.RedirectUri);
 
-                Assert.False(string.IsNullOrEmpty(authz.Code),
-                    "request_uri 経路で認可コードが発行されませんでした: " + authz.ToString());
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が取得できること");
 
                 JsonResponse token = await Flows.ExchangeCodeAsync(
-                    client, registration, authz.Code, registration.RedirectUri);
+                    client, reg, authz.Code, reg.RedirectUri);
 
-                this.Output.WriteLine("正しい redirect_uri: " + token.ToString());
+                r.Verify("エラーにならない", string.IsNullOrEmpty(token.Error),
+                    "error なし", token.Error ?? "error なし");
 
-                Assert.Null(token.Error);
-                Assert.False(string.IsNullOrEmpty(token.AccessToken), "access_token がありません。");
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(token.AccessToken),
+                    "access_token あり", token.AccessToken == null ? "なし" : "あり（値は伏せる）");
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// request_uri 経路でも、redirect_uri が認可コードに紐付いている。
-        ///
-        /// Request Object には redirect_uri が入っている。
-        /// RFC 6749 4.1.3 / OIDC Core 3.1.3.1 により、トークン リクエストの
-        /// redirect_uri は、それと一致しなければならない。
-        ///
-        /// クエリ文字列の経路は #186 で対応済み。この経路も同じかどうかを測る。
-        /// </summary>
+        /// <summary>RT-197.5 request_uri 経路でも redirect_uri が照合される</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory(Skip = "未修正（#197）。実測（2026/09/09, net10.0）では、"
             + "誤った redirect_uri を送ってもトークンが発行される。")]
         [MemberData(nameof(AllTargets))]
-        public async Task request_uri経路でもredirect_uriが照合される(string targetKey)
+        public async Task RT197_05_request_uri経路でもredirect_uriが照合される(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.TestClient);
+                TestReport r = this.Report("RT-197.5",
+                    "request_uri 経路でも、redirect_uri が認可コードに紐付いている",
+                    "Request Object には redirect_uri が入っている。"
+                    + "**クエリ文字列で渡したときと扱いが変わってはならない。**"
+                    + "`AuthorizationCodeProvider.Create` がクエリ文字列だけを読むため、"
+                    + "この経路では null が保存され、照合が素通りになる。"
+                    + "#186 の対応が及んでいない箇所。",
+                    "RFC 6749 §4.1.3 / OIDC Core §3.1.3.1 / #197");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient);
+                r.Step("(1) Request Object に正しい redirect_uri を入れて認可する");
+                r.Step("(2) https://attacker.example.com/callback を指定して交換する");
 
                 AuthZResponse authz = await this.AuthorizeViaRequestUriAsync(
-                    client, registration, registration.RedirectUri);
+                    client, reg, reg.RedirectUri);
 
-                Assert.False(string.IsNullOrEmpty(authz.Code),
-                    "request_uri 経路で認可コードが発行されませんでした: " + authz.ToString());
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が取得できること");
 
-                // 認可時とは違う redirect_uri を送る。
                 JsonResponse token = await Flows.ExchangeCodeAsync(
-                    client, registration, authz.Code, "https://attacker.example.com/callback");
+                    client, reg, authz.Code, "https://attacker.example.com/callback");
 
-                this.Output.WriteLine("誤った redirect_uri: " + token.ToString());
+                r.Verify("トークンを発行しない", string.IsNullOrEmpty(token.AccessToken),
+                    "access_token を返さない",
+                    token.AccessToken == null ? "返さなかった" : "**返してしまった**");
 
-                Assert.Null(token.AccessToken);
-                Assert.Equal("invalid_grant", token.Error);
+                r.VerifyEqual("invalid_grant で拒否される", "invalid_grant", token.Error);
+
+                r.Done();
             }
         }
 
-        /// <summary>
-        /// request_uri 経路でも、PKCE（RFC 7636）が機能する。
-        ///
-        /// Request Object に code_challenge / code_challenge_method を入れて認可し、
-        /// トークン リクエストで code_verifier を送る。
-        /// </summary>
+        /// <summary>RT-197.6 request_uri 経路の PKCE の実測</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task request_uri経路のPKCEの実測(string targetKey)
+        public async Task RT197_06_request_uri経路のPKCEの実測(string targetKey)
         {
-            const string Verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+            // RFC 7636 附録 B の例。
+            const string Verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
             const string Challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration registration = Flows.Registration(client, KnownClients.TestClient);
+                TestReport r = this.Report("RT-197.6",
+                    "request_uri 経路の PKCE が、どう振る舞うかを測る",
+                    "`code_challenge` も redirect_uri と同じ理由で記録されない。"
+                    + "ただし**向きが逆で、素通りではなく拒否になる**"
+                    + "（`code_verifier` を示しても `invalid_client`）。"
+                    + "安全側に倒れてはいるが、"
+                    + "**`request_uri` ＋ PKCE のパブリック クライアントは機能しない。**"
+                    + "ここで必ず満たすべきなのは「誤った検証子でトークンが出ないこと」だけ。",
+                    "RFC 7636 §4.6 / RFC 9101 / #197");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
                 Dictionary<string, object> extra = new Dictionary<string, object>()
                 {
@@ -245,38 +309,55 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                     { "code_challenge_method", "S256" }
                 };
 
+                r.Target("client_name=" + KnownClients.TestClient);
+                r.Step("(1) Request Object に code_challenge（S256）を入れて認可する");
+
                 AuthZResponse authz = await this.AuthorizeViaRequestUriAsync(
-                    client, registration, registration.RedirectUri, extra);
+                    client, reg, reg.RedirectUri, extra);
 
-                Assert.False(string.IsNullOrEmpty(authz.Code),
-                    "request_uri + PKCE で認可コードが発行されませんでした: " + authz.ToString());
+                r.Verify("認可コードが発行される", !string.IsNullOrEmpty(authz.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(authz.Code) ? authz.ToString() : "code あり");
 
-                // パブリック クライアントの作法で、client_secret を送らずに交換する。
+                r.Step("(2) 正しい code_verifier で交換する（client_secret は送らない）");
+
                 Dictionary<string, string> form = new Dictionary<string, string>()
                 {
                     { "grant_type", "authorization_code" },
                     { "code", authz.Code },
-                    { "client_id", registration.ClientId },
+                    { "client_id", reg.ClientId },
                     { "code_verifier", Verifier },
-                    { "redirect_uri", registration.RedirectUri }
+                    { "redirect_uri", reg.RedirectUri }
                 };
 
                 JsonResponse token = await client.TokenAsync(form);
 
-                this.Output.WriteLine("正しい code_verifier: " + token.ToString());
+                r.Observe("正しい code_verifier のときの結果",
+                    string.IsNullOrEmpty(token.Error)
+                        ? "トークンが発行された"
+                        : "拒否された（error=" + token.Error + "）",
+                    "**拒否されるのが現状。** code_challenge が記録されていないため、"
+                    + "PKCE 分岐がクライアントを認証できず invalid_client になる。"
+                    + "安全側の失敗だが、この組み合わせは機能しない。");
 
-                // 誤った code_verifier
-                form["code_verifier"] = "WRONG-VERIFIER-WRONG-VERIFIER-WRONG-VERIFIER";
+                r.Step("(3) 誤った code_verifier で交換する（別の code を取り直す）");
+
                 AuthZResponse authz2 = await this.AuthorizeViaRequestUriAsync(
-                    client, registration, registration.RedirectUri, extra);
+                    client, reg, reg.RedirectUri, extra);
+
                 form["code"] = authz2.Code;
+                form["code_verifier"] = "WRONG-VERIFIER-WRONG-VERIFIER-WRONG-VERIFIER";
 
                 JsonResponse token2 = await client.TokenAsync(form);
 
-                this.Output.WriteLine("誤った code_verifier: " + token2.ToString());
+                r.Verify("誤った code_verifier ではトークンを発行しない",
+                    string.IsNullOrEmpty(token2.AccessToken),
+                    "access_token を返さない",
+                    token2.AccessToken == null
+                        ? "返さなかった（error=" + (token2.Error ?? "なし") + "）"
+                        : "**返してしまった**");
 
-                // 誤った code_verifier でトークンが出ないことだけは、必ず満たすこと。
-                Assert.Null(token2.AccessToken);
+                r.Done();
             }
         }
 
@@ -323,8 +404,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                 "Request Object を PARエンドポイント（" + RequestObjectBuilder.RegistrationPath
                 + "）に登録できませんでした。");
 
-            this.Output.WriteLine("認可リクエスト: " + url);
-
             AuthZResponse authz = await client.AuthorizeAndGrantAsync(url);
 
             if (!authz.Redirected)
@@ -355,7 +434,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
             // スターターは構成ファイルのエンドポイントURLを返すので、
             // 実際に待ち受けているURLへ読み替える。
             string authorizeUrl = client.ToLocalUrl(location);
-            this.Output.WriteLine("認可リクエスト: " + authorizeUrl);
 
             // Request Object に prompt=none が入っていないので、同意画面が出る。
             AuthZResponse authz = await client.AuthorizeAndGrantAsync(authorizeUrl);
