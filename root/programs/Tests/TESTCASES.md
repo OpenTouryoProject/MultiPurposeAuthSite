@@ -1567,14 +1567,14 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
-| `EX0204_token_type_hintを省略しても失効できる` | 未修正。実測（2026/09/10, net10.0 / net48）では、token_type_hint を省略すると invalid_request（invalid token_type_hint.）で拒否され、失効しない。 |
-| `EX0205_無効なトークンの失効要求はエラーにしない` | 未修正。実測（2026/09/10, net10.0 / net48）では、存在しないトークンの失効要求に invalid_request（Invalid token.）を返す。 |
-| `EX0302_有効なrefresh_tokenもactiveがtrue` | 未修正。実測（2026/09/10）では、同じテストが通る回と、invalid_request（Invalid token.）になる回がある（net48 で観測）。refresh_token を、有効期限が現在時刻の access_token に変換してから検証しているため、秒をまたぐと失効扱いになると見られる（IntrospectToken）。 |
-| `EX0304_無効なトークンにはactiveがfalseで答える` | 未修正。実測（2026/09/10, net10.0 / net48）では、存在しないトークンに active=false ではなく invalid_request（Invalid token.）を返す。 |
-| `EX0405_トークンを受け取った後のdevice_codeは使えない` | 未修正。実測（2026/09/10, net10.0 / net48）では、使用済みの device_code で HTTP 500 になる（DeviceAuthZProvider.ReceiveTokenReq の KeyNotFoundException）。 |
-| `EX0501_code_id_tokenでc_hashがcodeと一致する` | 未修正。実測（2026/09/10, net10.0 / net48）では、c_hash が code から計算した値と一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
-| `EX0503_code_id_token_tokenでat_hashとc_hashが一致する` | 未修正。実測（2026/09/10, net10.0 / net48）では、at_hash / c_hash が一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
-| `EX0604_JARMのexpはNumericDateである` | 未修正。実測（2026/09/10, net10.0 / net48）では、JARM の exp が JSON の文字列になっている。 |
+| `EX0204_token_type_hintを省略しても失効できる` | 未修正（#200）。実測（2026/09/10, net10.0 / net48）では、token_type_hint を省略すると invalid_request（invalid token_type_hint.）で拒否され、失効しない。 |
+| `EX0205_無効なトークンの失効要求はエラーにしない` | 未修正（#200）。実測（2026/09/10, net10.0 / net48）では、存在しないトークンの失効要求に invalid_request（Invalid token.）を返す。 |
+| `EX0302_有効なrefresh_tokenもactiveがtrue` | 未修正（#200）。実測（2026/09/10）では、同じテストが通る回と、invalid_request（Invalid token.）になる回がある（net48 で観測）。refresh_token を、有効期限が現在時刻の access_token に変換してから検証しているため、秒をまたぐと失効扱いになると見られる（IntrospectToken）。 |
+| `EX0304_無効なトークンにはactiveがfalseで答える` | 未修正（#200）。実測（2026/09/10, net10.0 / net48）では、存在しないトークンに active=false ではなく invalid_request（Invalid token.）を返す。 |
+| `EX0405_トークンを受け取った後のdevice_codeは使えない` | 未修正（#199）。実測（2026/09/10, net10.0 / net48）では、使用済みの device_code で HTTP 500 になる（DeviceAuthZProvider.ReceiveTokenReq の KeyNotFoundException）。 |
+| `EX0501_code_id_tokenでc_hashがcodeと一致する` | 未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、c_hash が code から計算した値と一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
+| `EX0503_code_id_token_tokenでat_hashとc_hashが一致する` | 未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、at_hash / c_hash が一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
+| `EX0604_JARMのexpはNumericDateである` | 未修正（#201）。実測（2026/09/10, net10.0 / net48）では、JARM の exp が JSON の文字列になっている。 |
 | `RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする` | 未修正。実測（2026/09/09, net10.0）では、リダイレクトではなくエラー画面（HTTP 200）になる。 |
 | `RT197_05_request_uri経路でもredirect_uriが照合される` | 未修正（#197）。実測（2026/09/09, net10.0）では、誤った redirect_uri を送ってもトークンが発行される。 |
 | `TC0104_未定義のスコープの扱い` | 未修正（#198）。実測（2026/09/09, net10.0）では、scopes_supported に無い任意の文字列がそのまま発行される。 |

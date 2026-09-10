@@ -227,21 +227,21 @@ cd root
   `request_uri`（JAR）経路では `redirect_uri` が認可コードに紐付かず、
   **誤った `redirect_uri` を送ってもトークンが発行される。** #186 の対応が及んでいない。
 
-以下は拡張仕様（EX）で見つかったもの。**Issue は未起票。**
+以下は拡張仕様（EX）で見つかったもの。
 
-- `EX-2.4` / `EX-2.5`（`Extended.RevocationTests`）
+- `EX-2.4` / `EX-2.5`（`Extended.RevocationTests`、#200）
   `token_type_hint` を省略すると失効を断る。存在しないトークンの失効要求をエラーにする。
   RFC 7009 では、ヒントは任意で、無効なトークンでも 200 を返す。
-- `EX-3.2` / `EX-3.4`（`Extended.IntrospectionTests`）
+- `EX-3.2` / `EX-3.4`（`Extended.IntrospectionTests`、#200）
   存在しないトークンに `active=false` ではなく `invalid_request` を返す。
   refresh_token の問い合わせは、実行ごとに成否が揺れる（net48 で観測）。
-- `EX-4.5`（`Extended.DeviceAuthorizationTests`）
+- `EX-4.5`（`Extended.DeviceAuthorizationTests`、#199）
   使用済みの `device_code` で **HTTP 500**（`KeyNotFoundException`）。トークンは出ない。
-- `EX-5.1` / `EX-5.3`（`Extended.HybridFlowTests`）
+- `EX-5.1` / `EX-5.3`（`Extended.HybridFlowTests`、OpenTouryoProject/OpenTouryo#584）
   **`at_hash` / `c_hash` / `s_hash` の計算方法が OIDC と違う。** SHA-256 の左半分ではなく、
   左右を XOR で畳んでいる（Open棟梁 の `ArrayOperator.ShortenByteArray`）。
   標準の RP ライブラリは、Hybrid / Implicit で受け取った id_token を検証できない。
-- `EX-6.4`（`Extended.ResponseModeTests`）
+- `EX-6.4`（`Extended.ResponseModeTests`、#201）
   JARM の `exp` が文字列になっている（id_token / access_token では #184 で直した問題）。
 
 ## 分かっていること（実測）

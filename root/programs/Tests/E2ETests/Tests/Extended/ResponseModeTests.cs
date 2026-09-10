@@ -264,7 +264,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-6.4 JARM の exp の型</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10, net10.0 / net48）では、"
+        [SkippableTheory(Skip = "未修正（#201）。実測（2026/09/10, net10.0 / net48）では、"
             + "JARM の exp が JSON の文字列になっている。")]
         [MemberData(nameof(AllTargets))]
         public async Task EX0604_JARMのexpはNumericDateである(string targetKey)

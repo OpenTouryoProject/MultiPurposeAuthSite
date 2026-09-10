@@ -138,7 +138,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-5.1 code id_token</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10, net10.0 / net48）では、"
+        [SkippableTheory(Skip = "未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、"
             + "c_hash が code から計算した値と一致しない。"
             + "Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、"
             + "左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。")]
@@ -251,7 +251,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-5.3 code id_token token</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10, net10.0 / net48）では、"
+        [SkippableTheory(Skip = "未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、"
             + "at_hash / c_hash が一致しない。"
             + "Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、"
             + "左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。")]

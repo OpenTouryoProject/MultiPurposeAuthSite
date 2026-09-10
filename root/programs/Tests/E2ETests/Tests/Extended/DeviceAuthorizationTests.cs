@@ -320,7 +320,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-4.5 device_code の再利用</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10, net10.0 / net48）では、"
+        [SkippableTheory(Skip = "未修正（#199）。実測（2026/09/10, net10.0 / net48）では、"
             + "使用済みの device_code で HTTP 500 になる"
             + "（DeviceAuthZProvider.ReceiveTokenReq の KeyNotFoundException）。")]
         [MemberData(nameof(AllTargets))]

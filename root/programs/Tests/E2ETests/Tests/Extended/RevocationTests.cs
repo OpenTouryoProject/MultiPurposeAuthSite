@@ -241,7 +241,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-2.4 token_type_hint の省略</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10, net10.0 / net48）では、"
+        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10, net10.0 / net48）では、"
             + "token_type_hint を省略すると invalid_request（invalid token_type_hint.）で拒否され、失効しない。")]
         [MemberData(nameof(AllTargets))]
         public async Task EX0204_token_type_hintを省略しても失効できる(string targetKey)
@@ -289,7 +289,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-2.5 無効なトークン</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10, net10.0 / net48）では、"
+        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10, net10.0 / net48）では、"
             + "存在しないトークンの失効要求に invalid_request（Invalid token.）を返す。")]
         [MemberData(nameof(AllTargets))]
         public async Task EX0205_無効なトークンの失効要求はエラーにしない(string targetKey)

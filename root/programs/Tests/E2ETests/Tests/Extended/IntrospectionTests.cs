@@ -152,7 +152,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-3.2 有効な refresh_token</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10）では、同じテストが通る回と、"
+        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10）では、同じテストが通る回と、"
             + "invalid_request（Invalid token.）になる回がある（net48 で観測）。"
             + "refresh_token を、有効期限が現在時刻の access_token に変換してから"
             + "検証しているため、秒をまたぐと失効扱いになると見られる（IntrospectToken）。")]
@@ -237,7 +237,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-3.4 無効なトークン</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/10, net10.0 / net48）では、"
+        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10, net10.0 / net48）では、"
             + "存在しないトークンに active=false ではなく invalid_request（Invalid token.）を返す。")]
         [MemberData(nameof(AllTargets))]
         public async Task EX0304_無効なトークンにはactiveがfalseで答える(string targetKey)
