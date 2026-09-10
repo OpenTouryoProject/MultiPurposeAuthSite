@@ -227,15 +227,6 @@ cd root
   `request_uri`（JAR）経路では `redirect_uri` が認可コードに紐付かず、
   **誤った `redirect_uri` を送ってもトークンが発行される。** #186 の対応が及んでいない。
 
-以下は拡張仕様（EX）で見つかったもの。
-
-- `EX-2.4` / `EX-2.5`（`Extended.RevocationTests`、#200）
-  `token_type_hint` を省略すると失効を断る。存在しないトークンの失効要求をエラーにする。
-  RFC 7009 では、ヒントは任意で、無効なトークンでも 200 を返す。
-- `EX-3.2` / `EX-3.4`（`Extended.IntrospectionTests`、#200）
-  存在しないトークンに `active=false` ではなく `invalid_request` を返す。
-  refresh_token の問い合わせは、実行ごとに成否が揺れる（net48 で観測）。
-
 ## 分かっていること（実測）
 
 `request_uri` 経路について、net10.0 版で測った結果（#197）。

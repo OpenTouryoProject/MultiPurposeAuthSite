@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/11  玄人 幸道         EX-2.4 / 2.5 の Skip を解除、成功の HTTP 200 を検証に、EX-2.6 を追加（#200）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -119,8 +120,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     revoke.Error == null ? "error なし"
                                          : "error=" + revoke.Error + " / " + revoke.ErrorDescription);
 
-                r.Observe("失効要求の HTTP ステータス", "HTTP " + (int)revoke.StatusCode,
-                    "RFC 7009 §2.2 は、成功したら 200 を返すとしている。");
+                r.VerifyEqual("失効要求の HTTP ステータスが 200（RFC 7009 §2.2）",
+                    "200", ((int)revoke.StatusCode).ToString());
 
                 r.Step("(3) 同じ access_token で、もう一度 /userinfo を叩く");
 
@@ -241,8 +242,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-2.4 token_type_hint の省略</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10, net10.0 / net48）では、"
-            + "token_type_hint を省略すると invalid_request（invalid token_type_hint.）で拒否され、失効しない。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0204_token_type_hintを省略しても失効できる(string targetKey)
         {
@@ -289,8 +289,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-2.5 無効なトークン</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10, net10.0 / net48）では、"
-            + "存在しないトークンの失効要求に invalid_request（Invalid token.）を返す。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0205_無効なトークンの失効要求はエラーにしない(string targetKey)
         {
@@ -314,8 +313,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     revoke.Error == null ? "error なし"
                                          : "error=" + revoke.Error + " / " + revoke.ErrorDescription);
 
-                r.Observe("HTTP ステータス", "HTTP " + (int)revoke.StatusCode,
-                    "RFC 7009 §2.2 は 200 を求める。");
+                r.VerifyEqual("HTTP ステータスが 200（RFC 7009 §2.2）",
+                    "200", ((int)revoke.StatusCode).ToString());
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-2.6 token_type_hint の取り違え</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0206_token_type_hintが違っていても失効できる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("EX-2.6",
+                    "token_type_hint が実際の種類と違っていても、失効できる",
+                    "ヒントは手掛かりにすぎず、**外れていてもトークンを探し当てる**のがサーバの責務。"
+                    + "クライアントがヒントを取り違えただけで失効が効かないと、トークンが生き残る。",
+                    "RFC 7009 §2.1（ヒントで見つからなければ、対応する全種類から探す。MUST）/ #200");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("(1) 認可コード フローで access_token を得る");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
+                    client, KnownClients.MvcSample, "openid email");
+
+                r.Step("(2) access_token を、token_type_hint=refresh_token（取り違え）で失効させる");
+
+                JsonResponse revoke = await RevokeAsync(client, reg, token.AccessToken, "refresh_token");
+
+                r.Verify("失効要求がエラーにならない", string.IsNullOrEmpty(revoke.Error),
+                    "error なし",
+                    revoke.Error == null ? "error なし"
+                                         : "error=" + revoke.Error + " / " + revoke.ErrorDescription);
+
+                r.Step("(3) 同じ access_token で /userinfo を叩く");
+
+                JsonResponse after = await client.UserInfoAsync(token.AccessToken);
+
+                r.Verify("失効後は /userinfo がユーザ情報を返さない", !UserInfoAccepted(after),
+                    "sub を含む応答を返さない",
+                    UserInfoAccepted(after) ? "**返してしまった**（失効していない）"
+                                            : "拒否した（" + after.ToString() + "）");
 
                 r.Done();
             }

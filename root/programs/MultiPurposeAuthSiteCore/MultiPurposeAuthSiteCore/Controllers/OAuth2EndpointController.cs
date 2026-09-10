@@ -46,6 +46,7 @@
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
 //*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
+//*  2026/09/11  玄人 幸道         /revoke /introspect を RFC 7009 / 7662 に合わせて修正（#200）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -451,7 +452,8 @@ namespace MultiPurposeAuthSite.Controllers
                 string token = formData[OAuth2AndOIDCConst.token];
                 string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
 
-                if (!(string.IsNullOrEmpty(token) && string.IsNullOrEmpty(token_type_hint)))
+                // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
+                if (!string.IsNullOrEmpty(token))
                 {
                     // クライアント証明書
                     // Azure Web App Client Certificate Authentication with ASP.NET Core | Kirk Evans Blog
@@ -475,70 +477,11 @@ namespace MultiPurposeAuthSite.Controllers
                     if (Token.CmnEndpoints.ClientAuthentication(client_id, client_secret,
                         ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
                     {
-                        // 検証完了
-                        if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
-                        {
-                            // 検証
-                            if (Token.CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
-                            {
-                                // 検証成功
-
-                                // Tokenが呼び出し元に発行されたものかを確認（RFC 7009 2.1）（#194）
-                                if (!Token.CmnEndpoints.CheckTokenOwner(client_id, identity))
-                                {
-                                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
-                                    err.Add(OAuth2AndOIDCConst.error_description,
-                                        "The token was not issued to this client.");
-                                    return err;
-                                }
-
-                                // jtiの取り出し
-                                Claim jti = identity.Claims.Where(
-                                    x => x.Type == OAuth2AndOIDCConst.UrnJwtIdClaim).FirstOrDefault<Claim>();
-
-                                // access_token取消
-                                Sts.RevocationProvider.Create(jti.Value);
-                                return null; // 成功
-                            }
-                            else
-                            {
-                                // 検証失敗
-                                // 検証エラー
-                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                                err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
-                            }
-                        }
-                        else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
-                        {
-                            // Tokenが呼び出し元に発行されたものかを確認（RFC 7009 2.1）（#194）
-                            if (!Token.CmnEndpoints.CheckRefreshTokenOwner(
-                                client_id, Token.RefreshTokenProvider.Refer(token)))
-                            {
-                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
-                                err.Add(OAuth2AndOIDCConst.error_description,
-                                    "The token was not issued to this client.");
-                                return err;
-                            }
-
-                            // refresh_token取消
-                            if (Token.RefreshTokenProvider.Delete(token))
-                            {
-                                // 取り消し成功
-                                return null; // 成功
-                            }
-                            else
-                            {
-                                // 取り消し失敗
-                                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                                err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
-                            }
-                        }
-                        else
-                        {
-                            // token_type_hint パラメタ・エラー
-                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                            err.Add(OAuth2AndOIDCConst.error_description, "invalid token_type_hint.");
-                        }
+                        // 失効（#200）
+                        // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
+                        // ・無効なトークンはエラーにしない（RFC 7009 2.2）
+                        // ・成功は空の JSON（HTTP 200）で返し、両アプリで揃える
+                        return Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
                     }
                     else
                     {
@@ -549,9 +492,9 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // token or token_type_hint are null or empty.
+                    // token が無い
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                    err.Add(OAuth2AndOIDCConst.error_description, "token or token_type_hint are null or empty.");
+                    err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
                 }
             }
             else
@@ -580,10 +523,7 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public Dictionary<string, object> IntrospectToken(IFormCollection formData)
         {
-            // 戻り値
-            // ・正常
-            Dictionary<string, object> ret = new Dictionary<string, object>();
-            // ・異常
+            // 戻り値（エラー）
             Dictionary<string, object> err = new Dictionary<string, object>();
 
             if (formData != null)
@@ -592,7 +532,8 @@ namespace MultiPurposeAuthSite.Controllers
                 string token = formData[OAuth2AndOIDCConst.token];
                 string token_type_hint = formData[OAuth2AndOIDCConst.token_type_hint];
 
-                if (!(string.IsNullOrEmpty(token) && string.IsNullOrEmpty(token_type_hint)))
+                // token は必須、token_type_hint は任意（RFC 7009 2.1 / RFC 7662 2.1）（#200）
+                if (!string.IsNullOrEmpty(token))
                 {
                     // クライアント証明書
                     // Azure Web App Client Certificate Authentication with ASP.NET Core | Kirk Evans Blog
@@ -616,91 +557,10 @@ namespace MultiPurposeAuthSite.Controllers
                     if (Token.CmnEndpoints.ClientAuthentication(client_id, client_secret,
                         ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
                     {
-
-                        // 検証完了
-                        if (token_type_hint == OAuth2AndOIDCConst.AccessToken)
-                        {
-                            // AccessToken
-                            // ↓に続く
-                        }
-                        else if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
-                        {
-                            // RefreshToken
-                            string tokenPayload = Token.RefreshTokenProvider.Refer(token);
-                            if (!string.IsNullOrEmpty(tokenPayload))
-                            {
-                                // AccessToken化して処理共通化
-                                token = Token.CmnAccessToken.ProtectFromPayload(
-                                    "", tokenPayload, DateTimeOffset.Now,
-                                    null, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
-                            }
-                            else
-                            {
-                                token = "";
-                            }
-                            // ↓に続く
-                        }
-                        else
-                        {
-                            // token_type_hint パラメタ・エラー
-                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid token_type_hint.");
-                        }
-
-                        // AccessToken化して共通化した処理
-                        if (!string.IsNullOrEmpty(token)
-                            && Token.CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
-                        {
-                            // Tokenが呼び出し元に発行されたものでなければ、
-                            // メタデータを返さない（RFC 7662 2.2 / 5）（#194）。
-                            if (!Token.CmnEndpoints.CheckTokenOwner(client_id, identity))
-                            {
-                                ret.Add("active", false);
-                                return ret;
-                            }
-
-                            // 検証成功
-                            // メタデータの返却
-                            ret.Add("active", true);
-                            ret.Add(OAuth2AndOIDCConst.token_type, token_type_hint);
-
-                            string scopes = "";
-                            foreach (Claim claim in identity.Claims)
-                            {
-                                if (claim.Type.StartsWith(OAuth2AndOIDCConst.UrnClaimBase))
-                                {
-                                    if (claim.Type == OAuth2AndOIDCConst.UrnScopesClaim)
-                                    {
-                                        scopes += claim.Value + " ";
-                                    }
-                                    else if (claim.Type.StartsWith(OAuth2AndOIDCConst.UrnCnfX5tClaim))
-                                    {
-                                        string temp = OAuth2AndOIDCConst.x5t
-                                            + claim.Type.Substring(OAuth2AndOIDCConst.UrnCnfX5tClaim.Length);
-                                        ret.Add(OAuth2AndOIDCConst.cnf, new Dictionary<string, string>()
-                                    {
-                                        { temp, claim.Value}
-                                    });
-                                    }
-                                    else
-                                    {
-                                        ret.Add(claim.Type.Substring(
-                                            OAuth2AndOIDCConst.UrnClaimBase.Length), claim.Value);
-                                    }
-                                }
-                            }
-                            ret.Add(OAuth2AndOIDCConst.UrnScopesClaim.Substring(
-                                OAuth2AndOIDCConst.UrnClaimBase.Length), scopes.Trim());
-
-                            return ret; // 成功
-                        }
-                        else
-                        {
-                            // 検証失敗
-                            // 検証エラー
-                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
-                        }
+                        // 問い合わせ（#200）
+                        // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）
+                        // ・無効なトークン（存在しない・失効済み・期限切れ）は active=false で答える（RFC 7662 2.2）
+                        return Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint);
                     }
                     else
                     {
@@ -711,9 +571,9 @@ namespace MultiPurposeAuthSite.Controllers
                 }
                 else
                 {
-                    // token or token_type_hint are null or empty.
+                    // token が無い
                     err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                    err.Add(OAuth2AndOIDCConst.error_description, "token or token_type_hint are null or empty.");
+                    err.Add(OAuth2AndOIDCConst.error_description, "token is null or empty.");
                 }
             }
             else

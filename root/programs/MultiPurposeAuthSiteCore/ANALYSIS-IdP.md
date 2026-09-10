@@ -35,7 +35,7 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
-**フェーズ 1 は A-6 / A-8 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
+**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
 セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
@@ -347,6 +347,47 @@ CIBA クライアントはこのキーを見つけられない。
 | `end_session_endpoint` / `registration_endpoint` が無い | 5 節（未実装のため） |
 | `authorization_response_iss_parameter_supported` が無い | RFC 9207（未実装のため） |
 | JARM の `authorization_signing_alg_values_supported` が無い | JARM を広告しているのに alg を出していない |
+
+### A-11. `/revoke` `/introspect` がヒントを必須にし、無効なトークンをエラーにする **[Core][Lib]** — **✅ 修正済み（#200）**
+
+E2E テストの拡張仕様（EX-2 / EX-3）で見つかった。
+
+| # | エンドポイント | 修正前 | RFC |
+|---|---|---|---|
+| 1 | `/revoke` | `token_type_hint` が無いと `invalid_request`。失効しない | ヒントは任意。見つからなければ全種類を探す（RFC 7009 §2.1） |
+| 2 | `/revoke` | 無効なトークンに `invalid_request` | 200 で成功扱い（RFC 7009 §2.2） |
+| 3 | `/introspect` | 無効なトークンに `invalid_request` | `{"active": false}`（RFC 7662 §2.2） |
+| 4 | `/introspect` | refresh_token の問い合わせが、実行ごとに `active=true` / `invalid_request` に揺れる | `active=true` |
+| 5 | `/revoke` | 成功が net10.0 は HTTP 204、net48 は HTTP 200（本文 `null`） | 200（RFC 7009 §2.2） |
+
+4 の原因は、refresh_token を**有効期限が現在時刻の** access_token に作り直してから検証していたこと。
+`CmnJwtToken.VerifyExp` は秒単位の `exp >= now` なので、作ってから検証するまでに秒をまたぐと失効扱いになる。
+
+```csharp
+// 修正前: MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/Controllers/OAuth2EndpointController.cs（net48 版も同じ）
+token = Token.CmnAccessToken.ProtectFromPayload(
+    "", tokenPayload, DateTimeOffset.Now,
+    null, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
+```
+
+**対応（#200）:** クライアント認証より後の本体を、両アプリの Controller から
+`CmnEndpoints.RevokeToken` / `IntrospectToken` に移した。
+両アプリに同じコードが 2 本ずつあったため、片方だけ直す事故を防ぐ。Controller にはクライアント認証だけを残した。
+
+- `token_type_hint` は探す順番の手掛かりにする。ヒントの種類で見つからなければ、他の種類も探す
+- どの種類でも見つからなければ、`/revoke` は成功（空の JSON、HTTP 200）、`/introspect` は `{"active": false}`
+- 他のクライアントのトークンの扱い（#194）は変えていない
+- refresh_token の問い合わせでは、作り直す access_token の期限を、検証の間は持つ長さにした。
+  その一時的なトークンの `exp` / `nbf` / `iat` / `jti` は refresh_token 自身の値ではないので、返さない
+- `token` が無い要求は `invalid_request`（以前は `token_type_hint` だけでも先へ進んでいた）
+
+E2E テスト: `EX-2.4` / `EX-2.5` / `EX-2.6`（ヒントの取り違え）/ `EX-3.2` / `EX-3.4` / `EX-3.7`（同）。
+
+> **残っている点:**
+> エラー応答の HTTP ステータス（400 / 401）は #196 で扱う。
+> `/introspect` の `token_type` には「見つかった種類」（`access_token` / `refresh_token`）を入れているが、
+> RFC 7662 §2.2 の `token_type` は `Bearer` などの型を指す。
+> また、メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
 
 ---
 
@@ -825,6 +866,7 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 |---|
 | ✅ **A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消）** #187 |
 | ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
+| ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | A-7 エラーの HTTP ステータス（400 / 401） → **#196 に分離。テスト整備後** |
 | A-10 discovery の項目整備 → **#189 の残り 13 項目** |
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/11  玄人 幸道         EX-3.2 / 3.4 の Skip を解除、EX-3.7 を追加（#200）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -152,10 +153,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-3.2 有効な refresh_token</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10）では、同じテストが通る回と、"
-            + "invalid_request（Invalid token.）になる回がある（net48 で観測）。"
-            + "refresh_token を、有効期限が現在時刻の access_token に変換してから"
-            + "検証しているため、秒をまたぐと失効扱いになると見られる（IntrospectToken）。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0302_有効なrefresh_tokenもactiveがtrue(string targetKey)
         {
@@ -237,8 +235,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-3.4 無効なトークン</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#200）。実測（2026/09/10, net10.0 / net48）では、"
-            + "存在しないトークンに active=false ではなく invalid_request（Invalid token.）を返す。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0304_無効なトークンにはactiveがfalseで答える(string targetKey)
         {
@@ -356,6 +353,44 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 r.Observe("拒否のしかた",
                     "HTTP " + (int)res.StatusCode + " / error=" + (res.Error ?? "なし"),
                     "RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-3.7 token_type_hint の取り違え</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0307_token_type_hintが違っていても答えられる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("EX-3.7",
+                    "token_type_hint が実際の種類と違っていても、答えられる",
+                    "ヒントは手掛かりにすぎない。**外れていても探し当てて答える。**"
+                    + "取り違えただけで active=false になると、リソース サーバは使えるトークンを拒んでしまう。",
+                    "RFC 7662 §2.1（ヒントで見つからなければ、対応する全種類から探す。MUST）/ #200");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("(1) 認可コード フローで access_token を得る");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
+                    client, KnownClients.MvcSample, "openid email");
+
+                r.Step("(2) access_token を、token_type_hint=refresh_token（取り違え）で問い合わせる");
+
+                JsonResponse res = await IntrospectAsync(client, reg, token.AccessToken, "refresh_token");
+
+                r.Verify("active が true（JSON の真偽値）", res.KindOf("active") == JsonValueKind.True,
+                    "active=true",
+                    ActiveOf(res) + " / error=" + (res.Error ?? "なし"));
+
+                r.Observe("token_type", res.String("token_type") ?? "（返らない）",
+                    "見つかった種類が入る。RFC 7662 §2.2 の token_type は Bearer などの型を指すので、意味がずれている。");
 
                 r.Done();
             }
