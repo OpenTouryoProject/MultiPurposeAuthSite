@@ -300,7 +300,11 @@ function Get-MeasuredLines
 
     foreach ($line in ($Text -split "`r?`n"))
     {
-        if ($line -match '^\s*(検証|観測)[0-9]+\s*:' -or
+        # 「対象」も残す。**どちらのアプリを測ったのかは、その回の事実である。**
+        # net48版と net10.0版は同じURLで構成されているため、
+        # ここが記録に無いと、後から取り違えを見抜けない（実際に取り違えた）。
+        if ($line -match '^\s*対象\s*:' -or
+            $line -match '^\s*(検証|観測)[0-9]+\s*:' -or
             $line -match '^\s*(期待|実測|判定)\s*=' -or
             $line -match '^\s*結果\s*:')
         {
@@ -325,7 +329,36 @@ $null = $md.AppendLine()
 $null = $md.AppendLine("| | |")
 $null = $md.AppendLine("|---|---|")
 $null = $md.AppendLine(("| 実行日時 | {0} |" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss")))
-$null = $md.AppendLine(("| 叩いた先 | {0} |" -f $Url))
+# **「叩いた先」は 1 つに決まらない。**
+# net48版と net10.0版を同時に測ると URL が 2 つになる（-Url で片方をずらす）。
+# ここに -Url の値だけを書くと、もう一方を測った事実が消える。
+# TargetTestBase が各テストに書かせた「対象 … / 応答 …」から、
+# 実際に応答したアプリを拾う。
+# **「応答」を含む行だけに限ること。** TestReport の Target()（クライアント名や
+# redirect_uri を書くもの）も「対象」で始まるため、条件を緩めると全部拾う。
+$measuredApps = New-Object System.Collections.Generic.List[string]
+
+foreach ($row in $rows)
+{
+    foreach ($line in ($row.出力 -split "`r?`n"))
+    {
+        if ($line -match '^\s*対象\s*:\s*(.+?応答\s*:.+?)\s*$')
+        {
+            $app = $Matches[1]
+            if (-not $measuredApps.Contains($app)) { $null = $measuredApps.Add($app) }
+        }
+    }
+}
+
+if ($measuredApps.Count -eq 0)
+{
+    # 1 件も測れていない（全て Skip など）。起動を指示した URL を書く。
+    $null = $md.AppendLine(("| 叩いた先 | {0} |" -f $Url))
+}
+else
+{
+    $null = $md.AppendLine(("| 叩いた先 | {0} |" -f ($measuredApps -join "<br>")))
+}
 $null = $md.AppendLine(("| 構成 | {0} |" -f $Configuration))
 $null = $md.AppendLine(("| 成功 / 失敗 / Skip | {0} / {1} / {2} |" -f `
     $passed.Count, $failed.Count, $skipped.Count))

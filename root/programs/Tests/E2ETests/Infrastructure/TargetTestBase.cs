@@ -104,7 +104,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             Skip.IfNot(target.IsReachable(), target.UnavailableReason ?? "対象が起動していません。");
 
-            this.Output.WriteLine("対象: " + target.DisplayName + " (" + target.BaseUrl + ")");
+            // **どのアプリが応答したのかを残す。**
+            // 2 つのターゲットが同じURLで構成されているため、
+            // 「どちらを測ったのか」が記録に無いと後から分からない。
+            this.Output.WriteLine("対象: " + target.DisplayName + " (" + target.BaseUrl + ")"
+                + " / 応答: " + (target.DetectedServer ?? "不明"));
 
             return new IdPClient(target);
         }

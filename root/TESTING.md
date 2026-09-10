@@ -128,6 +128,101 @@ appSettings__OAuth2ClientEndpointsRootURI
 .\2_RunAllTests.ps1 -Launch -UpdateTestCases
 ```
 
+### net48 版を測る
+
+**net48 版は IIS Express で立てる。** `app.config` の
+`OAuth2AuthorizationServerEndpointsRootURI` が
+`https://localhost:44300/MultiPurposeAuthSite` なので、
+**その仮想パスで待ち受けている必要がある**（Kestrel では仮想ディレクトリを作れない）。
+
+Visual Studio から起動すれば、そのまま合う。
+コマンドラインから立てる場合は、`applicationhost.config` を用意する。
+
+```
+"C:\Program Files\IIS Express\iisexpress.exe" /config:<applicationhost.config> /site:<サイト名>
+```
+
+サイトには 2 つのアプリケーションを持たせる。
+
+| 仮想パス | 物理パス | 役目 |
+|---|---|---|
+| `/` | 空のフォルダ | net10.0 版の到達性判定を 404 にし、そちらを Skip させる |
+| `/MultiPurposeAuthSite` | `programs\MultiPurposeAuthSite\MultiPurposeAuthSite` | net48 版の本体 |
+
+バインドは `https` の `*:44300:localhost`。
+44300〜44399 は IIS Express の開発用証明書が http.sys に登録済みなので、そのまま使える。
+
+> **`.vs` を消すと `applicationhost.config` も消える。**
+> `1_DeleteDir.bat` の削除対象に `.vs` が入っているため、
+> クリーン後は Visual Studio で開き直すか、自分で用意する。
+
+### 取り違えは検出する
+
+**net48 版と net10.0 版は、既定ではどちらも同じ URL で構成されている。**
+片方しか動いていないのに、両方の到達性判定が通ってしまう。
+
+そのままだと**同じアプリを 2 回測って「両方 OK」と報告する。**（実際にやった）
+
+このため、応答ヘッダで**どちらのアプリが応答したのか**を確かめている。
+
+| | 見分け方 |
+|---|---|
+| net48 | `X-AspNet-Version` が付く |
+| net10.0 | `Server: Kestrel` |
+
+期待と食い違う場合は、そのターゲットを Skip して理由を残す。
+
+```
+net10.0版 (MultiPurposeAuthSiteCore) のはずの https://localhost:44300/MultiPurposeAuthSite に、
+net48版（ASP.NET Framework）が応答しました。同じURLで構成されているため取り違えます。
+片方を別のURLにするか、順番に実行してください。
+```
+
+報告書にも、測った相手が残る。
+
+```
+対象: net48版 (MultiPurposeAuthSite) (https://localhost:44300/MultiPurposeAuthSite)
+      / 応答: net48（ASP.NET Framework / Microsoft-IIS/10.0）
+```
+
+### 両方を同時に測る
+
+**報告書（`E2ETests.report.md`）は 1 回の実行で上書きされる。**
+net48 版を測った後に net10.0 版を測れば、net48 版の結果は残らない。
+**両方の結果を 1 枚に残したいなら、同じ実行で測る。**
+
+既定では両者が同じ URL を指していて取り違えるので、**net10.0 版をずらす。**
+
+```
+> .\2_RunAllTests.ps1 -Launch -Url https://localhost:44301
+```
+
+`-Url` は Kestrel の待ち受け URL であると同時に、
+構成ファイルの `OAuth2AuthorizationServerEndpointsRootURI` /
+`OAuth2ClientEndpointsRootURI` の上書き（環境変数）と、
+テスト側の `MPAS_CORE_BASEURL` にも渡される。
+**3 つが揃っていないと、サーバが自分自身へ戻る経路（FAPI2 の自己テストなど）が壊れる。**
+
+net48 版は `app.config` の URI（`44300/MultiPurposeAuthSite`）から動かせないので、
+**ずらすのは net10.0 版の方。**
+
+| 対象 | 待ち受け | 立て方 |
+|---|---|---|
+| net48 | `https://localhost:44300/MultiPurposeAuthSite` | IIS Express（先に起動しておく） |
+| net10.0 | `https://localhost:44301` | `-Launch` が起動・停止する |
+
+この形で実行すると 94 件（47 × 2）が測られ、報告書の「叩いた先」に両方が並ぶ。
+
+```
+| 叩いた先 | net48版 (MultiPurposeAuthSite) (https://localhost:44300/MultiPurposeAuthSite)
+            / 応答: net48（ASP.NET Framework / Microsoft-IIS/10.0）<br>
+            net10.0版 (MultiPurposeAuthSiteCore) (https://localhost:44301)
+            / 応答: net10.0（Kestrel） |
+```
+
+**この行は `-Url` の値ではなく、実際に応答したアプリから作る。**
+引数を書き写すだけでは、測れていない対象まで「叩いた」ことになってしまう。
+
 ### TRX を読む
 
 コンソールの集計行（`テストの合計数: ...`）は**ロケールで変わる。**
@@ -212,6 +307,7 @@ E2ETests OK     28    0   30 42.3
 | 証明書 | `SpRp_RsaPfxFilePath` の pfx。Request Object の署名に使う |
 
 **net10.0 版と net48 版は、既定では同じ URL で構成されている。同時には測れない。**
+取り違えは検出して Skip する（5 節「取り違えは検出する」）。
 片方を別の URL にするか、順番に実行する。
 
 ## 9. 秘密情報を出さない

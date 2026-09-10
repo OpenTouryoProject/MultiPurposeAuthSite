@@ -131,6 +131,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public string UnavailableReason { get; private set; }
 
         /// <summary>
+        /// 応答したアプリの種類（"net48（IIS）" / "net10.0（Kestrel）" / "不明"）。
+        /// **どちらを測ったのかを報告に残すために要る。**
+        /// </summary>
+        public string DetectedServer { get; private set; }
+
+        /// <summary>
         /// サイトが起動しているか（1度だけ確認して覚える）。
         /// 起動していない対象のテストは Skip する。落とさないのは、
         /// net48版はIIS Expressでの手動起動が前提で、常に起動しているとは限らないため。
@@ -183,6 +189,59 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                             this.UnavailableReason = this.DisplayName + " が " + baseUrl
                                 + " にいません（/.well-known/openid-configuration が HTTP "
                                 + (int)res.StatusCode + "）。";
+                            this._reachable = false;
+                            return false;
+                        }
+
+                        // **応答したのが、期待したアプリかを確かめる。**
+                        //
+                        // net48版と net10.0版は、既定ではどちらも
+                        // https://localhost:44300/MultiPurposeAuthSite で構成されている。
+                        // 到達性だけを見ると、**片方しか動いていないのに両方が通り、
+                        // 同じアプリを 2 回測って「両方 OK」と報告してしまう。**
+                        //
+                        //   net48   : ASP.NET Framework → X-AspNet-Version が付く
+                        //   net10.0 : Kestrel           → Server: Kestrel
+                        //
+                        // どちらとも確証が持てないときは拒否しない（判定を壊さない）。
+                        bool hasAspNetVersion = res.Headers.Contains("X-AspNet-Version");
+
+                        string server = (res.Headers.Server == null)
+                            ? "" : res.Headers.Server.ToString();
+
+                        bool isKestrel = server.IndexOf(
+                            "Kestrel", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                        if (hasAspNetVersion)
+                        {
+                            this.DetectedServer = "net48（ASP.NET Framework / " + server + "）";
+                        }
+                        else if (isKestrel)
+                        {
+                            this.DetectedServer = "net10.0（Kestrel）";
+                        }
+                        else
+                        {
+                            this.DetectedServer = "不明（Server: "
+                                + (string.IsNullOrEmpty(server) ? "なし" : server) + "）";
+                        }
+
+                        if (this.IsNetFx && isKestrel)
+                        {
+                            this.UnavailableReason = this.DisplayName + " のはずの " + baseUrl
+                                + " に、net10.0版（Kestrel）が応答しました。"
+                                + "同じURLで構成されているため取り違えます。"
+                                + "片方を別のURLにするか、順番に実行してください。";
+                            this._reachable = false;
+                            return false;
+                        }
+
+                        if (!this.IsNetFx && hasAspNetVersion)
+                        {
+                            this.UnavailableReason = this.DisplayName + " のはずの " + baseUrl
+                                + " に、net48版（ASP.NET Framework）が応答しました。"
+                                + "同じURLで構成されているため取り違えます。"
+                                + "片方を別のURLにするか、順番に実行してください。";
                             this._reachable = false;
                             return false;
                         }
