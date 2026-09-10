@@ -173,10 +173,10 @@ function Get-TrxResults([string]$path)
         $stdout = ""
         if ($r.Output -and $r.Output.StdOut) { $stdout = [string]$r.Output.StdOut }
 
-        # 並び順に使う識別子。TestReport が "[TC-1.1] ..." の形で出す。
+        # 並び順に使う識別子。TestReport が "[SM-1] ..." の形で出す。
         #
-        #   TC-n.n        基本テストケース（input.md 由来）
         #   SM-n          疎通（スモーク）
+        #   TC-n.n        基本テストケース（input.md 由来）
         #   RT-<Issue>.n  個別 Issue の回帰
         $tc = ""
         $m = [regex]::Match($stdout, '\[([A-Z]{2}-[0-9]+(?:\.[0-9]+)?)\]')
@@ -330,7 +330,7 @@ function Get-MeasuredLines
 # ------------------------------------------------------------------
 # **テストの妥当性を、実行した人以外が評価できるようにする。**
 #   テスト名と OK / NG だけでは、期待値の根拠も、実際に何が起きたかも分からない。
-#   TestReport が各テストに書かせた内容を、TC 番号順に 1 枚へまとめる。
+#   TestReport が各テストに書かせた内容を、識別子の順に 1 枚へまとめる。
 $reportPath = Join-Path $OutputDir "E2ETests.report.md"
 
 $md = New-Object System.Text.StringBuilder
@@ -397,7 +397,13 @@ $null = $md.AppendLine("| ID | テスト | 対象 | 結果 |")
 $null = $md.AppendLine("|---|---|---|---|")
 
 # 識別子を持つものを先、持たないものを後ろに。
-# 群の順は TC（基本）→ SM（疎通）→ RT（回帰）。群の中は番号順。
+# 群の順は SM（疎通）→ TC（基本）→ RT（回帰）。群の中は番号順。
+#
+# **土台から順に読めるようにする。**
+# SM が倒れていれば TC の合否は読む意味がない（サイトに届いていない、
+# サインインできていない、という話であって、仕様の適合とは別）。
+# 同様に、TC が倒れている状態の RT は、回帰かどうかを判断できない。
+# 先に出る群が倒れていたら、後ろは読まずに済む。
 function Get-IdRank
 {
     param([string]$Id)
@@ -406,8 +412,8 @@ function Get-IdRank
 
     switch ($Id.Substring(0, 2))
     {
-        "TC"    { return 0 }
-        "SM"    { return 1 }
+        "SM"    { return 0 }
+        "TC"    { return 1 }
         "RT"    { return 2 }
         default { return 8 }
     }
@@ -575,8 +581,8 @@ if ($UpdateTestCases)
 
             $heading = switch ($group)
             {
-                "TC"    { "TC. 基本テストケース" }
                 "SM"    { "SM. 疎通（テスト基盤そのものの確認）" }
+                "TC"    { "TC. 基本テストケース" }
                 "RT"    { "RT. 個別 Issue の回帰" }
                 default { $group }
             }

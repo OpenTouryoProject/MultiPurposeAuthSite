@@ -139,7 +139,14 @@ OAuth2ClientEndpointsRootURI
 
 ## テストの構成
 
-**`Tests/Basic/` が入口。** OAuth 2.0 / OIDC の基本的な検証項目を、
+**`Tests/SmokeTests.cs` が土台。** サイトに届いているか、サインインできるか、
+認可コード フローが通るか。**ここが倒れていたら、他の合否は読む意味がない。**
+
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/SmokeTests.cs` | `SM-n` | Discovery / JWK Set / サインイン / 認可コード フロー |
+
+**次が `Tests/Basic/`。** OAuth 2.0 / OIDC の基本的な検証項目を、
 仕様の根拠つきで並べたもの（TC-1 〜 TC-6）。
 
 | ファイル | 対象 |
@@ -150,11 +157,10 @@ OAuth2ClientEndpointsRootURI
 | `Tests/Basic/PasswordAndClientCredentialsTests.cs` | TC-4・TC-5 パスワード / クライアント資格情報 |
 | `Tests/Basic/OidcTests.cs` | TC-6 id_token の中身と署名 / alg:none の拒否 / UserInfo |
 
-以下は、疎通と、個別の Issue に対応する回帰テスト。
+以下は、個別の Issue に対応する回帰テスト。
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/SmokeTests.cs` | `SM-n` | Discovery / JWK Set / サインイン / 認可コード フロー |
 | `Tests/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
 | `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
 | `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
