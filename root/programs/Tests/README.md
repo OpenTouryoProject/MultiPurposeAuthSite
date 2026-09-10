@@ -180,7 +180,8 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 | `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
 | `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
-| `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の実測 |
+| `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
+| `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープを発行しない（client_credentials / password） |
 
 **すべてのテストが `TestReport` で記録を残す。**
 識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。
@@ -219,10 +220,9 @@ cd root
 - `RT-187.4`（`ErrorResponseTests`）
   未知の `response_type` が、リダイレクトではなくエラー画面（HTTP 200）になる。
   認可コードは発行されないので、安全側には倒れている。
-- `TC-1.4`（`Basic.CommonSecurityTests`、#198）
-  **要求した `scope` が、そのままトークンに載る。** 許可された一覧との突き合わせも、
-  クライアントごとの権限の確認も無い。`scopes_supported` に無い任意の文字列
-  （`admin` など）も、認可サーバの署名付きで発行される。
+
+テストの無い未対応もある。#198 の後半（クライアントごとに要求してよいスコープの制限）は、
+登録情報にそのための項目が無いため、テストも書けていない。
 
 ## 分かっていること（実測）
 

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/09  玄人 幸道         新規（基本テストケースの追加）
 //*  2026/09/10  玄人 幸道         TC-1.4の実測結果を#198として起票し、Skipに変更
+//*  2026/09/11  玄人 幸道         TC-1.4 の Skip を解除（#198）
 //**********************************************************************************
 
 using System;
@@ -198,8 +199,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
         /// <summary>TC-1.4 未定義のスコープの扱い</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#198）。実測（2026/09/09, net10.0）では、"
-            + "scopes_supported に無い任意の文字列がそのまま発行される。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task TC0104_未定義のスコープの扱い(string targetKey)
         {

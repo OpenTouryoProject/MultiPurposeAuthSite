@@ -36,7 +36,7 @@
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
 **フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
-セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。
+セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。C-17 は前半（`scopes_supported` での絞り込み、#198）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
 見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
@@ -819,6 +819,41 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 > A-2（#183）を誤検出と判断する過程で見つかった。**A-2 の「真の問題」はこちら。**
 > #183 は close 済み。
 
+### C-17. 要求したスコープがそのまま発行される **[Lib]** — **✅ 前半を修正（#198）／後半は未対応**
+
+基本テストケース（TC-1.4）で見つかった。
+
+クライアントが要求した `scope` を、**そのままトークンに載せていた。**
+Discovery の `scopes_supported` にも無い任意の文字列（`admin` `superuser` など）が、認可サーバの署名付きで発行された。
+
+```
+要求: roles userid auth admin superuser whatever → 発行: roles, userid, auth, admin, superuser, whatever
+```
+
+RFC 6749 §3.3 は「発行するスコープは要求と異なってよい」とし、**発行するスコープを認可サーバが決める**ことを前提にしている。
+
+直すには 2 段階が要る。
+
+1. **認可サーバが扱わないスコープを発行しない**（`scopes_supported` の範囲に収める）
+2. **クライアントごとに、要求してよいスコープを制限する**（登録情報に、そのための項目が無い）
+
+**対応（#198 の前半）:**
+
+- `Helper.GetScopesSupported()` を新設し、Discovery の `scopes_supported` もこれを使うようにした（一覧を 1 か所に）
+- `Helper.FilterSupportedScopes()` で、一覧に無いスコープを外してから Claim にする。
+  発行の 6 経路（認可コード / Implicit / Hybrid / password / client_credentials / JWT bearer）が対象。
+  device と CIBA は認可コードの経路を通る。拒否（`invalid_scope`）ではなく外す（RFC 6749 §3.3 が認める）
+- 発行済みのトークンを読む経路（`CmnAccessToken.AddClaims`）は変えていない
+- `/token` の応答に `scope` を返すようにした。発行したスコープが要求と異なる場合は必須（RFC 6749 §5.1）
+
+E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）/ `RT-198.2`（password）。
+
+> **未対応（#198 の後半）:** クライアントごとの制限。`OAuth2ClientsInformation` に項目を足し、
+> 雛形（`_appsettings.json` / `_app.config`）と `CreateClientsIdentity` も直す必要がある。
+>
+> **残っている点:** Implicit / Hybrid の応答（フラグメント）には、まだ `scope` を返していない
+> （RFC 6749 §4.2.2 は、要求と異なるなら必須）。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -903,6 +938,7 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 | C-9 CORS をエンドポイント単位に |
 | C-10 `redirect_uri` の厳密比較、テスト用抜け道のロックダウン対象化 |
 | C-12 / C-13 Cookie 有効期限の設定反映、DataProtection の永続化 |
+| ✅ **C-17 の前半 : `scopes_supported` に無いスコープを発行しない** #198（後半のクライアントごとの制限は未対応） |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 

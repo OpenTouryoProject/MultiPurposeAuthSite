@@ -196,6 +196,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーの返し方
   - redirect_uri を信頼できない以上、そこへエラーを返さないのが正しい（RFC 6749 §4.1.2.1）。画面で知らせる形は妥当。
 
+## TC-1.4 未定義のスコープを要求したときの扱い
+
+| | |
+|---|---|
+| 観点 | 認可サーバは、未定義のスコープを **invalid_scope で拒否するか、無視して認めた分だけを返すか**のいずれかを選べる（RFC 6749 §3.3）。どちらを選ぶにせよ、**発行するスコープは、認可サーバ自身がDiscovery で宣言した scopes_supported の範囲に収まるべきである。**宣言外の文字列をそのまま載せると、スコープ文字列で認可するリソース サーバを、クライアントが任意の値で騙せる余地が生まれる。 |
+| 根拠 | RFC 6749 §3.3（発行スコープは要求と異なってよい）/ §4.1.2.1（invalid_scope） / RFC 8414 §2（scopes_supported） |
+| テスト | `TC0104_未定義のスコープの扱い` |
+
+**手順**
+
+1. GET /authorize に scope="openid email bogus_scope_not_defined" を指定する（3 つ目は scopes_supported に無い）
+
+**検証（合否を判定する）**
+
+- トークンが発行される
+- 発行されたスコープが scopes_supported の範囲に収まる
+
+**観測（判定しない）**
+
+- 認可の段階で拒否したか
+  - 受理したので、発行されたトークンのスコープを見る。
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
 ## TC-1.5 アクセス トークンの exp と expires_in が整合する
 
 | | |
@@ -1793,6 +1819,50 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 正しい code_verifier でトークンが発行される
 - 誤った code_verifier ではトークンを発行しない
 
+## RT-198.1 client_credentials : scopes_supported に無いスコープを発行しない
+
+| | |
+|---|---|
+| 観点 | 起票時の再現手順そのもの。宣言外の `admin` `superuser` `whatever` まで、認可サーバの署名付きで発行されていた。**宣言済みのものは残し、宣言外のものだけを外す**こと、そして**要求と異なる発行をしたことを、トークン応答の scope で伝える**ことを確かめる。 |
+| 根拠 | RFC 6749 §3.3（発行スコープは要求と異なってよい）/ §5.1（異なる場合は scope が必須） / RFC 8414 §2（scopes_supported）/ #198 |
+| テスト | `RT198_01_client_credentialsで宣言外のスコープを発行しない` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials、scope="roles userid auth admin superuser whatever" を送る
+
+**検証（合否を判定する）**
+
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
+## RT-198.2 password : scopes_supported に無いスコープを発行しない
+
+| | |
+|---|---|
+| 観点 | ユーザの文脈を持つトークンでも同じであること。RT-198.1（client_credentials）とはサーバ側の発行経路が別なので、個別に確かめる。 |
+| 根拠 | RFC 6749 §3.3 / §5.1 / #198 |
+| テスト | `RT198_02_passwordで宣言外のスコープを発行しない` |
+
+**手順**
+
+1. POST /token に grant_type=password、scope="email profile admin" を送る
+
+**検証（合否を判定する）**
+
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
 # 保留中のテストケース（Skip）
 
 **未修正だと分かっている項目は、期待する動作を書いたうえで Skip にしている。**
@@ -1804,5 +1874,4 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
 | `RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする` | 未修正。実測（2026/09/09, net10.0）では、リダイレクトではなくエラー画面（HTTP 200）になる。 |
-| `TC0104_未定義のスコープの扱い` | 未修正（#198）。実測（2026/09/09, net10.0）では、scopes_supported に無い任意の文字列がそのまま発行される。 |
 

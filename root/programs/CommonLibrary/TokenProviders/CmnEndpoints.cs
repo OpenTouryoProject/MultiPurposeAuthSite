@@ -63,6 +63,7 @@
 //*  2026/09/08  玄人 幸道         エラー コードをRFC 6749に合わせる（#187）
 //*  2026/09/11  玄人 幸道         device_code のエラーを RFC の値で返すよう修正（#199）
 //*  2026/09/11  玄人 幸道         revoke/introspectの本体を両アプリから移し、RFC 7009 / 7662 に合わせる（#200）
+//*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行せず、トークン応答に scope を返す（#198）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -154,14 +155,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region scopes
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
-            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
+            // 発行時の絞り込み（Helper.FilterSupportedScopes）と同じ一覧を使う（#198）。
+            // openid は OIDC が有効なときだけ含まれる。
+            scopes_supported.AddRange(Helper.GetScopesSupported());
             #endregion
 
             #region grant and response_types
@@ -213,7 +209,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (Config.EnableOpenIDConnect)
             {
-                scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
+                // openid は、上の Helper.GetScopesSupported で追加済み（#198）
 
                 #region response_types
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
@@ -773,7 +769,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         {
             // ClaimsIdentityに、その他、所定のClaimを追加する。
-            Helper.AddClaim(identity, client_id, scopes, claims, nonce);
+            // scopes_supported に無いスコープは発行しない（#198）
+            Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes), claims, nonce);
 
             // Codeの生成
             string code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -835,7 +832,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, scopes, claims, nonce);
+                // scopes_supported に無いスコープは発行しない（#198）
+                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes), claims, nonce);
 
                 // AccessTokenの生成
                 access_token = CmnAccessToken.CreateFromClaims(
@@ -930,7 +928,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, scopes, claims, nonce);
+                // scopes_supported に無いスコープは発行しない（#198）
+                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes), claims, nonce);
 
                 // Codeの生成
                 code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -1365,7 +1364,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            identity = Helper.AddClaim(identity, client_id, scopes.Split(' '), null, "");
+                            // scopes_supported に無いスコープは発行しない（#198）
+                            identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' ')), null, "");
 
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
@@ -1482,7 +1482,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                    identity = Helper.AddClaim(identity, client_id, scopes.Split(' '), null, "");
+                    // scopes_supported に無いスコープは発行しない（#198）
+                    identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' ')), null, "");
 
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
@@ -1570,7 +1571,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                                identity = Helper.AddClaim(identity, iss, scopes.Split(' '), null, "");
+                                // scopes_supported に無いスコープは発行しない（#198）
+                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(scopes.Split(' ')), null, "");
 
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(
@@ -2560,6 +2562,23 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // expires_in
             ret.Add(OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString());
+
+            // scope
+            // 発行したスコープを返す。要求と異なる場合は必須（RFC 6749 5.1）。
+            // scopes_supported に無いスコープは発行しないので、要求と異なることがある（#198）。
+            List<string> issued = new List<string>();
+            foreach (string s in jAry)
+            {
+                if (!string.IsNullOrEmpty(s))
+                {
+                    issued.Add(s);
+                }
+            }
+
+            if (issued.Count > 0)
+            {
+                ret.Add(OAuth2AndOIDCConst.scope, string.Join(" ", issued));
+            }
 
             return ret;
         }
