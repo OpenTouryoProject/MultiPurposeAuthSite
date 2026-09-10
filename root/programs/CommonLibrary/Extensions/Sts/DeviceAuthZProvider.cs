@@ -25,6 +25,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2020/12/18  西野 大介         新規
+//*  2026/09/11  玄人 幸道         使用済み・発行していない device_code で HTTP 500 になる問題を修正（#199）
 //**********************************************************************************
 
 using System;
@@ -195,7 +196,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                         foreach (string deviceCode in DeviceAuthZProvider.DeviceAuthZData.Keys)
                         {
-                            string temp = DeviceAuthZProvider.DeviceAuthZData[deviceCode];
+                            // 列挙した後に、トークン要求側（ReceiveTokenReq）が削除していることがある。
+                            // 索引子で読むと KeyNotFoundException になるので TryGetValue で読む（#199）。
+                            string temp;
+                            if (!DeviceAuthZProvider.DeviceAuthZData.TryGetValue(deviceCode, out temp))
+                            {
+                                continue;
+                            }
 
                             Dictionary<string, string> dic
                                 = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
@@ -372,7 +379,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     case EnumUserStoreType.Memory:
 
-                        temp = DeviceAuthZProvider.DeviceAuthZData[deviceCode];
+                        // 使用済み（トークンを渡した時点で削除済み）・発行していない device_code は、キーが無い。
+                        // 索引子で読むと KeyNotFoundException → HTTP 500 になる。
+                        // null のキーも ConcurrentDictionary は例外にするので、先に弾く（#199）。
+                        if (string.IsNullOrEmpty(deviceCode)
+                            || !DeviceAuthZProvider.DeviceAuthZData.TryGetValue(deviceCode, out temp))
+                        {
+                            // 見つからない（states は not_found のまま）
+                            break;
+                        }
 
                         if (string.IsNullOrEmpty(temp))
                         {

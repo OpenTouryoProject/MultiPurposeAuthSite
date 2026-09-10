@@ -31,7 +31,9 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\netfx\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <!-- NETFX は Debug / Release の両方で必要（#if NETFX が 71 箇所）。
+         抜けていると #else（Core 側）が採られ、コンパイルが通らない。 -->
+    <DefineConstants>TRACE;NETFX</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>

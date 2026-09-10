@@ -25,6 +25,7 @@
 //*  2020/11/12  西野 大介         redirect_uri、ROへの対策漏れ。
 //*  2020/11/12  西野 大介         SameSiteCookie対応 (.NET Fx側は対策不要)
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
+//*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -262,8 +263,7 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         /// <summary>テスト用にパラメタを保存</summary>
-        /// <param name="isOidc">OIDCの場合、true</param>
-        private void SaveOAuth2Params(bool isOidc)
+        private void SaveOAuth2Params()
         {
             // テスト用にパラメタを、Session, Cookieに保存
             // ・Session : サイト分割時
@@ -280,12 +280,9 @@ namespace MultiPurposeAuthSite.Controllers
             responseCookies.Set(Const.TestState, this.State, this._cookieOptions);
 
             // redirect_uri
-            if (!isOidc)
-            {
-                // OIDCはTokenリクエストにredirect_uriを指定しない。
-                HttpContext.Session.SetString(Const.TestRedirectUri, this.RedirectUri);
-                responseCookies.Set(Const.TestRedirectUri, this.RedirectUri, this._cookieOptions);
-            }
+            // OIDCでもTokenリクエストにredirect_uriを指定する（OIDC Core 3.1.3.1）（#186）。
+            HttpContext.Session.SetString(Const.TestRedirectUri, this.RedirectUri);
+            responseCookies.Set(Const.TestRedirectUri, this.RedirectUri, this._cookieOptions);
 
             // nonce
             HttpContext.Session.SetString(Const.TestNonce, this.Nonce);
@@ -1041,7 +1038,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params(false);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1061,7 +1058,7 @@ namespace MultiPurposeAuthSite.Controllers
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&prompt=none";
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1090,7 +1087,7 @@ namespace MultiPurposeAuthSite.Controllers
             // Authorization Code Grant Flow with PKCE
             if (toSpa) redirect += "&response_mode=fragment";
 
-            this.SaveOAuth2Params(false);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1115,7 +1112,7 @@ namespace MultiPurposeAuthSite.Controllers
             // Authorization Code Grant Flow with PKCE
             if (toSpa) redirect += "&response_mode=fragment";
 
-            this.SaveOAuth2Params(false);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1138,7 +1135,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOAuth2Starter(
                 OAuth2AndOIDCConst.ImplicitResponseType);
 
-            this.SaveOAuth2Params(false);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1157,7 +1154,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcImplicit1_ResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1173,7 +1170,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1196,7 +1193,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcHybrid2_IdToken_ResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1211,7 +1208,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcHybrid2_Token_ResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1226,7 +1223,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.OidcHybrid3_ResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1249,7 +1246,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleFAPI1Starter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1264,7 +1261,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = this.AssembleFAPI1_OIDCStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1285,7 +1282,7 @@ namespace MultiPurposeAuthSite.Controllers
                 + "&code_challenge=" + this.CodeChallenge
                 + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain;
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }
@@ -1304,7 +1301,7 @@ namespace MultiPurposeAuthSite.Controllers
             string redirect = await this.AssembleFAPI2CCStarterAsync(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType);
 
-            this.SaveOAuth2Params(true);
+            this.SaveOAuth2Params();
 
             return Redirect(redirect);
         }

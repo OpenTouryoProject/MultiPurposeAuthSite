@@ -323,17 +323,32 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 > リポジトリに直接格納する方式に変わっている。**
 > エージェントは bat を経由せず `dotnet build` を直接使うのが確実。
 
-### 9.1 現状のビルド結果（実測 2026-09-07）
+### 9.1 現状のビルド結果（実測 2026-09-08）
 
-`dotnet build MultiPurposeAuthSiteCore.sln` … **0 エラー / 警告あり**
+`dotnet build MultiPurposeAuthSiteCore.sln` … **0 エラー / 6 警告**
 
-| 警告 | 内容 | 対処の目安 |
-|---|---|---|
-| `NU1902`（中） | `log4net` **3.2.0** に既知の脆弱性（`GHSA-4f7c-pmjv-c25w`） | `MultiPurposeAuthSiteCore.csproj` の `log4net` を **3.3.0** へ。Open棟梁本体は既に 3.3.0 |
-| `NU1901`（低） | `NuGet.Packaging` / `NuGet.Protocol` 6.12.1（`GHSA-g4vj-cjjj-v7hg`） | `Microsoft.VisualStudio.Web.CodeGeneration.Design` からの推移的依存 |
-| `MSB3277` | `log4net` 3.2.0 と 3.3.0、`Microsoft.Data.SqlClient` 6.1.4 と 7.0.0 の版競合 | 上と同根。Open棟梁アセンブリが期待する版と本プロジェクトの `PackageReference` がズレている |
+| 警告 | 件数 | 内容 |
+|---|---:|---|
+| `MSB3277` | 64 | `Microsoft.Data.SqlClient` 6.1.4 と 7.0.0 の版競合。Open棟梁アセンブリが期待する版と本プロジェクトの `PackageReference` のズレ |
+| `NU1901`（低） | 8 | `NuGet.Packaging` / `NuGet.Protocol` 6.12.1（`GHSA-g4vj-cjjj-v7hg`）。`Microsoft.VisualStudio.Web.CodeGeneration.Design` からの推移的依存 |
 
-**`log4net` の版を上げると `MSB3277` も同時に減る。**
+> **`log4net` は 3.2.0 → 3.3.0 に上げた（Dependabot PR #181 と同じ内容）。**
+> **上げるまでは、ビルドは通るのに実行時に落ちていた。**
+>
+> ```
+> FileNotFoundException: Could not load file or assembly
+> 'log4net, Version=3.3.0.0, Culture=neutral, PublicKeyToken=669e0ddf0bb1aa2a'
+> ```
+>
+> `OpenTouryo.Public`（net48 / net10.0 とも）が **log4net 3.3.0.0** を参照するのに対し、
+> 本プロジェクトが **3.2.0** を固定していたため、`bin` には 3.2.0 が配置される。
+> **.NET (Core) には binding redirect が無い**ので、そのまま `FileNotFoundException` になる。
+> `MSB3277` の版競合警告は、この実行時エラーの予兆だった。
+>
+> 版を上げた結果、**警告 9 → 6**、`NU1902`（log4net の既知脆弱性）は解消。
+>
+> net48 側は `packages.config` / csproj に log4net を持たず、
+> `OpenTouryoAssemblies/Build_net48/log4net.dll` を使うため、この問題は起きない。
 
 ---
 

@@ -34,7 +34,9 @@
 「最新の IdP に近づける」うえでの最短経路は、**新機能の追加ではなく、
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
-**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-6 / C-14）。
+**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
+**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
+セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
 見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
@@ -154,9 +156,18 @@ RFC 7519 §2 の **NumericDate は JSON の数値**。`"exp": "1789..."` は仕�
 （`Claim` の値は `string` なので変換が要る）。この書き方なら、
 **文字列で発行済みの古いトークンもそのまま検証を通る。**
 
-> **残っている同種の箇所:** JARM の Response Object（`CmnResponseObject.Create`）も
-> `exp` を文字列で入れている。ただし引数が `Dictionary<string, string>` なので、
-> 直すにはシグネチャ変更と両アプリの呼び出し側 12 箇所の修正を伴う。**本 Issue の範囲外**とした。
+> **残っていた同種の箇所 — ✅ 修正済み（#201）:** JARM の Response Object（`CmnResponseObject.Create`）も
+> `exp` を文字列で入れていた（E2E テスト EX-6.4 で実測）。
+>
+> ```csharp
+> // 修正前: CommonLibrary/TokenProviders/CmnResponseObject.cs
+> responseDictionary.Add(OAuth2AndOIDCConst.exp, expiresUtc.Value.ToUnixTimeSeconds().ToString());
+> ```
+>
+> 当時は「引数が `Dictionary<string, string>` なので、シグネチャ変更と両アプリの呼び出し側の修正を伴う」
+> として範囲外にした。#201 では、**関数の中で `Dictionary<string, object>` に写してから `exp` を数値で入れる**形にし、
+> シグネチャも呼び出し側も変えずに直した。
+> 検証側（Open棟梁 の `ResponseObject.Verify`）は `(string)` で読むが、JSON の数値も文字列として読めるので、変更は要らない。
 
 ### A-4. `email_verified` / `phone_number_verified` が文字列 **[Lib][Core]** — **✅ 修正済み（#184）**
 
@@ -171,7 +182,7 @@ OIDC Core §5.1 は **boolean** と定めている。JSON 的にも `"True"` は
 
 **修正:** `.ToString()` を外した。access_token / id_token と `/userinfo` の計 4 箇所。
 
-### A-5. OIDC のとき `redirect_uri` が code に紐付かない（条件が反転している） **[Lib]**
+### A-5. OIDC のとき `redirect_uri` が code に紐付かない（条件が反転している） **[Lib][Core]** — **✅ 修正済み（#186）**
 
 ```csharp
 // CommonLibrary/TokenProviders/AuthorizationCodeProvider.cs:83-87
@@ -190,10 +201,41 @@ if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
 → **OIDC フローでは `/token` の `redirect_uri` が検証されない。**
 RFC 6749 §4.1.3 / OIDC Core §3.1.3.1 が要求する照合が効いていない。
 
-**修正:** 条件を外して常に保存する（あるいは OIDC のときこそ保存する）。
-**net48 版と共通コードなので、両系統の回帰確認が要る。**
+**対応（#186）:** 条件を外し、認可リクエストの `redirect_uri` を常に code に紐付けるようにした。
 
-### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]**
+**サーバだけ直すと自己テストが壊れる**点が要だった。
+`HomeController.SaveOAuth2Params` に
+
+```csharp
+if (!isOidc) { /* OIDCはTokenリクエストにredirect_uriを指定しない。 */ }
+```
+
+という分岐があり、**クライアント側も送らない実装**になっていた。
+このコメントは仕様の誤解で、**OIDC Core §3.1.3.1 は Token リクエストの `redirect_uri` を
+REQUIRED としている**（RFC 6749 §4.1.3 の「認可リクエストに含めた場合は必須」より厳しい）。
+両アプリの分岐を外し、意味を失った `isOidc` 引数も廃止した（呼び出し 14 箇所 × 2 アプリ）。
+
+Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_uri` は null のままとなり、
+`CheckClientIdAndRedirectUri` の「認可リクエスト時、指定無し」経路に入る。影響しない。
+
+> **残っている穴（#197）:** `request_uri`（Request Object / JAR）の経路では、
+> `redirect_uri` が **JWT の中**にあって `queryString` には無いため、**紐付けが効かない。**
+> `CreateCodeInAuthZNRes` に実効値を渡す形にする必要がある。
+>
+> E2E テストで実測した（2026/09/09, net10.0）。**推測ではない。**
+>
+> ```
+> 誤った redirect_uri: HTTP 200 / keys=[access_token, expires_in, id_token, ...] / error=-
+> ```
+>
+> PKCE の `code_challenge` も同じ理由で拾えていないが、**向きは逆**で、
+> 記録されないため `code_verifier` を送ると `invalid_client` になる（素通りではなく拒否）。
+> 安全側だが、`request_uri` ＋ PKCE のパブリック クライアントは機能しない。
+>
+> 再現するテストが `root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs` にある
+> （`Skip` を外すと落ちる）。
+
+### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]** — **✅ 修正済み（#187）**
 
 ```csharp
 // MultiPurposeAuthSiteCore/.../AccountController.cs:2848, 2977
@@ -209,9 +251,24 @@ RFC 6749 §4.1.2.1 が要求するのは `error` / `error_description`、
 
 - `redirect_uri` が既にクエリを持つ場合でも無条件に `?` を付ける（URL が壊れる）
 - `err` / `errDescription` を URL エンコードしていない
-- `err` は事実上いつも `server_error`（A-7 / C-15 参照）
+- `err` は事実上いつも `server_error`（A-8 参照）
 
-### A-7. エラーの HTTP ステータスが 200 **[Core]**
+**対応（#187）:** `CmnEndpoints.BuildRedirectUrl` を新設し、**両アプリの 36 箇所**を置き換えた。
+
+- パラメタ名を `error` / `error_description` にし、**`state` は要求にあった場合のみ返す**（RFC 6749 §4.1.2）
+- 既にクエリ文字列を持つ `redirect_uri` でも壊れないよう、区切りを `?` と `&` で切り替える
+- **値を必ず URL エンコードする。** `state` はクライアントが自由に決められるため、
+  生で連結するとリダイレクト先 URL にパラメタを注入できた（**C-6 の解消**）
+
+実機で確認済み。`state="a&b=c d"` が分割されずに復元されること、
+`state` を送らなければ応答にも入らないこと、`client_id` / `response_type` が不正なときは
+**リダイレクトせずエラー画面**になること（RFC 6749 §4.1.2.1）を確かめた。
+
+> **`?` と `&` の切り替えは、コードの読みでしか確認できていない。**
+> 登録済みクライアントの `redirect_uri` にクエリ文字列を持つものが無く、
+> `CheckRedirectUri` は完全一致を要求するため、実機で試せなかった。単体テスト向き。
+
+### A-7. エラーの HTTP ステータスが 200 **[Core]** — **未対応（#196）**
 
 `/token` `/userinfo` `/revoke` `/introspect` はいずれも
 `Dictionary<string,string>` を返すだけなので、**エラーでも HTTP 200** になる。
@@ -221,7 +278,11 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 **修正:** `IActionResult` に変えて `BadRequest(...)` / `Unauthorized(...)` を返す。
 **net48 版（`ApiController` / `HttpResponseMessage`）とは書き方が違うので、両系統で別実装になる。**
 
-### A-8. 認可エラーのコードが全て `server_error` **[Lib]**
+> **#187 から #196 に分離した。** 戻り値の型変更を伴い両系統で実装が分かれること、
+> **HTTP ステータスはクライアントの期待そのもの**でテスト整備後に着手したいことが理由。
+> `/revoke` は RFC 7009 §2.2 により**エラーでも 200 が正**（例外）である点に注意。
+
+### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs:378-380
@@ -237,6 +298,21 @@ redirect_uri 不一致・scope 不正のいずれでも `server_error` を返す
 
 `/token` 側も `"not_supported"`（未登録の値。正しくは `unsupported_grant_type`）や
 未知の grant_type に `invalid_grant`（正しくは `unsupported_grant_type`）を使っている。
+
+**対応（#187）:** `OAuth2AndOIDCConst` に標準コードが揃っていたので、それを使って返し分けた。
+
+| 失敗の内容 | 返すコード |
+|---|---|
+| `client_id` 未設定 | `invalid_request` |
+| `client_id` 不正 | `unauthorized_client` |
+| `response_type` 空 | `invalid_request` |
+| `response_type` 不明 / グラント種別が無効 | `unsupported_response_type` |
+| OIDC が無効なのに `scope=openid` | `invalid_scope` |
+| OIDC で `redirect_uri` 欠落 / `redirect_uri` 不一致・未登録 | `invalid_request` |
+| Grant\* の `"not_supported"` | `unsupported_grant_type` |
+
+> **未知の `grant_type` に `invalid_grant` を返している件は、まだ直していない**
+> （`OAuth2EndpointController` 側。正しくは `unsupported_grant_type`）。#196 で扱う。
 
 ### A-9. discovery のキー名に末尾スペース **[Lib]** — **✅ 修正済み（#189 の一部）**
 
@@ -272,6 +348,47 @@ CIBA クライアントはこのキーを見つけられない。
 | `authorization_response_iss_parameter_supported` が無い | RFC 9207（未実装のため） |
 | JARM の `authorization_signing_alg_values_supported` が無い | JARM を広告しているのに alg を出していない |
 
+### A-11. `/revoke` `/introspect` がヒントを必須にし、無効なトークンをエラーにする **[Core][Lib]** — **✅ 修正済み（#200）**
+
+E2E テストの拡張仕様（EX-2 / EX-3）で見つかった。
+
+| # | エンドポイント | 修正前 | RFC |
+|---|---|---|---|
+| 1 | `/revoke` | `token_type_hint` が無いと `invalid_request`。失効しない | ヒントは任意。見つからなければ全種類を探す（RFC 7009 §2.1） |
+| 2 | `/revoke` | 無効なトークンに `invalid_request` | 200 で成功扱い（RFC 7009 §2.2） |
+| 3 | `/introspect` | 無効なトークンに `invalid_request` | `{"active": false}`（RFC 7662 §2.2） |
+| 4 | `/introspect` | refresh_token の問い合わせが、実行ごとに `active=true` / `invalid_request` に揺れる | `active=true` |
+| 5 | `/revoke` | 成功が net10.0 は HTTP 204、net48 は HTTP 200（本文 `null`） | 200（RFC 7009 §2.2） |
+
+4 の原因は、refresh_token を**有効期限が現在時刻の** access_token に作り直してから検証していたこと。
+`CmnJwtToken.VerifyExp` は秒単位の `exp >= now` なので、作ってから検証するまでに秒をまたぐと失効扱いになる。
+
+```csharp
+// 修正前: MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/Controllers/OAuth2EndpointController.cs（net48 版も同じ）
+token = Token.CmnAccessToken.ProtectFromPayload(
+    "", tokenPayload, DateTimeOffset.Now,
+    null, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
+```
+
+**対応（#200）:** クライアント認証より後の本体を、両アプリの Controller から
+`CmnEndpoints.RevokeToken` / `IntrospectToken` に移した。
+両アプリに同じコードが 2 本ずつあったため、片方だけ直す事故を防ぐ。Controller にはクライアント認証だけを残した。
+
+- `token_type_hint` は探す順番の手掛かりにする。ヒントの種類で見つからなければ、他の種類も探す
+- どの種類でも見つからなければ、`/revoke` は成功（空の JSON、HTTP 200）、`/introspect` は `{"active": false}`
+- 他のクライアントのトークンの扱い（#194）は変えていない
+- refresh_token の問い合わせでは、作り直す access_token の期限を、検証の間は持つ長さにした。
+  その一時的なトークンの `exp` / `nbf` / `iat` / `jti` は refresh_token 自身の値ではないので、返さない
+- `token` が無い要求は `invalid_request`（以前は `token_type_hint` だけでも先へ進んでいた）
+
+E2E テスト: `EX-2.4` / `EX-2.5` / `EX-2.6`（ヒントの取り違え）/ `EX-3.2` / `EX-3.4` / `EX-3.7`（同）。
+
+> **残っている点:**
+> エラー応答の HTTP ステータス（400 / 401）は #196 で扱う。
+> `/introspect` の `token_type` には「見つかった種類」（`access_token` / `refresh_token`）を入れているが、
+> RFC 7662 §2.2 の `token_type` は `Bearer` などの型を指す。
+> また、メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
+
 ---
 
 ## 3. B. 異常系で落ちる（HTTP 500 になる）
@@ -283,6 +400,8 @@ CIBA クライアントはこのキーを見つけられない。
 > **B-3 は資格情報なしで到達する**ことが分かった
 > （`grant_type=authorization_code` ＋ 任意の `code` ＋ `code_verifier`、`client_secret` なし
 > → `ReceiveChallenge` で NRE）。この経路が最も深刻だった。
+>
+> **B-7 は、後から E2E テストの拡張仕様（EX-4.5）で見つかり、#199 で対応した。**
 
 ### B-1. `kid` の無い JWT で `NullReferenceException` **[Lib]** — **✅ 修正済み（#185）**
 
@@ -353,6 +472,35 @@ if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 `GrantRefreshTokenCredentials` は、`RefreshTokenProvider.Receive` が空を返したとき
 （＝ローテーション済み・存在しない refresh_token）に `err` を設定せず `false` を返す。
 → `/token` が **`{}` を HTTP 200 で返す**。`invalid_grant` を返すべき。
+
+### B-7. 使用済み・不正な `device_code` で `KeyNotFoundException` **[Lib]** — **✅ 修正済み（#199）**
+
+E2E テストの拡張仕様（EX-4.5）で見つかった。
+
+`DeviceAuthZProvider.ReceiveTokenReq` が、`ConcurrentDictionary` を**索引子で**読んでいた。
+トークンを渡した時点でレコードは削除されるため、
+**同じ `device_code` で 2 回目を送ると、必ず例外（HTTP 500）になる。**
+発行していない `device_code` も同じ行を通る。
+
+```csharp
+// 修正前: CommonLibrary/Extensions/Sts/DeviceAuthZProvider.cs
+temp = DeviceAuthZProvider.DeviceAuthZData[deviceCode];
+```
+
+トークンは出ないので、権限の漏れは無い。
+
+**対応（#199）:**
+
+- `ReceiveTokenReq` は `TryGetValue` で読み、無ければ `not_found` として扱う。
+  `null` のキーも `ConcurrentDictionary` は例外にするので、先に弾く
+- `ReceiveResult`（`/device_verify`）も同じ読み方をしていたので `TryGetValue` にした
+  （キーを列挙した後に、トークン要求側が削除すると同じ例外になる）
+- `GrantDeviceAuthZ` は、仕様外の状態（`not_found` / `irregularity_data`）を
+  **enum 名のまま `error` に入れていた**のをやめ、`invalid_grant` で返す。
+  `access_denied` / `expired_token` は RFC 8628 §3.5 の値なので、そのまま返す
+- `device_code` を送らない要求は `invalid_request`
+
+E2E テスト: `EX-4.5`（使用済み）/ `EX-4.7`（発行していない・送らない）。
 
 ---
 
@@ -702,6 +850,8 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 | 4 | ✅ **B-1 〜 B-6 異常系の NRE と未処理例外** #185 | 82 行 | Lib ＋ 両アプリ |
 | 5 | ✅ **A-9 discovery の末尾スペース** #189 の一部 | 1 行 | Lib |
 | 6 | ✅ **C-14 implicit / hybrid で `nonce` を必須化** #190 | 15 行 | Lib |
+| 7 | ✅ **B-7 使用済み・不正な `device_code` の未処理例外** #199 | 39 行 | Lib |
+| 8 | ✅ **A-3 の残り : JARM の `exp` を数値に** #201 | 24 行 | Lib |
 
 > 6 は本来フェーズ 2（セキュリティ）の項目だが、**2 と表裏の関係**にあり、
 > 片方だけ直すと「nonce 無しの implicit / hybrid が nonce クレームの無い id_token を得る」
@@ -714,10 +864,11 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 
 | 項目 |
 |---|
-| A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消） |
-| A-7 エラーの HTTP ステータス（400 / 401） |
-| A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる） |
-| A-10 discovery の項目整備 |
+| ✅ **A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消）** #187 |
+| ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
+| ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
+| A-7 エラーの HTTP ステータス（400 / 401） → **#196 に分離。テスト整備後** |
+| A-10 discovery の項目整備 → **#189 の残り 13 項目** |
 
 ### フェーズ 2 — セキュリティの底上げ
 

@@ -31,6 +31,7 @@
 //*  2018/12/26  西野 大介         新規（分割
 //*  2019/08/01  西野 大介         ReceiveをReceive＋ReceiveChallengeに分割
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
+//*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -78,13 +79,13 @@ namespace MultiPurposeAuthSite.TokenProviders
             temp.Add("access_token_payload", access_token_payload);
 
             // redirect_uri 対応
-            string scope = queryString[OAuth2AndOIDCConst.scope];
-            scope = scope ?? ""; // 空文字列で標準化
-            if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
-            {
-                // OIDCの場合は、redirect_uriを保存しない。
-                temp.Add(OAuth2AndOIDCConst.redirect_uri, queryString[OAuth2AndOIDCConst.redirect_uri]);
-            }
+            // 認可リクエストのredirect_uriをcodeに紐付ける（#186）。
+            // Tokenリクエストでの照合は、CheckClientIdAndRedirectUriが行う。
+            // - RFC 6749 4.1.3 : 認可リクエストに含めた場合、Tokenリクエストでも必須
+            // - OIDC Core 3.1.3.1 : OIDCでは必須
+            // ※ 認可リクエストに指定が無い場合（事前登録のみ）はnullが入り、照合はスキップされる。
+            //    Device AuthZ / CIBAは空のqueryStringを渡すので、この経路に入る。
+            temp.Add(OAuth2AndOIDCConst.redirect_uri, queryString[OAuth2AndOIDCConst.redirect_uri]);
 
             // OAuth PKCE 対応
             temp.Add(OAuth2AndOIDCConst.code_challenge, queryString[OAuth2AndOIDCConst.code_challenge]);

@@ -60,6 +60,9 @@
 //*  2026/09/07  玄人 幸道         discoveryのキー名の末尾スペースを除去（#189）
 //*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
 //*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
+//*  2026/09/08  玄人 幸道         エラー コードをRFC 6749に合わせる（#187）
+//*  2026/09/11  玄人 幸道         device_code のエラーを RFC の値で返すよう修正（#199）
+//*  2026/09/11  玄人 幸道         revoke/introspectの本体を両アプリから移し、RFC 7009 / 7662 に合わせる（#200）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -78,6 +81,7 @@ using MultiPurposeAuthSite.Extensions.Sts;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Text;
 using System.Collections.Specialized;
 using System.Security.Claims;
 using System.Security.Cryptography.X509Certificates;
@@ -382,7 +386,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             out string valid_redirect_uri, out string err, out string errDescription)
         {
             valid_redirect_uri = "";
-            err = "server_error";
+            // 各分岐で上書きする。ここは想定外のケースの既定値（#187）。
+            err = OAuth2AndOIDCConst.server_error;
             errDescription = "";
 
             #region client_id
@@ -390,7 +395,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // client_idチェック
             if (string.IsNullOrEmpty(client_id))
             {
-                //err = "server_error";
+                err = OAuth2AndOIDCConst.invalid_request;
                 errDescription = Resources.ApplicationOAuthBearerTokenProvider.client_id_NotSett;
                 return false;
             }
@@ -400,7 +405,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (string.IsNullOrEmpty(clientName))
                 {
-                    //err = "server_error";
+                    err = OAuth2AndOIDCConst.unauthorized_client;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
                     return false;
                 }
@@ -417,7 +422,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (!Config.EnableAuthorizationCodeGrantType)
                     {
-                        //err = "server_error";
+                        err = OAuth2AndOIDCConst.unsupported_response_type;
                         errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType;
                         return false;
                     }
@@ -426,7 +431,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (!Config.EnableImplicitGrantType)
                     {
-                        //err = "server_error";
+                        err = OAuth2AndOIDCConst.unsupported_response_type;
                         errDescription = Resources.ApplicationOAuthBearerTokenProvider.EnableImplicitGrantType;
                         return false;
                     }
@@ -441,7 +446,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
                     {
                         // OIDC無効
-                        //err = "server_error";
+                        err = OAuth2AndOIDCConst.invalid_request;
                         errDescription = string.Format(
                             "This response_type is required {0} value in scope param.",
                             OAuth2AndOIDCConst.Scope_Openid);
@@ -451,14 +456,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
                 else
                 {
-                    //err = "server_error";
+                    err = OAuth2AndOIDCConst.unsupported_response_type;
                     errDescription = "This response_type is unknown.";
                     return false;
                 }
             }
             else
             {
-                //err = "server_error";
+                err = OAuth2AndOIDCConst.invalid_request;
                 errDescription = "response_type is empty.";
                 return false;
             }
@@ -475,7 +480,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // OIDC有効
                     if (!Config.EnableOpenIDConnect)
                     {
-                        //err = "server_error";
+                        err = OAuth2AndOIDCConst.invalid_scope;
                         errDescription = "OIDC is not enabled.";
                         return false;
                     }
@@ -484,7 +489,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (string.IsNullOrEmpty(redirect_uri) 
                         || string.IsNullOrEmpty(valid_redirect_uri))
                     {
-                        //err = "server_error";
+                        err = OAuth2AndOIDCConst.invalid_request;
                         errDescription = "OIDC is required the valid redirect_uri.";
                         return false;
                     }
@@ -704,7 +709,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // 事前登録されていない。
-                    err = "server_error";
+                    err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.redirect_uri_NotRegistered;
                     return false;
                 }
@@ -741,7 +746,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     else
                     {
                         // 完全一致しない場合。
-                        err = "server_error";
+                        err = OAuth2AndOIDCConst.invalid_request;
                         errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_redirect_uri;
                         return false;
                     }
@@ -1142,14 +1147,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
                 err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableAuthorizationCodeGrantType);
             }
 
@@ -1266,14 +1271,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
                 err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableRefreshToken);
             }
 
@@ -1396,14 +1401,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
                 err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableResourceOwnerCredentialsGrantType);
             }
 
@@ -1497,14 +1502,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
                 err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableClientCredentialsGrantType);
             }
 
@@ -1587,21 +1592,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                         else
                         {
                             // クライアント認証エラー（Credential（aud）不正
-                            err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                             err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                         }
                     }
                     else
                     {
                         // クライアント認証エラー（Credential（署名）不正
-                        err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                         err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                     }
                 }
                 else
                 {
                     // クライアント認証エラー（Credential（iss or pubKey）不正
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential or pubkey is not set.");
                 }
             }
@@ -1638,7 +1643,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (!CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                     return false;
                 }
@@ -1650,6 +1655,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // Tokenレスポンスを生成する。
                 string code = "";
                 OAuth2AndOIDCEnum.DeviceAuthZState deviceState = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
+
+                // device_code は必須（RFC 8628 §3.4）。無ければ invalid_request（#199）。
+                if (string.IsNullOrEmpty(device_code))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    err.Add(OAuth2AndOIDCConst.error_description, "device_code is required.");
+                    return false;
+                }
 
                 if (DeviceAuthZProvider.ReceiveTokenReq(device_code, out code, out deviceState))
                 {
@@ -1712,8 +1725,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                             err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending.ToStringByEmit());
                             break;
 
-                        default:
+                        case OAuth2AndOIDCEnum.DeviceAuthZState.access_denied:
+                        case OAuth2AndOIDCEnum.DeviceAuthZState.expired_token:
+                            // RFC 8628 §3.5 の値そのもの
                             err.Add(OAuth2AndOIDCConst.error, deviceState.ToStringByEmit());
+                            break;
+
+                        default:
+                            // not_found（使用済み・発行していない）/ irregularity_data は仕様外の値。
+                            // enum 名をそのまま返さず、RFC 6749 §5.2 の invalid_grant で返す（#199）。
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid device_code.");
                             break;
                     }
                 }
@@ -1723,14 +1745,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //else
                 //{
                 //    // クライアント認証エラー（Credential不正
-                //    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                //    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                 //    err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 //}
             }
             else
             {
                 // サポートされていない
-                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
                 err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableCibaGrantType);
             }
 
@@ -1876,14 +1898,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 else
                 {
                     // クライアント認証エラー（Credential不正
-                    err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
                 }
             }
             else
             {
                 // サポートされていない
-                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
                 err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.EnableCibaGrantType);
             }
 
@@ -2016,6 +2038,49 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region Redirect URLの組み立て
+
+        /// <summary>リダイレクト先URLに、パラメタを付ける</summary>
+        /// <param name="redirectUri">リダイレクト先</param>
+        /// <param name="parameters">付けるパラメタ（値が空のものは付けない）</param>
+        /// <param name="useFragment">true : フラグメント（#）、false : クエリ文字列（?）</param>
+        /// <returns>URL</returns>
+        /// <remarks>
+        /// #187
+        /// - **既にクエリ文字列を持つredirect_uriでも壊れない**よう、区切りを ? と & で切り替える。
+        /// - **値は必ずURLエンコードする。** stateはクライアントが自由に決められるため、
+        ///   生で連結するとリダイレクト先URLにパラメタを注入できてしまう。
+        /// - 値が空のパラメタは付けない。stateは、要求に含まれた場合のみ返す（RFC 6749 4.1.2）。
+        /// </remarks>
+        public static string BuildRedirectUrl(
+            string redirectUri, Dictionary<string, string> parameters, bool useFragment = false)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            foreach (KeyValuePair<string, string> p in parameters)
+            {
+                if (string.IsNullOrEmpty(p.Value)) continue;
+
+                if (sb.Length != 0) sb.Append("&");
+                sb.Append(Uri.EscapeDataString(p.Key));
+                sb.Append("=");
+                sb.Append(Uri.EscapeDataString(p.Value));
+            }
+
+            if (sb.Length == 0) return redirectUri;
+
+            if (useFragment)
+            {
+                return redirectUri + (redirectUri.Contains("#") ? "&" : "#") + sb.ToString();
+            }
+            else
+            {
+                return redirectUri + (redirectUri.Contains("?") ? "&" : "?") + sb.ToString();
+            }
+        }
+
+        #endregion
+
         #region Token所有者の確認
 
         /// <summary>Tokenが、認証したクライアントに発行されたものかを確認する</summary>
@@ -2046,6 +2111,205 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return (payload != null
                 && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
+        }
+
+        #endregion
+
+        #region Revocation / Introspection
+
+        /// <summary>
+        /// token_type_hint から、トークンを探す順番を決める。
+        /// </summary>
+        /// <param name="token_type_hint">token_type_hint（省略・未知の値は既定の順番）</param>
+        /// <returns>探す順番（access_token / refresh_token）</returns>
+        /// <remarks>
+        /// ヒントは探す順番の手掛かりにすぎない。
+        /// ヒントの種類で見つからなければ、他の種類も探す（RFC 7009 2.1 / RFC 7662 2.1）（#200）。
+        /// </remarks>
+        private static string[] TokenSearchOrder(string token_type_hint)
+        {
+            if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
+            {
+                return new string[] { OAuth2AndOIDCConst.RefreshToken, OAuth2AndOIDCConst.AccessToken };
+            }
+
+            return new string[] { OAuth2AndOIDCConst.AccessToken, OAuth2AndOIDCConst.RefreshToken };
+        }
+
+        /// <summary>トークンを失効させる（RFC 7009）。クライアント認証は済んでいること。</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="token">失効させるトークン</param>
+        /// <param name="token_type_hint">token_type_hint（任意）</param>
+        /// <returns>成功なら空の辞書。他クライアントのトークンなら error を持つ辞書</returns>
+        /// <remarks>
+        /// 両アプリの /revoke から呼ぶ（#200 で Controller から移した）。
+        /// ・無効なトークン（存在しない・失効済み・期限切れ）も成功として扱う（RFC 7009 2.2）（#200）
+        /// ・他のクライアントのトークンは、要求を拒否してエラーを返す（RFC 7009 2.1）（#194）
+        /// </remarks>
+        public static Dictionary<string, string> RevokeToken(
+            string client_id, string token, string token_type_hint)
+        {
+            Dictionary<string, string> err = new Dictionary<string, string>();
+
+            foreach (string type in CmnEndpoints.TokenSearchOrder(token_type_hint))
+            {
+                if (type == OAuth2AndOIDCConst.AccessToken)
+                {
+                    // 検証（署名・期限・失効済みか）に通らなければ、access_token としては見つからない。
+                    if (!CmnAccessToken.VerifyAccessToken(token, out ClaimsIdentity identity))
+                    {
+                        continue;
+                    }
+
+                    // Tokenが呼び出し元に発行されたものかを確認（RFC 7009 2.1）（#194）
+                    if (!CmnEndpoints.CheckTokenOwner(client_id, identity))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "The token was not issued to this client.");
+                        return err;
+                    }
+
+                    // access_token取消（jtiで記録する）
+                    Claim jti = identity.Claims.Where(
+                        x => x.Type == OAuth2AndOIDCConst.UrnJwtIdClaim).FirstOrDefault<Claim>();
+
+                    if (jti != null)
+                    {
+                        RevocationProvider.Create(jti.Value);
+                    }
+
+                    return err; // 成功（空）
+                }
+                else
+                {
+                    string tokenPayload = RefreshTokenProvider.Refer(token);
+
+                    if (string.IsNullOrEmpty(tokenPayload))
+                    {
+                        continue;
+                    }
+
+                    // Tokenが呼び出し元に発行されたものかを確認（RFC 7009 2.1）（#194）
+                    if (!CmnEndpoints.CheckRefreshTokenOwner(client_id, tokenPayload))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                        err.Add(OAuth2AndOIDCConst.error_description, "The token was not issued to this client.");
+                        return err;
+                    }
+
+                    // refresh_token取消
+                    RefreshTokenProvider.Delete(token);
+                    return err; // 成功（空）
+                }
+            }
+
+            // どの種類でも見つからない ＝ 無効なトークン。
+            // 使えなくするという目的は達しているので、エラーにしない（RFC 7009 2.2）（#200）。
+            return err;
+        }
+
+        /// <summary>トークンのメタデータを返す（RFC 7662）。クライアント認証は済んでいること。</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="token">問い合わせるトークン</param>
+        /// <param name="token_type_hint">token_type_hint（任意）</param>
+        /// <returns>active と、有効ならメタデータ</returns>
+        /// <remarks>
+        /// 両アプリの /introspect から呼ぶ（#200 で Controller から移した）。
+        /// ・無効なトークン（存在しない・失効済み・期限切れ）は active=false（RFC 7662 2.2）（#200）
+        /// ・他のクライアントのトークンも active=false だけを返す（RFC 7662 2.2 / 4）（#194）
+        /// </remarks>
+        public static Dictionary<string, object> IntrospectToken(
+            string client_id, string token, string token_type_hint)
+        {
+            Dictionary<string, object> ret = new Dictionary<string, object>();
+
+            foreach (string type in CmnEndpoints.TokenSearchOrder(token_type_hint))
+            {
+                string accessToken = token;
+
+                if (type == OAuth2AndOIDCConst.RefreshToken)
+                {
+                    string tokenPayload = RefreshTokenProvider.Refer(token);
+
+                    if (string.IsNullOrEmpty(tokenPayload))
+                    {
+                        continue;
+                    }
+
+                    // AccessToken化して、検証とメタデータの取り出しを共通化する。
+                    // 有効期限を「現在時刻」にすると、作ってから検証するまでの間に秒をまたいだとき
+                    // 失効扱いになる（VerifyExp は秒単位の exp >= now）。検証の間は持つ期限にする（#200）。
+                    accessToken = CmnAccessToken.ProtectFromPayload(
+                        "", tokenPayload, DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                        null, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
+                }
+
+                if (string.IsNullOrEmpty(accessToken)
+                    || !CmnAccessToken.VerifyAccessToken(accessToken, out ClaimsIdentity identity))
+                {
+                    continue;
+                }
+
+                // Tokenが呼び出し元に発行されたものでなければ、
+                // メタデータを返さない（RFC 7662 2.2 / 4）（#194）。
+                if (!CmnEndpoints.CheckTokenOwner(client_id, identity))
+                {
+                    ret.Add("active", false);
+                    return ret;
+                }
+
+                // メタデータの返却
+                ret.Add("active", true);
+                ret.Add(OAuth2AndOIDCConst.token_type, type);
+
+                string scopes = "";
+                foreach (Claim claim in identity.Claims)
+                {
+                    if (!claim.Type.StartsWith(OAuth2AndOIDCConst.UrnClaimBase))
+                    {
+                        continue;
+                    }
+
+                    if (claim.Type == OAuth2AndOIDCConst.UrnScopesClaim)
+                    {
+                        scopes += claim.Value + " ";
+                    }
+                    else if (claim.Type.StartsWith(OAuth2AndOIDCConst.UrnCnfX5tClaim))
+                    {
+                        string temp = OAuth2AndOIDCConst.x5t
+                            + claim.Type.Substring(OAuth2AndOIDCConst.UrnCnfX5tClaim.Length);
+                        ret.Add(OAuth2AndOIDCConst.cnf, new Dictionary<string, string>()
+                        {
+                            { temp, claim.Value }
+                        });
+                    }
+                    else
+                    {
+                        string name = claim.Type.Substring(OAuth2AndOIDCConst.UrnClaimBase.Length);
+
+                        // refresh_token の exp / nbf / iat / jti は、上で作った一時的な access_token の値で、
+                        // refresh_token 自身のものではない。誤解を招くので返さない（#200）。
+                        if (type == OAuth2AndOIDCConst.RefreshToken
+                            && (name == OAuth2AndOIDCConst.exp || name == OAuth2AndOIDCConst.nbf
+                                || name == OAuth2AndOIDCConst.iat || name == OAuth2AndOIDCConst.jti))
+                        {
+                            continue;
+                        }
+
+                        ret.Add(name, claim.Value);
+                    }
+                }
+
+                ret.Add(OAuth2AndOIDCConst.UrnScopesClaim.Substring(
+                    OAuth2AndOIDCConst.UrnClaimBase.Length), scopes.Trim());
+
+                return ret; // 成功
+            }
+
+            // どの種類でも見つからない ＝ 使えないトークン。
+            // エラーではなく、問い合わせへの正常な答えとして active=false を返す（RFC 7662 2.2）（#200）。
+            ret.Add("active", false);
+            return ret;
         }
 
         #endregion
@@ -2128,7 +2392,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             string clientModeString = "";
             if (string.IsNullOrEmpty(client_id))
             {
-                err.Add(OAuth2AndOIDCConst.error, "invalid_client");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                 err.Add(OAuth2AndOIDCConst.error_description, string.Format("client_id is not set."));
                 return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
             }
@@ -2200,7 +2464,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             if (!retval)
             {
                 // エラーを追加
-                err.Add(OAuth2AndOIDCConst.error, "not_supported");
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
 
                 if (string.IsNullOrEmpty(clientModeString))
                 {
