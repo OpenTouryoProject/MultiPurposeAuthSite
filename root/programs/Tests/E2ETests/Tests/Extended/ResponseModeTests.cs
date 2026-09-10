@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/11  玄人 幸道         EX-6.4 の Skip を解除（#201）
 //**********************************************************************************
 
 using System;
@@ -264,8 +265,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-6.4 JARM の exp の型</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#201）。実測（2026/09/10, net10.0 / net48）では、"
-            + "JARM の exp が JSON の文字列になっている。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0604_JARMのexpはNumericDateである(string targetKey)
         {

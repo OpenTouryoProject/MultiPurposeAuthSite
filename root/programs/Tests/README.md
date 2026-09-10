@@ -235,8 +235,6 @@ cd root
 - `EX-3.2` / `EX-3.4`（`Extended.IntrospectionTests`、#200）
   存在しないトークンに `active=false` ではなく `invalid_request` を返す。
   refresh_token の問い合わせは、実行ごとに成否が揺れる（net48 で観測）。
-- `EX-6.4`（`Extended.ResponseModeTests`、#201）
-  JARM の `exp` が文字列になっている（id_token / access_token では #184 で直した問題）。
 
 ## 分かっていること（実測）
 

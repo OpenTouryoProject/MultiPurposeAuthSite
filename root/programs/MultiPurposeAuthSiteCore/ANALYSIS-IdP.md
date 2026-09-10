@@ -34,7 +34,7 @@
 「最新の IdP に近づける」うえでの最短経路は、**新機能の追加ではなく、
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
-**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）は、後から E2E テストで見つかったもの。
+**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
 **フェーズ 1 は A-6 / A-8 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
 セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
@@ -156,9 +156,18 @@ RFC 7519 §2 の **NumericDate は JSON の数値**。`"exp": "1789..."` は仕�
 （`Claim` の値は `string` なので変換が要る）。この書き方なら、
 **文字列で発行済みの古いトークンもそのまま検証を通る。**
 
-> **残っている同種の箇所:** JARM の Response Object（`CmnResponseObject.Create`）も
-> `exp` を文字列で入れている。ただし引数が `Dictionary<string, string>` なので、
-> 直すにはシグネチャ変更と両アプリの呼び出し側 12 箇所の修正を伴う。**本 Issue の範囲外**とした。
+> **残っていた同種の箇所 — ✅ 修正済み（#201）:** JARM の Response Object（`CmnResponseObject.Create`）も
+> `exp` を文字列で入れていた（E2E テスト EX-6.4 で実測）。
+>
+> ```csharp
+> // 修正前: CommonLibrary/TokenProviders/CmnResponseObject.cs
+> responseDictionary.Add(OAuth2AndOIDCConst.exp, expiresUtc.Value.ToUnixTimeSeconds().ToString());
+> ```
+>
+> 当時は「引数が `Dictionary<string, string>` なので、シグネチャ変更と両アプリの呼び出し側の修正を伴う」
+> として範囲外にした。#201 では、**関数の中で `Dictionary<string, object>` に写してから `exp` を数値で入れる**形にし、
+> シグネチャも呼び出し側も変えずに直した。
+> 検証側（Open棟梁 の `ResponseObject.Verify`）は `(string)` で読むが、JSON の数値も文字列として読めるので、変更は要らない。
 
 ### A-4. `email_verified` / `phone_number_verified` が文字列 **[Lib][Core]** — **✅ 修正済み（#184）**
 
@@ -801,6 +810,7 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 | 5 | ✅ **A-9 discovery の末尾スペース** #189 の一部 | 1 行 | Lib |
 | 6 | ✅ **C-14 implicit / hybrid で `nonce` を必須化** #190 | 15 行 | Lib |
 | 7 | ✅ **B-7 使用済み・不正な `device_code` の未処理例外** #199 | 39 行 | Lib |
+| 8 | ✅ **A-3 の残り : JARM の `exp` を数値に** #201 | 24 行 | Lib |
 
 > 6 は本来フェーズ 2（セキュリティ）の項目だが、**2 と表裏の関係**にあり、
 > 片方だけ直すと「nonce 無しの implicit / hybrid が nonce クレームの無い id_token を得る」

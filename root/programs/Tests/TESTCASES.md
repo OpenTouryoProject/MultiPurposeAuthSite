@@ -1122,6 +1122,22 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - code が JWT の中にある
 - トークンに交換できる
 
+## EX-6.4 JARM の exp は NumericDate（JSON の数値）である
+
+| | |
+|---|---|
+| 観点 | exp は RFC 7519 の NumericDate であり、**数値**でなければならない。文字列だと、JWT ライブラリの多くは有効期限の検証に失敗するか、検証を素通りさせる。（id_token / access_token では #184 で直した問題） |
+| 根拠 | JARM §2.1（exp は RFC 7519 の定義による）/ RFC 7519 §2（NumericDate）/ §4.1.4 |
+| テスト | `EX0604_JARMのexpはNumericDateである` |
+
+**手順**
+
+1. GET /authorize に response_mode=query.jwt を付けて送り、JWT の exp の型を見る
+
+**検証（合否を判定する）**
+
+- exp が JSON の数値である
+
 ## EX-7.1 クライアントが署名した JWT（assertion）で、トークンを取得できる
 
 | | |
@@ -1665,7 +1681,6 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | `EX0205_無効なトークンの失効要求はエラーにしない` | 未修正（#200）。実測（2026/09/10, net10.0 / net48）では、存在しないトークンの失効要求に invalid_request（Invalid token.）を返す。 |
 | `EX0302_有効なrefresh_tokenもactiveがtrue` | 未修正（#200）。実測（2026/09/10）では、同じテストが通る回と、invalid_request（Invalid token.）になる回がある（net48 で観測）。refresh_token を、有効期限が現在時刻の access_token に変換してから検証しているため、秒をまたぐと失効扱いになると見られる（IntrospectToken）。 |
 | `EX0304_無効なトークンにはactiveがfalseで答える` | 未修正（#200）。実測（2026/09/10, net10.0 / net48）では、存在しないトークンに active=false ではなく invalid_request（Invalid token.）を返す。 |
-| `EX0604_JARMのexpはNumericDateである` | 未修正（#201）。実測（2026/09/10, net10.0 / net48）では、JARM の exp が JSON の文字列になっている。 |
 | `RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする` | 未修正。実測（2026/09/09, net10.0）では、リダイレクトではなくエラー画面（HTTP 200）になる。 |
 | `RT197_05_request_uri経路でもredirect_uriが照合される` | 未修正（#197）。実測（2026/09/09, net10.0）では、誤った redirect_uri を送ってもトークンが発行される。 |
 | `TC0104_未定義のスコープの扱い` | 未修正（#198）。実測（2026/09/09, net10.0）では、scopes_supported に無い任意の文字列がそのまま発行される。 |

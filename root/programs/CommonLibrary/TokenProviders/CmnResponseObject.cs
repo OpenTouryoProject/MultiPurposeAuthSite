@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/06/26  西野 大介         新規
+//*  2026/09/11  玄人 幸道         exp を NumericDate（JSON の数値）で出すよう修正（#201）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -56,15 +57,30 @@ namespace MultiPurposeAuthSite.TokenProviders
             Dictionary<string, string> responseDictionary,
             string clientId, DateTimeOffset? expiresUtc)
         {
+            // 応答パラメタ（code / state など）は文字列のまま、
+            // exp だけは RFC 7519 の NumericDate（JSON の数値）で入れる（#201）。
+            // 引数は Dictionary<string, string> のまま、ここで object の辞書に写す。
+            // こうすれば、両アプリの呼び出し側（30 箇所余り）を変えずに済む。
+            Dictionary<string, object> payload = new Dictionary<string, object>();
+
+            foreach (KeyValuePair<string, string> item in responseDictionary)
+            {
+                payload[item.Key] = item.Value;
+            }
+
             if (string.IsNullOrEmpty(clientId))
             {
                 // error
             }
             else
             {
-                responseDictionary.Add(OAuth2AndOIDCConst.iss, Config.IssuerId);
-                responseDictionary.Add(OAuth2AndOIDCConst.aud, clientId);
-                responseDictionary.Add(OAuth2AndOIDCConst.exp, expiresUtc.Value.ToUnixTimeSeconds().ToString());
+                payload[OAuth2AndOIDCConst.iss] = Config.IssuerId;
+                payload[OAuth2AndOIDCConst.aud] = clientId;
+
+                // 文字列にしない（#184 と同じ）。
+                // 検証側（Open棟梁 の ResponseObject.Verify）は (string) で読むが、
+                // JSON の数値も文字列として読めるので、変更は要らない。
+                payload[OAuth2AndOIDCConst.exp] = expiresUtc.Value.ToUnixTimeSeconds();
             }
 
             // 秘密鍵
@@ -87,7 +103,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // Create
             return jwsRS256.Create(
-                JsonConvert.SerializeObject(responseDictionary));
+                JsonConvert.SerializeObject(payload));
         }
 
         // VerifyはClient側のみなので、
