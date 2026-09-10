@@ -1,4 +1,4 @@
-# Tests
+﻿# Tests
 
 MultiPurposeAuthSite の**ビルド確認**と **E2E テスト**。
 
@@ -63,7 +63,14 @@ cd root\programs\Tests
 .\test.ps1 -Launch
 ```
 
-net10.0 版を `https://localhost:44300` で起動し、テストを流して、停止する。
+**net10.0 版と net48 版の両方**を起動し、テストを流して、停止する。
+
+| 対象 | 待ち受け | 立て方 |
+|---|---|---|
+| net10.0 | `https://localhost:44300` | Kestrel（`-Url` で変えられる） |
+| net48 | `https://localhost:44302` | IIS Express（`-NetFxUrl` で変えられる） |
+
+net48 版を測らないときは `-NoNetFx`。その分は Skip される。
 
 ### すでにサイトが動いている場合
 
@@ -99,11 +106,20 @@ cd root
 `test.ps1 -Launch` は、この 2 つを環境変数で揃えてから起動する。
 
 ```
-appSettings__OAuth2AuthorizationServerEndpointsRootURI
-appSettings__OAuth2ClientEndpointsRootURI
+OAuth2AuthorizationServerEndpointsRootURI
+OAuth2ClientEndpointsRootURI
 ```
 
-（net10.0 版の構成は環境変数で上書きできる。`__` が階層の区切り。）
+`appSettings` の `FxContainerization` が `ON` のとき、Open棟梁 は
+**設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。
+**キー名がそのまま環境変数名になる。** 接頭辞は付かない。
+
+このため 2 つのサイトを別々の URL で同時に立てられる。
+
+| 対象 | 既定 |
+|---|---|
+| net10.0（Kestrel） | `https://localhost:44300` |
+| net48（IIS Express） | `https://localhost:44302` |
 
 ## 設定
 
@@ -209,7 +225,9 @@ cd root
   （`unsupported_grant_type`）。mTLS / private_key_jwt が要る。
   このため `redirect_uri` の照合は、`normal` モードのクライアントに
   自前の Request Object を渡して測っている。
-- **net48 版は、このスクリプトからは起動しない。** IIS Express で起動しておくこと。
-- net10.0 版と net48 版は、既定では同じ URL（`https://localhost:44300`）で
-  構成されている。**同時には測れない。**
-  片方を別の URL にするか、順番に実行する。
+- net48 版の起動には **IIS Express が要る**（`%ProgramFiles%\IIS Express`）。
+  無い場合・ビルドされていない場合は、理由を出して**その分を Skip する**（失敗にしない）。
+- 構成ファイルの既定では、net10.0 版と net48 版は同じ URL を指している。
+  `-Launch` は環境変数で別のポートへ寄せるので**同時に測れる**が、
+  手で立てるときは片方を別の URL にすること。
+  取り違えは検出して Skip する（[`../../TESTING.md`](../../TESTING.md) 5 節）。

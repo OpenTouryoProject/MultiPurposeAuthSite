@@ -23,7 +23,7 @@
 
 ```powershell
 cd root
-.\2_RunAllTests.ps1 -Launch     # サイトを起動 → テスト → 停止
+.\2_RunAllTests.ps1 -Launch     # 2 つのサイトを起動 → テスト → 停止
 .\2_RunAllTests.ps1             # 起動済みのサイトを叩く
 .\2_RunAllTests.ps1 -Launch -Filter "FullyQualifiedName~RequestObjectTests"
 ```
@@ -37,8 +37,10 @@ cd root\programs\Tests
 
 | 引数 | 意味 |
 |---|---|
-| `-Launch` | net10.0 版を起動してからテストし、終わったら停止する |
-| `-Url` | `-Launch` のときに待ち受ける URL。既定 `https://localhost:44300` |
+| `-Launch` | **net10.0 版と net48 版の両方**を起動してからテストし、終わったら停止する |
+| `-Url` | net10.0 版（Kestrel）の待ち受け URL。既定 `https://localhost:44300` |
+| `-NetFxUrl` | net48 版（IIS Express）の待ち受け URL。既定 `https://localhost:44302` |
+| `-NoNetFx` | net48 版を起動しない。その分は Skip される |
 | `-Filter` | `dotnet test` の `--filter` |
 | `-Configuration` | `Debug`（既定）/ `Release` |
 | `-OutputDir` | TRX とログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
@@ -81,12 +83,23 @@ JWT のデコードも Request Object の署名も、テスト側で独立に実
 `max_age` を使うフロー（FAPI2）は `auth_time` Cookie を見るので、http だとエラー画面になる。
 
 Visual Studio（IIS Express）で起動する分には、構成ファイルのままなので食い違わない。
-`-Launch` は、環境変数で両者を揃えてから Kestrel を起動する。
+`-Launch` は、**構成ファイルを書き換えずに、環境変数で上書きしてから**起動する。
 
 ```
-appSettings__OAuth2AuthorizationServerEndpointsRootURI
-appSettings__OAuth2ClientEndpointsRootURI
+OAuth2AuthorizationServerEndpointsRootURI
+OAuth2ClientEndpointsRootURI
 ```
+
+Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization` が `ON` のとき
+**設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。
+**キー名がそのまま環境変数名になる。** 接頭辞は付かない。
+
+このため、**net48 版を `app.config` の URL に置く必要がない。**
+別のポートへ寄せられるので、2 つのサイトを同時に立てても衝突しない。
+
+> **環境変数は、子プロセスの起動時に写される。**
+> 2 つのサイトへ別々の URL を渡せるのは、この性質による。
+> 起動の直前に書き換えること。後から変えても、動いている側には効かない。
 
 詳細は [`CONFIGURATION.md`](CONFIGURATION.md)。
 
@@ -128,38 +141,56 @@ appSettings__OAuth2ClientEndpointsRootURI
 .\2_RunAllTests.ps1 -Launch -UpdateTestCases
 ```
 
-### net48 版を測る
+### net48 版も同時に測る
 
-**net48 版は IIS Express で立てる。** `app.config` の
-`OAuth2AuthorizationServerEndpointsRootURI` が
-`https://localhost:44300/MultiPurposeAuthSite` なので、
-**その仮想パスで待ち受けている必要がある**（Kestrel では仮想ディレクトリを作れない）。
+**`-Launch` は 2 つのサイトを立てる。** 1 回の実行で 94 件（47 × 2）を測る。
 
-Visual Studio から起動すれば、そのまま合う。
-コマンドラインから立てる場合は、`applicationhost.config` を用意する。
-
-```
-"C:\Program Files\IIS Express\iisexpress.exe" /config:<applicationhost.config> /site:<サイト名>
-```
-
-サイトには 2 つのアプリケーションを持たせる。
-
-| 仮想パス | 物理パス | 役目 |
+| 対象 | 待ち受け | 立て方 |
 |---|---|---|
-| `/` | 空のフォルダ | net10.0 版の到達性判定を 404 にし、そちらを Skip させる |
-| `/MultiPurposeAuthSite` | `programs\MultiPurposeAuthSite\MultiPurposeAuthSite` | net48 版の本体 |
+| net10.0 | `https://localhost:44300` | Kestrel（ビルド済みの `MultiPurposeAuthSite.exe`） |
+| net48 | `https://localhost:44302` | IIS Express |
 
-バインドは `https` の `*:44300:localhost`。
-44300〜44399 は IIS Express の開発用証明書が http.sys に登録済みなので、そのまま使える。
+> **`dotnet run` は使わない。**
+> アプリを子プロセスとして起動するため、親（`dotnet`）を止めてもアプリが残り、
+> 次回の起動がポートを奪われる。ビルド済みの exe を直接起動すれば、
+> 止めた時点で確実に終わる。
 
-> **`.vs` を消すと `applicationhost.config` も消える。**
-> `1_DeleteDir.bat` の削除対象に `.vs` が入っているため、
-> クリーン後は Visual Studio で開き直すか、自分で用意する。
+**報告書は 1 回の実行で上書きされる。**
+別々に測ると、後から測った方しか残らない。**両方を残したいなら、同じ実行で測る。**
+
+net48 版は ASP.NET なので Kestrel では動かない。`test.ps1` は IIS Express の雛形
+
+```
+%ProgramFiles%\IIS Express\config\templates\PersonalWebServer\applicationhost.config
+```
+
+を読み、サイト 1 つ分を書き換えて `Result\applicationhost.config` に出す。
+
+- 物理パス : `programs\MultiPurposeAuthSite\MultiPurposeAuthSite`
+- バインド : `https` の `*:44302:localhost`
+- 44300〜44399 は IIS Express の開発用証明書が http.sys に登録済みなので、そのまま使える
+
+**仮想ディレクトリは作らない。**
+待ち受け URL は環境変数で構成へ反映されるので（4 節）、
+`/MultiPurposeAuthSite` の下に置く必要がない。アプリはサイト直下に置く。
+
+立てられないときは、**理由を出してその対象を Skip する。** 失敗にはしない。
+
+| 状況 | 見るところ |
+|---|---|
+| `-NoNetFx` を付けた | 意図的に測らない |
+| IIS Express が無い | `%ProgramFiles%\IIS Express\iisexpress.exe` |
+| net48 版がビルドされていない | `1_BuildAll.ps1`（`bin\MultiPurposeAuthSite.dll`） |
+
+> **`.vs` を消すと、Visual Studio 用の `applicationhost.config` は消える。**
+> `1_DeleteDir.bat` の削除対象に `.vs` が入っているため。
+> `test.ps1` が使うのは自前で作る方なので、こちらは影響を受けない。
 
 ### 取り違えは検出する
 
-**net48 版と net10.0 版は、既定ではどちらも同じ URL で構成されている。**
-片方しか動いていないのに、両方の到達性判定が通ってしまう。
+**net48 版と net10.0 版は、構成ファイルの既定ではどちらも同じ URL を指している。**
+`-Launch` は別のポートへ寄せるが、手で立てた場合や `testsettings.json` で
+URL を指定した場合は、**同じ URL を 2 回測ることが起こり得る。**
 
 そのままだと**同じアプリを 2 回測って「両方 OK」と報告する。**（実際にやった）
 
@@ -173,55 +204,27 @@ Visual Studio から起動すれば、そのまま合う。
 期待と食い違う場合は、そのターゲットを Skip して理由を残す。
 
 ```
-net10.0版 (MultiPurposeAuthSiteCore) のはずの https://localhost:44300/MultiPurposeAuthSite に、
+net10.0版 (MultiPurposeAuthSiteCore) のはずの https://localhost:44302 に、
 net48版（ASP.NET Framework）が応答しました。同じURLで構成されているため取り違えます。
 片方を別のURLにするか、順番に実行してください。
 ```
 
-報告書にも、測った相手が残る。
+報告書の「叩いた先」も、**`-Url` の値ではなく、実際に応答したアプリ**から作る。
+引数を書き写すだけでは、測れていない対象まで「叩いた」ことになってしまう。
 
 ```
-対象: net48版 (MultiPurposeAuthSite) (https://localhost:44300/MultiPurposeAuthSite)
+| 叩いた先 | net10.0版 (MultiPurposeAuthSiteCore) (https://localhost:44300)
+            / 応答: net10.0（Kestrel）
+            net48版 (MultiPurposeAuthSite) (https://localhost:44302)
+            / 応答: net48（ASP.NET Framework / Microsoft-IIS/10.0） |
+```
+
+個々のテストの記録にも残る。
+
+```
+対象: net48版 (MultiPurposeAuthSite) (https://localhost:44302)
       / 応答: net48（ASP.NET Framework / Microsoft-IIS/10.0）
 ```
-
-### 両方を同時に測る
-
-**報告書（`E2ETests.report.md`）は 1 回の実行で上書きされる。**
-net48 版を測った後に net10.0 版を測れば、net48 版の結果は残らない。
-**両方の結果を 1 枚に残したいなら、同じ実行で測る。**
-
-既定では両者が同じ URL を指していて取り違えるので、**net10.0 版をずらす。**
-
-```
-> .\2_RunAllTests.ps1 -Launch -Url https://localhost:44301
-```
-
-`-Url` は Kestrel の待ち受け URL であると同時に、
-構成ファイルの `OAuth2AuthorizationServerEndpointsRootURI` /
-`OAuth2ClientEndpointsRootURI` の上書き（環境変数）と、
-テスト側の `MPAS_CORE_BASEURL` にも渡される。
-**3 つが揃っていないと、サーバが自分自身へ戻る経路（FAPI2 の自己テストなど）が壊れる。**
-
-net48 版は `app.config` の URI（`44300/MultiPurposeAuthSite`）から動かせないので、
-**ずらすのは net10.0 版の方。**
-
-| 対象 | 待ち受け | 立て方 |
-|---|---|---|
-| net48 | `https://localhost:44300/MultiPurposeAuthSite` | IIS Express（先に起動しておく） |
-| net10.0 | `https://localhost:44301` | `-Launch` が起動・停止する |
-
-この形で実行すると 94 件（47 × 2）が測られ、報告書の「叩いた先」に両方が並ぶ。
-
-```
-| 叩いた先 | net48版 (MultiPurposeAuthSite) (https://localhost:44300/MultiPurposeAuthSite)
-            / 応答: net48（ASP.NET Framework / Microsoft-IIS/10.0）<br>
-            net10.0版 (MultiPurposeAuthSiteCore) (https://localhost:44301)
-            / 応答: net10.0（Kestrel） |
-```
-
-**この行は `-Url` の値ではなく、実際に応答したアプリから作る。**
-引数を書き写すだけでは、測れていない対象まで「叩いた」ことになってしまう。
 
 ### TRX を読む
 
@@ -284,15 +287,19 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 
 対象     結果 成功 失敗 Skip   秒
 -------- ---- ---- ---- ---- ----
-E2ETests OK     28    0   30 42.3
+E2ETests OK     94    0    3 42.2
 
-  Skip 30 件の内訳
-        28  netfx
-         2  (対象なし)
+  Skip 3 件の内訳
+         3  (対象なし)
+
+  対象ごとの Skip は、そのサイトが起動していないだけのことが多い。
+  (対象なし) は、未修正として Skip 指定しているもの（Tests\README.md）。
 
   所要時間 : 0.7 分
   TRX      : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.trx
   ログ     : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.log
+  報告書   : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.report.md
+  原本     : C:\MultiPurposeAuthSite\root\programs\Tests\TESTCASES.md
 
   全テスト OK
 ```
@@ -305,10 +312,13 @@ E2ETests OK     28    0   30 42.3
 | 設定ファイル | `appsettings.json` / `app.config`。テストは**ここから資格情報を読む** |
 | `UserStoreType` | `mem` を想定。テスト ユーザは初回アクセスで作られ、再起動で消える |
 | 証明書 | `SpRp_RsaPfxFilePath` の pfx。Request Object の署名に使う |
+| `FxContainerization` | `ON`。**待ち受け URL の上書きに要る**（4 節）。雛形には入っている |
+| IIS Express | net48 版を測るときだけ。無ければその分が Skip される |
 
-**net10.0 版と net48 版は、既定では同じ URL で構成されている。同時には測れない。**
+**構成ファイルの既定では、net10.0 版と net48 版は同じ URL を指している。**
+`-Launch` は環境変数で別のポートへ寄せるので、**同時に測れる。**
+手で立てるときは、片方を別の URL にすること。
 取り違えは検出して Skip する（5 節「取り違えは検出する」）。
-片方を別の URL にするか、順番に実行する。
 
 ## 9. 秘密情報を出さない
 

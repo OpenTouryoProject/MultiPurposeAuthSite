@@ -65,9 +65,32 @@ new JsonDocumentOptions()
 set appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:44300
 ```
 
-`root/programs/Tests/test.ps1 -Launch` は、これを使って起動 URL と構成を揃えている（5 節）。
+**net48 版にはこの仕組みが無い。** これは ASP.NET Core の構成の仕組みである。
+ただし、次の `FxContainerization` は**両方で使える。**
 
-**net48 版にはこの仕組みが無い。** あちらは `app.config` を書き換えるしかない。
+### `FxContainerization` — 環境変数を優先する（net48 / net10.0 の両方）
+
+`appSettings` の `FxContainerization` を `ON` にすると、
+Open棟梁 の `GetConfigParameter` が**設定ファイルより環境変数を優先する。**
+
+```
+<add key="FxContainerization" value="ON" />   app.config
+"FxContainerization": "ON",                   appsettings.json
+```
+
+**キー名がそのまま環境変数名になる。** 接頭辞は付かない。
+
+```
+set OAuth2AuthorizationServerEndpointsRootURI=https://localhost:44302
+set OAuth2ClientEndpointsRootURI=https://localhost:44302
+```
+
+`root/programs/Tests/test.ps1 -Launch` は、これを使って
+**2 つのサイトを別々の URL で同時に立てている**（[`TESTING.md`](TESTING.md) 4 節）。
+net48 版を `app.config` の URL に置く必要がないのは、この仕組みによる。
+
+> **`ON` にしただけでは、動きは変わらない。**
+> 環境変数が定義されていなければ、設定ファイルの値が使われる。
 
 ## 3. net48 — `app.config`
 
@@ -171,6 +194,9 @@ set appSettings__OAuth2ClientEndpointsRootURI=https://localhost:44300
 dotnet run --urls https://localhost:44300
 ```
 
+`FxContainerization` が `ON` なら、**接頭辞なし**の `OAuth2...` でも上書きできる（2 節）。
+net48 版と書き方が揃うので、両方を扱うスクリプトはそちらを使っている。
+
 ### https で動かすこと
 
 **認証まわりの Cookie は `SameSite=None` で発行される。**
@@ -249,7 +275,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | 設定ファイル | `app.config`（`Web.config` から `file=` で取り込み） | `appsettings.json` |
 | ルート要素 / セクション | `<appSettings>` | `appSettings` |
 | コメント | XML コメント ＋ JSON 文字列内の `//` | JSONC の `//` |
-| 環境変数で上書き | **できない** | `appSettings__<キー>` |
+| 環境変数で上書き | `FxContainerization=ON`（キー名そのまま） | `appSettings__<キー>` ／ `FxContainerization=ON` |
 | クライアント登録 | JSON **文字列** | JSON **オブジェクト** |
 | 既定の起動 | IIS Express | IIS Express / Kestrel |
 | パッケージ | `packages.config` ＋ `PackageReference` | `PackageReference` |

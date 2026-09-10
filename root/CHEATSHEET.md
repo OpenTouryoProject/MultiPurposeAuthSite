@@ -81,6 +81,12 @@ set appSettings__OAuth2ClientEndpointsRootURI=https://localhost:44300
 dotnet run --urls https://localhost:44300
 ```
 
+テストのついでに立てるなら、**2 つとも立ててくれる。**
+
+```
+root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
+```
+
 **構成のルート URI と待ち受け URL を揃えること。https で動かすこと。**
 理由 → [`CONFIGURATION.md`](CONFIGURATION.md) 5 節
 
