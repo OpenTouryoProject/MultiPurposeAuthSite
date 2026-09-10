@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/10  玄人 幸道         EX-5.1 / 5.3 の Skip を解除（OpenTouryo#584 の修正を取り込み）
 //**********************************************************************************
 
 using System;
@@ -138,10 +139,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-5.1 code id_token</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、"
-            + "c_hash が code から計算した値と一致しない。"
-            + "Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、"
-            + "左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0501_code_id_tokenでc_hashがcodeと一致する(string targetKey)
         {
@@ -251,10 +249,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-5.3 code id_token token</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、"
-            + "at_hash / c_hash が一致しない。"
-            + "Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、"
-            + "左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0503_code_id_token_tokenでat_hashとc_hashが一致する(string targetKey)
         {

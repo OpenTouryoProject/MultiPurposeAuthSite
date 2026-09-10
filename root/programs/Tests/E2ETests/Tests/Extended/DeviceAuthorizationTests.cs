@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/11  玄人 幸道         EX-4.5 の Skip を解除し、EX-4.7 を追加（#199）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -320,9 +321,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>EX-4.5 device_code の再利用</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正（#199）。実測（2026/09/10, net10.0 / net48）では、"
-            + "使用済みの device_code で HTTP 500 になる"
-            + "（DeviceAuthZProvider.ReceiveTokenReq の KeyNotFoundException）。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task EX0405_トークンを受け取った後のdevice_codeは使えない(string targetKey)
         {
@@ -365,8 +364,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     second.IsJson && !string.IsNullOrEmpty(second.Error),
                     "error を含む JSON", second.ToString());
 
-                r.Observe("2 回目の error", second.Error ?? "なし",
-                    "RFC 8628 §3.5 の語彙では expired_token、RFC 6749 §5.2 では invalid_grant が近い。");
+                bool rfcValue = second.Error == "invalid_grant" || second.Error == "expired_token";
+
+                r.Verify("2 回目の error が RFC の値である", rfcValue,
+                    "invalid_grant（RFC 6749 §5.2）または expired_token（RFC 8628 §3.5）",
+                    second.Error ?? "なし");
 
                 r.Done();
             }
@@ -397,6 +399,53 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 r.Verify("device_code を発行しない", res.KindOf("device_code") == JsonValueKind.Undefined,
                     "device_code を返さない",
                     res.KindOf("device_code") == JsonValueKind.Undefined ? "返さなかった" : "**返してしまった**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-4.7 不正な device_code</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0407_不正なdevice_codeは500にならずエラーで返る(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("EX-4.7",
+                    "発行していない・送らない device_code は、HTTP 500 にせずエラーとして返す",
+                    "機器が送ってくる device_code は、信用できない入力である。"
+                    + "**どんな値でも、サーバが落ちずに、機器が解釈できるエラーを返す**こと。"
+                    + "（EX-4.5 は使用済みの値。こちらは最初から存在しない値と、値が無い場合）",
+                    "RFC 8628 §3.4（device_code は REQUIRED）/ RFC 6749 §5.2（invalid_grant / invalid_request）/ #199");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+
+                r.Target("client_name=" + KnownClients.TestClient3);
+                r.Step("(1) 発行していない device_code でトークンを要求する");
+
+                JsonResponse unknown = await PollAsync(client, reg.ClientId, "00000000000000000000000000000000");
+
+                r.Verify("発行していない値 : JSON のエラー応答を返す（HTTP 500 にならない）",
+                    unknown.IsJson && !string.IsNullOrEmpty(unknown.Error),
+                    "error を含む JSON", unknown.ToString());
+
+                r.VerifyEqual("発行していない値 : invalid_grant で拒否される", "invalid_grant", unknown.Error);
+
+                r.Step("(2) device_code を付けずにトークンを要求する");
+
+                JsonResponse missing = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", GrantType },
+                    { "client_id", reg.ClientId }
+                });
+
+                r.Verify("値が無い : JSON のエラー応答を返す（HTTP 500 にならない）",
+                    missing.IsJson && !string.IsNullOrEmpty(missing.Error),
+                    "error を含む JSON", missing.ToString());
+
+                r.VerifyEqual("値が無い : invalid_request で拒否される", "invalid_request", missing.Error);
 
                 r.Done();
             }

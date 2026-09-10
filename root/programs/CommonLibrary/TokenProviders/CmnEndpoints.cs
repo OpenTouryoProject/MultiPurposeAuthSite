@@ -61,6 +61,7 @@
 //*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
 //*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //*  2026/09/08  玄人 幸道         エラー コードをRFC 6749に合わせる（#187）
+//*  2026/09/11  玄人 幸道         device_code のエラーを RFC の値で返すよう修正（#199）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1654,6 +1655,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 string code = "";
                 OAuth2AndOIDCEnum.DeviceAuthZState deviceState = OAuth2AndOIDCEnum.DeviceAuthZState.not_found;
 
+                // device_code は必須（RFC 8628 §3.4）。無ければ invalid_request（#199）。
+                if (string.IsNullOrEmpty(device_code))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    err.Add(OAuth2AndOIDCConst.error_description, "device_code is required.");
+                    return false;
+                }
+
                 if (DeviceAuthZProvider.ReceiveTokenReq(device_code, out code, out deviceState))
                 {
                     // = OAuth2AndOIDCEnum.CibaState.access_permitted
@@ -1715,8 +1724,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                             err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCEnum.DeviceAuthZState.authorization_pending.ToStringByEmit());
                             break;
 
-                        default:
+                        case OAuth2AndOIDCEnum.DeviceAuthZState.access_denied:
+                        case OAuth2AndOIDCEnum.DeviceAuthZState.expired_token:
+                            // RFC 8628 §3.5 の値そのもの
                             err.Add(OAuth2AndOIDCConst.error, deviceState.ToStringByEmit());
+                            break;
+
+                        default:
+                            // not_found（使用済み・発行していない）/ irregularity_data は仕様外の値。
+                            // enum 名をそのまま返さず、RFC 6749 §5.2 の invalid_grant で返す（#199）。
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                            err.Add(OAuth2AndOIDCConst.error_description, "Invalid device_code.");
                             break;
                     }
                 }

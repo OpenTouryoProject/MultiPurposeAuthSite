@@ -34,7 +34,7 @@
 「最新の IdP に近づける」うえでの最短経路は、**新機能の追加ではなく、
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
-**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-6 / C-14）。
+**対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）は、後から E2E テストで見つかったもの。
 **フェーズ 1 は A-6 / A-8 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
 セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
@@ -350,6 +350,8 @@ CIBA クライアントはこのキーを見つけられない。
 > **B-3 は資格情報なしで到達する**ことが分かった
 > （`grant_type=authorization_code` ＋ 任意の `code` ＋ `code_verifier`、`client_secret` なし
 > → `ReceiveChallenge` で NRE）。この経路が最も深刻だった。
+>
+> **B-7 は、後から E2E テストの拡張仕様（EX-4.5）で見つかり、#199 で対応した。**
 
 ### B-1. `kid` の無い JWT で `NullReferenceException` **[Lib]** — **✅ 修正済み（#185）**
 
@@ -420,6 +422,35 @@ if (client_id != aud) { throw new Exception("[client_id != aud]"); }
 `GrantRefreshTokenCredentials` は、`RefreshTokenProvider.Receive` が空を返したとき
 （＝ローテーション済み・存在しない refresh_token）に `err` を設定せず `false` を返す。
 → `/token` が **`{}` を HTTP 200 で返す**。`invalid_grant` を返すべき。
+
+### B-7. 使用済み・不正な `device_code` で `KeyNotFoundException` **[Lib]** — **✅ 修正済み（#199）**
+
+E2E テストの拡張仕様（EX-4.5）で見つかった。
+
+`DeviceAuthZProvider.ReceiveTokenReq` が、`ConcurrentDictionary` を**索引子で**読んでいた。
+トークンを渡した時点でレコードは削除されるため、
+**同じ `device_code` で 2 回目を送ると、必ず例外（HTTP 500）になる。**
+発行していない `device_code` も同じ行を通る。
+
+```csharp
+// 修正前: CommonLibrary/Extensions/Sts/DeviceAuthZProvider.cs
+temp = DeviceAuthZProvider.DeviceAuthZData[deviceCode];
+```
+
+トークンは出ないので、権限の漏れは無い。
+
+**対応（#199）:**
+
+- `ReceiveTokenReq` は `TryGetValue` で読み、無ければ `not_found` として扱う。
+  `null` のキーも `ConcurrentDictionary` は例外にするので、先に弾く
+- `ReceiveResult`（`/device_verify`）も同じ読み方をしていたので `TryGetValue` にした
+  （キーを列挙した後に、トークン要求側が削除すると同じ例外になる）
+- `GrantDeviceAuthZ` は、仕様外の状態（`not_found` / `irregularity_data`）を
+  **enum 名のまま `error` に入れていた**のをやめ、`invalid_grant` で返す。
+  `access_denied` / `expired_token` は RFC 8628 §3.5 の値なので、そのまま返す
+- `device_code` を送らない要求は `invalid_request`
+
+E2E テスト: `EX-4.5`（使用済み）/ `EX-4.7`（発行していない・送らない）。
 
 ---
 
@@ -769,6 +800,7 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 | 4 | ✅ **B-1 〜 B-6 異常系の NRE と未処理例外** #185 | 82 行 | Lib ＋ 両アプリ |
 | 5 | ✅ **A-9 discovery の末尾スペース** #189 の一部 | 1 行 | Lib |
 | 6 | ✅ **C-14 implicit / hybrid で `nonce` を必須化** #190 | 15 行 | Lib |
+| 7 | ✅ **B-7 使用済み・不正な `device_code` の未処理例外** #199 | 39 行 | Lib |
 
 > 6 は本来フェーズ 2（セキュリティ）の項目だが、**2 と表裏の関係**にあり、
 > 片方だけ直すと「nonce 無しの implicit / hybrid が nonce クレームの無い id_token を得る」

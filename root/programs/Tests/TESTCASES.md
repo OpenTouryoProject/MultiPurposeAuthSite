@@ -896,6 +896,25 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - access_denied を返す
 - トークンを発行しない
 
+## EX-4.5 トークンを受け取った後の device_code は、もう使えない
+
+| | |
+|---|---|
+| 観点 | device_code は、承認 1 回につきトークン 1 回。**再び使えるなら、device_code を盗み見た者もトークンを得られる。** |
+| 根拠 | RFC 8628 §3.5 / RFC 6749 §4.1.2（認可コードは 1 回限り。device_code も同じ役割を担う） |
+| テスト | `EX0405_トークンを受け取った後のdevice_codeは使えない` |
+
+**手順**
+
+1. 承認まで済ませ、トークンを 1 回受け取る
+1. 同じ device_code で、もう一度トークンを要求する
+
+**検証（合否を判定する）**
+
+- 2 回目はトークンを発行しない
+- 2 回目は JSON のエラー応答を返す
+- 2 回目の error が RFC の値である
+
 ## EX-4.6 登録されていない client_id では、デバイス認可を始められない
 
 | | |
@@ -912,6 +931,55 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - invalid_client で拒否される
 - device_code を発行しない
+
+## EX-4.7 発行していない・送らない device_code は、HTTP 500 にせずエラーとして返す
+
+| | |
+|---|---|
+| 観点 | 機器が送ってくる device_code は、信用できない入力である。**どんな値でも、サーバが落ちずに、機器が解釈できるエラーを返す**こと。（EX-4.5 は使用済みの値。こちらは最初から存在しない値と、値が無い場合） |
+| 根拠 | RFC 8628 §3.4（device_code は REQUIRED）/ RFC 6749 §5.2（invalid_grant / invalid_request）/ #199 |
+| テスト | `EX0407_不正なdevice_codeは500にならずエラーで返る` |
+
+**手順**
+
+1. 発行していない device_code でトークンを要求する
+1. device_code を付けずにトークンを要求する
+
+**検証（合否を判定する）**
+
+- 発行していない値 : JSON のエラー応答を返す（HTTP 500 にならない）
+- 発行していない値 : invalid_grant で拒否される
+- 値が無い : JSON のエラー応答を返す（HTTP 500 にならない）
+- 値が無い : invalid_request で拒否される
+
+## EX-5.1 response_type=code id_token : フラグメントで返り、id_token の c_hash が code と一致する
+
+| | |
+|---|---|
+| 観点 | id_token を認可エンドポイントで先に受け取り、code は後でトークンに交換する形。**c_hash は「この id_token とこの code は同じ応答のものだ」という結び付け。**合わなければ、code だけを差し替えられても RP は気付けない。 |
+| 根拠 | OIDC Core §3.3.2.5（フラグメントで返す）/ §3.3.2.10（c_hash による code の検証） / §3.3.2.11（この形では c_hash は REQUIRED） |
+| テスト | `EX0501_code_id_tokenでc_hashがcodeと一致する` |
+
+**手順**
+
+1. GET /authorize に response_type=code id_token と nonce を付けて送る
+
+**検証（合否を判定する）**
+
+- フラグメント（#）で返る
+- code が返る
+- id_token が返る
+- access_token は返さない（response_type に token が無い）
+- id_token の署名を JWKS で検証できる
+- nonce が送った値と一致する
+- c_hash が、code から計算した値と一致する
+
+**観測（判定しない）**
+
+- s_hash と、state から計算した値（計算方法の対照）
+  - s_hash は FAPI の拡張で、OIDC Core では任意。
+- at_hash
+  - この形では access_token を返さないので、at_hash は任意（§3.3.2.11）。
 
 ## EX-5.2 response_type=code token : code と access_token がフラグメントで返る
 
@@ -937,6 +1005,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - expires_in
   - RECOMMENDED。
+
+## EX-5.3 response_type=code id_token token : at_hash と c_hash の両方が一致する
+
+| | |
+|---|---|
+| 観点 | 3 つを同時に返す形。**id_token が code と access_token の両方に結び付いている**ことを確かめる。片方でも合わなければ、その値だけを差し替えられる。 |
+| 根拠 | OIDC Core §3.3.2.11（この形では at_hash も c_hash も REQUIRED）/ §3.3.2.9 / §3.3.2.10 |
+| テスト | `EX0503_code_id_token_tokenでat_hashとc_hashが一致する` |
+
+**手順**
+
+1. GET /authorize に response_type=code id_token token と nonce を付けて送る
+
+**検証（合否を判定する）**
+
+- フラグメント（#）で返る
+- code / id_token / access_token がすべて返る
+- id_token の署名を JWKS で検証できる
+- nonce が送った値と一致する
+- at_hash が、access_token から計算した値と一致する
+- c_hash が、code から計算した値と一致する
+
+**観測（判定しない）**
+
+- s_hash と、state から計算した値（計算方法の対照）
+  - s_hash は FAPI の拡張で、OIDC Core では任意。
 
 ## EX-5.4 Hybrid で受け取った code をトークンに交換でき、両方の id_token が同じユーザを指す
 
@@ -1571,9 +1665,6 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | `EX0205_無効なトークンの失効要求はエラーにしない` | 未修正（#200）。実測（2026/09/10, net10.0 / net48）では、存在しないトークンの失効要求に invalid_request（Invalid token.）を返す。 |
 | `EX0302_有効なrefresh_tokenもactiveがtrue` | 未修正（#200）。実測（2026/09/10）では、同じテストが通る回と、invalid_request（Invalid token.）になる回がある（net48 で観測）。refresh_token を、有効期限が現在時刻の access_token に変換してから検証しているため、秒をまたぐと失効扱いになると見られる（IntrospectToken）。 |
 | `EX0304_無効なトークンにはactiveがfalseで答える` | 未修正（#200）。実測（2026/09/10, net10.0 / net48）では、存在しないトークンに active=false ではなく invalid_request（Invalid token.）を返す。 |
-| `EX0405_トークンを受け取った後のdevice_codeは使えない` | 未修正（#199）。実測（2026/09/10, net10.0 / net48）では、使用済みの device_code で HTTP 500 になる（DeviceAuthZProvider.ReceiveTokenReq の KeyNotFoundException）。 |
-| `EX0501_code_id_tokenでc_hashがcodeと一致する` | 未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、c_hash が code から計算した値と一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
-| `EX0503_code_id_token_tokenでat_hashとc_hashが一致する` | 未修正（OpenTouryo#584）。実測（2026/09/10, net10.0 / net48）では、at_hash / c_hash が一致しない。Open棟梁 の IdToken.CreateHash が、SHA-256 の左半分ではなく、左右を XOR で畳んだ値を使っている（ArrayOperator.ShortenByteArray）。 |
 | `EX0604_JARMのexpはNumericDateである` | 未修正（#201）。実測（2026/09/10, net10.0 / net48）では、JARM の exp が JSON の文字列になっている。 |
 | `RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする` | 未修正。実測（2026/09/09, net10.0）では、リダイレクトではなくエラー画面（HTTP 200）になる。 |
 | `RT197_05_request_uri経路でもredirect_uriが照合される` | 未修正（#197）。実測（2026/09/09, net10.0）では、誤った redirect_uri を送ってもトークンが発行される。 |
