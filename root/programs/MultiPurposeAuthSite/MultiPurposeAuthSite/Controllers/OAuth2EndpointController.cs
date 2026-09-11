@@ -47,6 +47,7 @@
 //*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //*  2026/09/11  玄人 幸道         /revoke /introspect を RFC 7009 / 7662 に合わせて修正（#200）
 //*  2026/09/11  玄人 幸道         /token のエラー応答を 400 / 401 で返す（#196）
+//*  2026/09/11  玄人 幸道         /userinfo のエラー応答を 401 ＋ WWW-Authenticate: Bearer で返す（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -321,12 +322,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
         /// GET: /userinfo
         /// </summary>
-        /// <returns>Dictionary(string, object)</returns>
+        /// <returns>成功は 200、エラーは 401 と WWW-Authenticate: Bearer（RFC 6750 3）（#196）</returns>
         [HttpGet]
-        public async Task<Dictionary<string, object>> GetUserClaims()
+        public async Task<IHttpActionResult> GetUserClaims()
         {
             // 戻り値（エラー）
-            Dictionary<string, object> err = new Dictionary<string, object>();
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             // クライアント認証
             if (AuthenticationHeader.GetCredentials(
@@ -411,24 +412,41 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                     }
 
-                    return userinfoClaimSet;
+                    return this.Ok(userinfoClaimSet);
 
                 }
                 else
                 {
-                    // ユーザ認証エラー
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    // 無効なトークン（JWT でない、改竄・失効・期限切れなど）。
+                    // RFC 6750 3.1 : invalid_token（401）。以前は invalid_request（400 に当たる）だった（#196）。
+                    err.Add(OAuth2AndOIDCConst.error, Token.CmnEndpoints.invalid_token);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                 }
             }
-            else
-            {
-                // クライアント認証エラー（ヘッダ不正
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                err.Add(OAuth2AndOIDCConst.error_description, "Invalid authentication header.");
-            }
 
-            return err; // 失敗
+            // Bearer トークンが無い（Authorization ヘッダ無し、または他の方式）場合、err は空のまま。
+            // RFC 6750 3.1 : エラー情報を付けず、Bearer が要ることだけを示す（#196）。
+
+            return this.UserInfoError(err); // 失敗（RFC 6750 3 : 401 ＋ WWW-Authenticate）（#196）
+        }
+
+        /// <summary>/userinfo のエラー応答を作る（RFC 6750 3 / OIDC Core 5.3.3）</summary>
+        /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
+        /// <returns>401 と WWW-Authenticate: Bearer</returns>
+        /// <remarks>
+        /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// トークンが無かった場合は、本文を返さない（RFC 6750 3.1 : エラー情報を含めない）。
+        /// </remarks>
+        private IHttpActionResult UserInfoError(Dictionary<string, string> err)
+        {
+            HttpResponseMessage res = (err.Count == 0)
+                ? this.Request.CreateResponse(HttpStatusCode.Unauthorized)
+                : this.Request.CreateResponse((HttpStatusCode)Token.CmnEndpoints.GetErrorStatusCode(err), err);
+
+            res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter("userinfo", err)));
+
+            return this.ResponseMessage(res);
         }
 
         #endregion

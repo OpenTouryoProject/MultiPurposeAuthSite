@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/09  玄人 幸道         新規（基本テストケースの追加）
+//*  2026/09/11  玄人 幸道         TC-6.4 の観測の注記を、#196（/userinfo の 401）の対応に合わせる
 //**********************************************************************************
 
 using System;
@@ -287,7 +288,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
                 r.Observe("拒否のしかた",
                     "alg=none : HTTP " + (int)none.StatusCode
                     + " / 改竄 : HTTP " + (int)tampered.StatusCode,
-                    "OIDC Core §5.3.3 は 401 と WWW-Authenticate を求める（#196）。");
+                    "OIDC Core §5.3.3 / RFC 6750 §3.1 は 401 と WWW-Authenticate を求める（#196 で対応。RT-196.6 で検証）。");
 
                 r.Done();
             }

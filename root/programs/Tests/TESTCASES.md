@@ -573,7 +573,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - 拒否のしかた
-  - OIDC Core §5.3.3 は 401 と WWW-Authenticate を求める（#196）。
+  - OIDC Core §5.3.3 / RFC 6750 §3.1 は 401 と WWW-Authenticate を求める（#196 で対応。RT-196.6 で検証）。
 
 ## TC-6.5 UserInfo が、要求したスコープに応じた属性を返す
 
@@ -1489,7 +1489,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **HTTP ステータス自体は 200 のまま**である（RFC 6749 §5.2 は 400 / 401 を求める）。これは #196 で別途扱う。
+- HTTP ステータスは、#196 で 400 / 401 に直した（RT-196.1 〜 196.4 で検証）。
 
 ## RT-186.1 認可時と同じ redirect_uri なら成功する（ケース A）
 
@@ -1799,6 +1799,85 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - フォーム : access_token が返る
 - Basic : HTTP 200
 - Basic : access_token が返る
+
+## RT-196.5 /userinfo : Bearer トークンの無い要求は、HTTP 401 と WWW-Authenticate: Bearer（エラー コードなし）
+
+| | |
+|---|---|
+| 観点 | トークンを付け忘れた（または別の方式で認証しようとした）クライアントに、**Bearer トークンが要ることを、HTTP の約束事で伝える。**認証情報が無いだけなので、エラー コードは付けない。 |
+| 根拠 | RFC 6750 §3 / §3.1（認証情報の無い要求にはエラー情報を含めない）/ OIDC Core §5.3.3 / #196 |
+| テスト | `RT196_05_userinfoでトークン無しは401とBearerの要求` |
+
+**手順**
+
+1. Authorization ヘッダを付けずに GET /userinfo を送る
+1. Bearer ではなく Basic 方式の Authorization ヘッダで GET /userinfo を送る
+1. 観測 : 方式だけで値の無い Authorization ヘッダ（Bearer のみ）で GET /userinfo を送る
+
+**検証（合否を判定する）**
+
+- ヘッダ無し : HTTP 401 で返る
+- ヘッダ無し : WWW-Authenticate が Bearer 方式を示す
+- ヘッダ無し : WWW-Authenticate にエラー コードを付けない
+- ヘッダ無し : 本文に、エラー情報もユーザ情報も含めない
+- Basic 方式 : HTTP 401 で返る
+- Basic 方式 : WWW-Authenticate が Bearer 方式を示す
+
+**観測（判定しない）**
+
+- 値の無い Bearer
+  - Open棟梁 の AuthenticationHeader.GetCredentials は、方式の後ろの値を確かめずに読む。値が無いと例外になり、HTTP 500 になり得る（#196 の範囲外）。
+
+## RT-196.6 /userinfo : 無効なトークンは、HTTP 401 と error="invalid_token"
+
+| | |
+|---|---|
+| 観点 | 壊れた・改竄された・失効したトークンは、**クライアントが取り直すべき**トークン。401 と invalid_token で伝えれば、クライアントは refresh_token での更新や再認可に進める。以前は invalid_request（400 に当たるコード）を HTTP 200 で返していた。 |
+| 根拠 | RFC 6750 §3.1（invalid_token は 401）/ OIDC Core §5.3.3 / #196 |
+| テスト | `RT196_06_userinfoで無効なトークンは401とinvalid_token` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. JWT でない文字列を Bearer トークンとして送る
+1. ペイロードを書き換えた（署名はそのままの）トークンを送る
+1. トークンを失効させてから送る
+
+**検証（合否を判定する）**
+
+- JWT でない文字列 : HTTP 401 で返る
+- JWT でない文字列 : 本文は error を含む JSON のまま
+- JWT でない文字列 : error
+- JWT でない文字列 : WWW-Authenticate が Bearer 方式を示す
+- JWT でない文字列 : WWW-Authenticate に error="invalid_token" が付く
+- 改竄したトークン : HTTP 401 で返る
+- 改竄したトークン : 本文は error を含む JSON のまま
+- 改竄したトークン : error
+- 改竄したトークン : WWW-Authenticate が Bearer 方式を示す
+- 改竄したトークン : WWW-Authenticate に error="invalid_token" が付く
+- 失効させたトークン : HTTP 401 で返る
+- 失効させたトークン : 本文は error を含む JSON のまま
+- 失効させたトークン : error
+- 失効させたトークン : WWW-Authenticate が Bearer 方式を示す
+- 失効させたトークン : WWW-Authenticate に error="invalid_token" が付く
+
+## RT-196.7 /userinfo : 有効なトークンでの成功は HTTP 200 のまま（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.5 / 196.6 の対照。** エラーの返し方を変えたことで、成功の応答（ユーザ情報の JSON）まで変わっていないことを確かめる。 |
+| 根拠 | OIDC Core §5.3.2（成功は 200 と JSON）/ #196 |
+| テスト | `RT196_07_userinfoの成功は200のまま` |
+
+**手順**
+
+1. 認可コード フローで access_token を得て、GET /userinfo を送る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- sub がテスト ユーザである
+- WWW-Authenticate を付けない
 
 ## RT-197.1 FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する
 

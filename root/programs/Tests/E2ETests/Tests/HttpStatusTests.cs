@@ -29,10 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/11  玄人 幸道         新規（#196 の 1 つ目 : /token）
+//*  2026/09/11  玄人 幸道         /userinfo（RT-196.5 〜 196.7）を追加（#196 の 2 つ目）
 //**********************************************************************************
 
 using System.Collections.Generic;
 using System.Net;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -49,9 +51,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     /// エンドポイントごとに分けて直しているので、テストも分けて足していく。
     ///
     ///   RT-196.1 〜 196.4 : /token（RFC 6749 §5.2 : エラーは 400、invalid_client は 401）
+    ///   RT-196.5 〜 196.7 : /userinfo（RFC 6750 §3 : 401 と WWW-Authenticate: Bearer）
     ///
-    /// **本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
+    /// /token では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
+    /// /userinfo は RFC 6750 に合わせて本文も変えた（無効なトークンは invalid_token、トークン無しは本文なし）。
     /// </summary>
     public class HttpStatusTests : TargetTestBase
     {
@@ -80,6 +84,37 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
             {
                 r.VerifyEqual(label + " : error", error, res.Error);
             }
+        }
+
+        /// <summary>WWW-Authenticate が Bearer 方式を示すかを確かめる</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">何の要求か</param>
+        /// <param name="res">応答</param>
+        /// <returns>WWW-Authenticate の値（無ければ null）</returns>
+        private static string VerifyBearerChallenge(TestReport r, string label, JsonResponse res)
+        {
+            string challenge = res.Header("WWW-Authenticate");
+
+            r.Verify(label + " : WWW-Authenticate が Bearer 方式を示す",
+                challenge != null && challenge.TrimStart().StartsWith("Bearer", System.StringComparison.OrdinalIgnoreCase),
+                "Bearer ...", challenge ?? "（無し）");
+
+            return challenge;
+        }
+
+        /// <summary>無効なトークンへの /userinfo の応答を確かめる（RFC 6750 §3.1）</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">何の要求か</param>
+        /// <param name="res">応答</param>
+        private static void VerifyInvalidToken(TestReport r, string label, JsonResponse res)
+        {
+            VerifyError(r, label, res, 401, "invalid_token");
+
+            string challenge = VerifyBearerChallenge(r, label, res);
+
+            r.Verify(label + " : WWW-Authenticate に error=\"invalid_token\" が付く",
+                challenge != null && challenge.Contains("error=\"invalid_token\""),
+                "error=\"invalid_token\"", challenge ?? "（無し）");
         }
 
         /// <summary>RT-196.1 クライアント認証の失敗（フォーム）</summary>
@@ -264,6 +299,140 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                 r.VerifyEqual("Basic : HTTP 200", "200", ((int)basic.StatusCode).ToString());
                 r.Verify("Basic : access_token が返る", !string.IsNullOrEmpty(basic.AccessToken),
                     "access_token あり", basic.AccessToken == null ? "なし（" + basic.ToString() + "）" : "あり（値は伏せる）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.5 /userinfo にトークン無し</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_05_userinfoでトークン無しは401とBearerの要求(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.5",
+                    "/userinfo : Bearer トークンの無い要求は、HTTP 401 と WWW-Authenticate: Bearer（エラー コードなし）",
+                    "トークンを付け忘れた（または別の方式で認証しようとした）クライアントに、"
+                    + "**Bearer トークンが要ることを、HTTP の約束事で伝える。**"
+                    + "認証情報が無いだけなので、エラー コードは付けない。",
+                    "RFC 6750 §3 / §3.1（認証情報の無い要求にはエラー情報を含めない）/ OIDC Core §5.3.3 / #196");
+
+                r.Target(client.Target.DisplayName);
+                r.Step("(1) Authorization ヘッダを付けずに GET /userinfo を送る");
+
+                JsonResponse none = await client.UserInfoWithAuthorizationAsync(null);
+
+                r.VerifyEqual("ヘッダ無し : HTTP 401 で返る", "401", ((int)none.StatusCode).ToString());
+
+                string challenge = VerifyBearerChallenge(r, "ヘッダ無し", none);
+
+                r.Verify("ヘッダ無し : WWW-Authenticate にエラー コードを付けない",
+                    challenge != null && !challenge.Contains("error="),
+                    "error= なし", challenge ?? "（無し）");
+
+                r.Verify("ヘッダ無し : 本文に、エラー情報もユーザ情報も含めない",
+                    string.IsNullOrEmpty(none.Error) && none.KindOf("sub") == JsonValueKind.Undefined,
+                    "error なし・sub なし", none.ToString());
+
+                r.Step("(2) Bearer ではなく Basic 方式の Authorization ヘッダで GET /userinfo を送る");
+
+                JsonResponse basic = await client.UserInfoWithAuthorizationAsync(
+                    "Basic " + System.Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes("user:password")));
+
+                r.VerifyEqual("Basic 方式 : HTTP 401 で返る", "401", ((int)basic.StatusCode).ToString());
+
+                VerifyBearerChallenge(r, "Basic 方式", basic);
+
+                r.Step("(3) 観測 : 方式だけで値の無い Authorization ヘッダ（Bearer のみ）で GET /userinfo を送る");
+
+                JsonResponse empty = await client.UserInfoWithAuthorizationAsync("Bearer");
+
+                r.Observe("値の無い Bearer", "HTTP " + (int)empty.StatusCode,
+                    "Open棟梁 の AuthenticationHeader.GetCredentials は、方式の後ろの値を確かめずに読む。"
+                    + "値が無いと例外になり、HTTP 500 になり得る（#196 の範囲外）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.6 /userinfo に無効なトークン</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_06_userinfoで無効なトークンは401とinvalid_token(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-196.6",
+                    "/userinfo : 無効なトークンは、HTTP 401 と error=\"invalid_token\"",
+                    "壊れた・改竄された・失効したトークンは、**クライアントが取り直すべき**トークン。"
+                    + "401 と invalid_token で伝えれば、クライアントは refresh_token での更新や再認可に進める。"
+                    + "以前は invalid_request（400 に当たるコード）を HTTP 200 で返していた。",
+                    "RFC 6750 §3.1（invalid_token は 401）/ OIDC Core §5.3.3 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("(1) 認可コード フローで access_token を得る");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                r.Step("(2) JWT でない文字列を Bearer トークンとして送る");
+
+                VerifyInvalidToken(r, "JWT でない文字列", await client.UserInfoAsync("NOT-A-REAL-TOKEN"));
+
+                r.Step("(3) ペイロードを書き換えた（署名はそのままの）トークンを送る");
+
+                VerifyInvalidToken(r, "改竄したトークン", await client.UserInfoAsync(Jwks.Tamper(token.AccessToken)));
+
+                r.Step("(4) トークンを失効させてから送る");
+
+                JsonResponse revoke = await Flows.RevokeAsync(client, reg, token.AccessToken, "access_token");
+
+                Assert.True(string.IsNullOrEmpty(revoke.Error), "前提: 失効に成功すること（" + revoke.ToString() + "）");
+
+                VerifyInvalidToken(r, "失効させたトークン", await client.UserInfoAsync(token.AccessToken));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.7 成功は 200（対照）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_07_userinfoの成功は200のまま(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-196.7",
+                    "/userinfo : 有効なトークンでの成功は HTTP 200 のまま（対照）",
+                    "**RT-196.5 / 196.6 の対照。** エラーの返し方を変えたことで、"
+                    + "成功の応答（ユーザ情報の JSON）まで変わっていないことを確かめる。",
+                    "OIDC Core §5.3.2（成功は 200 と JSON）/ #196");
+
+                r.Target("client_name=" + KnownClients.MvcSample + " / scope=openid email");
+                r.Step("(1) 認可コード フローで access_token を得て、GET /userinfo を送る");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                JsonResponse res = await client.UserInfoAsync(token.AccessToken);
+
+                r.VerifyEqual("HTTP 200", "200", ((int)res.StatusCode).ToString());
+
+                r.VerifyEqual("sub がテスト ユーザである", TestEnv.TestUserName, res.String("sub"));
+
+                r.Verify("WWW-Authenticate を付けない", res.Header("WWW-Authenticate") == null,
+                    "（無し）", res.Header("WWW-Authenticate") ?? "（無し）");
 
                 r.Done();
             }

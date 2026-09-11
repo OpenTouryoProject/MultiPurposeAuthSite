@@ -32,6 +32,7 @@
 //*  2026/09/10  玄人 幸道         Device Authorization Grant の検証画面の操作を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         client_secret_basic で /token を呼ぶ TokenWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         汎用の HTTP 関数を「素のHTTP」へ移し、デバイス認可（/device_authz）の要求を追加
+//*  2026/09/11  玄人 幸道         /userinfo を Authorization ヘッダを指定して呼ぶ UserInfoWithAuthorizationAsync を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -488,10 +489,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>UserInfoエンドポイントを呼ぶ</summary>
         /// <param name="accessToken">アクセス トークン</param>
         /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> UserInfoAsync(string accessToken)
+        public Task<JsonResponse> UserInfoAsync(string accessToken)
+        {
+            return this.UserInfoWithAuthorizationAsync("Bearer " + accessToken);
+        }
+
+        /// <summary>
+        /// UserInfoエンドポイントを、Authorization ヘッダを指定して呼ぶ。
+        /// トークンが無い要求や、Bearer 以外の方式の要求を作るために使う（#196）。
+        /// </summary>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> UserInfoWithAuthorizationAsync(string authorization)
         {
             HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Get, this.Absolute("/userinfo"));
-            req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + accessToken);
+
+            if (authorization != null)
+            {
+                req.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
 
             HttpResponseMessage res = await this._http.SendAsync(req);
             return await ToJsonResponseAsync(res);

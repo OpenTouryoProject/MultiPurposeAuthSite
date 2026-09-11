@@ -68,6 +68,7 @@
 //*  2026/09/11  玄人 幸道         エラー応答の HTTP ステータスを決める GetErrorStatusCode を追加（#196）
 //*  2026/09/11  玄人 幸道         #region の配置を整理（ClientAuthentication の下に置いていた #187 / #194 / #196 / #200 の追加分を移動）
 //*  2026/09/11  玄人 幸道         Public / Private の region を中身に合わせる（ClientAuthentication を Public へ、Token所有者の確認を private に）
+//*  2026/09/11  玄人 幸道         /userinfo の Bearer のエラー（invalid_token は 401、WWW-Authenticate の組み立て）を追加（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2245,14 +2246,19 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region エラー応答の HTTP ステータス
+        #region エラー応答（HTTP ステータス・WWW-Authenticate）
 
-        /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2）</summary>
+        /// <summary>無効な Bearer トークン（RFC 6750 3.1）</summary>
+        /// <remarks>Open棟梁 の OAuth2AndOIDCConst に無いので、ここで定義する（#196）。</remarks>
+        public const string invalid_token = "invalid_token";
+
+        /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2 / RFC 6750 3.1）</summary>
         /// <param name="err">error / error_description を持つ辞書</param>
-        /// <returns>HTTP ステータス（invalid_client は 401、それ以外は 400）</returns>
+        /// <returns>HTTP ステータス（invalid_client / invalid_token は 401、それ以外は 400）</returns>
         /// <remarks>
         /// 以前は、どのエンドポイントも Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
         /// RFC 6749 5.2 : エラーは 400。invalid_client（クライアント認証の失敗）は 401。
+        /// RFC 6750 3.1 : invalid_token（無効・失効・期限切れの Bearer トークン）は 401。
         /// Device / CIBA のポーリングのエラー（authorization_pending など）も 400（RFC 8628 3.5）。
         /// 実際の応答（IActionResult / IHttpActionResult）は、フレームワークごとに各アプリで作る。
         /// </remarks>
@@ -2265,7 +2271,42 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.TryGetValue(OAuth2AndOIDCConst.error, out error);
             }
 
-            return (error == OAuth2AndOIDCConst.invalid_client) ? 401 : 400;
+            if (error == OAuth2AndOIDCConst.invalid_client || error == CmnEndpoints.invalid_token)
+            {
+                return 401;
+            }
+
+            return 400;
+        }
+
+        /// <summary>Bearer トークンのエラー応答の WWW-Authenticate を作る（RFC 6750 3）</summary>
+        /// <param name="realm">realm（保護資源の名前）</param>
+        /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
+        /// <returns>WWW-Authenticate の値のうち、スキーム名（Bearer）より後ろ</returns>
+        /// <remarks>
+        /// RFC 6750 3 : 保護資源は、トークンが無い・無効な要求に WWW-Authenticate: Bearer を返す（#196）。
+        /// - トークンが無い（ヘッダ無し、または他の方式）: realm だけ。エラー情報は付けない（3.1 : SHOULD NOT）
+        /// - 無効なトークン : error と error_description を付ける
+        /// 値には固定の文字列を渡すこと（quoted-string の中に " と \ は入れられない）。
+        /// ヘッダの付け方はフレームワークごとに違うので、各アプリで付ける。
+        /// </remarks>
+        public static string GetBearerChallengeParameter(string realm, Dictionary<string, string> err)
+        {
+            List<string> items = new List<string>();
+            items.Add("realm=\"" + realm + "\"");
+
+            if (err != null)
+            {
+                foreach (string key in new string[] { OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.error_description })
+                {
+                    if (err.TryGetValue(key, out string value) && !string.IsNullOrEmpty(value))
+                    {
+                        items.Add(key + "=\"" + value + "\"");
+                    }
+                }
+            }
+
+            return string.Join(", ", items);
         }
 
         #endregion
