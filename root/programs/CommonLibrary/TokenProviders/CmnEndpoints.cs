@@ -66,6 +66,7 @@
 //*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行せず、トークン応答に scope を返す（#198）
 //*  2026/09/11  玄人 幸道         クライアントの登録（scope）でも、発行するスコープを絞る（#198 の後半）
 //*  2026/09/11  玄人 幸道         エラー応答の HTTP ステータスを決める GetErrorStatusCode を追加（#196）
+//*  2026/09/11  玄人 幸道         #region の配置を整理（ClientAuthentication の下に置いていた #187 / #194 / #196 / #200 の追加分を移動）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1920,170 +1921,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region Common
-
-        #region Public
-
-        /// <summary>定数文字列からRedirectUriを取得する。</summary>
-        /// <param name="constr">定数文字列</param>
-        /// <returns>RedirectUri</returns>
-        public static string GetRedirectUriFromConstr(string constr)
-        {
-            string ret = "";
-
-            // 事前登録されている。
-            if (constr.ToLower() == Const.TestSelfCode)
-            {
-                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
-            }
-            else if (constr.ToLower() == Const.TestSelfToken)
-            {
-                // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
-                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
-            }
-            else
-            {
-                // そのまま使用する。
-                ret = constr;
-            }
-
-            return ret;
-        }
-
-        #endregion
-
-        #region Private
-
-        #region　ClientAuthentication
-
-        #region client_id & (client_secret or x509)
-
-        /// <summary>ClientAuthentication</summary>
-        /// <param name="client_id">string</param>
-        /// <param name="client_secret">string</param>
-        /// <param name="x509">X509Certificate2</param>
-        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
-        /// <returns>bool</returns>
-        public static bool ClientAuthentication(string client_id, string client_secret,
-            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
-        {
-            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-
-            // client_id & client_secret
-            if (!string.IsNullOrEmpty(client_id))
-            {
-                if (!string.IsNullOrEmpty(client_secret))
-                {
-                    // *.config or Saml2OAuth2Dataテーブルを参照して、
-                    // クライアント認証（client_secret）を行なう。
-                    if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                    {
-                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-                        x509 = null; // client_secretがあった場合、x509を無効化
-                        return true;
-                    }
-                }
-                else if (x509 != null)
-                {
-                    // *.config or Saml2OAuth2Dataテーブルを参照して、
-                    // クライアント認証（X509Certificate2）を行なう。
-                    if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
-                    {
-                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        #endregion
-
-        #region Device AuthZ
-
-        /// <summary>Device AuthZのクライアント認証</summary>
-        /// <param name="client_id">string</param>
-        /// <param name="client_secret">string</param>
-        /// <param name="x509">X509Certificate2</param>
-        /// <returns>bool</returns>
-        /// <remarks>
-        /// RFC 8628
-        /// - 3.1 : デバイス認可要求で、クライアントを識別する。
-        /// - 3.4 : トークン要求で、コンフィデンシャル クライアントは認証する。
-        /// パブリック クライアント（client_secret未登録）は、client_idの確認だけを行う。
-        /// </remarks>
-        public static bool DeviceAuthZClientAuthentication(
-            string client_id, string client_secret, ref X509Certificate2 x509)
-        {
-            // client_idは必須
-            if (string.IsNullOrEmpty(client_id)) return false;
-
-            // 未登録のclient_idは拒否
-            if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
-
-            // コンフィデンシャル クライアントは認証必須
-            // - client_secretを登録済み
-            // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
-            // - x509を提示してきた
-            if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
-                || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
-                || x509 != null)
-            {
-                return CmnEndpoints.ClientAuthentication(
-                    client_id, client_secret, ref x509,
-                    out OAuth2AndOIDCEnum.ClientMode permittedLevel);
-            }
-
-            // パブリック クライアントは、client_idの確認のみ
-            return true;
-        }
-
-        #endregion
-
-        #region Redirect URLの組み立て
-
-        /// <summary>リダイレクト先URLに、パラメタを付ける</summary>
-        /// <param name="redirectUri">リダイレクト先</param>
-        /// <param name="parameters">付けるパラメタ（値が空のものは付けない）</param>
-        /// <param name="useFragment">true : フラグメント（#）、false : クエリ文字列（?）</param>
-        /// <returns>URL</returns>
-        /// <remarks>
-        /// #187
-        /// - **既にクエリ文字列を持つredirect_uriでも壊れない**よう、区切りを ? と & で切り替える。
-        /// - **値は必ずURLエンコードする。** stateはクライアントが自由に決められるため、
-        ///   生で連結するとリダイレクト先URLにパラメタを注入できてしまう。
-        /// - 値が空のパラメタは付けない。stateは、要求に含まれた場合のみ返す（RFC 6749 4.1.2）。
-        /// </remarks>
-        public static string BuildRedirectUrl(
-            string redirectUri, Dictionary<string, string> parameters, bool useFragment = false)
-        {
-            StringBuilder sb = new StringBuilder();
-
-            foreach (KeyValuePair<string, string> p in parameters)
-            {
-                if (string.IsNullOrEmpty(p.Value)) continue;
-
-                if (sb.Length != 0) sb.Append("&");
-                sb.Append(Uri.EscapeDataString(p.Key));
-                sb.Append("=");
-                sb.Append(Uri.EscapeDataString(p.Value));
-            }
-
-            if (sb.Length == 0) return redirectUri;
-
-            if (useFragment)
-            {
-                return redirectUri + (redirectUri.Contains("#") ? "&" : "#") + sb.ToString();
-            }
-            else
-            {
-                return redirectUri + (redirectUri.Contains("?") ? "&" : "?") + sb.ToString();
-            }
-        }
-
-        #endregion
+        #region Revocation / Introspection Endpoint
 
         #region Token所有者の確認
 
@@ -2119,32 +1957,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region エラー応答の HTTP ステータス
-
-        /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2）</summary>
-        /// <param name="err">error / error_description を持つ辞書</param>
-        /// <returns>HTTP ステータス（invalid_client は 401、それ以外は 400）</returns>
-        /// <remarks>
-        /// 以前は、どのエンドポイントも Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
-        /// RFC 6749 5.2 : エラーは 400。invalid_client（クライアント認証の失敗）は 401。
-        /// Device / CIBA のポーリングのエラー（authorization_pending など）も 400（RFC 8628 3.5）。
-        /// 実際の応答（IActionResult / IHttpActionResult）は、フレームワークごとに各アプリで作る。
-        /// </remarks>
-        public static int GetErrorStatusCode(Dictionary<string, string> err)
-        {
-            string error = null;
-
-            if (err != null)
-            {
-                err.TryGetValue(OAuth2AndOIDCConst.error, out error);
-            }
-
-            return (error == OAuth2AndOIDCConst.invalid_client) ? 401 : 400;
-        }
-
-        #endregion
-
-        #region Revocation / Introspection
+        #region RevokeToken / IntrospectToken
 
         /// <summary>
         /// token_type_hint から、トークンを探す順番を決める。
@@ -2339,6 +2152,198 @@ namespace MultiPurposeAuthSite.TokenProviders
             // エラーではなく、問い合わせへの正常な答えとして active=false を返す（RFC 7662 2.2）（#200）。
             ret.Add("active", false);
             return ret;
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Common
+
+        #region Public
+
+        /// <summary>定数文字列からRedirectUriを取得する。</summary>
+        /// <param name="constr">定数文字列</param>
+        /// <returns>RedirectUri</returns>
+        public static string GetRedirectUriFromConstr(string constr)
+        {
+            string ret = "";
+
+            // 事前登録されている。
+            if (constr.ToLower() == Const.TestSelfCode)
+            {
+                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
+            }
+            else if (constr.ToLower() == Const.TestSelfToken)
+            {
+                // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
+            }
+            else
+            {
+                // そのまま使用する。
+                ret = constr;
+            }
+
+            return ret;
+        }
+
+        #region Redirect URLの組み立て
+
+        /// <summary>リダイレクト先URLに、パラメタを付ける</summary>
+        /// <param name="redirectUri">リダイレクト先</param>
+        /// <param name="parameters">付けるパラメタ（値が空のものは付けない）</param>
+        /// <param name="useFragment">true : フラグメント（#）、false : クエリ文字列（?）</param>
+        /// <returns>URL</returns>
+        /// <remarks>
+        /// #187
+        /// - **既にクエリ文字列を持つredirect_uriでも壊れない**よう、区切りを ? と & で切り替える。
+        /// - **値は必ずURLエンコードする。** stateはクライアントが自由に決められるため、
+        ///   生で連結するとリダイレクト先URLにパラメタを注入できてしまう。
+        /// - 値が空のパラメタは付けない。stateは、要求に含まれた場合のみ返す（RFC 6749 4.1.2）。
+        /// </remarks>
+        public static string BuildRedirectUrl(
+            string redirectUri, Dictionary<string, string> parameters, bool useFragment = false)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            foreach (KeyValuePair<string, string> p in parameters)
+            {
+                if (string.IsNullOrEmpty(p.Value)) continue;
+
+                if (sb.Length != 0) sb.Append("&");
+                sb.Append(Uri.EscapeDataString(p.Key));
+                sb.Append("=");
+                sb.Append(Uri.EscapeDataString(p.Value));
+            }
+
+            if (sb.Length == 0) return redirectUri;
+
+            if (useFragment)
+            {
+                return redirectUri + (redirectUri.Contains("#") ? "&" : "#") + sb.ToString();
+            }
+            else
+            {
+                return redirectUri + (redirectUri.Contains("?") ? "&" : "?") + sb.ToString();
+            }
+        }
+
+        #endregion
+
+        #region エラー応答の HTTP ステータス
+
+        /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2）</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>HTTP ステータス（invalid_client は 401、それ以外は 400）</returns>
+        /// <remarks>
+        /// 以前は、どのエンドポイントも Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// RFC 6749 5.2 : エラーは 400。invalid_client（クライアント認証の失敗）は 401。
+        /// Device / CIBA のポーリングのエラー（authorization_pending など）も 400（RFC 8628 3.5）。
+        /// 実際の応答（IActionResult / IHttpActionResult）は、フレームワークごとに各アプリで作る。
+        /// </remarks>
+        public static int GetErrorStatusCode(Dictionary<string, string> err)
+        {
+            string error = null;
+
+            if (err != null)
+            {
+                err.TryGetValue(OAuth2AndOIDCConst.error, out error);
+            }
+
+            return (error == OAuth2AndOIDCConst.invalid_client) ? 401 : 400;
+        }
+
+        #endregion
+
+        #endregion
+
+        #region Private
+
+        #region　ClientAuthentication
+
+        #region client_id & (client_secret or x509)
+
+        /// <summary>ClientAuthentication</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <returns>bool</returns>
+        public static bool ClientAuthentication(string client_id, string client_secret,
+            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+        {
+            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+
+            // client_id & client_secret
+            if (!string.IsNullOrEmpty(client_id))
+            {
+                if (!string.IsNullOrEmpty(client_secret))
+                {
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
+                    // クライアント認証（client_secret）を行なう。
+                    if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
+                    {
+                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                        x509 = null; // client_secretがあった場合、x509を無効化
+                        return true;
+                    }
+                }
+                else if (x509 != null)
+                {
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
+                    // クライアント認証（X509Certificate2）を行なう。
+                    if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                    {
+                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region Device AuthZ
+
+        /// <summary>Device AuthZのクライアント認証</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <returns>bool</returns>
+        /// <remarks>
+        /// RFC 8628
+        /// - 3.1 : デバイス認可要求で、クライアントを識別する。
+        /// - 3.4 : トークン要求で、コンフィデンシャル クライアントは認証する。
+        /// パブリック クライアント（client_secret未登録）は、client_idの確認だけを行う。
+        /// </remarks>
+        public static bool DeviceAuthZClientAuthentication(
+            string client_id, string client_secret, ref X509Certificate2 x509)
+        {
+            // client_idは必須
+            if (string.IsNullOrEmpty(client_id)) return false;
+
+            // 未登録のclient_idは拒否
+            if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
+
+            // コンフィデンシャル クライアントは認証必須
+            // - client_secretを登録済み
+            // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
+            // - x509を提示してきた
+            if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                || x509 != null)
+            {
+                return CmnEndpoints.ClientAuthentication(
+                    client_id, client_secret, ref x509,
+                    out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+            }
+
+            // パブリック クライアントは、client_idの確認のみ
+            return true;
         }
 
         #endregion
