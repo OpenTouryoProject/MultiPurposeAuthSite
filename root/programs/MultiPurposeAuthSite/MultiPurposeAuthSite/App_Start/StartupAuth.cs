@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/09/11  玄人 幸道         OAuth2 / OIDC の API の 401 を、ログイン画面への 302 に変えない（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -159,6 +160,10 @@ namespace MultiPurposeAuthSite
 
             // アプリケーションがユーザのサイン・イン情報をCookie認証チケットに一時的に保存するようにします。
             // また、サードパーティのプロバイダでログインするユーザ情報もCookie認証チケットを使用してできるようにします。
+            // Cookie 認証の既定のリダイレクト（Ajax の扱いを含む）。下の OnApplyRedirect から呼ぶ（#196）。
+            System.Action<CookieApplyRedirectContext> defaultApplyRedirect =
+                new CookieAuthenticationProvider().OnApplyRedirect;
+
             app.UseCookieAuthentication(new CookieAuthenticationOptions
             {
                 AuthenticationType = DefaultAuthenticationTypes.ApplicationCookie,  // 認証タイプを設定する。
@@ -185,8 +190,24 @@ namespace MultiPurposeAuthSite
                         // SecurityStampValidatorによる検証の間隔
                         validateInterval: Config.SecurityStampValidateIntervalFromSeconds,
                         // ClaimsIdentityを返すdelegate
-                        regenerateIdentity: (manager, user) => user.GenerateUserIdentityAsync(manager))
+                        regenerateIdentity: (manager, user) => user.GenerateUserIdentityAsync(manager)),
                         
+                    #endregion
+
+                    #region ApplyRedirect
+
+                    // OAuth2 / OIDC の API（/token など）が返す 401 を、ログイン画面への 302 に書き換えない（#196）。
+                    // Cookie 認証は、既定では 401 の応答を LoginPath へのリダイレクトに変える。
+                    // 画面には都合がよいが、API の 401（invalid_client など）が 302 になり、
+                    // クライアントは認証の失敗を読み取れなくなる（net10.0 版には、この書き換えが無い）。
+                    OnApplyRedirect = context =>
+                    {
+                        if (!StartupAuth.IsOAuth2ApiRequest(context.Request))
+                        {
+                            defaultApplyRedirect(context);
+                        }
+                    }
+
                     #endregion
                 },
 
@@ -369,6 +390,40 @@ namespace MultiPurposeAuthSite
             #endregion
 
             #endregion
+        }
+
+        /// <summary>OAuth2 / OIDC の API への要求か</summary>
+        /// <param name="request">IOwinRequest</param>
+        /// <returns>API への要求なら true（Cookie 認証のログイン画面へのリダイレクトから外す）</returns>
+        /// <remarks>
+        /// これらは、エラーを 400 / 401 の JSON で返す（#196）。
+        /// 401 をログイン画面への 302 に書き換えられると、クライアントが読めなくなる。
+        /// </remarks>
+        private static bool IsOAuth2ApiRequest(IOwinRequest request)
+        {
+            string path = request.Path.HasValue ? request.Path.Value : "";
+
+            string[] apis = new string[]
+            {
+                Config.OAuth2TokenEndpoint,
+                Config.OAuth2UserInfoEndpoint,
+                Config.OAuth2RevokeTokenEndpoint,
+                Config.OAuth2IntrospectTokenEndpoint,
+                Config.DeviceAuthZAuthorizeEndpoint,
+                Config.CibaAuthorizeEndpoint,
+                Config.CibaPushResultEndpoint
+            };
+
+            foreach (string api in apis)
+            {
+                if (!string.IsNullOrEmpty(api)
+                    && string.Equals(path, api, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

@@ -65,6 +65,7 @@
 //*  2026/09/11  玄人 幸道         revoke/introspectの本体を両アプリから移し、RFC 7009 / 7662 に合わせる（#200）
 //*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行せず、トークン応答に scope を返す（#198）
 //*  2026/09/11  玄人 幸道         クライアントの登録（scope）でも、発行するスコープを絞る（#198 の後半）
+//*  2026/09/11  玄人 幸道         エラー応答の HTTP ステータスを決める GetErrorStatusCode を追加（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2114,6 +2115,31 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return (payload != null
                 && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
+        }
+
+        #endregion
+
+        #region エラー応答の HTTP ステータス
+
+        /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2）</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>HTTP ステータス（invalid_client は 401、それ以外は 400）</returns>
+        /// <remarks>
+        /// 以前は、どのエンドポイントも Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// RFC 6749 5.2 : エラーは 400。invalid_client（クライアント認証の失敗）は 401。
+        /// Device / CIBA のポーリングのエラー（authorization_pending など）も 400（RFC 8628 3.5）。
+        /// 実際の応答（IActionResult / IHttpActionResult）は、フレームワークごとに各アプリで作る。
+        /// </remarks>
+        public static int GetErrorStatusCode(Dictionary<string, string> err)
+        {
+            string error = null;
+
+            if (err != null)
+            {
+                err.TryGetValue(OAuth2AndOIDCConst.error, out error);
+            }
+
+            return (error == OAuth2AndOIDCConst.invalid_client) ? 401 : 400;
         }
 
         #endregion

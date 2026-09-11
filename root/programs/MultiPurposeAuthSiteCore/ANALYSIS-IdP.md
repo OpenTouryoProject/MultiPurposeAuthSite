@@ -35,7 +35,7 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
-**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
+**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196 で `/token` を対応済み（残りのエンドポイントは順次）、A-10 は #189 の残りに紐づく。
 セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。C-17（#198）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
@@ -286,19 +286,40 @@ RFC 6749 §4.1.2.1 が要求するのは `error` / `error_description`、
 > 登録済みクライアントの `redirect_uri` にクエリ文字列を持つものが無く、
 > `CheckRedirectUri` は完全一致を要求するため、実機で試せなかった。単体テスト向き。
 
-### A-7. エラーの HTTP ステータスが 200 **[Core]** — **未対応（#196）**
+### A-7. エラーの HTTP ステータスが 200 **[Core]** — **一部修正（#196 : `/token`）**
 
 `/token` `/userinfo` `/revoke` `/introspect` はいずれも
 `Dictionary<string,string>` を返すだけなので、**エラーでも HTTP 200** になる。
 RFC 6749 §5.2 は **400（`invalid_client` は 401）**、
 OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める。
 
-**修正:** `IActionResult` に変えて `BadRequest(...)` / `Unauthorized(...)` を返す。
-**net48 版（`ApiController` / `HttpResponseMessage`）とは書き方が違うので、両系統で別実装になる。**
+**修正方針:** 戻り値を `IActionResult`（net10.0）/ `IHttpActionResult`（net48）に変え、エラーを 400 / 401 で返す。
+**両系統で書き方が違うので、別実装になる。** エンドポイントごとに分けて進める。
 
 > **#187 から #196 に分離した。** 戻り値の型変更を伴い両系統で実装が分かれること、
 > **HTTP ステータスはクライアントの期待そのもの**でテスト整備後に着手したいことが理由。
-> `/revoke` は RFC 7009 §2.2 により**エラーでも 200 が正**（例外）である点に注意。
+> `/revoke` は、成功と無効なトークンの場合に 200 を返す（RFC 7009 §2.2。#200 で対応済み）。
+> `invalid_client` などのエラーは、他と同じく 400 / 401 になる。
+
+**対応（#196 の 1 つ目 : `/token`）:**
+
+- エラーは 400、`invalid_client` は 401（RFC 6749 §5.2）。401 には `WWW-Authenticate: Basic realm="token"` を付ける
+  （Authorization ヘッダで認証を試みたクライアントには必須）
+- 判定は `CmnEndpoints.GetErrorStatusCode` に置き、両アプリで共用する（残りのエンドポイントでも使う）
+- 本文（`error` / `error_description` の JSON）は変えていない。成功は 200 のまま
+- **net48 版だけの落とし穴:** OWIN の Cookie 認証が、**401 の応答をログイン画面への 302 に書き換えていた。**
+  `StartupAuth` の `OnApplyRedirect` で、OAuth2 / OIDC の API
+  （`/token` `/userinfo` `/revoke` `/introspect` `/device_authz` `/ciba_authz` `/ciba_result`）を書き換えの対象から外した。
+  画面の遷移は、従来どおりログイン画面へリダイレクトする
+- E2E テスト : `RT-196.1`（フォームでの認証失敗 → 401）/ `RT-196.2`（Basic 認証の失敗 → 401 と `WWW-Authenticate`）/
+  `RT-196.3`（その他のエラー → 400）/ `RT-196.4`（成功は 200 のまま）
+
+> **net48 版の既知の問題（Open棟梁 側）:** 401 の `WWW-Authenticate` に、`somescheme somechallenge` という仮の値が付け足される。
+> Open棟梁 の `MyBaseAsyncApiController.ChallengeAsync` が、雛形のまま残った `ResultWithChallenge` を無条件に使っているため。
+> 先頭の `Basic realm="token"` は正しく付くので、動作には支障が無い。
+
+> **残り:** `/userinfo`（401 ＋ `WWW-Authenticate: Bearer`、RFC 6750 §3）、`/revoke`・`/introspect`、
+> `/device_authz`・`/ciba_authz`、`/ciba_result`・`/SetDeviceToken`（応答が文字列。`authentication_device` の修正を伴う）。
 
 ### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 
@@ -932,7 +953,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 | ✅ **A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消）** #187 |
 | ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
-| A-7 エラーの HTTP ステータス（400 / 401） → **#196 に分離。テスト整備後** |
+| A-7 エラーの HTTP ステータス（400 / 401） → **#196。`/token` は対応済み、残りはエンドポイントごとに順次** |
 | A-10 discovery の項目整備 → **#189 の残り 13 項目** |
 
 ### フェーズ 2 — セキュリティの底上げ

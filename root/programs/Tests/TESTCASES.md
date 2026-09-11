@@ -1709,6 +1709,97 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - id_token に nonce クレームがある
 - 送った値と完全一致する
 
+## RT-196.1 /token : クライアント認証の失敗（client_secret_post）は HTTP 401
+
+| | |
+|---|---|
+| 観点 | invalid_client は、要求の中身ではなく**誰が要求したか**の失敗。400 と区別されていれば、クライアントは「資格情報を見直す」と判断できる。 |
+| 根拠 | RFC 6749 §5.2（invalid_client は 401 を返してよい）/ #196 |
+| テスト | `RT196_01_tokenでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials と誤った client_secret をフォームで送る
+
+**検証（合否を判定する）**
+
+- 誤った client_secret : HTTP 401 で返る
+- 誤った client_secret : 本文は error を含む JSON のまま
+- 誤った client_secret : error
+
+**観測（判定しない）**
+
+- WWW-Authenticate
+  - フォームで認証を試みた場合は任意。付けると、受け付ける認証方式をクライアントに示せる。
+
+## RT-196.2 /token : Authorization ヘッダでの認証の失敗は、HTTP 401 と WWW-Authenticate
+
+| | |
+|---|---|
+| 観点 | Authorization ヘッダ（client_secret_basic）で認証を試みたクライアントには、**401 と、同じ方式の WWW-Authenticate を必ず返す**。HTTP 認証の約束事であり、ここを外すと汎用の HTTP クライアントが認証の失敗と認識できない。 |
+| 根拠 | RFC 6749 §5.2（Authorization ヘッダで認証した場合は 401 と WWW-Authenticate が MUST） / §2.3.1 / #196 |
+| テスト | `RT196_02_tokenでBasic認証の失敗は401とWWW_Authenticate` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials を送り、client_id と誤った client_secret を Authorization: Basic で渡す
+
+**検証（合否を判定する）**
+
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- WWW-Authenticate が Basic 方式を示す
+
+## RT-196.3 /token : クライアント認証以外のエラーは HTTP 400
+
+| | |
+|---|---|
+| 観点 | 要求の中身の誤り（無効な refresh_token、grant_type の欠落・未知の値）は 400。**正しく認証したクライアントの要求は、401 にしない**（資格情報の問題と取り違えさせない）。 |
+| 根拠 | RFC 6749 §5.2（エラーは 400）/ #196 |
+| テスト | `RT196_03_tokenでそれ以外のエラーは400` |
+
+**手順**
+
+1. 存在しない refresh_token で更新する
+1. grant_type を付けずに送る
+1. 未知の grant_type を送る
+
+**検証（合否を判定する）**
+
+- 存在しない refresh_token : HTTP 400 で返る
+- 存在しない refresh_token : 本文は error を含む JSON のまま
+- 存在しない refresh_token : error
+- grant_type なし : HTTP 400 で返る
+- grant_type なし : 本文は error を含む JSON のまま
+- 未知の grant_type : HTTP 400 で返る
+- 未知の grant_type : 本文は error を含む JSON のまま
+
+**観測（判定しない）**
+
+- error の値（grant_type なし / 未知）
+  - RFC 6749 §5.2 では、欠落は invalid_request、未知の値は unsupported_grant_type が相当する。本 Issue（HTTP ステータス）の範囲外なので、値は判定しない。
+
+## RT-196.4 /token : 成功は HTTP 200 のまま（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.1 〜 196.3 の対照。** エラーの返し方を変えたことで、成功の応答まで変わっていないことを確かめる（Basic 認証の成功も含む）。 |
+| 根拠 | RFC 6749 §5.1（成功は 200）/ #196 |
+| テスト | `RT196_04_tokenの成功は200のまま` |
+
+**手順**
+
+1. client_secret_post（フォーム）で client_credentials を送る
+1. client_secret_basic（Authorization ヘッダ）で同じ要求を送る
+
+**検証（合否を判定する）**
+
+- フォーム : HTTP 200
+- フォーム : access_token が返る
+- Basic : HTTP 200
+- Basic : access_token が返る
+
 ## RT-197.1 FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する
 
 | | |

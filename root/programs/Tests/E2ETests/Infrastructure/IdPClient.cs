@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         Device Authorization Grant の検証画面の操作を追加（拡張仕様のテスト）
+//*  2026/09/11  玄人 幸道         client_secret_basic で /token を呼ぶ TokenWithBasicAuthAsync を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -373,6 +374,39 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> TokenAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/token", form);
+        }
+
+        /// <summary>
+        /// トークン エンドポイントを、client_secret_basic（Authorization ヘッダ）で呼ぶ。
+        /// client_id / client_secret はフォームに入れない。
+        /// </summary>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> TokenWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            List<KeyValuePair<string, string>> items = new List<KeyValuePair<string, string>>();
+
+            foreach (KeyValuePair<string, string> item in form)
+            {
+                if (item.Value != null)
+                {
+                    items.Add(item);
+                }
+            }
+
+            HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, this.Absolute("/token"));
+            req.Content = new FormUrlEncodedContent(items);
+
+            // RFC 6749 2.3.1 : form-urlencode してから ":" で繋ぎ、BASE64 にする。
+            string credential = WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret);
+            req.Headers.TryAddWithoutValidation("Authorization",
+                "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(credential)));
+
+            HttpResponseMessage res = await this._http.SendAsync(req);
+            return await ToJsonResponseAsync(res);
         }
 
         /// <summary>UserInfoエンドポイントを呼ぶ</summary>

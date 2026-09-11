@@ -47,6 +47,7 @@
 //*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
 //*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //*  2026/09/11  玄人 幸道         /revoke /introspect を RFC 7009 / 7662 に合わせて修正（#200）
+//*  2026/09/11  玄人 幸道         /token のエラー応答を 400 / 401 で返す（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -164,9 +165,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /token
         /// </summary>
         /// <param name="formData">FormDataCollection</param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <returns>成功は 200、エラーは 400 / 401（RFC 6749 5.1 / 5.2）（#196）</returns>
         [HttpPost]
-        public Dictionary<string, string> OAuth2Token(IFormCollection formData)
+        public IActionResult OAuth2Token(IFormCollection formData)
         {
             Dictionary<string, string> ret = null;
             // grant_typeが未知・未指定、フォームデータ無しの経路でも使うので初期化する（#185）。
@@ -224,7 +225,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 grant_type, client_id, client_secret, assertion, x509,
                                 code, code_verifier, redirect_uri, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -233,7 +234,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantRefreshTokenCredentials(
                                 grant_type, client_id, client_secret, x509, refresh_token, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -245,7 +246,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 grant_type, client_id, client_secret, x509,
                                 username, password, scope, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -254,7 +255,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantClientCredentials(
                                 grant_type, client_id, client_secret, x509, scope, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -262,7 +263,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantJwtBearerTokenCredentials(
                             grant_type, assertion, x509, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -271,7 +272,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
                                 client_id, client_secret, x509, device_code, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -281,7 +282,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 client_id, client_secret, x509,
                                 auth_req_id, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -306,9 +307,30 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return err; // 失敗
+            return this.TokenError(err); // 失敗（RFC 6749 5.2 : 400 / 401）（#196）
         }
 
+
+        /// <summary>/token のエラー応答を作る（RFC 6749 5.2）</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>400、または 401（invalid_client）</returns>
+        /// <remarks>
+        /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// 本文（error / error_description の JSON）は変えない。
+        /// </remarks>
+        private IActionResult TokenError(Dictionary<string, string> err)
+        {
+            int status = Token.CmnEndpoints.GetErrorStatusCode(err);
+
+            if (status == 401)
+            {
+                // クライアント認証の失敗。受け付ける認証方式を示す。
+                // Authorization ヘッダで認証を試みたクライアントには必須（RFC 6749 5.2）。
+                this.Response.Headers["WWW-Authenticate"] = "Basic realm=\"token\"";
+            }
+
+            return new ObjectResult(err) { StatusCode = status };
+        }
         #endregion
 
         #region /userinfo

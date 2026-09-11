@@ -182,6 +182,7 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 | `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
 | `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
+| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（現在は `/token`） |
 
 **すべてのテストが `TestReport` で記録を残す。**
 識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。
