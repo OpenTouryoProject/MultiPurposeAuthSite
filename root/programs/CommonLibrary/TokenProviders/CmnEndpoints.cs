@@ -69,6 +69,7 @@
 //*  2026/09/11  玄人 幸道         #region の配置を整理（ClientAuthentication の下に置いていた #187 / #194 / #196 / #200 の追加分を移動）
 //*  2026/09/11  玄人 幸道         Public / Private の region を中身に合わせる（ClientAuthentication を Public へ、Token所有者の確認を private に）
 //*  2026/09/11  玄人 幸道         /userinfo の Bearer のエラー（invalid_token は 401、WWW-Authenticate の組み立て）を追加（#196）
+//*  2026/09/11  玄人 幸道         /ciba_authz の空のエラー コードを CIBA Core 13 のコードに（unknown_user_id を追加）（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -569,7 +570,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region 取得 → チェック
             // iss → client_id
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.iss,
                 out client_id, out err, out errDescription))
             {
@@ -581,14 +582,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (string.IsNullOrEmpty(clientName))
                 {
-                    //err = "server_error";
+                    // 登録されていないクライアント（CIBA Core 13 : invalid_client）。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_client;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
                     return false;
                 }
             }
             // aud
             // exp
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                     json, OAuth2AndOIDCConst.exp,
                     out exp, out err, out errDescription))
             {
@@ -598,14 +600,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!CmnJwtToken.VerifyExp(exp))
                 {
-                    //err = "server_error";
+                    // CIBA Core 13 : invalid_request。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "This PAR is expired.";
                     return false;
                 }
             }
             // iat
             // nbf
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.nbf,
                 out nbf, out err, out errDescription))
             {
@@ -615,14 +618,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!CmnJwtToken.VerifyNbf(nbf))
                 {
-                    //err = "server_error";
+                    // CIBA Core 13 : invalid_request。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "This PAR is before enabled.";
                     return false;
                 }
             }
             // jti
             // scope
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.scope,
                 out scope, out err, out errDescription))
             {
@@ -632,8 +636,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
                 {
-                    // OIDC無効
-                    //err = "server_error";
+                    // OIDC無効（CIBA Core 13 : invalid_scope）。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_scope;
                     errDescription = string.Format(
                         "CIBA is required {0} value in scope param.",
                         OAuth2AndOIDCConst.Scope_Openid);
@@ -642,29 +646,29 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
             // client_notification_token
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.client_notification_token,
                 out client_notification_token, out err, out errDescription))
             {
                 return false;
             }
             // binding_message
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.binding_message,
                 out binding_message, out err, out errDescription))
             {
                 return false;
             }
             // user_code
-            CmnJwtToken.CheckClaims(
+            CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.user_code,
                 out user_code, out err, out errDescription, nullable: true);
             // requested_expiry
-            CmnJwtToken.CheckClaims(
+            CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.requested_expiry,
                 out requested_expiry, out err, out errDescription, nullable: true);
             // login_hint
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.login_hint,
                 out login_hint, out err, out errDescription))
             {
@@ -672,6 +676,30 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return true;
+        }
+
+        /// <summary>CIBA の認証リクエストのクレームを取り出す（CmnJwtToken.CheckClaims の包み）</summary>
+        /// <param name="json">JObject</param>
+        /// <param name="key">クレーム名</param>
+        /// <param name="value">値</param>
+        /// <param name="err">error</param>
+        /// <param name="errDescription">error_description</param>
+        /// <param name="nullable">省略できるクレームか</param>
+        /// <returns>取り出せたか（省略できるクレームが無い場合も true）</returns>
+        /// <remarks>
+        /// Open棟梁 の CheckClaims は、クレームが無いと server_error を返す。
+        /// 要求の不備なので、CIBA Core 13 のとおり invalid_request にする（#196）。
+        /// </remarks>
+        private static bool GetCibaClaim(JObject json, string key,
+            out string value, out string err, out string errDescription, bool nullable = false)
+        {
+            if (CmnJwtToken.CheckClaims(json, key, out value, out err, out errDescription, nullable))
+            {
+                return true;
+            }
+
+            err = OAuth2AndOIDCConst.invalid_request;
+            return false;
         }
         #endregion
 
@@ -2252,6 +2280,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <remarks>Open棟梁 の OAuth2AndOIDCConst に無いので、ここで定義する（#196）。</remarks>
         public const string invalid_token = "invalid_token";
 
+        /// <summary>login_hint などで示されたユーザが見つからない（CIBA Core 13）</summary>
+        /// <remarks>Open棟梁 の OAuth2AndOIDCConst に無いので、ここで定義する（#196）。</remarks>
+        public const string unknown_user_id = "unknown_user_id";
+
         /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2 / RFC 6750 3.1）</summary>
         /// <param name="err">error / error_description を持つ辞書</param>
         /// <returns>HTTP ステータス（invalid_client / invalid_token は 401、それ以外は 400）</returns>
@@ -2259,6 +2291,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 以前は、どのエンドポイントも Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
         /// RFC 6749 5.2 : エラーは 400。invalid_client（クライアント認証の失敗）は 401。
         /// RFC 6750 3.1 : invalid_token（無効・失効・期限切れの Bearer トークン）は 401。
+        /// CIBA Core 13 : invalid_client は 401、それ以外（invalid_scope・unknown_user_id など）は 400。
         /// Device / CIBA のポーリングのエラー（authorization_pending など）も 400（RFC 8628 3.5）。
         /// 実際の応答（IActionResult / IHttpActionResult）は、フレームワークごとに各アプリで作る。
         /// </remarks>

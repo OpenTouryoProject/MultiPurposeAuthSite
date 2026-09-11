@@ -2052,6 +2052,76 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - device_code が返る
 - error を返さない
 
+## RT-196.16 /ciba_authz : request_uri が無い・存在しない要求は、HTTP 400 と invalid_request
+
+| | |
+|---|---|
+| 観点 | CIBA の認証リクエストは、事前に /ros へ登録した Request Object を request_uri で指す。**指していない・指す先が無い要求は、要求の誤りとして 400 で返す。** |
+| 根拠 | CIBA Core §13（invalid_request は 400）/ #196 |
+| テスト | `RT196_16_ciba_authzでrequest_uriの不備は400` |
+
+**手順**
+
+1. request_uri を付けずに POST /ciba_authz を送る
+1. 登録されていない request_uri を送る
+
+**検証（合否を判定する）**
+
+- request_uri なし : HTTP 400 で返る
+- request_uri なし : 本文は error を含む JSON のまま
+- request_uri なし : error
+- 存在しない request_uri : HTTP 400 で返る
+- 存在しない request_uri : 本文は error を含む JSON のまま
+- 存在しない request_uri : error
+
+## RT-196.17 /ciba_authz : 認証リクエストの中身の誤りは、HTTP 400 と CIBA Core §13 のエラー コード
+
+| | |
+|---|---|
+| 観点 | 以前は、これらの誤りで error が**空文字列**のまま返っていた（コードが無いと、クライアントは原因を判断できない）。CIBA Core §13 のコードを返し、HTTP ステータスはコードから決める（invalid_client 以外は 400）。 |
+| 根拠 | CIBA Core §7.1 / §13 / #196 |
+| テスト | `RT196_17_ciba_authzで要求の中身の誤りは400とCIBAのコード` |
+
+**手順**
+
+1. scope に openid が無い要求
+1. nbf が未来の要求（まだ有効になっていない）
+1. exp が過去の要求（期限切れ）
+
+**検証（合否を判定する）**
+
+- openid なし : HTTP 400 で返る
+- openid なし : 本文は error を含む JSON のまま
+- openid なし : error
+- nbf が未来 : HTTP 400 で返る
+- nbf が未来 : 本文は error を含む JSON のまま
+- nbf が未来 : error
+- exp が過去 : HTTP 400 で返る
+- exp が過去 : 本文は error を含む JSON のまま
+- exp が過去 : error
+
+## RT-196.18 /ciba_authz : login_hint のユーザが見つからない要求は、HTTP 400 と unknown_user_id
+
+| | |
+|---|---|
+| 観点 | CIBA では、認証を求める相手（ユーザ）を login_hint などで指す。**見つからないなら、それを unknown_user_id で伝える。**以前は error が空のまま返っていた。 |
+| 根拠 | CIBA Core §13（unknown_user_id は 400）/ #196 |
+| テスト | `RT196_18_ciba_authzでユーザが見つからなければ400とunknown_user_id` |
+
+**手順**
+
+1. login_hint に存在しないユーザを入れた要求を /ros に登録し、その request_uri を送る
+
+**検証（合否を判定する）**
+
+- ユーザ不明 : HTTP 400 で返る
+- ユーザ不明 : 本文は error を含む JSON のまま
+- ユーザ不明 : error
+
+**補足**
+
+- 成功経路（見つかったユーザへのプッシュ通知）は FCM に送るので、E2E では測らない。
+
 ## RT-197.1 FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する
 
 | | |

@@ -33,6 +33,7 @@
 //*  2026/09/11  玄人 幸道         /revoke（RT-196.8 〜 196.10）を追加（#196 の 3 つ目）
 //*  2026/09/11  玄人 幸道         /introspect（RT-196.11 〜 196.13）を追加（#196 の 4 つ目）
 //*  2026/09/11  玄人 幸道         /device_authz（RT-196.14 〜 196.15）を追加（#196 の 5 つ目）
+//*  2026/09/11  玄人 幸道         /ciba_authz（RT-196.16 〜 196.18）を追加（#196 の 6 つ目）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -58,10 +59,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     ///   RT-196.8 〜 196.10 : /revoke（RFC 7009 §2.2.1 : エラーは /token と同じ。成功と無効なトークンは 200）
     ///   RT-196.11 〜 196.13 : /introspect（RFC 7662 §2.3 : 認証の失敗は 401。active=false は 200）
     ///   RT-196.14 〜 196.15 : /device_authz（RFC 8628 §3.1 : クライアント認証は /token と同じ。失敗は 401）
+    ///   RT-196.16 〜 196.18 : /ciba_authz（CIBA Core §13 : invalid_client は 401、それ以外は 400。成功は FCM に送るので測らない）
     ///
     /// /token・/revoke・/introspect・/device_authz では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
     /// /userinfo は RFC 6750 に合わせて本文も変えた（無効なトークンは invalid_token、トークン無しは本文なし）。
+    /// /ciba_authz は CIBA Core §13 に合わせてエラー コードも変えた（空・server_error だった経路を、正しいコードに）。
     /// </summary>
     public class HttpStatusTests : TargetTestBase
     {
@@ -121,6 +124,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
             r.Verify(label + " : WWW-Authenticate に error=\"invalid_token\" が付く",
                 challenge != null && challenge.Contains("error=\"invalid_token\""),
                 "error=\"invalid_token\"", challenge ?? "（無し）");
+        }
+
+        /// <summary>CIBA の認証リクエスト（ES256）を /ros に登録し、request_uri を返す</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">CIBA のクライアント</param>
+        /// <param name="overrides">既定の値を上書きするクレーム</param>
+        /// <returns>request_uri</returns>
+        private static async Task<string> RegisterCibaRequestAsync(
+            IdPClient client, ClientRegistration reg, IDictionary<string, object> overrides)
+        {
+            string requestUri = await RequestObjectBuilder.RegisterAsync(
+                client, RequestObjectBuilder.CreateCiba(client, reg.ClientId, overrides));
+
+            Assert.False(string.IsNullOrEmpty(requestUri),
+                "前提: /ros が、ES256 で署名した CIBA の要求を受け付けること");
+
+            return requestUri;
         }
 
         /// <summary>RT-196.1 クライアント認証の失敗（フォーム）</summary>
@@ -821,6 +841,121 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
 
                 r.Verify("error を返さない", string.IsNullOrEmpty(res.Error),
                     "error なし", res.Error == null ? "error なし" : "error=" + res.Error);
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.16 /ciba_authz の request_uri の不備</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_16_ciba_authzでrequest_uriの不備は400(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.16",
+                    "/ciba_authz : request_uri が無い・存在しない要求は、HTTP 400 と invalid_request",
+                    "CIBA の認証リクエストは、事前に /ros へ登録した Request Object を request_uri で指す。"
+                    + "**指していない・指す先が無い要求は、要求の誤りとして 400 で返す。**",
+                    "CIBA Core §13（invalid_request は 400）/ #196");
+
+                r.Target(client.Target.DisplayName);
+                r.Step("(1) request_uri を付けずに POST /ciba_authz を送る");
+
+                JsonResponse none = await client.CibaAuthorizeAsync(new Dictionary<string, string>());
+
+                VerifyError(r, "request_uri なし", none, 400, "invalid_request");
+
+                r.Step("(2) 登録されていない request_uri を送る");
+
+                JsonResponse unknown = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "request_uri", RequestObjectBuilder.RequestUriPrefix + "00000000000000000000000000000000" }
+                });
+
+                VerifyError(r, "存在しない request_uri", unknown, 400, "invalid_request");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.17 /ciba_authz の認証リクエストの中身の誤り</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_17_ciba_authzで要求の中身の誤りは400とCIBAのコード(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.17",
+                    "/ciba_authz : 認証リクエストの中身の誤りは、HTTP 400 と CIBA Core §13 のエラー コード",
+                    "以前は、これらの誤りで error が**空文字列**のまま返っていた（コードが無いと、クライアントは原因を判断できない）。"
+                    + "CIBA Core §13 のコードを返し、HTTP ステータスはコードから決める（invalid_client 以外は 400）。",
+                    "CIBA Core §7.1 / §13 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+                long now = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+                r.Target("client_name=" + KnownClients.TestClient4 + "（fapi_ciba。要求は ES256 で署名して /ros に登録する）");
+
+                r.Step("(1) scope に openid が無い要求");
+
+                string noOpenid = await RegisterCibaRequestAsync(client, reg,
+                    new Dictionary<string, object>() { { "scope", "profile" } });
+
+                VerifyError(r, "openid なし", await client.CibaAuthorizeAsync(
+                    new Dictionary<string, string>() { { "request_uri", noOpenid } }), 400, "invalid_scope");
+
+                r.Step("(2) nbf が未来の要求（まだ有効になっていない）");
+
+                string notYet = await RegisterCibaRequestAsync(client, reg,
+                    new Dictionary<string, object>() { { "nbf", now + 600 } });
+
+                VerifyError(r, "nbf が未来", await client.CibaAuthorizeAsync(
+                    new Dictionary<string, string>() { { "request_uri", notYet } }), 400, "invalid_request");
+
+                r.Step("(3) exp が過去の要求（期限切れ）");
+
+                string expired = await RegisterCibaRequestAsync(client, reg,
+                    new Dictionary<string, object>() { { "exp", now - 600 } });
+
+                VerifyError(r, "exp が過去", await client.CibaAuthorizeAsync(
+                    new Dictionary<string, string>() { { "request_uri", expired } }), 400, "invalid_request");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.18 /ciba_authz のユーザ不明</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_18_ciba_authzでユーザが見つからなければ400とunknown_user_id(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.18",
+                    "/ciba_authz : login_hint のユーザが見つからない要求は、HTTP 400 と unknown_user_id",
+                    "CIBA では、認証を求める相手（ユーザ）を login_hint などで指す。"
+                    + "**見つからないなら、それを unknown_user_id で伝える。**以前は error が空のまま返っていた。",
+                    "CIBA Core §13（unknown_user_id は 400）/ #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = 存在しないユーザ");
+                r.Step("login_hint に存在しないユーザを入れた要求を /ros に登録し、その request_uri を送る");
+
+                string requestUri = await RegisterCibaRequestAsync(client, reg,
+                    new Dictionary<string, object>() { { "login_hint", "unknown-user@example.invalid" } });
+
+                VerifyError(r, "ユーザ不明", await client.CibaAuthorizeAsync(
+                    new Dictionary<string, string>() { { "request_uri", requestUri } }), 400, "unknown_user_id");
+
+                r.Note("成功経路（見つかったユーザへのプッシュ通知）は FCM に送るので、E2E では測らない。");
 
                 r.Done();
             }

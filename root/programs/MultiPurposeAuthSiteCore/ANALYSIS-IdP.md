@@ -35,7 +35,7 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
-**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196 で `/token`・`/userinfo`・`/revoke`・`/introspect`・`/device_authz` を対応済み（残りのエンドポイントは順次）、A-10 は #189 の残りに紐づく。
+**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196 で `/token`・`/userinfo`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz` を対応済み（残りのエンドポイントは順次）、A-10 は #189 の残りに紐づく。
 セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。C-17（#198）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
@@ -286,7 +286,7 @@ RFC 6749 §4.1.2.1 が要求するのは `error` / `error_description`、
 > 登録済みクライアントの `redirect_uri` にクエリ文字列を持つものが無く、
 > `CheckRedirectUri` は完全一致を要求するため、実機で試せなかった。単体テスト向き。
 
-### A-7. エラーの HTTP ステータスが 200 **[Core]** — **一部修正（#196 : `/token`・`/userinfo`・`/revoke`・`/introspect`・`/device_authz`）**
+### A-7. エラーの HTTP ステータスが 200 **[Core]** — **一部修正（#196 : `/token`・`/userinfo`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz`）**
 
 `/token` `/userinfo` `/revoke` `/introspect` はいずれも
 `Dictionary<string,string>` を返すだけなので、**エラーでも HTTP 200** になる。
@@ -378,7 +378,29 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   フォームデータなし（400）は、空のフォームでは `client_id` なし（401）の経路に入るため、E2E では測っていない
 - `expires_in` / `interval` が文字列で返る点（`EX-4.1` で観測）は、HTTP ステータスの範囲外なので扱っていない
 
-> **残り:** `/ciba_authz`、`/ciba_result`・`/SetDeviceToken`（応答が文字列。`authentication_device` の修正を伴う）。
+**対応（#196 の 6 つ目 : `/ciba_authz`）:** CIBA Core §13（エラー コードごとに HTTP ステータスを定める）に合わせた。
+**エラー コードも直した。** 以前は、空文字列や `server_error` のまま返る経路があった。
+
+| 要求 | 修正前 | 修正後 |
+|---|---|---|
+| 成功（`auth_req_id` を発行） | 200 | 変更なし（ユーザへプッシュ通知を FCM で送るので、E2E では測っていない） |
+| `request_uri` が無い・存在しない | 200 ＋ `invalid_request` | **400** ＋ `invalid_request` |
+| `scope` に `openid` が無い | 200 ＋ `error` が空 | **400** ＋ `invalid_scope` |
+| `exp` / `nbf` の範囲外、必須のクレームの欠落 | 200 ＋ 空 / `server_error` | **400** ＋ `invalid_request` |
+| `login_hint` のユーザが見つからない | 200 ＋ 空 | **400** ＋ `unknown_user_id` |
+| 登録されていないクライアント（`iss`） | 200 ＋ 空 | **401** ＋ `invalid_client` |
+
+- `/ciba_authz` は、クライアントを HTTP 認証ではなく、`/ros` に登録した署名付きの要求（ES256）で識別する。
+  そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
+- 未登録のクライアントや必須のクレームの欠落は、`/ros` の登録（署名と必須項目の検証）で先に断られるので、
+  `/ciba_authz` では実際には起きにくい（防御として正しいコードにした）
+- `unknown_user_id` は Open棟梁 の定数に無いので `CmnEndpoints` で定義した。
+  クレームの欠落は、Open棟梁 の `CmnJwtToken.CheckClaims` が返す `server_error` を、`invalid_request` に読み替える（`GetCibaClaim`）
+- E2E テスト : `RT-196.16`（`request_uri` なし・存在しない → 400）/
+  `RT-196.17`（`openid` なし・`nbf` が未来・`exp` が過去 → 400 と CIBA のコード）/
+  `RT-196.18`（ユーザ不明 → 400 と `unknown_user_id`）。要求は、テスト基盤に足した ES256 の署名で組み立てる
+
+> **残り:** `/ciba_result`・`/SetDeviceToken`（応答が文字列。`authentication_device` の修正を伴う）。
 
 ### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 
@@ -1015,7 +1037,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 | ✅ **A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消）** #187 |
 | ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
-| A-7 エラーの HTTP ステータス（400 / 401） → **#196。`/token`・`/userinfo`・`/revoke`・`/introspect`・`/device_authz` は対応済み、残りはエンドポイントごとに順次** |
+| A-7 エラーの HTTP ステータス（400 / 401） → **#196。`/token`・`/userinfo`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz` は対応済み、残りはエンドポイントごとに順次** |
 | A-10 discovery の項目整備 → **#189 の残り 13 項目** |
 
 ### フェーズ 2 — セキュリティの底上げ

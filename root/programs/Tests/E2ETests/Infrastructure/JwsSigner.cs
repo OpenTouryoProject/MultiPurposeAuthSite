@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：JwsSigner
-//* クラス日本語名  ：RS256 の JWS の署名（テスト用）
+//* クラス日本語名  ：RS256 / ES256 の JWS の署名（テスト用）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/11  玄人 幸道         新規（RequestObjectBuilder と JwtBearerAssertion に重複していた署名を集約）
+//*  2026/09/11  玄人 幸道         ES256 の署名（CIBA の認証リクエスト用）を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -41,14 +42,15 @@ using System.Text.Json;
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 {
     /// <summary>
-    /// クライアントの秘密鍵で、RS256 の JWS を作る。
+    /// クライアントの秘密鍵で、RS256 / ES256 の JWS を作る。
     ///
-    /// Request Object（RequestObjectBuilder）と、JWT Bearer の assertion（JwtBearerAssertion）で使う。
+    /// RS256 : Request Object（RequestObjectBuilder）と、JWT Bearer の assertion（JwtBearerAssertion）で使う。
+    ///         署名鍵は、テスト用クライアントの jwk_rsa_publickey と対になる SpRp_RsaPfxFilePath（構成ファイル）。
+    /// ES256 : CIBA の認証リクエスト（RequestObjectBuilder.CreateCiba）で使う。
+    ///         署名鍵は、CIBA のクライアントの jwk_ecdsa_publickey と対になる SpRp_EcdsaPfxFilePath（構成ファイル）。
+    ///
     /// 実装側の JWS クラスは使わず、System.Security.Cryptography だけで組む
     /// （同じコードで作って同じコードで検証すると、「サーバが何を受け取っているか」を確かめたことにならないため）。
-    ///
-    /// 署名鍵は、テスト用クライアントが登録している jwk_rsa_publickey と対になる
-    /// SpRp_RsaPfxFilePath（構成ファイル）を使う。
     /// </summary>
     public static class JwsSigner
     {
@@ -58,18 +60,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <returns>JWS</returns>
         public static string SignRS256(IdPClient client, IDictionary<string, object> payload)
         {
-            Dictionary<string, object> header = new Dictionary<string, object>()
-            {
-                { "alg", "RS256" },
-                { "typ", "JWT" }
-            };
+            string signingInput = SigningInput("RS256", payload);
 
-            string signingInput =
-                Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(header))
-                + "." + Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(payload));
-
-            using (RSA rsa = LoadSigningKey(client))
+            using (X509Certificate2 cert = LoadCertificate(client, "SpRp_RsaPfxFilePath", "SpRp_RsaPfxPassword"))
+            using (RSA rsa = cert.GetRSAPrivateKey())
             {
+                if (rsa == null)
+                {
+                    throw new InvalidOperationException(
+                        "RSAの秘密鍵を取り出せませんでした: " + client.Config.Get("SpRp_RsaPfxFilePath"));
+                }
+
                 byte[] signature = rsa.SignData(
                     Encoding.UTF8.GetBytes(signingInput),
                     HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -78,32 +79,66 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
         }
 
-        /// <summary>署名鍵（クライアントの秘密鍵）を読む</summary>
-        /// <param name="client">IdPClient</param>
-        /// <returns>RSA</returns>
-        private static RSA LoadSigningKey(IdPClient client)
+        /// <summary>ペイロードに ES256 で署名し、JWS（コンパクト形式）を返す</summary>
+        /// <param name="client">IdPClient（署名鍵の場所を構成ファイルから読む）</param>
+        /// <param name="payload">ペイロード（クレーム）</param>
+        /// <returns>JWS</returns>
+        /// <remarks>
+        /// JWS の ES256 の署名は、R と S をつないだ 64 バイト（RFC 7518 3.4）。
+        /// .NET の ECDsa.SignData は、既定でこの形（IEEE P1363）で返す。
+        /// </remarks>
+        public static string SignES256(IdPClient client, IDictionary<string, object> payload)
         {
-            string path = client.Config.Get("SpRp_RsaPfxFilePath");
-            string password = client.Config.Get("SpRp_RsaPfxPassword");
+            string signingInput = SigningInput("ES256", payload);
+
+            using (X509Certificate2 cert = LoadCertificate(client, "SpRp_EcdsaPfxFilePath", "SpRp_EcdsaPfxPassword"))
+            using (ECDsa ecdsa = cert.GetECDsaPrivateKey())
+            {
+                if (ecdsa == null)
+                {
+                    throw new InvalidOperationException(
+                        "ECDSAの秘密鍵を取り出せませんでした: " + client.Config.Get("SpRp_EcdsaPfxFilePath"));
+                }
+
+                byte[] signature = ecdsa.SignData(Encoding.UTF8.GetBytes(signingInput), HashAlgorithmName.SHA256);
+
+                return signingInput + "." + Base64Url.Encode(signature);
+            }
+        }
+
+        /// <summary>署名する入力（ヘッダ.ペイロード）を作る</summary>
+        /// <param name="alg">alg（RS256 / ES256）</param>
+        /// <param name="payload">ペイロード</param>
+        /// <returns>BASE64URL(ヘッダ) + "." + BASE64URL(ペイロード)</returns>
+        private static string SigningInput(string alg, IDictionary<string, object> payload)
+        {
+            Dictionary<string, object> header = new Dictionary<string, object>()
+            {
+                { "alg", alg },
+                { "typ", "JWT" }
+            };
+
+            return Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(header))
+                + "." + Base64Url.Encode(JsonSerializer.SerializeToUtf8Bytes(payload));
+        }
+
+        /// <summary>署名鍵の証明書（クライアントの秘密鍵を含む pfx）を読む</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="pathKey">pfx のパスの構成キー</param>
+        /// <param name="passwordKey">pfx のパスワードの構成キー</param>
+        /// <returns>X509Certificate2</returns>
+        private static X509Certificate2 LoadCertificate(IdPClient client, string pathKey, string passwordKey)
+        {
+            string path = client.Config.Get(pathKey);
+            string password = client.Config.Get(passwordKey);
 
             if (string.IsNullOrEmpty(path))
             {
                 throw new InvalidOperationException(
-                    "SpRp_RsaPfxFilePath が構成ファイルにありません: " + client.Config.Path);
+                    pathKey + " が構成ファイルにありません: " + client.Config.Path);
             }
 
-            X509Certificate2 cert = X509CertificateLoader.LoadPkcs12FromFile(
-                path, password, X509KeyStorageFlags.Exportable);
-
-            RSA rsa = cert.GetRSAPrivateKey();
-
-            if (rsa == null)
-            {
-                throw new InvalidOperationException(
-                    "RSAの秘密鍵を取り出せませんでした: " + path);
-            }
-
-            return rsa;
+            return X509CertificateLoader.LoadPkcs12FromFile(path, password, X509KeyStorageFlags.Exportable);
         }
     }
 }

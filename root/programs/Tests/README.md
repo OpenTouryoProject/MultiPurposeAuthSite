@@ -169,8 +169,9 @@ OAuth2ClientEndpointsRootURI
 | `Tests/Extended/ResponseModeTests.cs` | `EX-6` | response_mode（fragment / form_post / JARM） |
 | `Tests/Extended/JwtBearerTests.cs` | `EX-7` | JWT Bearer グラント（RFC 7523） |
 
-CIBA と PAR / JAR は扱っていない。CIBA は ECDSA で署名した要求と通知の受け口が要り、
-PAR / JAR（`request_uri`）は RT-197 で測っている。
+CIBA と PAR / JAR は、拡張仕様としては扱っていない。
+CIBA は、認証リクエストのエラーの返し方だけを RT-196 で測っている（ES256 で署名した要求を `/ros` に登録する）。
+成功経路はユーザへプッシュ通知（FCM）を送るので測っていない。PAR / JAR（`request_uri`）は RT-197 で測っている。
 
 以下は、個別の Issue に対応する回帰テスト。
 
@@ -180,7 +181,7 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 | `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
 | `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
-| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（現在は `/token`・`/userinfo`・`/revoke`・`/introspect`・`/device_authz`） |
+| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（`/ciba_result`・`/SetDeviceToken` を除く） |
 | `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
 | `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 
@@ -195,9 +196,9 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 | `AppConfig.cs` | `appsettings.json` / `app.config` の読み取り |
 | `IdPClient.cs` | サインイン、認可、トークン、UserInfo、失効・問い合わせ、デバイス認可、自己テストの起動 |
 | `Flows.cs` | 認可コード フローの組み立て、トークンの更新・失効・問い合わせ、クライアントの解決 |
-| `RequestObject.cs` | Request Object の組み立てと PAR への登録 |
+| `RequestObject.cs` | Request Object（CIBA の認証リクエストを含む）の組み立てと PAR への登録 |
 | `JwtBearerAssertion.cs` | JWT Bearer グラント（RFC 7523）の assertion の組み立て |
-| `JwsSigner.cs` | RS256 の署名（Request Object と assertion で共用） |
+| `JwsSigner.cs` | RS256 / ES256 の署名（Request Object・assertion・CIBA の要求で共用） |
 | `Jwt.cs` | JWT のデコード（検証はしない）と、c_hash / at_hash の計算 |
 | `Base64Url.cs` | BASE64URL の変換 |
 | `Jwks.cs` | JWK Set での署名検証、alg:none 化・改竄（テスト用） |
@@ -250,4 +251,6 @@ cd root
 - 構成ファイルの既定では、net10.0 版と net48 版は同じ URL を指している。
   `-Launch` は環境変数で別のポートへ寄せるので**同時に測れる**が、
   手で立てるときは片方を別の URL にすること。
+- CIBA のテスト（`RT-196.16` 〜 `196.18`）は、構成ファイルの `SpRp_EcdsaPfxFilePath`（ES256 の秘密鍵）で要求に署名する。
+  CIBA のクライアント（`TestClient4`）が登録している `jwk_ecdsa_publickey` と対になっていること。
   取り違えは検出して Skip する（[`../../TESTING.md`](../../TESTING.md) 5 節）。

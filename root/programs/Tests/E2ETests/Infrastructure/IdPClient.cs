@@ -36,6 +36,7 @@
 //*  2026/09/11  玄人 幸道         client_secret_basic の POST を PostJsonWithBasicAuthAsync に一般化し、RevokeWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         /introspect を client_secret_basic で呼ぶ IntrospectWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -638,6 +639,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string body = await post.Content.ReadAsStringAsync();
 
             return post.StatusCode == HttpStatusCode.OK && body.Contains("Accepted.");
+        }
+
+        #endregion
+
+        #region CIBA（/ciba_authz）
+
+        /// <summary>
+        /// CIBA の認証リクエストを送る（POST /ciba_authz）。
+        /// 要求そのものは、事前に /ros（PAR）へ登録した Request Object を request_uri で指す。
+        /// </summary>
+        /// <param name="form">フォーム（request_uri）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> CibaAuthorizeAsync(IDictionary<string, string> form)
+        {
+            return this.PostJsonAsync("/ciba_authz", form);
         }
 
         #endregion
