@@ -30,9 +30,9 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-2.4 / 2.5 の Skip を解除、成功の HTTP 200 を検証に、EX-2.6 を追加（#200）
+//*  2026/09/11  玄人 幸道         RevokeAsync を Flows へ移し、UserInfoAccepted を private に
 //**********************************************************************************
 
-using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -57,28 +57,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         {
         }
 
-        /// <summary>POST /revoke を呼ぶ</summary>
-        /// <param name="client">IdPClient</param>
-        /// <param name="reg">認証に使うクライアント</param>
-        /// <param name="token">失効させるトークン</param>
-        /// <param name="tokenTypeHint">token_type_hint（null なら送らない）</param>
-        /// <returns>JsonResponse</returns>
-        internal static Task<JsonResponse> RevokeAsync(
-            IdPClient client, ClientRegistration reg, string token, string tokenTypeHint)
-        {
-            return client.RevokeAsync(new Dictionary<string, string>()
-            {
-                { "token", token },
-                { "token_type_hint", tokenTypeHint },
-                { "client_id", reg.ClientId },
-                { "client_secret", reg.ClientSecret }
-            });
-        }
-
         /// <summary>/userinfo がユーザ情報を返したか</summary>
         /// <param name="res">/userinfo の応答</param>
         /// <returns>返したら true</returns>
-        internal static bool UserInfoAccepted(JsonResponse res)
+        private static bool UserInfoAccepted(JsonResponse res)
         {
             return res.IsJson && res.KindOf("sub") != JsonValueKind.Undefined;
         }
@@ -113,7 +95,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) POST /revoke に token と token_type_hint=access_token を送る");
 
-                JsonResponse revoke = await RevokeAsync(client, reg, token.AccessToken, "access_token");
+                JsonResponse revoke = await Flows.RevokeAsync(client, reg, token.AccessToken, "access_token");
 
                 r.Verify("失効要求がエラーにならない", string.IsNullOrEmpty(revoke.Error),
                     "error なし",
@@ -163,7 +145,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) POST /revoke に token と token_type_hint=refresh_token を送る");
 
-                JsonResponse revoke = await RevokeAsync(client, reg, token.RefreshToken, "refresh_token");
+                JsonResponse revoke = await Flows.RevokeAsync(client, reg, token.RefreshToken, "refresh_token");
 
                 r.Verify("失効要求がエラーにならない", string.IsNullOrEmpty(revoke.Error),
                     "error なし",
@@ -172,7 +154,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(3) 失効させた refresh_token で更新を試みる");
 
-                JsonResponse refresh = await RefreshTokenTests.RefreshAsync(client, reg, token.RefreshToken);
+                JsonResponse refresh = await Flows.RefreshAsync(client, reg, token.RefreshToken);
 
                 r.Verify("トークンを発行しない", string.IsNullOrEmpty(refresh.AccessToken),
                     "access_token を返さない",
@@ -222,7 +204,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) " + KnownClients.TestClient + " の資格情報で、その access_token の失効を要求する");
 
-                JsonResponse revoke = await RevokeAsync(client, other, token.AccessToken, "access_token");
+                JsonResponse revoke = await Flows.RevokeAsync(client, other, token.AccessToken, "access_token");
 
                 r.Verify("要求を拒否する（error を返す）", !string.IsNullOrEmpty(revoke.Error),
                     "error が返る", "error = " + (revoke.Error ?? "なし"));
@@ -266,7 +248,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) POST /revoke に token だけを送る（token_type_hint なし）");
 
-                JsonResponse revoke = await RevokeAsync(client, reg, token.AccessToken, null);
+                JsonResponse revoke = await Flows.RevokeAsync(client, reg, token.AccessToken, null);
 
                 r.Verify("失効要求がエラーにならない", string.IsNullOrEmpty(revoke.Error),
                     "error なし",
@@ -306,7 +288,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 r.Target("client_name=" + KnownClients.MvcSample);
                 r.Step("POST /revoke に、存在しないトークン（token_type_hint=access_token）を送る");
 
-                JsonResponse revoke = await RevokeAsync(client, reg, "NOT-A-REAL-TOKEN", "access_token");
+                JsonResponse revoke = await Flows.RevokeAsync(client, reg, "NOT-A-REAL-TOKEN", "access_token");
 
                 r.Verify("エラーを返さない", string.IsNullOrEmpty(revoke.Error),
                     "error なし",
@@ -345,7 +327,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) access_token を、token_type_hint=refresh_token（取り違え）で失効させる");
 
-                JsonResponse revoke = await RevokeAsync(client, reg, token.AccessToken, "refresh_token");
+                JsonResponse revoke = await Flows.RevokeAsync(client, reg, token.AccessToken, "refresh_token");
 
                 r.Verify("失効要求がエラーにならない", string.IsNullOrEmpty(revoke.Error),
                     "error なし",

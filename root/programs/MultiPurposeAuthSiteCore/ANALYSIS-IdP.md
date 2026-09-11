@@ -308,8 +308,8 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 - 判定は `CmnEndpoints.GetErrorStatusCode` に置き、両アプリで共用する（残りのエンドポイントでも使う）
 - 本文（`error` / `error_description` の JSON）は変えていない。成功は 200 のまま
 - **net48 版だけの落とし穴:** OWIN の Cookie 認証が、**401 の応答をログイン画面への 302 に書き換えていた。**
-  `StartupAuth` の `OnApplyRedirect` で、OAuth2 / OIDC の API
-  （`/token` `/userinfo` `/revoke` `/introspect` `/device_authz` `/ciba_authz` `/ciba_result`）を書き換えの対象から外した。
+  `StartupAuth` の `OnApplyRedirect` で、Web API（`WebApiConfig` に登録したルートと、`[Route]` の属性ルート）を
+  書き換えの対象から外した。対象は登録済みのルートから判定し、別の一覧は持たない（§8）。
   画面の遷移は、従来どおりログイン画面へリダイレクトする
 - E2E テスト : `RT-196.1`（フォームでの認証失敗 → 401）/ `RT-196.2`（Basic 認証の失敗 → 401 と `WWW-Authenticate`）/
   `RT-196.3`（その他のエラー → 400）/ `RT-196.4`（成功は 200 のまま）
@@ -614,6 +614,9 @@ RFC 7009 §2.1 / RFC 7662 §2.1 はいずれも所有者確認を要求してい
 **対応（#194）:** `CmnEndpoints.CheckTokenOwner`（access_token / ClaimsIdentity 用）と
 `CheckRefreshTokenOwner`（refresh_token / payload 用）を新設し、
 両アプリの `/revoke`・`/introspect` から呼ぶようにした。併せて Core 側の mTLS を有効化。
+
+> その後、#200 で `/revoke`・`/introspect` の本体を `CmnEndpoints.RevokeToken` / `IntrospectToken` に移したので、
+> この 2 つは現在、その中からだけ呼ぶ private 関数になっている。
 
 | エンドポイント | 所有者が違う場合 |
 |---|---|
@@ -960,8 +963,8 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 
 | 項目 |
 |---|
-| C-1 `/device_authz` のクライアント認証 |
-| C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化 |
+| ✅ **C-1 `/device_authz` のクライアント認証** #193 |
+| ✅ **C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化（net10.0 版）** #194 |
 | C-4 / C-5 / C-11 有効期限の実装（code / refresh_token / request object）＋ ワンタイム化 ＋ 再利用検知 |
 | C-8 検証アルゴリズムの固定 |
 | C-9 CORS をエンドポイント単位に |
@@ -1011,6 +1014,10 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
   実ファイル（`appsettings.json` / `app.config`）は `.gitignore` 対象で秘密情報を含むため、
   **中身を報告・Issue・コミット メッセージに転記しない。**
 - **エンドポイントを足したら、net48 側の `App_Start/WebApiConfig.cs` / `RouteConfig.cs` にも登録が要る。**
+  **API は Web API（`WebApiConfig` のルート、または `[Route]`）として登録すること。**
+  net48 版では OWIN の Cookie 認証が、401 の応答をログイン画面への 302 に書き換える。
+  `StartupAuth.IsWebApiRequest` が Web API のルートから判定して書き換えの対象から外すので、
+  別の一覧を直す必要は無い。MVC の Controller に置いた API は対象にならない（A-7）。
 - ヘッダ コメントの更新履歴に 1 行追記する（Contributing.ja.md）。
 - **1 つの "プルリクエスト" に複数のタスクを混ぜない。** 本書のロードマップは
   そのまま Issue の単位になるよう項目を切ってある。

@@ -67,6 +67,7 @@
 //*  2026/09/11  玄人 幸道         クライアントの登録（scope）でも、発行するスコープを絞る（#198 の後半）
 //*  2026/09/11  玄人 幸道         エラー応答の HTTP ステータスを決める GetErrorStatusCode を追加（#196）
 //*  2026/09/11  玄人 幸道         #region の配置を整理（ClientAuthentication の下に置いていた #187 / #194 / #196 / #200 の追加分を移動）
+//*  2026/09/11  玄人 幸道         Public / Private の region を中身に合わせる（ClientAuthentication を Public へ、Token所有者の確認を private に）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1923,60 +1924,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Revocation / Introspection Endpoint
 
-        #region Token所有者の確認
-
-        /// <summary>Tokenが、認証したクライアントに発行されたものかを確認する</summary>
-        /// <param name="client_id">認証済みのclient_id</param>
-        /// <param name="identity">ClaimsIdentity（VerifyAccessTokenの結果）</param>
-        /// <returns>bool</returns>
-        /// <remarks>RFC 7009 2.1 / RFC 7662 2.1（#194）</remarks>
-        public static bool CheckTokenOwner(string client_id, ClaimsIdentity identity)
-        {
-            if (string.IsNullOrEmpty(client_id) || identity == null) return false;
-
-            Claim aud = identity.Claims.Where(
-                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-            return (aud != null && aud.Value == client_id);
-        }
-
-        /// <summary>RefreshTokenが、認証したクライアントに発行されたものかを確認する</summary>
-        /// <param name="client_id">認証済みのclient_id</param>
-        /// <param name="tokenPayload">RefreshTokenProvider.Referの結果</param>
-        /// <returns>bool</returns>
-        /// <remarks>RFC 7009 2.1（#194）</remarks>
-        public static bool CheckRefreshTokenOwner(string client_id, string tokenPayload)
-        {
-            if (string.IsNullOrEmpty(client_id) || string.IsNullOrEmpty(tokenPayload)) return false;
-
-            JObject payload = (JObject)JsonConvert.DeserializeObject(tokenPayload);
-
-            return (payload != null
-                && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
-        }
-
-        #endregion
+        #region Public
 
         #region RevokeToken / IntrospectToken
-
-        /// <summary>
-        /// token_type_hint から、トークンを探す順番を決める。
-        /// </summary>
-        /// <param name="token_type_hint">token_type_hint（省略・未知の値は既定の順番）</param>
-        /// <returns>探す順番（access_token / refresh_token）</returns>
-        /// <remarks>
-        /// ヒントは探す順番の手掛かりにすぎない。
-        /// ヒントの種類で見つからなければ、他の種類も探す（RFC 7009 2.1 / RFC 7662 2.1）（#200）。
-        /// </remarks>
-        private static string[] TokenSearchOrder(string token_type_hint)
-        {
-            if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
-            {
-                return new string[] { OAuth2AndOIDCConst.RefreshToken, OAuth2AndOIDCConst.AccessToken };
-            }
-
-            return new string[] { OAuth2AndOIDCConst.AccessToken, OAuth2AndOIDCConst.RefreshToken };
-        }
 
         /// <summary>トークンを失効させる（RFC 7009）。クライアント認証は済んでいること。</summary>
         /// <param name="client_id">認証済みのclient_id</param>
@@ -2158,6 +2108,69 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region Private
+
+        #region Token所有者の確認
+
+        /// <summary>Tokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="identity">ClaimsIdentity（VerifyAccessTokenの結果）</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1 / RFC 7662 2.1（#194）</remarks>
+        private static bool CheckTokenOwner(string client_id, ClaimsIdentity identity)
+        {
+            if (string.IsNullOrEmpty(client_id) || identity == null) return false;
+
+            Claim aud = identity.Claims.Where(
+                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+            return (aud != null && aud.Value == client_id);
+        }
+
+        /// <summary>RefreshTokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="tokenPayload">RefreshTokenProvider.Referの結果</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1（#194）</remarks>
+        private static bool CheckRefreshTokenOwner(string client_id, string tokenPayload)
+        {
+            if (string.IsNullOrEmpty(client_id) || string.IsNullOrEmpty(tokenPayload)) return false;
+
+            JObject payload = (JObject)JsonConvert.DeserializeObject(tokenPayload);
+
+            return (payload != null
+                && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
+        }
+
+        #endregion
+
+        #region TokenSearchOrder
+
+        /// <summary>
+        /// token_type_hint から、トークンを探す順番を決める。
+        /// </summary>
+        /// <param name="token_type_hint">token_type_hint（省略・未知の値は既定の順番）</param>
+        /// <returns>探す順番（access_token / refresh_token）</returns>
+        /// <remarks>
+        /// ヒントは探す順番の手掛かりにすぎない。
+        /// ヒントの種類で見つからなければ、他の種類も探す（RFC 7009 2.1 / RFC 7662 2.1）（#200）。
+        /// </remarks>
+        private static string[] TokenSearchOrder(string token_type_hint)
+        {
+            if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
+            {
+                return new string[] { OAuth2AndOIDCConst.RefreshToken, OAuth2AndOIDCConst.AccessToken };
+            }
+
+            return new string[] { OAuth2AndOIDCConst.AccessToken, OAuth2AndOIDCConst.RefreshToken };
+        }
+
+        #endregion
+
+        #endregion
+
+        #endregion
+
         #region Common
 
         #region Public
@@ -2256,10 +2269,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         }
 
         #endregion
-
-        #endregion
-
-        #region Private
 
         #region　ClientAuthentication
 
@@ -2397,6 +2406,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #endregion
+
+        #endregion
+
+        #region Private
 
         #region CheckClientMode
 

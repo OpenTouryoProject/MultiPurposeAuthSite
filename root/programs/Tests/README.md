@@ -178,11 +178,11 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 |---|---|---|
 | `Tests/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
 | `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
-| `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
+| `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
+| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（現在は `/token`） |
 | `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
 | `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
-| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（現在は `/token`） |
 
 **すべてのテストが `TestReport` で記録を残す。**
 識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。
@@ -193,13 +193,16 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 |---|---|
 | `TestEnv.cs` | テスト対象（net10.0 版 / net48 版）と、その到達性 |
 | `AppConfig.cs` | `appsettings.json` / `app.config` の読み取り |
-| `IdPClient.cs` | サインイン、認可、トークン、UserInfo、自己テストの起動 |
-| `Flows.cs` | 認可コード フローの組み立て、クライアントの解決 |
+| `IdPClient.cs` | サインイン、認可、トークン、UserInfo、失効・問い合わせ、デバイス認可、自己テストの起動 |
+| `Flows.cs` | 認可コード フローの組み立て、トークンの更新・失効・問い合わせ、クライアントの解決 |
 | `RequestObject.cs` | Request Object の組み立てと PAR への登録 |
-| `Jwt.cs` | JWT のデコード（検証はしない） |
+| `JwtBearerAssertion.cs` | JWT Bearer グラント（RFC 7523）の assertion の組み立て |
+| `JwsSigner.cs` | RS256 の署名（Request Object と assertion で共用） |
+| `Jwt.cs` | JWT のデコード（検証はしない）と、c_hash / at_hash の計算 |
+| `Base64Url.cs` | BASE64URL の変換 |
 | `Jwks.cs` | JWK Set での署名検証、alg:none 化・改竄（テスト用） |
 | `TestReport.cs` | **テストの内容と結果を、それ自体で読める形に書き出す** |
-| `Html.cs` | リダイレクトしなかったときの画面の要約 |
+| `Html.cs` | リダイレクトしなかったときの画面の要約、form_post のフォームの解析 |
 | `Responses.cs` | 各エンドポイントの応答 |
 | `TargetTestBase.cs` | 両ターゲットに同じテストを流す基底クラス |
 

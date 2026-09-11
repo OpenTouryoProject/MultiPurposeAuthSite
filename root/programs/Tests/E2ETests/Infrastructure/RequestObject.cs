@@ -30,14 +30,11 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         署名鍵の読み込みを JwtBearerAssertion と共用（internal 化）
+//*  2026/09/11  玄人 幸道         署名と BASE64URL を JwsSigner / Base64Url へ移す（JwtBearerAssertion と共用）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
@@ -48,10 +45,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// 実装側の Touryo.Infrastructure.Framework.Authentication.RequestObject は使わない。
     /// 同じコードで作って同じコードで検証すると、
     /// 「サーバが何を受け取っているか」を確かめたことにならないため、
-    /// ここでは System.Security.Cryptography だけで RS256 の JWS を作る。
-    ///
-    /// 署名鍵は、テスト用クライアントが登録している jwk_rsa_publickey と対になる
-    /// SpRp_RsaPfxFilePath（構成ファイル）を使う。
+    /// 署名は JwsSigner（System.Security.Cryptography だけで RS256 の JWS を作る）で行う。
     /// </summary>
     public static class RequestObjectBuilder
     {
@@ -92,24 +86,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
             }
 
-            Dictionary<string, object> header = new Dictionary<string, object>()
-            {
-                { "alg", "RS256" },
-                { "typ", "JWT" }
-            };
-
-            string signingInput =
-                ToBase64Url(JsonSerializer.SerializeToUtf8Bytes(header))
-                + "." + ToBase64Url(JsonSerializer.SerializeToUtf8Bytes(payload));
-
-            using (RSA rsa = LoadSigningKey(client))
-            {
-                byte[] signature = rsa.SignData(
-                    Encoding.UTF8.GetBytes(signingInput),
-                    HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-
-                return signingInput + "." + ToBase64Url(signature);
-            }
+            return JwsSigner.SignRS256(client, payload);
         }
 
         /// <summary>
@@ -154,43 +131,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             // エンコードすると urn:oauth:request: の接頭辞を外せず、見つからない。
             // アプリ同梱の自己テスト（HomeController）も、そのまま連結している。
             return client.Target.Url("/authorize?request_uri=" + requestUri);
-        }
-
-        /// <summary>署名鍵（クライアントの秘密鍵）を読む（JwtBearerAssertion と共用）</summary>
-        /// <param name="client">IdPClient</param>
-        /// <returns>RSA</returns>
-        internal static RSA LoadSigningKey(IdPClient client)
-        {
-            string path = client.Config.Get("SpRp_RsaPfxFilePath");
-            string password = client.Config.Get("SpRp_RsaPfxPassword");
-
-            if (string.IsNullOrEmpty(path))
-            {
-                throw new InvalidOperationException(
-                    "SpRp_RsaPfxFilePath が構成ファイルにありません: " + client.Config.Path);
-            }
-
-            X509Certificate2 cert = X509CertificateLoader.LoadPkcs12FromFile(
-                path, password, X509KeyStorageFlags.Exportable);
-
-            RSA rsa = cert.GetRSAPrivateKey();
-
-            if (rsa == null)
-            {
-                throw new InvalidOperationException(
-                    "RSAの秘密鍵を取り出せませんでした: " + path);
-            }
-
-            return rsa;
-        }
-
-        /// <summary>BASE64URL にする</summary>
-        /// <param name="value">バイト列</param>
-        /// <returns>BASE64URL文字列</returns>
-        internal static string ToBase64Url(byte[] value)
-        {
-            return Convert.ToBase64String(value)
-                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
     }
 }

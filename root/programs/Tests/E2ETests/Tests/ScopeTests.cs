@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/11  玄人 幸道         新規（#198 の前半）
 //*  2026/09/11  玄人 幸道         クライアントごとの制限（RT-198.3 / 198.4）を追加（#198 の後半）
+//*  2026/09/11  玄人 幸道         scopes の読み取りを Jwt.Strings へ移し、補助関数を先頭にまとめる
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -84,26 +85,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
             return supported;
         }
 
-        /// <summary>access_token の scopes クレームを読む</summary>
-        /// <param name="accessToken">access_token</param>
-        /// <returns>scopes</returns>
-        private static List<string> ScopesOf(string accessToken)
-        {
-            JsonElement payload = Jwt.Payload(accessToken);
-            List<string> scopes = new List<string>();
-            JsonElement array;
-
-            if (payload.TryGetProperty("scopes", out array) && array.ValueKind == JsonValueKind.Array)
-            {
-                foreach (JsonElement s in array.EnumerateArray())
-                {
-                    scopes.Add(s.GetString());
-                }
-            }
-
-            return scopes;
-        }
-
         /// <summary>
         /// 発行されたスコープを確かめる。
         /// 「宣言外を外す」だけを見ると、全部落とす実装でも通ってしまうので、
@@ -116,7 +97,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
         private static void VerifyIssuedScopes(
             TestReport r, JsonResponse token, List<string> supported, string[] mustKeep)
         {
-            List<string> granted = ScopesOf(token.AccessToken);
+            List<string> granted = Jwt.Strings(Jwt.Payload(token.AccessToken), "scopes");
             List<string> outside = granted.Where(g => !supported.Contains(g)).ToList();
 
             r.Verify("発行されたスコープが scopes_supported の範囲に収まる", outside.Count == 0,
@@ -138,6 +119,44 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
             r.Verify("トークン応答の scope が、発行したスコープと一致する", same,
                 "scope = " + string.Join(" ", granted) + "（要求と異なるので必須）",
                 "scope = " + (scopeParam ?? "（返らない）"));
+        }
+
+        /// <summary>
+        /// scope を登録したクライアント（TestClient5）を返す。登録が無ければ Skip する。
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="permitted">登録の scope</param>
+        /// <returns>ClientRegistration</returns>
+        private static ClientRegistration RestrictedClient(IdPClient client, out List<string> permitted)
+        {
+            string clientId = client.Config.FindClientIdByName(KnownClients.TestClient5);
+
+            Skip.If(string.IsNullOrEmpty(clientId),
+                KnownClients.TestClient5 + " が構成ファイルに登録されていません。"
+                + "雛形（_appsettings.json / _app.config）を参照して追加してください。");
+
+            string scope = client.Config.GetClientAttribute(clientId, "scope");
+
+            Skip.If(string.IsNullOrEmpty(scope),
+                KnownClients.TestClient5 + " に scope が登録されていません。");
+
+            permitted = scope.Split(' ').Where(x => x.Length > 0).ToList();
+
+            return Flows.Registration(client, KnownClients.TestClient5);
+        }
+
+        /// <summary>登録の scope に無いスコープを発行していないことを確かめる</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="token">トークン応答</param>
+        /// <param name="permitted">登録の scope</param>
+        private static void VerifyWithinRegistration(TestReport r, JsonResponse token, List<string> permitted)
+        {
+            List<string> granted = Jwt.Strings(Jwt.Payload(token.AccessToken), "scopes");
+            List<string> notPermitted = granted.Where(g => !permitted.Contains(g)).ToList();
+
+            r.Verify("登録の scope に無いスコープを発行しない", notPermitted.Count == 0,
+                "登録の範囲 [" + string.Join(", ", permitted) + "] に収まる",
+                "発行 = [" + string.Join(", ", granted) + "] / 範囲外 = [" + string.Join(", ", notPermitted) + "]");
         }
 
         /// <summary>RT-198.1 client_credentials</summary>
@@ -229,44 +248,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
 
                 r.Done();
             }
-        }
-
-        /// <summary>
-        /// scope を登録したクライアント（TestClient5）を返す。登録が無ければ Skip する。
-        /// </summary>
-        /// <param name="client">IdPClient</param>
-        /// <param name="permitted">登録の scope</param>
-        /// <returns>ClientRegistration</returns>
-        private static ClientRegistration RestrictedClient(IdPClient client, out List<string> permitted)
-        {
-            string clientId = client.Config.FindClientIdByName(KnownClients.TestClient5);
-
-            Skip.If(string.IsNullOrEmpty(clientId),
-                KnownClients.TestClient5 + " が構成ファイルに登録されていません。"
-                + "雛形（_appsettings.json / _app.config）を参照して追加してください。");
-
-            string scope = client.Config.GetClientAttribute(clientId, "scope");
-
-            Skip.If(string.IsNullOrEmpty(scope),
-                KnownClients.TestClient5 + " に scope が登録されていません。");
-
-            permitted = scope.Split(' ').Where(x => x.Length > 0).ToList();
-
-            return Flows.Registration(client, KnownClients.TestClient5);
-        }
-
-        /// <summary>登録の scope に無いスコープを発行していないことを確かめる</summary>
-        /// <param name="r">TestReport</param>
-        /// <param name="token">トークン応答</param>
-        /// <param name="permitted">登録の scope</param>
-        private static void VerifyWithinRegistration(TestReport r, JsonResponse token, List<string> permitted)
-        {
-            List<string> granted = ScopesOf(token.AccessToken);
-            List<string> notPermitted = granted.Where(g => !permitted.Contains(g)).ToList();
-
-            r.Verify("登録の scope に無いスコープを発行しない", notPermitted.Count == 0,
-                "登録の範囲 [" + string.Join(", ", permitted) + "] に収まる",
-                "発行 = [" + string.Join(", ", granted) + "] / 範囲外 = [" + string.Join(", ", notPermitted) + "]");
         }
 
         /// <summary>RT-198.3 登録の scope（client_credentials）</summary>

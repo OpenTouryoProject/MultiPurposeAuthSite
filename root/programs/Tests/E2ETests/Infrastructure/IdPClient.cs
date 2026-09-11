@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         Device Authorization Grant の検証画面の操作を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         client_secret_basic で /token を呼ぶ TokenWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         汎用の HTTP 関数を「素のHTTP」へ移し、デバイス認可（/device_authz）の要求を追加
 //**********************************************************************************
 
 using System;
@@ -132,6 +133,81 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return this._http.PostAsync(this.Absolute(pathOrUrl), new FormUrlEncodedContent(items));
+        }
+
+        /// <summary>
+        /// 本文をそのままPOSTする（PARエンドポイントは text/plain で JWS を受ける）。
+        /// </summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="body">本文</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> PostTextAsync(string pathOrUrl, string body)
+        {
+            StringContent content = new StringContent(body, Encoding.UTF8, "text/plain");
+            HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
+
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>JSONを返すエンドポイントをGETする</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> GetJsonAsync(string pathOrUrl)
+        {
+            HttpResponseMessage res = await this.GetAsync(pathOrUrl);
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>JSONを返すエンドポイントをPOSTする</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> PostJsonAsync(
+            string pathOrUrl, IDictionary<string, string> form)
+        {
+            HttpResponseMessage res = await this.PostFormAsync(pathOrUrl, form);
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>HttpResponseMessage を JsonResponse に変換する</summary>
+        /// <param name="res">応答</param>
+        /// <returns>JsonResponse</returns>
+        public static async Task<JsonResponse> ToJsonResponseAsync(HttpResponseMessage res)
+        {
+            JsonResponse result = new JsonResponse();
+            result.StatusCode = res.StatusCode;
+            result.ContentType = (res.Content.Headers.ContentType == null)
+                ? null : res.Content.Headers.ContentType.MediaType;
+            result.Body = await res.Content.ReadAsStringAsync();
+
+            // 応答ヘッダを拾う。Cache-Control のように、
+            // 本文ではなくヘッダで確かめる項目がある（RFC 6749 §5.1）。
+            result.Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Headers)
+            {
+                result.Headers[h.Key] = string.Join(", ", h.Value);
+            }
+
+            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Content.Headers)
+            {
+                result.Headers[h.Key] = string.Join(", ", h.Value);
+            }
+
+            try
+            {
+                using (JsonDocument doc = JsonDocument.Parse(result.Body))
+                {
+                    result.Json = doc.RootElement.Clone();
+                    result.IsJson = true;
+                }
+            }
+            catch (JsonException)
+            {
+                result.IsJson = false;
+            }
+
+            return result;
         }
 
         /// <summary>相対パスを絶対URLにする</summary>
@@ -437,84 +513,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this.PostJsonAsync("/revoke", form);
         }
 
-        /// <summary>
-        /// 本文をそのままPOSTする（PARエンドポイントは text/plain で JWS を受ける）。
-        /// </summary>
-        /// <param name="pathOrUrl">パスまたはURL</param>
-        /// <param name="body">本文</param>
-        /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> PostTextAsync(string pathOrUrl, string body)
-        {
-            StringContent content = new StringContent(body, Encoding.UTF8, "text/plain");
-            HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
-
-            return await ToJsonResponseAsync(res);
-        }
-
-        /// <summary>JSONを返すエンドポイントをGETする</summary>
-        /// <param name="pathOrUrl">パスまたはURL</param>
-        /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> GetJsonAsync(string pathOrUrl)
-        {
-            HttpResponseMessage res = await this.GetAsync(pathOrUrl);
-            return await ToJsonResponseAsync(res);
-        }
-
-        /// <summary>JSONを返すエンドポイントをPOSTする</summary>
-        /// <param name="pathOrUrl">パスまたはURL</param>
-        /// <param name="form">フォーム</param>
-        /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> PostJsonAsync(
-            string pathOrUrl, IDictionary<string, string> form)
-        {
-            HttpResponseMessage res = await this.PostFormAsync(pathOrUrl, form);
-            return await ToJsonResponseAsync(res);
-        }
-
-        /// <summary>HttpResponseMessage を JsonResponse に変換する</summary>
-        /// <param name="res">応答</param>
-        /// <returns>JsonResponse</returns>
-        public static async Task<JsonResponse> ToJsonResponseAsync(HttpResponseMessage res)
-        {
-            JsonResponse result = new JsonResponse();
-            result.StatusCode = res.StatusCode;
-            result.ContentType = (res.Content.Headers.ContentType == null)
-                ? null : res.Content.Headers.ContentType.MediaType;
-            result.Body = await res.Content.ReadAsStringAsync();
-
-            // 応答ヘッダを拾う。Cache-Control のように、
-            // 本文ではなくヘッダで確かめる項目がある（RFC 6749 §5.1）。
-            result.Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Headers)
-            {
-                result.Headers[h.Key] = string.Join(", ", h.Value);
-            }
-
-            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Content.Headers)
-            {
-                result.Headers[h.Key] = string.Join(", ", h.Value);
-            }
-
-            try
-            {
-                using (JsonDocument doc = JsonDocument.Parse(result.Body))
-                {
-                    result.Json = doc.RootElement.Clone();
-                    result.IsJson = true;
-                }
-            }
-            catch (JsonException)
-            {
-                result.IsJson = false;
-            }
-
-            return result;
-        }
-
         #endregion
 
-        #region Device Authorization Grant（/device_verify）
+        #region Device Authorization Grant（/device_authz・/device_verify）
+
+        /// <summary>
+        /// デバイス認可エンドポイント（/device_authz）を呼ぶ。
+        /// RFC 8628 §3.1 で、**機器が**最初に行う要求に当たる（device_code と user_code を得る）。
+        /// </summary>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> DeviceAuthorizationAsync(IDictionary<string, string> form)
+        {
+            return this.PostJsonAsync("/device_authz", form);
+        }
 
         /// <summary>
         /// 検証画面（/device_verify）で user_code を入力し、許可または拒否を押す。

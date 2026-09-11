@@ -29,13 +29,11 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/11  玄人 幸道         署名を JwsSigner へ移す（RequestObjectBuilder の内部を使わない）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 {
@@ -43,8 +41,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// JWT Bearer グラント（RFC 7523）の assertion を作る。
     ///
     /// 実装側の JwtAssertion は使わない（RequestObjectBuilder と同じ理由）。
-    /// 署名鍵も同じく、テスト用クライアントが登録している jwk_rsa_publickey と対になる
-    /// SpRp_RsaPfxFilePath を使う。
+    /// 署名も、RequestObjectBuilder と同じく JwsSigner で行う。
     /// </summary>
     public static class JwtBearerAssertion
     {
@@ -95,24 +92,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
             }
 
-            Dictionary<string, object> header = new Dictionary<string, object>()
-            {
-                { "alg", "RS256" },
-                { "typ", "JWT" }
-            };
-
-            string signingInput =
-                RequestObjectBuilder.ToBase64Url(JsonSerializer.SerializeToUtf8Bytes(header))
-                + "." + RequestObjectBuilder.ToBase64Url(JsonSerializer.SerializeToUtf8Bytes(payload));
-
-            using (RSA rsa = RequestObjectBuilder.LoadSigningKey(client))
-            {
-                byte[] signature = rsa.SignData(
-                    Encoding.UTF8.GetBytes(signingInput),
-                    HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-
-                return signingInput + "." + RequestObjectBuilder.ToBase64Url(signature);
-            }
+            return JwsSigner.SignRS256(client, payload);
         }
     }
 }

@@ -29,9 +29,9 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/09  玄人 幸道         新規（基本テストの追加に伴う）
+//*  2026/09/11  玄人 幸道         BASE64URL の変換を Base64Url へ集約
 //**********************************************************************************
 
-using System;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -113,14 +113,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 RSAParameters p = new RSAParameters()
                 {
-                    Modulus  = FromBase64Url(n),
-                    Exponent = FromBase64Url(e)
+                    Modulus  = Base64Url.Decode(n),
+                    Exponent = Base64Url.Decode(e)
                 };
 
                 rsa.ImportParameters(p);
 
                 byte[] signingInput = Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]);
-                byte[] signature    = FromBase64Url(parts[2]);
+                byte[] signature    = Base64Url.Decode(parts[2]);
 
                 result.Verified = rsa.VerifyData(
                     signingInput, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -145,7 +145,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string[] parts = jwt.Split('.');
 
             string payload = parts.Length >= 2 ? parts[1] : "";
-            string header  = ToBase64Url(Encoding.UTF8.GetBytes("{\"alg\":\"none\",\"typ\":\"JWT\"}"));
+            string header  = Base64Url.Encode(Encoding.UTF8.GetBytes("{\"alg\":\"none\",\"typ\":\"JWT\"}"));
 
             // 署名は空にする（RFC 7519 の Unsecured JWS）。
             return header + "." + payload + ".";
@@ -169,10 +169,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string sub = Jwt.String(payload, "sub") ?? "";
 
             // sub を別の値にする。署名は付け替えないので、検証すれば必ず落ちる。
-            string json = Encoding.UTF8.GetString(FromBase64Url(parts[1]));
+            string json = Encoding.UTF8.GetString(Base64Url.Decode(parts[1]));
             string modified = json.Replace("\"" + sub + "\"", "\"tampered@example.com\"");
 
-            return parts[0] + "." + ToBase64Url(Encoding.UTF8.GetBytes(modified)) + "." + parts[2];
+            return parts[0] + "." + Base64Url.Encode(Encoding.UTF8.GetBytes(modified)) + "." + parts[2];
         }
 
         #region Private
@@ -207,35 +207,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return false;
-        }
-
-        /// <summary>BASE64URL をデコードする</summary>
-        /// <param name="value">BASE64URL文字列</param>
-        /// <returns>バイト列</returns>
-        private static byte[] FromBase64Url(string value)
-        {
-            string temp = value.Replace('-', '+').Replace('_', '/');
-
-            switch (temp.Length % 4)
-            {
-                case 2:
-                    temp += "==";
-                    break;
-                case 3:
-                    temp += "=";
-                    break;
-            }
-
-            return Convert.FromBase64String(temp);
-        }
-
-        /// <summary>BASE64URL にする</summary>
-        /// <param name="value">バイト列</param>
-        /// <returns>BASE64URL文字列</returns>
-        private static string ToBase64Url(byte[] value)
-        {
-            return Convert.ToBase64String(value)
-                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
 
         #endregion

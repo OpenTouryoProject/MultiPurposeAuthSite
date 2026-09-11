@@ -39,6 +39,7 @@
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行しないよう、一覧と絞り込みを追加（#198）
 //*  2026/09/11  玄人 幸道         クライアントの登録（scope）で、発行するスコープを絞る（#198 の後半）
+//*  2026/09/11  玄人 幸道         GetScopesSupported を Claim関連ヘルパ から scopes_supported の region へ移す
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1163,7 +1164,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region staticメソッド
 
-        #region Claim関連ヘルパ
+        #region scopes_supported
 
         /// <summary>認可サーバが扱うスコープの一覧（Discovery の scopes_supported と同じもの）</summary>
         /// <returns>スコープの一覧</returns>
@@ -1192,6 +1193,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             return scopes;
         }
+
+        #endregion
+
+        #region Claim関連ヘルパ
 
         /// <summary>要求されたスコープのうち、認可サーバが扱うもの（scopes_supported）だけを残す</summary>
         /// <param name="scopes">要求されたスコープ</param>

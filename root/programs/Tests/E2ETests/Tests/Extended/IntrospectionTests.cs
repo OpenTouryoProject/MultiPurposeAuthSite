@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-3.2 / 3.4 の Skip を解除、EX-3.7 を追加（#200）
+//*  2026/09/11  玄人 幸道         IntrospectAsync を Flows へ移す（RevocationTests への依存も解消）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -55,24 +56,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="output">ITestOutputHelper</param>
         public IntrospectionTests(ITestOutputHelper output) : base(output)
         {
-        }
-
-        /// <summary>POST /introspect を呼ぶ</summary>
-        /// <param name="client">IdPClient</param>
-        /// <param name="reg">認証に使うクライアント（null なら認証しない）</param>
-        /// <param name="token">問い合わせるトークン</param>
-        /// <param name="tokenTypeHint">token_type_hint（null なら送らない）</param>
-        /// <returns>JsonResponse</returns>
-        private static Task<JsonResponse> IntrospectAsync(
-            IdPClient client, ClientRegistration reg, string token, string tokenTypeHint)
-        {
-            return client.IntrospectAsync(new Dictionary<string, string>()
-            {
-                { "token", token },
-                { "token_type_hint", tokenTypeHint },
-                { "client_id", reg == null ? null : reg.ClientId },
-                { "client_secret", reg == null ? null : reg.ClientSecret }
-            });
         }
 
         /// <summary>active の値を、読み手向けに書く</summary>
@@ -138,7 +121,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) POST /introspect に token と token_type_hint=access_token を送る（発行先の資格情報で）");
 
-                JsonResponse res = await IntrospectAsync(client, reg, token.AccessToken, "access_token");
+                JsonResponse res = await Flows.IntrospectAsync(client, reg, token.AccessToken, "access_token");
 
                 r.Verify("active が true（JSON の真偽値）", res.KindOf("active") == JsonValueKind.True,
                     "active=true", ActiveOf(res));
@@ -178,7 +161,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) POST /introspect に token と token_type_hint=refresh_token を送る");
 
-                JsonResponse res = await IntrospectAsync(client, reg, token.RefreshToken, "refresh_token");
+                JsonResponse res = await Flows.IntrospectAsync(client, reg, token.RefreshToken, "refresh_token");
 
                 r.Verify("active が true（JSON の真偽値）", res.KindOf("active") == JsonValueKind.True,
                     "active=true", ActiveOf(res));
@@ -218,7 +201,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) " + KnownClients.TestClient + " の資格情報で、その access_token を問い合わせる");
 
-                JsonResponse res = await IntrospectAsync(client, other, token.AccessToken, "access_token");
+                JsonResponse res = await Flows.IntrospectAsync(client, other, token.AccessToken, "access_token");
 
                 r.Verify("active が false", res.KindOf("active") == JsonValueKind.False,
                     "active=false", ActiveOf(res));
@@ -253,7 +236,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 r.Target("client_name=" + KnownClients.MvcSample);
                 r.Step("(1) 存在しないトークンを問い合わせる");
 
-                JsonResponse unknown = await IntrospectAsync(client, reg, "NOT-A-REAL-TOKEN", "access_token");
+                JsonResponse unknown = await Flows.IntrospectAsync(client, reg, "NOT-A-REAL-TOKEN", "access_token");
 
                 r.Verify("存在しないトークン : active=false と答える",
                     unknown.KindOf("active") == JsonValueKind.False,
@@ -265,12 +248,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(
                     client, KnownClients.MvcSample, "openid email");
 
-                JsonResponse revoke = await RevocationTests.RevokeAsync(
+                JsonResponse revoke = await Flows.RevokeAsync(
                     client, reg, token.AccessToken, "access_token");
 
                 Assert.True(string.IsNullOrEmpty(revoke.Error), "前提: 失効させられること");
 
-                JsonResponse revoked = await IntrospectAsync(client, reg, token.AccessToken, "access_token");
+                JsonResponse revoked = await Flows.IntrospectAsync(client, reg, token.AccessToken, "access_token");
 
                 r.Verify("失効させたトークン : active=false と答える",
                     revoked.KindOf("active") == JsonValueKind.False,
@@ -306,7 +289,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) POST /introspect に token だけを送る（token_type_hint なし）");
 
-                JsonResponse res = await IntrospectAsync(client, reg, token.AccessToken, null);
+                JsonResponse res = await Flows.IntrospectAsync(client, reg, token.AccessToken, null);
 
                 r.Verify("active が true（JSON の真偽値）", res.KindOf("active") == JsonValueKind.True,
                     "active=true",
@@ -339,7 +322,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) client_id / client_secret を付けずに POST /introspect を送る");
 
-                JsonResponse res = await IntrospectAsync(client, null, token.AccessToken, "access_token");
+                JsonResponse res = await Flows.IntrospectAsync(client, null, token.AccessToken, "access_token");
 
                 r.Verify("active=true を返さない", res.KindOf("active") != JsonValueKind.True,
                     "active=true を返さない", ActiveOf(res));
@@ -383,7 +366,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) access_token を、token_type_hint=refresh_token（取り違え）で問い合わせる");
 
-                JsonResponse res = await IntrospectAsync(client, reg, token.AccessToken, "refresh_token");
+                JsonResponse res = await Flows.IntrospectAsync(client, reg, token.AccessToken, "refresh_token");
 
                 r.Verify("active が true（JSON の真偽値）", res.KindOf("active") == JsonValueKind.True,
                     "active=true",
