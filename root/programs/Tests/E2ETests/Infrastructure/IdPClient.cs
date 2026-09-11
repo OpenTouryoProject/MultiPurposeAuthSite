@@ -33,6 +33,7 @@
 //*  2026/09/11  玄人 幸道         client_secret_basic で /token を呼ぶ TokenWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         汎用の HTTP 関数を「素のHTTP」へ移し、デバイス認可（/device_authz）の要求を追加
 //*  2026/09/11  玄人 幸道         /userinfo を Authorization ヘッダを指定して呼ぶ UserInfoWithAuthorizationAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         client_secret_basic の POST を PostJsonWithBasicAuthAsync に一般化し、RevokeWithBasicAuthAsync を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -167,6 +168,40 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string pathOrUrl, IDictionary<string, string> form)
         {
             HttpResponseMessage res = await this.PostFormAsync(pathOrUrl, form);
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>
+        /// JSONを返すエンドポイントに、client_secret_basic（Authorization ヘッダ）で POST する。
+        /// client_id / client_secret はフォームに入れない。
+        /// </summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> PostJsonWithBasicAuthAsync(
+            string pathOrUrl, IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            List<KeyValuePair<string, string>> items = new List<KeyValuePair<string, string>>();
+
+            foreach (KeyValuePair<string, string> item in form)
+            {
+                if (item.Value != null)
+                {
+                    items.Add(item);
+                }
+            }
+
+            HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, this.Absolute(pathOrUrl));
+            req.Content = new FormUrlEncodedContent(items);
+
+            // RFC 6749 2.3.1 : form-urlencode してから ":" で繋ぎ、BASE64 にする。
+            string credential = WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret);
+            req.Headers.TryAddWithoutValidation("Authorization",
+                "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(credential)));
+
+            HttpResponseMessage res = await this._http.SendAsync(req);
             return await ToJsonResponseAsync(res);
         }
 
@@ -461,29 +496,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="clientId">client_id</param>
         /// <param name="clientSecret">client_secret（出力しないこと）</param>
         /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> TokenWithBasicAuthAsync(
+        public Task<JsonResponse> TokenWithBasicAuthAsync(
             IDictionary<string, string> form, string clientId, string clientSecret)
         {
-            List<KeyValuePair<string, string>> items = new List<KeyValuePair<string, string>>();
-
-            foreach (KeyValuePair<string, string> item in form)
-            {
-                if (item.Value != null)
-                {
-                    items.Add(item);
-                }
-            }
-
-            HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, this.Absolute("/token"));
-            req.Content = new FormUrlEncodedContent(items);
-
-            // RFC 6749 2.3.1 : form-urlencode してから ":" で繋ぎ、BASE64 にする。
-            string credential = WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret);
-            req.Headers.TryAddWithoutValidation("Authorization",
-                "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(credential)));
-
-            HttpResponseMessage res = await this._http.SendAsync(req);
-            return await ToJsonResponseAsync(res);
+            return this.PostJsonWithBasicAuthAsync("/token", form, clientId, clientSecret);
         }
 
         /// <summary>UserInfoエンドポイントを呼ぶ</summary>
@@ -527,6 +543,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> RevokeAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/revoke", form);
+        }
+
+        /// <summary>Revocationエンドポイントを、client_secret_basic（Authorization ヘッダ）で呼ぶ</summary>
+        /// <param name="form">フォーム（client_id / client_secret は入れない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> RevokeWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/revoke", form, clientId, clientSecret);
         }
 
         #endregion

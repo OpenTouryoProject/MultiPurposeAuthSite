@@ -48,6 +48,7 @@
 //*  2026/09/11  玄人 幸道         /revoke /introspect を RFC 7009 / 7662 に合わせて修正（#200）
 //*  2026/09/11  玄人 幸道         /token のエラー応答を 400 / 401 で返す（#196）
 //*  2026/09/11  玄人 幸道         /userinfo のエラー応答を 401 ＋ WWW-Authenticate: Bearer で返す（#196）
+//*  2026/09/11  玄人 幸道         /revoke のエラー応答を 400 / 401 で返す。/token と共用するエラー応答を共通の region へ（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -288,32 +289,9 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return this.TokenError(err); // 失敗（RFC 6749 5.2 : 400 / 401）（#196）
+            return this.OAuth2Error(err, "token"); // 失敗（RFC 6749 5.2 : 400 / 401）（#196）
         }
 
-
-        /// <summary>/token のエラー応答を作る（RFC 6749 5.2）</summary>
-        /// <param name="err">error / error_description を持つ辞書</param>
-        /// <returns>400、または 401（invalid_client）</returns>
-        /// <remarks>
-        /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
-        /// 本文（error / error_description の JSON）は変えない。
-        /// </remarks>
-        private IHttpActionResult TokenError(Dictionary<string, string> err)
-        {
-            HttpStatusCode status = (HttpStatusCode)Token.CmnEndpoints.GetErrorStatusCode(err);
-            HttpResponseMessage res = this.Request.CreateResponse(status, err);
-
-            if (status == HttpStatusCode.Unauthorized)
-            {
-                // クライアント認証の失敗。受け付ける認証方式を示す。
-                // Authorization ヘッダで認証を試みたクライアントには必須（RFC 6749 5.2）。
-                res.Headers.WwwAuthenticate.Add(
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", "realm=\"token\""));
-            }
-
-            return this.ResponseMessage(res);
-        }
         #endregion
 
         #region /userinfo
@@ -461,9 +439,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// token
         /// token_type_hint
         /// </param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <returns>成功（無効なトークンを含む）は 200、エラーは 400 / 401（RFC 7009 2.2 / 2.2.1）（#196）</returns>
         [HttpPost]
-        public Dictionary<string, string> RevokeToken(FormDataCollection formData)
+        public IHttpActionResult RevokeToken(FormDataCollection formData)
         {
             // 戻り値（エラー）
             Dictionary<string, string> err = new Dictionary<string, string>();
@@ -500,7 +478,14 @@ namespace MultiPurposeAuthSite.Controllers
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
                         // ・無効なトークンはエラーにしない（RFC 7009 2.2）
                         // ・成功は空の JSON（HTTP 200）で返し、両アプリで揃える
-                        return Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
+                        err = Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
+
+                        if (err.Count == 0)
+                        {
+                            return this.Ok(err); // 成功（RFC 7009 2.2 : 200）
+                        }
+
+                        // 他のクライアントのトークン（invalid_grant）は、下でエラーとして返す（#196）。
                     }
                     else
                     {
@@ -523,7 +508,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return err; // 失敗
+            return this.OAuth2Error(err, "revoke"); // 失敗（RFC 7009 2.2.1 : RFC 6749 5.2 のとおり 400 / 401）（#196）
         }
 
         #endregion
@@ -1113,6 +1098,37 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             return "NG"; // 和製英語ですがｗ
+        }
+
+        #endregion
+
+        #region 共通のエラー応答（RFC 6749 5.2）
+
+        /// <summary>
+        /// クライアント認証を行うエンドポイント（/token・/revoke）のエラー応答を作る（RFC 6749 5.2）
+        /// </summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <param name="realm">WWW-Authenticate の realm（エンドポイントの名前）</param>
+        /// <returns>400、または 401（invalid_client）</returns>
+        /// <remarks>
+        /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// 本文（error / error_description の JSON）は変えない。
+        /// /revoke のエラーも RFC 6749 5.2 に従う（RFC 7009 2.2.1）ので、/token の region から移して共用する（#196）。
+        /// </remarks>
+        private IHttpActionResult OAuth2Error(Dictionary<string, string> err, string realm)
+        {
+            HttpStatusCode status = (HttpStatusCode)Token.CmnEndpoints.GetErrorStatusCode(err);
+            HttpResponseMessage res = this.Request.CreateResponse(status, err);
+
+            if (status == HttpStatusCode.Unauthorized)
+            {
+                // クライアント認証の失敗。受け付ける認証方式を示す。
+                // Authorization ヘッダで認証を試みたクライアントには必須（RFC 6749 5.2）。
+                res.Headers.WwwAuthenticate.Add(
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", "realm=\"" + realm + "\""));
+            }
+
+            return this.ResponseMessage(res);
         }
 
         #endregion

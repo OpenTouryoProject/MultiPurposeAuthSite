@@ -1879,6 +1879,71 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - sub がテスト ユーザである
 - WWW-Authenticate を付けない
 
+## RT-196.8 /revoke : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）
+
+| | |
+|---|---|
+| 観点 | 失効も、トークン エンドポイントと同じくクライアントを認証してから行う。**認証の失敗は、要求の中身の誤り（400）と区別して 401 で返す。** |
+| 根拠 | RFC 7009 §2.2.1（エラーは RFC 6749 §5.2 のとおり）/ RFC 6749 §5.2 / #196 |
+| テスト | `RT196_08_revokeでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /revoke に token と、誤った client_secret をフォームで送る
+1. 同じ要求を、client_id と誤った client_secret を Authorization: Basic で渡して送る
+
+**検証（合否を判定する）**
+
+- 誤った client_secret（フォーム） : HTTP 401 で返る
+- 誤った client_secret（フォーム） : 本文は error を含む JSON のまま
+- 誤った client_secret（フォーム） : error
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- Basic : WWW-Authenticate が Basic 方式を示す
+
+## RT-196.9 /revoke : クライアント認証以外のエラーは HTTP 400
+
+| | |
+|---|---|
+| 観点 | token の欠落（invalid_request）や、他のクライアントのトークンの失効要求（invalid_grant）は、**正しく認証したクライアントの要求の誤り**なので 400。401 にしない。 |
+| 根拠 | RFC 7009 §2.1 / §2.2.1 / RFC 6749 §5.2 / #196 |
+| テスト | `RT196_09_revokeでそれ以外のエラーは400` |
+
+**手順**
+
+1. token を付けずに POST /revoke を送る（資格情報は正しい）
+1. MVC_Sample の access_token の失効を、TestClient の資格情報で要求する
+
+**検証（合否を判定する）**
+
+- token なし : HTTP 400 で返る
+- token なし : 本文は error を含む JSON のまま
+- token なし : error
+- 他のクライアントのトークン : HTTP 400 で返る
+- 他のクライアントのトークン : 本文は error を含む JSON のまま
+- 他のクライアントのトークン : error
+
+## RT-196.10 /revoke : 成功は HTTP 200 のまま（Authorization ヘッダでの認証を含む）
+
+| | |
+|---|---|
+| 観点 | **RT-196.8 / 196.9 の対照。** エラーの返し方を変えたことで、成功の応答まで変わっていないことを確かめる。フォームでの失効と、無効なトークンの失効が 200 であることは EX-2.1 / EX-2.5 が見ているので、ここでは Authorization ヘッダ（client_secret_basic）での失効を見る。 |
+| 根拠 | RFC 7009 §2.2（成功は 200）/ #196 |
+| テスト | `RT196_10_revokeの成功は200のまま` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. POST /revoke に token を送り、client_id と client_secret は Authorization: Basic で渡す
+1. 同じ access_token で /userinfo を叩く
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- error を返さない
+- 失効している（/userinfo が 401 を返す）
+
 ## RT-197.1 FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する
 
 | | |

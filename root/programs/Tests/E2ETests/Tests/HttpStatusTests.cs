@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/11  玄人 幸道         新規（#196 の 1 つ目 : /token）
 //*  2026/09/11  玄人 幸道         /userinfo（RT-196.5 〜 196.7）を追加（#196 の 2 つ目）
+//*  2026/09/11  玄人 幸道         /revoke（RT-196.8 〜 196.10）を追加（#196 の 3 つ目）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -52,8 +53,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     ///
     ///   RT-196.1 〜 196.4 : /token（RFC 6749 §5.2 : エラーは 400、invalid_client は 401）
     ///   RT-196.5 〜 196.7 : /userinfo（RFC 6750 §3 : 401 と WWW-Authenticate: Bearer）
+    ///   RT-196.8 〜 196.10 : /revoke（RFC 7009 §2.2.1 : エラーは /token と同じ。成功と無効なトークンは 200）
     ///
-    /// /token では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
+    /// /token・/revoke では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
     /// /userinfo は RFC 6750 に合わせて本文も変えた（無効なトークンは invalid_token、トークン無しは本文なし）。
     /// </summary>
@@ -433,6 +435,151 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
 
                 r.Verify("WWW-Authenticate を付けない", res.Header("WWW-Authenticate") == null,
                     "（無し）", res.Header("WWW-Authenticate") ?? "（無し）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.8 /revoke のクライアント認証の失敗</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_08_revokeでクライアント認証の失敗は401(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.8",
+                    "/revoke : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）",
+                    "失効も、トークン エンドポイントと同じくクライアントを認証してから行う。"
+                    + "**認証の失敗は、要求の中身の誤り（400）と区別して 401 で返す。**",
+                    "RFC 7009 §2.2.1（エラーは RFC 6749 §5.2 のとおり）/ RFC 6749 §5.2 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample + "（client_secret だけを誤らせる）");
+                r.Step("(1) POST /revoke に token と、誤った client_secret をフォームで送る");
+
+                JsonResponse post = await client.RevokeAsync(new Dictionary<string, string>()
+                {
+                    { "token", "NOT-A-REAL-TOKEN" },
+                    { "client_id", reg.ClientId },
+                    { "client_secret", "WRONG-SECRET-WRONG-SECRET" }
+                });
+
+                VerifyError(r, "誤った client_secret（フォーム）", post, 401, "invalid_client");
+
+                r.Step("(2) 同じ要求を、client_id と誤った client_secret を Authorization: Basic で渡して送る");
+
+                JsonResponse basic = await client.RevokeWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "token", "NOT-A-REAL-TOKEN" }
+                }, reg.ClientId, "WRONG-SECRET-WRONG-SECRET");
+
+                VerifyError(r, "誤った client_secret（Basic）", basic, 401, "invalid_client");
+
+                string challenge = basic.Header("WWW-Authenticate");
+
+                r.Verify("Basic : WWW-Authenticate が Basic 方式を示す",
+                    challenge != null && challenge.TrimStart().StartsWith("Basic", System.StringComparison.OrdinalIgnoreCase),
+                    "Basic ...", challenge ?? "（無し）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.9 /revoke のそれ以外のエラー</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_09_revokeでそれ以外のエラーは400(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-196.9",
+                    "/revoke : クライアント認証以外のエラーは HTTP 400",
+                    "token の欠落（invalid_request）や、他のクライアントのトークンの失効要求（invalid_grant）は、"
+                    + "**正しく認証したクライアントの要求の誤り**なので 400。401 にしない。",
+                    "RFC 7009 §2.1 / §2.2.1 / RFC 6749 §5.2 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient);
+
+                Assert.False(string.IsNullOrEmpty(other.ClientSecret),
+                    "前提: " + KnownClients.TestClient + " に client_secret が登録されていること");
+
+                r.Target("発行先 client_name=" + KnownClients.MvcSample
+                    + " / 失効を要求する側 client_name=" + KnownClients.TestClient);
+
+                r.Step("(1) token を付けずに POST /revoke を送る（資格情報は正しい）");
+
+                JsonResponse missing = await client.RevokeAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", reg.ClientId },
+                    { "client_secret", reg.ClientSecret }
+                });
+
+                VerifyError(r, "token なし", missing, 400, "invalid_request");
+
+                r.Step("(2) " + KnownClients.MvcSample + " の access_token の失効を、"
+                    + KnownClients.TestClient + " の資格情報で要求する");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                JsonResponse stolen = await Flows.RevokeAsync(client, other, token.AccessToken, "access_token");
+
+                VerifyError(r, "他のクライアントのトークン", stolen, 400, "invalid_grant");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.10 /revoke の成功は 200（対照）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_10_revokeの成功は200のまま(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-196.10",
+                    "/revoke : 成功は HTTP 200 のまま（Authorization ヘッダでの認証を含む）",
+                    "**RT-196.8 / 196.9 の対照。** エラーの返し方を変えたことで、成功の応答まで変わっていないことを確かめる。"
+                    + "フォームでの失効と、無効なトークンの失効が 200 であることは EX-2.1 / EX-2.5 が見ているので、"
+                    + "ここでは Authorization ヘッダ（client_secret_basic）での失効を見る。",
+                    "RFC 7009 §2.2（成功は 200）/ #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("(1) 認可コード フローで access_token を得る");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                r.Step("(2) POST /revoke に token を送り、client_id と client_secret は Authorization: Basic で渡す");
+
+                JsonResponse revoke = await client.RevokeWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "token", token.AccessToken },
+                    { "token_type_hint", "access_token" }
+                }, reg.ClientId, reg.ClientSecret);
+
+                r.VerifyEqual("HTTP 200", "200", ((int)revoke.StatusCode).ToString());
+
+                r.Verify("error を返さない", string.IsNullOrEmpty(revoke.Error),
+                    "error なし", revoke.Error == null ? "error なし" : "error=" + revoke.Error);
+
+                r.Step("(3) 同じ access_token で /userinfo を叩く");
+
+                JsonResponse after = await client.UserInfoAsync(token.AccessToken);
+
+                r.VerifyEqual("失効している（/userinfo が 401 を返す）", "401", ((int)after.StatusCode).ToString());
 
                 r.Done();
             }
