@@ -64,6 +64,7 @@
 //*  2026/09/11  玄人 幸道         device_code のエラーを RFC の値で返すよう修正（#199）
 //*  2026/09/11  玄人 幸道         revoke/introspectの本体を両アプリから移し、RFC 7009 / 7662 に合わせる（#200）
 //*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行せず、トークン応答に scope を返す（#198）
+//*  2026/09/11  玄人 幸道         クライアントの登録（scope）でも、発行するスコープを絞る（#198 の後半）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -769,8 +770,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         {
             // ClaimsIdentityに、その他、所定のClaimを追加する。
-            // scopes_supported に無いスコープは発行しない（#198）
-            Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes), claims, nonce);
+            // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+            Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
             // Codeの生成
             string code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -832,8 +833,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                // scopes_supported に無いスコープは発行しない（#198）
-                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes), claims, nonce);
+                // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
                 // AccessTokenの生成
                 access_token = CmnAccessToken.CreateFromClaims(
@@ -928,8 +929,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                // scopes_supported に無いスコープは発行しない（#198）
-                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes), claims, nonce);
+                // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
                 // Codeの生成
                 code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -1364,8 +1365,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            // scopes_supported に無いスコープは発行しない（#198）
-                            identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' ')), null, "");
+                            // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                            identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
 
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
@@ -1482,8 +1483,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                    // scopes_supported に無いスコープは発行しない（#198）
-                    identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' ')), null, "");
+                    // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                    identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
 
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
@@ -1571,8 +1572,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                                // scopes_supported に無いスコープは発行しない（#198）
-                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(scopes.Split(' ')), null, "");
+                                // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(scopes.Split(' '), iss), null, "");
 
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(

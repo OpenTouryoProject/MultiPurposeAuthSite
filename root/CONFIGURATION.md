@@ -143,7 +143,33 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 | `TestClient2` | FAPI2（Request Object を使う） |
 | `TestClient3` | Device Authorization Grant。**`client_secret` を持たない**（パブリック クライアント） |
 | `TestClient4` | CIBA |
+| `TestClient5` | 登録の `scope` で、要求してよいスコープを制限した例（#198、E2E テスト用） |
 | `MVC_Sample` ほか | 絶対 URL の `redirect_uri` を持つサンプル |
+
+### `scope` — 要求してよいスコープ（任意）
+
+**クライアントごとに、発行してよいスコープを制限する。** RFC 7591 §2 の client metadata と同じく、
+スペース区切りで並べる。
+
+```json
+"scope": "openid profile email"
+```
+
+発行するスコープは、次の 3 つをすべて満たすものになる。
+
+1. クライアントが要求した
+2. Discovery の `scopes_supported` にある（認可サーバが扱う）
+3. 登録の `scope` にある
+
+| 登録 | 扱い |
+|---|---|
+| **項目が無い** | 3 は見ない（`scopes_supported` の範囲だけ）。**既存の登録はこのまま動く** |
+| 空文字列 | どのスコープも許さない |
+
+要求を拒否（`invalid_scope`）するのではなく、許されないスコープを外して発行する。
+外したときは、トークン応答の `scope` に実際に発行したものを返す（RFC 6749 §5.1）。
+
+> `CreateClientsIdentity` はこの項目を出力しない。必要なクライアントにだけ、手で足す。
 
 ### `redirect_uri` の記号
 

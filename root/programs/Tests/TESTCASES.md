@@ -1863,6 +1863,50 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
 
+## RT-198.3 クライアントの登録（scope）の範囲に収める : client_credentials
+
+| | |
+|---|---|
+| 観点 | scopes_supported に載っていても、**そのクライアントに許していないスコープは発行しない。**登録の scope は、RFC 7591 §2 の client metadata と同じく、要求してよいスコープの一覧。許した範囲は残し、許していないもの（phone / roles）と宣言外のもの（admin）だけを外すことを確かめる。 |
+| 根拠 | RFC 6749 §3.3 / §5.1 / RFC 7591 §2（scope）/ #198 |
+| テスト | `RT198_03_登録したscopeの範囲に収める_client_credentials` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials、scope="profile email phone roles admin" を送る
+
+**検証（合否を判定する）**
+
+- 登録の scope に無いスコープを発行しない
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
+## RT-198.4 クライアントの登録（scope）の範囲に収める : 認可コード フロー
+
+| | |
+|---|---|
+| 観点 | 認可エンドポイントを通る経路（CreateCodeInAuthZNRes）でも同じであること。この経路は device / CIBA も通る。openid は許しているので、id_token も発行されることを確かめる（絞り込みすぎていない）。 |
+| 根拠 | RFC 6749 §3.3 / OIDC Core §3.1.2.1 / RFC 7591 §2（scope）/ #198 |
+| テスト | `RT198_04_登録したscopeの範囲に収める_認可コード` |
+
+**手順**
+
+1. GET /authorize に scope="openid profile email phone roles" を付けて code を得る
+1. code をトークンに交換する
+
+**検証（合否を判定する）**
+
+- 登録の scope に無いスコープを発行しない
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+- id_token が返る（openid は許している）
+
 # 保留中のテストケース（Skip）
 
 **未修正だと分かっている項目は、期待する動作を書いたうえで Skip にしている。**

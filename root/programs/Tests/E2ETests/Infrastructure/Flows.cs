@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         JWK Set の取得を追加（拡張仕様のテスト）
+//*  2026/09/11  玄人 幸道         scope を登録した TestClient5 を追加（#198 の後半）
 //**********************************************************************************
 
 using System;
@@ -63,6 +64,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>CIBA 用</summary>
         public const string TestClient4 = "TestClient4";
+
+        /// <summary>登録の scope で、要求してよいスコープを制限したクライアント（#198）</summary>
+        public const string TestClient5 = "TestClient5";
     }
 
     /// <summary>クライアントの登録内容（テストから参照する分だけ）</summary>

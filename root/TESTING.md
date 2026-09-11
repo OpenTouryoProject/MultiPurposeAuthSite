@@ -297,7 +297,7 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 
 対象     結果 成功 失敗 Skip   秒
 -------- ---- ---- ---- ---- ----
-E2ETests OK    172    0    1 64.2
+E2ETests OK    176    0    1 51.5
 
   Skip 1 件の内訳
          1  (対象なし)
@@ -305,7 +305,7 @@ E2ETests OK    172    0    1 64.2
   対象ごとの Skip は、そのサイトが起動していないだけのことが多い。
   (対象なし) は、未修正として Skip 指定しているもの（Tests\README.md）。
 
-  所要時間 : 1.1 分
+  所要時間 : 0.9 分
   TRX      : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.trx
   ログ     : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.log
   報告書   : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.report.md

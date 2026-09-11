@@ -181,7 +181,7 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 | `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
-| `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープを発行しない（client_credentials / password） |
+| `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 
 **すべてのテストが `TestReport` で記録を残す。**
 識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。
@@ -220,9 +220,6 @@ cd root
 - `RT-187.4`（`ErrorResponseTests`）
   未知の `response_type` が、リダイレクトではなくエラー画面（HTTP 200）になる。
   認可コードは発行されないので、安全側には倒れている。
-
-テストの無い未対応もある。#198 の後半（クライアントごとに要求してよいスコープの制限）は、
-登録情報にそのための項目が無いため、テストも書けていない。
 
 ## 分かっていること（実測）
 
