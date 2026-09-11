@@ -2010,6 +2010,48 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 無効なトークン : HTTP 200（エラーにしない）
 - 無効なトークン : active が false
 
+## RT-196.14 /device_authz : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）
+
+| | |
+|---|---|
+| 観点 | デバイス認可エンドポイントのクライアント認証は、トークン エンドポイントと同じ。**登録されていない client_id や、誤った資格情報は 401 で断る。**パブリック クライアントは client_id だけで識別する（#193）。 |
+| 根拠 | RFC 8628 §3.1（クライアント認証は RFC 6749 §3.2.1 のとおり）/ RFC 6749 §5.2 / #196 |
+| テスト | `RT196_14_device_authzでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /device_authz に、登録されていない client_id をフォームで送る
+1. コンフィデンシャル クライアントの client_id と誤った client_secret を、Authorization: Basic で渡して送る
+
+**検証（合否を判定する）**
+
+- 登録されていない client_id : HTTP 401 で返る
+- 登録されていない client_id : 本文は error を含む JSON のまま
+- 登録されていない client_id : error
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- Basic : WWW-Authenticate が Basic 方式を示す
+- device_code を発行しない
+
+## RT-196.15 /device_authz : 成功は HTTP 200 のまま（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.14 の対照。** エラーの返し方を変えたことで、成功の応答（device_code / user_code の JSON）まで変わっていないことを確かめる。 |
+| 根拠 | RFC 8628 §3.2（成功は 200 と JSON）/ #196 |
+| テスト | `RT196_15_device_authzの成功は200のまま` |
+
+**手順**
+
+1. POST /device_authz に client_id と scope を送る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- device_code が返る
+- error を返さない
+
 ## RT-197.1 FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する
 
 | | |

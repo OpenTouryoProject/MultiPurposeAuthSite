@@ -35,6 +35,7 @@
 //*  2026/09/11  玄人 幸道         /userinfo を Authorization ヘッダを指定して呼ぶ UserInfoWithAuthorizationAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         client_secret_basic の POST を PostJsonWithBasicAuthAsync に一般化し、RevokeWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         /introspect を client_secret_basic で呼ぶ IntrospectWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -581,6 +582,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> DeviceAuthorizationAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/device_authz", form);
+        }
+
+        /// <summary>
+        /// デバイス認可エンドポイント（/device_authz）を、client_secret_basic（Authorization ヘッダ）で呼ぶ。
+        /// コンフィデンシャル クライアントの機器が使う（RFC 8628 3.1）。
+        /// </summary>
+        /// <param name="form">フォーム（client_id / client_secret は入れない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> DeviceAuthorizationWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/device_authz", form, clientId, clientSecret);
         }
 
         /// <summary>

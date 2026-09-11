@@ -32,6 +32,7 @@
 //*  2026/09/11  玄人 幸道         /userinfo（RT-196.5 〜 196.7）を追加（#196 の 2 つ目）
 //*  2026/09/11  玄人 幸道         /revoke（RT-196.8 〜 196.10）を追加（#196 の 3 つ目）
 //*  2026/09/11  玄人 幸道         /introspect（RT-196.11 〜 196.13）を追加（#196 の 4 つ目）
+//*  2026/09/11  玄人 幸道         /device_authz（RT-196.14 〜 196.15）を追加（#196 の 5 つ目）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -56,8 +57,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     ///   RT-196.5 〜 196.7 : /userinfo（RFC 6750 §3 : 401 と WWW-Authenticate: Bearer）
     ///   RT-196.8 〜 196.10 : /revoke（RFC 7009 §2.2.1 : エラーは /token と同じ。成功と無効なトークンは 200）
     ///   RT-196.11 〜 196.13 : /introspect（RFC 7662 §2.3 : 認証の失敗は 401。active=false は 200）
+    ///   RT-196.14 〜 196.15 : /device_authz（RFC 8628 §3.1 : クライアント認証は /token と同じ。失敗は 401）
     ///
-    /// /token・/revoke・/introspect では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
+    /// /token・/revoke・/introspect・/device_authz では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
     /// /userinfo は RFC 6750 に合わせて本文も変えた（無効なトークンは invalid_token、トークン無しは本文なし）。
     /// </summary>
@@ -726,6 +728,99 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
 
                 r.Verify("無効なトークン : active が false", inactive.KindOf("active") == JsonValueKind.False,
                     "active=false", "active の型 = " + inactive.KindOf("active"));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.14 /device_authz のクライアント認証の失敗</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_14_device_authzでクライアント認証の失敗は401(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.14",
+                    "/device_authz : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）",
+                    "デバイス認可エンドポイントのクライアント認証は、トークン エンドポイントと同じ。"
+                    + "**登録されていない client_id や、誤った資格情報は 401 で断る。**"
+                    + "パブリック クライアントは client_id だけで識別する（#193）。",
+                    "RFC 8628 §3.1（クライアント認証は RFC 6749 §3.2.1 のとおり）/ RFC 6749 §5.2 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("登録されていない client_id / client_name=" + KnownClients.MvcSample
+                    + "（コンフィデンシャル。client_secret だけを誤らせる）");
+
+                r.Step("(1) POST /device_authz に、登録されていない client_id をフォームで送る");
+
+                JsonResponse unknown = await client.DeviceAuthorizationAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", "00000000000000000000000000000000" },
+                    { "scope", "profile email" }
+                });
+
+                VerifyError(r, "登録されていない client_id", unknown, 401, "invalid_client");
+
+                r.Step("(2) コンフィデンシャル クライアントの client_id と誤った client_secret を、Authorization: Basic で渡して送る");
+
+                JsonResponse basic = await client.DeviceAuthorizationWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "scope", "profile email" }
+                }, reg.ClientId, "WRONG-SECRET-WRONG-SECRET");
+
+                VerifyError(r, "誤った client_secret（Basic）", basic, 401, "invalid_client");
+
+                string challenge = basic.Header("WWW-Authenticate");
+
+                r.Verify("Basic : WWW-Authenticate が Basic 方式を示す",
+                    challenge != null && challenge.TrimStart().StartsWith("Basic", System.StringComparison.OrdinalIgnoreCase),
+                    "Basic ...", challenge ?? "（無し）");
+
+                r.Verify("device_code を発行しない",
+                    unknown.KindOf("device_code") == JsonValueKind.Undefined
+                    && basic.KindOf("device_code") == JsonValueKind.Undefined,
+                    "どちらも device_code を返さない", "（1）" + unknown.ToString() + " /（2）" + basic.ToString());
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.15 /device_authz の成功は 200（対照）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_15_device_authzの成功は200のまま(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.15",
+                    "/device_authz : 成功は HTTP 200 のまま（対照）",
+                    "**RT-196.14 の対照。** エラーの返し方を変えたことで、"
+                    + "成功の応答（device_code / user_code の JSON）まで変わっていないことを確かめる。",
+                    "RFC 8628 §3.2（成功は 200 と JSON）/ #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
+
+                r.Target("client_name=" + KnownClients.TestClient3 + "（device モード、client_secret なし）");
+                r.Step("POST /device_authz に client_id と scope を送る");
+
+                JsonResponse res = await client.DeviceAuthorizationAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", reg.ClientId },
+                    { "scope", "profile email" }
+                });
+
+                r.VerifyEqual("HTTP 200", "200", ((int)res.StatusCode).ToString());
+
+                r.Verify("device_code が返る", res.KindOf("device_code") != JsonValueKind.Undefined,
+                    "device_code あり", res.KindOf("device_code") != JsonValueKind.Undefined ? "あり（値は伏せる）" : res.ToString());
+
+                r.Verify("error を返さない", string.IsNullOrEmpty(res.Error),
+                    "error なし", res.Error == null ? "error なし" : "error=" + res.Error);
 
                 r.Done();
             }

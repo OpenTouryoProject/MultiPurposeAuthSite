@@ -50,6 +50,7 @@
 //*  2026/09/11  玄人 幸道         /userinfo のエラー応答を 401 ＋ WWW-Authenticate: Bearer で返す（#196）
 //*  2026/09/11  玄人 幸道         /revoke のエラー応答を 400 / 401 で返す。/token と共用するエラー応答を共通の region へ（#196）
 //*  2026/09/11  玄人 幸道         /introspect のエラー応答を 400 / 401 で返す（#196）
+//*  2026/09/11  玄人 幸道         /device_authz のエラー応答を 400 / 401 で返す（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -598,9 +599,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /device_authz
         /// </summary>
         /// <param name="formData">FormDataCollection</param>
-        /// <returns>Device AuthZの認可レスポンス</returns>
+        /// <returns>成功は 200、エラーは 400 / 401（RFC 8628 3.1 / RFC 6749 5.2）（#196）</returns>
         [HttpPost]
-        public async Task<Dictionary<string, string>> DeviceAuthZAuthorize(FormDataCollection formData)
+        public async Task<IHttpActionResult> DeviceAuthZAuthorize(FormDataCollection formData)
         {
             string err = "";
             string errDescription = "";
@@ -624,11 +625,12 @@ namespace MultiPurposeAuthSite.Controllers
                 X509Certificate2 x509 = Request.GetClientCertificate();
                 if (!Token.CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
                 {
-                    return new Dictionary<string, string>()
+                    // RFC 6749 5.2 : invalid_client は 401（#196）
+                    return this.OAuth2Error(new Dictionary<string, string>()
                     {
-                        {OAuth2AndOIDCConst.error, "invalid_client"},
+                        {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client},
                         {OAuth2AndOIDCConst.error_description, "Invalid credential."}
-                    };
+                    }, "device_authz");
                 }
 
                 // scopeパラメタ
@@ -658,8 +660,8 @@ namespace MultiPurposeAuthSite.Controllers
                 string userCode;
                 Sts.DeviceAuthZProvider.Create(authReqExp, tempData, out deviceCode, out userCode);
 
-                // ココまでの結果をレスポンス
-                return new Dictionary<string, string>()
+                // ココまでの結果をレスポンス（RFC 8628 3.2 : 200）
+                return this.Ok(new Dictionary<string, string>()
                 {
                     {OAuth2AndOIDCConst.device_code, deviceCode},
                     {OAuth2AndOIDCConst.user_code, userCode},
@@ -668,7 +670,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {OAuth2AndOIDCConst.verification_uri_complete, verificationUri + "?user_code=" + userCode},
                     {OAuth2AndOIDCConst.expires_in, requested_expiry.ToString()},
                     {OAuth2AndOIDCConst.PollingInterval, Config.DeviceAuthZPollingIntervalSeconds.ToString()}
-                };
+                });
             }
             else
             {
@@ -677,12 +679,12 @@ namespace MultiPurposeAuthSite.Controllers
                 errDescription = "Form data is null.";
             }
 
-            // エラー
-            return new Dictionary<string, string>()
+            // エラー（RFC 6749 5.2 : 400）（#196）
+            return this.OAuth2Error(new Dictionary<string, string>()
             {
                 {OAuth2AndOIDCConst.error, err},
                 {OAuth2AndOIDCConst.error_description, errDescription}
-            };
+            }, "device_authz");
         }
 
         // DeviceAuthZResponse画面 → HomeControllerに。
@@ -1107,7 +1109,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region 共通のエラー応答（RFC 6749 5.2）
 
         /// <summary>
-        /// クライアント認証を行うエンドポイント（/token・/revoke・/introspect）のエラー応答を作る（RFC 6749 5.2）
+        /// クライアント認証を行うエンドポイント（/token・/revoke・/introspect・/device_authz）のエラー応答を作る（RFC 6749 5.2）
         /// </summary>
         /// <param name="err">error / error_description を持つ辞書</param>
         /// <param name="realm">WWW-Authenticate の realm（エンドポイントの名前）</param>
@@ -1117,6 +1119,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 本文（error / error_description の JSON）は変えない。
         /// /revoke のエラーも RFC 6749 5.2 に従う（RFC 7009 2.2.1）ので、/token の region から移して共用する（#196）。
         /// /introspect のクライアント認証の失敗も、RFC 6749 5.2 のとおり 401（RFC 7662 2.3）。
+        /// /device_authz のクライアント認証は /token と同じ（RFC 8628 3.1）なので、エラーも同じく返す。
         /// </remarks>
         private IHttpActionResult OAuth2Error(Dictionary<string, string> err, string realm)
         {
