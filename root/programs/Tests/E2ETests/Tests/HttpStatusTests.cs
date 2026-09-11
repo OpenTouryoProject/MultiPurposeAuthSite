@@ -31,6 +31,7 @@
 //*  2026/09/11  玄人 幸道         新規（#196 の 1 つ目 : /token）
 //*  2026/09/11  玄人 幸道         /userinfo（RT-196.5 〜 196.7）を追加（#196 の 2 つ目）
 //*  2026/09/11  玄人 幸道         /revoke（RT-196.8 〜 196.10）を追加（#196 の 3 つ目）
+//*  2026/09/11  玄人 幸道         /introspect（RT-196.11 〜 196.13）を追加（#196 の 4 つ目）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -54,8 +55,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     ///   RT-196.1 〜 196.4 : /token（RFC 6749 §5.2 : エラーは 400、invalid_client は 401）
     ///   RT-196.5 〜 196.7 : /userinfo（RFC 6750 §3 : 401 と WWW-Authenticate: Bearer）
     ///   RT-196.8 〜 196.10 : /revoke（RFC 7009 §2.2.1 : エラーは /token と同じ。成功と無効なトークンは 200）
+    ///   RT-196.11 〜 196.13 : /introspect（RFC 7662 §2.3 : 認証の失敗は 401。active=false は 200）
     ///
-    /// /token・/revoke では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
+    /// /token・/revoke・/introspect では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
     /// /userinfo は RFC 6750 に合わせて本文も変えた（無効なトークンは invalid_token、トークン無しは本文なし）。
     /// </summary>
@@ -580,6 +582,150 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                 JsonResponse after = await client.UserInfoAsync(token.AccessToken);
 
                 r.VerifyEqual("失効している（/userinfo が 401 を返す）", "401", ((int)after.StatusCode).ToString());
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.11 /introspect のクライアント認証の失敗</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_11_introspectでクライアント認証の失敗は401(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.11",
+                    "/introspect : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）",
+                    "イントロスペクションは、トークンの中身（ユーザ・範囲）を明かす口。"
+                    + "**認証できない問い合わせ元には、401 で断る。**"
+                    + "資格情報を付けない問い合わせも、認証の失敗として扱う。",
+                    "RFC 7662 §2.3（認証に失敗したら RFC 6749 §5.2 のとおり 401）/ §2.1 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample + "（client_secret だけを誤らせる）");
+                r.Step("(1) POST /introspect に token と、誤った client_secret をフォームで送る");
+
+                JsonResponse post = await client.IntrospectAsync(new Dictionary<string, string>()
+                {
+                    { "token", "NOT-A-REAL-TOKEN" },
+                    { "client_id", reg.ClientId },
+                    { "client_secret", "WRONG-SECRET-WRONG-SECRET" }
+                });
+
+                VerifyError(r, "誤った client_secret（フォーム）", post, 401, "invalid_client");
+
+                r.Step("(2) 同じ要求を、client_id と誤った client_secret を Authorization: Basic で渡して送る");
+
+                JsonResponse basic = await client.IntrospectWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "token", "NOT-A-REAL-TOKEN" }
+                }, reg.ClientId, "WRONG-SECRET-WRONG-SECRET");
+
+                VerifyError(r, "誤った client_secret（Basic）", basic, 401, "invalid_client");
+
+                string challenge = basic.Header("WWW-Authenticate");
+
+                r.Verify("Basic : WWW-Authenticate が Basic 方式を示す",
+                    challenge != null && challenge.TrimStart().StartsWith("Basic", System.StringComparison.OrdinalIgnoreCase),
+                    "Basic ...", challenge ?? "（無し）");
+
+                r.Step("(3) 資格情報を何も付けずに送る");
+
+                JsonResponse none = await client.IntrospectAsync(new Dictionary<string, string>()
+                {
+                    { "token", "NOT-A-REAL-TOKEN" }
+                });
+
+                VerifyError(r, "資格情報なし", none, 401, "invalid_client");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.12 /introspect のそれ以外のエラー</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_12_introspectでtokenが無ければ400(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.12",
+                    "/introspect : token の無い問い合わせは HTTP 400",
+                    "token は必須のパラメタ。欠けているのは要求の誤りなので 400（invalid_request）。"
+                    + "**正しく認証したクライアントの要求は、401 にしない。**",
+                    "RFC 7662 §2.1（token は REQUIRED）/ RFC 6749 §5.2 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample + "（資格情報は正しい）");
+                r.Step("token を付けずに POST /introspect を送る");
+
+                JsonResponse missing = await client.IntrospectAsync(new Dictionary<string, string>()
+                {
+                    { "client_id", reg.ClientId },
+                    { "client_secret", reg.ClientSecret }
+                });
+
+                VerifyError(r, "token なし", missing, 400, "invalid_request");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.13 /introspect の答えは 200（対照）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_13_introspectの答えはactiveによらず200(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-196.13",
+                    "/introspect : 問い合わせへの答えは、active=true でも active=false でも HTTP 200（対照）",
+                    "**RT-196.11 / 196.12 の対照。** 使えないトークンについての「使えない」（active=false）は、"
+                    + "エラーではなく正常な答え。**4xx にしてはならない。**"
+                    + "あわせて、Authorization ヘッダ（client_secret_basic）での問い合わせを見る。",
+                    "RFC 7662 §2.2（active=false も正常な応答）/ §2.3 / #196");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("(1) 認可コード フローで access_token を得る");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                r.Step("(2) その access_token を、Authorization: Basic で認証して問い合わせる");
+
+                JsonResponse active = await client.IntrospectWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "token", token.AccessToken },
+                    { "token_type_hint", "access_token" }
+                }, reg.ClientId, reg.ClientSecret);
+
+                r.VerifyEqual("有効なトークン : HTTP 200", "200", ((int)active.StatusCode).ToString());
+
+                r.Verify("有効なトークン : active が true", active.KindOf("active") == JsonValueKind.True,
+                    "active=true", "active の型 = " + active.KindOf("active"));
+
+                r.Step("(3) 存在しないトークンを、同じく問い合わせる");
+
+                JsonResponse inactive = await client.IntrospectWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "token", "NOT-A-REAL-TOKEN" }
+                }, reg.ClientId, reg.ClientSecret);
+
+                r.VerifyEqual("無効なトークン : HTTP 200（エラーにしない）", "200", ((int)inactive.StatusCode).ToString());
+
+                r.Verify("無効なトークン : active が false", inactive.KindOf("active") == JsonValueKind.False,
+                    "active=false", "active の型 = " + inactive.KindOf("active"));
 
                 r.Done();
             }

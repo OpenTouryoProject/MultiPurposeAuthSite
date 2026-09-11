@@ -31,6 +31,7 @@
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-3.2 / 3.4 の Skip を解除、EX-3.7 を追加（#200）
 //*  2026/09/11  玄人 幸道         IntrospectAsync を Flows へ移す（RevocationTests への依存も解消）
+//*  2026/09/11  玄人 幸道         EX-3.6 の観測の注記を、#196（/introspect の 401）の対応に合わせる
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -335,7 +336,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Observe("拒否のしかた",
                     "HTTP " + (int)res.StatusCode + " / error=" + (res.Error ?? "なし"),
-                    "RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196）。");
+                    "RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196 で対応。RT-196.11 で検証）。");
 
                 r.Done();
             }

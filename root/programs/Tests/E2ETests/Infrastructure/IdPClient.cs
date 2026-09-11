@@ -34,6 +34,7 @@
 //*  2026/09/11  玄人 幸道         汎用の HTTP 関数を「素のHTTP」へ移し、デバイス認可（/device_authz）の要求を追加
 //*  2026/09/11  玄人 幸道         /userinfo を Authorization ヘッダを指定して呼ぶ UserInfoWithAuthorizationAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         client_secret_basic の POST を PostJsonWithBasicAuthAsync に一般化し、RevokeWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         /introspect を client_secret_basic で呼ぶ IntrospectWithBasicAuthAsync を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -535,6 +536,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> IntrospectAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/introspect", form);
+        }
+
+        /// <summary>Introspectionエンドポイントを、client_secret_basic（Authorization ヘッダ）で呼ぶ</summary>
+        /// <param name="form">フォーム（client_id / client_secret は入れない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> IntrospectWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/introspect", form, clientId, clientSecret);
         }
 
         /// <summary>Revocationエンドポイントを呼ぶ</summary>

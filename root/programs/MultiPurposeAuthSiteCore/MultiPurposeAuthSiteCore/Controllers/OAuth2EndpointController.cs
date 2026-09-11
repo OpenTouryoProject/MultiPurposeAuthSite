@@ -50,6 +50,7 @@
 //*  2026/09/11  玄人 幸道         /token のエラー応答を 400 / 401 で返す（#196）
 //*  2026/09/11  玄人 幸道         /userinfo のエラー応答を 401 ＋ WWW-Authenticate: Bearer で返す（#196）
 //*  2026/09/11  玄人 幸道         /revoke のエラー応答を 400 / 401 で返す。/token と共用するエラー応答を共通の region へ（#196）
+//*  2026/09/11  玄人 幸道         /introspect のエラー応答を 400 / 401 で返す（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -547,12 +548,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// token
         /// token_type_hint
         /// </param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <returns>問い合わせへの答え（active=false を含む）は 200、エラーは 400 / 401（RFC 7662 2.2 / 2.3）（#196）</returns>
         [HttpPost]
-        public Dictionary<string, object> IntrospectToken(IFormCollection formData)
+        public IActionResult IntrospectToken(IFormCollection formData)
         {
             // 戻り値（エラー）
-            Dictionary<string, object> err = new Dictionary<string, object>();
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             if (formData != null)
             {
@@ -588,7 +589,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // 問い合わせ（#200）
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）
                         // ・無効なトークン（存在しない・失効済み・期限切れ）は active=false で答える（RFC 7662 2.2）
-                        return Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint);
+                        // ・active=false もエラーではなく、問い合わせへの正常な答えなので 200（RFC 7662 2.2）（#196）
+                        return this.Ok(Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint));
                     }
                     else
                     {
@@ -611,7 +613,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return err; // 失敗
+            return this.OAuth2Error(err, "introspect"); // 失敗（RFC 7662 2.3 : RFC 6749 5.2 のとおり 400 / 401）（#196）
         }
 
         #endregion
@@ -1124,7 +1126,7 @@ namespace MultiPurposeAuthSite.Controllers
         #region 共通のエラー応答（RFC 6749 5.2）
 
         /// <summary>
-        /// クライアント認証を行うエンドポイント（/token・/revoke）のエラー応答を作る（RFC 6749 5.2）
+        /// クライアント認証を行うエンドポイント（/token・/revoke・/introspect）のエラー応答を作る（RFC 6749 5.2）
         /// </summary>
         /// <param name="err">error / error_description を持つ辞書</param>
         /// <param name="realm">WWW-Authenticate の realm（エンドポイントの名前）</param>
@@ -1133,6 +1135,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
         /// 本文（error / error_description の JSON）は変えない。
         /// /revoke のエラーも RFC 6749 5.2 に従う（RFC 7009 2.2.1）ので、/token の region から移して共用する（#196）。
+        /// /introspect のクライアント認証の失敗も、RFC 6749 5.2 のとおり 401（RFC 7662 2.3）。
         /// </remarks>
         private IActionResult OAuth2Error(Dictionary<string, string> err, string realm)
         {

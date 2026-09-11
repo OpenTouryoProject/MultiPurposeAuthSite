@@ -180,7 +180,7 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 | `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
 | `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
-| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（現在は `/token`・`/userinfo`・`/revoke`） |
+| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（現在は `/token`・`/userinfo`・`/revoke`・`/introspect`） |
 | `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
 | `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 

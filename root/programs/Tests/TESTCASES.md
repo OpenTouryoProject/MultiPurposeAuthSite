@@ -913,7 +913,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - 拒否のしかた
-  - RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196）。
+  - RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196 で対応。RT-196.11 で検証）。
 
 ## EX-3.7 token_type_hint が実際の種類と違っていても、答えられる
 
@@ -1943,6 +1943,72 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 200
 - error を返さない
 - 失効している（/userinfo が 401 を返す）
+
+## RT-196.11 /introspect : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）
+
+| | |
+|---|---|
+| 観点 | イントロスペクションは、トークンの中身（ユーザ・範囲）を明かす口。**認証できない問い合わせ元には、401 で断る。**資格情報を付けない問い合わせも、認証の失敗として扱う。 |
+| 根拠 | RFC 7662 §2.3（認証に失敗したら RFC 6749 §5.2 のとおり 401）/ §2.1 / #196 |
+| テスト | `RT196_11_introspectでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /introspect に token と、誤った client_secret をフォームで送る
+1. 同じ要求を、client_id と誤った client_secret を Authorization: Basic で渡して送る
+1. 資格情報を何も付けずに送る
+
+**検証（合否を判定する）**
+
+- 誤った client_secret（フォーム） : HTTP 401 で返る
+- 誤った client_secret（フォーム） : 本文は error を含む JSON のまま
+- 誤った client_secret（フォーム） : error
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- Basic : WWW-Authenticate が Basic 方式を示す
+- 資格情報なし : HTTP 401 で返る
+- 資格情報なし : 本文は error を含む JSON のまま
+- 資格情報なし : error
+
+## RT-196.12 /introspect : token の無い問い合わせは HTTP 400
+
+| | |
+|---|---|
+| 観点 | token は必須のパラメタ。欠けているのは要求の誤りなので 400（invalid_request）。**正しく認証したクライアントの要求は、401 にしない。** |
+| 根拠 | RFC 7662 §2.1（token は REQUIRED）/ RFC 6749 §5.2 / #196 |
+| テスト | `RT196_12_introspectでtokenが無ければ400` |
+
+**手順**
+
+1. token を付けずに POST /introspect を送る
+
+**検証（合否を判定する）**
+
+- token なし : HTTP 400 で返る
+- token なし : 本文は error を含む JSON のまま
+- token なし : error
+
+## RT-196.13 /introspect : 問い合わせへの答えは、active=true でも active=false でも HTTP 200（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.11 / 196.12 の対照。** 使えないトークンについての「使えない」（active=false）は、エラーではなく正常な答え。**4xx にしてはならない。**あわせて、Authorization ヘッダ（client_secret_basic）での問い合わせを見る。 |
+| 根拠 | RFC 7662 §2.2（active=false も正常な応答）/ §2.3 / #196 |
+| テスト | `RT196_13_introspectの答えはactiveによらず200` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. その access_token を、Authorization: Basic で認証して問い合わせる
+1. 存在しないトークンを、同じく問い合わせる
+
+**検証（合否を判定する）**
+
+- 有効なトークン : HTTP 200
+- 有効なトークン : active が true
+- 無効なトークン : HTTP 200（エラーにしない）
+- 無効なトークン : active が false
 
 ## RT-197.1 FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する
 
