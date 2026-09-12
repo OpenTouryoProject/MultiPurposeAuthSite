@@ -54,6 +54,7 @@
 //*  2026/09/11  玄人 幸道         /device_authz のエラー応答を 400 / 401 で返す（#196）
 //*  2026/09/11  玄人 幸道         /ciba_authz のエラー応答を 400 / 401 で返し、ユーザ不明を unknown_user_id に（#196）
 //*  2026/09/12  玄人 幸道         /ciba_result・/SetDeviceToken の失敗を 400 / 401 で返す（本文の NG は変えない）（#196）
+//*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -421,7 +422,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 無効なトークン（JWT でない、改竄・失効・期限切れなど）。
                     // RFC 6750 3.1 : invalid_token（401）。以前は invalid_request（400 に当たる）だった（#196）。
-                    err.Add(OAuth2AndOIDCConst.error, Token.CmnEndpoints.invalid_token);
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                 }
             }
@@ -837,7 +838,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // login_hint のユーザが見つからない（CIBA Core 13 : unknown_user_id）。
                             // 以前は err / errDescription が空のまま返っていた（#196）。
-                            err = Token.CmnEndpoints.unknown_user_id;
+                            err = OAuth2AndOIDCConst.unknown_user_id;
                             errDescription = "The user identified by login_hint was not found.";
                         }
                         // 以降で、下記を束ねる。
@@ -913,7 +914,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (user == null)
             {
                 // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-                return this.NGResult(401, "ciba_result", Token.CmnEndpoints.invalid_token);
+                return this.NGResult(401, "ciba_result", OAuth2AndOIDCConst.invalid_token);
             }
 
             // 変数
@@ -1153,7 +1154,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-            return this.NGResult(401, "SetDeviceToken", Token.CmnEndpoints.invalid_token);
+            return this.NGResult(401, "SetDeviceToken", OAuth2AndOIDCConst.invalid_token);
         }
 
         #endregion

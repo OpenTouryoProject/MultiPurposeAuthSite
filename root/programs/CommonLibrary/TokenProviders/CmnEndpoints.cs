@@ -70,6 +70,7 @@
 //*  2026/09/11  玄人 幸道         Public / Private の region を中身に合わせる（ClientAuthentication を Public へ、Token所有者の確認を private に）
 //*  2026/09/11  玄人 幸道         /userinfo の Bearer のエラー（invalid_token は 401、WWW-Authenticate の組み立て）を追加（#196）
 //*  2026/09/11  玄人 幸道         /ciba_authz の空のエラー コードを CIBA Core 13 のコードに（unknown_user_id を追加）（#196）
+//*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1418,14 +1419,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                         else
                         {
                             // パスワードが一致しない場合。
-                            err.Add(OAuth2AndOIDCConst.error, "access_denied");
+                            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
                             err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.access_denied);
                         }
                     }
                     else
                     {
                         // ユーザーが見つからない場合。
-                        err.Add(OAuth2AndOIDCConst.error, "access_denied");
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.access_denied);
                         err.Add(OAuth2AndOIDCConst.error_description, Resources.ApplicationOAuthBearerTokenProvider.access_denied);
                     }
 
@@ -2075,12 +2076,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // メタデータを返さない（RFC 7662 2.2 / 4）（#194）。
                 if (!CmnEndpoints.CheckTokenOwner(client_id, identity))
                 {
-                    ret.Add("active", false);
+                    ret.Add(OAuth2AndOIDCConst.active, false);
                     return ret;
                 }
 
                 // メタデータの返却
-                ret.Add("active", true);
+                ret.Add(OAuth2AndOIDCConst.active, true);
                 ret.Add(OAuth2AndOIDCConst.token_type, type);
 
                 string scopes = "";
@@ -2129,7 +2130,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // どの種類でも見つからない ＝ 使えないトークン。
             // エラーではなく、問い合わせへの正常な答えとして active=false を返す（RFC 7662 2.2）（#200）。
-            ret.Add("active", false);
+            ret.Add(OAuth2AndOIDCConst.active, false);
             return ret;
         }
 
@@ -2276,14 +2277,6 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region エラー応答（HTTP ステータス・WWW-Authenticate）
 
-        /// <summary>無効な Bearer トークン（RFC 6750 3.1）</summary>
-        /// <remarks>Open棟梁 の OAuth2AndOIDCConst に無いので、ここで定義する（#196）。</remarks>
-        public const string invalid_token = "invalid_token";
-
-        /// <summary>login_hint などで示されたユーザが見つからない（CIBA Core 13）</summary>
-        /// <remarks>Open棟梁 の OAuth2AndOIDCConst に無いので、ここで定義する（#196）。</remarks>
-        public const string unknown_user_id = "unknown_user_id";
-
         /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2 / RFC 6750 3.1）</summary>
         /// <param name="err">error / error_description を持つ辞書</param>
         /// <returns>HTTP ステータス（invalid_client / invalid_token は 401、それ以外は 400）</returns>
@@ -2304,7 +2297,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.TryGetValue(OAuth2AndOIDCConst.error, out error);
             }
 
-            if (error == OAuth2AndOIDCConst.invalid_client || error == CmnEndpoints.invalid_token)
+            if (error == OAuth2AndOIDCConst.invalid_client || error == OAuth2AndOIDCConst.invalid_token)
             {
                 return 401;
             }
