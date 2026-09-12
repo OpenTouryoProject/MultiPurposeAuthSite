@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         JWK Set の取得を追加（拡張仕様のテスト）
+//*  2026/09/11  玄人 幸道         scope を登録した TestClient5 を追加（#198 の後半）
+//*  2026/09/11  玄人 幸道         トークンの更新・失効・問い合わせ（RefreshAsync / RevokeAsync / IntrospectAsync）を、テスト クラスから移す
 //**********************************************************************************
 
 using System;
@@ -63,6 +65,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>CIBA 用</summary>
         public const string TestClient4 = "TestClient4";
+
+        /// <summary>登録の scope で、要求してよいスコープを制限したクライアント（#198）</summary>
+        public const string TestClient5 = "TestClient5";
     }
 
     /// <summary>クライアントの登録内容（テストから参照する分だけ）</summary>
@@ -257,6 +262,59 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return await ExchangeCodeAsync(client, registration, authz.Code, registration.RedirectUri);
+        }
+
+        /// <summary>grant_type=refresh_token でトークンを取り直す</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="registration">認証に使うクライアント</param>
+        /// <param name="refreshToken">refresh_token</param>
+        /// <returns>JsonResponse</returns>
+        public static Task<JsonResponse> RefreshAsync(
+            IdPClient client, ClientRegistration registration, string refreshToken)
+        {
+            return client.TokenAsync(new Dictionary<string, string>()
+            {
+                { "grant_type", "refresh_token" },
+                { "refresh_token", refreshToken },
+                { "client_id", registration.ClientId },
+                { "client_secret", registration.ClientSecret }
+            });
+        }
+
+        /// <summary>トークンを失効させる（POST /revoke）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="registration">認証に使うクライアント</param>
+        /// <param name="token">失効させるトークン</param>
+        /// <param name="tokenTypeHint">token_type_hint（null なら送らない）</param>
+        /// <returns>JsonResponse</returns>
+        public static Task<JsonResponse> RevokeAsync(
+            IdPClient client, ClientRegistration registration, string token, string tokenTypeHint)
+        {
+            return client.RevokeAsync(new Dictionary<string, string>()
+            {
+                { "token", token },
+                { "token_type_hint", tokenTypeHint },
+                { "client_id", registration.ClientId },
+                { "client_secret", registration.ClientSecret }
+            });
+        }
+
+        /// <summary>トークンを問い合わせる（POST /introspect）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="registration">認証に使うクライアント（null なら認証しない）</param>
+        /// <param name="token">問い合わせるトークン</param>
+        /// <param name="tokenTypeHint">token_type_hint（null なら送らない）</param>
+        /// <returns>JsonResponse</returns>
+        public static Task<JsonResponse> IntrospectAsync(
+            IdPClient client, ClientRegistration registration, string token, string tokenTypeHint)
+        {
+            return client.IntrospectAsync(new Dictionary<string, string>()
+            {
+                { "token", token },
+                { "token_type_hint", tokenTypeHint },
+                { "client_id", registration == null ? null : registration.ClientId },
+                { "client_secret", registration == null ? null : registration.ClientSecret }
+            });
         }
 
         /// <summary>

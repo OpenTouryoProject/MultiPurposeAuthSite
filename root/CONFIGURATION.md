@@ -92,6 +92,17 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 > **`ON` にしただけでは、動きは変わらない。**
 > 環境変数が定義されていなければ、設定ファイルの値が使われる。
 
+### `FcmOutboxDirectory` — プッシュ通知の送信箱（テスト用）
+
+**本番では空のままにする。** 設定すると、サーバはプッシュ通知（CIBA、2FA のモバイル アプリ）を FCM に送らず、
+このディレクトリに JSON ファイルとして書く。E2E テストが、認証デバイスの代わりにそれを読む（#196）。
+送信箱を使うときは、Firebase の資格情報（`FirebaseServiceAccountKey`）を読まない。
+
+`root/programs/Tests/test.ps1 -Launch` が、上の `FxContainerization` の仕組みで、**環境変数として**サイトごとに設定する
+（`Tests/E2ETests/Result/fcm/core`・`…/netfx`）。構成ファイルに書く必要は無い。
+
+> **ファイルには、device_token や 2FA のコードがそのまま書かれる。**
+
 ## 3. net48 — `app.config`
 
 **`Web.config` から取り込まれる外部 `appSettings` ファイルである。**
@@ -143,7 +154,33 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 | `TestClient2` | FAPI2（Request Object を使う） |
 | `TestClient3` | Device Authorization Grant。**`client_secret` を持たない**（パブリック クライアント） |
 | `TestClient4` | CIBA |
+| `TestClient5` | 登録の `scope` で、要求してよいスコープを制限した例（#198、E2E テスト用） |
 | `MVC_Sample` ほか | 絶対 URL の `redirect_uri` を持つサンプル |
+
+### `scope` — 要求してよいスコープ（任意）
+
+**クライアントごとに、発行してよいスコープを制限する。** RFC 7591 §2 の client metadata と同じく、
+スペース区切りで並べる。
+
+```json
+"scope": "openid profile email"
+```
+
+発行するスコープは、次の 3 つをすべて満たすものになる。
+
+1. クライアントが要求した
+2. Discovery の `scopes_supported` にある（認可サーバが扱う）
+3. 登録の `scope` にある
+
+| 登録 | 扱い |
+|---|---|
+| **項目が無い** | 3 は見ない（`scopes_supported` の範囲だけ）。**既存の登録はこのまま動く** |
+| 空文字列 | どのスコープも許さない |
+
+要求を拒否（`invalid_scope`）するのではなく、許されないスコープを外して発行する。
+外したときは、トークン応答の `scope` に実際に発行したものを返す（RFC 6749 §5.1）。
+
+> `CreateClientsIdentity` はこの項目を出力しない。必要なクライアントにだけ、手で足す。
 
 ### `redirect_uri` の記号
 

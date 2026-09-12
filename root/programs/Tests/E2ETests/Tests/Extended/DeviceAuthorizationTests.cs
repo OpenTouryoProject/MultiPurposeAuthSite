@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-4.5 の Skip を解除し、EX-4.7 を追加（#199）
+//*  2026/09/11  玄人 幸道         /device_authz の要求を IdPClient.DeviceAuthorizationAsync へ移す
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -59,9 +60,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <summary>grant_type</summary>
         private const string GrantType = "urn:ietf:params:oauth:grant-type:device_code";
 
-        /// <summary>デバイス認可エンドポイント（DeviceAuthZAuthorizeEndpoint）</summary>
-        private const string AuthorizePath = "/device_authz";
-
         /// <summary>コンストラクタ</summary>
         /// <param name="output">ITestOutputHelper</param>
         public DeviceAuthorizationTests(ITestOutputHelper output) : base(output)
@@ -74,7 +72,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <returns>JsonResponse</returns>
         private static Task<JsonResponse> StartAsync(IdPClient client, string clientId)
         {
-            return client.PostJsonAsync(AuthorizePath, new Dictionary<string, string>()
+            return client.DeviceAuthorizationAsync(new Dictionary<string, string>()
             {
                 { "client_id", clientId },
                 { "scope", "profile email" }
@@ -114,7 +112,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
 
                 r.Target("client_name=" + KnownClients.TestClient3 + "（device モード、client_secret なし）");
-                r.Step("POST " + AuthorizePath + " に client_id と scope を送る");
+                r.Step("POST /device_authz に client_id と scope を送る");
 
                 JsonResponse res = await StartAsync(client, reg.ClientId);
 
@@ -186,7 +184,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
 
                 r.Target("client_name=" + KnownClients.TestClient3);
-                r.Step("(1) 機器 : POST " + AuthorizePath + " で device_code を得る");
+                r.Step("(1) 機器 : POST /device_authz で device_code を得る");
 
                 JsonResponse start = await StartAsync(client, reg.ClientId);
                 string deviceCode = start.String("device_code");
@@ -227,11 +225,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Target("client_name=" + KnownClients.TestClient3
                     + " / 承認するユーザ = " + TestEnv.TestUserName);
-                r.Step("(1) 機器 : POST " + AuthorizePath + " で device_code と user_code を得る");
+                r.Step("(1) 機器 : POST /device_authz で device_code と user_code を得る");
                 r.Step("(2) ユーザ : サインインした端末で /device_verify を開き、user_code を入力して許可する");
                 r.Step("(3) 機器 : grant_type=device_code でトークンを要求する");
                 r.Note("このテストでは 1 つの HTTP クライアントが両方の役を務める。"
-                    + "機器側の要求（" + AuthorizePath + " と /token）は Cookie に依存しないので、"
+                    + "機器側の要求（/device_authz と /token）は Cookie に依存しないので、"
                     + "役の区別には影響しない。");
 
                 JsonResponse start = await StartAsync(client, reg.ClientId);
@@ -390,7 +388,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     "RFC 8628 §3.1 / RFC 6749 §5.2（invalid_client）/ #193");
 
                 r.Target("client_id = 登録されていない値");
-                r.Step("POST " + AuthorizePath + " に、登録されていない client_id を送る");
+                r.Step("POST /device_authz に、登録されていない client_id を送る");
 
                 JsonResponse res = await StartAsync(client, "00000000000000000000000000000000");
 

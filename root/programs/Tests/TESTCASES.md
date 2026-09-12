@@ -196,6 +196,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーの返し方
   - redirect_uri を信頼できない以上、そこへエラーを返さないのが正しい（RFC 6749 §4.1.2.1）。画面で知らせる形は妥当。
 
+## TC-1.4 未定義のスコープを要求したときの扱い
+
+| | |
+|---|---|
+| 観点 | 認可サーバは、未定義のスコープを **invalid_scope で拒否するか、無視して認めた分だけを返すか**のいずれかを選べる（RFC 6749 §3.3）。どちらを選ぶにせよ、**発行するスコープは、認可サーバ自身がDiscovery で宣言した scopes_supported の範囲に収まるべきである。**宣言外の文字列をそのまま載せると、スコープ文字列で認可するリソース サーバを、クライアントが任意の値で騙せる余地が生まれる。 |
+| 根拠 | RFC 6749 §3.3（発行スコープは要求と異なってよい）/ §4.1.2.1（invalid_scope） / RFC 8414 §2（scopes_supported） |
+| テスト | `TC0104_未定義のスコープの扱い` |
+
+**手順**
+
+1. GET /authorize に scope="openid email bogus_scope_not_defined" を指定する（3 つ目は scopes_supported に無い）
+
+**検証（合否を判定する）**
+
+- トークンが発行される
+- 発行されたスコープが scopes_supported の範囲に収まる
+
+**観測（判定しない）**
+
+- 認可の段階で拒否したか
+  - 受理したので、発行されたトークンのスコープを見る。
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
 ## TC-1.5 アクセス トークンの exp と expires_in が整合する
 
 | | |
@@ -547,7 +573,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - 拒否のしかた
-  - OIDC Core §5.3.3 は 401 と WWW-Authenticate を求める（#196）。
+  - OIDC Core §5.3.3 / RFC 6750 §3.1 は 401 と WWW-Authenticate を求める（#196 で対応。RT-196.6 で検証）。
 
 ## TC-6.5 UserInfo が、要求したスコープに応じた属性を返す
 
@@ -887,7 +913,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **観測（判定しない）**
 
 - 拒否のしかた
-  - RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196）。
+  - RFC 7662 §2.3 は、認証に失敗したら 401 を返すとしている（#196 で対応。RT-196.11 で検証）。
 
 ## EX-3.7 token_type_hint が実際の種類と違っていても、答えられる
 
@@ -1335,6 +1361,70 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - トークンを発行しない
 
+## EX-8.1 認証デバイスで許可すると、クライアントはトークンを取得できる
+
+| | |
+|---|---|
+| 観点 | CIBA の本筋。ユーザは、クライアントの画面ではなく**手元の認証デバイス**で承認する。承認までは authorization_pending を返し、**承認した後にだけトークンを出す**こと。プッシュ通知は、登録した端末に、要求の binding_message を載せて届くこと。 |
+| 根拠 | CIBA Core §7（認証リクエスト）/ §10（ポーリング）/ §11（authorization_pending）/ #196 |
+| テスト | `EX0801_認証デバイスで許可するとクライアントはトークンを取得できる` |
+
+**手順**
+
+1. ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）
+1. クライアント : CIBA の認証リクエストを送る（/ros に登録 → POST /ciba_authz）
+1. サーバ → 認証デバイス : プッシュ通知を受け取る（送信箱）
+1. クライアント : 承認の前にポーリングする
+1. ユーザ : 認証デバイスで「許可」を押す（POST /ciba_result、result=true）
+1. クライアント : もう一度ポーリングする
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- 認証リクエスト : HTTP 200
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- binding_message が載る
+- authorization_pending が返る
+- トークンを出さない
+- 返答 : HTTP 200
+- 返答 : 本文は OK
+- access_token が返る
+
+**観測（判定しない）**
+
+- id_token
+  - CIBA Core は、成功のトークン応答に id_token を含めるとしている。
+
+## EX-8.2 認証デバイスで拒否すると、クライアントには access_denied を返す
+
+| | |
+|---|---|
+| 観点 | ユーザが身に覚えのない要求を**手元で断れる**ことが、CIBA の安全性の要。拒否した要求で、トークンが出てはならない。 |
+| 根拠 | CIBA Core §11（access_denied）/ #196 |
+| テスト | `EX0802_認証デバイスで拒否するとaccess_denied` |
+
+**手順**
+
+1. ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）
+1. クライアント : CIBA の認証リクエストを送る
+1. サーバ → 認証デバイス : プッシュ通知を受け取る（送信箱）
+1. ユーザ : 認証デバイスで「拒否」を押す（POST /ciba_result、result=false）
+1. クライアント : ポーリングする
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- 返答 : HTTP 200
+- 返答 : 本文は OK
+- access_denied が返る
+- トークンを出さない
+
 # RT. 個別 Issue の回帰
 
 ## RT-182.1 expires_in が 0 にならない
@@ -1463,7 +1553,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **HTTP ステータス自体は 200 のまま**である（RFC 6749 §5.2 は 400 / 401 を求める）。これは #196 で別途扱う。
+- HTTP ステータスは、#196 で 400 / 401 に直した（RT-196.1 〜 196.4 で検証）。
 
 ## RT-186.1 認可時と同じ redirect_uri なら成功する（ケース A）
 
@@ -1683,6 +1773,484 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - id_token に nonce クレームがある
 - 送った値と完全一致する
 
+## RT-196.1 /token : クライアント認証の失敗（client_secret_post）は HTTP 401
+
+| | |
+|---|---|
+| 観点 | invalid_client は、要求の中身ではなく**誰が要求したか**の失敗。400 と区別されていれば、クライアントは「資格情報を見直す」と判断できる。 |
+| 根拠 | RFC 6749 §5.2（invalid_client は 401 を返してよい）/ #196 |
+| テスト | `RT196_01_tokenでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials と誤った client_secret をフォームで送る
+
+**検証（合否を判定する）**
+
+- 誤った client_secret : HTTP 401 で返る
+- 誤った client_secret : 本文は error を含む JSON のまま
+- 誤った client_secret : error
+
+**観測（判定しない）**
+
+- WWW-Authenticate
+  - フォームで認証を試みた場合は任意。付けると、受け付ける認証方式をクライアントに示せる。
+
+## RT-196.2 /token : Authorization ヘッダでの認証の失敗は、HTTP 401 と WWW-Authenticate
+
+| | |
+|---|---|
+| 観点 | Authorization ヘッダ（client_secret_basic）で認証を試みたクライアントには、**401 と、同じ方式の WWW-Authenticate を必ず返す**。HTTP 認証の約束事であり、ここを外すと汎用の HTTP クライアントが認証の失敗と認識できない。 |
+| 根拠 | RFC 6749 §5.2（Authorization ヘッダで認証した場合は 401 と WWW-Authenticate が MUST） / §2.3.1 / #196 |
+| テスト | `RT196_02_tokenでBasic認証の失敗は401とWWW_Authenticate` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials を送り、client_id と誤った client_secret を Authorization: Basic で渡す
+
+**検証（合否を判定する）**
+
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- WWW-Authenticate が Basic 方式を示す
+
+## RT-196.3 /token : クライアント認証以外のエラーは HTTP 400
+
+| | |
+|---|---|
+| 観点 | 要求の中身の誤り（無効な refresh_token、grant_type の欠落・未知の値）は 400。**正しく認証したクライアントの要求は、401 にしない**（資格情報の問題と取り違えさせない）。 |
+| 根拠 | RFC 6749 §5.2（エラーは 400）/ #196 |
+| テスト | `RT196_03_tokenでそれ以外のエラーは400` |
+
+**手順**
+
+1. 存在しない refresh_token で更新する
+1. grant_type を付けずに送る
+1. 未知の grant_type を送る
+
+**検証（合否を判定する）**
+
+- 存在しない refresh_token : HTTP 400 で返る
+- 存在しない refresh_token : 本文は error を含む JSON のまま
+- 存在しない refresh_token : error
+- grant_type なし : HTTP 400 で返る
+- grant_type なし : 本文は error を含む JSON のまま
+- 未知の grant_type : HTTP 400 で返る
+- 未知の grant_type : 本文は error を含む JSON のまま
+
+**観測（判定しない）**
+
+- error の値（grant_type なし / 未知）
+  - RFC 6749 §5.2 では、欠落は invalid_request、未知の値は unsupported_grant_type が相当する。本 Issue（HTTP ステータス）の範囲外なので、値は判定しない。
+
+## RT-196.4 /token : 成功は HTTP 200 のまま（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.1 〜 196.3 の対照。** エラーの返し方を変えたことで、成功の応答まで変わっていないことを確かめる（Basic 認証の成功も含む）。 |
+| 根拠 | RFC 6749 §5.1（成功は 200）/ #196 |
+| テスト | `RT196_04_tokenの成功は200のまま` |
+
+**手順**
+
+1. client_secret_post（フォーム）で client_credentials を送る
+1. client_secret_basic（Authorization ヘッダ）で同じ要求を送る
+
+**検証（合否を判定する）**
+
+- フォーム : HTTP 200
+- フォーム : access_token が返る
+- Basic : HTTP 200
+- Basic : access_token が返る
+
+## RT-196.5 /userinfo : Bearer トークンの無い要求は、HTTP 401 と WWW-Authenticate: Bearer（エラー コードなし）
+
+| | |
+|---|---|
+| 観点 | トークンを付け忘れた（または別の方式で認証しようとした）クライアントに、**Bearer トークンが要ることを、HTTP の約束事で伝える。**認証情報が無いだけなので、エラー コードは付けない。 |
+| 根拠 | RFC 6750 §3 / §3.1（認証情報の無い要求にはエラー情報を含めない）/ OIDC Core §5.3.3 / #196 |
+| テスト | `RT196_05_userinfoでトークン無しは401とBearerの要求` |
+
+**手順**
+
+1. Authorization ヘッダを付けずに GET /userinfo を送る
+1. Bearer ではなく Basic 方式の Authorization ヘッダで GET /userinfo を送る
+1. 観測 : 方式だけで値の無い Authorization ヘッダ（Bearer のみ）で GET /userinfo を送る
+
+**検証（合否を判定する）**
+
+- ヘッダ無し : HTTP 401 で返る
+- ヘッダ無し : WWW-Authenticate が Bearer 方式を示す
+- ヘッダ無し : WWW-Authenticate にエラー コードを付けない
+- ヘッダ無し : 本文に、エラー情報もユーザ情報も含めない
+- Basic 方式 : HTTP 401 で返る
+- Basic 方式 : WWW-Authenticate が Bearer 方式を示す
+
+**観測（判定しない）**
+
+- 値の無い Bearer
+  - Open棟梁 の AuthenticationHeader.GetCredentials は、方式の後ろの値を確かめずに読む。値が無いと例外になり、HTTP 500 になり得る（#196 の範囲外）。
+
+## RT-196.6 /userinfo : 無効なトークンは、HTTP 401 と error="invalid_token"
+
+| | |
+|---|---|
+| 観点 | 壊れた・改竄された・失効したトークンは、**クライアントが取り直すべき**トークン。401 と invalid_token で伝えれば、クライアントは refresh_token での更新や再認可に進める。以前は invalid_request（400 に当たるコード）を HTTP 200 で返していた。 |
+| 根拠 | RFC 6750 §3.1（invalid_token は 401）/ OIDC Core §5.3.3 / #196 |
+| テスト | `RT196_06_userinfoで無効なトークンは401とinvalid_token` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. JWT でない文字列を Bearer トークンとして送る
+1. ペイロードを書き換えた（署名はそのままの）トークンを送る
+1. トークンを失効させてから送る
+
+**検証（合否を判定する）**
+
+- JWT でない文字列 : HTTP 401 で返る
+- JWT でない文字列 : 本文は error を含む JSON のまま
+- JWT でない文字列 : error
+- JWT でない文字列 : WWW-Authenticate が Bearer 方式を示す
+- JWT でない文字列 : WWW-Authenticate に error="invalid_token" が付く
+- 改竄したトークン : HTTP 401 で返る
+- 改竄したトークン : 本文は error を含む JSON のまま
+- 改竄したトークン : error
+- 改竄したトークン : WWW-Authenticate が Bearer 方式を示す
+- 改竄したトークン : WWW-Authenticate に error="invalid_token" が付く
+- 失効させたトークン : HTTP 401 で返る
+- 失効させたトークン : 本文は error を含む JSON のまま
+- 失効させたトークン : error
+- 失効させたトークン : WWW-Authenticate が Bearer 方式を示す
+- 失効させたトークン : WWW-Authenticate に error="invalid_token" が付く
+
+## RT-196.7 /userinfo : 有効なトークンでの成功は HTTP 200 のまま（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.5 / 196.6 の対照。** エラーの返し方を変えたことで、成功の応答（ユーザ情報の JSON）まで変わっていないことを確かめる。 |
+| 根拠 | OIDC Core §5.3.2（成功は 200 と JSON）/ #196 |
+| テスト | `RT196_07_userinfoの成功は200のまま` |
+
+**手順**
+
+1. 認可コード フローで access_token を得て、GET /userinfo を送る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- sub がテスト ユーザである
+- WWW-Authenticate を付けない
+
+## RT-196.8 /revoke : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）
+
+| | |
+|---|---|
+| 観点 | 失効も、トークン エンドポイントと同じくクライアントを認証してから行う。**認証の失敗は、要求の中身の誤り（400）と区別して 401 で返す。** |
+| 根拠 | RFC 7009 §2.2.1（エラーは RFC 6749 §5.2 のとおり）/ RFC 6749 §5.2 / #196 |
+| テスト | `RT196_08_revokeでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /revoke に token と、誤った client_secret をフォームで送る
+1. 同じ要求を、client_id と誤った client_secret を Authorization: Basic で渡して送る
+
+**検証（合否を判定する）**
+
+- 誤った client_secret（フォーム） : HTTP 401 で返る
+- 誤った client_secret（フォーム） : 本文は error を含む JSON のまま
+- 誤った client_secret（フォーム） : error
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- Basic : WWW-Authenticate が Basic 方式を示す
+
+## RT-196.9 /revoke : クライアント認証以外のエラーは HTTP 400
+
+| | |
+|---|---|
+| 観点 | token の欠落（invalid_request）や、他のクライアントのトークンの失効要求（invalid_grant）は、**正しく認証したクライアントの要求の誤り**なので 400。401 にしない。 |
+| 根拠 | RFC 7009 §2.1 / §2.2.1 / RFC 6749 §5.2 / #196 |
+| テスト | `RT196_09_revokeでそれ以外のエラーは400` |
+
+**手順**
+
+1. token を付けずに POST /revoke を送る（資格情報は正しい）
+1. MVC_Sample の access_token の失効を、TestClient の資格情報で要求する
+
+**検証（合否を判定する）**
+
+- token なし : HTTP 400 で返る
+- token なし : 本文は error を含む JSON のまま
+- token なし : error
+- 他のクライアントのトークン : HTTP 400 で返る
+- 他のクライアントのトークン : 本文は error を含む JSON のまま
+- 他のクライアントのトークン : error
+
+## RT-196.10 /revoke : 成功は HTTP 200 のまま（Authorization ヘッダでの認証を含む）
+
+| | |
+|---|---|
+| 観点 | **RT-196.8 / 196.9 の対照。** エラーの返し方を変えたことで、成功の応答まで変わっていないことを確かめる。フォームでの失効と、無効なトークンの失効が 200 であることは EX-2.1 / EX-2.5 が見ているので、ここでは Authorization ヘッダ（client_secret_basic）での失効を見る。 |
+| 根拠 | RFC 7009 §2.2（成功は 200）/ #196 |
+| テスト | `RT196_10_revokeの成功は200のまま` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. POST /revoke に token を送り、client_id と client_secret は Authorization: Basic で渡す
+1. 同じ access_token で /userinfo を叩く
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- error を返さない
+- 失効している（/userinfo が 401 を返す）
+
+## RT-196.11 /introspect : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）
+
+| | |
+|---|---|
+| 観点 | イントロスペクションは、トークンの中身（ユーザ・範囲）を明かす口。**認証できない問い合わせ元には、401 で断る。**資格情報を付けない問い合わせも、認証の失敗として扱う。 |
+| 根拠 | RFC 7662 §2.3（認証に失敗したら RFC 6749 §5.2 のとおり 401）/ §2.1 / #196 |
+| テスト | `RT196_11_introspectでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /introspect に token と、誤った client_secret をフォームで送る
+1. 同じ要求を、client_id と誤った client_secret を Authorization: Basic で渡して送る
+1. 資格情報を何も付けずに送る
+
+**検証（合否を判定する）**
+
+- 誤った client_secret（フォーム） : HTTP 401 で返る
+- 誤った client_secret（フォーム） : 本文は error を含む JSON のまま
+- 誤った client_secret（フォーム） : error
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- Basic : WWW-Authenticate が Basic 方式を示す
+- 資格情報なし : HTTP 401 で返る
+- 資格情報なし : 本文は error を含む JSON のまま
+- 資格情報なし : error
+
+## RT-196.12 /introspect : token の無い問い合わせは HTTP 400
+
+| | |
+|---|---|
+| 観点 | token は必須のパラメタ。欠けているのは要求の誤りなので 400（invalid_request）。**正しく認証したクライアントの要求は、401 にしない。** |
+| 根拠 | RFC 7662 §2.1（token は REQUIRED）/ RFC 6749 §5.2 / #196 |
+| テスト | `RT196_12_introspectでtokenが無ければ400` |
+
+**手順**
+
+1. token を付けずに POST /introspect を送る
+
+**検証（合否を判定する）**
+
+- token なし : HTTP 400 で返る
+- token なし : 本文は error を含む JSON のまま
+- token なし : error
+
+## RT-196.13 /introspect : 問い合わせへの答えは、active=true でも active=false でも HTTP 200（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.11 / 196.12 の対照。** 使えないトークンについての「使えない」（active=false）は、エラーではなく正常な答え。**4xx にしてはならない。**あわせて、Authorization ヘッダ（client_secret_basic）での問い合わせを見る。 |
+| 根拠 | RFC 7662 §2.2（active=false も正常な応答）/ §2.3 / #196 |
+| テスト | `RT196_13_introspectの答えはactiveによらず200` |
+
+**手順**
+
+1. 認可コード フローで access_token を得る
+1. その access_token を、Authorization: Basic で認証して問い合わせる
+1. 存在しないトークンを、同じく問い合わせる
+
+**検証（合否を判定する）**
+
+- 有効なトークン : HTTP 200
+- 有効なトークン : active が true
+- 無効なトークン : HTTP 200（エラーにしない）
+- 無効なトークン : active が false
+
+## RT-196.14 /device_authz : クライアント認証の失敗は HTTP 401（Authorization ヘッダなら WWW-Authenticate: Basic も）
+
+| | |
+|---|---|
+| 観点 | デバイス認可エンドポイントのクライアント認証は、トークン エンドポイントと同じ。**登録されていない client_id や、誤った資格情報は 401 で断る。**パブリック クライアントは client_id だけで識別する（#193）。 |
+| 根拠 | RFC 8628 §3.1（クライアント認証は RFC 6749 §3.2.1 のとおり）/ RFC 6749 §5.2 / #196 |
+| テスト | `RT196_14_device_authzでクライアント認証の失敗は401` |
+
+**手順**
+
+1. POST /device_authz に、登録されていない client_id をフォームで送る
+1. コンフィデンシャル クライアントの client_id と誤った client_secret を、Authorization: Basic で渡して送る
+
+**検証（合否を判定する）**
+
+- 登録されていない client_id : HTTP 401 で返る
+- 登録されていない client_id : 本文は error を含む JSON のまま
+- 登録されていない client_id : error
+- 誤った client_secret（Basic） : HTTP 401 で返る
+- 誤った client_secret（Basic） : 本文は error を含む JSON のまま
+- 誤った client_secret（Basic） : error
+- Basic : WWW-Authenticate が Basic 方式を示す
+- device_code を発行しない
+
+## RT-196.15 /device_authz : 成功は HTTP 200 のまま（対照）
+
+| | |
+|---|---|
+| 観点 | **RT-196.14 の対照。** エラーの返し方を変えたことで、成功の応答（device_code / user_code の JSON）まで変わっていないことを確かめる。 |
+| 根拠 | RFC 8628 §3.2（成功は 200 と JSON）/ #196 |
+| テスト | `RT196_15_device_authzの成功は200のまま` |
+
+**手順**
+
+1. POST /device_authz に client_id と scope を送る
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- device_code が返る
+- error を返さない
+
+## RT-196.16 /ciba_authz : request_uri が無い・存在しない要求は、HTTP 400 と invalid_request
+
+| | |
+|---|---|
+| 観点 | CIBA の認証リクエストは、事前に /ros へ登録した Request Object を request_uri で指す。**指していない・指す先が無い要求は、要求の誤りとして 400 で返す。** |
+| 根拠 | CIBA Core §13（invalid_request は 400）/ #196 |
+| テスト | `RT196_16_ciba_authzでrequest_uriの不備は400` |
+
+**手順**
+
+1. request_uri を付けずに POST /ciba_authz を送る
+1. 登録されていない request_uri を送る
+
+**検証（合否を判定する）**
+
+- request_uri なし : HTTP 400 で返る
+- request_uri なし : 本文は error を含む JSON のまま
+- request_uri なし : error
+- 存在しない request_uri : HTTP 400 で返る
+- 存在しない request_uri : 本文は error を含む JSON のまま
+- 存在しない request_uri : error
+
+## RT-196.17 /ciba_authz : 認証リクエストの中身の誤りは、HTTP 400 と CIBA Core §13 のエラー コード
+
+| | |
+|---|---|
+| 観点 | 以前は、これらの誤りで error が**空文字列**のまま返っていた（コードが無いと、クライアントは原因を判断できない）。CIBA Core §13 のコードを返し、HTTP ステータスはコードから決める（invalid_client 以外は 400）。 |
+| 根拠 | CIBA Core §7.1 / §13 / #196 |
+| テスト | `RT196_17_ciba_authzで要求の中身の誤りは400とCIBAのコード` |
+
+**手順**
+
+1. scope に openid が無い要求
+1. nbf が未来の要求（まだ有効になっていない）
+1. exp が過去の要求（期限切れ）
+
+**検証（合否を判定する）**
+
+- openid なし : HTTP 400 で返る
+- openid なし : 本文は error を含む JSON のまま
+- openid なし : error
+- nbf が未来 : HTTP 400 で返る
+- nbf が未来 : 本文は error を含む JSON のまま
+- nbf が未来 : error
+- exp が過去 : HTTP 400 で返る
+- exp が過去 : 本文は error を含む JSON のまま
+- exp が過去 : error
+
+## RT-196.18 /ciba_authz : login_hint のユーザが見つからない要求は、HTTP 400 と unknown_user_id
+
+| | |
+|---|---|
+| 観点 | CIBA では、認証を求める相手（ユーザ）を login_hint などで指す。**見つからないなら、それを unknown_user_id で伝える。**以前は error が空のまま返っていた。 |
+| 根拠 | CIBA Core §13（unknown_user_id は 400）/ #196 |
+| テスト | `RT196_18_ciba_authzでユーザが見つからなければ400とunknown_user_id` |
+
+**手順**
+
+1. login_hint に存在しないユーザを入れた要求を /ros に登録し、その request_uri を送る
+
+**検証（合否を判定する）**
+
+- ユーザ不明 : HTTP 400 で返る
+- ユーザ不明 : 本文は error を含む JSON のまま
+- ユーザ不明 : error
+
+**補足**
+
+- 成功経路（見つかったユーザへのプッシュ通知）は FCM に送るので、E2E では測らない。
+
+## RT-196.19 /SetDeviceToken : 失敗は本文 NG のまま、パラメタの不備は HTTP 400、トークンの不備は 401
+
+| | |
+|---|---|
+| 観点 | 認証デバイスを登録する口。以前は失敗でも HTTP 200 と NG だった。**本文（OK / NG）は認証デバイス（authentication_device）が見ているので変えず、ステータスだけを直す。**トークンの不備には、Bearer トークンが要ることを WWW-Authenticate で示す。 |
+| 根拠 | RFC 6750 §3 / #196 |
+| テスト | `RT196_19_SetDeviceTokenの失敗は400と401` |
+
+**手順**
+
+1. device_token を付けずに送る
+1. Authorization ヘッダを付けずに送る
+1. 無効なトークンで送る
+
+**検証（合否を判定する）**
+
+- device_token なし : HTTP 400 で返る
+- device_token なし : 本文は NG のまま
+- トークンなし : HTTP 401 で返る
+- トークンなし : 本文は NG のまま
+- トークンなし : WWW-Authenticate が Bearer 方式を示す
+- トークンなし : WWW-Authenticate にエラー コードを付けない
+- 無効なトークン : HTTP 401 で返る
+- 無効なトークン : 本文は NG のまま
+- 無効なトークン : WWW-Authenticate が Bearer 方式を示す
+- 無効なトークン : WWW-Authenticate に error="invalid_token" が付く
+
+**補足**
+
+- 成功（200 と OK）は EX-8 で見る。ここで登録すると、並行して動く CIBA のテストの宛先を書き換えてしまう。
+
+## RT-196.20 /ciba_result : 失敗は本文 NG のまま、トークンの不備は HTTP 401、パラメタの不備は 400
+
+| | |
+|---|---|
+| 観点 | 認証デバイスが、CIBA の要求に「許可 / 拒否」を返す口。以前は失敗でも HTTP 200 と NG だった。本文（OK / NG）は変えず、ステータスだけを直す。 |
+| 根拠 | RFC 6750 §3 / #196 |
+| テスト | `RT196_20_ciba_resultの失敗は400と401` |
+
+**手順**
+
+1. Authorization ヘッダを付けずに送る
+1. 無効なトークンで送る
+1. ユーザの有効なトークンで、auth_req_id を付けずに送る
+1. result が真偽値でない値で送る
+
+**検証（合否を判定する）**
+
+- トークンなし : HTTP 401 で返る
+- トークンなし : 本文は NG のまま
+- トークンなし : WWW-Authenticate が Bearer 方式を示す
+- トークンなし : WWW-Authenticate にエラー コードを付けない
+- 無効なトークン : HTTP 401 で返る
+- 無効なトークン : 本文は NG のまま
+- 無効なトークン : WWW-Authenticate が Bearer 方式を示す
+- 無効なトークン : WWW-Authenticate に error="invalid_token" が付く
+- auth_req_id なし : HTTP 400 で返る
+- auth_req_id なし : 本文は NG のまま
+- result が不正 : HTTP 400 で返る
+- result が不正 : 本文は NG のまま
+
+**補足**
+
+- 成功（200 と OK）は EX-8 で見る。ここで返答すると、並行して動く CIBA のテストの要求に結果を書き込んでしまう。
+
 ## RT-197.1 FAPI2 の自己テストが、PAR 登録から request_uri の認可リクエストまで到達する
 
 | | |
@@ -1755,13 +2323,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - エラーにならない
 - access_token が返る
 
-## RT-197.6 request_uri 経路の PKCE が、どう振る舞うかを測る
+## RT-197.5 request_uri 経路でも、redirect_uri が認可コードに紐付いている
 
 | | |
 |---|---|
-| 観点 | `code_challenge` も redirect_uri と同じ理由で記録されない。ただし**向きが逆で、素通りではなく拒否になる**（`code_verifier` を示しても `invalid_client`）。安全側に倒れてはいるが、**`request_uri` ＋ PKCE のパブリック クライアントは機能しない。**ここで必ず満たすべきなのは「誤った検証子でトークンが出ないこと」だけ。 |
-| 根拠 | RFC 7636 §4.6 / RFC 9101 / #197 |
-| テスト | `RT197_06_request_uri経路のPKCEの実測` |
+| 観点 | Request Object には redirect_uri が入っている。**クエリ文字列で渡したときと扱いが変わってはならない。**以前は `AuthorizationCodeProvider.Create` がクエリ文字列だけを読んだため、この経路では null が保存され、照合が素通りになっていた（#186 の対応が及んでいなかった。#197 で修正）。 |
+| 根拠 | RFC 6749 §4.1.3 / OIDC Core §3.1.3.1 / #197 |
+| テスト | `RT197_05_request_uri経路でもredirect_uriが照合される` |
+
+**手順**
+
+1. Request Object に正しい redirect_uri を入れて認可する
+1. https://attacker.example.com/callback を指定して交換する
+
+**検証（合否を判定する）**
+
+- トークンを発行しない
+- invalid_grant で拒否される
+
+## RT-197.6 request_uri 経路でも PKCE が働く（正しい検証子で通り、誤った検証子で拒否される）
+
+| | |
+|---|---|
+| 観点 | `code_challenge` は redirect_uri と同じく Request Object の中にある。以前は記録されず、正しい `code_verifier` を示しても `invalid_client` になっていた（安全側だが、`request_uri` ＋ PKCE のパブリック クライアントが機能しない）。**正しい検証子で通り、誤った検証子では通らないこと**の両方を確かめる。片方だけでは、常に拒否する実装も常に通す実装も見逃す。 |
+| 根拠 | RFC 7636 §4.5 / §4.6 / RFC 9101 / #197 |
+| テスト | `RT197_06_request_uri経路でもPKCEが働く` |
 
 **手順**
 
@@ -1772,12 +2358,96 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - 認可コードが発行される
+- 正しい code_verifier でトークンが発行される
 - 誤った code_verifier ではトークンを発行しない
 
-**観測（判定しない）**
+## RT-198.1 client_credentials : scopes_supported に無いスコープを発行しない
 
-- 正しい code_verifier のときの結果
-  - **拒否されるのが現状。** code_challenge が記録されていないため、PKCE 分岐がクライアントを認証できず invalid_client になる。安全側の失敗だが、この組み合わせは機能しない。
+| | |
+|---|---|
+| 観点 | 起票時の再現手順そのもの。宣言外の `admin` `superuser` `whatever` まで、認可サーバの署名付きで発行されていた。**宣言済みのものは残し、宣言外のものだけを外す**こと、そして**要求と異なる発行をしたことを、トークン応答の scope で伝える**ことを確かめる。 |
+| 根拠 | RFC 6749 §3.3（発行スコープは要求と異なってよい）/ §5.1（異なる場合は scope が必須） / RFC 8414 §2（scopes_supported）/ #198 |
+| テスト | `RT198_01_client_credentialsで宣言外のスコープを発行しない` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials、scope="roles userid auth admin superuser whatever" を送る
+
+**検証（合否を判定する）**
+
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
+## RT-198.2 password : scopes_supported に無いスコープを発行しない
+
+| | |
+|---|---|
+| 観点 | ユーザの文脈を持つトークンでも同じであること。RT-198.1（client_credentials）とはサーバ側の発行経路が別なので、個別に確かめる。 |
+| 根拠 | RFC 6749 §3.3 / §5.1 / #198 |
+| テスト | `RT198_02_passwordで宣言外のスコープを発行しない` |
+
+**手順**
+
+1. POST /token に grant_type=password、scope="email profile admin" を送る
+
+**検証（合否を判定する）**
+
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
+## RT-198.3 クライアントの登録（scope）の範囲に収める : client_credentials
+
+| | |
+|---|---|
+| 観点 | scopes_supported に載っていても、**そのクライアントに許していないスコープは発行しない。**登録の scope は、RFC 7591 §2 の client metadata と同じく、要求してよいスコープの一覧。許した範囲は残し、許していないもの（phone / roles）と宣言外のもの（admin）だけを外すことを確かめる。 |
+| 根拠 | RFC 6749 §3.3 / §5.1 / RFC 7591 §2（scope）/ #198 |
+| テスト | `RT198_03_登録したscopeの範囲に収める_client_credentials` |
+
+**手順**
+
+1. POST /token に grant_type=client_credentials、scope="profile email phone roles admin" を送る
+
+**検証（合否を判定する）**
+
+- 登録の scope に無いスコープを発行しない
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+
+**補足**
+
+- Discovery の scopes_supported = [profile, email, phone, address, auth, userid, roles, openid]
+
+## RT-198.4 クライアントの登録（scope）の範囲に収める : 認可コード フロー
+
+| | |
+|---|---|
+| 観点 | 認可エンドポイントを通る経路（CreateCodeInAuthZNRes）でも同じであること。この経路は device / CIBA も通る。openid は許しているので、id_token も発行されることを確かめる（絞り込みすぎていない）。 |
+| 根拠 | RFC 6749 §3.3 / OIDC Core §3.1.2.1 / RFC 7591 §2（scope）/ #198 |
+| テスト | `RT198_04_登録したscopeの範囲に収める_認可コード` |
+
+**手順**
+
+1. GET /authorize に scope="openid profile email phone roles" を付けて code を得る
+1. code をトークンに交換する
+
+**検証（合否を判定する）**
+
+- 登録の scope に無いスコープを発行しない
+- 発行されたスコープが scopes_supported の範囲に収まる
+- 宣言済みのスコープは落とさない（絞り込みすぎない）
+- トークン応答の scope が、発行したスコープと一致する
+- id_token が返る（openid は許している）
 
 # 保留中のテストケース（Skip）
 
@@ -1790,6 +2460,4 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
 | `RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする` | 未修正。実測（2026/09/09, net10.0）では、リダイレクトではなくエラー画面（HTTP 200）になる。 |
-| `RT197_05_request_uri経路でもredirect_uriが照合される` | 未修正（#197）。実測（2026/09/09, net10.0）では、誤った redirect_uri を送ってもトークンが発行される。 |
-| `TC0104_未定義のスコープの扱い` | 未修正（#198）。実測（2026/09/09, net10.0）では、scopes_supported に無い任意の文字列がそのまま発行される。 |
 

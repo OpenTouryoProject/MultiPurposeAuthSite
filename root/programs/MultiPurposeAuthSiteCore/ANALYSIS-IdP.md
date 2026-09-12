@@ -35,8 +35,8 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
-**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196（テスト整備後）、A-10 は #189 の残りに紐づく。
-セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186）が完了。
+**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196 で対応済み（全エンドポイント）、A-10 は #189 の残りに紐づく。
+セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。C-17（#198）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
 見出しの **✅ 修正済み** / **⚠️ 誤検出** で個別に追える（7 節も参照）。
@@ -218,9 +218,8 @@ REQUIRED としている**（RFC 6749 §4.1.3 の「認可リクエストに含�
 Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_uri` は null のままとなり、
 `CheckClientIdAndRedirectUri` の「認可リクエスト時、指定無し」経路に入る。影響しない。
 
-> **残っている穴（#197）:** `request_uri`（Request Object / JAR）の経路では、
-> `redirect_uri` が **JWT の中**にあって `queryString` には無いため、**紐付けが効かない。**
-> `CreateCodeInAuthZNRes` に実効値を渡す形にする必要がある。
+> **残っていた穴 — ✅ 修正済み（#197）:** `request_uri`（Request Object / JAR）の経路では、
+> `redirect_uri` が **JWT の中**にあって `queryString` には無いため、**紐付けが効かなかった。**
 >
 > E2E テストで実測した（2026/09/09, net10.0）。**推測ではない。**
 >
@@ -228,12 +227,31 @@ Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_ur
 > 誤った redirect_uri: HTTP 200 / keys=[access_token, expires_in, id_token, ...] / error=-
 > ```
 >
-> PKCE の `code_challenge` も同じ理由で拾えていないが、**向きは逆**で、
-> 記録されないため `code_verifier` を送ると `invalid_client` になる（素通りではなく拒否）。
-> 安全側だが、`request_uri` ＋ PKCE のパブリック クライアントは機能しない。
+> PKCE の `code_challenge` も同じ理由で拾えていなかったが、**向きは逆**で、
+> 記録されないため `code_verifier` を送ると `invalid_client` になっていた（素通りではなく拒否）。
+> 安全側だが、`request_uri` ＋ PKCE のパブリック クライアントは機能しなかった。
 >
-> 再現するテストが `root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs` にある
-> （`Skip` を外すと落ちる）。
+> ```csharp
+> // 修正前: CommonLibrary/TokenProviders/AuthorizationCodeProvider.cs（Create）
+> temp.Add(OAuth2AndOIDCConst.redirect_uri,          queryString[OAuth2AndOIDCConst.redirect_uri]);
+> temp.Add(OAuth2AndOIDCConst.code_challenge,        queryString[OAuth2AndOIDCConst.code_challenge]);
+> temp.Add(OAuth2AndOIDCConst.code_challenge_method, queryString[OAuth2AndOIDCConst.code_challenge_method]);
+> ```
+>
+> **対応（#197）:** 当時は「`CreateCodeInAuthZNRes` に実効値を渡す形にする」としたが、
+> 呼び出し側（両アプリの Controller）を変えずに済むよう、
+> **`AuthorizationCodeProvider.Create` の中で値の出どころを決める**形にした。
+> クエリ文字列に `request_uri` があれば Request Object を読み、その中の 3 つの値だけを使う（RFC 9101 §5）。
+> `request_uri` が無い、または Request Object が見つからないときは、従来どおりクエリ文字列から読む
+> （見つからないときの扱いは Controller と揃えた）。
+> 認可コード フローと Hybrid フローの両方がこの関数を通るので、1 か所で両方に効く。
+>
+> Request Object は Controller でも読んでいるが、`RequestObjectProvider.Get` は消費しない（C-11）ので読み直せる。
+> **C-11 でワンタイム化するときは、読む回数を 1 回にまとめる必要がある。**
+>
+> E2E テスト（`root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs`）:
+> `RT-197.5`（誤った `redirect_uri` → `invalid_grant`）/
+> `RT-197.6`（正しい検証子で通り、誤った検証子は拒否）。net48 / net10.0 の両方で確認した。
 
 ### A-6. 認可エンドポイントのエラー応答が独自形式 **[Core]** — **✅ 修正済み（#187）**
 
@@ -268,19 +286,142 @@ RFC 6749 §4.1.2.1 が要求するのは `error` / `error_description`、
 > 登録済みクライアントの `redirect_uri` にクエリ文字列を持つものが無く、
 > `CheckRedirectUri` は完全一致を要求するため、実機で試せなかった。単体テスト向き。
 
-### A-7. エラーの HTTP ステータスが 200 **[Core]** — **未対応（#196）**
+### A-7. エラーの HTTP ステータスが 200 **[Core]** — **✅ 修正済み（#196）**
 
 `/token` `/userinfo` `/revoke` `/introspect` はいずれも
 `Dictionary<string,string>` を返すだけなので、**エラーでも HTTP 200** になる。
 RFC 6749 §5.2 は **400（`invalid_client` は 401）**、
 OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める。
 
-**修正:** `IActionResult` に変えて `BadRequest(...)` / `Unauthorized(...)` を返す。
-**net48 版（`ApiController` / `HttpResponseMessage`）とは書き方が違うので、両系統で別実装になる。**
+**修正方針:** 戻り値を `IActionResult`（net10.0）/ `IHttpActionResult`（net48）に変え、エラーを 400 / 401 で返す。
+**両系統で書き方が違うので、別実装になる。** エンドポイントごとに分けて進める。
 
 > **#187 から #196 に分離した。** 戻り値の型変更を伴い両系統で実装が分かれること、
 > **HTTP ステータスはクライアントの期待そのもの**でテスト整備後に着手したいことが理由。
-> `/revoke` は RFC 7009 §2.2 により**エラーでも 200 が正**（例外）である点に注意。
+> `/revoke` は、成功と無効なトークンの場合に 200 を返す（RFC 7009 §2.2。#200 で対応済み）。
+> `invalid_client` などのエラーは、他と同じく 400 / 401 になる。
+
+**対応（#196 の 1 つ目 : `/token`）:**
+
+- エラーは 400、`invalid_client` は 401（RFC 6749 §5.2）。401 には `WWW-Authenticate: Basic realm="token"` を付ける
+  （Authorization ヘッダで認証を試みたクライアントには必須）
+- 判定は `CmnEndpoints.GetErrorStatusCode` に置き、両アプリで共用する（残りのエンドポイントでも使う）
+- 本文（`error` / `error_description` の JSON）は変えていない。成功は 200 のまま
+- **net48 版だけの落とし穴:** OWIN の Cookie 認証が、**401 の応答をログイン画面への 302 に書き換えていた。**
+  `StartupAuth` の `OnApplyRedirect` で、Web API（`WebApiConfig` に登録したルートと、`[Route]` の属性ルート）を
+  書き換えの対象から外した。対象は登録済みのルートから判定し、別の一覧は持たない（§8）。
+  画面の遷移は、従来どおりログイン画面へリダイレクトする
+- E2E テスト : `RT-196.1`（フォームでの認証失敗 → 401）/ `RT-196.2`（Basic 認証の失敗 → 401 と `WWW-Authenticate`）/
+  `RT-196.3`（その他のエラー → 400）/ `RT-196.4`（成功は 200 のまま）
+
+> **net48 版の既知の問題（Open棟梁 側）:** 401 の `WWW-Authenticate` に、`somescheme somechallenge` という仮の値が付け足される。
+> Open棟梁 の `MyBaseAsyncApiController.ChallengeAsync` が、雛形のまま残った `ResultWithChallenge` を無条件に使っているため。
+> 先頭の `Basic realm="token"` は正しく付くので、動作には支障が無い。
+
+**対応（#196 の 2 つ目 : `/userinfo`）:** RFC 6750 §3（OIDC Core §5.3.3 が参照）に合わせた。
+
+| 要求 | 修正前 | 修正後 |
+|---|---|---|
+| Bearer トークンが無い（ヘッダ無し、または Basic など他の方式） | 200 ＋ `invalid_request` | **401 ＋ `WWW-Authenticate: Bearer realm="userinfo"`、本文なし** |
+| 無効なトークン（JWT でない・改竄・失効・期限切れ） | 200 ＋ `invalid_request` | **401 ＋ `WWW-Authenticate: Bearer realm="userinfo", error="invalid_token", …`、本文は `invalid_token`** |
+| 有効なトークン | 200 ＋ ユーザ情報 | 変更なし |
+
+- **本文も変えた。** 無効なトークンの `error` は `invalid_request` から `invalid_token` に
+  （`invalid_request` は RFC 6750 §3.1 で 400 に当たるコードで、401 と食い違うため）。
+  トークンが無い要求には、エラー情報を返さない（§3.1 : 認証情報の無い要求にはエラー コードを含めない）
+- 判定（`invalid_token` は 401）と `WWW-Authenticate` の組み立ては `CmnEndpoints` に置き、両アプリで共用する
+  （`GetErrorStatusCode` / `GetBearerChallengeParameter`）。`invalid_token` は Open棟梁 の定数に無いので `CmnEndpoints` で定義した
+- 同梱のクライアント（Open棟梁 の `OAuth2AndOIDCClient.GetUserInfoAsync`）は、ステータスを見ずに本文を読むので影響しない
+- E2E テスト : `RT-196.5`（トークン無し・Basic 方式 → 401、エラー コードなし）/
+  `RT-196.6`（JWT でない・改竄・失効 → 401 と `invalid_token`）/ `RT-196.7`（成功は 200 のまま）
+
+**対応（#196 の 3 つ目 : `/revoke`）:** RFC 7009 §2.2.1（エラーは RFC 6749 §5.2 のとおり）に合わせた。
+
+| 要求 | 修正前 | 修正後 |
+|---|---|---|
+| 成功、無効なトークン（RFC 7009 §2.2） | 200 | 変更なし |
+| クライアント認証の失敗（`invalid_client`） | 200 | **401 ＋ `WWW-Authenticate: Basic realm="revoke"`** |
+| `token` の欠落（`invalid_request`）、他のクライアントのトークン（`invalid_grant`） | 200 | **400** |
+
+- 本文（`error` / `error_description` の JSON）は変えていない
+- `/token` のエラー応答（400 / 401 と `WWW-Authenticate: Basic`）を作る関数を、両アプリとも `/token` の region から
+  クラス末尾の共通の region に移し、`/revoke` と共用する（`realm` だけを変える）
+- E2E テスト : `RT-196.8`（フォーム・Basic での認証の失敗 → 401）/
+  `RT-196.9`（`token` なし・他のクライアントのトークン → 400）/ `RT-196.10`（Authorization ヘッダでの成功は 200 のまま）。
+  フォームでの成功と、無効なトークンの 200 は `EX-2.1` / `EX-2.5` が見ている
+
+**対応（#196 の 4 つ目 : `/introspect`）:** RFC 7662 §2.3（認証の失敗は RFC 6749 §5.2 のとおり 401）に合わせた。
+
+| 要求 | 修正前 | 修正後 |
+|---|---|---|
+| 問い合わせへの答え（`active=true`、および無効・他クライアントのトークンの `active=false`） | 200 | 変更なし（RFC 7662 §2.2 : `active=false` もエラーではない） |
+| クライアント認証の失敗・資格情報なし（`invalid_client`） | 200 | **401 ＋ `WWW-Authenticate: Basic realm="introspect"`** |
+| `token` の欠落（`invalid_request`） | 200 | **400** |
+
+- 本文（`error` / `error_description` の JSON）は変えていない
+- エラー応答は、`/token`・`/revoke` と共用の関数（クラス末尾の共通の region）で作る
+- E2E テスト : `RT-196.11`（フォーム・Basic・資格情報なし → 401）/ `RT-196.12`（`token` なし → 400）/
+  `RT-196.13`（`active=true` も `active=false` も 200）
+
+**対応（#196 の 5 つ目 : `/device_authz`）:** RFC 8628 §3.1（クライアント認証はトークン エンドポイントと同じ）に合わせ、
+エラーを RFC 6749 §5.2 のとおりに返す。
+
+| 要求 | 修正前 | 修正後 |
+|---|---|---|
+| 成功（`device_code` / `user_code` を発行） | 200 | 変更なし |
+| 登録されていない `client_id`、コンフィデンシャル クライアントの認証の失敗（`invalid_client`） | 200 | **401 ＋ `WWW-Authenticate: Basic realm="device_authz"`** |
+| フォームデータなし（`invalid_request`） | 200 | **400** |
+
+- 本文（`error` / `error_description` の JSON）は変えていない
+- エラー応答は、`/token`・`/revoke`・`/introspect` と共用の関数で作る
+- E2E テスト : `RT-196.14`（登録されていない `client_id`・Basic での認証の失敗 → 401）/ `RT-196.15`（成功は 200 のまま）。
+  フォームデータなし（400）は、空のフォームでは `client_id` なし（401）の経路に入るため、E2E では測っていない
+- `expires_in` / `interval` が文字列で返る点（`EX-4.1` で観測）は、HTTP ステータスの範囲外なので扱っていない
+
+**対応（#196 の 6 つ目 : `/ciba_authz`）:** CIBA Core §13（エラー コードごとに HTTP ステータスを定める）に合わせた。
+**エラー コードも直した。** 以前は、空文字列や `server_error` のまま返る経路があった。
+
+| 要求 | 修正前 | 修正後 |
+|---|---|---|
+| 成功（`auth_req_id` を発行） | 200 | 変更なし（ユーザへプッシュ通知を FCM で送るので、E2E では測っていない） |
+| `request_uri` が無い・存在しない | 200 ＋ `invalid_request` | **400** ＋ `invalid_request` |
+| `scope` に `openid` が無い | 200 ＋ `error` が空 | **400** ＋ `invalid_scope` |
+| `exp` / `nbf` の範囲外、必須のクレームの欠落 | 200 ＋ 空 / `server_error` | **400** ＋ `invalid_request` |
+| `login_hint` のユーザが見つからない | 200 ＋ 空 | **400** ＋ `unknown_user_id` |
+| 登録されていないクライアント（`iss`） | 200 ＋ 空 | **401** ＋ `invalid_client` |
+
+- `/ciba_authz` は、クライアントを HTTP 認証ではなく、`/ros` に登録した署名付きの要求（ES256）で識別する。
+  そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
+- 未登録のクライアントや必須のクレームの欠落は、`/ros` の登録（署名と必須項目の検証）で先に断られるので、
+  `/ciba_authz` では実際には起きにくい（防御として正しいコードにした）
+- `unknown_user_id` は Open棟梁 の定数に無いので `CmnEndpoints` で定義した。
+  クレームの欠落は、Open棟梁 の `CmnJwtToken.CheckClaims` が返す `server_error` を、`invalid_request` に読み替える（`GetCibaClaim`）
+- E2E テスト : `RT-196.16`（`request_uri` なし・存在しない → 400）/
+  `RT-196.17`（`openid` なし・`nbf` が未来・`exp` が過去 → 400 と CIBA のコード）/
+  `RT-196.18`（ユーザ不明 → 400 と `unknown_user_id`）。要求は、テスト基盤に足した ES256 の署名で組み立てる
+
+**対応（#196 の 7 つ目 : `/ciba_result`・`/SetDeviceToken`）:** 認証デバイス（`authentication_device`）が呼ぶ 2 つの口。
+
+| 要求 | 修正前 | 修正後 |
+|---|---|---|
+| 成功 | 200 ＋ `"OK"` | 変更なし |
+| Bearer トークンが無い | 200 ＋ `"NG"` | **401 ＋ `WWW-Authenticate: Bearer realm="…"`**、本文 `"NG"` |
+| 無効なトークン、ユーザの無いトークン | 200 ＋ `"NG"` | **401 ＋ `WWW-Authenticate: Bearer …, error="invalid_token"`**、本文 `"NG"` |
+| パラメタの不備（`device_token`・`auth_req_id` なし、`result` が真偽値でない） | 200 ＋ `"NG"` | **400**、本文 `"NG"` |
+
+- **本文（`"OK"` / `"NG"`）は変えていない。** 認証デバイスは、ステータスと本文の `"OK"` を見ているので、アプリの修正は要らない
+- **E2E テストでは、認証デバイスとプッシュ通知を置き換える。**
+  サーバは、構成の `FcmOutboxDirectory` が設定されていれば FCM に送らず、そのディレクトリにファイルとして書く（送信箱）。
+  設定するのは `test.ps1 -Launch`（環境変数）だけで、本番では空のまま。
+  テストは送信箱を読み、認証デバイスと同じ要求（`/SetDeviceToken`・`/ciba_result`）を送る。
+  これで、これまで測れなかった CIBA の成功経路（`EX-8.1` 許可 → トークン、`EX-8.2` 拒否 → `access_denied`）を測れる
+- E2E テスト : `RT-196.19`（`/SetDeviceToken` の 400 / 401）/ `RT-196.20`（`/ciba_result` の 400 / 401）
+
+> **別の問題（#196 の範囲外、未起票）:**
+> - `/ciba_result` は、`auth_req_id` がそのユーザ宛ての要求かを確かめていない。
+>   さらに、メモリのストアでは `CibaProvider.ReceiveResult` が `auth_req_id` を見ずに、
+>   **保留中の全ての CIBA 要求に結果を書き込む**（DB のストアは `WHERE AuthReqId` で絞っている）
+> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無い
 
 ### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 
@@ -384,7 +525,7 @@ token = Token.CmnAccessToken.ProtectFromPayload(
 E2E テスト: `EX-2.4` / `EX-2.5` / `EX-2.6`（ヒントの取り違え）/ `EX-3.2` / `EX-3.4` / `EX-3.7`（同）。
 
 > **残っている点:**
-> エラー応答の HTTP ステータス（400 / 401）は #196 で扱う。
+> エラー応答の HTTP ステータス（400 / 401）は #196 で対応した（`/revoke`・`/introspect` とも）。
 > `/introspect` の `token_type` には「見つかった種類」（`access_token` / `refresh_token`）を入れているが、
 > RFC 7662 §2.2 の `token_type` は `Bearer` などの型を指す。
 > また、メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
@@ -576,6 +717,9 @@ RFC 7009 §2.1 / RFC 7662 §2.1 はいずれも所有者確認を要求してい
 `CheckRefreshTokenOwner`（refresh_token / payload 用）を新設し、
 両アプリの `/revoke`・`/introspect` から呼ぶようにした。併せて Core 側の mTLS を有効化。
 
+> その後、#200 で `/revoke`・`/introspect` の本体を `CmnEndpoints.RevokeToken` / `IntrospectToken` に移したので、
+> この 2 つは現在、その中からだけ呼ぶ private 関数になっている。
+
 | エンドポイント | 所有者が違う場合 |
 |---|---|
 | `/revoke` | `invalid_grant` を返す（RFC 7009 §2.1 が検証を要求） |
@@ -704,6 +848,10 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 
 コード中のコメント「存続期間は短く、好ましくは一回限」がそのまま未実装項目になっている。
 
+> **注意（#197）:** `AuthorizationCodeProvider.Create` も、`redirect_uri` / PKCE の値を得るために
+> Request Object を読むようになった（Controller と合わせて 2 回読む）。
+> ワンタイム化するときは、読む回数を 1 回にまとめること（A-5 を参照）。
+
 ### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]**
 
 ```csharp
@@ -797,6 +945,49 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 > A-2（#183）を誤検出と判断する過程で見つかった。**A-2 の「真の問題」はこちら。**
 > #183 は close 済み。
 
+### C-17. 要求したスコープがそのまま発行される **[Lib]** — **✅ 修正済み（#198）**
+
+基本テストケース（TC-1.4）で見つかった。
+
+クライアントが要求した `scope` を、**そのままトークンに載せていた。**
+Discovery の `scopes_supported` にも無い任意の文字列（`admin` `superuser` など）が、認可サーバの署名付きで発行された。
+
+```
+要求: roles userid auth admin superuser whatever → 発行: roles, userid, auth, admin, superuser, whatever
+```
+
+RFC 6749 §3.3 は「発行するスコープは要求と異なってよい」とし、**発行するスコープを認可サーバが決める**ことを前提にしている。
+
+直すには 2 段階が要る。
+
+1. **認可サーバが扱わないスコープを発行しない**（`scopes_supported` の範囲に収める）
+2. **クライアントごとに、要求してよいスコープを制限する**（登録情報に、そのための項目が無い）
+
+**対応（#198 の前半）:**
+
+- `Helper.GetScopesSupported()` を新設し、Discovery の `scopes_supported` もこれを使うようにした（一覧を 1 か所に）
+- `Helper.FilterSupportedScopes()` で、一覧に無いスコープを外してから Claim にする。
+  発行の 6 経路（認可コード / Implicit / Hybrid / password / client_credentials / JWT bearer）が対象。
+  device と CIBA は認可コードの経路を通る。拒否（`invalid_scope`）ではなく外す（RFC 6749 §3.3 が認める）
+- 発行済みのトークンを読む経路（`CmnAccessToken.AddClaims`）は変えていない
+- `/token` の応答に `scope` を返すようにした。発行したスコープが要求と異なる場合は必須（RFC 6749 §5.1）
+
+**対応（#198 の後半）:**
+
+- クライアントの登録（`OAuth2ClientsInformation`）に、任意の項目 `scope` を設けた。
+  RFC 7591 §2 の client metadata と同じく、要求してよいスコープをスペース区切りで並べる
+- 発行するスコープは「要求した」かつ「`scopes_supported` にある」かつ「登録の `scope` にある」もの
+- **`scope` の登録が無いクライアントは制限しない**（`scopes_supported` の範囲だけ）。既存の登録を壊さないため
+- 空文字列を登録すると、どのスコープも許さない
+- 管理画面で登録したクライアント（saml2OAuth2Data）には、まだこの項目が無いので制限しない
+- 動作確認用に、雛形へ `TestClient5`（`scope = openid profile email`）を追加した
+
+E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）/ `RT-198.2`（password）/
+`RT-198.3`・`RT-198.4`（登録の `scope` による制限。client_credentials / 認可コード）。
+
+> **残っている点:** Implicit / Hybrid の応答（フラグメント）には、まだ `scope` を返していない
+> （RFC 6749 §4.2.2 は、要求と異なるなら必須）。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -867,20 +1058,21 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
 | ✅ **A-6 認可エラーを `error` / `error_description` / `state` に。URL 組み立てを共通化（C-6 も同時に解消）** #187 |
 | ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
-| A-7 エラーの HTTP ステータス（400 / 401） → **#196 に分離。テスト整備後** |
+| ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
 | A-10 discovery の項目整備 → **#189 の残り 13 項目** |
 
 ### フェーズ 2 — セキュリティの底上げ
 
 | 項目 |
 |---|
-| C-1 `/device_authz` のクライアント認証 |
-| C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化 |
+| ✅ **C-1 `/device_authz` のクライアント認証** #193 |
+| ✅ **C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化（net10.0 版）** #194 |
 | C-4 / C-5 / C-11 有効期限の実装（code / refresh_token / request object）＋ ワンタイム化 ＋ 再利用検知 |
 | C-8 検証アルゴリズムの固定 |
 | C-9 CORS をエンドポイント単位に |
 | C-10 `redirect_uri` の厳密比較、テスト用抜け道のロックダウン対象化 |
 | C-12 / C-13 Cookie 有効期限の設定反映、DataProtection の永続化 |
+| ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 
@@ -924,6 +1116,10 @@ Helper.AddClaim(identity, (string)tokenClaimSet[...aud], "", scopes, null,
   実ファイル（`appsettings.json` / `app.config`）は `.gitignore` 対象で秘密情報を含むため、
   **中身を報告・Issue・コミット メッセージに転記しない。**
 - **エンドポイントを足したら、net48 側の `App_Start/WebApiConfig.cs` / `RouteConfig.cs` にも登録が要る。**
+  **API は Web API（`WebApiConfig` のルート、または `[Route]`）として登録すること。**
+  net48 版では OWIN の Cookie 認証が、401 の応答をログイン画面への 302 に書き換える。
+  `StartupAuth.IsWebApiRequest` が Web API のルートから判定して書き換えの対象から外すので、
+  別の一覧を直す必要は無い。MVC の Controller に置いた API は対象にならない（A-7）。
 - ヘッダ コメントの更新履歴に 1 行追記する（Contributing.ja.md）。
 - **1 つの "プルリクエスト" に複数のタスクを混ぜない。** 本書のロードマップは
   そのまま Issue の単位になるよう項目を切ってある。

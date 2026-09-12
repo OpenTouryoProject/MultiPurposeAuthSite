@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：Jwt
-//* クラス日本語名  ：JWTのデコード（テスト用）
+//* クラス日本語名  ：JWTのデコードと、ハッシュ値の計算（テスト用）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -30,9 +30,11 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         c_hash / at_hash の計算を追加（拡張仕様のテスト）
+//*  2026/09/11  玄人 幸道         クラスの説明を中身に合わせる。BASE64URL を Base64Url へ、クレームの配列を読む Strings を追加
 //**********************************************************************************
 
 using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -40,10 +42,10 @@ using System.Text.Json;
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 {
     /// <summary>
-    /// JWTのヘッダ・ペイロードを取り出す。
+    /// JWTのヘッダ・ペイロードを取り出し、c_hash / at_hash に入るべき値を計算する。
     ///
-    /// 検証（署名・exp）は行わない。ブラックボックス テストとして、
-    /// 実装側のJWTライブラリを使わずに独立してデコードする
+    /// 検証（署名・exp）は行わない（署名の検証は Jwks）。ブラックボックス テストとして、
+    /// 実装側のJWTライブラリを使わずに、独立してデコード・計算する
     /// （同じコードで作って同じコードで読むと、型の誤りを検出できないため）。
     /// </summary>
     public static class Jwt
@@ -100,6 +102,26 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return (value.ValueKind == JsonValueKind.String) ? value.GetString() : value.ToString();
         }
 
+        /// <summary>配列のクレームを、文字列の一覧で返す（無い・配列でなければ空）</summary>
+        /// <param name="claimSet">クレーム セット</param>
+        /// <param name="name">クレーム名（scopes など）</param>
+        /// <returns>値の一覧（クレームの順のまま）</returns>
+        public static List<string> Strings(JsonElement claimSet, string name)
+        {
+            List<string> list = new List<string>();
+            JsonElement value;
+
+            if (claimSet.TryGetProperty(name, out value) && value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement item in value.EnumerateArray())
+                {
+                    list.Add((item.ValueKind == JsonValueKind.String) ? item.GetString() : item.ToString());
+                }
+            }
+
+            return list;
+        }
+
         /// <summary>
         /// c_hash / at_hash / s_hash に入るべき値を計算する。
         ///
@@ -117,8 +139,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 byte[] half = new byte[hash.Length / 2];
                 Array.Copy(hash, half, half.Length);
 
-                return Convert.ToBase64String(half)
-                    .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+                return Base64Url.Encode(half);
             }
         }
 
@@ -140,7 +161,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 throw new ArgumentException("JWTの形式ではありません（'.' が足りません）。", "jwt");
             }
 
-            byte[] json = FromBase64Url(parts[index]);
+            byte[] json = Base64Url.Decode(parts[index]);
 
             // JsonDocument は Dispose 後に無効になるため、
             // クローンした JsonElement を返す。
@@ -148,26 +169,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 return doc.RootElement.Clone();
             }
-        }
-
-        /// <summary>BASE64URL をデコードする</summary>
-        /// <param name="value">BASE64URL文字列</param>
-        /// <returns>バイト列</returns>
-        private static byte[] FromBase64Url(string value)
-        {
-            string temp = value.Replace('-', '+').Replace('_', '/');
-
-            switch (temp.Length % 4)
-            {
-                case 2:
-                    temp += "==";
-                    break;
-                case 3:
-                    temp += "=";
-                    break;
-            }
-
-            return Convert.FromBase64String(temp);
         }
     }
 }

@@ -30,14 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         署名鍵の読み込みを JwtBearerAssertion と共用（internal 化）
+//*  2026/09/11  玄人 幸道         署名と BASE64URL を JwsSigner / Base64Url へ移す（JwtBearerAssertion と共用）
+//*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（ES256 で署名）を作る CreateCiba を追加（#196）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
@@ -48,10 +46,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// 実装側の Touryo.Infrastructure.Framework.Authentication.RequestObject は使わない。
     /// 同じコードで作って同じコードで検証すると、
     /// 「サーバが何を受け取っているか」を確かめたことにならないため、
-    /// ここでは System.Security.Cryptography だけで RS256 の JWS を作る。
-    ///
-    /// 署名鍵は、テスト用クライアントが登録している jwk_rsa_publickey と対になる
-    /// SpRp_RsaPfxFilePath（構成ファイル）を使う。
+    /// 署名は JwsSigner（System.Security.Cryptography だけで RS256 の JWS を作る）で行う。
     /// </summary>
     public static class RequestObjectBuilder
     {
@@ -92,24 +87,47 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 }
             }
 
-            Dictionary<string, object> header = new Dictionary<string, object>()
+            return JwsSigner.SignRS256(client, payload);
+        }
+
+        /// <summary>
+        /// CIBA の認証リクエスト（ES256 で署名した Request Object）を作る。
+        ///
+        /// /ros は、client_notification_token を含む要求を CIBA として受け、
+        /// クライアントの jwk_ecdsa_publickey で検証する（RS256 の要求とは別の経路）。
+        /// **既定の login_hint は、存在しないユーザ。** 見つかったユーザへはプッシュ通知（FCM）を送るので、
+        /// テストがうっかり成功経路に入らないようにしている。
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id（iss に入れる）</param>
+        /// <param name="parameters">既定の値を上書きするクレーム</param>
+        /// <returns>JWS</returns>
+        public static string CreateCiba(
+            IdPClient client, string clientId, IDictionary<string, object> parameters)
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            Dictionary<string, object> payload = new Dictionary<string, object>()
             {
-                { "alg", "RS256" },
-                { "typ", "JWT" }
+                // CIBA Core 7.1.1 : 署名した認証リクエストのクレーム（/ros はこれらが揃っていることを確かめる）
+                { "iss", clientId },
+                { "aud", client.Target.BaseUrl },
+                { "iat", now },
+                { "nbf", now },
+                { "exp", now + 600 },
+                { "jti", Guid.NewGuid().ToString("N") },
+                { "scope", "openid" },
+                { "client_notification_token", Guid.NewGuid().ToString("N") },
+                { "binding_message", "E2E" },
+                { "login_hint", "unknown-user@example.invalid" }
             };
 
-            string signingInput =
-                ToBase64Url(JsonSerializer.SerializeToUtf8Bytes(header))
-                + "." + ToBase64Url(JsonSerializer.SerializeToUtf8Bytes(payload));
-
-            using (RSA rsa = LoadSigningKey(client))
+            foreach (KeyValuePair<string, object> p in parameters)
             {
-                byte[] signature = rsa.SignData(
-                    Encoding.UTF8.GetBytes(signingInput),
-                    HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-
-                return signingInput + "." + ToBase64Url(signature);
+                payload[p.Key] = p.Value;
             }
+
+            return JwsSigner.SignES256(client, payload);
         }
 
         /// <summary>
@@ -154,43 +172,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             // エンコードすると urn:oauth:request: の接頭辞を外せず、見つからない。
             // アプリ同梱の自己テスト（HomeController）も、そのまま連結している。
             return client.Target.Url("/authorize?request_uri=" + requestUri);
-        }
-
-        /// <summary>署名鍵（クライアントの秘密鍵）を読む（JwtBearerAssertion と共用）</summary>
-        /// <param name="client">IdPClient</param>
-        /// <returns>RSA</returns>
-        internal static RSA LoadSigningKey(IdPClient client)
-        {
-            string path = client.Config.Get("SpRp_RsaPfxFilePath");
-            string password = client.Config.Get("SpRp_RsaPfxPassword");
-
-            if (string.IsNullOrEmpty(path))
-            {
-                throw new InvalidOperationException(
-                    "SpRp_RsaPfxFilePath が構成ファイルにありません: " + client.Config.Path);
-            }
-
-            X509Certificate2 cert = X509CertificateLoader.LoadPkcs12FromFile(
-                path, password, X509KeyStorageFlags.Exportable);
-
-            RSA rsa = cert.GetRSAPrivateKey();
-
-            if (rsa == null)
-            {
-                throw new InvalidOperationException(
-                    "RSAの秘密鍵を取り出せませんでした: " + path);
-            }
-
-            return rsa;
-        }
-
-        /// <summary>BASE64URL にする</summary>
-        /// <param name="value">バイト列</param>
-        /// <returns>BASE64URL文字列</returns>
-        internal static string ToBase64Url(byte[] value)
-        {
-            return Convert.ToBase64String(value)
-                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
     }
 }

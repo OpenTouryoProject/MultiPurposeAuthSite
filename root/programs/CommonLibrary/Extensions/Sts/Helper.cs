@@ -37,6 +37,9 @@
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2021/06/02  西野 大介         テスト用 証明書 検証 無効化コード追加
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
+//*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行しないよう、一覧と絞り込みを追加（#198）
+//*  2026/09/11  玄人 幸道         クライアントの登録（scope）で、発行するスコープを絞る（#198 の後半）
+//*  2026/09/11  玄人 幸道         GetScopesSupported を Claim関連ヘルパ から scopes_supported の region へ移す
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1023,6 +1026,47 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region Client Scope
+
+        /// <summary>client_idから、要求してよいスコープ（登録の scope）を取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>スコープの一覧（登録が無ければ null ＝ 制限しない）</returns>
+        /// <remarks>
+        /// RFC 7591 2 の client metadata の scope と同じく、スペース区切りで登録する（#198）。
+        /// 空文字列を登録した場合は、空の一覧（＝ どのスコープも許さない）になる。
+        /// saml2OAuth2Data（管理画面で登録したクライアント）には、まだこの項目が無いので制限しない。
+        /// </remarks>
+        public List<string> GetClientScopes(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey("scope") && dic["scope"] != null)
+                {
+                    List<string> ret = new List<string>();
+
+                    foreach (string s in dic["scope"].Split(' '))
+                    {
+                        if (!string.IsNullOrEmpty(s) && !ret.Contains(s))
+                        {
+                            ret.Add(s);
+                        }
+                    }
+
+                    return ret;
+                }
+            }
+
+            // 登録が無い
+            return null;
+        }
+
+        #endregion
+
         #region Client Name
 
         #region GetClientName
@@ -1120,7 +1164,95 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region staticメソッド
 
+        #region scopes_supported
+
+        /// <summary>認可サーバが扱うスコープの一覧（Discovery の scopes_supported と同じもの）</summary>
+        /// <returns>スコープの一覧</returns>
+        /// <remarks>
+        /// Discovery の広告（CmnEndpoints.OpenIDConfig）と、発行時の絞り込み（FilterSupportedScopes）の
+        /// 両方で使う。別々に持つと一方だけ直してずれるので、ここ 1 か所で決める（#198）。
+        /// </remarks>
+        public static List<string> GetScopesSupported()
+        {
+            List<string> scopes = new List<string>()
+            {
+                OAuth2AndOIDCConst.Scope_Profile,
+                OAuth2AndOIDCConst.Scope_Email,
+                OAuth2AndOIDCConst.Scope_Phone,
+                OAuth2AndOIDCConst.Scope_Address,
+                OAuth2AndOIDCConst.Scope_Auth,
+                OAuth2AndOIDCConst.Scope_UserID,
+                OAuth2AndOIDCConst.Scope_Roles
+            };
+
+            // openid は OIDC が有効なときだけ
+            if (Config.EnableOpenIDConnect)
+            {
+                scopes.Add(OAuth2AndOIDCConst.Scope_Openid);
+            }
+
+            return scopes;
+        }
+
+        #endregion
+
         #region Claim関連ヘルパ
+
+        /// <summary>要求されたスコープのうち、認可サーバが扱うもの（scopes_supported）だけを残す</summary>
+        /// <param name="scopes">要求されたスコープ</param>
+        /// <returns>発行するスコープ</returns>
+        /// <remarks>
+        /// 以前は、要求されたスコープをそのままトークンに載せていた。
+        /// Discovery で宣言していない任意の文字列（admin など）も、認可サーバの署名付きで発行されていた（#198）。
+        /// RFC 6749 3.3 : 認可サーバは、要求されたスコープの一部または全部を無視してよい。
+        /// ここでは拒否（invalid_scope）ではなく、扱えないものを外す。空の要素と重複も外す。
+        /// クライアントごとの制限（#198 の後半）は、client_id を取る多重定義で行う。
+        /// </remarks>
+        public static IEnumerable<string> FilterSupportedScopes(IEnumerable<string> scopes)
+        {
+            List<string> supported = Helper.GetScopesSupported();
+            List<string> ret = new List<string>();
+
+            if (scopes == null)
+            {
+                return ret;
+            }
+
+            foreach (string s in scopes)
+            {
+                if (supported.Contains(s) && !ret.Contains(s))
+                {
+                    ret.Add(s);
+                }
+            }
+
+            return ret;
+        }
+
+        /// <summary>要求されたスコープのうち、認可サーバが扱い、かつクライアントに許されたものだけを残す</summary>
+        /// <param name="scopes">要求されたスコープ</param>
+        /// <param name="client_id">client_id（JWT bearer では iss）</param>
+        /// <returns>発行するスコープ</returns>
+        /// <remarks>
+        /// scopes_supported での絞り込み（#198 の前半）に加え、
+        /// クライアントの登録に scope があれば、その範囲にも収める（#198 の後半）。
+        /// 登録が無いクライアントは、既存の登録を壊さないよう、ここでは制限しない。
+        /// </remarks>
+        public static IEnumerable<string> FilterSupportedScopes(IEnumerable<string> scopes, string client_id)
+        {
+            List<string> ret = new List<string>();
+            List<string> permitted = Helper.GetInstance().GetClientScopes(client_id);
+
+            foreach (string s in Helper.FilterSupportedScopes(scopes))
+            {
+                if (permitted == null || permitted.Contains(s))
+                {
+                    ret.Add(s);
+                }
+            }
+
+            return ret;
+        }
 
         /// <summary>認証の場合クレームをフィルタリング</summary>
         /// <param name="scopes">フィルタ前のscopes</param>

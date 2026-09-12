@@ -110,6 +110,9 @@ OAuth2AuthorizationServerEndpointsRootURI
 OAuth2ClientEndpointsRootURI
 ```
 
+あわせて、プッシュ通知の送信箱 `FcmOutboxDirectory` を設定する（`Result/fcm/core`・`Result/fcm/netfx`）。
+サイトは FCM に送らずここへファイルを書き、テストが認証デバイスの代わりに読む（`EX-8`）。
+
 `appSettings` の `FxContainerization` が `ON` のとき、Open棟梁 は
 **設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。
 **キー名がそのまま環境変数名になる。** 接頭辞は付かない。
@@ -133,6 +136,7 @@ OAuth2ClientEndpointsRootURI
 | `MPAS_CORE_BASEURL` / `MPAS_NETFX_BASEURL` | 叩き先の URL |
 | `MPAS_CORE_CONFIG` / `MPAS_NETFX_CONFIG` | 構成ファイルのパス（`root/programs` からの相対） |
 | `MPAS_TESTUSER` | テスト ユーザ名 |
+| `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` | プッシュ通知の送信箱（`-Launch` が設定する。無ければ CIBA の `EX-8` は Skip） |
 
 `UserStoreType` は `mem` を想定している。テスト ユーザは初回アクセスで作られ、
 再起動で消えるので、テストの前後で状態を掃除する必要が無い。
@@ -157,7 +161,7 @@ OAuth2ClientEndpointsRootURI
 | `Tests/Basic/PasswordAndClientCredentialsTests.cs` | TC-4・TC-5 パスワード / クライアント資格情報 |
 | `Tests/Basic/OidcTests.cs` | TC-6 id_token の中身と署名 / alg:none の拒否 / UserInfo |
 
-**その次が `Tests/Extended/`。** 基本テストケースに含まれない、追加の仕様・拡張仕様（EX-1 〜 EX-7）。
+**その次が `Tests/Extended/`。** 基本テストケースに含まれない、追加の仕様・拡張仕様（EX-1 〜 EX-8）。
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
@@ -168,9 +172,14 @@ OAuth2ClientEndpointsRootURI
 | `Tests/Extended/HybridFlowTests.cs` | `EX-5` | OIDC Hybrid フロー（c_hash / at_hash） |
 | `Tests/Extended/ResponseModeTests.cs` | `EX-6` | response_mode（fragment / form_post / JARM） |
 | `Tests/Extended/JwtBearerTests.cs` | `EX-7` | JWT Bearer グラント（RFC 7523） |
+| `Tests/Extended/CibaTests.cs` | `EX-8` | CIBA（認証デバイスとプッシュ通知は、テストで置き換える） |
 
-CIBA と PAR / JAR は扱っていない。CIBA は ECDSA で署名した要求と通知の受け口が要り、
-PAR / JAR（`request_uri`）は RT-197 で測っている。
+PAR / JAR は、拡張仕様としては扱っていない（`request_uri` の経路は RT-197 で測っている）。
+
+CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッシュ通知を、テストで置き換える。**
+サイトは FCM に送らず送信箱（`FcmOutboxDirectory`）にファイルを書き、テストはそれを読んで、
+認証デバイスと同じ要求（`/SetDeviceToken`・`/ciba_result`）を送る。送信箱は `-Launch` のときだけ設定されるので、
+それ以外では `EX-8` は Skip する。認証リクエストのエラーの返し方は RT-196 で測っている（ES256 で署名した要求を `/ros` に登録する）。
 
 以下は、個別の Issue に対応する回帰テスト。
 
@@ -178,9 +187,11 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 |---|---|---|
 | `Tests/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
 | `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
-| `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
-| `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の実測 |
+| `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
+| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
+| `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
+| `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 
 **すべてのテストが `TestReport` で記録を残す。**
 識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。
@@ -191,13 +202,17 @@ PAR / JAR（`request_uri`）は RT-197 で測っている。
 |---|---|
 | `TestEnv.cs` | テスト対象（net10.0 版 / net48 版）と、その到達性 |
 | `AppConfig.cs` | `appsettings.json` / `app.config` の読み取り |
-| `IdPClient.cs` | サインイン、認可、トークン、UserInfo、自己テストの起動 |
-| `Flows.cs` | 認可コード フローの組み立て、クライアントの解決 |
-| `RequestObject.cs` | Request Object の組み立てと PAR への登録 |
-| `Jwt.cs` | JWT のデコード（検証はしない） |
+| `IdPClient.cs` | サインイン、認可、トークン、UserInfo、失効・問い合わせ、デバイス認可、CIBA、認証デバイスの代わりの要求、自己テストの起動 |
+| `FcmOutbox.cs` | プッシュ通知の送信箱（テスト用）の読み取り。認証デバイスの代わりに受け取る |
+| `Flows.cs` | 認可コード フローの組み立て、トークンの更新・失効・問い合わせ、クライアントの解決 |
+| `RequestObject.cs` | Request Object（CIBA の認証リクエストを含む）の組み立てと PAR への登録 |
+| `JwtBearerAssertion.cs` | JWT Bearer グラント（RFC 7523）の assertion の組み立て |
+| `JwsSigner.cs` | RS256 / ES256 の署名（Request Object・assertion・CIBA の要求で共用） |
+| `Jwt.cs` | JWT のデコード（検証はしない）と、c_hash / at_hash の計算 |
+| `Base64Url.cs` | BASE64URL の変換 |
 | `Jwks.cs` | JWK Set での署名検証、alg:none 化・改竄（テスト用） |
 | `TestReport.cs` | **テストの内容と結果を、それ自体で読める形に書き出す** |
-| `Html.cs` | リダイレクトしなかったときの画面の要約 |
+| `Html.cs` | リダイレクトしなかったときの画面の要約、form_post のフォームの解析 |
 | `Responses.cs` | 各エンドポイントの応答 |
 | `TargetTestBase.cs` | 両ターゲットに同じテストを流す基底クラス |
 
@@ -219,26 +234,20 @@ cd root
 - `RT-187.4`（`ErrorResponseTests`）
   未知の `response_type` が、リダイレクトではなくエラー画面（HTTP 200）になる。
   認可コードは発行されないので、安全側には倒れている。
-- `TC-1.4`（`Basic.CommonSecurityTests`、#198）
-  **要求した `scope` が、そのままトークンに載る。** 許可された一覧との突き合わせも、
-  クライアントごとの権限の確認も無い。`scopes_supported` に無い任意の文字列
-  （`admin` など）も、認可サーバの署名付きで発行される。
-- `RT-197.5`（`RequestObjectTests`、#197）
-  `request_uri`（JAR）経路では `redirect_uri` が認可コードに紐付かず、
-  **誤った `redirect_uri` を送ってもトークンが発行される。** #186 の対応が及んでいない。
 
 ## 分かっていること（実測）
 
-`request_uri` 経路について、net10.0 版で測った結果（#197）。
+`request_uri` 経路について測った結果（#197）。
 
-| | 実測 |
-|---|---|
-| 認可コードの発行 | できる |
-| `redirect_uri` の照合 | **効いていない。** 誤った値でもトークンが出る |
-| PKCE（`code_challenge`） | 記録されないため、`code_verifier` を送ると `invalid_client` になる（**素通りではなく拒否**） |
+| | 修正前（2026/09/09, net10.0） | 修正後（2026/09/11, net10.0 / net48） |
+|---|---|---|
+| 認可コードの発行 | できる | できる |
+| `redirect_uri` の照合 | **効いていない。** 誤った値でもトークンが出る | 誤った値は `invalid_grant` |
+| PKCE（`code_challenge`） | 記録されないため、`code_verifier` を送ると `invalid_client`（**素通りではなく拒否**） | 正しい検証子で通り、誤った検証子は `invalid_client` |
 
-いずれも `AuthorizationCodeProvider.Create` が、これらの値を
-**Request Object ではなくクエリ文字列から**読んでいることによる。
+修正前は、`AuthorizationCodeProvider.Create` がこれらの値を
+**Request Object ではなくクエリ文字列から**読んでいたことによる。
+#197 で、`request_uri` 経路では Request Object の値を使うように直した。
 
 ## 制約
 
@@ -251,4 +260,6 @@ cd root
 - 構成ファイルの既定では、net10.0 版と net48 版は同じ URL を指している。
   `-Launch` は環境変数で別のポートへ寄せるので**同時に測れる**が、
   手で立てるときは片方を別の URL にすること。
+- CIBA のテスト（`RT-196.16` 〜 `196.18`、`EX-8`）は、構成ファイルの `SpRp_EcdsaPfxFilePath`（ES256 の秘密鍵）で要求に署名する。
+  CIBA のクライアント（`TestClient4`）が登録している `jwk_ecdsa_publickey` と対になっていること。
   取り違えは検出して Skip する（[`../../TESTING.md`](../../TESTING.md) 5 節）。

@@ -29,11 +29,11 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/11  玄人 幸道         RefreshAsync を Flows へ、scopes の読み取りを Jwt.Strings へ移す
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -56,49 +56,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="output">ITestOutputHelper</param>
         public RefreshTokenTests(ITestOutputHelper output) : base(output)
         {
-        }
-
-        /// <summary>grant_type=refresh_token でトークンを取り直す</summary>
-        /// <param name="client">IdPClient</param>
-        /// <param name="reg">認証に使うクライアント</param>
-        /// <param name="refreshToken">refresh_token</param>
-        /// <returns>JsonResponse</returns>
-        internal static Task<JsonResponse> RefreshAsync(
-            IdPClient client, ClientRegistration reg, string refreshToken)
-        {
-            return client.TokenAsync(new Dictionary<string, string>()
-            {
-                { "grant_type", "refresh_token" },
-                { "refresh_token", refreshToken },
-                { "client_id", reg.ClientId },
-                { "client_secret", reg.ClientSecret }
-            });
-        }
-
-        /// <summary>access_token の scopes クレームを、並べ替えて 1 つの文字列にする</summary>
-        /// <param name="accessToken">access_token</param>
-        /// <returns>scopes（無ければ "(なし)"）</returns>
-        private static string ScopesOf(string accessToken)
-        {
-            JsonElement payload = Jwt.Payload(accessToken);
-            JsonElement scopes;
-
-            if (!payload.TryGetProperty("scopes", out scopes)
-                || scopes.ValueKind != JsonValueKind.Array)
-            {
-                return "(なし)";
-            }
-
-            List<string> list = new List<string>();
-
-            foreach (JsonElement s in scopes.EnumerateArray())
-            {
-                list.Add(s.ToString());
-            }
-
-            list.Sort(StringComparer.Ordinal);
-
-            return string.Join(" ", list);
         }
 
         /// <summary>EX-1.1 更新できる</summary>
@@ -130,7 +87,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) POST /token に grant_type=refresh_token を送る（scope は省略）");
 
-                JsonResponse second = await RefreshAsync(client, reg, first.RefreshToken);
+                JsonResponse second = await Flows.RefreshAsync(client, reg, first.RefreshToken);
 
                 r.Verify("エラーにならない", string.IsNullOrEmpty(second.Error),
                     "error なし",
@@ -151,8 +108,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                         Jwt.String(Jwt.Payload(first.AccessToken), "sub"),
                         Jwt.String(Jwt.Payload(second.AccessToken), "sub"));
 
+                    List<string> before = Jwt.Strings(Jwt.Payload(first.AccessToken), "scopes");
+                    List<string> after = Jwt.Strings(Jwt.Payload(second.AccessToken), "scopes");
+                    before.Sort(StringComparer.Ordinal);
+                    after.Sort(StringComparer.Ordinal);
+
                     r.VerifyEqual("元と同じ範囲である（scopes）",
-                        ScopesOf(first.AccessToken), ScopesOf(second.AccessToken));
+                        string.Join(" ", before), string.Join(" ", after));
                 }
 
                 r.Observe("新しい refresh_token",
@@ -193,14 +155,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) 旧で更新し、新しい refresh_token（新）を得る");
 
-                JsonResponse second = await RefreshAsync(client, reg, first.RefreshToken);
+                JsonResponse second = await Flows.RefreshAsync(client, reg, first.RefreshToken);
 
                 Assert.False(string.IsNullOrEmpty(second.RefreshToken),
                     "前提: 1 回目の更新が成功し、新しい refresh_token が返ること");
 
                 r.Step("(3) 旧を、もう一度使う");
 
-                JsonResponse reuse = await RefreshAsync(client, reg, first.RefreshToken);
+                JsonResponse reuse = await Flows.RefreshAsync(client, reg, first.RefreshToken);
 
                 r.VerifyEqual("invalid_grant で拒否される", "invalid_grant", reuse.Error);
 
@@ -210,7 +172,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(4) 新で更新する");
 
-                JsonResponse third = await RefreshAsync(client, reg, second.RefreshToken);
+                JsonResponse third = await Flows.RefreshAsync(client, reg, second.RefreshToken);
 
                 r.Observe("旧が再び提示された後も、新は使えるか",
                     !string.IsNullOrEmpty(third.AccessToken)
@@ -257,7 +219,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(2) " + KnownClients.TestClient + " の資格情報で、その refresh_token を提示する");
 
-                JsonResponse stolen = await RefreshAsync(client, other, first.RefreshToken);
+                JsonResponse stolen = await Flows.RefreshAsync(client, other, first.RefreshToken);
 
                 r.VerifyEqual("invalid_grant で拒否される", "invalid_grant", stolen.Error);
 
@@ -267,7 +229,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Step("(3) 発行先の " + KnownClients.MvcSample + " が、その refresh_token を使う");
 
-                JsonResponse legit = await RefreshAsync(client, reg, first.RefreshToken);
+                JsonResponse legit = await Flows.RefreshAsync(client, reg, first.RefreshToken);
 
                 r.Observe("他者に提示された後も、正規のクライアントが使えるか",
                     !string.IsNullOrEmpty(legit.AccessToken)

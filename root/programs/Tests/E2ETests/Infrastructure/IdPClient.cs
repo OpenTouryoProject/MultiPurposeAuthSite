@@ -30,6 +30,14 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         Device Authorization Grant の検証画面の操作を追加（拡張仕様のテスト）
+//*  2026/09/11  玄人 幸道         client_secret_basic で /token を呼ぶ TokenWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         汎用の HTTP 関数を「素のHTTP」へ移し、デバイス認可（/device_authz）の要求を追加
+//*  2026/09/11  玄人 幸道         /userinfo を Authorization ヘッダを指定して呼ぶ UserInfoWithAuthorizationAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         client_secret_basic の POST を PostJsonWithBasicAuthAsync に一般化し、RevokeWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         /introspect を client_secret_basic で呼ぶ IntrospectWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
+//*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
+//*  2026/09/12  玄人 幸道         Authorization ヘッダ付きの POST を一般化し、認証デバイスの代わりの要求（/SetDeviceToken・/ciba_result）を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -131,6 +139,130 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return this._http.PostAsync(this.Absolute(pathOrUrl), new FormUrlEncodedContent(items));
+        }
+
+        /// <summary>
+        /// 本文をそのままPOSTする（PARエンドポイントは text/plain で JWS を受ける）。
+        /// </summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="body">本文</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> PostTextAsync(string pathOrUrl, string body)
+        {
+            StringContent content = new StringContent(body, Encoding.UTF8, "text/plain");
+            HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
+
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>JSONを返すエンドポイントをGETする</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> GetJsonAsync(string pathOrUrl)
+        {
+            HttpResponseMessage res = await this.GetAsync(pathOrUrl);
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>JSONを返すエンドポイントをPOSTする</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> PostJsonAsync(
+            string pathOrUrl, IDictionary<string, string> form)
+        {
+            HttpResponseMessage res = await this.PostFormAsync(pathOrUrl, form);
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>
+        /// JSONを返すエンドポイントに、client_secret_basic（Authorization ヘッダ）で POST する。
+        /// client_id / client_secret はフォームに入れない。
+        /// </summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> PostJsonWithBasicAuthAsync(
+            string pathOrUrl, IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            // RFC 6749 2.3.1 : form-urlencode してから ":" で繋ぎ、BASE64 にする。
+            string credential = WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret);
+
+            return this.PostJsonWithAuthorizationAsync(pathOrUrl, form,
+                "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(credential)));
+        }
+
+        /// <summary>JSONを返すエンドポイントに、Authorization ヘッダを付けて POST する</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> PostJsonWithAuthorizationAsync(
+            string pathOrUrl, IDictionary<string, string> form, string authorization)
+        {
+            List<KeyValuePair<string, string>> items = new List<KeyValuePair<string, string>>();
+
+            foreach (KeyValuePair<string, string> item in form)
+            {
+                if (item.Value != null)
+                {
+                    items.Add(item);
+                }
+            }
+
+            HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, this.Absolute(pathOrUrl));
+            req.Content = new FormUrlEncodedContent(items);
+
+            if (authorization != null)
+            {
+                req.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
+
+            HttpResponseMessage res = await this._http.SendAsync(req);
+            return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>HttpResponseMessage を JsonResponse に変換する</summary>
+        /// <param name="res">応答</param>
+        /// <returns>JsonResponse</returns>
+        public static async Task<JsonResponse> ToJsonResponseAsync(HttpResponseMessage res)
+        {
+            JsonResponse result = new JsonResponse();
+            result.StatusCode = res.StatusCode;
+            result.ContentType = (res.Content.Headers.ContentType == null)
+                ? null : res.Content.Headers.ContentType.MediaType;
+            result.Body = await res.Content.ReadAsStringAsync();
+
+            // 応答ヘッダを拾う。Cache-Control のように、
+            // 本文ではなくヘッダで確かめる項目がある（RFC 6749 §5.1）。
+            result.Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Headers)
+            {
+                result.Headers[h.Key] = string.Join(", ", h.Value);
+            }
+
+            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Content.Headers)
+            {
+                result.Headers[h.Key] = string.Join(", ", h.Value);
+            }
+
+            try
+            {
+                using (JsonDocument doc = JsonDocument.Parse(result.Body))
+                {
+                    result.Json = doc.RootElement.Clone();
+                    result.IsJson = true;
+                }
+            }
+            catch (JsonException)
+            {
+                result.IsJson = false;
+            }
+
+            return result;
         }
 
         /// <summary>相対パスを絶対URLにする</summary>
@@ -375,13 +507,42 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this.PostJsonAsync("/token", form);
         }
 
+        /// <summary>
+        /// トークン エンドポイントを、client_secret_basic（Authorization ヘッダ）で呼ぶ。
+        /// client_id / client_secret はフォームに入れない。
+        /// </summary>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> TokenWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/token", form, clientId, clientSecret);
+        }
+
         /// <summary>UserInfoエンドポイントを呼ぶ</summary>
         /// <param name="accessToken">アクセス トークン</param>
         /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> UserInfoAsync(string accessToken)
+        public Task<JsonResponse> UserInfoAsync(string accessToken)
+        {
+            return this.UserInfoWithAuthorizationAsync("Bearer " + accessToken);
+        }
+
+        /// <summary>
+        /// UserInfoエンドポイントを、Authorization ヘッダを指定して呼ぶ。
+        /// トークンが無い要求や、Bearer 以外の方式の要求を作るために使う（#196）。
+        /// </summary>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> UserInfoWithAuthorizationAsync(string authorization)
         {
             HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Get, this.Absolute("/userinfo"));
-            req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + accessToken);
+
+            if (authorization != null)
+            {
+                req.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
 
             HttpResponseMessage res = await this._http.SendAsync(req);
             return await ToJsonResponseAsync(res);
@@ -395,6 +556,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this.PostJsonAsync("/introspect", form);
         }
 
+        /// <summary>Introspectionエンドポイントを、client_secret_basic（Authorization ヘッダ）で呼ぶ</summary>
+        /// <param name="form">フォーム（client_id / client_secret は入れない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> IntrospectWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/introspect", form, clientId, clientSecret);
+        }
+
         /// <summary>Revocationエンドポイントを呼ぶ</summary>
         /// <param name="form">フォーム</param>
         /// <returns>JsonResponse</returns>
@@ -403,84 +575,45 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this.PostJsonAsync("/revoke", form);
         }
 
-        /// <summary>
-        /// 本文をそのままPOSTする（PARエンドポイントは text/plain で JWS を受ける）。
-        /// </summary>
-        /// <param name="pathOrUrl">パスまたはURL</param>
-        /// <param name="body">本文</param>
+        /// <summary>Revocationエンドポイントを、client_secret_basic（Authorization ヘッダ）で呼ぶ</summary>
+        /// <param name="form">フォーム（client_id / client_secret は入れない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
         /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> PostTextAsync(string pathOrUrl, string body)
+        public Task<JsonResponse> RevokeWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
         {
-            StringContent content = new StringContent(body, Encoding.UTF8, "text/plain");
-            HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
-
-            return await ToJsonResponseAsync(res);
-        }
-
-        /// <summary>JSONを返すエンドポイントをGETする</summary>
-        /// <param name="pathOrUrl">パスまたはURL</param>
-        /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> GetJsonAsync(string pathOrUrl)
-        {
-            HttpResponseMessage res = await this.GetAsync(pathOrUrl);
-            return await ToJsonResponseAsync(res);
-        }
-
-        /// <summary>JSONを返すエンドポイントをPOSTする</summary>
-        /// <param name="pathOrUrl">パスまたはURL</param>
-        /// <param name="form">フォーム</param>
-        /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> PostJsonAsync(
-            string pathOrUrl, IDictionary<string, string> form)
-        {
-            HttpResponseMessage res = await this.PostFormAsync(pathOrUrl, form);
-            return await ToJsonResponseAsync(res);
-        }
-
-        /// <summary>HttpResponseMessage を JsonResponse に変換する</summary>
-        /// <param name="res">応答</param>
-        /// <returns>JsonResponse</returns>
-        public static async Task<JsonResponse> ToJsonResponseAsync(HttpResponseMessage res)
-        {
-            JsonResponse result = new JsonResponse();
-            result.StatusCode = res.StatusCode;
-            result.ContentType = (res.Content.Headers.ContentType == null)
-                ? null : res.Content.Headers.ContentType.MediaType;
-            result.Body = await res.Content.ReadAsStringAsync();
-
-            // 応答ヘッダを拾う。Cache-Control のように、
-            // 本文ではなくヘッダで確かめる項目がある（RFC 6749 §5.1）。
-            result.Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Headers)
-            {
-                result.Headers[h.Key] = string.Join(", ", h.Value);
-            }
-
-            foreach (KeyValuePair<string, IEnumerable<string>> h in res.Content.Headers)
-            {
-                result.Headers[h.Key] = string.Join(", ", h.Value);
-            }
-
-            try
-            {
-                using (JsonDocument doc = JsonDocument.Parse(result.Body))
-                {
-                    result.Json = doc.RootElement.Clone();
-                    result.IsJson = true;
-                }
-            }
-            catch (JsonException)
-            {
-                result.IsJson = false;
-            }
-
-            return result;
+            return this.PostJsonWithBasicAuthAsync("/revoke", form, clientId, clientSecret);
         }
 
         #endregion
 
-        #region Device Authorization Grant（/device_verify）
+        #region Device Authorization Grant（/device_authz・/device_verify）
+
+        /// <summary>
+        /// デバイス認可エンドポイント（/device_authz）を呼ぶ。
+        /// RFC 8628 §3.1 で、**機器が**最初に行う要求に当たる（device_code と user_code を得る）。
+        /// </summary>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> DeviceAuthorizationAsync(IDictionary<string, string> form)
+        {
+            return this.PostJsonAsync("/device_authz", form);
+        }
+
+        /// <summary>
+        /// デバイス認可エンドポイント（/device_authz）を、client_secret_basic（Authorization ヘッダ）で呼ぶ。
+        /// コンフィデンシャル クライアントの機器が使う（RFC 8628 3.1）。
+        /// </summary>
+        /// <param name="form">フォーム（client_id / client_secret は入れない）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> DeviceAuthorizationWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/device_authz", form, clientId, clientSecret);
+        }
 
         /// <summary>
         /// 検証画面（/device_verify）で user_code を入力し、許可または拒否を押す。
@@ -522,6 +655,54 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string body = await post.Content.ReadAsStringAsync();
 
             return post.StatusCode == HttpStatusCode.OK && body.Contains("Accepted.");
+        }
+
+        #endregion
+
+        #region CIBA（/ciba_authz）
+
+        /// <summary>
+        /// CIBA の認証リクエストを送る（POST /ciba_authz）。
+        /// 要求そのものは、事前に /ros（PAR）へ登録した Request Object を request_uri で指す。
+        /// </summary>
+        /// <param name="form">フォーム（request_uri）</param>
+        /// <returns>JsonResponse</returns>
+        public Task<JsonResponse> CibaAuthorizeAsync(IDictionary<string, string> form)
+        {
+            return this.PostJsonAsync("/ciba_authz", form);
+        }
+
+        #endregion
+
+        #region 認証デバイスの代わり（/SetDeviceToken・/ciba_result）
+
+        /// <summary>
+        /// 認証デバイスを登録する（POST /SetDeviceToken）。
+        /// 認証デバイス（authentication_device）が、サインインの後に送る要求と同じ形（Bearer ＋ device_token）。
+        /// </summary>
+        /// <param name="accessToken">ユーザのアクセス トークン（null なら Authorization ヘッダを付けない）</param>
+        /// <param name="deviceToken">デバイス・トークン（プッシュ通知の宛先。null なら送らない）</param>
+        /// <returns>JsonResponse（本文は "OK" / "NG"）</returns>
+        public Task<JsonResponse> SetDeviceTokenAsync(string accessToken, string deviceToken)
+        {
+            return this.PostJsonWithAuthorizationAsync("/SetDeviceToken",
+                new Dictionary<string, string>() { { "device_token", deviceToken } },
+                accessToken == null ? null : "Bearer " + accessToken);
+        }
+
+        /// <summary>
+        /// CIBA の要求への返答を送る（POST /ciba_result）。
+        /// 認証デバイスが、プッシュ通知を受けて「許可 / 拒否」を押したときに送る要求と同じ形。
+        /// </summary>
+        /// <param name="accessToken">ユーザのアクセス トークン（null なら Authorization ヘッダを付けない）</param>
+        /// <param name="authReqId">auth_req_id（プッシュ通知の data にある。null なら送らない）</param>
+        /// <param name="result">"true"（許可）/ "false"（拒否）。不正な値を送るテストのため、文字列で受ける</param>
+        /// <returns>JsonResponse（本文は "OK" / "NG"）</returns>
+        public Task<JsonResponse> CibaPushResultAsync(string accessToken, string authReqId, string result)
+        {
+            return this.PostJsonWithAuthorizationAsync("/ciba_result",
+                new Dictionary<string, string>() { { "auth_req_id", authReqId }, { "result", result } },
+                accessToken == null ? null : "Bearer " + accessToken);
         }
 
         #endregion

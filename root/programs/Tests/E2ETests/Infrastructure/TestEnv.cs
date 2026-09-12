@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/12  玄人 幸道         プッシュ通知の送信箱（MPAS_CORE_FCM_OUTBOX / MPAS_NETFX_FCM_OUTBOX）を受け取る（#196）
 //**********************************************************************************
 
 using System;
@@ -92,6 +93,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>構成ファイルのパス（絶対パス）</summary>
         public string ConfigPath { get; set; }
+
+        /// <summary>
+        /// プッシュ通知の送信箱（テスト用）のディレクトリ。設定されていなければ null。
+        /// test.ps1 -Launch が、サイトごとに設定する（MPAS_CORE_FCM_OUTBOX / MPAS_NETFX_FCM_OUTBOX）（#196）。
+        /// </summary>
+        public string FcmOutbox { get; set; }
 
         /// <summary>net48版か</summary>
         public bool IsNetFx
@@ -426,8 +433,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>環境変数があれば読む</summary>
         private static void ApplyEnvironmentVariables()
         {
-            Override(CoreKey, "MPAS_CORE_BASEURL", "MPAS_CORE_CONFIG");
-            Override(NetFxKey, "MPAS_NETFX_BASEURL", "MPAS_NETFX_CONFIG");
+            Override(CoreKey, "MPAS_CORE_BASEURL", "MPAS_CORE_CONFIG", "MPAS_CORE_FCM_OUTBOX");
+            Override(NetFxKey, "MPAS_NETFX_BASEURL", "MPAS_NETFX_CONFIG", "MPAS_NETFX_FCM_OUTBOX");
 
             string user = Environment.GetEnvironmentVariable("MPAS_TESTUSER");
             if (!string.IsNullOrEmpty(user))
@@ -437,7 +444,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         }
 
         /// <summary>環境変数1組でテスト対象を上書きする</summary>
-        private static void Override(string key, string baseUrlVar, string configVar)
+        private static void Override(string key, string baseUrlVar, string configVar, string fcmOutboxVar)
         {
             TargetInfo target = _targets[key];
 
@@ -451,6 +458,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             if (!string.IsNullOrEmpty(config))
             {
                 target.ConfigPath = Path.GetFullPath(Path.Combine(ProgramsDir, config));
+            }
+
+            string outbox = Environment.GetEnvironmentVariable(fcmOutboxVar);
+            if (!string.IsNullOrEmpty(outbox))
+            {
+                target.FcmOutbox = outbox;
             }
         }
 

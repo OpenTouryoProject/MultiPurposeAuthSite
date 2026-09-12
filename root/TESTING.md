@@ -88,7 +88,11 @@ Visual Studio（IIS Express）で起動する分には、構成ファイルの�
 ```
 OAuth2AuthorizationServerEndpointsRootURI
 OAuth2ClientEndpointsRootURI
+FcmOutboxDirectory
 ```
+
+`FcmOutboxDirectory` は、プッシュ通知の送信箱（テスト用）。サイトは FCM に送らず、ここにファイルを書く。
+テストは `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` で場所を受け取り、認証デバイスの代わりに読む（CIBA の `EX-8`）。
 
 Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization` が `ON` のとき
 **設定ファイルより環境変数を優先する**（net48 / net10.0 の両方）。
@@ -113,7 +117,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 |---|---|---|
 | `SM-n` | 疎通（テスト基盤そのものの確認） | `Tests/SmokeTests.cs` |
 | `TC-n.n` | 基本テストケース（OAuth 2.0 / OIDC の基本的な検証項目） | `Tests/Basic/` |
-| `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer） | `Tests/Extended/` |
+| `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer / CIBA） | `Tests/Extended/` |
 | `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/*.cs` |
 
 報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT**）に並ぶ。
@@ -297,15 +301,15 @@ TRX（XML）の `outcome` は `Passed` / `Failed` / `NotExecuted` で固定な�
 
 対象     結果 成功 失敗 Skip   秒
 -------- ---- ---- ---- ---- ----
-E2ETests OK    164    0    3 55.9
+E2ETests OK    220    0    1 146.7
 
-  Skip 3 件の内訳
-         3  (対象なし)
+  Skip 1 件の内訳
+         1  (対象なし)
 
   対象ごとの Skip は、そのサイトが起動していないだけのことが多い。
   (対象なし) は、未修正として Skip 指定しているもの（Tests\README.md）。
 
-  所要時間 : 0.9 分
+  所要時間 : 2.4 分
   TRX      : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.trx
   ログ     : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.log
   報告書   : C:\MultiPurposeAuthSite\root\programs\Tests\E2ETests\Result\E2ETests.report.md

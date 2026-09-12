@@ -46,6 +46,13 @@
 //*  2026/09/08  玄人 幸道         Device AuthZのクライアント認証を追加（#193）
 //*  2026/09/08  玄人 幸道         revoke/introspectの所有者確認を追加（#194）
 //*  2026/09/11  玄人 幸道         /revoke /introspect を RFC 7009 / 7662 に合わせて修正（#200）
+//*  2026/09/11  玄人 幸道         /token のエラー応答を 400 / 401 で返す（#196）
+//*  2026/09/11  玄人 幸道         /userinfo のエラー応答を 401 ＋ WWW-Authenticate: Bearer で返す（#196）
+//*  2026/09/11  玄人 幸道         /revoke のエラー応答を 400 / 401 で返す。/token と共用するエラー応答を共通の region へ（#196）
+//*  2026/09/11  玄人 幸道         /introspect のエラー応答を 400 / 401 で返す（#196）
+//*  2026/09/11  玄人 幸道         /device_authz のエラー応答を 400 / 401 で返す（#196）
+//*  2026/09/11  玄人 幸道         /ciba_authz のエラー応答を 400 / 401 で返し、ユーザ不明を unknown_user_id に（#196）
+//*  2026/09/12  玄人 幸道         /ciba_result・/SetDeviceToken の失敗を 400 / 401 で返す（本文の NG は変えない）（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -141,9 +148,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /token
         /// </summary>
         /// <param name="formData">FormDataCollection</param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <returns>成功は 200、エラーは 400 / 401（RFC 6749 5.1 / 5.2）（#196）</returns>
         [HttpPost]
-        public Dictionary<string, string> OAuth2Token(FormDataCollection formData)
+        public IHttpActionResult OAuth2Token(FormDataCollection formData)
         {
             //// エラーにならないことを確認
             //var v = formData["hoge"];
@@ -204,7 +211,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 grant_type, client_id, client_secret, assertion, x509,
                                 code, code_verifier, redirect_uri, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -213,7 +220,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantRefreshTokenCredentials(
                                 grant_type, client_id, client_secret, x509, refresh_token, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -225,7 +232,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 grant_type, client_id, client_secret, x509,
                                 username, password, scope, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -234,7 +241,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantClientCredentials(
                                 grant_type, client_id, client_secret, x509, scope, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -242,7 +249,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantJwtBearerTokenCredentials(
                             grant_type, assertion, x509, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -251,7 +258,7 @@ namespace MultiPurposeAuthSite.Controllers
                             if (Token.CmnEndpoints.GrantDeviceAuthZ(grant_type,
                                 client_id, client_secret, x509, device_code, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -261,7 +268,7 @@ namespace MultiPurposeAuthSite.Controllers
                                 client_id, client_secret, x509,
                                 auth_req_id, out ret, out err))
                             {
-                                return ret;
+                                return this.Ok(ret);
                             }
                             break;
 
@@ -286,7 +293,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return err; // 失敗
+            return this.OAuth2Error(err, "token"); // 失敗（RFC 6749 5.2 : 400 / 401）（#196）
         }
 
         #endregion
@@ -297,12 +304,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// OAuthで認可したユーザ情報のClaimを発行するWebAPI
         /// GET: /userinfo
         /// </summary>
-        /// <returns>Dictionary(string, object)</returns>
+        /// <returns>成功は 200、エラーは 401 と WWW-Authenticate: Bearer（RFC 6750 3）（#196）</returns>
         [HttpGet]
-        public async Task<Dictionary<string, object>> GetUserClaims()
+        public async Task<IHttpActionResult> GetUserClaims()
         {
             // 戻り値（エラー）
-            Dictionary<string, object> err = new Dictionary<string, object>();
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             // クライアント認証
             if (AuthenticationHeader.GetCredentials(
@@ -387,24 +394,41 @@ namespace MultiPurposeAuthSite.Controllers
                         }
                     }
 
-                    return userinfoClaimSet;
+                    return this.Ok(userinfoClaimSet);
 
                 }
                 else
                 {
-                    // ユーザ認証エラー
-                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    // 無効なトークン（JWT でない、改竄・失効・期限切れなど）。
+                    // RFC 6750 3.1 : invalid_token（401）。以前は invalid_request（400 に当たる）だった（#196）。
+                    err.Add(OAuth2AndOIDCConst.error, Token.CmnEndpoints.invalid_token);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                 }
             }
-            else
-            {
-                // クライアント認証エラー（ヘッダ不正
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
-                err.Add(OAuth2AndOIDCConst.error_description, "Invalid authentication header.");
-            }
 
-            return err; // 失敗
+            // Bearer トークンが無い（Authorization ヘッダ無し、または他の方式）場合、err は空のまま。
+            // RFC 6750 3.1 : エラー情報を付けず、Bearer が要ることだけを示す（#196）。
+
+            return this.UserInfoError(err); // 失敗（RFC 6750 3 : 401 ＋ WWW-Authenticate）（#196）
+        }
+
+        /// <summary>/userinfo のエラー応答を作る（RFC 6750 3 / OIDC Core 5.3.3）</summary>
+        /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
+        /// <returns>401 と WWW-Authenticate: Bearer</returns>
+        /// <remarks>
+        /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// トークンが無かった場合は、本文を返さない（RFC 6750 3.1 : エラー情報を含めない）。
+        /// </remarks>
+        private IHttpActionResult UserInfoError(Dictionary<string, string> err)
+        {
+            HttpResponseMessage res = (err.Count == 0)
+                ? this.Request.CreateResponse(HttpStatusCode.Unauthorized)
+                : this.Request.CreateResponse((HttpStatusCode)Token.CmnEndpoints.GetErrorStatusCode(err), err);
+
+            res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter("userinfo", err)));
+
+            return this.ResponseMessage(res);
         }
 
         #endregion
@@ -419,9 +443,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// token
         /// token_type_hint
         /// </param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <returns>成功（無効なトークンを含む）は 200、エラーは 400 / 401（RFC 7009 2.2 / 2.2.1）（#196）</returns>
         [HttpPost]
-        public Dictionary<string, string> RevokeToken(FormDataCollection formData)
+        public IHttpActionResult RevokeToken(FormDataCollection formData)
         {
             // 戻り値（エラー）
             Dictionary<string, string> err = new Dictionary<string, string>();
@@ -458,7 +482,14 @@ namespace MultiPurposeAuthSite.Controllers
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
                         // ・無効なトークンはエラーにしない（RFC 7009 2.2）
                         // ・成功は空の JSON（HTTP 200）で返し、両アプリで揃える
-                        return Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
+                        err = Token.CmnEndpoints.RevokeToken(client_id, token, token_type_hint);
+
+                        if (err.Count == 0)
+                        {
+                            return this.Ok(err); // 成功（RFC 7009 2.2 : 200）
+                        }
+
+                        // 他のクライアントのトークン（invalid_grant）は、下でエラーとして返す（#196）。
                     }
                     else
                     {
@@ -481,7 +512,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return err; // 失敗
+            return this.OAuth2Error(err, "revoke"); // 失敗（RFC 7009 2.2.1 : RFC 6749 5.2 のとおり 400 / 401）（#196）
         }
 
         #endregion
@@ -496,12 +527,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// token
         /// token_type_hint
         /// </param>
-        /// <returns>Dictionary(string, string)</returns>
+        /// <returns>問い合わせへの答え（active=false を含む）は 200、エラーは 400 / 401（RFC 7662 2.2 / 2.3）（#196）</returns>
         [HttpPost]
-        public Dictionary<string, object> IntrospectToken(FormDataCollection formData)
+        public IHttpActionResult IntrospectToken(FormDataCollection formData)
         {
             // 戻り値（エラー）
-            Dictionary<string, object> err = new Dictionary<string, object>();
+            Dictionary<string, string> err = new Dictionary<string, string>();
 
             if (formData != null)
             {
@@ -534,7 +565,8 @@ namespace MultiPurposeAuthSite.Controllers
                         // 問い合わせ（#200）
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）
                         // ・無効なトークン（存在しない・失効済み・期限切れ）は active=false で答える（RFC 7662 2.2）
-                        return Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint);
+                        // ・active=false もエラーではなく、問い合わせへの正常な答えなので 200（RFC 7662 2.2）（#196）
+                        return this.Ok(Token.CmnEndpoints.IntrospectToken(client_id, token, token_type_hint));
                     }
                     else
                     {
@@ -557,7 +589,7 @@ namespace MultiPurposeAuthSite.Controllers
                 err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
             }
 
-            return err; // 失敗
+            return this.OAuth2Error(err, "introspect"); // 失敗（RFC 7662 2.3 : RFC 6749 5.2 のとおり 400 / 401）（#196）
         }
 
         #endregion
@@ -569,9 +601,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /device_authz
         /// </summary>
         /// <param name="formData">FormDataCollection</param>
-        /// <returns>Device AuthZの認可レスポンス</returns>
+        /// <returns>成功は 200、エラーは 400 / 401（RFC 8628 3.1 / RFC 6749 5.2）（#196）</returns>
         [HttpPost]
-        public async Task<Dictionary<string, string>> DeviceAuthZAuthorize(FormDataCollection formData)
+        public async Task<IHttpActionResult> DeviceAuthZAuthorize(FormDataCollection formData)
         {
             string err = "";
             string errDescription = "";
@@ -595,11 +627,12 @@ namespace MultiPurposeAuthSite.Controllers
                 X509Certificate2 x509 = Request.GetClientCertificate();
                 if (!Token.CmnEndpoints.DeviceAuthZClientAuthentication(client_id, client_secret, ref x509))
                 {
-                    return new Dictionary<string, string>()
+                    // RFC 6749 5.2 : invalid_client は 401（#196）
+                    return this.OAuth2Error(new Dictionary<string, string>()
                     {
-                        {OAuth2AndOIDCConst.error, "invalid_client"},
+                        {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client},
                         {OAuth2AndOIDCConst.error_description, "Invalid credential."}
-                    };
+                    }, "device_authz");
                 }
 
                 // scopeパラメタ
@@ -629,8 +662,8 @@ namespace MultiPurposeAuthSite.Controllers
                 string userCode;
                 Sts.DeviceAuthZProvider.Create(authReqExp, tempData, out deviceCode, out userCode);
 
-                // ココまでの結果をレスポンス
-                return new Dictionary<string, string>()
+                // ココまでの結果をレスポンス（RFC 8628 3.2 : 200）
+                return this.Ok(new Dictionary<string, string>()
                 {
                     {OAuth2AndOIDCConst.device_code, deviceCode},
                     {OAuth2AndOIDCConst.user_code, userCode},
@@ -639,7 +672,7 @@ namespace MultiPurposeAuthSite.Controllers
                     {OAuth2AndOIDCConst.verification_uri_complete, verificationUri + "?user_code=" + userCode},
                     {OAuth2AndOIDCConst.expires_in, requested_expiry.ToString()},
                     {OAuth2AndOIDCConst.PollingInterval, Config.DeviceAuthZPollingIntervalSeconds.ToString()}
-                };
+                });
             }
             else
             {
@@ -648,12 +681,12 @@ namespace MultiPurposeAuthSite.Controllers
                 errDescription = "Form data is null.";
             }
 
-            // エラー
-            return new Dictionary<string, string>()
+            // エラー（RFC 6749 5.2 : 400）（#196）
+            return this.OAuth2Error(new Dictionary<string, string>()
             {
                 {OAuth2AndOIDCConst.error, err},
                 {OAuth2AndOIDCConst.error_description, errDescription}
-            };
+            }, "device_authz");
         }
 
         // DeviceAuthZResponse画面 → HomeControllerに。
@@ -670,9 +703,9 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="formData">
         /// request_uri
         /// </param>
-        /// <returns>CIBAの認可レスポンス</returns>
+        /// <returns>成功は 200、エラーは 400 / 401（CIBA Core 7.3 / 13）（#196）</returns>
         [HttpPost]
-        public async Task<Dictionary<string, string>> CibaAuthorizeAsync(FormDataCollection formData)
+        public async Task<IHttpActionResult> CibaAuthorizeAsync(FormDataCollection formData)
         {
             string err = "";
             string errDescription = "";
@@ -767,13 +800,20 @@ namespace MultiPurposeAuthSite.Controllers
 
 #pragma warning restore 162
 
-                            // ココまでの結果をレスポンス
-                            return new Dictionary<string, string>()
+                            // ココまでの結果をレスポンス（CIBA Core 7.3 : 200）
+                            return this.Ok(new Dictionary<string, string>()
                             {
                                 {OAuth2AndOIDCConst.auth_req_id, authReqId},
                                 {OAuth2AndOIDCConst.expires_in, _requested_expiry.ToString()},
                                 {OAuth2AndOIDCConst.PollingInterval, Config.CibaPollingIntervalSeconds.ToString()}
-                            };
+                            });
+                        }
+                        else
+                        {
+                            // login_hint のユーザが見つからない（CIBA Core 13 : unknown_user_id）。
+                            // 以前は err / errDescription が空のまま返っていた（#196）。
+                            err = Token.CmnEndpoints.unknown_user_id;
+                            errDescription = "The user identified by login_hint was not found.";
                         }
                         // 以降で、下記を束ねる。
                         // - プッシュ通知の応答結果
@@ -799,12 +839,13 @@ namespace MultiPurposeAuthSite.Controllers
                 errDescription = "Form data is null.";
             }
 
-            // エラー
-            return new Dictionary<string, string>()
+            // エラー（CIBA Core 13 : invalid_client は 401、それ以外は 400）（#196）
+            // HTTP 認証ではなく署名した要求でクライアントを識別するので、WWW-Authenticate は付けない（realm に null）。
+            return this.OAuth2Error(new Dictionary<string, string>()
             {
                 {OAuth2AndOIDCConst.error, err},
                 {OAuth2AndOIDCConst.error_description, errDescription}
-            };
+            }, null);
         }
 
         /// <summary>
@@ -812,47 +853,57 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /ciba_result
         /// </summary>
         /// <param name="formData">
+        /// - auth_req_id
         /// - result
         /// </param>
-        /// <returns>string</returns>
+        /// <returns>
+        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
+        /// トークンの不備は 401（WWW-Authenticate: Bearer）、パラメタの不備は 400（#196）
+        /// </returns>
+        /// <remarks>
+        /// 認証デバイス（authentication_device）が、プッシュ通知を受けて「許可 / 拒否」を押したときに呼ぶ。
+        /// </remarks>
         [HttpPost]
-        public string CibaPushResult(FormDataCollection formData)
+        public IHttpActionResult CibaPushResult(FormDataCollection formData)
         {
-            // 戻り値（エラー）
-            Dictionary<string, object> err = new Dictionary<string, object>();
-
-            // クライアント認証
-            if (AuthenticationHeader.GetCredentials(
+            // クライアント認証（Bearer トークン）
+            if (!AuthenticationHeader.GetCredentials(
                 HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
             {
-                if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
-                {
-                    // ClientIdの取り出し
-                    Claim ClientId = identity.Claims.Where(
-                        x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-                    ApplicationUser user =
-                        //CmnUserStore.FindByName(identity.Name);
-                        PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-
-                    if (user != null)
-                    {
-                        // 変数
-                        string auth_req_id = formData["auth_req_id"];
-                        string temp = formData["result"];
-
-                        bool result = false;
-                        if (!string.IsNullOrEmpty(auth_req_id)
-                            && bool.TryParse(temp, out result))
-                        {
-                            Sts.CibaProvider.ReceiveResult(auth_req_id, result);
-                            return "OK";
-                        }
-                    }
-                }
+                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
+                return this.NGResult(401, "ciba_result", null);
             }
 
-            return "NG"; // 和製英語ですがｗ
+            ApplicationUser user = null;
+
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            {
+                // ClientIdの取り出し
+                Claim ClientId = identity.Claims.Where(
+                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+                user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+            }
+
+            if (user == null)
+            {
+                // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
+                return this.NGResult(401, "ciba_result", Token.CmnEndpoints.invalid_token);
+            }
+
+            // 変数
+            string auth_req_id = (formData == null) ? null : (string)formData["auth_req_id"];
+            string temp = (formData == null) ? null : (string)formData["result"];
+
+            if (!string.IsNullOrEmpty(auth_req_id)
+                && bool.TryParse(temp, out bool result))
+            {
+                Sts.CibaProvider.ReceiveResult(auth_req_id, result);
+                return this.Ok("OK");
+            }
+
+            // パラメタの不備（#196 : 400）
+            return this.NGResult(400, "ciba_result", null);
         }
 
         #endregion
@@ -1034,43 +1085,122 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /SetDeviceToken
         /// </summary>
         /// <param name="formData">
-        /// - devicetoken
+        /// - device_token
         /// </param>
-        /// <returns>string</returns>
+        /// <returns>
+        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
+        /// トークンの不備は 401（WWW-Authenticate: Bearer）、パラメタの不備は 400（#196）
+        /// </returns>
+        /// <remarks>
+        /// 認証デバイス（authentication_device）が、サインインの後に呼ぶ（端末の登録）。
+        /// </remarks>
         [HttpPost]
-        public async Task<string> SetDeviceToken(FormDataCollection formData)
+        public async Task<IHttpActionResult> SetDeviceToken(FormDataCollection formData)
         {
-            string device_token = formData["device_token"];
+            string device_token = (formData == null) ? null : (string)formData["device_token"];
 
-            if (!string.IsNullOrEmpty(device_token))
+            if (string.IsNullOrEmpty(device_token))
             {
-                // クライアント認証
-                if (AuthenticationHeader.GetCredentials(
-                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+                // パラメタの不備（#196 : 400）
+                return this.NGResult(400, "SetDeviceToken", null);
+            }
+
+            // クライアント認証（Bearer トークン）
+            if (!AuthenticationHeader.GetCredentials(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            {
+                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
+                return this.NGResult(401, "SetDeviceToken", null);
+            }
+
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            {
+                // ClientIdの取り出し
+                Claim ClientId = identity.Claims.Where(
+                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+                ApplicationUser user =
+                    //CmnUserStore.FindByName(identity.Name);
+                    PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+
+                if (user != null)
                 {
-                    if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
-                    {
-                        // ClientIdの取り出し
-                        Claim ClientId = identity.Claims.Where(
-                            x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+                    // デバイストークンの保存
+                    user.DeviceToken = device_token;
+                    await UserManager.UpdateAsync(user);
 
-                        ApplicationUser user =
-                            //CmnUserStore.FindByName(identity.Name);
-                            PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-
-                        if (user != null)
-                        {
-                            // デバイストークンの保存
-                            user.DeviceToken = device_token;
-                            await UserManager.UpdateAsync(user);
-
-                            return "OK";
-                        }
-                    }
+                    return this.Ok("OK");
                 }
             }
 
-            return "NG"; // 和製英語ですがｗ
+            // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
+            return this.NGResult(401, "SetDeviceToken", Token.CmnEndpoints.invalid_token);
+        }
+
+        #endregion
+
+        #region 共通のエラー応答
+
+        /// <summary>
+        /// クライアント認証を行うエンドポイント（/token・/revoke・/introspect・/device_authz・/ciba_authz）のエラー応答を作る（RFC 6749 5.2）
+        /// </summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <param name="realm">WWW-Authenticate の realm（エンドポイントの名前。null なら WWW-Authenticate を付けない）</param>
+        /// <returns>400、または 401（invalid_client）</returns>
+        /// <remarks>
+        /// 以前は Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// 本文（error / error_description の JSON）は変えない。
+        /// /revoke のエラーも RFC 6749 5.2 に従う（RFC 7009 2.2.1）ので、/token の region から移して共用する（#196）。
+        /// /introspect のクライアント認証の失敗も、RFC 6749 5.2 のとおり 401（RFC 7662 2.3）。
+        /// /device_authz のクライアント認証は /token と同じ（RFC 8628 3.1）なので、エラーも同じく返す。
+        /// /ciba_authz は HTTP 認証ではなく署名した要求でクライアントを識別するので、realm に null を渡す（CIBA Core 13）。
+        /// </remarks>
+        private IHttpActionResult OAuth2Error(Dictionary<string, string> err, string realm)
+        {
+            HttpStatusCode status = (HttpStatusCode)Token.CmnEndpoints.GetErrorStatusCode(err);
+            HttpResponseMessage res = this.Request.CreateResponse(status, err);
+
+            if (status == HttpStatusCode.Unauthorized && realm != null)
+            {
+                // クライアント認証の失敗。受け付ける認証方式を示す。
+                // Authorization ヘッダで認証を試みたクライアントには必須（RFC 6749 5.2）。
+                res.Headers.WwwAuthenticate.Add(
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", "realm=\"" + realm + "\""));
+            }
+
+            return this.ResponseMessage(res);
+        }
+
+        /// <summary>
+        /// 文字列（OK / NG）で答えるエンドポイント（/SetDeviceToken・/ciba_result）の失敗の応答を作る
+        /// </summary>
+        /// <param name="status">HTTP ステータス（400 / 401）</param>
+        /// <param name="realm">WWW-Authenticate の realm（401 のとき）</param>
+        /// <param name="error">WWW-Authenticate の error（トークンが無い場合は null）</param>
+        /// <returns>本文が "NG" の応答</returns>
+        /// <remarks>
+        /// 認証デバイス（authentication_device）は、HTTP ステータスと本文の "OK" を見ている。
+        /// 本文は従来の "NG" のまま、ステータスだけを 400 / 401 にする（#196）。
+        /// 401 には、Bearer トークンが要ることを示す WWW-Authenticate を付ける（RFC 6750 3）。
+        /// </remarks>
+        private IHttpActionResult NGResult(int status, string realm, string error)
+        {
+            HttpResponseMessage res = this.Request.CreateResponse((HttpStatusCode)status, "NG");
+
+            if (status == 401)
+            {
+                Dictionary<string, string> err = new Dictionary<string, string>();
+
+                if (error != null)
+                {
+                    err.Add(OAuth2AndOIDCConst.error, error);
+                }
+
+                res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter(realm, err)));
+            }
+
+            return this.ResponseMessage(res);
         }
 
         #endregion

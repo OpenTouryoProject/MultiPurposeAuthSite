@@ -16,6 +16,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/09/11  玄人 幸道         OAuth2 / OIDC の API の 401 を、ログイン画面への 302 に変えない（#196）
+//*  2026/09/11  玄人 幸道         401 を 302 に変えない対象を、Web API に登録済みのルートから判定する（一覧を二重に持たない）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -25,9 +27,12 @@ using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.TokenProviders;
 
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Web.Http;
+using System.Web.Http.Routing;
 
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
@@ -159,6 +164,10 @@ namespace MultiPurposeAuthSite
 
             // アプリケーションがユーザのサイン・イン情報をCookie認証チケットに一時的に保存するようにします。
             // また、サードパーティのプロバイダでログインするユーザ情報もCookie認証チケットを使用してできるようにします。
+            // Cookie 認証の既定のリダイレクト（Ajax の扱いを含む）。下の OnApplyRedirect から呼ぶ（#196）。
+            System.Action<CookieApplyRedirectContext> defaultApplyRedirect =
+                new CookieAuthenticationProvider().OnApplyRedirect;
+
             app.UseCookieAuthentication(new CookieAuthenticationOptions
             {
                 AuthenticationType = DefaultAuthenticationTypes.ApplicationCookie,  // 認証タイプを設定する。
@@ -185,8 +194,24 @@ namespace MultiPurposeAuthSite
                         // SecurityStampValidatorによる検証の間隔
                         validateInterval: Config.SecurityStampValidateIntervalFromSeconds,
                         // ClaimsIdentityを返すdelegate
-                        regenerateIdentity: (manager, user) => user.GenerateUserIdentityAsync(manager))
+                        regenerateIdentity: (manager, user) => user.GenerateUserIdentityAsync(manager)),
                         
+                    #endregion
+
+                    #region ApplyRedirect
+
+                    // Web API（/token など）が返す 401 を、ログイン画面への 302 に書き換えない（#196）。
+                    // Cookie 認証は、既定では 401 の応答を LoginPath へのリダイレクトに変える。
+                    // 画面には都合がよいが、API の 401（invalid_client など）が 302 になり、
+                    // クライアントは認証の失敗を読み取れなくなる（net10.0 版には、この書き換えが無い）。
+                    OnApplyRedirect = context =>
+                    {
+                        if (!StartupAuth.IsWebApiRequest(context.Request))
+                        {
+                            defaultApplyRedirect(context);
+                        }
+                    }
+
                     #endregion
                 },
 
@@ -369,6 +394,75 @@ namespace MultiPurposeAuthSite
             #endregion
 
             #endregion
+        }
+
+        /// <summary>Web API（WebApiConfig が登録したルート）への要求か</summary>
+        /// <param name="request">IOwinRequest</param>
+        /// <returns>Web API への要求なら true（Cookie 認証のログイン画面へのリダイレクトから外す）</returns>
+        /// <remarks>
+        /// /token などは、エラーを 400 / 401 の JSON で返す（#196）。
+        /// 401 をログイン画面への 302 に書き換えられると、クライアントが読めなくなる。
+        /// 対象を別の一覧で持つと、WebApiConfig にエンドポイントを足したときに書き漏れるので、
+        /// Web API に登録済みのルートから判定する。
+        /// </remarks>
+        private static bool IsWebApiRequest(IOwinRequest request)
+        {
+            // ルートのテンプレートは、先頭の / を除いた形で登録されている（WebApiConfig）。
+            string path = request.Path.HasValue ? request.Path.Value.Trim('/') : "";
+
+            return path.Length != 0
+                && StartupAuth.MatchesAnyRoute(path, GlobalConfiguration.Configuration.Routes);
+        }
+
+        /// <summary>パスが、いずれかのルートのテンプレートに当たるか</summary>
+        /// <param name="path">先頭と末尾の / を除いたパス</param>
+        /// <param name="routes">Web API のルート</param>
+        /// <returns>当たれば true</returns>
+        /// <remarks>
+        /// - { を含まないテンプレート（token など）: パスと完全に一致するか
+        /// - { を含むテンプレート（api/{controller}/... など）: { より前の固定部分で始まるか
+        /// - 属性ルーティング（[Route]）: 個々のルートを束ねたルートとして登録されるので、その中を見る
+        /// </remarks>
+        private static bool MatchesAnyRoute(string path, IEnumerable<IHttpRoute> routes)
+        {
+            foreach (IHttpRoute route in routes)
+            {
+                IEnumerable<IHttpRoute> subRoutes = route as IEnumerable<IHttpRoute>;
+
+                if (subRoutes != null)
+                {
+                    if (StartupAuth.MatchesAnyRoute(path, subRoutes))
+                    {
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                string template = route.RouteTemplate;
+
+                if (string.IsNullOrEmpty(template))
+                {
+                    continue;
+                }
+
+                int brace = template.IndexOf('{');
+
+                if (brace < 0)
+                {
+                    if (string.Equals(path, template.Trim('/'), System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                else if (brace > 0
+                    && path.StartsWith(template.Substring(0, brace), System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

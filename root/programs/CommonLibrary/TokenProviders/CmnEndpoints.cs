@@ -63,6 +63,13 @@
 //*  2026/09/08  玄人 幸道         エラー コードをRFC 6749に合わせる（#187）
 //*  2026/09/11  玄人 幸道         device_code のエラーを RFC の値で返すよう修正（#199）
 //*  2026/09/11  玄人 幸道         revoke/introspectの本体を両アプリから移し、RFC 7009 / 7662 に合わせる（#200）
+//*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行せず、トークン応答に scope を返す（#198）
+//*  2026/09/11  玄人 幸道         クライアントの登録（scope）でも、発行するスコープを絞る（#198 の後半）
+//*  2026/09/11  玄人 幸道         エラー応答の HTTP ステータスを決める GetErrorStatusCode を追加（#196）
+//*  2026/09/11  玄人 幸道         #region の配置を整理（ClientAuthentication の下に置いていた #187 / #194 / #196 / #200 の追加分を移動）
+//*  2026/09/11  玄人 幸道         Public / Private の region を中身に合わせる（ClientAuthentication を Public へ、Token所有者の確認を private に）
+//*  2026/09/11  玄人 幸道         /userinfo の Bearer のエラー（invalid_token は 401、WWW-Authenticate の組み立て）を追加（#196）
+//*  2026/09/11  玄人 幸道         /ciba_authz の空のエラー コードを CIBA Core 13 のコードに（unknown_user_id を追加）（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -154,14 +161,9 @@ namespace MultiPurposeAuthSite.TokenProviders
             #endregion
 
             #region scopes
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Profile);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Email);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Phone);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Address);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Auth);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_UserID);
-            scopes_supported.Add(OAuth2AndOIDCConst.Scope_Roles);
-            //scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);↓で追加
+            // 発行時の絞り込み（Helper.FilterSupportedScopes）と同じ一覧を使う（#198）。
+            // openid は OIDC が有効なときだけ含まれる。
+            scopes_supported.AddRange(Helper.GetScopesSupported());
             #endregion
 
             #region grant and response_types
@@ -213,7 +215,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (Config.EnableOpenIDConnect)
             {
-                scopes_supported.Add(OAuth2AndOIDCConst.Scope_Openid);
+                // openid は、上の Helper.GetScopesSupported で追加済み（#198）
 
                 #region response_types
                 response_types_supported.Add(OAuth2AndOIDCConst.OidcImplicit2_ResponseType);
@@ -568,7 +570,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region 取得 → チェック
             // iss → client_id
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.iss,
                 out client_id, out err, out errDescription))
             {
@@ -580,14 +582,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 if (string.IsNullOrEmpty(clientName))
                 {
-                    //err = "server_error";
+                    // 登録されていないクライアント（CIBA Core 13 : invalid_client）。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_client;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
                     return false;
                 }
             }
             // aud
             // exp
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                     json, OAuth2AndOIDCConst.exp,
                     out exp, out err, out errDescription))
             {
@@ -597,14 +600,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!CmnJwtToken.VerifyExp(exp))
                 {
-                    //err = "server_error";
+                    // CIBA Core 13 : invalid_request。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "This PAR is expired.";
                     return false;
                 }
             }
             // iat
             // nbf
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.nbf,
                 out nbf, out err, out errDescription))
             {
@@ -614,14 +618,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!CmnJwtToken.VerifyNbf(nbf))
                 {
-                    //err = "server_error";
+                    // CIBA Core 13 : invalid_request。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "This PAR is before enabled.";
                     return false;
                 }
             }
             // jti
             // scope
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.scope,
                 out scope, out err, out errDescription))
             {
@@ -631,8 +636,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (!scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
                 {
-                    // OIDC無効
-                    //err = "server_error";
+                    // OIDC無効（CIBA Core 13 : invalid_scope）。以前はコードが空だった（#196）。
+                    err = OAuth2AndOIDCConst.invalid_scope;
                     errDescription = string.Format(
                         "CIBA is required {0} value in scope param.",
                         OAuth2AndOIDCConst.Scope_Openid);
@@ -641,29 +646,29 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
             // client_notification_token
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.client_notification_token,
                 out client_notification_token, out err, out errDescription))
             {
                 return false;
             }
             // binding_message
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.binding_message,
                 out binding_message, out err, out errDescription))
             {
                 return false;
             }
             // user_code
-            CmnJwtToken.CheckClaims(
+            CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.user_code,
                 out user_code, out err, out errDescription, nullable: true);
             // requested_expiry
-            CmnJwtToken.CheckClaims(
+            CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.requested_expiry,
                 out requested_expiry, out err, out errDescription, nullable: true);
             // login_hint
-            if (!CmnJwtToken.CheckClaims(
+            if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.login_hint,
                 out login_hint, out err, out errDescription))
             {
@@ -671,6 +676,30 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return true;
+        }
+
+        /// <summary>CIBA の認証リクエストのクレームを取り出す（CmnJwtToken.CheckClaims の包み）</summary>
+        /// <param name="json">JObject</param>
+        /// <param name="key">クレーム名</param>
+        /// <param name="value">値</param>
+        /// <param name="err">error</param>
+        /// <param name="errDescription">error_description</param>
+        /// <param name="nullable">省略できるクレームか</param>
+        /// <returns>取り出せたか（省略できるクレームが無い場合も true）</returns>
+        /// <remarks>
+        /// Open棟梁 の CheckClaims は、クレームが無いと server_error を返す。
+        /// 要求の不備なので、CIBA Core 13 のとおり invalid_request にする（#196）。
+        /// </remarks>
+        private static bool GetCibaClaim(JObject json, string key,
+            out string value, out string err, out string errDescription, bool nullable = false)
+        {
+            if (CmnJwtToken.CheckClaims(json, key, out value, out err, out errDescription, nullable))
+            {
+                return true;
+            }
+
+            err = OAuth2AndOIDCConst.invalid_request;
+            return false;
         }
         #endregion
 
@@ -773,7 +802,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             string client_id, string state, IEnumerable<string> scopes, JObject claims, string nonce)
         {
             // ClaimsIdentityに、その他、所定のClaimを追加する。
-            Helper.AddClaim(identity, client_id, scopes, claims, nonce);
+            // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+            Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
             // Codeの生成
             string code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -835,7 +865,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, scopes, claims, nonce);
+                // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
                 // AccessTokenの生成
                 access_token = CmnAccessToken.CreateFromClaims(
@@ -930,7 +961,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region Token発行
 
                 // ClaimsIdentityに、その他、所定のClaimを追加する。
-                Helper.AddClaim(identity, client_id, scopes, claims, nonce);
+                // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
                 // Codeの生成
                 code = AuthorizationCodeProvider.Create(identity, queryString);
@@ -1365,7 +1397,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                             identity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
 
                             // ClaimsIdentityに、その他、所定のClaimを追加する。
-                            identity = Helper.AddClaim(identity, client_id, scopes.Split(' '), null, "");
+                            // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                            identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
 
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
@@ -1482,7 +1515,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // ClaimsIdentityに、その他、所定のClaimを追加する。
                     identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                    identity = Helper.AddClaim(identity, client_id, scopes.Split(' '), null, "");
+                    // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                    identity = Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes.Split(' '), client_id), null, "");
 
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
@@ -1570,7 +1604,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
-                                identity = Helper.AddClaim(identity, iss, scopes.Split(' '), null, "");
+                                // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
+                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(scopes.Split(' '), iss), null, "");
 
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(
@@ -1916,225 +1951,11 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        #region Common
+        #region Revocation / Introspection Endpoint
 
         #region Public
 
-        /// <summary>定数文字列からRedirectUriを取得する。</summary>
-        /// <param name="constr">定数文字列</param>
-        /// <returns>RedirectUri</returns>
-        public static string GetRedirectUriFromConstr(string constr)
-        {
-            string ret = "";
-
-            // 事前登録されている。
-            if (constr.ToLower() == Const.TestSelfCode)
-            {
-                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
-                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
-            }
-            else if (constr.ToLower() == Const.TestSelfToken)
-            {
-                // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
-                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
-            }
-            else
-            {
-                // そのまま使用する。
-                ret = constr;
-            }
-
-            return ret;
-        }
-
-        #endregion
-
-        #region Private
-
-        #region　ClientAuthentication
-
-        #region client_id & (client_secret or x509)
-
-        /// <summary>ClientAuthentication</summary>
-        /// <param name="client_id">string</param>
-        /// <param name="client_secret">string</param>
-        /// <param name="x509">X509Certificate2</param>
-        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
-        /// <returns>bool</returns>
-        public static bool ClientAuthentication(string client_id, string client_secret,
-            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
-        {
-            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-
-            // client_id & client_secret
-            if (!string.IsNullOrEmpty(client_id))
-            {
-                if (!string.IsNullOrEmpty(client_secret))
-                {
-                    // *.config or Saml2OAuth2Dataテーブルを参照して、
-                    // クライアント認証（client_secret）を行なう。
-                    if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
-                    {
-                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-                        x509 = null; // client_secretがあった場合、x509を無効化
-                        return true;
-                    }
-                }
-                else if (x509 != null)
-                {
-                    // *.config or Saml2OAuth2Dataテーブルを参照して、
-                    // クライアント認証（X509Certificate2）を行なう。
-                    if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
-                    {
-                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        #endregion
-
-        #region Device AuthZ
-
-        /// <summary>Device AuthZのクライアント認証</summary>
-        /// <param name="client_id">string</param>
-        /// <param name="client_secret">string</param>
-        /// <param name="x509">X509Certificate2</param>
-        /// <returns>bool</returns>
-        /// <remarks>
-        /// RFC 8628
-        /// - 3.1 : デバイス認可要求で、クライアントを識別する。
-        /// - 3.4 : トークン要求で、コンフィデンシャル クライアントは認証する。
-        /// パブリック クライアント（client_secret未登録）は、client_idの確認だけを行う。
-        /// </remarks>
-        public static bool DeviceAuthZClientAuthentication(
-            string client_id, string client_secret, ref X509Certificate2 x509)
-        {
-            // client_idは必須
-            if (string.IsNullOrEmpty(client_id)) return false;
-
-            // 未登録のclient_idは拒否
-            if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
-
-            // コンフィデンシャル クライアントは認証必須
-            // - client_secretを登録済み
-            // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
-            // - x509を提示してきた
-            if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
-                || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
-                || x509 != null)
-            {
-                return CmnEndpoints.ClientAuthentication(
-                    client_id, client_secret, ref x509,
-                    out OAuth2AndOIDCEnum.ClientMode permittedLevel);
-            }
-
-            // パブリック クライアントは、client_idの確認のみ
-            return true;
-        }
-
-        #endregion
-
-        #region Redirect URLの組み立て
-
-        /// <summary>リダイレクト先URLに、パラメタを付ける</summary>
-        /// <param name="redirectUri">リダイレクト先</param>
-        /// <param name="parameters">付けるパラメタ（値が空のものは付けない）</param>
-        /// <param name="useFragment">true : フラグメント（#）、false : クエリ文字列（?）</param>
-        /// <returns>URL</returns>
-        /// <remarks>
-        /// #187
-        /// - **既にクエリ文字列を持つredirect_uriでも壊れない**よう、区切りを ? と & で切り替える。
-        /// - **値は必ずURLエンコードする。** stateはクライアントが自由に決められるため、
-        ///   生で連結するとリダイレクト先URLにパラメタを注入できてしまう。
-        /// - 値が空のパラメタは付けない。stateは、要求に含まれた場合のみ返す（RFC 6749 4.1.2）。
-        /// </remarks>
-        public static string BuildRedirectUrl(
-            string redirectUri, Dictionary<string, string> parameters, bool useFragment = false)
-        {
-            StringBuilder sb = new StringBuilder();
-
-            foreach (KeyValuePair<string, string> p in parameters)
-            {
-                if (string.IsNullOrEmpty(p.Value)) continue;
-
-                if (sb.Length != 0) sb.Append("&");
-                sb.Append(Uri.EscapeDataString(p.Key));
-                sb.Append("=");
-                sb.Append(Uri.EscapeDataString(p.Value));
-            }
-
-            if (sb.Length == 0) return redirectUri;
-
-            if (useFragment)
-            {
-                return redirectUri + (redirectUri.Contains("#") ? "&" : "#") + sb.ToString();
-            }
-            else
-            {
-                return redirectUri + (redirectUri.Contains("?") ? "&" : "?") + sb.ToString();
-            }
-        }
-
-        #endregion
-
-        #region Token所有者の確認
-
-        /// <summary>Tokenが、認証したクライアントに発行されたものかを確認する</summary>
-        /// <param name="client_id">認証済みのclient_id</param>
-        /// <param name="identity">ClaimsIdentity（VerifyAccessTokenの結果）</param>
-        /// <returns>bool</returns>
-        /// <remarks>RFC 7009 2.1 / RFC 7662 2.1（#194）</remarks>
-        public static bool CheckTokenOwner(string client_id, ClaimsIdentity identity)
-        {
-            if (string.IsNullOrEmpty(client_id) || identity == null) return false;
-
-            Claim aud = identity.Claims.Where(
-                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-            return (aud != null && aud.Value == client_id);
-        }
-
-        /// <summary>RefreshTokenが、認証したクライアントに発行されたものかを確認する</summary>
-        /// <param name="client_id">認証済みのclient_id</param>
-        /// <param name="tokenPayload">RefreshTokenProvider.Referの結果</param>
-        /// <returns>bool</returns>
-        /// <remarks>RFC 7009 2.1（#194）</remarks>
-        public static bool CheckRefreshTokenOwner(string client_id, string tokenPayload)
-        {
-            if (string.IsNullOrEmpty(client_id) || string.IsNullOrEmpty(tokenPayload)) return false;
-
-            JObject payload = (JObject)JsonConvert.DeserializeObject(tokenPayload);
-
-            return (payload != null
-                && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
-        }
-
-        #endregion
-
-        #region Revocation / Introspection
-
-        /// <summary>
-        /// token_type_hint から、トークンを探す順番を決める。
-        /// </summary>
-        /// <param name="token_type_hint">token_type_hint（省略・未知の値は既定の順番）</param>
-        /// <returns>探す順番（access_token / refresh_token）</returns>
-        /// <remarks>
-        /// ヒントは探す順番の手掛かりにすぎない。
-        /// ヒントの種類で見つからなければ、他の種類も探す（RFC 7009 2.1 / RFC 7662 2.1）（#200）。
-        /// </remarks>
-        private static string[] TokenSearchOrder(string token_type_hint)
-        {
-            if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
-            {
-                return new string[] { OAuth2AndOIDCConst.RefreshToken, OAuth2AndOIDCConst.AccessToken };
-            }
-
-            return new string[] { OAuth2AndOIDCConst.AccessToken, OAuth2AndOIDCConst.RefreshToken };
-        }
+        #region RevokeToken / IntrospectToken
 
         /// <summary>トークンを失効させる（RFC 7009）。クライアント認証は済んでいること。</summary>
         /// <param name="client_id">認証済みのclient_id</param>
@@ -2314,6 +2135,302 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #endregion
+
+        #region Private
+
+        #region Token所有者の確認
+
+        /// <summary>Tokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="identity">ClaimsIdentity（VerifyAccessTokenの結果）</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1 / RFC 7662 2.1（#194）</remarks>
+        private static bool CheckTokenOwner(string client_id, ClaimsIdentity identity)
+        {
+            if (string.IsNullOrEmpty(client_id) || identity == null) return false;
+
+            Claim aud = identity.Claims.Where(
+                x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+            return (aud != null && aud.Value == client_id);
+        }
+
+        /// <summary>RefreshTokenが、認証したクライアントに発行されたものかを確認する</summary>
+        /// <param name="client_id">認証済みのclient_id</param>
+        /// <param name="tokenPayload">RefreshTokenProvider.Referの結果</param>
+        /// <returns>bool</returns>
+        /// <remarks>RFC 7009 2.1（#194）</remarks>
+        private static bool CheckRefreshTokenOwner(string client_id, string tokenPayload)
+        {
+            if (string.IsNullOrEmpty(client_id) || string.IsNullOrEmpty(tokenPayload)) return false;
+
+            JObject payload = (JObject)JsonConvert.DeserializeObject(tokenPayload);
+
+            return (payload != null
+                && (string)payload[OAuth2AndOIDCConst.aud] == client_id);
+        }
+
+        #endregion
+
+        #region TokenSearchOrder
+
+        /// <summary>
+        /// token_type_hint から、トークンを探す順番を決める。
+        /// </summary>
+        /// <param name="token_type_hint">token_type_hint（省略・未知の値は既定の順番）</param>
+        /// <returns>探す順番（access_token / refresh_token）</returns>
+        /// <remarks>
+        /// ヒントは探す順番の手掛かりにすぎない。
+        /// ヒントの種類で見つからなければ、他の種類も探す（RFC 7009 2.1 / RFC 7662 2.1）（#200）。
+        /// </remarks>
+        private static string[] TokenSearchOrder(string token_type_hint)
+        {
+            if (token_type_hint == OAuth2AndOIDCConst.RefreshToken)
+            {
+                return new string[] { OAuth2AndOIDCConst.RefreshToken, OAuth2AndOIDCConst.AccessToken };
+            }
+
+            return new string[] { OAuth2AndOIDCConst.AccessToken, OAuth2AndOIDCConst.RefreshToken };
+        }
+
+        #endregion
+
+        #endregion
+
+        #endregion
+
+        #region Common
+
+        #region Public
+
+        /// <summary>定数文字列からRedirectUriを取得する。</summary>
+        /// <param name="constr">定数文字列</param>
+        /// <returns>RedirectUri</returns>
+        public static string GetRedirectUriFromConstr(string constr)
+        {
+            string ret = "";
+
+            // 事前登録されている。
+            if (constr.ToLower() == Const.TestSelfCode)
+            {
+                // Authorization Codeグラント種別のテスト用のセルフRedirectエンドポイント
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Account;
+            }
+            else if (constr.ToLower() == Const.TestSelfToken)
+            {
+                // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
+            }
+            else
+            {
+                // そのまま使用する。
+                ret = constr;
+            }
+
+            return ret;
+        }
+
+        #region Redirect URLの組み立て
+
+        /// <summary>リダイレクト先URLに、パラメタを付ける</summary>
+        /// <param name="redirectUri">リダイレクト先</param>
+        /// <param name="parameters">付けるパラメタ（値が空のものは付けない）</param>
+        /// <param name="useFragment">true : フラグメント（#）、false : クエリ文字列（?）</param>
+        /// <returns>URL</returns>
+        /// <remarks>
+        /// #187
+        /// - **既にクエリ文字列を持つredirect_uriでも壊れない**よう、区切りを ? と & で切り替える。
+        /// - **値は必ずURLエンコードする。** stateはクライアントが自由に決められるため、
+        ///   生で連結するとリダイレクト先URLにパラメタを注入できてしまう。
+        /// - 値が空のパラメタは付けない。stateは、要求に含まれた場合のみ返す（RFC 6749 4.1.2）。
+        /// </remarks>
+        public static string BuildRedirectUrl(
+            string redirectUri, Dictionary<string, string> parameters, bool useFragment = false)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            foreach (KeyValuePair<string, string> p in parameters)
+            {
+                if (string.IsNullOrEmpty(p.Value)) continue;
+
+                if (sb.Length != 0) sb.Append("&");
+                sb.Append(Uri.EscapeDataString(p.Key));
+                sb.Append("=");
+                sb.Append(Uri.EscapeDataString(p.Value));
+            }
+
+            if (sb.Length == 0) return redirectUri;
+
+            if (useFragment)
+            {
+                return redirectUri + (redirectUri.Contains("#") ? "&" : "#") + sb.ToString();
+            }
+            else
+            {
+                return redirectUri + (redirectUri.Contains("?") ? "&" : "?") + sb.ToString();
+            }
+        }
+
+        #endregion
+
+        #region エラー応答（HTTP ステータス・WWW-Authenticate）
+
+        /// <summary>無効な Bearer トークン（RFC 6750 3.1）</summary>
+        /// <remarks>Open棟梁 の OAuth2AndOIDCConst に無いので、ここで定義する（#196）。</remarks>
+        public const string invalid_token = "invalid_token";
+
+        /// <summary>login_hint などで示されたユーザが見つからない（CIBA Core 13）</summary>
+        /// <remarks>Open棟梁 の OAuth2AndOIDCConst に無いので、ここで定義する（#196）。</remarks>
+        public const string unknown_user_id = "unknown_user_id";
+
+        /// <summary>エラー応答の HTTP ステータスを決める（RFC 6749 5.2 / RFC 6750 3.1）</summary>
+        /// <param name="err">error / error_description を持つ辞書</param>
+        /// <returns>HTTP ステータス（invalid_client / invalid_token は 401、それ以外は 400）</returns>
+        /// <remarks>
+        /// 以前は、どのエンドポイントも Dictionary をそのまま返していたため、エラーでも HTTP 200 だった（#196）。
+        /// RFC 6749 5.2 : エラーは 400。invalid_client（クライアント認証の失敗）は 401。
+        /// RFC 6750 3.1 : invalid_token（無効・失効・期限切れの Bearer トークン）は 401。
+        /// CIBA Core 13 : invalid_client は 401、それ以外（invalid_scope・unknown_user_id など）は 400。
+        /// Device / CIBA のポーリングのエラー（authorization_pending など）も 400（RFC 8628 3.5）。
+        /// 実際の応答（IActionResult / IHttpActionResult）は、フレームワークごとに各アプリで作る。
+        /// </remarks>
+        public static int GetErrorStatusCode(Dictionary<string, string> err)
+        {
+            string error = null;
+
+            if (err != null)
+            {
+                err.TryGetValue(OAuth2AndOIDCConst.error, out error);
+            }
+
+            if (error == OAuth2AndOIDCConst.invalid_client || error == CmnEndpoints.invalid_token)
+            {
+                return 401;
+            }
+
+            return 400;
+        }
+
+        /// <summary>Bearer トークンのエラー応答の WWW-Authenticate を作る（RFC 6750 3）</summary>
+        /// <param name="realm">realm（保護資源の名前）</param>
+        /// <param name="err">error / error_description を持つ辞書（トークンが無かった場合は空）</param>
+        /// <returns>WWW-Authenticate の値のうち、スキーム名（Bearer）より後ろ</returns>
+        /// <remarks>
+        /// RFC 6750 3 : 保護資源は、トークンが無い・無効な要求に WWW-Authenticate: Bearer を返す（#196）。
+        /// - トークンが無い（ヘッダ無し、または他の方式）: realm だけ。エラー情報は付けない（3.1 : SHOULD NOT）
+        /// - 無効なトークン : error と error_description を付ける
+        /// 値には固定の文字列を渡すこと（quoted-string の中に " と \ は入れられない）。
+        /// ヘッダの付け方はフレームワークごとに違うので、各アプリで付ける。
+        /// </remarks>
+        public static string GetBearerChallengeParameter(string realm, Dictionary<string, string> err)
+        {
+            List<string> items = new List<string>();
+            items.Add("realm=\"" + realm + "\"");
+
+            if (err != null)
+            {
+                foreach (string key in new string[] { OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.error_description })
+                {
+                    if (err.TryGetValue(key, out string value) && !string.IsNullOrEmpty(value))
+                    {
+                        items.Add(key + "=\"" + value + "\"");
+                    }
+                }
+            }
+
+            return string.Join(", ", items);
+        }
+
+        #endregion
+
+        #region　ClientAuthentication
+
+        #region client_id & (client_secret or x509)
+
+        /// <summary>ClientAuthentication</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <returns>bool</returns>
+        public static bool ClientAuthentication(string client_id, string client_secret,
+            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+        {
+            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+
+            // client_id & client_secret
+            if (!string.IsNullOrEmpty(client_id))
+            {
+                if (!string.IsNullOrEmpty(client_secret))
+                {
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
+                    // クライアント認証（client_secret）を行なう。
+                    if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
+                    {
+                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                        x509 = null; // client_secretがあった場合、x509を無効化
+                        return true;
+                    }
+                }
+                else if (x509 != null)
+                {
+                    // *.config or Saml2OAuth2Dataテーブルを参照して、
+                    // クライアント認証（X509Certificate2）を行なう。
+                    if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                    {
+                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+        #region Device AuthZ
+
+        /// <summary>Device AuthZのクライアント認証</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <returns>bool</returns>
+        /// <remarks>
+        /// RFC 8628
+        /// - 3.1 : デバイス認可要求で、クライアントを識別する。
+        /// - 3.4 : トークン要求で、コンフィデンシャル クライアントは認証する。
+        /// パブリック クライアント（client_secret未登録）は、client_idの確認だけを行う。
+        /// </remarks>
+        public static bool DeviceAuthZClientAuthentication(
+            string client_id, string client_secret, ref X509Certificate2 x509)
+        {
+            // client_idは必須
+            if (string.IsNullOrEmpty(client_id)) return false;
+
+            // 未登録のclient_idは拒否
+            if (string.IsNullOrEmpty(Helper.GetInstance().GetClientName(client_id))) return false;
+
+            // コンフィデンシャル クライアントは認証必須
+            // - client_secretを登録済み
+            // - tls_client_auth_subject_dnを登録済み（mTLSのみのクライアント）
+            // - x509を提示してきた
+            if (!string.IsNullOrEmpty(Helper.GetInstance().GetClientSecret(client_id))
+                || !string.IsNullOrEmpty(Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
+                || x509 != null)
+            {
+                return CmnEndpoints.ClientAuthentication(
+                    client_id, client_secret, ref x509,
+                    out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+            }
+
+            // パブリック クライアントは、client_idの確認のみ
+            return true;
+        }
+
+        #endregion
+
         #region assertion
 
         /// <summary>ClientAuthentication</summary>
@@ -2363,6 +2480,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #endregion
+
+        #endregion
+
+        #region Private
 
         #region CheckClientMode
 
@@ -2560,6 +2681,23 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // expires_in
             ret.Add(OAuth2AndOIDCConst.expires_in, ((int)Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalSeconds).ToString());
+
+            // scope
+            // 発行したスコープを返す。要求と異なる場合は必須（RFC 6749 5.1）。
+            // scopes_supported に無いスコープは発行しないので、要求と異なることがある（#198）。
+            List<string> issued = new List<string>();
+            foreach (string s in jAry)
+            {
+                if (!string.IsNullOrEmpty(s))
+                {
+                    issued.Add(s);
+                }
+            }
+
+            if (issued.Count > 0)
+            {
+                ret.Add(OAuth2AndOIDCConst.scope, string.Join(" ", issued));
+            }
 
             return ret;
         }
