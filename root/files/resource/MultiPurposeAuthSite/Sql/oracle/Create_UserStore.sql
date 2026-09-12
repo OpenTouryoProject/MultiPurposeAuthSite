@@ -104,6 +104,31 @@ CREATE TABLE "FIDO2Data"(
     CONSTRAINT "PK.FIDO2Data" PRIMARY KEY ("PublicKeyId")
 );
 
+CREATE SEQUENCE TS_DeviceAuthZDataID;    -- TS_DeviceAuthZDataID.NEXTVAL
+CREATE TABLE "DeviceAuthZData"(
+    "Id" NUMBER(10) NOT NULL,                    -- PK (キー長に問題があるため"Id" "NUMBER(10)"を使用)
+    "DeviceCode" NVARCHAR2(38) NOT NULL,         -- device_code(guid)
+    "UserCode" NVARCHAR2(10) NOT NULL,           -- user_code(10文字以下)
+    "AuthReqExp" NUMBER(19) NOT NULL,            -- UNIX時刻(long)
+    "TempData" NVARCHAR2(256) NULL,              -- TempData
+    "AuthZCode" NVARCHAR2(64) NULL,              -- AuthZCode
+    "Result" NUMBER(3) NULL,                     -- Result of Verify
+    CONSTRAINT "PK.DeviceAuthZData" PRIMARY KEY ("Id")
+);
+
+CREATE SEQUENCE TS_CibaDataID;    -- TS_CibaDataID.NEXTVAL
+CREATE TABLE "CibaData"(
+    "Id" NUMBER(10) NOT NULL,                    -- PK (キー長に問題があるため"Id" "NUMBER(10)"を使用)
+    "ClientNotificationToken" NVARCHAR2(800) NOT NULL, -- 乱数(800)
+    "AuthReqId" NVARCHAR2(800) NOT NULL,         -- 乱数(800)
+    "AuthReqExp" NUMBER(19) NOT NULL,            -- UNIX時刻(long)
+    "AuthZCode" NVARCHAR2(64) NOT NULL,          -- AuthZCode
+    "UnstructuredData" NVARCHAR2(2000) NULL,     -- binding_message, user_code, etc.
+    "Result" NUMBER(3) NULL,                     -- Result of CIBA
+    "UserId" NVARCHAR2(128) NULL,                -- 承認する利用者 (Users.Id)
+    CONSTRAINT "PK.CibaData" PRIMARY KEY ("Id")
+);
+
 CREATE TABLE "OAuth2Revocation"(
     "Jti" NVARCHAR2(38) NOT NULL,            -- PK, guid
     "CreatedDate" DATE NOT NULL,
@@ -136,6 +161,17 @@ ALTER TABLE "Users" ADD CONSTRAINT "ClientIDIndex" UNIQUE ("ClientID");
 ---- Roles
 ALTER TABLE "Roles" ADD CONSTRAINT "RoleNameIndex" UNIQUE ("Name");
 ALTER TABLE "Roles" ADD CONSTRAINT "NormalizedNameIndex" UNIQUE ("NormalizedName");
+---- DeviceAuthZData
+ALTER TABLE "DeviceAuthZData" ADD CONSTRAINT "DeviceAuthZDeviceCodeIndex" UNIQUE ("DeviceCode");
+ALTER TABLE "DeviceAuthZData" ADD CONSTRAINT "DeviceAuthZUserCodeIndex" UNIQUE ("UserCode");
+---- CibaData
+-- 注意 : 下の 2 列は 800 文字である。NVARCHAR2 の上限は 2000 バイトで、
+--        一意索引のキー長はブロック サイズの制約を受けるため、
+--        環境によって ORA-01450 (maximum key length exceeded) になりうる。
+--        その場合は、索引を作らない（sqlserver / pstgrs との差として記録する）か、
+--        列長の見直しが必要。**実機で未確認。**
+ALTER TABLE "CibaData" ADD CONSTRAINT "CibaClientNotificationTokenIndex" UNIQUE ("ClientNotificationToken");
+ALTER TABLE "CibaData" ADD CONSTRAINT "CibaAuthReqIdIndex" UNIQUE ("AuthReqId");
 
 --- INDEX
 ---- UserRoles

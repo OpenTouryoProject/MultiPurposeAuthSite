@@ -286,7 +286,22 @@ E2E テストは `mem` を想定している。**前後で状態を掃除する�
 >
 > 列が無いと、CIBA の要求の登録（`INSERT`）が失敗する。
 > なお**列を足す前の保留中の要求は、承認できない**（宛先が記録されていないため）。
-> `ora` は `Create_UserStore.sql` に `CibaData` 自体が無く、CIBA は動かない（既存の欠落）。
+> `ora` にも `DeviceAuthZData` / `CibaData` を追加した（#206）。
+> **ただし実機で流していない。** Oracle では、800 文字の列への一意索引が
+> `ORA-01450` になりうる（スクリプト内に注記あり）。
+
+**3 つの DDL がミラーかどうかは、機械的に確かめられる。**
+
+```powershell
+cd root
+.\CompareDdl.ps1           # 差があれば赤く出て、終了コードが 1 になる
+.\CompareDdl.ps1 -Detail   # 差の無いテーブルも並べる
+```
+
+`Create_UserStore.sql`（テーブルと列）と `Select_UserStore.sql`（SELECT 対象）の**両方**を見る。
+**型は比べない**（`nvarchar(max)` と `NVARCHAR2(2000)` のように、対応はするが同一ではない）。
+**SQL が実行できるかは分からない。** それが分かるのは、テストで `UserStoreType` を
+切り替えられるようになってから（#207）。
 
 ## 8. 証明書
 

@@ -31,6 +31,12 @@ cd root
 .\1_BuildAll.ps1 -Libs Force    # OpenTouryo のアセンブリを取り直す
 ```
 
+ビルドとは別に、**DDL がミラーかを確かめるスクリプト**がある（#206）。
+
+```powershell
+.\CompareDdl.ps1                # 3 つの RDB の DDL を突き合わせる
+```
+
 バッチを直接ダブル クリックしてもよい。その場合は `root/programs` の
 `0_ExecAllBat.bat`（通し）または `10_MultiPurposeAuthSite*.bat`（個別）を使う。
 
