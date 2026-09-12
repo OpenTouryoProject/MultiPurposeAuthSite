@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/12  玄人 幸道         新規（プッシュ通知を送信箱で受け、認証デバイスの返答をテストが送る）（#196）
+//*  2026/09/13  玄人 幸道         EX-8.3（返答の及ぶ範囲）・EX-8.4（別の利用者は承認できない）を追加
 //**********************************************************************************
 
 using System;
@@ -57,8 +58,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
     /// サーバは FCM に送らず送信箱（FcmOutbox）にファイルとして書き（test.ps1 -Launch のときだけ）、
     /// テストはそれを受け取って、認証デバイスと同じ HTTP 要求（/SetDeviceToken・/ciba_result）を送る。
     ///
-    /// /ciba_result は、メモリのストアでは auth_req_id を見ずに、保留中の全ての要求へ結果を書き込む。
-    /// そのため、返答を送るテストはこのクラスに集めて、順に流す（xUnit は、クラスの中を順に実行する）。
+    /// /ciba_result は、**auth_req_id で 1 件を特定し、その要求が返答者宛てかを確かめてから**結果を書き込む。
+    /// 以前はメモリのストアで auth_req_id を見ておらず、保留中の全ての要求へ書き込んでいた（EX-8.3 で回帰を見る）。
     /// </summary>
     public class CibaTests : TargetTestBase
     {
@@ -285,6 +286,114 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Verify("トークンを出さない", string.IsNullOrEmpty(denied.AccessToken),
                     "access_token を返さない", denied.AccessToken == null ? "返さなかった" : "**返してしまった**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-8.3 返答は、その auth_req_id だけに効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0803_返答はそのauth_req_idだけに効く(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                FcmOutbox.SkipIfUnavailable(client.Target);
+
+                TestReport r = this.Report("EX-8.3",
+                    "返答は、その auth_req_id の要求だけに効く（他の保留中の要求に波及しない）",
+                    "**返答は 1 つの要求に閉じなければならない。** 以前はメモリのストアで auth_req_id を見ておらず、"
+                    + "1 つの「許可」が保留中の全ての要求に書き込まれた。"
+                    + "この状態では、承認していない要求にもトークンが出てしまう。",
+                    "CIBA Core §10（ポーリング）/ §11（authorization_pending）");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName
+                    + "（同じ利用者の要求を 2 件、同時に保留にする）");
+
+                r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
+
+                (string AccessToken, string DeviceToken) device = await RegisterDeviceAsync(r, client);
+
+                r.Step("(2) クライアント : CIBA の認証リクエストを 2 件送る（A と B）");
+
+                JsonResponse startA = await StartAsync(client, reg, "E2E-scope-A");
+                string authReqIdA = startA.String("auth_req_id");
+
+                JsonResponse startB = await StartAsync(client, reg, "E2E-scope-B");
+                string authReqIdB = startB.String("auth_req_id");
+
+                Assert.False(string.IsNullOrEmpty(authReqIdA), "前提: A の auth_req_id が返ること");
+                Assert.False(string.IsNullOrEmpty(authReqIdB), "前提: B の auth_req_id が返ること");
+
+                r.Verify("2 件の auth_req_id は別のもの", authReqIdA != authReqIdB,
+                    "A と B で異なる", authReqIdA != authReqIdB ? "異なる" : "**同じ値**");
+
+                r.Step("(3) サーバ → 認証デバイス : 2 件のプッシュ通知を受け取る（送信箱）");
+
+                await ReceivePushAsync(r, client, authReqIdA, device.DeviceToken);
+                await ReceivePushAsync(r, client, authReqIdB, device.DeviceToken);
+
+                r.Step("(4) ユーザ : A だけに「許可」を返す（POST /ciba_result）");
+
+                JsonResponse answer = await client.CibaPushResultAsync(device.AccessToken, authReqIdA, "true");
+
+                r.VerifyEqual("返答 : HTTP 200", "200", ((int)answer.StatusCode).ToString());
+                r.VerifyEqual("返答 : 本文は OK", "OK", answer.Text);
+
+                r.Step("(5) クライアント : B をポーリングする（まだ誰も返答していない）");
+
+                JsonResponse pollB = await PollAsync(client, reg, authReqIdB);
+
+                r.VerifyEqual("B は authorization_pending のまま", "authorization_pending", pollB.Error);
+
+                r.Verify("B にトークンを出さない", string.IsNullOrEmpty(pollB.AccessToken),
+                    "access_token を返さない", pollB.AccessToken == null ? "返さなかった" : "**返してしまった**");
+
+                r.Step("(6) クライアント : A をポーリングする（許可済み）");
+
+                JsonResponse pollA = await PollAsync(client, reg, authReqIdA);
+
+                r.Verify("A にはトークンを出す", !string.IsNullOrEmpty(pollA.AccessToken),
+                    "access_token を返す", string.IsNullOrEmpty(pollA.AccessToken) ? "**返らない**" : "返った");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-8.4 別の利用者は承認できない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory(Skip = "テスト基盤で 2 人目の利用者を作れないため、未実施。"
+            + "RequireUniqueEmail=true で /Account/Register がメアド検証待ち（VerifyEmailAddress）になり、"
+            + "登録した利用者でサインインできない。2 人目を用意する手段が入ったら外す。")]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0804_別の利用者は承認できない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                FcmOutbox.SkipIfUnavailable(client.Target);
+
+                TestReport r = this.Report("EX-8.4",
+                    "別の利用者のトークンでは、他人の CIBA 要求を承認できない",
+                    "**承認は、要求が宛てられた利用者だけができなければならない。**"
+                    + "他人が承認できると、本人の知らないうちにクライアントへトークンが出る。"
+                    + "要求が無い場合と自分宛てでない場合は、**同じ応答**で返すこと"
+                    + "（区別すると auth_req_id の存在を推測できる）。",
+                    "CIBA Core §7（認証リクエストは特定の利用者に宛てられる）");
+
+                r.Target("宛先の利用者 = " + TestEnv.TestUserName + " / 返答するのは別の利用者");
+
+                r.Step("(1) 宛先の利用者で端末を登録し、CIBA の要求を 1 件保留にする");
+                r.Step("(2) **別の利用者**のトークンで、その auth_req_id に「許可」を送る");
+                r.Step("(3) 承認されないこと（HTTP 400 ＋ 本文 NG）を確かめる");
+                r.Step("(4) クライアントのポーリングが authorization_pending のままであることを確かめる");
+
+                r.Note("実装は入っている（CibaProvider.ReceiveResult が auth_req_id と利用者の両方で照合する）。"
+                    + "このテストだけが、2 人目の利用者を用意できないため未実施。");
 
                 r.Done();
             }

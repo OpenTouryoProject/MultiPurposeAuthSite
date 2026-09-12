@@ -274,6 +274,20 @@ E2E テストは、**実行時にアプリ自身の構成ファイルから読�
 
 E2E テストは `mem` を想定している。**前後で状態を掃除する必要が無い**のが理由。
 
+> **`sql` / `npg` を使っている既存環境は、`CibaData` に `UserId` 列の追加が要る。**
+> CIBA の返答（`/ciba_result`）は、**要求が誰宛てだったか**を照合してから結果を書き込む。
+> その宛先を持つ列で、`Create_UserStore.sql` には入れてあるが、
+> **作成済みのデータベースには自動では増えない。**
+>
+> ```sql
+> ALTER TABLE [CibaData] ADD [UserId] [nvarchar](128) NULL;   -- SQL Server
+> ALTER TABLE CibaData ADD UserId varchar(128) NULL;          -- PostgreSQL
+> ```
+>
+> 列が無いと、CIBA の要求の登録（`INSERT`）が失敗する。
+> なお**列を足す前の保留中の要求は、承認できない**（宛先が記録されていないため）。
+> `ora` は `Create_UserStore.sql` に `CibaData` 自体が無く、CIBA は動かない（既存の欠落）。
+
 ## 8. 証明書
 
 ```json

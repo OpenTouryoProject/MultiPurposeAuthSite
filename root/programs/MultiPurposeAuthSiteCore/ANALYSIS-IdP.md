@@ -418,9 +418,14 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 - E2E テスト : `RT-196.19`（`/SetDeviceToken` の 400 / 401）/ `RT-196.20`（`/ciba_result` の 400 / 401）
 
 > **別の問題（#196 の範囲外。調査の途中で見つけ、別に報告した）:**
-> - `/ciba_result`（と `CibaProvider.ReceiveResult`）が、`auth_req_id` の宛先ユーザを確かめていない（未修正）。
->   **セキュリティの問題なので、`SECURITY.md` のとおり非公開で報告した。**
->   詳細は advisory 側に置き、修正が入ってからここに書く（`AGENTS.md`「セキュリティの指摘は、公開される前に確認を取る」）
+> - `/ciba_result`（と `CibaProvider.ReceiveResult`）が、`auth_req_id` の宛先ユーザを確かめていなかった
+>   → **✅ 修正済み。** `CibaData` に承認する利用者（`Users.Id`）を記録し、
+>   返答時に **`auth_req_id` と利用者の両方**で照合する。要求が無い場合と自分宛てでない場合は
+>   同じ応答（400 ＋ `"NG"`）で返す（存在を推測させないため）。
+>   あわせて、メモリのストアの 2 つの取り違えも直した。
+>   **（a）`ReceiveResult` が `auth_req_id` を見ず、保留中の全要求へ結果を書き込んでいた**（E2E : `EX-8.3`）。
+>   **（b）`ReceiveTokenReq` が、一致したものとは別の保留要求を削除しうる状態だった**（ループ変数の取り残し）。
+>   E2E : `EX-8.3`。`EX-8.4`（別の利用者は承認できない）は、テスト基盤で 2 人目の利用者を作れないため Skip
 > - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無い → #203
 > - `Authorization: Bearer`（方式だけで値が無い）で HTTP 500 になる
 >   （Open棟梁 の `AuthenticationHeader.GetCredentials` が `temp[1]` を確かめずに読む）

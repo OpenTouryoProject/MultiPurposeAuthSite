@@ -125,6 +125,7 @@ CREATE TABLE CibaData(
     AuthZCode varchar(64) NOT NULL,                   -- AuthZCode
     UnstructuredData varchar(2000) NULL,              -- binding_message, user_code, etc.
     Result boolean NULL,                              -- Result of CIBA
+    UserId varchar(128) NULL,                         -- 承認する利用者 (Users.Id)
     CONSTRAINT PK_CibaData PRIMARY KEY (Id)
 );
 

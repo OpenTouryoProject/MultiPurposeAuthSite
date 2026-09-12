@@ -1049,7 +1049,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "RFC 6750 §3 / #196");
 
                 r.Target(client.Target.DisplayName + " / ユーザのトークンは認可コード フローで得る");
-                r.Note("成功（200 と OK）は EX-8 で見る。ここで返答すると、並行して動く CIBA のテストの要求に結果を書き込んでしまう。");
+                r.Note("成功（200 と OK）は EX-8 で見る。"
+                    + "なお auth_req_id が自分宛ての要求でない場合も、ここと同じ 400 ＋ NG で返る（EX-8.4）。");
 
                 r.Step("(1) Authorization ヘッダを付けずに送る");
 

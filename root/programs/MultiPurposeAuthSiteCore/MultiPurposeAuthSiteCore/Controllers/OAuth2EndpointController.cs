@@ -55,6 +55,7 @@
 //*  2026/09/11  玄人 幸道         /ciba_authz のエラー応答を 400 / 401 で返し、ユーザ不明を unknown_user_id に（#196）
 //*  2026/09/12  玄人 幸道         /ciba_result・/SetDeviceToken の失敗を 400 / 401 で返す（本文の NG は変えない）（#196）
 //*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
+//*  2026/09/13  玄人 幸道         CIBAの返答に所有者確認を追加。メモリ ストアの取り違えも修正
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -800,9 +801,10 @@ namespace MultiPurposeAuthSite.Controllers
                             long authReqExp = DateTimeOffset.Now.AddSeconds(_requested_expiry).ToUnixTimeSeconds();
 
                             // CIBA情報をストア
+                            // **誰宛ての要求かを記録する**（user は login_hint で解決した利用者）。
                             Sts.CibaProvider.Create(
                                client_notification_token,
-                               authReqExp, code, binding_message, out authReqId);
+                               authReqExp, code, binding_message, user.Id, out authReqId);
 
 #pragma warning disable 162
 
@@ -821,7 +823,7 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // テストを通すため追加
-                                Sts.CibaProvider.ReceiveResult(authReqId, true);
+                                Sts.CibaProvider.ReceiveResult(authReqId, user.Id, true);
                             }
 
 #pragma warning restore 162
@@ -924,8 +926,14 @@ namespace MultiPurposeAuthSite.Controllers
             if (!string.IsNullOrEmpty(auth_req_id)
                 && bool.TryParse(temp, out bool result))
             {
-                Sts.CibaProvider.ReceiveResult(auth_req_id, result);
-                return this.Ok("OK");
+                if (Sts.CibaProvider.ReceiveResult(auth_req_id, user.Id, result))
+                {
+                    return this.Ok("OK");
+                }
+
+                // **自分宛ての要求ではない（または、その要求が無い）。**
+                //   区別して返すと、auth_req_id の存在を推測させるので、同じ応答にする。
+                return this.NGResult(400, "ciba_result", null);
             }
 
             // パラメタの不備（#196 : 400）
