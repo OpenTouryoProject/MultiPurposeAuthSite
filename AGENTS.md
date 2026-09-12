@@ -9,6 +9,9 @@ https://github.com/OpenTouryoProject/MultiPurposeAuthSite
 
 の開発エージェント用。
 
+環境のセットアップ・ビルド・検証の手順は [root/Readme.ja.md](root/Readme.ja.md) を参照。
+本書は、その上で**エージェントが守るべきこと**と、**どの文書を見るか**を示す。
+
 **プロジェクト共通の投稿規約は [Contributing.ja.md](Contributing.ja.md) に従う。**
 コメント量の目安、クロスコンパイルと下位互換の方針、ブランチ運用（git-flow）、
 "プルリクエスト" の粒度は、人もエージェントも同じ規約による。
@@ -116,7 +119,9 @@ gh issue create --repo OpenTouryoProject/MultiPurposeAuthSite --title <title> --
 **全部回すのは「安全」ではない。遅いだけのことがある。**
 逆に、**変更が実行されるコードに届いていないなら、通しを回しても何も分からない。**
 
-手順とコマンドは [`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節、合否の読み方は
+**入口は [`root/Readme.ja.md`](root/Readme.ja.md) である。**
+前提の準備とスクリプト（`root\*.ps1`）は、そこから辿れる。
+手順だけを引くなら [`CHEATSHEET.md`](root/CHEATSHEET.md) 1 節、合否の読み方は
 [`BUILDING.md`](root/BUILDING.md) 3 節・[`TESTING.md`](root/TESTING.md) 5 節が一次情報である。
 **本書にコマンドは書かない。** 転記すると、両方を直さないかぎりズレる。
 
