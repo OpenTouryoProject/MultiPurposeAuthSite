@@ -417,11 +417,14 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   これで、これまで測れなかった CIBA の成功経路（`EX-8.1` 許可 → トークン、`EX-8.2` 拒否 → `access_denied`）を測れる
 - E2E テスト : `RT-196.19`（`/SetDeviceToken` の 400 / 401）/ `RT-196.20`（`/ciba_result` の 400 / 401）
 
-> **別の問題（#196 の範囲外、未起票）:**
-> - `/ciba_result` は、`auth_req_id` がそのユーザ宛ての要求かを確かめていない。
->   さらに、メモリのストアでは `CibaProvider.ReceiveResult` が `auth_req_id` を見ずに、
->   **保留中の全ての CIBA 要求に結果を書き込む**（DB のストアは `WHERE AuthReqId` で絞っている）
-> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無い
+> **別の問題（#196 の範囲外。調査の途中で見つけ、別に報告した）:**
+> - `/ciba_result`（と `CibaProvider.ReceiveResult`）が、`auth_req_id` の宛先ユーザを確かめていない（未修正）。
+>   **セキュリティの問題なので、`SECURITY.md` のとおり非公開で報告した。**
+>   詳細は advisory 側に置き、修正が入ってからここに書く（`AGENTS.md`「セキュリティの指摘は、公開される前に確認を取る」）
+> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無い → #203
+> - `Authorization: Bearer`（方式だけで値が無い）で HTTP 500 になる
+>   （Open棟梁 の `AuthenticationHeader.GetCredentials` が `temp[1]` を確かめずに読む）
+>   → Open棟梁 の #586。`RT-196.5` で観測している
 
 ### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 
