@@ -92,6 +92,17 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 > **`ON` にしただけでは、動きは変わらない。**
 > 環境変数が定義されていなければ、設定ファイルの値が使われる。
 
+### `FcmOutboxDirectory` — プッシュ通知の送信箱（テスト用）
+
+**本番では空のままにする。** 設定すると、サーバはプッシュ通知（CIBA、2FA のモバイル アプリ）を FCM に送らず、
+このディレクトリに JSON ファイルとして書く。E2E テストが、認証デバイスの代わりにそれを読む（#196）。
+送信箱を使うときは、Firebase の資格情報（`FirebaseServiceAccountKey`）を読まない。
+
+`root/programs/Tests/test.ps1 -Launch` が、上の `FxContainerization` の仕組みで、**環境変数として**サイトごとに設定する
+（`Tests/E2ETests/Result/fcm/core`・`…/netfx`）。構成ファイルに書く必要は無い。
+
+> **ファイルには、device_token や 2FA のコードがそのまま書かれる。**
+
 ## 3. net48 — `app.config`
 
 **`Web.config` から取り込まれる外部 `appSettings` ファイルである。**

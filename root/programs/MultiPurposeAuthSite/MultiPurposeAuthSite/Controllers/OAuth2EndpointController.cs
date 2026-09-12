@@ -52,6 +52,7 @@
 //*  2026/09/11  玄人 幸道         /introspect のエラー応答を 400 / 401 で返す（#196）
 //*  2026/09/11  玄人 幸道         /device_authz のエラー応答を 400 / 401 で返す（#196）
 //*  2026/09/11  玄人 幸道         /ciba_authz のエラー応答を 400 / 401 で返し、ユーザ不明を unknown_user_id に（#196）
+//*  2026/09/12  玄人 幸道         /ciba_result・/SetDeviceToken の失敗を 400 / 401 で返す（本文の NG は変えない）（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -852,47 +853,57 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /ciba_result
         /// </summary>
         /// <param name="formData">
+        /// - auth_req_id
         /// - result
         /// </param>
-        /// <returns>string</returns>
+        /// <returns>
+        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
+        /// トークンの不備は 401（WWW-Authenticate: Bearer）、パラメタの不備は 400（#196）
+        /// </returns>
+        /// <remarks>
+        /// 認証デバイス（authentication_device）が、プッシュ通知を受けて「許可 / 拒否」を押したときに呼ぶ。
+        /// </remarks>
         [HttpPost]
-        public string CibaPushResult(FormDataCollection formData)
+        public IHttpActionResult CibaPushResult(FormDataCollection formData)
         {
-            // 戻り値（エラー）
-            Dictionary<string, object> err = new Dictionary<string, object>();
-
-            // クライアント認証
-            if (AuthenticationHeader.GetCredentials(
+            // クライアント認証（Bearer トークン）
+            if (!AuthenticationHeader.GetCredentials(
                 HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
             {
-                if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
-                {
-                    // ClientIdの取り出し
-                    Claim ClientId = identity.Claims.Where(
-                        x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
-
-                    ApplicationUser user =
-                        //CmnUserStore.FindByName(identity.Name);
-                        PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-
-                    if (user != null)
-                    {
-                        // 変数
-                        string auth_req_id = formData["auth_req_id"];
-                        string temp = formData["result"];
-
-                        bool result = false;
-                        if (!string.IsNullOrEmpty(auth_req_id)
-                            && bool.TryParse(temp, out result))
-                        {
-                            Sts.CibaProvider.ReceiveResult(auth_req_id, result);
-                            return "OK";
-                        }
-                    }
-                }
+                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
+                return this.NGResult(401, "ciba_result", null);
             }
 
-            return "NG"; // 和製英語ですがｗ
+            ApplicationUser user = null;
+
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            {
+                // ClientIdの取り出し
+                Claim ClientId = identity.Claims.Where(
+                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+                user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+            }
+
+            if (user == null)
+            {
+                // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
+                return this.NGResult(401, "ciba_result", Token.CmnEndpoints.invalid_token);
+            }
+
+            // 変数
+            string auth_req_id = (formData == null) ? null : (string)formData["auth_req_id"];
+            string temp = (formData == null) ? null : (string)formData["result"];
+
+            if (!string.IsNullOrEmpty(auth_req_id)
+                && bool.TryParse(temp, out bool result))
+            {
+                Sts.CibaProvider.ReceiveResult(auth_req_id, result);
+                return this.Ok("OK");
+            }
+
+            // パラメタの不備（#196 : 400）
+            return this.NGResult(400, "ciba_result", null);
         }
 
         #endregion
@@ -1074,48 +1085,61 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /SetDeviceToken
         /// </summary>
         /// <param name="formData">
-        /// - devicetoken
+        /// - device_token
         /// </param>
-        /// <returns>string</returns>
+        /// <returns>
+        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
+        /// トークンの不備は 401（WWW-Authenticate: Bearer）、パラメタの不備は 400（#196）
+        /// </returns>
+        /// <remarks>
+        /// 認証デバイス（authentication_device）が、サインインの後に呼ぶ（端末の登録）。
+        /// </remarks>
         [HttpPost]
-        public async Task<string> SetDeviceToken(FormDataCollection formData)
+        public async Task<IHttpActionResult> SetDeviceToken(FormDataCollection formData)
         {
-            string device_token = formData["device_token"];
+            string device_token = (formData == null) ? null : (string)formData["device_token"];
 
-            if (!string.IsNullOrEmpty(device_token))
+            if (string.IsNullOrEmpty(device_token))
             {
-                // クライアント認証
-                if (AuthenticationHeader.GetCredentials(
-                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+                // パラメタの不備（#196 : 400）
+                return this.NGResult(400, "SetDeviceToken", null);
+            }
+
+            // クライアント認証（Bearer トークン）
+            if (!AuthenticationHeader.GetCredentials(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            {
+                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）（#196 : 401）
+                return this.NGResult(401, "SetDeviceToken", null);
+            }
+
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            {
+                // ClientIdの取り出し
+                Claim ClientId = identity.Claims.Where(
+                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+                ApplicationUser user =
+                    //CmnUserStore.FindByName(identity.Name);
+                    PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+
+                if (user != null)
                 {
-                    if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
-                    {
-                        // ClientIdの取り出し
-                        Claim ClientId = identity.Claims.Where(
-                            x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+                    // デバイストークンの保存
+                    user.DeviceToken = device_token;
+                    await UserManager.UpdateAsync(user);
 
-                        ApplicationUser user =
-                            //CmnUserStore.FindByName(identity.Name);
-                            PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
-
-                        if (user != null)
-                        {
-                            // デバイストークンの保存
-                            user.DeviceToken = device_token;
-                            await UserManager.UpdateAsync(user);
-
-                            return "OK";
-                        }
-                    }
+                    return this.Ok("OK");
                 }
             }
 
-            return "NG"; // 和製英語ですがｗ
+            // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
+            return this.NGResult(401, "SetDeviceToken", Token.CmnEndpoints.invalid_token);
         }
 
         #endregion
 
-        #region 共通のエラー応答（RFC 6749 5.2）
+        #region 共通のエラー応答
 
         /// <summary>
         /// クライアント認証を行うエンドポイント（/token・/revoke・/introspect・/device_authz・/ciba_authz）のエラー応答を作る（RFC 6749 5.2）
@@ -1142,6 +1166,38 @@ namespace MultiPurposeAuthSite.Controllers
                 // Authorization ヘッダで認証を試みたクライアントには必須（RFC 6749 5.2）。
                 res.Headers.WwwAuthenticate.Add(
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", "realm=\"" + realm + "\""));
+            }
+
+            return this.ResponseMessage(res);
+        }
+
+        /// <summary>
+        /// 文字列（OK / NG）で答えるエンドポイント（/SetDeviceToken・/ciba_result）の失敗の応答を作る
+        /// </summary>
+        /// <param name="status">HTTP ステータス（400 / 401）</param>
+        /// <param name="realm">WWW-Authenticate の realm（401 のとき）</param>
+        /// <param name="error">WWW-Authenticate の error（トークンが無い場合は null）</param>
+        /// <returns>本文が "NG" の応答</returns>
+        /// <remarks>
+        /// 認証デバイス（authentication_device）は、HTTP ステータスと本文の "OK" を見ている。
+        /// 本文は従来の "NG" のまま、ステータスだけを 400 / 401 にする（#196）。
+        /// 401 には、Bearer トークンが要ることを示す WWW-Authenticate を付ける（RFC 6750 3）。
+        /// </remarks>
+        private IHttpActionResult NGResult(int status, string realm, string error)
+        {
+            HttpResponseMessage res = this.Request.CreateResponse((HttpStatusCode)status, "NG");
+
+            if (status == 401)
+            {
+                Dictionary<string, string> err = new Dictionary<string, string>();
+
+                if (error != null)
+                {
+                    err.Add(OAuth2AndOIDCConst.error, error);
+                }
+
+                res.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "Bearer", Token.CmnEndpoints.GetBearerChallengeParameter(realm, err)));
             }
 
             return this.ResponseMessage(res);

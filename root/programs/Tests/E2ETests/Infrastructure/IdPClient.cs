@@ -37,6 +37,7 @@
 //*  2026/09/11  玄人 幸道         /introspect を client_secret_basic で呼ぶ IntrospectWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
+//*  2026/09/12  玄人 幸道         Authorization ヘッダ付きの POST を一般化し、認証デバイスの代わりの要求（/SetDeviceToken・/ciba_result）を追加（#196）
 //**********************************************************************************
 
 using System;
@@ -183,8 +184,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="clientId">client_id</param>
         /// <param name="clientSecret">client_secret（出力しないこと）</param>
         /// <returns>JsonResponse</returns>
-        public async Task<JsonResponse> PostJsonWithBasicAuthAsync(
+        public Task<JsonResponse> PostJsonWithBasicAuthAsync(
             string pathOrUrl, IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            // RFC 6749 2.3.1 : form-urlencode してから ":" で繋ぎ、BASE64 にする。
+            string credential = WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret);
+
+            return this.PostJsonWithAuthorizationAsync(pathOrUrl, form,
+                "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(credential)));
+        }
+
+        /// <summary>JSONを返すエンドポイントに、Authorization ヘッダを付けて POST する</summary>
+        /// <param name="pathOrUrl">パスまたはURL</param>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="authorization">Authorization ヘッダの値（null なら付けない。出力しないこと）</param>
+        /// <returns>JsonResponse</returns>
+        public async Task<JsonResponse> PostJsonWithAuthorizationAsync(
+            string pathOrUrl, IDictionary<string, string> form, string authorization)
         {
             List<KeyValuePair<string, string>> items = new List<KeyValuePair<string, string>>();
 
@@ -199,10 +215,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             HttpRequestMessage req = new HttpRequestMessage(HttpMethod.Post, this.Absolute(pathOrUrl));
             req.Content = new FormUrlEncodedContent(items);
 
-            // RFC 6749 2.3.1 : form-urlencode してから ":" で繋ぎ、BASE64 にする。
-            string credential = WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret);
-            req.Headers.TryAddWithoutValidation("Authorization",
-                "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(credential)));
+            if (authorization != null)
+            {
+                req.Headers.TryAddWithoutValidation("Authorization", authorization);
+            }
 
             HttpResponseMessage res = await this._http.SendAsync(req);
             return await ToJsonResponseAsync(res);
@@ -654,6 +670,39 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> CibaAuthorizeAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/ciba_authz", form);
+        }
+
+        #endregion
+
+        #region 認証デバイスの代わり（/SetDeviceToken・/ciba_result）
+
+        /// <summary>
+        /// 認証デバイスを登録する（POST /SetDeviceToken）。
+        /// 認証デバイス（authentication_device）が、サインインの後に送る要求と同じ形（Bearer ＋ device_token）。
+        /// </summary>
+        /// <param name="accessToken">ユーザのアクセス トークン（null なら Authorization ヘッダを付けない）</param>
+        /// <param name="deviceToken">デバイス・トークン（プッシュ通知の宛先。null なら送らない）</param>
+        /// <returns>JsonResponse（本文は "OK" / "NG"）</returns>
+        public Task<JsonResponse> SetDeviceTokenAsync(string accessToken, string deviceToken)
+        {
+            return this.PostJsonWithAuthorizationAsync("/SetDeviceToken",
+                new Dictionary<string, string>() { { "device_token", deviceToken } },
+                accessToken == null ? null : "Bearer " + accessToken);
+        }
+
+        /// <summary>
+        /// CIBA の要求への返答を送る（POST /ciba_result）。
+        /// 認証デバイスが、プッシュ通知を受けて「許可 / 拒否」を押したときに送る要求と同じ形。
+        /// </summary>
+        /// <param name="accessToken">ユーザのアクセス トークン（null なら Authorization ヘッダを付けない）</param>
+        /// <param name="authReqId">auth_req_id（プッシュ通知の data にある。null なら送らない）</param>
+        /// <param name="result">"true"（許可）/ "false"（拒否）。不正な値を送るテストのため、文字列で受ける</param>
+        /// <returns>JsonResponse（本文は "OK" / "NG"）</returns>
+        public Task<JsonResponse> CibaPushResultAsync(string accessToken, string authReqId, string result)
+        {
+            return this.PostJsonWithAuthorizationAsync("/ciba_result",
+                new Dictionary<string, string>() { { "auth_req_id", authReqId }, { "result", result } },
+                accessToken == null ? null : "Bearer " + accessToken);
         }
 
         #endregion

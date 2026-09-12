@@ -258,6 +258,13 @@ try {
         $env:OAuth2AuthorizationServerEndpointsRootURI = $Url
         $env:OAuth2ClientEndpointsRootURI = $Url
 
+        # プッシュ通知の送信箱（テスト用）。サイトは FCM に送らず、ここへファイルとして書く（#196）。
+        # テストは、認証デバイスの代わりにここを読む。サイトごとに分け、前回の残りは消す。
+        $coreOutbox = Join-Path $LogDir 'fcm\core'
+        New-Item -ItemType Directory -Force $coreOutbox | Out-Null
+        Remove-Item (Join-Path $coreOutbox '*') -Force -ErrorAction SilentlyContinue
+        $env:FcmOutboxDirectory = $coreOutbox
+
         # サイトの出力をファイルへ残す。
         # 起動に失敗したとき、これが無いと「応答しません」しか分からない。
         $coreOut = Join-Path $LogDir 'MpasSite.out.log'
@@ -284,6 +291,7 @@ try {
 
         Write-Host '起動しました。' -ForegroundColor Green
         $env:MPAS_CORE_BASEURL = $Url
+        $env:MPAS_CORE_FCM_OUTBOX = $coreOutbox
 
         # --------------------------------------------------------------
         # net48 版（IIS Express）
@@ -309,6 +317,11 @@ try {
             $env:OAuth2AuthorizationServerEndpointsRootURI = $NetFxUrl
             $env:OAuth2ClientEndpointsRootURI = $NetFxUrl
 
+            $netFxOutbox = Join-Path $LogDir 'fcm\netfx'
+            New-Item -ItemType Directory -Force $netFxOutbox | Out-Null
+            Remove-Item (Join-Path $netFxOutbox '*') -Force -ErrorAction SilentlyContinue
+            $env:FcmOutboxDirectory = $netFxOutbox
+
             $netFx = Start-Process -FilePath $iisExe `
                 -ArgumentList @("/config:$iisCfg", '/site:MPAS48') `
                 -PassThru -WindowStyle Hidden `
@@ -319,11 +332,13 @@ try {
 
             Write-Host '起動しました。' -ForegroundColor Green
             $env:MPAS_NETFX_BASEURL = $NetFxUrl
+            $env:MPAS_NETFX_FCM_OUTBOX = $netFxOutbox
         }
 
         # 役目は終わっている。テスト側へ持ち込まない。
         Remove-Item Env:\OAuth2AuthorizationServerEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\OAuth2ClientEndpointsRootURI -ErrorAction SilentlyContinue
+        Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
     }
 
     $testArgs = @('test', $csproj, '-c', $Configuration, '--logger', 'console;verbosity=normal')
@@ -376,6 +391,9 @@ finally {
         Remove-Item Env:\OAuth2ClientEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_BASEURL -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_BASEURL -ErrorAction SilentlyContinue
+        Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_FCM_OUTBOX -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_NETFX_FCM_OUTBOX -ErrorAction SilentlyContinue
     }
 }
 

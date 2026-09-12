@@ -35,6 +35,7 @@
 //*                                GetConfigSection → GetAnyConfigSection
 //*  2020/08/04  西野 大介         コンテナ化対応実施
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
+//*  2026/09/12  玄人 幸道         FcmOutboxDirectory（プッシュ通知の送信箱。テスト用）を追加（#196）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -400,6 +401,19 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("FirebaseServiceAccountKey");
+            }
+        }
+
+        /// <summary>
+        /// FcmOutboxDirectory（テスト用）。
+        /// 設定すると、プッシュ通知を FCM に送らず、このディレクトリにファイルとして書く（#196）。
+        /// E2E テスト（test.ps1 -Launch）が環境変数で設定する。本番では空のままにする。
+        /// </summary>
+        public static string FcmOutboxDirectory
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("FcmOutboxDirectory");
             }
         }
 

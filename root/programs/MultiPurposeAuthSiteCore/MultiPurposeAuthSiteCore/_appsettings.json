@@ -102,6 +102,8 @@
     "TwilioFromPhoneNumber": "[TwilioFromPhoneNumber]",
     // Firebase Cloud Messaging (FCM)
     "FirebaseServiceAccountKey": "C:/root/files/resource/MultiPurposeAuthSite/FirebaseServiceAccountKey.json",
+    // テスト用 : 設定すると、プッシュ通知を FCM に送らず、このディレクトリにファイルとして書く。本番では空のまま
+    "FcmOutboxDirectory": "",
 
     // 文面ファイルのフォルダ
     "ContentOfLetterFilePath": "C:/root/files/resource/MultiPurposeAuthSite/Txt",

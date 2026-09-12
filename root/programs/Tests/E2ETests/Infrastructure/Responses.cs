@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         JSON の null など、オブジェクトでない本文でも落ちないよう修正
+//*  2026/09/12  玄人 幸道         本文を文字列として読む Text を追加（"OK" / "NG" で答えるエンドポイント用）（#196）
 //**********************************************************************************
 
 using System;
@@ -250,6 +251,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public string ErrorDescription
         {
             get { return this.String("error_description"); }
+        }
+
+        /// <summary>
+        /// 本文を文字列として返す（JSON の文字列ならその値）。
+        /// /SetDeviceToken・/ciba_result のように、"OK" / "NG" で答えるエンドポイント用。
+        /// </summary>
+        public string Text
+        {
+            get
+            {
+                if (this.IsJson && this.Json.ValueKind == JsonValueKind.String)
+                {
+                    return this.Json.GetString();
+                }
+
+                return (this.Body ?? "").Trim();
+            }
         }
 
         /// <summary>診断用の要約（秘密情報を含めない）</summary>

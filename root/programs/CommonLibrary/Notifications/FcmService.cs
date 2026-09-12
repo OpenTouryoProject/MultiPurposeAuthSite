@@ -25,14 +25,19 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2020/03/12  西野 大介         新規
+//*  2026/09/12  玄人 幸道         送信箱（FcmOutboxDirectory）が設定されていれば、FCM に送らずファイルに書く（テスト用）（#196）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
 using Google.Apis.Auth.OAuth2;
+
+using Newtonsoft.Json;
 
 /// <summary>MultiPurposeAuthSite.Notifications</summary>
 namespace MultiPurposeAuthSite.Notifications
@@ -59,12 +64,19 @@ namespace MultiPurposeAuthSite.Notifications
         private FirebaseApp _FirebaseApp = null;
 
         /// <summary>Constructor</summary>
+        /// <remarks>
+        /// 送信箱（FcmOutboxDirectory）を使うときは、Firebase の資格情報を読まない。
+        /// テスト環境には、資格情報のファイルが無いため（#196）。
+        /// </remarks>
         public FcmService()
         {
-            this._FirebaseApp = FirebaseApp.Create(new AppOptions()
+            if (string.IsNullOrEmpty(Co.Config.FcmOutboxDirectory))
             {
-                Credential = GoogleCredential.FromFile(Co.Config.FirebaseServiceAccountKey)
-            });
+                this._FirebaseApp = FirebaseApp.Create(new AppOptions()
+                {
+                    Credential = GoogleCredential.FromFile(Co.Config.FirebaseServiceAccountKey)
+                });
+            }
         }
 
         /// <summary>
@@ -78,6 +90,14 @@ namespace MultiPurposeAuthSite.Notifications
         public async Task<string> SendAsync(
             string destination, string subject, string body, Dictionary<string, string> data)
         {
+            // テスト用 : FCM に送らず、送信箱に書く（#196）。
+            string outbox = Co.Config.FcmOutboxDirectory;
+
+            if (!string.IsNullOrEmpty(outbox))
+            {
+                return FcmService.WriteToOutbox(outbox, destination, subject, body, data);
+            }
+
             FirebaseMessaging fcmMsging = FirebaseMessaging.GetMessaging(this._FirebaseApp);
 
             Message fcmMsg = new Message()
@@ -105,6 +125,39 @@ namespace MultiPurposeAuthSite.Notifications
             };
 
             return await fcmMsging.SendAsync(fcmMsg);
+        }
+
+        /// <summary>送信箱（テスト用）にメッセージを書く</summary>
+        /// <param name="outbox">送信箱のディレクトリ</param>
+        /// <param name="destination">デバイス・トークン</param>
+        /// <param name="subject">バナーのタイトル</param>
+        /// <param name="body">バナーの本文</param>
+        /// <param name="data">アプリが受け取るデータ</param>
+        /// <returns>書いたメッセージの名前（"outbox:" で始まる）</returns>
+        /// <remarks>
+        /// E2E テストが、認証デバイス（authentication_device）の代わりにプッシュ通知を受け取るために使う（#196）。
+        /// **device_token や 2FA のコードがそのまま書かれるので、本番では設定しないこと。**
+        /// 書きかけを読まれないよう、一時ファイルに書いてから名前を変える。
+        /// </remarks>
+        private static string WriteToOutbox(
+            string outbox, string destination, string subject, string body, Dictionary<string, string> data)
+        {
+            Directory.CreateDirectory(outbox);
+
+            string name = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "_" + Guid.NewGuid().ToString("N");
+            string temp = Path.Combine(outbox, name + ".tmp");
+
+            File.WriteAllText(temp, JsonConvert.SerializeObject(new Dictionary<string, object>()
+            {
+                { "token", destination },
+                { "title", subject },
+                { "body", body },
+                { "data", data }
+            }, Formatting.Indented));
+
+            File.Move(temp, Path.Combine(outbox, name + ".json"));
+
+            return "outbox:" + name;
         }
     }
 }

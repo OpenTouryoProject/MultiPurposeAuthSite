@@ -34,6 +34,7 @@
 //*  2026/09/11  玄人 幸道         /introspect（RT-196.11 〜 196.13）を追加（#196 の 4 つ目）
 //*  2026/09/11  玄人 幸道         /device_authz（RT-196.14 〜 196.15）を追加（#196 の 5 つ目）
 //*  2026/09/11  玄人 幸道         /ciba_authz（RT-196.16 〜 196.18）を追加（#196 の 6 つ目）
+//*  2026/09/12  玄人 幸道         /SetDeviceToken・/ciba_result（RT-196.19 〜 196.20）を追加（#196 の 7 つ目）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -59,7 +60,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     ///   RT-196.8 〜 196.10 : /revoke（RFC 7009 §2.2.1 : エラーは /token と同じ。成功と無効なトークンは 200）
     ///   RT-196.11 〜 196.13 : /introspect（RFC 7662 §2.3 : 認証の失敗は 401。active=false は 200）
     ///   RT-196.14 〜 196.15 : /device_authz（RFC 8628 §3.1 : クライアント認証は /token と同じ。失敗は 401）
-    ///   RT-196.16 〜 196.18 : /ciba_authz（CIBA Core §13 : invalid_client は 401、それ以外は 400。成功は FCM に送るので測らない）
+    ///   RT-196.16 〜 196.18 : /ciba_authz（CIBA Core §13 : invalid_client は 401、それ以外は 400。成功の経路は EX-8）
+    ///   RT-196.19 〜 196.20 : /SetDeviceToken・/ciba_result（本文は OK / NG のまま。トークンの不備は 401、パラメタの不備は 400）
     ///
     /// /token・/revoke・/introspect・/device_authz では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
@@ -141,6 +143,39 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                 "前提: /ros が、ES256 で署名した CIBA の要求を受け付けること");
 
             return requestUri;
+        }
+
+        /// <summary>"NG" で答えるエンドポイント（/SetDeviceToken・/ciba_result）の失敗を確かめる</summary>
+        /// <param name="r">TestReport</param>
+        /// <param name="label">何の要求か</param>
+        /// <param name="res">応答</param>
+        /// <param name="status">期待する HTTP ステータス</param>
+        /// <param name="bearerError">401 のときに期待する WWW-Authenticate の error（トークンが無い場合は null）</param>
+        private static void VerifyNG(TestReport r, string label, JsonResponse res, int status, string bearerError)
+        {
+            r.VerifyEqual(label + " : HTTP " + status + " で返る", status.ToString(), ((int)res.StatusCode).ToString());
+
+            r.VerifyEqual(label + " : 本文は NG のまま", "NG", res.Text);
+
+            if (status != 401)
+            {
+                return;
+            }
+
+            string challenge = VerifyBearerChallenge(r, label, res);
+
+            if (bearerError == null)
+            {
+                r.Verify(label + " : WWW-Authenticate にエラー コードを付けない",
+                    challenge != null && !challenge.Contains("error="),
+                    "error= なし", challenge ?? "（無し）");
+            }
+            else
+            {
+                r.Verify(label + " : WWW-Authenticate に error=\"" + bearerError + "\" が付く",
+                    challenge != null && challenge.Contains("error=\"" + bearerError + "\""),
+                    "error=\"" + bearerError + "\"", challenge ?? "（無し）");
+            }
         }
 
         /// <summary>RT-196.1 クライアント認証の失敗（フォーム）</summary>
@@ -956,6 +991,85 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                     new Dictionary<string, string>() { { "request_uri", requestUri } }), 400, "unknown_user_id");
 
                 r.Note("成功経路（見つかったユーザへのプッシュ通知）は FCM に送るので、E2E では測らない。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.19 /SetDeviceToken の失敗</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_19_SetDeviceTokenの失敗は400と401(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-196.19",
+                    "/SetDeviceToken : 失敗は本文 NG のまま、パラメタの不備は HTTP 400、トークンの不備は 401",
+                    "認証デバイスを登録する口。以前は失敗でも HTTP 200 と NG だった。"
+                    + "**本文（OK / NG）は認証デバイス（authentication_device）が見ているので変えず、ステータスだけを直す。**"
+                    + "トークンの不備には、Bearer トークンが要ることを WWW-Authenticate で示す。",
+                    "RFC 6750 §3 / #196");
+
+                r.Target(client.Target.DisplayName);
+                r.Note("成功（200 と OK）は EX-8 で見る。ここで登録すると、並行して動く CIBA のテストの宛先を書き換えてしまう。");
+
+                r.Step("(1) device_token を付けずに送る");
+
+                VerifyNG(r, "device_token なし", await client.SetDeviceTokenAsync("NOT-A-REAL-TOKEN", null), 400, null);
+
+                r.Step("(2) Authorization ヘッダを付けずに送る");
+
+                VerifyNG(r, "トークンなし", await client.SetDeviceTokenAsync(null, "e2e-device-token"), 401, null);
+
+                r.Step("(3) 無効なトークンで送る");
+
+                VerifyNG(r, "無効なトークン",
+                    await client.SetDeviceTokenAsync("NOT-A-REAL-TOKEN", "e2e-device-token"), 401, "invalid_token");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-196.20 /ciba_result の失敗</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT196_20_ciba_resultの失敗は400と401(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-196.20",
+                    "/ciba_result : 失敗は本文 NG のまま、トークンの不備は HTTP 401、パラメタの不備は 400",
+                    "認証デバイスが、CIBA の要求に「許可 / 拒否」を返す口。以前は失敗でも HTTP 200 と NG だった。"
+                    + "本文（OK / NG）は変えず、ステータスだけを直す。",
+                    "RFC 6750 §3 / #196");
+
+                r.Target(client.Target.DisplayName + " / ユーザのトークンは認可コード フローで得る");
+                r.Note("成功（200 と OK）は EX-8 で見る。ここで返答すると、並行して動く CIBA のテストの要求に結果を書き込んでしまう。");
+
+                r.Step("(1) Authorization ヘッダを付けずに送る");
+
+                VerifyNG(r, "トークンなし", await client.CibaPushResultAsync(null, "dummy", "true"), 401, null);
+
+                r.Step("(2) 無効なトークンで送る");
+
+                VerifyNG(r, "無効なトークン",
+                    await client.CibaPushResultAsync("NOT-A-REAL-TOKEN", "dummy", "true"), 401, "invalid_token");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                r.Step("(3) ユーザの有効なトークンで、auth_req_id を付けずに送る");
+
+                VerifyNG(r, "auth_req_id なし", await client.CibaPushResultAsync(token.AccessToken, null, "true"), 400, null);
+
+                r.Step("(4) result が真偽値でない値で送る");
+
+                VerifyNG(r, "result が不正", await client.CibaPushResultAsync(token.AccessToken, "dummy", "maybe"), 400, null);
 
                 r.Done();
             }
