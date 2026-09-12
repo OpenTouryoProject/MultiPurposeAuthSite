@@ -121,7 +121,6 @@ OpenTouryo の `root/programs/CS/z_Common.bat` の移植。**足並みを揃え�
 |---|---|
 | `BUILDFILEPATH` | MSBuild.exe。**vswhere で解決**するので、Community 以外（Professional / Enterprise / BuildTools）でも見つかる |
 | `NUGET_MSBUILD` | `nuget.exe restore` に渡す `-MSBuildPath`。指定しないと SSMS 同梱の MSBuild を掴むことがある |
-| `NUGET_EXE` | `nuget.exe`。まず自分の隣、無ければ PATH |
 | `VisualStudioVersion` | **vswhere から取得**する。固定値だと、別の VS しか無い環境で `MSB4226` になる |
 | `COMMANDLINE` | `/p:Configuration=... /p:DebugType=... -v:d` |
 
@@ -149,11 +148,13 @@ root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/packages.config
 `packages.config` は **MSBuild の `-t:Restore` では復元できない。** `nuget.exe restore` が要る。
 このため `root/programs/nuget.exe` をリポジトリに置いてある（OpenTouryo と同じ）。
 
+**バッチは `"%~dp0nuget.exe"` と、自分の隣を直接呼ぶ。** カレント ディレクトリに依らない。
+
 一方 `CommonLibrary/NetFxLibrary.csproj` は `PackageReference` なので、
 そちらは MSBuild の Restore が要る。**両方を回す。**
 
 ```
-%NUGET_EXE% restore "...sln" %NUGET_MSBUILD%     ← packages.config
+"%~dp0nuget.exe" restore "...sln" %NUGET_MSBUILD% ← packages.config
 %BUILDFILEPATH% %COMMANDLINE% /t:Restore "...sln" ← PackageReference
 %BUILDFILEPATH% %COMMANDLINE% "...sln"            ← ビルド
 ```

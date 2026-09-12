@@ -20,23 +20,26 @@ call %CURRENT_DIR%z_Common.bat
 @rem MultiPurposeAuthSite\MultiPurposeAuthSite\packages.config cannot be
 @rem restored by MSBuild -t:Restore.
 @rem
-@rem nuget.exe is kept next to this batch file, so this normally holds.
+@rem nuget.exe is version controlled next to this batch file, so this
+@rem normally holds. It is called by %~dp0 rather than by name, so the
+@rem current directory does not matter.
+@rem
 @rem Warn instead of stopping, for a working tree where it is missing:
 @rem the build still works when packages\ has already been restored,
 @rem for example by opening the solution in Visual Studio.
 @rem --------------------------------------------------
-if not defined NUGET_EXE (
+if not exist "%~dp0nuget.exe" (
   echo [WARNING] nuget.exe was not found. packages.config is not restored.
   echo           The build below works only when packages\ is already
-  echo           in place. Restore nuget.exe next to this batch file,
-  echo           or put it on PATH.
+  echo           in place. Restore nuget.exe next to this batch file
+  echo           - it is version controlled.
   pause
 )
 
 rem --------------------------------------------------
 rem Batch build of CommandLineTools.
 rem --------------------------------------------------
-if defined NUGET_EXE %NUGET_EXE% restore "CommandLineTools\CommandLineTools.sln" %NUGET_MSBUILD%
+if exist "%~dp0nuget.exe" "%~dp0nuget.exe" restore "CommandLineTools\CommandLineTools.sln" %NUGET_MSBUILD%
 %BUILDFILEPATH% %COMMANDLINE% "CommandLineTools\CommandLineTools.sln"
 
 pause
@@ -52,7 +55,7 @@ rem
 rem NOTE: the build line used to carry /t:Restore, so this solution was
 rem       only restored and never built.
 rem --------------------------------------------------
-if defined NUGET_EXE %NUGET_EXE% restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln" %NUGET_MSBUILD%
+if exist "%~dp0nuget.exe" "%~dp0nuget.exe" restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln" %NUGET_MSBUILD%
 %BUILDFILEPATH% %COMMANDLINE% /t:Restore "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
 %BUILDFILEPATH% %COMMANDLINE% "MultiPurposeAuthSite\MultiPurposeAuthSite.sln"
 
