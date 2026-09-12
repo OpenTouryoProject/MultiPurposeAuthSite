@@ -35,6 +35,7 @@
 //*  2026/09/11  玄人 幸道         /device_authz（RT-196.14 〜 196.15）を追加（#196 の 5 つ目）
 //*  2026/09/11  玄人 幸道         /ciba_authz（RT-196.16 〜 196.18）を追加（#196 の 6 つ目）
 //*  2026/09/12  玄人 幸道         /SetDeviceToken・/ciba_result（RT-196.19 〜 196.20）を追加（#196 の 7 つ目）
+//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-196）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -47,7 +48,7 @@ using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace MultiPurposeAuthSite.Tests.E2E.Tests
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
     /// RT-196. エラー応答の HTTP ステータス（#196）。

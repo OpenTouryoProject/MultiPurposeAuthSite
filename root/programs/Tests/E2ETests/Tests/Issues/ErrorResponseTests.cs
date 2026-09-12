@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-185 / RT-187）
 //*  2026/09/11  玄人 幸道         RT-185.1 の注記を、#196（/token の 400 / 401）の対応に合わせる
+//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-185 / RT-187）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -42,7 +43,7 @@ using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace MultiPurposeAuthSite.Tests.E2E.Tests
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
     /// RT-185 / RT-187. エラー応答の回帰テスト。

@@ -118,7 +118,7 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `SM-n` | 疎通（テスト基盤そのものの確認） | `Tests/SmokeTests.cs` |
 | `TC-n.n` | 基本テストケース（OAuth 2.0 / OIDC の基本的な検証項目） | `Tests/Basic/` |
 | `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer / CIBA） | `Tests/Extended/` |
-| `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/*.cs` |
+| `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/Issues/` |
 
 報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT**）に並ぶ。
 

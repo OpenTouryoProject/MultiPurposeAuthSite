@@ -181,17 +181,22 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 認証デバイスと同じ要求（`/SetDeviceToken`・`/ciba_result`）を送る。送信箱は `-Launch` のときだけ設定されるので、
 それ以外では `EX-8` は Skip する。認証リクエストのエラーの返し方は RT-196 で測っている（ES256 で署名した要求を `/ros` に登録する）。
 
-以下は、個別の Issue に対応する回帰テスト。
+**最後が `Tests/Issues/`。** 個別の Issue に対応する回帰テスト（RT）。
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
-| `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
-| `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
-| `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
-| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
-| `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
-| `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
+| `Tests/Issues/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
+| `Tests/Issues/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
+| `Tests/Issues/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
+| `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
+| `Tests/Issues/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
+| `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
+| `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
+
+**フォルダは、識別子の群に合わせている**（`Basic` = TC、`Extended` = EX、`Issues` = RT）。
+ただし**厳密な一対一ではない。** 回帰テストが既存のケースを対照として使うことがあり、
+`Tests/Issues/HttpStatusTests.cs` には EX が、`Tests/Extended/IntrospectionTests.cs` には
+RT が混ざっている。**対照は近くに置いたほうが読めるので、そこは揃えていない。**
 
 **すべてのテストが `TestReport` で記録を残す。**
 識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。
