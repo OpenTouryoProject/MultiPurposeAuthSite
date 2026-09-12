@@ -43,6 +43,8 @@ Contributing.ja.md の「下位互換は高く維持し、破壊的な変更は�
 mpas_dev.bat（リポジトリ ルート）               隣に clone 済みの OpenTouryo からビルド出力を xcopy
 ```
 
+**`1_BuildAll.ps1` は、無ければ 2 番目（`develop`）を自動で呼ぶ**（`-Libs Force` で取り直す）。
+
 `OpenTouryoAssemblies/` は `.gitignore` 対象。
 
 ### 2.2 NuGet パッケージは `packages.config` 方式

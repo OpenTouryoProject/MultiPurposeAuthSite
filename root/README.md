@@ -31,21 +31,25 @@ in-memory store → [CONFIGURATION.md](CONFIGURATION.md) section 7
 
 ## First-time setup
 
-### 1. Obtain the OpenTouryo assemblies
+### 1. The OpenTouryo assemblies (automatic)
 
-This repository builds against the assemblies of OpenTouryo.
+This repository builds against the assemblies of OpenTouryo. They are in `.gitignore`,
+so a fresh clone does not have them — **the build takes care of it.**
 
-```bat
-cd root\programs
-3_BuildLibsAtOtherRepos.bat
+```powershell
+cd root
+.\1_BuildAll.ps1              # fetches them when missing, then builds
+.\1_BuildAll.ps1 -Libs Force  # re-fetch, after updating OpenTouryo
+.\1_BuildAll.ps1 -Libs None   # do not fetch
 ```
 
-It fetches OpenTouryo as a ZIP, builds it, and copies the output into `OpenTouryoAssemblies`.
-If you are working on OpenTouryo at the same time, use
-`3_BuildLibsAtOtherReposInTimeOfDev.bat` instead.
+It fetches the `develop` ZIP of OpenTouryo, builds it, and copies the output into
+`OpenTouryoAssemblies`. **The ZIP cache (`Temp.zip` / `Temp`) is deleted first**, so a stale
+copy is never reused silently; it is cleaned up afterwards too, unless the step failed (then it
+is kept, for diagnosis).
 
-> **Neither is called by the full build** (`0_ExecAllBat.bat` has them commented out),
-> because fetching every time is slow. **Run it yourself after updating OpenTouryo.**
+You can also do it by hand: run `root\programs\3_BuildLibsAtOtherRepos.bat` (the `03-20` tag),
+or clone and build OpenTouryo separately and copy the output with `mpas_dev.bat`.
 
 ### 2. Create the configuration files
 

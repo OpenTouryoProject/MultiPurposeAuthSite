@@ -20,6 +20,15 @@
       MSBuild の日本語のメッセージがコード ページの食い違いで化けても、
       **合否は変わらない**（"ビルドに成功しました" のような文言では判定しない）。
 
+    ＜OpenTouryo のアセンブリ＞
+      net48 / net10.0 のどちらも、OpenTouryo のアセンブリを HintPath で直接参照する
+      （root\programs\OpenTouryoAssemblies\Build_net48 / Build_netcore100）。
+      .gitignore 済みで clone 直後は無いため、**無ければ取得してから建てる**。
+
+      取得は 3_BuildLibsAtOtherReposInTimeOfDev.bat（develop の ZIP）で行う。
+      これまでは、このバッチを単独実行してから 0_ExecAllBat.bat を回していたが、
+      **起点を本スクリプトに寄せた**（0_ExecAllBat.bat 側の 3_ 行は外したまま）。
+
     ＜クリーンと nuget.exe＞
       1_DeleteDir.bat は packages フォルダも消す。
       net48 版は packages.config を使うため、復元には nuget.exe が要る
@@ -38,6 +47,17 @@
 .PARAMETER SkipClean
     クリーン処理（1_DeleteDir / 2_DeleteFile）を省略する。
     ※ 前回のビルド成果物が残っていると、ビルドが通ったように見えることがある。
+
+.PARAMETER Libs
+    OpenTouryo のアセンブリ（OpenTouryoAssemblies）の扱い。
+
+      Auto （既定） 無ければ取得する。在れば見送る
+      None          取得しない。無いままなら、参照解決に失敗してビルドが NG になる
+      Force         在っても取り直す。OpenTouryo 側を更新したときに使う
+
+    取得の前に ZIP キャッシュ（Temp.zip / Temp）を消す。
+    バッチ側は「在れば飛ばす」作りで、**古い OpenTouryo を掴み続けても何も言わない**ため。
+    取得が成功したら、そのキャッシュも片付ける（失敗したときは、原因を見るため残す）。
 
 .PARAMETER WarnDetail
     警告の内訳（種類ごとの件数と代表例）を出す。
@@ -66,6 +86,9 @@
     .\1_BuildAll.ps1 -Only "net10" -SkipClean
 
 .EXAMPLE
+    .\1_BuildAll.ps1 -Libs Force
+
+.EXAMPLE
     .\1_BuildAll.ps1 -WarnDetail
 
 .NOTES
@@ -82,6 +105,8 @@ param(
     [string]$Only,
     [switch]$List,
     [switch]$SkipClean,
+    [ValidateSet('Auto', 'None', 'Force')]
+    [string]$Libs = 'Auto',
     [switch]$WarnDetail,
     [string]$OutputDir,
     [string[]]$IgnoreErrors = @()
@@ -121,9 +146,14 @@ New-Item -ItemType Directory -Force $OutputDir | Out-Null
 # Name  : 表示名（ログのファイル名にもなる）
 # Bat   : 呼び出すバッチ
 # Clean : $true のものは -SkipClean で省略される
+# Libs  : $true のものは -Libs で制御される（既定は「無ければ取得」）
+#
+# **Libs はクリーンの後、ビルドの前に置く。**
+#   クリーン（1_DeleteDir.bat）は Temp を消すため、先に取得すると展開物を捨てることになる。
 $steps = @(
     @{ Name = "Clean (dir)";     Bat = "1_DeleteDir.bat";                 Clean = $true }
     @{ Name = "Clean (file)";    Bat = "2_DeleteFile.bat";                Clean = $true }
+    @{ Name = "Libs";            Bat = "3_BuildLibsAtOtherReposInTimeOfDev.bat"; Libs = $true }
     @{ Name = "net48";           Bat = "10_MultiPurposeAuthSite.bat" }
     @{ Name = "net10.0";         Bat = "10_MultiPurposeAuthSiteCore.bat" }
 )
@@ -243,6 +273,43 @@ if ($Only)
     Write-Host ("  -Only '$Only' : {0} ステップに絞りました" -f $matched.Count) -ForegroundColor Yellow
 }
 
+# ------------------------------------------------------------------
+# OpenTouryo のアセンブリ
+# ------------------------------------------------------------------
+# HintPath で直接参照しているため、無ければ net48 / net10.0 の両方が建たない。
+# **「取得し忘れ」を、ビルドの失敗として遠くで知らされないようにする。**
+#
+# **-List より後に置く。** 一覧を出すだけの実行で「取得します」と言ってはいけない。
+$libsRoot = Join-Path $progRoot "OpenTouryoAssemblies"
+$libsDirs = @(
+    (Join-Path $libsRoot "Build_net48")
+    (Join-Path $libsRoot "Build_netcore100")
+)
+
+$libsMissing = @($libsDirs | Where-Object { -not (Test-Path $_) })
+
+switch ($Libs)
+{
+    'None'  { $runLibs = $false; $libsWhy = "-Libs None" }
+    'Force' { $runLibs = $true;  $libsWhy = "-Libs Force" }
+    default { $runLibs = ($libsMissing.Count -gt 0); $libsWhy = "取得済み" }
+}
+
+if ($runLibs)
+{
+    $libsNote = if ($Libs -eq 'Force') { "-Libs Force" } else { ("{0} が無い" -f (($libsMissing | Split-Path -Leaf) -join " / ")) }
+    Write-Host ("OpenTouryo のアセンブリを取得します（{0}）" -f $libsNote) -ForegroundColor Cyan
+}
+elseif ($libsMissing.Count -gt 0)
+{
+    # **無いのに取得しないなら、先に言う。** 後続の参照解決の失敗だけでは原因が遠い。
+    Write-Host ""
+    Write-Host "【警告】OpenTouryo のアセンブリがありません（-Libs None）。" -ForegroundColor Yellow
+    foreach ($d in $libsMissing) { Write-Host ("        {0}" -f $d) }
+    Write-Host "        このままでは、参照解決に失敗してビルドが NG になります。"
+    Write-Host ""
+}
+
 # バッチ側の構成を切り替える。
 # z_Common.bat は「if not defined BUILD_CONFIG set BUILD_CONFIG=Debug」なので、
 # ここで入れておけば、そちらが尊重する。
@@ -260,6 +327,18 @@ foreach ($s in $steps)
 {
     if ($Only -and ($s.Name -notlike "*$Only*") -and ($s.Bat -notlike "*$Only*"))
     {
+        continue
+    }
+
+    if ($s.Libs -and -not $runLibs)
+    {
+        Write-Host ("=== {0} ===" -f $s.Name) -ForegroundColor Cyan
+        Write-Host ("  見送り : {0}" -f $libsWhy)
+
+        $results += [pscustomobject]@{
+            ステップ = $s.Name; 結果 = "見送り"
+            エラー = 0; 既知 = 0; 警告 = 0; 秒 = 0
+        }
         continue
     }
 
@@ -291,6 +370,41 @@ foreach ($s in $steps)
 
     Write-Host ("=== {0} ===" -f $s.Name) -ForegroundColor Cyan
 
+    # **取得の前に ZIP キャッシュを消す。**
+    #   バッチは Temp.zip が在れば再ダウンロードせず、Temp\ が在れば再展開せず、
+    #   Build_netcore100 が在れば再ビルドしない。
+    #   **古い OpenTouryo を掴み続けても、何も言わない。**
+    if ($s.Libs)
+    {
+        foreach ($c in @((Join-Path $progRoot "Temp.zip"), (Join-Path $progRoot "Temp")))
+        {
+            if (Test-Path $c)
+            {
+                Write-Host ("  キャッシュを削除 : {0}" -f (Split-Path $c -Leaf))
+                Remove-Item $c -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    # **取得の間だけ NoDefaultCurrentDirectoryInExePath を外す。**
+    #   OpenTouryo のビルド バッチは、兄弟のバッチを**裸の名前**で呼ぶ
+    #   （call 2_Build_NuGet_net48.bat）。この環境変数が定義されていると
+    #   カレント ディレクトリが実行ファイルの探索から外れるため、
+    #   「'2_Build_NuGet_net48.bat' is not recognized」となり、
+    #   **何も建たないまま xcopy まで進む**（dir や where では見つかるので気づきにくい）。
+    #
+    #   **空にするのでは足りない。** 定義されていて空でも外れる。消す必要がある。
+    #   CI やサンドボックスで定義されていることがあるため、ここで面倒を見る。
+    $hadNoCurDir = $false
+
+    if ($s.Libs -and (Test-Path Env:\NoDefaultCurrentDirectoryInExePath))
+    {
+        $hadNoCurDir   = $true
+        $savedNoCurDir = $env:NoDefaultCurrentDirectoryInExePath
+        Remove-Item Env:\NoDefaultCurrentDirectoryInExePath
+        Write-Host "  NoDefaultCurrentDirectoryInExePath を外しました（このステップの間だけ）"
+    }
+
     $safe = ($s.Name -replace '[^A-Za-z0-9]', '_')
     $log  = Join-Path $OutputDir "$safe.log"
     $sw   = [Diagnostics.Stopwatch]::StartNew()
@@ -303,6 +417,12 @@ foreach ($s in $steps)
     Push-Location $progRoot
     cmd /c "echo. | call `"$bat`"" *>&1 | Out-File $log -Encoding UTF8
     Pop-Location
+
+    if ($hadNoCurDir)
+    {
+        $env:NoDefaultCurrentDirectoryInExePath = $savedNoCurDir
+    }
+
     $sw.Stop()
 
     $diag = Get-Diagnostics (Get-Content $log -EA SilentlyContinue)
@@ -325,7 +445,31 @@ foreach ($s in $steps)
         }
     }
 
+    # **取得ステップは、出力だけでは判定できない。**
+    #   xcopy の失敗は「: error」の形で出ないため、フォルダの実在で確かめる。
+    if ($s.Libs)
+    {
+        foreach ($d in @($libsDirs | Where-Object { -not (Test-Path $_) }))
+        {
+            $msg = "[取得失敗] 取得後もありません : {0}" -f $d
+            $stepErrors.Add($msg)
+            $allErrors.Add(("[{0}] {1}" -f $s.Name, $msg))
+        }
+    }
+
     $verdict = if ($stepErrors.Count -eq 0) { "OK" } else { "NG" }
+    # **取得が成功したら、ZIP キャッシュを残さない。**
+    #   方針は「取得前に消す」なので、残しても使わない。
+    #   21 MB の Temp.zip を置いておくと、未追跡のまま目に入り続ける。
+    #   **失敗したときは残す。** Libs.log と併せて原因を見るため。
+    if ($s.Libs -and $verdict -eq "OK")
+    {
+        foreach ($c in @((Join-Path $progRoot "Temp.zip"), (Join-Path $progRoot "Temp")))
+        {
+            if (Test-Path $c) { Remove-Item $c -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
     $color   = if ($verdict -eq "OK") { "Green" } else { "Red" }
     $knownNote = if ($stepKnown.Count -gt 0) { " / 既知 {0}" -f $stepKnown.Count } else { "" }
 

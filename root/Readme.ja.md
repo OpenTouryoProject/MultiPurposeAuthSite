@@ -29,20 +29,24 @@ DBMS は、ビルドには要りません。`UserStoreType` を `mem` にすれ�
 
 ## 初回の準備
 
-### 1. OpenTouryo のアセンブリを用意する
+### 1. OpenTouryo のアセンブリ（自動）
 
 本リポジトリは Open棟梁 のアセンブリを参照してビルドします。
+`.gitignore` 済みで clone 直後はありませんが、**ビルドが面倒を見ます。**
 
-```bat
-cd root\programs
-3_BuildLibsAtOtherRepos.bat
+```powershell
+cd root
+.\1_BuildAll.ps1              # 無ければ取得してから建てる
+.\1_BuildAll.ps1 -Libs Force  # Open棟梁 側を更新したとき、取り直す
+.\1_BuildAll.ps1 -Libs None   # 取得しない
 ```
 
-Open棟梁 を ZIP で取得してビルドし、`OpenTouryoAssemblies` へ複写します。
-Open棟梁 側も並行して開発しているなら、`3_BuildLibsAtOtherReposInTimeOfDev.bat`（開発時用）を使います。
+取得は `develop` の ZIP を取得してビルドし、`OpenTouryoAssemblies` へ複写します。
+**取得の前に ZIP キャッシュ（`Temp.zip` / `Temp`）を消します**（古い版を掴み続けないため）。
+取得が成功したら、そのキャッシュも片付けます（失敗したときは、原因を見るため残します）。
 
-> **この 2 本は、通しのビルド（`0_ExecAllBat.bat`）からは呼ばれません**（`rem` で外してあります）。
-> 毎回取得し直すと遅いためで、**Open棟梁 側を更新したときは自分で実行してください。**
+手で用意することもできます。`root\programs\3_BuildLibsAtOtherRepos.bat`（タグ `03-20`）を
+実行するか、Open棟梁 を別途 clone してビルドし、`mpas_dev.bat` で複写します。
 
 ### 2. 設定ファイルを作る
 
