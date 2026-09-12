@@ -394,7 +394,24 @@ foreach ($s in $steps)
     #   **何も建たないまま xcopy まで進む**（dir や where では見つかるので気づきにくい）。
     #
     #   **空にするのでは足りない。** 定義されていて空でも外れる。消す必要がある。
-    #   CI やサンドボックスで定義されていることがあるため、ここで面倒を見る。
+    #
+    #   ＜これはエージェント実行時だけの現象である＞
+    #     2026/09/13 に計測した結果は次のとおり。
+    #       Process                                         : '1'
+    #       User / Machine                                  : 未定義
+    #       HKCU:\Environment / HKLM:\...\Session Manager\Environment : 無し
+    #       親プロセス                                      : claude.exe → pwsh
+    #     **レジストリに登録は無く、プロセスにだけ注入されている。**
+    #     人が通常のコンソール / Visual Studio / ダブル クリックで回す場合、
+    #     下の Test-Path が偽になるので、この分岐は動かない（人への影響は無い）。
+    #
+    #   ＜症状（原因から遠いところで失敗する）＞
+    #     '2_Build_NuGet_net48.bat' is not recognized as an internal or external command,
+    #     File not found - Build_net48
+    #     0 File(s) copied
+    #     …この後、net48 / net10.0 が大量の CS0246（'Touryo' が見つかりません）で落ちる。
+    #     **dir や where では見つかる**ため、パスの間違いに見えて原因を取り違えやすい。
+    #     実際にこれで時間を使ったので、記録として残す。
     $hadNoCurDir = $false
 
     if ($s.Libs -and (Test-Path Env:\NoDefaultCurrentDirectoryInExePath))
