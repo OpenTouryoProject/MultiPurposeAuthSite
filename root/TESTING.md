@@ -68,6 +68,10 @@ $env:MPAS_CONNSTR_SQL = '...'
 **スクリプトに接続文字列の既定値は持たせていない。** 持たせると、それが事実上の資格情報になる。
 渡していなければ、その場で止まる（どの環境変数を設定すればよいかを表示する）。
 
+**DBMS は [LocalServicesOnDocker](https://github.com/NetDevInfraWGinOSSConsortium/LocalServicesOnDocker) で、まとめてコンテナとして起動できる**
+（SQL Server / Oracle / PostgreSQL。#208 の実測はこれで行った）。
+Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`**（`XEPDB1` ではない）。
+
 切り替える前に、対象の DBMS で次が済んでいること。
 
 1. 空のデータベース（スキーマ）を作る
