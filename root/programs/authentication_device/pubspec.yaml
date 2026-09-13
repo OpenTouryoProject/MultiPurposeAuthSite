@@ -33,7 +33,7 @@ dependencies:
   # firebase_core_web 3.11.0 は、Dart 3.12 未満（Flutter 3.44 未満）では web のコンパイルに失敗する
   # （firebase/flutterfire#18611。isA<JSObject>() を Object 型の catch 変数に呼んでいる）。
   # 修正版が出るまで 3.10.x に留め、それに合わせて firebase_core / firebase_messaging も 1 つ前に留める。
-  # 外すときは、この 4 行を消し、firebase_core / firebase_messaging を最新の版指定に戻す。
+  # 外すときは、このコメント 4 行と下の firebase_core_web の行を消し、firebase_core / firebase_messaging を最新の版指定に戻す。
   firebase_core_web: ">=3.10.0 <3.11.0"
   flutter_local_notifications: ^22.3.0
 
