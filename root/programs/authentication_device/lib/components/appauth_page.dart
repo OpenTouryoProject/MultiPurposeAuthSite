@@ -63,14 +63,14 @@ class _AppAuthPageState extends State<AppAuthPage> {
           && notification != null && android != null && !kIsWeb) {
 
         AppFcm.flutterLocalNotificationsPlugin?.show(
-          notification.hashCode,
-          notification.title,
-          notification.body,
-          NotificationDetails(
+          id: notification.hashCode,
+          title: notification.title,
+          body: notification.body,
+          notificationDetails: NotificationDetails(
             android: AndroidNotificationDetails(
               AppFcm.channel.id,
               AppFcm.channel.name,
-              AppFcm.channel.description,
+              channelDescription: AppFcm.channel.description,
               // TODO add a proper drawable resource to android, for now using
               //      one that already exists in example app.
               icon: 'notification_icon',

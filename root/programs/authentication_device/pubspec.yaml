@@ -18,22 +18,28 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.12.0 <3.0.0"
+  sdk: ^3.11.0
 
 dependencies:
   flutter:
     sdk: flutter
   english_words: ^4.0.0
-  shared_preferences: ^2.0.6
-  url_launcher: ^6.0.4
-  http: ^0.13.3
-  flutter_appauth: ^1.0.0
-  firebase_messaging:
-  flutter_local_notifications:
+  shared_preferences: ^2.5.5
+  url_launcher: ^6.3.2
+  http: ^1.6.0
+  flutter_appauth: ^12.1.0
+  firebase_core: ^4.13.0
+  firebase_messaging: ^16.5.0
+  # firebase_core_web 3.11.0 は、Dart 3.12 未満（Flutter 3.44 未満）では web のコンパイルに失敗する
+  # （firebase/flutterfire#18611。isA<JSObject>() を Object 型の catch 変数に呼んでいる）。
+  # 修正版が出るまで 3.10.x に留め、それに合わせて firebase_core / firebase_messaging も 1 つ前に留める。
+  # 外すときは、この 4 行を消し、firebase_core / firebase_messaging を最新の版指定に戻す。
+  firebase_core_web: ">=3.10.0 <3.11.0"
+  flutter_local_notifications: ^22.3.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.2
+  cupertino_icons: ^1.0.9
 
 dev_dependencies:
   flutter_test:

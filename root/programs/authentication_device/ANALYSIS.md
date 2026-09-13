@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 認証デバイス部（authentication_device / Flutter）コード分析
 
 対象: `root/programs/authentication_device`（**Flutter / Dart**） / ブランチ: `develop`
-最終更新: 2026-09-07
+最終更新: 2026-09-13
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
@@ -48,7 +48,7 @@
   `lib/configs/app_auth.dart` に直書きしてある。
 - **`redirect_uri` は両側で一致させる必要がある。**
   アプリ側は `com.opentouryo:/oauthredirect`（`app_auth.dart` ＋ `AndroidManifest.xml` ＋
-  `build.gradle` の `appAuthRedirectScheme`）。
+  `build.gradle.kts` の `appAuthRedirectScheme`）。
   認証サイト側のテンプレート `_appsettings.json` は `http://opentouryo.com/` になっている
   （＝ App Links 用）ので、**Private-Use URI Scheme で試すならサイト側の設定を直す。**
 
@@ -75,7 +75,7 @@ authentication_device/
 │   ├─ common/                                MetaCard / MyDrawer / MyDropdownButton /
 │   │                                         MyElevatedButton / SpaceBox
 │   └─ models/message_arguments.dart
-├─ android/          … ★設定の実体（Manifest / build.gradle / google-services.json / 証明書）
+├─ android/          … ★設定の実体（Manifest / build.gradle.kts / google-services.json / 証明書）
 ├─ ios/              … 雛形のまま（4 節）
 ├─ web/              … 雛形のまま
 └─ test/widget_test.dart
@@ -129,7 +129,7 @@ authentication_device/
 | `lib/configs/app_fcm.dart` | `vapidKey` | `<YOUR_PUBLIC_VAPID_KEY_HERE>` のまま（Web 用） |
 | `android/app/google-services.json` | Firebase の構成 | **プレースホルダ（中身は「置き換える。」の 1 行）** |
 | `android/app/src/main/AndroidManifest.xml` | Deep Links（`opentouryo://hoge`）/ App Links（`http://opentouryo.com`） | 設定済み |
-| `android/app/build.gradle` | `appAuthRedirectScheme` | `com.opentouryo` |
+| `android/app/build.gradle.kts` | `appAuthRedirectScheme` | `com.opentouryo` |
 | `android/app/src/debug/res/raw/my_ca.cer` | 自己署名 CA（デバッグ ビルドのみ信頼） | **未コミット。各自で用意する** |
 
 - `android/app/src/debug/res/xml/network_security_config.xml` が `@raw/my_ca` を
@@ -139,26 +139,33 @@ authentication_device/
 
 ---
 
-## 6. 依存とツールチェーン（**かなり古い**）
+## 6. 依存とツールチェーン
+
+**#209 で、現行の Flutter に合わせて更新した。**
 
 | | 値 |
 |---|---|
-| Dart SDK | `>=2.12.0 <3.0.0`（`pubspec.lock` は `>=2.13.0 <3.0.0`） |
-| Flutter | `>=2.2.0` |
-| `compileSdkVersion` / `targetSdkVersion` | **30**（Android 11） |
-| `minSdkVersion` | 23 |
-| 主な依存 | `flutter_appauth` ^1.0.0 / `firebase_messaging` 10.0.1 / `flutter_local_notifications`（版指定なし） / `shared_preferences` ^2.0.6 / `http` ^0.13.3 / `url_launcher` ^6.0.4 / `english_words` ^4.0.0 |
+| Dart SDK | `^3.11.0`（`pubspec.lock` は `>=3.11.0 <4.0.0`、Flutter `>=3.38.1`） |
+| 確認した Flutter | 3.41.9（stable）/ Dart 3.11.5 |
+| `compileSdk` / `targetSdk` / `minSdk` | Flutter の既定に従う（3.41 では 36 / 36 / 24）。`minSdk` 24 はプラグインの要求でもある |
+| Android のビルド | Kotlin DSL（`*.gradle.kts`）/ AGP 8.11.1 / Kotlin 2.2.20 / Gradle 8.14 / Java 17 / core library desugaring |
+| 主な依存 | `firebase_core` 4.13.0 / `firebase_core_web` 3.10.0 / `firebase_messaging` 16.5.0 / `flutter_local_notifications` 22.3.0 / `flutter_appauth` 12.1.0 / `http` 1.6.0 / `shared_preferences` 2.5.5 / `url_launcher` 6.3.2 / `english_words` 4.0.0 |
 
-> **Dart 3 以前（null safety 導入直後）のコードである。**
-> 現行の Flutter SDK では `pub get` の時点で解決できない可能性が高い。
-> 動かすには **当時の Flutter 2.x を用意する**か、**依存とコードをまとめて更新する**かのどちらか。
-> 後者は `flutter_local_notifications` の `AndroidNotificationDetails` の
-> 位置引数（`AppFcm.channel.description` を第 3 引数に渡している）など、
-> **破壊的変更を踏む箇所が複数ある。** 部分的な版上げは避けること。
+> **`firebase_core_web` は 3.10.x に留めている。**
+> 3.11.0 は、Dart 3.12 未満（Flutter 3.44 未満）では web のコンパイルに失敗する（firebase/flutterfire#18611）。
+> 修正は上流でマージ済みだが、3.11.0 より新しい版は出ていない（2026-09-13 時点）。
+> それに合わせて `firebase_core` / `firebase_messaging` も 1 つ前の版に留めている。外し方は `pubspec.yaml` のコメントにある。
+
+> **Android のビルドは確かめていない。** #209 は Android SDK の無い環境で作業した。
+> Gradle の設定は、同じ Flutter 版で `flutter create` した雛形に合わせ、各プラグインの要求
+> （README / `build.gradle`）を足したもの。最初に `flutter build apk --debug` を通すときに、差が出る可能性がある。
+>
+> **依存の版は、まとめて上げる。** `flutter_local_notifications` の引数の変更など、
+> 破壊的変更を踏む箇所が複数ある。部分的な版上げは避けること。
 
 - `AppFcm.channel` は `AndroidNotificationChannel('high_importance_channel', ...)` で、
   `AndroidManifest.xml` の FCM 既定チャネルを上書きしてヘッドアップ通知を出す狙い。
-- **`android/app/build.gradle` の release 署名は debug キーのまま**（Flutter テンプレートの TODO が残っている）。
+- **`android/app/build.gradle.kts` の release 署名は debug キーのまま**（Flutter テンプレートの TODO が残っている）。
   配布用のビルドはできない。
 
 ---
@@ -168,9 +175,11 @@ authentication_device/
 - `ios/Runner/Info.plist` に **`CFBundleURLTypes`（カスタム URL スキーム）の定義が無い。**
   このままでは AppAuth のリダイレクトが戻ってこない。
 - iOS 側の Firebase 構成ファイル（`GoogleService-Info.plist`）も無い。
-- `web/` は `flutter create` の雛形のまま。`app_fcm.dart` の `vapidKey` も未設定。
+- **web は `flutter build web` が通る（#209）が、動作はしない。**
+  `web/` は `flutter create` の雛形のままで、Firebase の web 構成・Service Worker・
+  `app_fcm.dart` の `vapidKey` が無い。サインインの `flutter_appauth` も web 非対応（#205）。
 
-**動作確認できるのは Android のみ**と考えてよい。
+**実機で動作を確認できるのは Android のみ**と考えてよい（ただし #209 以降の Android ビルドは未確認。6 節）。
 
 ---
 
@@ -190,8 +199,8 @@ authentication_device/
 8. **`AppAuth.userinfoEndpoint` は宣言されているが呼ばれていない。**
 9. **`TokenChecker` は使われていない。** `fcm_page.dart` で `MetaCard('FCM Token', ...)` ごと
    コメント アウトされている。
-10. **ツールチェーンが古い**（6 節）。安易な単発の版上げをしない。
-11. **`android/app/build.gradle` の release 署名が debug キー**（6 節）。
+10. **依存の版は、まとめて上げる**（6 節）。部分的な版上げをしない。**`firebase_core_web` は 3.10.x に留めている**ことにも注意する。
+11. **`android/app/build.gradle.kts` の release 署名が debug キー**（6 節）。
 12. `test/widget_test.dart` は `flutter create` の雛形のままで、
     このアプリの画面構成に合っていない可能性が高い。
 
@@ -206,9 +215,9 @@ authentication_device/
       `_app.config` の `OAuth2ClientsInformation`）との整合を確認する**
 - [ ] 通知の `title` / `data` のキー名を変えるときは、
       **`../CommonLibrary/Notifications/FcmService` と `Extensions/Sts/CibaProvider` を同時に見る**
-- [ ] 依存の版を上げるときは、**`pubspec.yaml` / `pubspec.lock` / `build.gradle` の
+- [ ] 依存の版を上げるときは、**`pubspec.yaml` / `pubspec.lock` / `build.gradle.kts` の
       compileSdk・targetSdk・コード側の破壊的変更をまとめて**扱う（部分更新をしない）
 - [ ] 共通で使う部品は `lib/components/importer.dart` に `export` を足す
 - [ ] `google-services.json` や `my_ca.cer` に**実物をコミットしない**
-- [ ] ビルド確認: `flutter pub get` → `flutter build apk --debug`
-      （**動作確認できるのは Android のみ**。iOS / Web は未整備）
+- [ ] ビルド確認: `flutter pub get` → `flutter analyze` → `flutter build web`
+      （Android は `flutter build apk --debug`。**Android SDK が要る**。6 節）

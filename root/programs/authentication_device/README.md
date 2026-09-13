@@ -13,7 +13,7 @@ For the settings of Private-Use URI Scheme Redirection and
 Claimed Https Scheme URI Redirection, please set them in the following files.
 
 - /android/app/src/main/AndroidManifest.xml
-- /android/app/build.gradle
+- /android/app/build.gradle.kts
 
 If the authentication server uses a self-signed certificate,  
 add the certificate to the following location to allow for self-signed certificates.  
