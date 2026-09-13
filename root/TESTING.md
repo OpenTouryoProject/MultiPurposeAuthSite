@@ -45,6 +45,42 @@ cd root\programs\Tests
 | `-Configuration` | `Debug`（既定）/ `Release` |
 | `-OutputDir` | TRX とログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
 | `-UpdateTestCases` | テストケースの原本（`programs\Tests\TESTCASES.md`）を作り直す |
+| `-UserStoreType` | サイトが使うストア（`mem` 既定 / `sql` / `ora` / `npg`）。**`mem` 以外は下の「ストアを切り替える」を読む**（#207） |
+| `-ConnectionString` | `mem` 以外のときの接続文字列。省略時は環境変数から読む |
+
+### ストアを切り替える（#207）
+
+**既定は `mem`。** これは変えない。`sql` / `ora` / `npg` は、対応する DBMS が
+動いていることが前提になるため、既定にすると DBMS の無い環境でテストが回らなくなる。
+
+```powershell
+# 接続文字列は環境変数で渡す（キー名ではなく、専用の名前を使う）
+$env:MPAS_CONNSTR_SQL = '...'
+.\2_RunAllTests.ps1 -Launch -UserStoreType sql
+```
+
+| ストア | 接続文字列の環境変数 | 上書きされる設定キー |
+|---|---|---|
+| `sql` | `MPAS_CONNSTR_SQL` | `ConnectionString_SQL` |
+| `ora` | `MPAS_CONNSTR_ODP` | `ConnectionString_ODP` |
+| `npg` | `MPAS_CONNSTR_NPS` | `ConnectionString_NPS` |
+
+**スクリプトに接続文字列の既定値は持たせていない。** 持たせると、それが事実上の資格情報になる。
+渡していなければ、その場で止まる（どの環境変数を設定すればよいかを表示する）。
+
+切り替える前に、対象の DBMS で次が済んでいること。
+
+1. 空のデータベース（スキーマ）を作る
+2. `files/resource/MultiPurposeAuthSite/Sql/<dbms>/Create_UserStore.sql` を流す
+
+**ロール・管理者・テスト ユーザは、サイトが初回の `/Account/Login` で作る**
+（`CreateData` が `Roles` の件数で初期化済みかを判定する）。手で入れる必要はない。
+
+> **net48 版は `npg` を選べない。** `Npgsql` の参照が `#if NETCORE` で囲まれているため、
+> `-UserStoreType npg` のときは net48 版を起動しない（その分は Skip）。
+
+> **`mem` と違い、状態が残る。** 同じデータベースを使い回すと、前回のテスト ユーザや
+> クライアント登録がそのまま残る。作り直したいときは、データベースを作り直す。
 
 ## 2. 構造
 
@@ -324,7 +360,7 @@ E2ETests OK    220    0    1 146.7
 |---|---|
 | ビルド済み | `1_BuildAll.ps1`、または Visual Studio |
 | 設定ファイル | `appsettings.json` / `app.config`。テストは**ここから資格情報を読む** |
-| `UserStoreType` | `mem` を想定。テスト ユーザは初回アクセスで作られ、再起動で消える |
+| `UserStoreType` | **既定は `mem`**。テスト ユーザは初回アクセスで作られ、再起動で消える。`sql` / `ora` / `npg` に切り替えるときは 1 節「ストアを切り替える」（#207） |
 | 証明書 | `SpRp_RsaPfxFilePath` の pfx。Request Object の署名に使う |
 | `FxContainerization` | `ON`。**待ち受け URL の上書きに要る**（4 節）。雛形には入っている |
 | IIS Express | net48 版を測るときだけ。無ければその分が Skip される |

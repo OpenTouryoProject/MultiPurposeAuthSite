@@ -26,6 +26,16 @@
 .PARAMETER NoNetFx
     net48 版を起動しない。その分のテストは Skip される。
 
+.PARAMETER UserStoreType
+    サイトが使う UserStore の種類（mem / sql / ora / npg）。既定は mem。
+    2_RunAllTests.ps1 → test.ps1 に渡す。
+
+    **mem 以外では、接続文字列と、作成済みのデータベースが要る。**
+    詳細は Tests\test.ps1 の説明、または TESTING.md を参照。
+
+.PARAMETER ConnectionString
+    mem 以外のときに使う接続文字列。省略時は環境変数から読む（test.ps1 が解決する）。
+
 .PARAMETER Configuration
     Debug（既定）または Release。
 
@@ -41,6 +51,10 @@
 .EXAMPLE
     .\0_RunAll.ps1 -Launch:$false
 
+.EXAMPLE
+    # SQL Server のストアで通す（接続文字列は環境変数 MPAS_CONNSTR_SQL から）
+    .\0_RunAll.ps1 -UserStoreType sql
+
 .NOTES
     作成者          ：玄人 幸道
     更新履歴        ：
@@ -54,6 +68,9 @@ param(
     [string]$Url = 'https://localhost:44300',
     [string]$NetFxUrl = 'https://localhost:44302',
     [switch]$NoNetFx,
+    [ValidateSet('mem', 'sql', 'ora', 'npg')]
+    [string]$UserStoreType = 'mem',
+    [string]$ConnectionString,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
     [switch]$SkipClean,
@@ -96,6 +113,10 @@ foreach ($s in $scripts)
         $splat.Url      = $Url
         $splat.NetFxUrl = $NetFxUrl
         if ($NoNetFx) { $splat.NoNetFx = $true }
+
+        # UserStore の切り替え（#207）。ビルドには関係しないので、テスト側だけに渡す。
+        $splat.UserStoreType = $UserStoreType
+        if ($ConnectionString) { $splat.ConnectionString = $ConnectionString }
     }
 
     # **実行時間を測る。** 通しは長い。合計だけ見ても、どこを短くすればよいかが分からない。

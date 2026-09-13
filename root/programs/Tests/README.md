@@ -137,9 +137,16 @@ OAuth2ClientEndpointsRootURI
 | `MPAS_CORE_CONFIG` / `MPAS_NETFX_CONFIG` | 構成ファイルのパス（`root/programs` からの相対） |
 | `MPAS_TESTUSER` | テスト ユーザ名 |
 | `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` | プッシュ通知の送信箱（`-Launch` が設定する。無ければ CIBA の `EX-8` は Skip） |
+| `MPAS_CONNSTR_SQL` / `MPAS_CONNSTR_ODP` / `MPAS_CONNSTR_NPS` | `-UserStoreType` で `sql` / `ora` / `npg` に切り替えるときの接続文字列（#207） |
 
-`UserStoreType` は `mem` を想定している。テスト ユーザは初回アクセスで作られ、
+`UserStoreType` の既定は `mem`。テスト ユーザは初回アクセスで作られ、
 再起動で消えるので、テストの前後で状態を掃除する必要が無い。
+
+**`sql` / `ora` / `npg` に切り替えられる**（`test.ps1 -UserStoreType`、#207）。
+設定ファイルは書き換えず、環境変数で上書きする（`FxContainerization=ON` のため、
+`GetConfigValue` と `GetConnectionString` のどちらも環境変数が優先される）。
+切り替えると**状態が残る**ので、作り直したいときはデータベースを作り直す。
+手順と前提は [`../../TESTING.md`](../../TESTING.md) 1 節「ストアを切り替える」。
 
 ## テストの構成
 

@@ -1,8 +1,10 @@
 ﻿{
   // connectionStrings section
   "connectionStrings": {
-    "ConnectionString_SQL": "Data Source=localhost;Initial Catalog=UserStore;User ID=sa;Password=seigi@123;",
-    "ConnectionString_ODP": "User Id=SCOTT;Password=tiger;Data Source=localhost/XEPDB1;",
+    // Encrypt=false : net10.0 は Microsoft.Data.SqlClient で、Encrypt の既定が True。
+    //                 自己署名証明書の SQL Server では、これが無いと接続できない。
+    "ConnectionString_SQL": "Data Source=localhost;Initial Catalog=UserStore;User ID=sa;Password=seigi@123;Encrypt=false;",
+    "ConnectionString_ODP": "User Id=SCOTT;Password=tiger;Data Source=localhost/FREEPDB1;",
     "ConnectionString_NPS": "HOST=localhost;DATABASE=UserStore;USER ID=postgres;PASSWORD=seigi@123;"
   },
 
