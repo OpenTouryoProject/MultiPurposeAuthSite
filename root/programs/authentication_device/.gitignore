@@ -31,6 +31,9 @@
 .pub/
 /build/
 
+
+# Firebase の web 構成（実際の値を含むため、コミットしない。#205）
+/firebase_web.json
 # Web related
 
 # Symbolication related

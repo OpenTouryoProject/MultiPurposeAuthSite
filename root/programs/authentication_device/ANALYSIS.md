@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 認証デバイス部（authentication_device / Flutter）コード分析
 
 対象: `root/programs/authentication_device`（**Flutter / Dart**） / ブランチ: `develop`
-最終更新: 2026-09-13
+最終更新: 2026-09-14
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
@@ -16,7 +16,7 @@
 **汎用認証サイトの「認証デバイス」として振る舞う Flutter アプリ。**
 本リポジトリで唯一の非 .NET 資産であり、次の 2 つを担う。
 
-1. **プッシュ通知の宛先になる。** ネイティブ アプリとして OAuth2 認可コード グラント（PKCE）で
+1. **プッシュ通知の宛先になる。** Android のネイティブ アプリ、または web（PWA。#205）として OAuth2 認可コード グラント（PKCE）で
    サインインし、取得したアクセス トークンで FCM のデバイス トークンを認証サイトへ登録する。
 2. **CIBA（Client Initiated Backchannel Authentication）の承認端末になる。**
    認証サイトから届くプッシュに「Allow / Deny」で応答する。
@@ -27,7 +27,7 @@
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `lib/` の `.dart` 19 ファイル / 約 960 行。
+規模の目安: `lib/` の `.dart` 20 ファイル / 約 1280 行。
 
 ---
 
@@ -36,21 +36,29 @@
 | このアプリが叩くもの | 認証サイト側 | 定義箇所 |
 |---|---|---|
 | `.well-known/openid-configuration`（discovery） | `OAuth2EndpointController.OpenIDConfig` | 固定パス |
-| `/authorize` → `/token`（AppAuth が discovery から解決） | `Account.OAuth2Authorize` / `OAuth2Endpoint.OAuth2Token` | `Config.OAuth2AuthorizeEndpoint` / `OAuth2TokenEndpoint` |
-| `POST /MultiPurposeAuthSite/SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` | `Config.SetDeviceTokenWebAPI` |
-| `POST /MultiPurposeAuthSite/ciba_result` | `OAuth2Endpoint.CibaPushResult` | `Config.CibaPushResultEndpoint` |
-| （宣言のみ・未使用）`/MultiPurposeAuthSite/userinfo` | `OAuth2Endpoint.GetUserClaims` | `Config.OAuth2UserInfoEndpoint` |
+| `/authorize` → `/token` | `Account.OAuth2Authorize` / `OAuth2Endpoint.OAuth2Token` | `Config.OAuth2AuthorizeEndpoint` / `OAuth2TokenEndpoint` |
+| `POST /SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` | `Config.SetDeviceTokenWebAPI` |
+| `POST /ciba_result` | `OAuth2Endpoint.CibaPushResult` | `Config.CibaPushResultEndpoint` |
+| （宣言のみ・未使用）`/userinfo` | `OAuth2Endpoint.GetUserClaims` | `Config.OAuth2UserInfoEndpoint` |
 
+- **URL は `AppConfig.mpasBaseUrl`（`MPAS_BASE_URL`）＋ 上のパスで組み立てる（#205）。**
+  Android / iOS の `/authorize` と `/token` は、AppAuth が discovery から解決する。
+  web は自前の実装（`web_sign_in.dart`）が直接組み立てる。
 - 登録したデバイス トークンは `Users.DeviceToken` 列に入り、
   `../CommonLibrary/Notifications/FcmService` がここへプッシュする。
-- **`client_id` は認証サイトの `OAuth2ClientsInformation` に定義されている
-  `40319c0100f94ff3aab3004c8bdb5e52`（`client_name: Native_Application`）。**
-  `lib/configs/app_auth.dart` に直書きしてある。
-- **`redirect_uri` は両側で一致させる必要がある。**
+- **`client_id` は認証サイトの `OAuth2ClientsInformation` に定義されている。** `lib/configs/app_auth.dart` に直書きしてある。
+
+| 版 | `client_id` | `client_name` | `redirect_uri` |
+|---|---|---|---|
+| Android / iOS | `40319c0100f94ff3aab3004c8bdb5e52` | `Native_Application` | `com.opentouryo:/oauthredirect` |
+| web（#205） | `aad529f7f9b6428a84c59ac15aef0cdb` | `AuthenticationDevice_Web`（パブリック クライアント。`client_secret` なし、PKCE で交換） | `http://localhost:5610/` |
+
+- **`redirect_uri` は両側で一致させる必要がある**（認証サイトは完全一致で照合する）。
   アプリ側は `com.opentouryo:/oauthredirect`（`app_auth.dart` ＋ `AndroidManifest.xml` ＋
   `build.gradle.kts` の `appAuthRedirectScheme`）。
   認証サイト側のテンプレート `_appsettings.json` は `http://opentouryo.com/` になっている
   （＝ App Links 用）ので、**Private-Use URI Scheme で試すならサイト側の設定を直す。**
+  web は `flutter run` を `--web-port 5610` で起動する（サイト側のテンプレートと実際の設定に登録済み。#205）。
 
 ---
 
@@ -58,26 +66,32 @@
 
 ```
 authentication_device/
-├─ README.md          … 設定すべき 5 ファイルの案内（一次情報）
+├─ README.md          … 設定すべきファイルの案内（一次情報）
+├─ CHEATSHEET.md      … 設定ファイルと起動の手順（#205）
 ├─ pubspec.yaml / pubspec.lock
+├─ firebase_web.sample.json          … web の Firebase 構成の項目名（実物の firebase_web.json は gitignore）
+├─ mpas.core.json / mpas.netfx.json  … 接続先（ローカル用）
 ├─ lib/
-│   ├─ main.dart                       64 行  Firebase 初期化、バックグラウンド ハンドラ、通知チャネル
+│   ├─ main.dart                         81 行  Firebase 初期化（web は構成があるときだけ）、バックグラウンド ハンドラ、通知チャネル
 │   ├─ components/
 │   │   ├─ importer.dart                      ★共通 export（各ファイルはこれ 1 本を import する）
-│   │   ├─ app.dart                     27 行  ルート定義（/ , /mypage , /message）
-│   │   ├─ appauth_page.dart           211 行  ★サインイン と デバイス トークン登録
-│   │   ├─ message_view.dart           131 行  ★通知詳細。2FA の code 表示 / CIBA の Allow・Deny
+│   │   ├─ app.dart                      28 行  ルート定義（/ , /mypage , /message）
+│   │   ├─ appauth_page.dart            267 行  ★サインイン と デバイス トークン登録
+│   │   ├─ web_sign_in.dart             154 行  ★web のサインイン（認可コード + PKCE を自前で実装。#205）
+│   │   ├─ message_view.dart            132 行  ★通知詳細。2FA の code 表示 / CIBA の Allow・Deny
 │   │   └─ fcm_page/{fcm_page,message_list,permissions,token_checker}.dart
 │   ├─ configs/
-│   │   ├─ app_config.dart              3 行  ★接続先 FQDN（`serverFqdn`）
-│   │   ├─ app_auth.dart               41 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
-│   │   └─ app_fcm.dart                21 行  ★通知チャネル定義 / VAPID キー
+│   │   ├─ app_config.dart               17 行  ★接続先（`MPAS_BASE_URL`）
+│   │   ├─ app_auth.dart                 52 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
+│   │   ├─ app_fcm.dart                  29 行  ★通知チャネル定義 / VAPID キー / Firebase 初期化済みフラグ
+│   │   └─ app_firebase_web.dart         60 行  ★web の Firebase 構成（`FIREBASE_*`）/ service worker のパス（#205）
 │   ├─ common/                                MetaCard / MyDrawer / MyDropdownButton /
 │   │                                         MyElevatedButton / SpaceBox
 │   └─ models/message_arguments.dart
 ├─ android/          … ★設定の実体（Manifest / build.gradle.kts / google-services.json / 証明書）
-├─ ios/              … 雛形のまま（4 節）
-├─ web/              … 雛形のまま
+├─ ios/              … 雛形のまま（7 節）
+├─ web/              … index.html（現行の雛形）/ flutter_bootstrap.js（Flutter の service worker を登録しない）/
+│                      firebase-messaging-sw.js（Web Push の受信）/ manifest.json（#205）
 └─ test/widget_test.dart
 ```
 
@@ -91,15 +105,23 @@ authentication_device/
 ```
 /  (AppAuthPage)
    initState:
-     ├ FirebaseMessaging.instance.getInitialMessage()   … terminated から通知起動 → /message
-     ├ FirebaseMessaging.onMessage.listen(...)          … foreground はローカル通知で代替表示
-     ├ FirebaseMessaging.onMessageOpenedApp.listen(...) … background から通知起動 → /message
-     ├ getToken(vapidKey) / onTokenRefresh              … FCM トークンを AppFcm.token へ
+     ├ AppFcm.enabled のときだけ（web で Firebase の構成が無ければ飛ばす。#205）
+     │   ├ FirebaseMessaging.instance.getInitialMessage()   … terminated から通知起動 → /message
+     │   ├ FirebaseMessaging.onMessage.listen(...)          … foreground はローカル通知で代替表示（Android）
+     │   ├ FirebaseMessaging.onMessageOpenedApp.listen(...) … background から通知起動 → /message
+     │   └ _getFcmToken() / onTokenRefresh                  … FCM トークンを AppFcm.token へ（web は service worker を指定）
+     ├ web : WebSignIn.completeIfReturned(Uri.base)         … 認可応答での戻りなら state を照合し、/token で交換して保存（#205）
      └ 保存済み access_token があれば _registerFcmTokenApi()
    [SignIn Button]
-     → FlutterAppAuth.authorize()  （discoveryUrl から /authorize を解決、PKCE）
-     → FlutterAppAuth.token()      （code + code_verifier → access_token）
-     → SharedPreferences に access_token 保存
+     ├ Android / iOS
+     │   → FlutterAppAuth.authorize()  （discoveryUrl から /authorize を解決、PKCE）
+     │   → FlutterAppAuth.token()      （code + code_verifier → access_token）
+     │   → SharedPreferences に access_token 保存 → _registerFcmTokenApi()
+     └ web（#205）
+         → WebSignIn.start()           （state / code_verifier を保存し、同じタブで /authorize へ）
+         → 戻った後は、initState の completeIfReturned が続きを行う
+   _registerFcmTokenApi():
+     → Firebase が無い / FCM トークンが取れないときは、登録を省略する
      → POST /SetDeviceToken  (Bearer, device_token=...)
         レスポンス本文が "OK"（JSON 文字列）なら AppConfig.initialized = true → /mypage
 
@@ -122,12 +144,14 @@ authentication_device/
 
 ## 5. 設定すべき箇所（README の要約）
 
+手順だけを並べたものは [`CHEATSHEET.md`](CHEATSHEET.md)。
+
 | ファイル | 何を入れるか | 現状 |
 |---|---|---|
-| `lib/configs/app_config.dart` | `serverFqdn` … 認証サイトの FQDN | `mpos-opentouryo.ddo.jp` が直書き |
-| `lib/configs/app_auth.dart` | `clientId` / `redirectUrl` / 各エンドポイント | `40319c...` が直書き |
-| `lib/configs/app_fcm.dart` | `vapidKey` | `<YOUR_PUBLIC_VAPID_KEY_HERE>` のまま（Web 用） |
-| `android/app/google-services.json` | Firebase の構成 | **プレースホルダ（中身は「置き換える。」の 1 行）** |
+| `mpas.core.json` / `mpas.netfx.json` | `MPAS_BASE_URL` … 認証サイトが実際に待ち受ける URL | ローカル用をコミット済み。渡さないときは `https://localhost:44300`（#205） |
+| `firebase_web.json` | web の Firebase 構成（`FIREBASE_*`）と VAPID キー | **各自で作る**（`firebase_web.sample.json` から。gitignore 済み）（#205） |
+| `lib/configs/app_auth.dart` | `clientId` / `redirectUrl`（Android）、`webClientId` / `webRedirectUrl`（web） | 直書き（認証サイト側の登録と対応させる） |
+| `android/app/google-services.json` | Firebase の構成（Android） | **プレースホルダ（中身は「置き換える。」の 1 行）**。web では使わない |
 | `android/app/src/main/AndroidManifest.xml` | Deep Links（`opentouryo://hoge`）/ App Links（`http://opentouryo.com`） | 設定済み |
 | `android/app/build.gradle.kts` | `appAuthRedirectScheme` | `com.opentouryo` |
 | `android/app/src/debug/res/raw/my_ca.cer` | 自己署名 CA（デバッグ ビルドのみ信頼） | **未コミット。各自で用意する** |
@@ -136,6 +160,7 @@ authentication_device/
   `<debug-overrides>` の trust-anchor にしている。**このファイルが無いとデバッグ ビルドが通らない。**
   ブラウザのアドレス バーから DER 形式の CER として書き出して置く（README）。
 - `android/app/src/main/res/xml/network_security_config.xml` は**空**（＝リリースは既定の信頼のみ）。
+- サーバ側の設定（web 版のクライアント登録、通知を送る鍵 `FirebaseServiceAccountKey.json`）の手順は [`CHEATSHEET.md`](CHEATSHEET.md) 6 節。
 
 ---
 
@@ -170,29 +195,34 @@ authentication_device/
 
 ---
 
-## 7. iOS / Web は未整備
+## 7. iOS / Web
 
 - `ios/Runner/Info.plist` に **`CFBundleURLTypes`（カスタム URL スキーム）の定義が無い。**
   このままでは AppAuth のリダイレクトが戻ってこない。
 - iOS 側の Firebase 構成ファイル（`GoogleService-Info.plist`）も無い。
-- **web は `flutter build web` が通る（#209）が、動作はしない。**
-  `web/` は `flutter create` の雛形のままで、Firebase の web 構成・Service Worker・
-  `app_fcm.dart` の `vapidKey` が無い。サインインの `flutter_appauth` も web 非対応（#205）。
+- **web は #205 で対応中。** net10.0 版に対して確認できていること（2026-09-14）:
+  - Firebase の web 構成（`firebase_web.json`）での初期化と、FCM トークンの取得
+  - サインイン（認可コード ＋ PKCE を自前で実装。`web_sign_in.dart`。`client_secret` なしで交換できた）
+  - `/SetDeviceToken` での端末の登録と、`/mypage` への遷移
+- **web でまだ確かめていないこと:** CIBA の通知の受信（前面 / 背面）と `/ciba_result` での応答、
+  net48 版に対する動作、HTTPS での配信（PWA としてのインストール）。
+- `firebase_web.json` を渡さないときは、Firebase を初期化せずに起動する（プッシュは使えない）。
 
-**実機で動作を確認できるのは Android のみ**と考えてよい（ただし #209 以降の Android ビルドは未確認。6 節）。
+**Android の実機での動作は、#209 以降は確認していない**（6 節）。
 
 ---
 
 ## 8. 落とし穴 / 既知の不整合
 
-1. **`google-services.json` はプレースホルダ。** そのままでは Firebase 初期化に失敗する（5 節）。
+1. **`google-services.json` はプレースホルダ。** そのままでは Android で Firebase 初期化に失敗する（5 節）。web は `firebase_web.json` を使う。
 2. **`my_ca.cer` が無いとデバッグ ビルドが通らない**（5 節）。README のとおり各自で用意する。
-3. **`redirect_uri` が 3 箇所＋サーバ側の計 4 箇所に散っている**（2 節）。
-   1 つでもズレると認可レスポンスが戻らない。
-4. **`serverFqdn` が `app_config.dart` に直書き**で、`userinfo` / `SetDeviceToken` /
-   `ciba_result` は **`http://`（平文）** を組み立てている
-   （`discoveryUrl` だけ `https://`）。コード中のコメントは「テストなので、HTTP」。
-   **本番相当の確認をするなら 3 つとも `https://` に直す。**
+3. **`redirect_uri` が複数箇所に散っている**（2 節）。1 つでもズレると認可レスポンスが戻らない。
+   Android : `app_auth.dart` ＋ `AndroidManifest.xml` ＋ `build.gradle.kts` ＋ サーバ側。
+   web : `app_auth.dart` の `webRedirectUrl` ＋ サーバ側（`AuthenticationDevice_Web`、ポート 5610）。
+4. **接続先には、認証サイトが実際に待ち受けている URL を渡す**（`MPAS_BASE_URL`。#205 で `serverFqdn` と `http://` の直書きをやめた）。
+   構成ファイルのルート URI（`…/MultiPurposeAuthSite`）とは限らない。Kestrel で起動し、ルート URI を環境変数で揃えた場合は、
+   `https://localhost:44300/.well-known/openid-configuration` が 200、`/MultiPurposeAuthSite` 付きは 404 だった（実測）。
+   既定は `https://localhost:44300` なので、Android の実機では、届く URL を書いたファイルを渡す。
 5. **通知の種別判定が `title` の文字列一致**（4 節）。サーバ側の文言を変えると黙って壊れる。
 6. **`/SetDeviceToken` の成功判定が `"\"OK\""` の完全一致**（4 節）。
 7. **2FA のプッシュ結果を返す実装が無い**（4 節）。`/TwoFactorAuthPushResult` は未使用。
@@ -203,6 +233,11 @@ authentication_device/
 11. **`android/app/build.gradle.kts` の release 署名が debug キー**（6 節）。
 12. `test/widget_test.dart` は `flutter create` の雛形のままで、
     このアプリの画面構成に合っていない可能性が高い。
+13. **web では Flutter 自身の service worker を登録しない**（`web/flutter_bootstrap.js`）。
+    `firebase-messaging-sw.js` と scope `/` が同じで、後から登録した方に置き換わるため。
+    `flutter_bootstrap.js` を消すと、Web Push を受ける service worker が置き換わる可能性がある（実測はしていない）。
+14. **`--dart-define-from-file` の値はコンパイル時の定数。** ファイルを変えたら `flutter run` をやり直す（ホット リロードでは変わらない）。
+15. **web で認可画面へ移ると、`flutter run` とアプリの接続が切れる。** 戻った後のログは、Chrome の DevTools の Console で見る。
 
 ---
 
@@ -213,11 +248,15 @@ authentication_device/
 - [ ] エンドポイントや `client_id` / `redirect_uri` を変えたら、
       **認証サイト側（`../CommonLibrary/Co/Config.cs` と `_appsettings.json` /
       `_app.config` の `OAuth2ClientsInformation`）との整合を確認する**
+- [ ] web 版の `redirect_uri`（ポート 5610）を変えたら、認証サイト側の `AuthenticationDevice_Web` の `redirect_uri_code` も変える
+      （テンプレートと、実際に読まれる `appsettings.json` / `app.config` の両方）
 - [ ] 通知の `title` / `data` のキー名を変えるときは、
       **`../CommonLibrary/Notifications/FcmService` と `Extensions/Sts/CibaProvider` を同時に見る**
 - [ ] 依存の版を上げるときは、**`pubspec.yaml` / `pubspec.lock` / `build.gradle.kts` の
       compileSdk・targetSdk・コード側の破壊的変更をまとめて**扱う（部分更新をしない）
 - [ ] 共通で使う部品は `lib/components/importer.dart` に `export` を足す
-- [ ] `google-services.json` や `my_ca.cer` に**実物をコミットしない**
+- [ ] `google-services.json` / `my_ca.cer` / `firebase_web.json` / `FirebaseServiceAccountKey.json` に**実物をコミットしない**（[`CHEATSHEET.md`](CHEATSHEET.md) 1 節）
 - [ ] ビルド確認: `flutter pub get` → `flutter analyze` → `flutter build web`
       （Android は `flutter build apk --debug`。**Android SDK が要る**。6 節）
+- [ ] web の動作確認: `flutter run -d chrome --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json`
+      （認証サイトの起動も含めて [`CHEATSHEET.md`](CHEATSHEET.md) 4 節）

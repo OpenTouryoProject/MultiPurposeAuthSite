@@ -11,6 +11,7 @@ export 'package:flutter/foundation.dart';
 export 'package:authentication_device/configs/app_config.dart';
 export 'package:authentication_device/configs/app_auth.dart';
 export 'package:authentication_device/configs/app_fcm.dart';
+export 'package:authentication_device/configs/app_firebase_web.dart';
 export 'package:authentication_device/models/message_arguments.dart';
 
 export 'package:authentication_device/common/meta_card.dart';
@@ -22,3 +23,4 @@ export 'package:authentication_device/common/space_box.dart';
 export 'package:authentication_device/components/appauth_page.dart';
 export 'package:authentication_device/components/fcm_page/fcm_page.dart';
 export 'package:authentication_device/components/message_view.dart';
+export 'package:authentication_device/components/web_sign_in.dart';

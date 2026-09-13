@@ -11,6 +11,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // ...
 import 'configs/app_fcm.dart';
+import 'configs/app_firebase_web.dart';
 import 'components/app.dart';
 
 /// Define a top-level named handler which background/terminated messages will call.
@@ -31,11 +32,26 @@ Future<void> main() async {
   // Flutter Engine を使う準備の呪文
   WidgetsFlutterBinding.ensureInitialized();
   // Firebase を初期化
-  await Firebase.initializeApp();
+  //   Android / iOS : 構成ファイル（google-services.json など）から読む。
+  //   web           : 構成ファイルの仕組みが無いので、FirebaseOptions を渡す（#205）。
+  //                   値は --dart-define-from-file=firebase_web.json で渡す（app_firebase_web.dart）。
+  //                   渡されていなければ初期化しない（プッシュは使えないが、画面は動かせる）。
+  if (!kIsWeb) {
+    await Firebase.initializeApp();
+    AppFcm.enabled = true;
+  } else if (AppFirebaseWeb.isConfigured) {
+    await Firebase.initializeApp(options: AppFirebaseWeb.options);
+    AppFcm.enabled = true;
+  } else {
+    print('Firebase の web 構成が渡されていないため、プッシュ通知を使わずに起動します（README.md）。');
+  }
 
-  // Set the background messaging handler early on, as a named top-level function
-  // バックグラウンド・メッセージング・ハンドラを早い段階で、名前付きのトップレベル関数として設定。
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  if (AppFcm.enabled) {
+    // Set the background messaging handler early on, as a named top-level function
+    // バックグラウンド・メッセージング・ハンドラを早い段階で、名前付きのトップレベル関数として設定。
+    // （web では何もしない。web のバックグラウンド受信は firebase-messaging-sw.js が担う）
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
 
   if (!kIsWeb) {
     AppFcm.flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();

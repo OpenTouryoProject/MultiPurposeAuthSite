@@ -21,6 +21,11 @@ class _MessageList extends State<MessageList> {
   void initState() {
     super.initState();
 
+    // Firebase を初期化していない（web で構成が無い）ときは、受信の設定をしない（#205）
+    if (!AppFcm.enabled) {
+      return;
+    }
+
     // ターミネーテッド状態でプッシュ通知からアプリを起動した時のアクションを実装
     FirebaseMessaging.instance
       .getInitialMessage()
