@@ -26,6 +26,9 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2020/12/18  西野 大介         新規
 //*  2026/09/11  玄人 幸道         使用済み・発行していない device_code で HTTP 500 になる問題を修正（#199）
+//*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
+//*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
+//*  2026/09/13  玄人 幸道         Oracle: AuthReqExp(decimal)のlongへの明示キャスト（#207で判明）
 //**********************************************************************************
 
 using System;
@@ -243,7 +246,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.SqlServer:
 
                                     // 参照
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT [TempData]"
                                          + " FROM [DeviceAuthZData]"
                                          + " WHERE [UserCode] = @UserCode",
@@ -277,7 +280,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     // 参照
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"TempData\""
                                          + " FROM \"DeviceAuthZData\""
                                          + " WHERE \"UserCode\" = :UserCode",
@@ -311,7 +314,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.PostgreSQL:
 
                                     // 参照
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"tempdata\""
                                          + " FROM \"deviceauthzdata\""
                                          + " WHERE \"usercode\" = @UserCode",
@@ -432,7 +435,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.SqlServer:
 
                                     // 参照
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT [AuthReqExp], [AuthZCode], [Result]"
                                         + " FROM [DeviceAuthZData]"
                                         + " WHERE [DeviceCode] = @DeviceCode",
@@ -447,11 +450,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     {
                                         // レコードあり。
                                         long authReqExp = dyn.AuthReqExp;
-                                        bool result = dyn.Result;
+
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
+                                        string result = (dyn.Result == null)
+                                            ? "" : ((bool)dyn.Result).ToString();
 
                                         // 結果の判別
                                         if (DeviceAuthZProvider.GetState(
-                                            authReqExp.ToString(), result.ToString(), out states))
+                                            authReqExp.ToString(), result, out states))
                                         {
                                             // Code
                                             authZCode = dyn.AuthZCode;
@@ -474,7 +482,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     // 参照
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\""
                                         + " FROM \"DeviceAuthZData\""
                                         + " WHERE \"DeviceCode\" = :DeviceCode",
@@ -488,12 +496,24 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     else
                                     {
                                         // レコードあり。
-                                        long authReqExp = dyn.AuthReqExp;
-                                        bool result = dyn.Result;
+                                        // **Oracle の NUMBER は decimal で返る。**
+                                        //   dynamic 経由の暗黙変換は通らず、
+                                        //   RuntimeBinderException になる（#207 で実測）。
+                                        //   CibaProvider も ((long)dyn.AuthReqExp) と明示している。
+                                        long authReqExp = (long)dyn.AuthReqExp;
+
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
+                                        // **Oracle に boolean が無い。** Result は NUMBER(3) で 0 / 1 / NULL。
+                                        //   ((bool)...) では変換できず、bool.TryParse が失敗して
+                                        //   irregularity_data になる（#207 で実測）。
+                                        string result = (dyn.Result == null)
+                                            ? "" : Convert.ToBoolean(dyn.Result).ToString();
 
                                         // 結果の判別
                                         if (DeviceAuthZProvider.GetState(
-                                            authReqExp.ToString(), result.ToString(), out states))
+                                            authReqExp.ToString(), result, out states))
                                         {
                                             // Code
                                             authZCode = dyn.AuthZCode;
@@ -516,7 +536,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                 case EnumUserStoreType.PostgreSQL:
 
                                     // 参照
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"authreqexp\", \"authzcode\", \"result\""
                                         + " FROM \"deviceauthzdata\""
                                         + " WHERE \"devicecode\" = @DeviceCode",
@@ -531,11 +551,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     {
                                         // レコードあり。
                                         long authReqExp = dyn.authreqexp;
-                                        bool result = dyn.result;
+
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
+                                        string result = (dyn.result == null)
+                                            ? "" : ((bool)dyn.result).ToString();
 
                                         // 結果の判別
                                         if (DeviceAuthZProvider.GetState(
-                                            authReqExp.ToString(), result.ToString(), out states))
+                                            authReqExp.ToString(), result, out states))
                                         {
                                             // Code
                                             authZCode = dyn.authzcode;

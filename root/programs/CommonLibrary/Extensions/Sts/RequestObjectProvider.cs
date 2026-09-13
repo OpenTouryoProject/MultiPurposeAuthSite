@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/06/20  西野 大介         新規
+//*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -185,6 +186,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                 break;
                         }
+                    }
+
+                    // **行が無いと ExecuteScalar は null を返す。**
+                    //   Memory 分岐は "" を返すので、揃えておく。
+                    //   null をそのまま返すと、呼び出し元（CIBA の認可リクエスト）で
+                    //   JsonConvert.DeserializeObject(null) となり ArgumentNullException になる。
+                    if (requestObjectValue == null)
+                    {
+                        requestObjectValue = "";
                     }
 
                     break;

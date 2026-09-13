@@ -27,6 +27,8 @@
 //*  2020/03/02  西野 大介         新規
 //*  2020/12/16  西野 大介         PostgreSQL疎通（Debugモード）
 //*  2026/09/13  玄人 幸道         CIBAの返答に所有者確認を追加。メモリ ストアの取り違えも修正
+//*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
+//*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
 //**********************************************************************************
 
 using System;
@@ -399,7 +401,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             switch (Config.UserStoreType)
                             {   
                                 case EnumUserStoreType.SqlServer:
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT [AuthReqExp], [AuthZCode], [Result] FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
@@ -414,9 +416,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
                                         retVal = CibaProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            (dyn.Result == null) ? "" : ((bool)dyn.Result).ToString().ToLower(),
                                             out states);
                                     }
 
@@ -431,7 +436,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\" FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
                                         new { AuthReqId = authReqId });
 
@@ -446,9 +451,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
                                         retVal = CibaProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            // **Oracle に boolean が無い。** Result は NUMBER(3) で 0 / 1 / NULL。
+                                            //   ((bool)...) では変換できず、bool.TryParse が失敗して
+                                            //   irregularity_data になる（#207 で実測）。
+                                            (dyn.Result == null) ? "" : Convert.ToBoolean(dyn.Result).ToString().ToLower(),
                                             out states);
                                     }
 
@@ -463,7 +474,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"authreqexp\", \"authzcode\", \"result\" FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
@@ -478,9 +489,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.authzcode;
 
                                         // states判別
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
                                         retVal = CibaProvider.GetState(
                                             ((long)dyn.authreqexp).ToString(),
-                                            ((bool)dyn.result).ToString().ToLower(),
+                                            (dyn.result == null) ? "" : ((bool)dyn.result).ToString().ToLower(),
                                             out states);
                                     }
 
