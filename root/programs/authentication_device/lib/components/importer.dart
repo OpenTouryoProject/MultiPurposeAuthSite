@@ -24,3 +24,4 @@ export 'package:authentication_device/components/appauth_page.dart';
 export 'package:authentication_device/components/fcm_page/fcm_page.dart';
 export 'package:authentication_device/components/message_view.dart';
 export 'package:authentication_device/components/web_sign_in.dart';
+export 'package:authentication_device/components/web_push_click.dart';

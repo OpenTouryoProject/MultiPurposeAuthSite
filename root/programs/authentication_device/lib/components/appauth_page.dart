@@ -116,6 +116,17 @@ class _AppAuthPageState extends State<AppAuthPage> {
       {
         await this._registerFcmTokenApi();
       }
+
+      // web : 通知のクリックで開かれたのなら、その通知の詳細画面（Allow / Deny）を開く（#205 増分 3）。
+      //   端末の登録（→ /mypage）の後に開くので、戻ると /mypage になる。
+      if (kIsWeb) {
+        final RemoteMessage? clicked = WebPushClick.fromUri(Uri.base);
+        if (clicked != null && this.mounted) {
+          print('通知のクリックで開かれました（${clicked.notification?.title}）。');
+          Navigator.of(context).pushNamed('/message',
+            arguments: MessageArguments(clicked, true));
+        }
+      }
     });
   }
 

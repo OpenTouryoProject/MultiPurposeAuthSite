@@ -160,7 +160,7 @@ authentication_device/
   `<debug-overrides>` の trust-anchor にしている。**このファイルが無いとデバッグ ビルドが通らない。**
   ブラウザのアドレス バーから DER 形式の CER として書き出して置く（README）。
 - `android/app/src/main/res/xml/network_security_config.xml` は**空**（＝リリースは既定の信頼のみ）。
-- サーバ側の設定（web 版のクライアント登録、通知を送る鍵 `FirebaseServiceAccountKey.json`）の手順は [`CHEATSHEET.md`](CHEATSHEET.md) 6 節。
+- サーバ側の設定（web 版のクライアント登録、通知を送る鍵 `FirebaseServiceAccountKey.json`）の手順は [`CHEATSHEET.md`](CHEATSHEET.md) 4 節。
 
 ---
 
@@ -204,8 +204,11 @@ authentication_device/
   - Firebase の web 構成（`firebase_web.json`）での初期化と、FCM トークンの取得
   - サインイン（認可コード ＋ PKCE を自前で実装。`web_sign_in.dart`。`client_secret` なしで交換できた）
   - `/SetDeviceToken` での端末の登録と、`/mypage` への遷移
-- **web でまだ確かめていないこと:** CIBA の通知の受信（前面 / 背面）と `/ciba_result` での応答、
-  net48 版に対する動作、HTTPS での配信（PWA としてのインストール）。
+  - **CIBA : 本物の FCM からの通知の受信と、`/ciba_result` での応答。** 認証サイトの自己テスト（`/Home/Saml2OAuth2Starters`）で、
+    Allow → `?ret=OK_NORMAL_END`、Deny → `?ret=OK_ABNORMAL_END` になった（アプリのタブが見えている＝フォアグラウンドで受けた場合）
+  - **CIBA（バックグラウンド）: OS の通知のクリック → アプリが前面に出て詳細画面 → Allow → `?ret=OK_NORMAL_END`。**
+    普段の Chrome（`flutter run -d web-server` で配信）で確認した。`flutter run -d chrome` の Chrome では、クリックが届かなかった（8 節 16）
+- **web でまだ確かめていないこと:** net48 版に対する動作、HTTPS での配信（PWA としてのインストール）
 - `firebase_web.json` を渡さないときは、Firebase を初期化せずに起動する（プッシュは使えない）。
 
 **Android の実機での動作は、#209 以降は確認していない**（6 節）。
@@ -238,6 +241,17 @@ authentication_device/
     `flutter_bootstrap.js` を消すと、Web Push を受ける service worker が置き換わる可能性がある（実測はしていない）。
 14. **`--dart-define-from-file` の値はコンパイル時の定数。** ファイルを変えたら `flutter run` をやり直す（ホット リロードでは変わらない）。
 15. **web で認可画面へ移ると、`flutter run` とアプリの接続が切れる。** 戻った後のログは、Chrome の DevTools の Console で見る。
+16. **web の通知は、アプリのタブが「見えている」ときだけ画面に届く**（Message Stream に並ぶ）。見えていなければ OS の通知になる。
+    判定は Firebase の SDK（service worker）が `visibilityState === 'visible'` で行う（フォーカスは関係ない。重なって隠れている / 最小化は見えていない扱い）。
+    **OS の通知のクリックは、`web/firebase-messaging-sw.js` が自前で受け、通知の中身を URL のクエリに載せてアプリを開く**（#205 増分 3。`web_push_click.dart`）。
+    SDK の `notificationclick` は、開く先（`fcmOptions.link` / `click_action`）が無い通知では閉じるだけで、`stopImmediatePropagation()` も呼ぶ。
+    そのため、自前の処理は `firebase.messaging()` より**前に**登録している（後にすると、SDK の処理に止められる）。`firebase_messaging_web` に `onMessageOpenedApp` の実装は無い。
+    **`flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれなかった。** バックグラウンドの経路は、普段の Chrome（`-d web-server`）で確かめる。
+17. **CIBA の自己テストは、宛先が `tanaka@gmail.com` に固定**（認証サイトの `HomeController.AssembleFAPICibaProfileStarterAsync`）。
+    認証デバイスも `tanaka@gmail.com` でサインインして端末を登録しておく。登録が無いと `/ciba_authz` が HTTP 500（例外の平文）を返し、
+    自己テストは `JsonReaderException` で落ちる。ユーザ ストアが `mem` だと、認証サイトの再起動でユーザも端末の登録も消える。
+18. **web のサインインは、ブラウザに残った認証サイトのサインイン状態で、サインイン画面を出さずに前のユーザのまま通る可能性がある**（実測はしていない）。
+    ユーザを切り替えるときは、先に認証サイトでサインアウトする。宛先と違うユーザで応答すると、`/ciba_result` は 400 を返す。
 
 ---
 
@@ -259,4 +273,4 @@ authentication_device/
 - [ ] ビルド確認: `flutter pub get` → `flutter analyze` → `flutter build web`
       （Android は `flutter build apk --debug`。**Android SDK が要る**。6 節）
 - [ ] web の動作確認: `flutter run -d chrome --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json`
-      （認証サイトの起動も含めて [`CHEATSHEET.md`](CHEATSHEET.md) 4 節）
+      （認証サイトの起動も含めて [`CHEATSHEET.md`](CHEATSHEET.md) 5 節）

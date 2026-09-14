@@ -25,7 +25,7 @@
 
 | ファイル | 中身 | git |
 |---|---|---|
-| `C:\root\files\resource\MultiPurposeAuthSite\FirebaseServiceAccountKey.json` | サーバが通知を送る鍵（サービス アカウントの秘密鍵）。取得 → 6 節 | リポジトリの外 |
+| `C:\root\files\resource\MultiPurposeAuthSite\FirebaseServiceAccountKey.json` | サーバが通知を送る鍵（サービス アカウントの秘密鍵）。取得 → 4 節 | リポジトリの外 |
 
 **値は、この会話・Issue・コミットのどこにも貼らない。**
 
@@ -98,7 +98,7 @@ GET https://localhost:44300/MultiPurposeAuthSite/.well-known/openid-configuratio
 ## 4. サーバ側で対応している設定
 
 | 設定 | 値 | 場所 | 設定要否 |
-|---|---|---|
+|---|---|---|---|
 | web 版のクライアント | `client_name` = `AuthenticationDevice_Web`、`client_id` = `aad529f7f9b6428a84c59ac15aef0cdb`、`redirect_uri_code` = `http://localhost:5610/`、`client_secret` なし | `OAuth2ClientsInformation`（`_appsettings.json` / `_app.config` と、実際に読まれる `appsettings.json` / `app.config`） | 不要（埋込・設定済） |
 | Android 版のクライアント | `client_name` = `Native_Application`、`redirect_uri` = `com.opentouryo:/oauthredirect`（アプリ側） | 同上 | 不要（埋込・設定済） |
 | 通知を送る鍵 | `FirebaseServiceAccountKey` | 同上。既定のパスはリポジトリ外 `C:\root\files\resource\MultiPurposeAuthSite\` | 要設定 |
@@ -174,9 +174,58 @@ flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.
 | 「Firebase の web 構成が渡されていないため…」と出る | `firebase_web.json` を渡していない、または必須 4 項目が欠けている | 2 節 |
 | `FCM Token` が出ない | VAPID キーが無い / 通知を拒否した / 古い service worker が残っている | 2 節 / 下の行 |
 | 古い service worker が残る | 以前の `index.html` が `flutter_service_worker.js` を登録した | DevTools → Application → Service workers → Unregister |
-| サインイン後、戻らずにエラー画面 | `--web-port 5610` で起動していない（`redirect_uri` の不一致） | 4 節 |
+| サインイン後、戻らずにエラー画面 | `--web-port 5610` で起動していない（`redirect_uri` の不一致） | 5 節 |
 | 「トークン要求に接続できません」 | 接続先の誤り（`/MultiPurposeAuthSite` の有無）/ 証明書 / サイトが止まっている | 3 節 |
 | 「トークン要求が失敗しました（HTTP 401）… invalid_client」 | PKCE での交換が拒否された（`code` の使用済みを含む） | サインインからやり直す |
 | 認証サイトの URL が 404 | 起動方法と接続先ファイルが合っていない | 3 節 |
 | 「16 packages have newer versions…」 | `firebase_core_web` を 3.10.x に固定している（#209） | 想定どおり。`pubspec.yaml` のコメント |
 | Android から認証サイトに届かない | 接続先を渡していない（既定は `localhost`） | 3 節 |
+| 自己テストが `JsonReaderException: Unexpected character … S` | 宛先（`tanaka@gmail.com`）に端末が登録されていない。`/ciba_authz` が例外の平文を返した | 8 節の前提 |
+| OS の通知が出て、Message Stream に届かない | 通知が届いたとき、Flutter のタブが見えていなかった（重なっていた / 最小化していた） | 想定どおり。OS の通知をクリックする（8 節「バックグラウンドで確かめる」）か、8 節の手順 2 |
+| OS の通知をクリックしても何も起きない | `flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれない | 8 節「バックグラウンドで確かめる」（普段の Chrome で開く） |
+| Allow / Deny で `/ciba_result` が 400 | 要求の期限切れ、または宛先と違うユーザで応答した | 認証サイトでサインアウトし、`tanaka@gmail.com` でサインインし直す |
+
+## 8. CIBA を確かめる（web）
+
+**前提**
+
+- 認証サイトを 5 節の手順で起動してある（送信箱 `FcmOutboxDirectory` を指定しない＝本物の FCM に送る）
+- 通知を送る鍵を置いてある（4 節）
+- **自己テストの宛先は `tanaka@gmail.com` に固定。** 認証デバイスも `tanaka@gmail.com` でサインインする
+  （パスワードは、実際に読まれる設定の `TestUserPWD`）
+- **ユーザ ストアが `mem` のときは、認証サイトを起動し直すと、ユーザも端末の登録も消える。** 起動し直したら、サインインからやり直す
+
+**手順**
+
+1. 認証デバイスを起動し（5 節）、`tanaka@gmail.com` でサインインする →「Flutter My Page」
+2. Flutter のウィンドウと、認証サイトのウィンドウを**重ならないように並べる**（Flutter のタブが見えている状態にする）
+3. 認証サイト側で `https://localhost:44300/Home/Saml2OAuth2Starters` を開く
+4. ClientType で **`fapi_ciba`** を選び、「**Test FAPI CIBA Profile (FAPI2)**」を押す（応答があるまで、読み込み中のまま待つ）
+5. Flutter 側の Message Stream に「CIBA」が届いたらタップし、**Allow** または **Deny** を押す
+6. 認証サイト側の画面が移る
+
+| 押したもの | 移る先 |
+|---|---|
+| Allow | `…?ret=OK_NORMAL_END` |
+| Deny | `…?ret=OK_ABNORMAL_END` |
+
+- 要求の期限は 600 秒（`CibaExpireTimeSpanFromSeconds`）。自己テストは期限まで `/token` を問い合わせ続け、**タブを閉じても止まらない**
+- ログは Flutter のタブで F12 → Console（「ログを保持」にチェック）。フォアグラウンドで届くと「ローカル通知で擬似的に通知メッセージを表示」が出る
+
+### バックグラウンドで確かめる（OS の通知のクリック）
+
+**普段の Chrome で開く。** `flutter run -d chrome` が起動する Chrome（一時プロファイル）では、OS の通知をクリックしても何も起きない。
+
+```powershell
+cd root\programs\authentication_device
+flutter run -d web-server --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
+```
+
+1. 普段の Chrome の**新しいウィンドウ**で `http://localhost:5610/` を開き、通知を許可して `tanaka@gmail.com` でサインインする
+   （ブラウザが変わると、保存されたサインインは無い。端末の登録も、この Chrome のものに置き換わる）
+2. アプリのウィンドウを最小化する
+3. 別のウィンドウで、上の手順 3・4 のとおり自己テストを押す
+4. OS の通知（CIBA）をクリックする → アプリが前面に出て、詳細画面が開く
+5. Allow / Deny を押す → 自己テストの画面が移る（上の表）
+
+- service worker を変えたときは、DevTools → Application → Service workers で「Update on reload」にチェックを入れて再読み込みする（古い版のまま動くことがある）
