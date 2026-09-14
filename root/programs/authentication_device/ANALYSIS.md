@@ -208,7 +208,9 @@ authentication_device/
     Allow → `?ret=OK_NORMAL_END`、Deny → `?ret=OK_ABNORMAL_END` になった（アプリのタブが見えている＝フォアグラウンドで受けた場合）
   - **CIBA（バックグラウンド）: OS の通知のクリック → アプリが前面に出て詳細画面 → Allow → `?ret=OK_NORMAL_END`。**
     普段の Chrome（`flutter run -d web-server` で配信）で確認した。`flutter run -d chrome` の Chrome では、クリックが届かなかった（8 節 16）
-- **web でまだ確かめていないこと:** net48 版に対する動作、HTTPS での配信（PWA としてのインストール）
+  - **net48 版（`https://localhost:44302`、`mpas.netfx.json`）でも、サインイン・端末の登録・CIBA（フォアグラウンド / バックグラウンドの Allow）を確認した。**
+    自己テストの移る先の表記は net48 版だけ違い、`?ret=OK: 正常終了`（それ以外は `OK: 異常終了`）。net10.0 版は `OK_NORMAL_END` / `OK_ABNORMAL_END`
+- **web でまだ確かめていないこと:** HTTPS での配信（PWA としてのインストール）
 - `firebase_web.json` を渡さないときは、Firebase を初期化せずに起動する（プッシュは使えない）。
 
 **Android の実機での動作は、#209 以降は確認していない**（6 節）。

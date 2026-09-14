@@ -74,7 +74,7 @@ Copy-Item firebase_web.sample.json firebase_web.json
 | 起動方法 | 接続先 | 渡すファイル |
 |---|---|---|
 | `test.ps1 -Launch` / Kestrel（ルート URI を環境変数で揃える） | `https://localhost:44300` | `mpas.core.json` |
-| `test.ps1 -Launch` の net48 版（IIS Express） | `https://localhost:44302` | `mpas.netfx.json` |
+| IIS Express で起動した net48 版（5 節の手順） | `https://localhost:44302` | `mpas.netfx.json` |
 | Visual Studio（IIS Express） | `https://localhost:44300/MultiPurposeAuthSite`（`../../CHEATSHEET.md` 4 節の既定値。**実測していない**） | 自分用のファイルを作る |
 | ファイルを渡さない | `https://localhost:44300` | — |
 
@@ -140,6 +140,37 @@ $exe = Get-ChildItem -Recurse bin\Debug -Filter MultiPurposeAuthSite.exe | Selec
 
 **構成のルート URI と待ち受け URL を揃えること。** 理由 → [`../../CONFIGURATION.md`](../../CONFIGURATION.md) 5 節
 
+### 認証サイト（net48 版、IIS Express、PowerShell）
+
+`test.ps1 -Launch` と同じ形で起動する（サイトの直下に置き、`https://localhost:44302` で待ち受ける）。
+**`test.ps1 -Launch` はテストが終わるとサイトを止めるので、手動の確認には使えない。**
+
+```powershell
+cd root\programs\MultiPurposeAuthSite\MultiPurposeAuthSite
+
+# IIS Express の設定を、テンプレートから作る
+$tmpl = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWebServer\applicationhost.config'
+$cfg  = Join-Path $env:TEMP 'mpas48.applicationhost.config'
+[xml]$doc = Get-Content $tmpl -Raw
+$site = $doc.configuration.'system.applicationHost'.sites.site | Where-Object { $_.name -eq 'WebSite1' }
+$site.name = 'MPAS48'
+$site.application.virtualDirectory.physicalPath = (Get-Location).Path
+$site.bindings.binding.protocol = 'https'
+$site.bindings.binding.bindingInformation = '*:44302:localhost'
+$doc.Save($cfg)
+
+# 構成のルート URI を、待ち受け URL に揃える
+$env:OAuth2AuthorizationServerEndpointsRootURI = 'https://localhost:44302'
+$env:OAuth2ClientEndpointsRootURI = 'https://localhost:44302'
+
+& (Join-Path $env:ProgramFiles 'IIS Express\iisexpress.exe') "/config:$cfg" /site:MPAS48
+```
+
+- 先に net48 版をビルドしておく（`root\1_BuildAll.ps1`）
+- 止めるときは、このターミナルで `Q` を押す
+- Visual Studio でデバッグ実行すると `https://localhost:44300/MultiPurposeAuthSite/` になる（`MultiPurposeAuthSite.csproj` の `IISUrl`）。
+  **net10.0 版（Kestrel）と同じポート**で、接続先も `mpas.netfx.json` とは違う（3 節の「自分用のファイル」）
+
 ### 認証デバイス
 
 ```powershell
@@ -199,15 +230,17 @@ flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.
 
 1. 認証デバイスを起動し（5 節）、`tanaka@gmail.com` でサインインする →「Flutter My Page」
 2. Flutter のウィンドウと、認証サイトのウィンドウを**重ならないように並べる**（Flutter のタブが見えている状態にする）
-3. 認証サイト側で `https://localhost:44300/Home/Saml2OAuth2Starters` を開く
+3. 認証サイト側で `https://localhost:44300/Home/Saml2OAuth2Starters` を開く（net48 版は `https://localhost:44302/…`。認証デバイスには `mpas.netfx.json` を渡す）
 4. ClientType で **`fapi_ciba`** を選び、「**Test FAPI CIBA Profile (FAPI2)**」を押す（応答があるまで、読み込み中のまま待つ）
 5. Flutter 側の Message Stream に「CIBA」が届いたらタップし、**Allow** または **Deny** を押す
 6. 認証サイト側の画面が移る
 
-| 押したもの | 移る先 |
-|---|---|
-| Allow | `…?ret=OK_NORMAL_END` |
-| Deny | `…?ret=OK_ABNORMAL_END` |
+| 押したもの | 移る先（net10.0 版） | 移る先（net48 版） |
+|---|---|---|
+| Allow | `…?ret=OK_NORMAL_END` | `…?ret=OK: 正常終了` |
+| Deny | `…?ret=OK_ABNORMAL_END` | `…?ret=OK: 異常終了` |
+
+- net48 版で実測したのは Allow（フォアグラウンド / バックグラウンド）。Deny の表記は、net48 版の `HomeController.cs` から
 
 - 要求の期限は 600 秒（`CibaExpireTimeSpanFromSeconds`）。自己テストは期限まで `/token` を問い合わせ続け、**タブを閉じても止まらない**
 - ログは Flutter のタブで F12 → Console（「ログを保持」にチェック）。フォアグラウンドで届くと「ローカル通知で擬似的に通知メッセージを表示」が出る
