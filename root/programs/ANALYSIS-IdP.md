@@ -1,13 +1,19 @@
 ﻿# ANALYSIS-IdP.md — IdP / STS 実装の適合性分析と近代化ロードマップ
 
-対象: `root/programs/MultiPurposeAuthSiteCore`（＋実装の実体である `../CommonLibrary`） / ブランチ: `develop`
+対象: `root/programs` の IdP / STS 実装
+（`CommonLibrary` ＋ `MultiPurposeAuthSiteCore`（net10.0）＋ `MultiPurposeAuthSite`（net48）） / ブランチ: `develop`
 最終更新: 2026-09-07
 
-本書は [`ANALYSIS.md`](ANALYSIS.md) の続編で、**「IdP / STS としてのプロトコル実装がどこまで出来ていて、
+本書は各 `ANALYSIS.md` の続編で、**「IdP / STS としてのプロトコル実装がどこまで出来ていて、
 最新の仕様・慣行に対して何が足りないか」** だけを扱う。
-ディレクトリ構成・ビルド手順・net48 版との差は [`ANALYSIS.md`](ANALYSIS.md) を参照。
 
-**重要: 指摘の多くは `../CommonLibrary` に在る＝net48 版（`../MultiPurposeAuthSite`）にも同じ症状が出る。**
+ディレクトリ構成・ビルド手順・両系統の差は、各プロジェクトの分析を参照。
+
+- [`CommonLibrary/ANALYSIS.md`](CommonLibrary/ANALYSIS.md) … **実装の実体**（両系統が使う）
+- [`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) … net10.0 版
+- [`MultiPurposeAuthSite/ANALYSIS.md`](MultiPurposeAuthSite/ANALYSIS.md) … net48 版
+
+**重要: 指摘の多くは `CommonLibrary` に在る＝net48 版（`MultiPurposeAuthSite`）にも同じ症状が出る。**
 各項目に **[Core]** / **[Lib]**（＝両系統に影響）を付けた。
 
 プロジェクト・ポリシーは リポジトリ ルートの `AGENTS.md` に定義済み。
@@ -935,7 +941,7 @@ Core 側は設定を無視して 2 分固定。SlidingExpiration があるので
 - **再起動で認証 Cookie と AntiForgery トークンが全て無効になる**
 - **複数インスタンスで動かすとインスタンス間で Cookie が通らない**
 
-`AddDistributedMemoryCache`（[`ANALYSIS.md`](ANALYSIS.md) 4.3 節）と併せて、
+`AddDistributedMemoryCache`（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 4.3 節）と併せて、
 **現状はスケールアウトできない構成**である。
 
 ### C-14. `nonce` が implicit / hybrid でも必須になっていない **[Lib]** — **✅ 修正済み（#190）**
@@ -1080,8 +1086,8 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 | E-1 | `Startup.cs` 方式のまま。.NET 6 以降の Minimal Hosting（`WebApplication.CreateBuilder`）へ寄せると、`Program.cs` の `IWebHost` / `IHost` のコメント アウト群も整理できる |
 | E-2 | `AddDistributedMemoryCache()` / DataProtection 未永続化（C-13）でスケールアウト不可 |
 | E-3 | CORS が 3 重定義（C-9） |
-| E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`ANALYSIS.md`](ANALYSIS.md) 10 節） |
-| E-5 | `log4net` 3.2.0 に既知の脆弱性（[`ANALYSIS.md`](ANALYSIS.md) 9.1 節） |
+| E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
+| E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
 | E-6 | 認可画面（`Views/Account/OAuth2Authorize.cshtml`）に **Deny ボタンが無い**。ユーザは拒否できず、`access_denied` を返す経路も無い。scope も生の識別子をそのまま表示している |
 | E-7 | `/jwkcerts` は毎回ファイルを読む（キャッシュ・`Cache-Control` なし） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
@@ -1171,9 +1177,9 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 
 ## 8. 作業時の注意（このリポジトリ固有）
 
-- **指摘の多くは `../CommonLibrary` に在るため、直すと net48 版にも効く。**
+- **指摘の多くは `CommonLibrary` に在るため、直すと net48 版にも効く。**
   逆に言えば、**net48 版の回帰確認をせずにマージできない。**
-  `../MultiPurposeAuthSite/ANALYSIS.md` 9 節のとおり、net48 は **Debug 構成でのみ**ビルドできる。
+  `MultiPurposeAuthSite/ANALYSIS.md` 9 節のとおり、net48 は **Debug 構成でのみ**ビルドできる。
 - **`Config` にプロパティを足したら `_appsettings.json` と `_app.config` の両方**に既定値を足す。
   実ファイル（`appsettings.json` / `app.config`）は `.gitignore` 対象で秘密情報を含むため、
   **中身を報告・Issue・コミット メッセージに転記しない。**
