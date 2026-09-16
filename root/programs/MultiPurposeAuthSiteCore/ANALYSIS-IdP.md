@@ -410,6 +410,9 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 - ユーザ自体は見つかっているので、`unknown_user_id` ではなく `access_denied` を返す
 - 送信の失敗（資格情報の誤り、宛先の拒否、通信障害など）は `server_error`。
   **こちらは `Create` の後なので、レコードは期限（`CibaExpireTimeSpanFromSeconds`、既定 600 秒）まで残る**
+- **原因は `ACCESS` ログに残す**（`Logging.MyDebugLogForEx`）。
+  例外を受け止めると、それまで `OnException` が書いていた内容（何が起きたか）が失われるため。
+  あとから足した（A-7-2 / #214 と同じ考え方。両アプリ）
 - E2E テスト : `RT-210.1`（端末未登録 → 400 と `access_denied`）。
   **送信そのものの失敗は E2E では測れない。** `test.ps1 -Launch` は送信箱を使い、`FcmService` は宛先を検証せずファイルに書くため
 - テストの `login_hint` には `tanaka@gmail.com` を使う。

@@ -58,6 +58,7 @@
 //*  2026/09/13  玄人 幸道         CIBAの返答に所有者確認を追加。メモリ ストアの取り違えも修正
 //*  2026/09/16  玄人 幸道         /ciba_authz : 端末未登録・FCM送信失敗を JSON のエラー応答にする（#210）
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）を追加（#213）
+//*  2026/09/17  玄人 幸道         /ciba_authz : プッシュ通知の送信失敗の原因を、ACCESSログに残す（#210）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -68,6 +69,7 @@ using MultiPurposeAuthSite.Util;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Notifications;
+using MultiPurposeAuthSite.Log;
 
 using System;
 using System.IO;
@@ -844,8 +846,12 @@ namespace MultiPurposeAuthSite.Controllers
                                             { OAuth2AndOIDCConst.binding_message, binding_message}
                                         });
                                 }
-                                catch (Exception)
+                                catch (Exception ex)
                                 {
+                                    // **原因は、記録に残す。** 例外を受け止めると、
+                                    //   これまで OnException が ACCESS ログに書いていた内容が失われるため。
+                                    Logging.MyDebugLogForEx(ex);
+
                                     // 資格情報の誤り、宛先の拒否、通信障害など。
                                     // **ここで返す。** 後続は成功のレスポンス（200 と auth_req_id）で、
                                     // err を見ないため、設定するだけでは成功として返ってしまう。

@@ -95,8 +95,36 @@ if (config.apiKey && config.appId && config.messagingSenderId && config.projectI
   // SDK が自動で通知を表示する。ここで表示すると二重になるので、記録だけにする。
   messaging.onBackgroundMessage((payload) => {
     // 中身（auth_req_id など）は出さない。タイトルだけ。
-    console.log('[firebase-messaging-sw] background message',
-      payload && payload.notification ? payload.notification.title : null);
+    const title = payload && payload.notification ? payload.notification.title : null;
+    console.log('[firebase-messaging-sw] background message', title);
+
+    // ---------------------------------------------------------------------
+    // **調査用（一時）: なぜ「バックグラウンド」と判定されたのかを見る。**
+    //
+    // 2FA の通知が、PWA のウィンドウの状態にかかわらず OS の通知になる、という観測がある
+    // （ANALYSIS.md 8 節 16）。判定は SDK が
+    //   clients.matchAll({ type: 'window', includeUncontrolled: true }) の中に
+    //   visibilityState === 'visible' のクライアントがあるか
+    // だけで行うので、届いた瞬間の一覧を出せば分かる。**同じ引数で取る。**
+    //
+    // 分かったら、このブロックは消すこと。
+    // URL はパスまでにする（クエリに push_data_* が載ることがあるため）。
+    // ---------------------------------------------------------------------
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      console.log('[firebase-messaging-sw] 調査 : title=' + title
+        + ' / clients=' + list.length + ' / scope=' + self.registration.scope);
+      list.forEach((client, i) => {
+        let where = client.url;
+        try {
+          const u = new URL(client.url);
+          where = u.origin + u.pathname;
+        } catch (e) { /* そのまま */ }
+        console.log('  [' + i + '] visibilityState=' + client.visibilityState
+          + ' focused=' + client.focused
+          + ' type=' + client.type
+          + ' url=' + where);
+      });
+    });
   });
 } else {
   console.warn('[firebase-messaging-sw] Firebase の構成がクエリ文字列に無いため、初期化しない。');

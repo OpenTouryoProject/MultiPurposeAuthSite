@@ -307,6 +307,23 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
 12. **`Startup.cs` に `MultiPurposeAuthSite/Startup.cs` と
     `App_Start/StartupAuth.cs` の 2 つがある。** 前者は OWIN のエントリだけで、中身は後者。
 13. **`ErrorController` の基底が系統で違う**（8 節）。エラー処理を触るときは両方を見る。
+14. **✅ 修正済み: プロフィール変更後の再サインインが、ブラウザ記憶(2FA)を発行していた。**
+    `ManageController.ReSignInAsync` が
+    `SignInManager.SignInAsync(user, isPersistent: false, rememberBrowser: true)` を呼んでおり、
+    **画面から 2FA を有効にした操作それ自体が、そのブラウザを「記憶済み」にしていた。**
+    サインイン時の判定は「2FA が有効」かつ「ブラウザを記憶していない」なので、
+    有効にした本人のブラウザでは、2FA が要求されないままだった
+    （設定 `TwoFactorEnabled` を `"true"` にして作った利用者では起きない。`Manage` 画面を通らないため）。
+    `rememberBrowser: false` に変更した。
+    - **再サインインそのものは必要**（`SecurityStamp` が変わるため）。不要だったのは「ブラウザ記憶」だけ
+    - `ReSignInAsync` は `ManageController` の **11 箇所**（メール アドレス・電話番号・パスワードの変更ほか）
+      から呼ばれるので、影響は 2FA の有効化に限らなかった
+    - ブラウザ記憶を付けてよいのは、利用者が 2FA を通して選んだときだけ（`Account/VerifyCode`）
+    - **net10.0 版は元から渡していない**（`../MultiPurposeAuthSiteCore/Controllers/ManageController.cs`）。
+      net48 版だけ取り残されていた
+    - **E2E では測れない**（2FA を有効にすると、共用のテスト ユーザで他の全テストのサインインが変わるため）。
+      修正の前後で同じ手順（`Manage` で有効化 → サインアウト → サインイン。クッキーは触らない）を踏み、
+      **前は 2FA が飛ばされ、後は要求される**ことを手で確認した（2026-09-17）
 
 ---
 
