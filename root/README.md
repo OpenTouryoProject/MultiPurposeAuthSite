@@ -133,4 +133,4 @@ organized and how to add one, see [programs/Tests/README.md](programs/Tests/READ
 | [CHEATSHEET.md](CHEATSHEET.md) | The commands alone |
 | [../AGENTS.md](../AGENTS.md) | What development agents must follow |
 | [../Contributing.ja.md](../Contributing.ja.md) | Contribution rules (comments, git-flow, PR granularity) |
-| [programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md](programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md) | Conformance as an IdP, and what has been addressed |
+| [programs/ANALYSIS-IdP.md](programs/ANALYSIS-IdP.md) | Conformance as an IdP, and what has been addressed |

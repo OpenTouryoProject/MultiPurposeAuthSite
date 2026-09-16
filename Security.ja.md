@@ -69,7 +69,7 @@
 **IdP 実装のプロトコル適合性については調査を実施し、結果を記録済みである。**
 報告の前に、次を確認してください。
 
-- **[`root/programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md`](root/programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md)**
+- **[`root/programs/ANALYSIS-IdP.md`](root/programs/ANALYSIS-IdP.md)**
   … ファイルと行番号を伴う一覧
 - Issue **[#182](https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues/182)** 〜
   **[#189](https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues/189)**

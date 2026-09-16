@@ -46,7 +46,7 @@ labels: bug
   ・リクエストとレスポンスの実際の値（**トークンや client_secret は伏せてください**）
 
 **報告の前に、既知かどうかを確認してください。**
-  ・root/programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md
+  ・root/programs/ANALYSIS-IdP.md
   ・SECURITY.md の「Already known」
 -->
 

@@ -9,6 +9,11 @@
 本書は「この Web アプリ固有の部分」だけを扱う。
 主要部（net10.0）は [`../MultiPurposeAuthSiteCore/ANALYSIS.md`](../MultiPurposeAuthSiteCore/ANALYSIS.md)。
 
+> **IdP / STS としてのプロトコル適合性、既知の不具合、近代化ロードマップは
+> [`../ANALYSIS-IdP.md`](../ANALYSIS-IdP.md) が一次情報。**
+> **指摘の 2/3 は `../CommonLibrary` に在り、この net48 版にも同じ症状が出る**（各項目の **[Lib]**）。
+> OAuth2 / OIDC まわりを触る前に必ず読むこと。本書はそこに重複して書かない。
+
 ---
 
 ## 1. これは何か

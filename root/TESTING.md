@@ -13,7 +13,7 @@
 > |---|---|
 > | **各テストが何を確かめるのか** | [`programs/Tests/TESTCASES.md`](programs/Tests/TESTCASES.md) |
 > | テストの方針・構成・未修正項目 | [`programs/Tests/README.md`](programs/Tests/README.md) |
-> | 適合上の穴の一覧 | [`programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md`](programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md) |
+> | 適合上の穴の一覧 | [`programs/ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) |
 > | ビルド | [`BUILDING.md`](BUILDING.md) |
 > | 設定と起動 URL | [`CONFIGURATION.md`](CONFIGURATION.md) |
 

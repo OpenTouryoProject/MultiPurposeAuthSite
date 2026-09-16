@@ -10,7 +10,7 @@
 下位互換版（net48）は [`../MultiPurposeAuthSite/ANALYSIS.md`](../MultiPurposeAuthSite/ANALYSIS.md)。
 
 > **IdP / STS としてのプロトコル適合性、既知の不具合、近代化ロードマップは
-> [`ANALYSIS-IdP.md`](ANALYSIS-IdP.md) が一次情報。**
+> [`../ANALYSIS-IdP.md`](../ANALYSIS-IdP.md) が一次情報。**
 > OAuth2 / OIDC まわりを触る前に必ず読むこと。本書はそこに重複して書かない。
 
 ---
