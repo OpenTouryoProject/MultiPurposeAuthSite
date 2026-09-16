@@ -36,6 +36,7 @@
 //*  2026/09/11  玄人 幸道         /ciba_authz（RT-196.16 〜 196.18）を追加（#196 の 6 つ目）
 //*  2026/09/12  玄人 幸道         /SetDeviceToken・/ciba_result（RT-196.19 〜 196.20）を追加（#196 の 7 つ目）
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-196）
+//*  2026/09/16  玄人 幸道         /ciba_authz の端末未登録（RT-210.1）を追加（#210）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -63,6 +64,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///   RT-196.14 〜 196.15 : /device_authz（RFC 8628 §3.1 : クライアント認証は /token と同じ。失敗は 401）
     ///   RT-196.16 〜 196.18 : /ciba_authz（CIBA Core §13 : invalid_client は 401、それ以外は 400。成功の経路は EX-8）
     ///   RT-196.19 〜 196.20 : /SetDeviceToken・/ciba_result（本文は OK / NG のまま。トークンの不備は 401、パラメタの不備は 400）
+    ///
+    ///   RT-210.1 : /ciba_authz（#210 : 端末が登録されていないユーザ宛ての要求は、HTTP 500 ではなく 400 と access_denied）
     ///
     /// /token・/revoke・/introspect・/device_authz では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
@@ -1072,6 +1075,45 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(4) result が真偽値でない値で送る");
 
                 VerifyNG(r, "result が不正", await client.CibaPushResultAsync(token.AccessToken, "dummy", "maybe"), 400, null);
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-210.1 /ciba_authz の端末未登録</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT210_01_ciba_authzで端末が未登録なら400とaccess_denied(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-210.1",
+                    "/ciba_authz : 端末が登録されていないユーザ宛ての要求は、HTTP 400 と access_denied",
+                    "CIBA は、ユーザの**別の端末**に承認を求める。その端末が登録されていなければ、要求は成立しない。"
+                    + "**以前は空の宛先のままプッシュ通知を送ろうとして例外になり、HTTP 500 と JSON でない本文を返していた**（#210）。"
+                    + "ユーザ自体は見つかっているので、unknown_user_id（RT-196.18）ではなく access_denied で返す。",
+                    "CIBA Core §13（access_denied は 400）/ #210");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                // **テスト ユーザは使えない。** CIBA のテスト（EX-8）が端末を登録するため、
+                // 実行順によっては「端末あり」になる。E2E からサインインしない別の利用者を指す。
+                const string NoDeviceUser = "tanaka@gmail.com";
+
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = " + NoDeviceUser
+                    + "（認証サイトが IsDebug のときに作る利用者。E2E は端末を登録しない）");
+                r.Step("端末を登録していない利用者を login_hint に入れた要求を /ros に登録し、その request_uri を送る");
+
+                string requestUri = await RegisterCibaRequestAsync(client, reg,
+                    new Dictionary<string, object>() { { "login_hint", NoDeviceUser } });
+
+                VerifyError(r, "端末未登録", await client.CibaAuthorizeAsync(
+                    new Dictionary<string, string>() { { "request_uri", requestUri } }), 400, "access_denied");
+
+                r.Note("送信そのものの失敗（server_error）は、E2E では測れない。"
+                    + "test.ps1 -Launch は送信箱を使い、FcmService は宛先を検証せずファイルに書くため。");
 
                 r.Done();
             }

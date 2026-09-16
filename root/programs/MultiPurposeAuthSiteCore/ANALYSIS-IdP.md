@@ -389,6 +389,8 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 | `exp` / `nbf` の範囲外、必須のクレームの欠落 | 200 ＋ 空 / `server_error` | **400** ＋ `invalid_request` |
 | `login_hint` のユーザが見つからない | 200 ＋ 空 | **400** ＋ `unknown_user_id` |
 | 登録されていないクライアント（`iss`） | 200 ＋ 空 | **401** ＋ `invalid_client` |
+| **ユーザの端末（認証デバイス）が未登録** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `access_denied` |
+| **プッシュ通知（FCM）の送信に失敗** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `server_error` |
 
 - `/ciba_authz` は、クライアントを HTTP 認証ではなく、`/ros` に登録した署名付きの要求（ES256）で識別する。
   そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
@@ -399,6 +401,19 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 - E2E テスト : `RT-196.16`（`request_uri` なし・存在しない → 400）/
   `RT-196.17`（`openid` なし・`nbf` が未来・`exp` が過去 → 400 と CIBA のコード）/
   `RT-196.18`（ユーザ不明 → 400 と `unknown_user_id`）。要求は、テスト基盤に足した ES256 の署名で組み立てる
+
+**対応（#210 : 端末未登録・送信失敗）:** 上の表の下 2 行。**#196 の対応では、この 2 つが残っていた。**
+`FcmService.SendAsync` の呼び出しに `try` / `catch` が無く、例外がそのまま外に出て HTTP 500 になっていた
+（開発モードでは例外の平文、それ以外では HTML のエラー画面。どちらも JSON ではない）。
+
+- **端末の有無は、送る前に確かめる**（`CibaProvider.Create` よりも前）。保留中のレコードを作らずに返す
+- ユーザ自体は見つかっているので、`unknown_user_id` ではなく `access_denied` を返す
+- 送信の失敗（資格情報の誤り、宛先の拒否、通信障害など）は `server_error`。
+  **こちらは `Create` の後なので、レコードは期限（`CibaExpireTimeSpanFromSeconds`、既定 600 秒）まで残る**
+- E2E テスト : `RT-210.1`（端末未登録 → 400 と `access_denied`）。
+  **送信そのものの失敗は E2E では測れない。** `test.ps1 -Launch` は送信箱を使い、`FcmService` は宛先を検証せずファイルに書くため
+- テストの `login_hint` には `tanaka@gmail.com` を使う。
+  テスト ユーザ（`super_tanaka@gmail.com`）は `EX-8` が端末を登録するので、「端末が無い」状態を作れない
 
 **対応（#196 の 7 つ目 : `/ciba_result`・`/SetDeviceToken`）:** 認証デバイス（`authentication_device`）が呼ぶ 2 つの口。
 
