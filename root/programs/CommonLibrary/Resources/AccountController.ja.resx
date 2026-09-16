@@ -120,6 +120,9 @@
   <data name="InvalidCode" xml:space="preserve">
     <value>無効なコード。</value>
   </data>
+  <data name="SendCodeError" xml:space="preserve">
+    <value>コードを送信できませんでした。やり直すか、別の送信先を選んでください。</value>
+  </data>
   <data name="Login_emailconfirm" xml:space="preserve">
     <value>電子メールの確認が必要です！</value>
   </data>

@@ -31,6 +31,7 @@
 //*  2026/09/11  玄人 幸道         新規（#198 の前半）
 //*  2026/09/11  玄人 幸道         クライアントごとの制限（RT-198.3 / 198.4）を追加（#198 の後半）
 //*  2026/09/11  玄人 幸道         scopes の読み取りを Jwt.Strings へ移し、補助関数を先頭にまとめる
+//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-198）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -43,7 +44,7 @@ using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace MultiPurposeAuthSite.Tests.E2E.Tests
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
     /// RT-198. 要求したスコープを、そのまま発行しない（#198 の前半）。

@@ -35,6 +35,40 @@
     このため、**net48 版を app.config の URL に置く必要はない。**
     別ポートへ寄せられるので、net10.0 版と URL が衝突しない。
 
+.PARAMETER UserStoreType
+    サイトが使う UserStore の種類（mem / sql / ora / npg）。既定は mem。
+
+    ** 既定を mem のままにしている理由 **
+
+    sql / ora / npg は、対応する DBMS が動いていることが前提になる。
+    既定を変えると、DBMS の無い環境で E2E が回らなくなる。
+
+    ** 切り替えるときに要るもの **
+
+    接続文字列。-ConnectionString で渡すか、環境変数で渡す。
+
+      sql : MPAS_CONNSTR_SQL   （キー名 ConnectionString_SQL）
+      ora : MPAS_CONNSTR_ODP   （キー名 ConnectionString_ODP）
+      npg : MPAS_CONNSTR_NPS   （キー名 ConnectionString_NPS）
+
+    **スクリプトに既定値を書かない。** 書いたものは事実上の資格情報になる。
+
+    ** 事前に要ること **
+
+    対象の DBMS に、空のデータベース（スキーマ）と
+    files/resource/MultiPurposeAuthSite/Sql/<dbms>/Create_UserStore.sql の実行。
+    ロール・管理者・テスト ユーザは、**初回の /Account/Login でサイトが作る**
+    （CreateData が Roles の件数で初期化済みかを判定する）。
+
+    ** net48 は npg を選べない **
+
+    Npgsql の参照が #if NETCORE で囲まれているため、net48 版は PostgreSQL を使えない。
+    -UserStoreType npg のときは、net48 版を起動しない（その分は Skip）。
+
+.PARAMETER ConnectionString
+    -UserStoreType が mem 以外のときに使う接続文字列。
+    省略した場合は、上記の環境変数から読む。
+
 .PARAMETER Launch
     net10.0 版と net48 版を起動してからテストする。
 
@@ -66,10 +100,22 @@
     .\test.ps1 -Launch
     .\test.ps1 -Launch -NoNetFx
     .\test.ps1 -Filter "FullyQualifiedName~RequestObjectTests"
+
+.EXAMPLE
+    # SQL Server のストアで回す（接続文字列は環境変数から）
+    $env:MPAS_CONNSTR_SQL = 'Data Source=localhost;Initial Catalog=UserStore;User ID=sa;Password=***;'
+    .\test.ps1 -Launch -UserStoreType sql
+
+.EXAMPLE
+    # PostgreSQL のストアで回す（net48 版は自動的に Skip される）
+    .\test.ps1 -Launch -UserStoreType npg -ConnectionString 'HOST=localhost;DATABASE=UserStore;USER ID=postgres;PASSWORD=***'
 #>
 [CmdletBinding()]
 param(
     [switch] $Launch,
+    [ValidateSet('mem', 'sql', 'ora', 'npg')]
+    [string] $UserStoreType = 'mem',
+    [string] $ConnectionString,
     [string] $Url = 'https://localhost:44300',
     [string] $NetFxUrl = 'https://localhost:44302',
     [switch] $NoNetFx,
@@ -97,6 +143,49 @@ $ErrorActionPreference = 'Stop'
 
 if (-not $LogDir) {
     $LogDir = Join-Path $PSScriptRoot 'E2ETests\Result'
+}
+
+# ------------------------------------------------------------------
+# UserStore の切り替え（#207）
+# ------------------------------------------------------------------
+# 設定ファイルは書き換えない。**環境変数で上書きする**（FxContainerization=ON）。
+# キー名がそのまま環境変数名になるので、ConnectionString_* を直接渡せる。
+#
+# **接続文字列の既定値は持たない。** 引数か環境変数で受ける。
+$storeKeys = @{
+    'sql' = @{ Key = 'ConnectionString_SQL'; Env = 'MPAS_CONNSTR_SQL'; Name = 'SQL Server' }
+    'ora' = @{ Key = 'ConnectionString_ODP'; Env = 'MPAS_CONNSTR_ODP'; Name = 'Oracle' }
+    'npg' = @{ Key = 'ConnectionString_NPS'; Env = 'MPAS_CONNSTR_NPS'; Name = 'PostgreSQL' }
+}
+
+$storeConnKey = $null
+$storeConnStr = $null
+
+if ($UserStoreType -ne 'mem') {
+
+    $info = $storeKeys[$UserStoreType]
+    $storeConnKey = $info.Key
+
+    # 引数が優先。無ければ環境変数。
+    $storeConnStr = $ConnectionString
+    if (-not $storeConnStr) {
+        $storeConnStr = [Environment]::GetEnvironmentVariable($info.Env)
+    }
+
+    if (-not $storeConnStr) {
+        throw ("-UserStoreType {0}（{1}）には接続文字列が要ります。" -f $UserStoreType, $info.Name) `
+            + "`n  -ConnectionString で渡すか、環境変数 $($info.Env) に設定してください。" `
+            + "`n  **スクリプトに既定値は持たせていません**（資格情報になるため）。"
+    }
+
+    Write-Host ("UserStore : {0}（{1}）" -f $UserStoreType, $info.Name) -ForegroundColor Cyan
+    Write-Host ("  接続文字列は {0} として渡します（内容は表示しません）。" -f $storeConnKey)
+
+    # **net48 は PostgreSQL を選べない。** Npgsql の参照が #if NETCORE で囲まれている。
+    if ($UserStoreType -eq 'npg' -and -not $NoNetFx) {
+        Write-Host '  net48 版は PostgreSQL を使えないため、起動しません（その分は Skip）。' -ForegroundColor Yellow
+        $NoNetFx = $true
+    }
 }
 
 $programs = Split-Path -Parent $PSScriptRoot
@@ -258,6 +347,12 @@ try {
         $env:OAuth2AuthorizationServerEndpointsRootURI = $Url
         $env:OAuth2ClientEndpointsRootURI = $Url
 
+        # UserStore の切り替え（#207）。mem のときは何も渡さない（構成ファイルのまま）。
+        if ($UserStoreType -ne 'mem') {
+            $env:UserStoreType = $UserStoreType
+            Set-Item -Path ("Env:\" + $storeConnKey) -Value $storeConnStr
+        }
+
         # プッシュ通知の送信箱（テスト用）。サイトは FCM に送らず、ここへファイルとして書く（#196）。
         # テストは、認証デバイスの代わりにここを読む。サイトごとに分け、前回の残りは消す。
         $coreOutbox = Join-Path $LogDir 'fcm\core'
@@ -317,6 +412,12 @@ try {
             $env:OAuth2AuthorizationServerEndpointsRootURI = $NetFxUrl
             $env:OAuth2ClientEndpointsRootURI = $NetFxUrl
 
+            # UserStore の切り替え（#207）。npg はここに来ない（上で NoNetFx にしている）。
+            if ($UserStoreType -ne 'mem') {
+                $env:UserStoreType = $UserStoreType
+                Set-Item -Path ("Env:\" + $storeConnKey) -Value $storeConnStr
+            }
+
             $netFxOutbox = Join-Path $LogDir 'fcm\netfx'
             New-Item -ItemType Directory -Force $netFxOutbox | Out-Null
             Remove-Item (Join-Path $netFxOutbox '*') -Force -ErrorAction SilentlyContinue
@@ -339,6 +440,13 @@ try {
         Remove-Item Env:\OAuth2AuthorizationServerEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\OAuth2ClientEndpointsRootURI -ErrorAction SilentlyContinue
         Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
+
+        # **接続文字列を、テスト プロセスへ引き継がない。**
+        # テストはサイトを HTTP で叩くだけで、DB へは触らない。
+        if ($UserStoreType -ne 'mem') {
+            Remove-Item Env:\UserStoreType -ErrorAction SilentlyContinue
+            Remove-Item -Path ("Env:\" + $storeConnKey) -ErrorAction SilentlyContinue
+        }
     }
 
     $testArgs = @('test', $csproj, '-c', $Configuration, '--logger', 'console;verbosity=normal')

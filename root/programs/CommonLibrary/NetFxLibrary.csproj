@@ -83,6 +83,7 @@
     <Compile Include="TokenProviders\CmnAccessToken.cs" />
     <Compile Include="TokenProviders\CmnResponseObject.cs" />
     <Compile Include="Extensions\Sts\CibaProvider.cs" />
+    <Compile Include="Extensions\Sts\TwoFactorPushProvider.cs" />
     <Compile Include="TokenProviders\RefreshTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RevocationProvider.cs" />
     <Compile Include="Notifications\CmnEmail.cs" />

@@ -43,6 +43,8 @@ Contributing.ja.md の「下位互換は高く維持し、破壊的な変更は�
 mpas_dev.bat（リポジトリ ルート）               隣に clone 済みの OpenTouryo からビルド出力を xcopy
 ```
 
+**`1_BuildAll.ps1` は、無ければ 2 番目（`develop`）を自動で呼ぶ**（`-Libs Force` で取り直す）。
+
 `OpenTouryoAssemblies/` は `.gitignore` 対象。
 
 ### 2.2 NuGet パッケージは `packages.config` 方式
@@ -184,7 +186,7 @@ net10.0 版は `Startup.UseEndpoints` の 1 箇所だが、**net48 は MVC と W
 | ファイル | 登録するもの |
 |---|---|
 | `App_Start/RouteConfig.cs` | `Saml2Request` / `OAuth2Authorize` / `DeviceAuthZVerify` ＋ Default |
-| `App_Start/WebApiConfig.cs` | `OAuth2Token` `GetUserClaims` `RevokeToken` `IntrospectToken` `JwksUri` `RequestObjectUri` `DeviceAuthZAuthorize` `CibaAuthorize` `CibaPushResult` `SetDeviceToken` `TwoFactorAuthPushResult` `TestHybridFlow` `ChageToUser` ＋ `api/{controller}/{action}/{id}` |
+| `App_Start/WebApiConfig.cs` | `OAuth2Token` `GetUserClaims` `RevokeToken` `IntrospectToken` `JwksUri` `RequestObjectUri` `DeviceAuthZAuthorize` `CibaAuthorize` `CibaPushResult` `SetDeviceToken` `TestHybridFlow` `ChageToUser` ＋ `api/{controller}/{action}/{id}` |
 
 いずれもパスは `Config.*`（＝ `app.config`）から取り、`.Substring(1)` で先頭 `/` を落とす。
 固定パスは `[Route]` 属性の 2 つ（`.well-known/openid-configuration` / `samlmetadata`）。

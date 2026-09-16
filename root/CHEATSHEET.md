@@ -93,9 +93,11 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
 ## 5. 初回の準備
 
 ```
-1. OpenTouryo のアセンブリを用意する
-   root\programs\3_BuildLibsAtOtherRepos.bat
-   （または OpenTouryo を clone してビルドし、mpas_dev.bat で複写）
+1. OpenTouryo のアセンブリ
+   4. のビルドで自動取得される（無ければ取得する）
+   取り直す  : cd root && .\1_BuildAll.ps1 -Libs Force
+   手で入れる: root\programs\3_BuildLibsAtOtherRepos.bat
+               （または OpenTouryo を clone してビルドし、mpas_dev.bat で複写）
 
 2. 設定ファイルを作る（どちらも .gitignore 済み）
    programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\_appsettings.json → appsettings.json
@@ -160,4 +162,5 @@ gh issue comment <番号> --repo OpenTouryoProject/MultiPurposeAuthSite --body-f
 - **状態を報告する直前に、必ず取り直す。** 前のターンの出力や記憶から書かない
 - **GitHub への投稿は、文面を提示して承認を得てから。** 投稿後は URL を報告する
 - **秘密を転記しない。** 設定の変更は雛形側に書く
+- **回さなかった検証は、「回していない」と報告する。** どこまで回すかの目安は [`../AGENTS.md`](../AGENTS.md)
 - ヘッダの更新者は **「玄人 幸道」**

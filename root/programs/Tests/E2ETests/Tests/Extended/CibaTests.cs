@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/12  玄人 幸道         新規（プッシュ通知を送信箱で受け、認証デバイスの返答をテストが送る）（#196）
+//*  2026/09/13  玄人 幸道         EX-8.3（返答の及ぶ範囲）・EX-8.4（別の利用者は承認できない）を追加
+//*  2026/09/16  玄人 幸道         EX-8.4 の Skip を解消（2 人目の利用者でサインインできるようにした）
 //**********************************************************************************
 
 using System;
@@ -57,8 +59,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
     /// サーバは FCM に送らず送信箱（FcmOutbox）にファイルとして書き（test.ps1 -Launch のときだけ）、
     /// テストはそれを受け取って、認証デバイスと同じ HTTP 要求（/SetDeviceToken・/ciba_result）を送る。
     ///
-    /// /ciba_result は、メモリのストアでは auth_req_id を見ずに、保留中の全ての要求へ結果を書き込む。
-    /// そのため、返答を送るテストはこのクラスに集めて、順に流す（xUnit は、クラスの中を順に実行する）。
+    /// /ciba_result は、**auth_req_id で 1 件を特定し、その要求が返答者宛てかを確かめてから**結果を書き込む。
+    /// 以前はメモリのストアで auth_req_id を見ておらず、保留中の全ての要求へ書き込んでいた（EX-8.3 で回帰を見る）。
     /// </summary>
     public class CibaTests : TargetTestBase
     {
@@ -285,6 +287,164 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Verify("トークンを出さない", string.IsNullOrEmpty(denied.AccessToken),
                     "access_token を返さない", denied.AccessToken == null ? "返さなかった" : "**返してしまった**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-8.3 返答は、その auth_req_id だけに効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0803_返答はそのauth_req_idだけに効く(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                FcmOutbox.SkipIfUnavailable(client.Target);
+
+                TestReport r = this.Report("EX-8.3",
+                    "返答は、その auth_req_id の要求だけに効く（他の保留中の要求に波及しない）",
+                    "**返答は 1 つの要求に閉じなければならない。** 以前はメモリのストアで auth_req_id を見ておらず、"
+                    + "1 つの「許可」が保留中の全ての要求に書き込まれた。"
+                    + "この状態では、承認していない要求にもトークンが出てしまう。",
+                    "CIBA Core §10（ポーリング）/ §11（authorization_pending）");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName
+                    + "（同じ利用者の要求を 2 件、同時に保留にする）");
+
+                r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
+
+                (string AccessToken, string DeviceToken) device = await RegisterDeviceAsync(r, client);
+
+                r.Step("(2) クライアント : CIBA の認証リクエストを 2 件送る（A と B）");
+
+                JsonResponse startA = await StartAsync(client, reg, "E2E-scope-A");
+                string authReqIdA = startA.String("auth_req_id");
+
+                JsonResponse startB = await StartAsync(client, reg, "E2E-scope-B");
+                string authReqIdB = startB.String("auth_req_id");
+
+                Assert.False(string.IsNullOrEmpty(authReqIdA), "前提: A の auth_req_id が返ること");
+                Assert.False(string.IsNullOrEmpty(authReqIdB), "前提: B の auth_req_id が返ること");
+
+                r.Verify("2 件の auth_req_id は別のもの", authReqIdA != authReqIdB,
+                    "A と B で異なる", authReqIdA != authReqIdB ? "異なる" : "**同じ値**");
+
+                r.Step("(3) サーバ → 認証デバイス : 2 件のプッシュ通知を受け取る（送信箱）");
+
+                await ReceivePushAsync(r, client, authReqIdA, device.DeviceToken);
+                await ReceivePushAsync(r, client, authReqIdB, device.DeviceToken);
+
+                r.Step("(4) ユーザ : A だけに「許可」を返す（POST /ciba_result）");
+
+                JsonResponse answer = await client.CibaPushResultAsync(device.AccessToken, authReqIdA, "true");
+
+                r.VerifyEqual("返答 : HTTP 200", "200", ((int)answer.StatusCode).ToString());
+                r.VerifyEqual("返答 : 本文は OK", "OK", answer.Text);
+
+                r.Step("(5) クライアント : B をポーリングする（まだ誰も返答していない）");
+
+                JsonResponse pollB = await PollAsync(client, reg, authReqIdB);
+
+                r.VerifyEqual("B は authorization_pending のまま", "authorization_pending", pollB.Error);
+
+                r.Verify("B にトークンを出さない", string.IsNullOrEmpty(pollB.AccessToken),
+                    "access_token を返さない", pollB.AccessToken == null ? "返さなかった" : "**返してしまった**");
+
+                r.Step("(6) クライアント : A をポーリングする（許可済み）");
+
+                JsonResponse pollA = await PollAsync(client, reg, authReqIdA);
+
+                r.Verify("A にはトークンを出す", !string.IsNullOrEmpty(pollA.AccessToken),
+                    "access_token を返す", string.IsNullOrEmpty(pollA.AccessToken) ? "**返らない**" : "返った");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-8.4 別の利用者は承認できない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0804_別の利用者は承認できない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                FcmOutbox.SkipIfUnavailable(client.Target);
+
+                TestReport r = this.Report("EX-8.4",
+                    "別の利用者のトークンでは、他人の CIBA 要求を承認できない",
+                    "**承認は、要求が宛てられた利用者だけができなければならない。**"
+                    + "他人が承認できると、本人の知らないうちにクライアントへトークンが出る。"
+                    + "要求が無い場合と自分宛てでない場合は、**同じ応答**で返すこと"
+                    + "（区別すると auth_req_id の存在を推測できる）。",
+                    "CIBA Core §7（認証リクエストは特定の利用者に宛てられる）");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("宛先の利用者 = " + TestEnv.TestUserName
+                    + " / 返答するのは " + TestEnv.SecondUserName);
+
+                r.Step("(1) 宛先の利用者 : 認証デバイスを登録し、CIBA の要求を 1 件保留にする");
+
+                (string AccessToken, string DeviceToken) device = await RegisterDeviceAsync(r, client);
+
+                JsonResponse start = await StartAsync(client, reg,
+                    "E2E-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+                string authReqId = start.String("auth_req_id");
+
+                Assert.False(string.IsNullOrEmpty(authReqId), "前提: auth_req_id が返ること");
+
+                await ReceivePushAsync(r, client, authReqId, device.DeviceToken);
+
+                r.Step("(2) **別の利用者**のトークンを得る");
+
+                // **別の利用者では、端末（device_token）を登録しない。**
+                //   RT-210.1（#210）が、この利用者を「端末が無い利用者」として使っているため。
+                //   ここで要るのはアクセス トークンだけで、端末の登録は要らない。
+                using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.SecondUserName))
+                {
+                    JsonResponse otherToken = await Flows.RunAuthorizationCodeFlowAsync(other);
+
+                    Assert.False(string.IsNullOrEmpty(otherToken.AccessToken),
+                        "前提: 別の利用者の access_token が返ること");
+
+                    r.Verify("別の利用者のトークンである", otherToken.AccessToken != device.AccessToken,
+                        "宛先の利用者とは別のトークン",
+                        otherToken.AccessToken != device.AccessToken ? "別のトークン" : "**同じトークン**");
+
+                    r.Step("(3) 別の利用者のトークンで、その auth_req_id に「許可」を送る");
+
+                    JsonResponse answer = await other.CibaPushResultAsync(otherToken.AccessToken, authReqId, "true");
+
+                    r.VerifyEqual("返答 : HTTP 400", "400", ((int)answer.StatusCode).ToString());
+                    r.VerifyEqual("返答 : 本文は NG", "NG", answer.Text);
+                }
+
+                r.Step("(4) クライアント : ポーリングしても、まだ承認されていない");
+
+                JsonResponse pending = await PollAsync(client, reg, authReqId);
+
+                r.VerifyEqual("authorization_pending のまま", "authorization_pending", pending.Error);
+
+                r.Verify("トークンを出さない", string.IsNullOrEmpty(pending.AccessToken),
+                    "access_token を返さない", pending.AccessToken == null ? "返さなかった" : "**返してしまった**");
+
+                r.Step("(5) 対照 : 宛先の利用者が「許可」を送るとトークンが出る");
+
+                JsonResponse ok = await client.CibaPushResultAsync(device.AccessToken, authReqId, "true");
+
+                r.VerifyEqual("宛先の利用者の返答 : HTTP 200", "200", ((int)ok.StatusCode).ToString());
+
+                JsonResponse granted = await PollAsync(client, reg, authReqId);
+
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(granted.AccessToken),
+                    "access_token あり",
+                    granted.AccessToken == null ? "なし（" + granted.ToString() + "）" : "あり（値は伏せる）");
 
                 r.Done();
             }

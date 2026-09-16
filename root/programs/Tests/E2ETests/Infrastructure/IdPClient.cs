@@ -38,6 +38,7 @@
 //*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
 //*  2026/09/12  玄人 幸道         Authorization ヘッダ付きの POST を一般化し、認証デバイスの代わりの要求（/SetDeviceToken・/ciba_result）を追加（#196）
+//*  2026/09/16  玄人 幸道         /2fa_result を呼ぶ TwoFactorPushResultAsync を追加（#213）
 //**********************************************************************************
 
 using System;
@@ -330,11 +331,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         #region サインイン
 
         /// <summary>
-        /// テスト ユーザでサインインする。
-        /// UserStoreType=mem のとき、テスト ユーザは初回アクセスで作成される。
+        /// 指定した利用者でサインインする（省略時はテスト ユーザ）。
+        /// UserStoreType=mem のとき、利用者は初回アクセスで作成される。
+        ///
+        /// **2 人目の利用者も、同じパスワード（TestUserPWD）で作られる。**
+        /// 認証サイトは IsDebug のとき super_tanaka@gmail.com と tanaka@gmail.com を作る
+        /// （AccountController の CreateData）。EX-8.4 は、その 2 人目を使う。
         /// </summary>
+        /// <param name="userName">サインインする利用者（null ならテスト ユーザ）</param>
         /// <returns>Task</returns>
-        public async Task SignInAsync()
+        public async Task SignInAsync(string userName = null)
         {
             if (this.IsSignedIn)
             {
@@ -355,7 +361,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             Dictionary<string, string> form = new Dictionary<string, string>()
             {
                 { "__RequestVerificationToken", m.Groups["value"].Value },
-                { "Email", TestEnv.TestUserName },
+                { "Email", userName ?? TestEnv.TestUserName },
                 { "Password", this.Config.Get("TestUserPWD") },
                 { "RememberMe", "false" },
                 { "submitButtonName", "normal_signin" }
@@ -370,6 +376,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 throw new InvalidOperationException(
                     "サインインに失敗しました（HTTP " + (int)post.StatusCode
+                    + "、利用者 " + (userName ?? TestEnv.TestUserName)
                     + "）。TestUserPWD と testUserName を確認してください。");
             }
 
@@ -702,6 +709,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             return this.PostJsonWithAuthorizationAsync("/ciba_result",
                 new Dictionary<string, string>() { { "auth_req_id", authReqId }, { "result", result } },
+                accessToken == null ? null : "Bearer " + accessToken);
+        }
+
+        /// <summary>
+        /// 2FA のプッシュ承認を送る（POST /2fa_result）。
+        /// 認証デバイスが、プッシュ通知で受け取ったコードを送り返すときと同じ形（#213）。
+        /// </summary>
+        /// <param name="accessToken">ユーザのアクセス トークン（null なら Authorization ヘッダを付けない）</param>
+        /// <param name="code">2FA のコード（プッシュ通知の data にある。null なら送らない）</param>
+        /// <returns>JsonResponse（本文は "OK" / "NG"）</returns>
+        public Task<JsonResponse> TwoFactorPushResultAsync(string accessToken, string code)
+        {
+            return this.PostJsonWithAuthorizationAsync("/2fa_result",
+                new Dictionary<string, string>() { { "code", code } },
                 accessToken == null ? null : "Bearer " + accessToken);
         }
 

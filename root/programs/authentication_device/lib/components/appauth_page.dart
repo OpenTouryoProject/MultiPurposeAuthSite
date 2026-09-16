@@ -40,69 +40,92 @@ class _AppAuthPageState extends State<AppAuthPage> {
   void initState() {
     super.initState();
 
-    // ターミネーテッド状態でプッシュ通知からアプリを起動した時のアクションを実装
-    FirebaseMessaging.instance
-      .getInitialMessage()
-      .then((RemoteMessage? message) {
-        if (message != null) {
-          // メッセージ詳細画面へ遷移
-          Navigator.pushNamed(context, '/message',
-            arguments: MessageArguments(message, true));
+    // Firebase を初期化していない（web で構成が無い）ときは、FirebaseMessaging を使わない（#205）
+    if (AppFcm.enabled) {
+      // ターミネーテッド状態でプッシュ通知からアプリを起動した時のアクションを実装
+      FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((RemoteMessage? message) {
+          if (message != null) {
+            // メッセージ詳細画面へ遷移
+            Navigator.pushNamed(context, '/message',
+              arguments: MessageArguments(message, true));
+          }
+        });
+
+      // Android のフォアグラウンドプッシュ通知受信時アクションを設定
+      //   (iOSと異なり、)Androidではアプリがフォアグラウンド状態で
+      //   画面上部にプッシュ通知メッセージを表示することができない為、
+      //   ローカル通知で擬似的に通知メッセージを表示する。
+      FirebaseMessaging.onMessage.listen((RemoteMessage? message) {
+        print("ローカル通知で擬似的に通知メッセージを表示");
+        RemoteNotification? notification = message?.notification;
+        AndroidNotification? android = message?.notification?.android;
+        if (AppFcm.flutterLocalNotificationsPlugin != null
+            && notification != null && android != null && !kIsWeb) {
+
+          AppFcm.flutterLocalNotificationsPlugin?.show(
+            id: notification.hashCode,
+            title: notification.title,
+            body: notification.body,
+            notificationDetails: NotificationDetails(
+              android: AndroidNotificationDetails(
+                AppFcm.channel.id,
+                AppFcm.channel.name,
+                channelDescription: AppFcm.channel.description,
+                // TODO add a proper drawable resource to android, for now using
+                //      one that already exists in example app.
+                icon: 'notification_icon',
+              ),
+            )
+          );
         }
       });
 
-    // Android のフォアグラウンドプッシュ通知受信時アクションを設定
-    //   (iOSと異なり、)Androidではアプリがフォアグラウンド状態で
-    //   画面上部にプッシュ通知メッセージを表示することができない為、
-    //   ローカル通知で擬似的に通知メッセージを表示する。
-    FirebaseMessaging.onMessage.listen((RemoteMessage? message) {
-      print("ローカル通知で擬似的に通知メッセージを表示");
-      RemoteNotification? notification = message?.notification;
-      AndroidNotification? android = message?.notification?.android;
-      if (AppFcm.flutterLocalNotificationsPlugin != null
-          && notification != null && android != null && !kIsWeb) {
+      // バックグラウンド状態でプッシュ通知からアプリを起動した時のアクションを実装する
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        print('A new onMessageOpenedApp event was published!');
+        // メッセージ詳細画面へ遷移
+        Navigator.pushNamed(context, '/message',
+          arguments: MessageArguments(message, true));
+      });
 
-        AppFcm.flutterLocalNotificationsPlugin?.show(
-          notification.hashCode,
-          notification.title,
-          notification.body,
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              AppFcm.channel.id,
-              AppFcm.channel.name,
-              AppFcm.channel.description,
-              // TODO add a proper drawable resource to android, for now using
-              //      one that already exists in example app.
-              icon: 'notification_icon',
-            ),
-          )
-        );
-      }
-    });
+      // FCMトークンの取得
+      this._getFcmToken();
 
-    // バックグラウンド状態でプッシュ通知からアプリを起動した時のアクションを実装する
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('A new onMessageOpenedApp event was published!');
-      // メッセージ詳細画面へ遷移
-      Navigator.pushNamed(context, '/message',
-        arguments: MessageArguments(message, true));
-    });
-
-    // FCMトークンの取得
-    FirebaseMessaging.instance
-      .getToken(vapidKey: AppFcm.vapidKey)
-      .then(setToken);
-
-    // FCMトークンの更新
-    AppFcm.tokenStream = FirebaseMessaging.instance.onTokenRefresh;
-    AppFcm.tokenStream?.listen(setToken);
+      // FCMトークンの更新
+      AppFcm.tokenStream = FirebaseMessaging.instance.onTokenRefresh;
+      AppFcm.tokenStream?.listen(setToken);
+    }
 
     // Accessトークンの確認と処理
     Future(() async {
+      // web : 認証サイトから認可応答で戻ってきたのなら、トークンに交換して保存する（#205）
+      if (kIsWeb) {
+        final String? token = await WebSignIn.completeIfReturned(Uri.base);
+        if (token != null) {
+          await AppAuth.setTokenValue(token);
+          print('サインインしました（アクセス トークンを保存しました）。');
+        }
+      }
+
       this._accessToken = await AppAuth.getTokenValue();
-      if(this._accessToken != null)
+      // getTokenValue() はトークンが無いと "" を返す（null にならない）。
+      // != null で判定すると、未サインインでも起動のたびに登録を呼んでしまう。
+      if(this._accessToken?.isNotEmpty ?? false)
       {
         await this._registerFcmTokenApi();
+      }
+
+      // web : 通知のクリックで開かれたのなら、その通知の詳細画面（Allow / Deny）を開く（#205 増分 3）。
+      //   端末の登録（→ /mypage）の後に開くので、戻ると /mypage になる。
+      if (kIsWeb) {
+        final RemoteMessage? clicked = WebPushClick.fromUri(Uri.base);
+        if (clicked != null && this.mounted) {
+          print('通知のクリックで開かれました（${clicked.notification?.title}）。');
+          Navigator.of(context).pushNamed('/message',
+            arguments: MessageArguments(clicked, true));
+        }
       }
     });
   }
@@ -113,7 +136,29 @@ class _AppAuthPageState extends State<AppAuthPage> {
     AppFcm.token = token;
   }
 
+  // FCMトークンの取得
+  //   web では、Web Push を受ける service worker を指定する（Android / iOS では無視される）。
+  Future<String?> _getFcmToken() async {
+    try {
+      final String? token = await FirebaseMessaging.instance.getToken(
+          vapidKey: AppFcm.vapidKey.isEmpty ? null : AppFcm.vapidKey,
+          serviceWorkerScriptPath: kIsWeb ? AppFirebaseWeb.serviceWorkerPath : null);
+      this.setToken(token);
+      return token;
+    } catch (e) {
+      print('FCM のトークンを取得できません: $e');
+      return null;
+    }
+  }
+
   Future<void> _signInWithNoCodeExchange() async {
+    // web は flutter_appauth が使えないので、自前の実装で認可要求を始める（#205）。
+    // 認証サイトから戻ってきた後の続きは、initState の WebSignIn.completeIfReturned。
+    if (kIsWeb) {
+      await WebSignIn.start();
+      return;
+    }
+
     try {
       final AuthorizationResponse? result
         = await this._appAuth.authorize(AuthorizationRequest(
@@ -162,16 +207,37 @@ class _AppAuthPageState extends State<AppAuthPage> {
 
   Future<void> _registerFcmTokenApi() async {
     String? accessToken = await AppAuth.getTokenValue();
-    var response = await http.post(
-      Uri.parse(AppAuth.setDeviceTokenEndpoint),
-      headers: {
-        "Accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": "Bearer ${accessToken}",
-      },
-      body: {
-        "device_token" : AppFcm.token,
-      });
+
+    // 端末のトークン（FCM）。Firebase を初期化していなければ、登録するものが無い（#205）。
+    if (!AppFcm.enabled) {
+      print('Firebase を初期化していないため、端末の登録（/SetDeviceToken）を省略します。');
+      return;
+    }
+
+    // 起動直後は、initState の getToken が終わる前に呼ばれることがある。ここで取得を待つ。
+    String? deviceToken = await this._getFcmToken();
+    if (deviceToken == null || deviceToken.isEmpty) {
+      print('FCM のトークンを取得できないため、端末の登録（/SetDeviceToken）を省略します。');
+      return;
+    }
+
+    http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse(AppAuth.setDeviceTokenEndpoint),
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Authorization": "Bearer ${accessToken}",
+        },
+        body: {
+          "device_token" : deviceToken,
+        });
+    } catch (e) {
+      // 接続できない（接続先の誤り、CORS、サーバの停止など）。起動を止めず、記録だけする。
+      print('Request failed: $e');
+      return;
+    }
     if (response.statusCode == 200) {
       if(response.body == "\"OK\"") // AuthZ(N)の仕様による
       {

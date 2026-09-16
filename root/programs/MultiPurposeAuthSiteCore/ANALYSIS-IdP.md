@@ -68,7 +68,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
 | | ID フェデレーション（他 IdP への委譲） | ✓ | |
-| | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | |
+| | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は net10.0 版のみ（#213） |
 
 **未実装**は 5 節にまとめた。
 
@@ -389,6 +389,8 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 | `exp` / `nbf` の範囲外、必須のクレームの欠落 | 200 ＋ 空 / `server_error` | **400** ＋ `invalid_request` |
 | `login_hint` のユーザが見つからない | 200 ＋ 空 | **400** ＋ `unknown_user_id` |
 | 登録されていないクライアント（`iss`） | 200 ＋ 空 | **401** ＋ `invalid_client` |
+| **ユーザの端末（認証デバイス）が未登録** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `access_denied` |
+| **プッシュ通知（FCM）の送信に失敗** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `server_error` |
 
 - `/ciba_authz` は、クライアントを HTTP 認証ではなく、`/ros` に登録した署名付きの要求（ES256）で識別する。
   そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
@@ -399,6 +401,19 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 - E2E テスト : `RT-196.16`（`request_uri` なし・存在しない → 400）/
   `RT-196.17`（`openid` なし・`nbf` が未来・`exp` が過去 → 400 と CIBA のコード）/
   `RT-196.18`（ユーザ不明 → 400 と `unknown_user_id`）。要求は、テスト基盤に足した ES256 の署名で組み立てる
+
+**対応（#210 : 端末未登録・送信失敗）:** 上の表の下 2 行。**#196 の対応では、この 2 つが残っていた。**
+`FcmService.SendAsync` の呼び出しに `try` / `catch` が無く、例外がそのまま外に出て HTTP 500 になっていた
+（開発モードでは例外の平文、それ以外では HTML のエラー画面。どちらも JSON ではない）。
+
+- **端末の有無は、送る前に確かめる**（`CibaProvider.Create` よりも前）。保留中のレコードを作らずに返す
+- ユーザ自体は見つかっているので、`unknown_user_id` ではなく `access_denied` を返す
+- 送信の失敗（資格情報の誤り、宛先の拒否、通信障害など）は `server_error`。
+  **こちらは `Create` の後なので、レコードは期限（`CibaExpireTimeSpanFromSeconds`、既定 600 秒）まで残る**
+- E2E テスト : `RT-210.1`（端末未登録 → 400 と `access_denied`）。
+  **送信そのものの失敗は E2E では測れない。** `test.ps1 -Launch` は送信箱を使い、`FcmService` は宛先を検証せずファイルに書くため
+- テストの `login_hint` には `tanaka@gmail.com` を使う。
+  テスト ユーザ（`super_tanaka@gmail.com`）は `EX-8` が端末を登録するので、「端末が無い」状態を作れない
 
 **対応（#196 の 7 つ目 : `/ciba_result`・`/SetDeviceToken`）:** 認証デバイス（`authentication_device`）が呼ぶ 2 つの口。
 
@@ -417,11 +432,39 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   これで、これまで測れなかった CIBA の成功経路（`EX-8.1` 許可 → トークン、`EX-8.2` 拒否 → `access_denied`）を測れる
 - E2E テスト : `RT-196.19`（`/SetDeviceToken` の 400 / 401）/ `RT-196.20`（`/ciba_result` の 400 / 401）
 
-> **別の問題（#196 の範囲外、未起票）:**
-> - `/ciba_result` は、`auth_req_id` がそのユーザ宛ての要求かを確かめていない。
->   さらに、メモリのストアでは `CibaProvider.ReceiveResult` が `auth_req_id` を見ずに、
->   **保留中の全ての CIBA 要求に結果を書き込む**（DB のストアは `WHERE AuthReqId` で絞っている）
-> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無い
+> **別の問題（#196 の範囲外。調査の途中で見つけ、別に報告した）:**
+> - `/ciba_result`（と `CibaProvider.ReceiveResult`）が、`auth_req_id` の宛先ユーザを確かめていなかった
+>   → **✅ 修正済み。** `CibaData` に承認する利用者（`Users.Id`）を記録し、
+>   返答時に **`auth_req_id` と利用者の両方**で照合する。要求が無い場合と自分宛てでない場合は
+>   同じ応答（400 ＋ `"NG"`）で返す（存在を推測させないため）。
+>   あわせて、メモリのストアの 2 つの取り違えも直した。
+>   **（a）`ReceiveResult` が `auth_req_id` を見ず、保留中の全要求へ結果を書き込んでいた**（E2E : `EX-8.3`）。
+>   **（b）`ReceiveTokenReq` が、一致したものとは別の保留要求を削除しうる状態だった**（ループ変数の取り残し）。
+>   E2E : `EX-8.3` / `EX-8.4`（別の利用者は承認できない。#212 で Skip を解消）
+> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無かった → **✅ 削除済み（#203）**。その後、**プッシュでの 2FA 承認そのものを `/2fa_result` として実装した（#213。net10.0 版のみ）**
+> - `Authorization: Bearer`（方式だけで値が無い）で HTTP 500 になる
+>   （Open棟梁 の `AuthenticationHeader.GetCredentials` が `temp[1]` を確かめずに読む）
+>   → Open棟梁 の #586。`RT-196.5` で観測している
+
+### A-7-2. 2FA のコード送信で、送信の失敗が処理されない例外になる **[Core][netfx]** — **✅ 修正済み（#214）**
+
+**`/ciba_authz` と同じ形の不具合が、画面側（`/Account/SendCode`）にも残っていた。**
+送信（メール / SMS / プッシュ）を `try` / `catch` 無しで呼んでいたため、
+**DNS の一時障害で `FirebaseMessagingException` がそのまま外に出て、原因の分からないエラー画面**になった
+（#205 の確認中に実際に発生。`ACCESS` ログに `Account,SendCode(OnException)` として残っていた）。
+
+| 状況 | 修正前 | 修正後 |
+|---|---|---|
+| 送信に成功 | コードの入力画面へ | 変更なし |
+| **送信に失敗（通信障害、資格情報の誤りなど）** | **処理されない例外 → エラー画面** | **コードの送信画面に戻し、失敗を表示**（別の送信先を選び直せる） |
+| 入力の検証に失敗、または送信が false | **`View()` にモデルを渡さず `NullReferenceException`** | 同上（モデルを作り直して再表示） |
+
+- **例外は握り潰さず、`Logging.MyDebugLogForEx` で `ACCESS` ログに残す。**
+  受け止めると、これまで `OnException` が書いていた原因が失われるため
+- 表示のために `SendCode.cshtml` に `ValidationSummary` を足した（他の画面と同じ形。**無いと `ModelState` のエラーが出ない**）
+- 一覧を作る処理は `CreateSendCodeViewModelAsync` にまとめ、初期表示と再表示で共用する
+- **net48 版も同じ形だったので、あわせて直した**（`SendTwoFactorCodeAsync` がメール / SMS を送るため、同様に失敗しうる）
+- **E2E では測れない。** テストは 2FA を有効にしておらず、送信箱（`FcmOutboxDirectory`）は失敗しない
 
 ### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 

@@ -14,6 +14,7 @@
 # Ignore the Temp folder
 Temp/
 _Temp/
+Temp.zip
 OpenTouryoAssemblies/
 
 # User-specific files

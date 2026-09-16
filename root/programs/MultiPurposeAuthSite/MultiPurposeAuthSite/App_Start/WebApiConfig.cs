@@ -144,12 +144,6 @@ namespace MultiPurposeAuthSite
                 routeTemplate: Config.SetDeviceTokenWebAPI.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "SetDeviceToken" }
             );
-
-            config.Routes.MapHttpRoute(
-                name: "TwoFactorAuthPushResult",
-                routeTemplate: Config.TwoFactorAuthPushResultWebAPI.Substring(1), // 先頭の[/]を削除
-                defaults: new { controller = "OAuth2Endpoint", action = "TwoFactorAuthPushResult" }
-            );
             #endregion
 
             #endregion

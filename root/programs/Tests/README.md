@@ -137,9 +137,35 @@ OAuth2ClientEndpointsRootURI
 | `MPAS_CORE_CONFIG` / `MPAS_NETFX_CONFIG` | 構成ファイルのパス（`root/programs` からの相対） |
 | `MPAS_TESTUSER` | テスト ユーザ名 |
 | `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` | プッシュ通知の送信箱（`-Launch` が設定する。無ければ CIBA の `EX-8` は Skip） |
+| `MPAS_CONNSTR_SQL` / `MPAS_CONNSTR_ODP` / `MPAS_CONNSTR_NPS` | `-UserStoreType` で `sql` / `ora` / `npg` に切り替えるときの接続文字列（#207） |
 
-`UserStoreType` は `mem` を想定している。テスト ユーザは初回アクセスで作られ、
+`UserStoreType` の既定は `mem`。テスト ユーザは初回アクセスで作られ、
 再起動で消えるので、テストの前後で状態を掃除する必要が無い。
+
+### 利用者は 2 人いる
+
+認証サイトは `IsDebug` のとき、**同じ `TestUserPWD` で 2 人**作る（`AccountController` の `CreateData`）。
+
+| 利用者 | 使い道 |
+|---|---|
+| `super_tanaka@gmail.com`（`TestEnv.TestUserName`） | 既定。`SignedInClientAsync` が何も指定しなければこちら |
+| `tanaka@gmail.com`（`TestEnv.SecondUserName`） | 「別の利用者」が要るとき（`EX-8.4`）と、「端末が無い利用者」が要るとき（`RT-210.1`） |
+
+別の利用者でサインインするには、利用者名を渡す。
+
+```csharp
+using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.SecondUserName))
+```
+
+> **2 人目には、端末（`device_token`）を登録しないこと。**
+> `RT-210.1`（#210）が「端末が登録されていない利用者」として使っているため、
+> 登録すると、実行順によってそのテストが失敗するようになる。
+
+**`sql` / `ora` / `npg` に切り替えられる**（`test.ps1 -UserStoreType`、#207）。
+設定ファイルは書き換えず、環境変数で上書きする（`FxContainerization=ON` のため、
+`GetConfigValue` と `GetConnectionString` のどちらも環境変数が優先される）。
+切り替えると**状態が残る**ので、作り直したいときはデータベースを作り直す。
+手順と前提は [`../../TESTING.md`](../../TESTING.md) 1 節「ストアを切り替える」。
 
 ## テストの構成
 
@@ -181,17 +207,22 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 認証デバイスと同じ要求（`/SetDeviceToken`・`/ciba_result`）を送る。送信箱は `-Launch` のときだけ設定されるので、
 それ以外では `EX-8` は Skip する。認証リクエストのエラーの返し方は RT-196 で測っている（ES256 で署名した要求を `/ros` に登録する）。
 
-以下は、個別の Issue に対応する回帰テスト。
+**最後が `Tests/Issues/`。** 個別の Issue に対応する回帰テスト（RT）。
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
-| `Tests/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
-| `Tests/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
-| `Tests/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
-| `Tests/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
-| `Tests/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
-| `Tests/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
+| `Tests/Issues/TokenClaimTests.cs` | `RT-182` `RT-184` | `expires_in`、JWT のクレーム型 |
+| `Tests/Issues/NonceTests.cs` | `RT-183` `RT-190` `RT-191` | nonce の要否と扱い |
+| `Tests/Issues/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
+| `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
+| `Tests/Issues/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
+| `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
+| `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
+
+**フォルダは、識別子の群に合わせている**（`Basic` = TC、`Extended` = EX、`Issues` = RT）。
+ただし**厳密な一対一ではない。** 回帰テストが既存のケースを対照として使うことがあり、
+`Tests/Issues/HttpStatusTests.cs` には EX が、`Tests/Extended/IntrospectionTests.cs` には
+RT が混ざっている。**対照は近くに置いたほうが読めるので、そこは揃えていない。**
 
 **すべてのテストが `TestReport` で記録を残す。**
 識別子の体系は [`../../TESTING.md`](../../TESTING.md) を参照。

@@ -370,7 +370,9 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 - `../3_BuildLibsAtOtherReposInTimeOfDev.bat` … `develop` の zip で同上
 - `mpas_dev.bat`（リポジトリ ルート）… 隣に clone 済みの OpenTouryo からビルド出力を xcopy
 
-**Open棟梁を更新したら、必ずコピーし直してからビルドすること。**
+**`1_BuildAll.ps1` は、無ければ 2 番目（`develop`）を自動で呼ぶ。**
+
+**Open棟梁を更新したら、必ずコピーし直してからビルドすること**（`-Libs Force`）。
 
 ---
 

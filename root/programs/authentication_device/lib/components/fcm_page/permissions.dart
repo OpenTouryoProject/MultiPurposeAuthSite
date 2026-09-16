@@ -40,6 +40,11 @@ class _Permissions extends State<Permissions> {
   NotificationSettings? _settings;
 
   Future<void> requestPermissions() async {
+    // Firebase を初期化していない（web で構成が無い）ときは、何もしない（#205）
+    if (!AppFcm.enabled) {
+      return;
+    }
+
     setState(() {
       _fetching = true;
     });

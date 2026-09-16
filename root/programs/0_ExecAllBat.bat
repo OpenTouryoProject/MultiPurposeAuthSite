@@ -16,7 +16,14 @@ timeout 5
 
 @rem --------------------------------------------------
 @rem The OpenTouryo assemblies this repository builds against.
-@rem Enable one of these when they need to be rebuilt.
+@rem
+@rem These stay off here. ..\1_BuildAll.ps1 controls them instead:
+@rem it runs the InTimeOfDev one when OpenTouryoAssemblies is missing
+@rem (-Libs Auto, the default), never with -Libs None, and always with
+@rem -Libs Force. Enabling a line here as well would fetch twice.
+@rem
+@rem Enable one of these only when building by double-click, without
+@rem the wrapper.
 @rem --------------------------------------------------
 rem echo | call 3_BuildLibsAtOtherRepos.bat
 rem echo | call 3_BuildLibsAtOtherReposInTimeOfDev.bat

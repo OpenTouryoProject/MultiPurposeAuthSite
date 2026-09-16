@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-183 / 190 / 191）
+//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-183 / RT-190 / RT-191）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -41,7 +42,7 @@ using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace MultiPurposeAuthSite.Tests.E2E.Tests
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
     /// RT-183 / RT-190 / RT-191. nonce の扱いの回帰テスト。

@@ -35,6 +35,9 @@
 //*  2026/09/11  玄人 幸道         /device_authz（RT-196.14 〜 196.15）を追加（#196 の 5 つ目）
 //*  2026/09/11  玄人 幸道         /ciba_authz（RT-196.16 〜 196.18）を追加（#196 の 6 つ目）
 //*  2026/09/12  玄人 幸道         /SetDeviceToken・/ciba_result（RT-196.19 〜 196.20）を追加（#196 の 7 つ目）
+//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-196）
+//*  2026/09/16  玄人 幸道         /ciba_authz の端末未登録（RT-210.1）を追加（#210）
+//*  2026/09/16  玄人 幸道         /2fa_result の失敗（RT-213.1）を追加（#213）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -47,7 +50,7 @@ using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace MultiPurposeAuthSite.Tests.E2E.Tests
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
     /// RT-196. エラー応答の HTTP ステータス（#196）。
@@ -62,6 +65,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
     ///   RT-196.14 〜 196.15 : /device_authz（RFC 8628 §3.1 : クライアント認証は /token と同じ。失敗は 401）
     ///   RT-196.16 〜 196.18 : /ciba_authz（CIBA Core §13 : invalid_client は 401、それ以外は 400。成功の経路は EX-8）
     ///   RT-196.19 〜 196.20 : /SetDeviceToken・/ciba_result（本文は OK / NG のまま。トークンの不備は 401、パラメタの不備は 400）
+    ///
+    ///   RT-210.1 : /ciba_authz（#210 : 端末が登録されていないユーザ宛ての要求は、HTTP 500 ではなく 400 と access_denied）
     ///
     /// /token・/revoke・/introspect・/device_authz では、**本文（error / error_description の JSON）が変わっていないこと**も併せて見る。
     /// ステータスだけ直して本文が壊れると、既存のクライアントが error を読めなくなる。
@@ -1048,7 +1053,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                     "RFC 6750 §3 / #196");
 
                 r.Target(client.Target.DisplayName + " / ユーザのトークンは認可コード フローで得る");
-                r.Note("成功（200 と OK）は EX-8 で見る。ここで返答すると、並行して動く CIBA のテストの要求に結果を書き込んでしまう。");
+                r.Note("成功（200 と OK）は EX-8 で見る。"
+                    + "なお auth_req_id が自分宛ての要求でない場合も、ここと同じ 400 ＋ NG で返る（EX-8.4）。");
 
                 r.Step("(1) Authorization ヘッダを付けずに送る");
 
@@ -1070,6 +1076,96 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                 r.Step("(4) result が真偽値でない値で送る");
 
                 VerifyNG(r, "result が不正", await client.CibaPushResultAsync(token.AccessToken, "dummy", "maybe"), 400, null);
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-210.1 /ciba_authz の端末未登録</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT210_01_ciba_authzで端末が未登録なら400とaccess_denied(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-210.1",
+                    "/ciba_authz : 端末が登録されていないユーザ宛ての要求は、HTTP 400 と access_denied",
+                    "CIBA は、ユーザの**別の端末**に承認を求める。その端末が登録されていなければ、要求は成立しない。"
+                    + "**以前は空の宛先のままプッシュ通知を送ろうとして例外になり、HTTP 500 と JSON でない本文を返していた**（#210）。"
+                    + "ユーザ自体は見つかっているので、unknown_user_id（RT-196.18）ではなく access_denied で返す。",
+                    "CIBA Core §13（access_denied は 400）/ #210");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                // **テスト ユーザは使えない。** CIBA のテスト（EX-8）が端末を登録するため、
+                // 実行順によっては「端末あり」になる。E2E からサインインしない別の利用者を指す。
+                const string NoDeviceUser = "tanaka@gmail.com";
+
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = " + NoDeviceUser
+                    + "（認証サイトが IsDebug のときに作る利用者。E2E は端末を登録しない）");
+                r.Step("端末を登録していない利用者を login_hint に入れた要求を /ros に登録し、その request_uri を送る");
+
+                string requestUri = await RegisterCibaRequestAsync(client, reg,
+                    new Dictionary<string, object>() { { "login_hint", NoDeviceUser } });
+
+                VerifyError(r, "端末未登録", await client.CibaAuthorizeAsync(
+                    new Dictionary<string, string>() { { "request_uri", requestUri } }), 400, "access_denied");
+
+                r.Note("送信そのものの失敗（server_error）は、E2E では測れない。"
+                    + "test.ps1 -Launch は送信箱を使い、FcmService は宛先を検証せずファイルに書くため。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-213.1 /2fa_result の失敗</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **net10.0 版のみ。** プッシュ（MobileApp）の 2FA プロバイダは net10.0 版にしかなく、
+        /// net48 版には /2fa_result も無い（#213）。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT213_01_2fa_resultの失敗は400と401(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-213.1",
+                    "/2fa_result : 失敗は本文 NG のまま、トークンの不備は HTTP 401、コードの不備は 400",
+                    "認証デバイスが、プッシュ通知で受け取った 2FA のコードを送り返す口（#213）。"
+                    + "**合わないコードを記録させない**のが要点で、コードは保存する前に検証する。"
+                    + "存在を推測させないよう、合わないコードは「コードが無い」と同じ 400 ＋ NG で返す。",
+                    "RFC 6750 §3 / #213");
+
+                r.Target(client.Target.DisplayName + " / ユーザのトークンは認可コード フローで得る");
+                r.Note("成功（200 と OK）は E2E では測れない。"
+                    + "2FA を有効にした利用者のコードが要るが、共用のテスト ユーザで 2FA を有効にすると"
+                    + "他の全テストのサインインが変わるため。成功経路は手で確かめる（CHEATSHEET.md）。");
+
+                r.Step("(1) Authorization ヘッダを付けずに送る");
+
+                VerifyNG(r, "トークンなし", await client.TwoFactorPushResultAsync(null, "123456"), 401, null);
+
+                r.Step("(2) 無効なトークンで送る");
+
+                VerifyNG(r, "無効なトークン",
+                    await client.TwoFactorPushResultAsync("NOT-A-REAL-TOKEN", "123456"), 401, "invalid_token");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                r.Step("(3) ユーザの有効なトークンで、code を付けずに送る");
+
+                VerifyNG(r, "code なし", await client.TwoFactorPushResultAsync(token.AccessToken, null), 400, null);
+
+                r.Step("(4) ユーザの有効なトークンで、合わない code を送る");
+
+                VerifyNG(r, "合わない code",
+                    await client.TwoFactorPushResultAsync(token.AccessToken, "000000"), 400, null);
 
                 r.Done();
             }

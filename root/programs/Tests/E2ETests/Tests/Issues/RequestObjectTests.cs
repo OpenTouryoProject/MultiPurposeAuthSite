@@ -32,6 +32,7 @@
 //*  2026/09/09  玄人 幸道         redirect_uriの実測結果を#197として起票
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-197）
 //*  2026/09/11  玄人 幸道         #197 の修正に合わせ、RT-197.5 の Skip を解除し、RT-197.6 を検証に変更
+//*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-197）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -43,7 +44,7 @@ using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace MultiPurposeAuthSite.Tests.E2E.Tests
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 {
     /// <summary>
     /// RT-197. Request Object（request_uri）を使う認可リクエストの実測。

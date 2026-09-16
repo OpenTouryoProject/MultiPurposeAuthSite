@@ -291,11 +291,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>テスト ユーザ名</summary>
         public static string TestUserName { get; private set; }
 
+        /// <summary>
+        /// 2 人目のテスト ユーザ（認証サイトが IsDebug のときに作る一般ユーザ）。
+        /// **テスト ユーザと同じ TestUserPWD で作られる。**
+        /// 「別の利用者」を要するテスト（EX-8.4）で使う。
+        /// **この利用者には端末（device_token）を登録しないこと。**
+        /// RT-210.1 が「端末が無い利用者」として使っている。
+        /// </summary>
+        public static string SecondUserName { get; private set; }
+
         /// <summary>静的コンストラクタ</summary>
         static TestEnv()
         {
             ProgramsDir = FindProgramsDir();
             TestUserName = "super_tanaka@gmail.com";
+            SecondUserName = "tanaka@gmail.com";
 
             // 既定値（baseUrl は null ＝ 構成ファイルから導出）
             Register(CoreKey, "net10.0版 (MultiPurposeAuthSiteCore)", null,

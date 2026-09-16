@@ -120,6 +120,9 @@
   <data name="InvalidCode" xml:space="preserve">
     <value>Invalid code.</value>
   </data>
+  <data name="SendCodeError" xml:space="preserve">
+    <value>Failed to send the code. Please try again, or choose another destination.</value>
+  </data>
   <data name="Login_emailconfirm" xml:space="preserve">
     <value>E-Mail Confirmation is needed !</value>
   </data>

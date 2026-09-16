@@ -19,6 +19,7 @@
 //*  2020/02/28  西野 大介         プッシュ通知、CIBA対応実施
 //*  2020/07/29  西野 大介         SecurityStamp対応
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
+//*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）のルートを追加（#213）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -242,9 +243,9 @@ namespace MultiPurposeAuthSite
                     defaults: new { controller = "OAuth2Endpoint", action = "SetDeviceToken" });
 
                 endpoints.MapControllerRoute(
-                    name: "TwoFactorAuthPushResult",
-                    pattern: Config.TwoFactorAuthPushResultWebAPI.Substring(1), // 先頭の[/]を削除,
-                    defaults: new { controller = "OAuth2Endpoint", action = "TwoFactorAuthPushResult" });
+                    name: "TwoFactorPushResult",
+                    pattern: Config.TwoFactorPushResultEndpoint.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "TwoFactorPushResult" });
 
                 #endregion
 

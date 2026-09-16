@@ -111,7 +111,7 @@ CREATE TABLE DeviceAuthZData(
     DeviceCode varchar(38) NOT NULL,                  -- device_code(guid)
     UserCode varchar(10) NOT NULL,                    -- user_code(10文字以下)
     AuthReqExp bigint NOT NULL,                       -- UNIX時刻(long)
-    TempData varchar(256) NOT NULL,                   -- TempData
+    TempData varchar(256) NULL,                       -- TempData
     AuthZCode varchar(64) NULL,                       -- AuthZCode
     Result boolean NULL,                              -- Result of Verify
     CONSTRAINT PK_DeviceAuthZData PRIMARY KEY (Id)
@@ -125,6 +125,7 @@ CREATE TABLE CibaData(
     AuthZCode varchar(64) NOT NULL,                   -- AuthZCode
     UnstructuredData varchar(2000) NULL,              -- binding_message, user_code, etc.
     Result boolean NULL,                              -- Result of CIBA
+    UserId varchar(128) NULL,                         -- 承認する利用者 (Users.Id)
     CONSTRAINT PK_CibaData PRIMARY KEY (Id)
 );
 
@@ -160,8 +161,8 @@ CREATE UNIQUE INDEX ClientIDIndex ON Users (ClientID);
 CREATE UNIQUE INDEX RoleNameIndex ON Roles (Name);
 CREATE UNIQUE INDEX NormalizedNameIndex ON Roles (NormalizedName);
 ---- DeviceAuthZData
-CREATE UNIQUE INDEX DeviceAuthZDeviceCodeIndex ON CibaData (DeviceAuthZData);
-CREATE UNIQUE INDEX DeviceAuthZUserCodeIndex ON CibaData (DeviceAuthZData);
+CREATE UNIQUE INDEX DeviceAuthZDeviceCodeIndex ON DeviceAuthZData (DeviceCode);
+CREATE UNIQUE INDEX DeviceAuthZUserCodeIndex ON DeviceAuthZData (UserCode);
 ---- CibaData
 CREATE UNIQUE INDEX CibaClientNotificationTokenIndex ON CibaData (ClientNotificationToken);
 CREATE UNIQUE INDEX CibaAuthReqIdIndex ON CibaData (AuthReqId);

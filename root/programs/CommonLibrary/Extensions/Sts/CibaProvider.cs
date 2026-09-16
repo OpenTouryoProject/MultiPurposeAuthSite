@@ -26,6 +26,9 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2020/03/02  西野 大介         新規
 //*  2020/12/16  西野 大介         PostgreSQL疎通（Debugモード）
+//*  2026/09/13  玄人 幸道         CIBAの返答に所有者確認を追加。メモリ ストアの取り違えも修正
+//*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
+//*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
 //**********************************************************************************
 
 using System;
@@ -65,9 +68,14 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="authReqExp">long</param>
         /// <param name="authZCode">string</param>
         /// <param name="unstructuredData">string</param>
+        /// <param name="userId">
+        /// 承認する利用者の ApplicationUser.Id（login_hint で解決した利用者）。
+        /// **誰宛ての要求かを記録する。** ReceiveResult が、返答者と突き合わせるために使う。
+        /// PPID により sub はクライアントごとに変わるので、利用者に固定な Id を使う。
+        /// </param>
         /// <param name="authReqId">string</param>
         public static void Create(string clientNotificationToken,
-            long authReqExp, string authZCode, string unstructuredData, out string authReqId)
+            long authReqExp, string authZCode, string unstructuredData, string userId, out string authReqId)
         {
             authReqId = ""; // 初期化
 
@@ -86,6 +94,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             { "authReqExp", authReqExp.ToString() },
                             { "authZCode", authZCode },
                             { "unstructuredData", unstructuredData },
+                            { "userId", userId },
                             { "result", "" }
                         };
                         
@@ -108,14 +117,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     cnn.Execute(
                                         "INSERT INTO [CibaData]"
-                                        + " ([ClientNotificationToken], [AuthReqId], [AuthReqExp], [AuthZCode], [UnstructuredData])"
-                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData)",
+                                        + " ([ClientNotificationToken], [AuthReqId], [AuthReqExp], [AuthZCode], [UnstructuredData], [UserId])"
+                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId)",
                                         new {
                                             ClientNotificationToken = clientNotificationToken,
                                             AuthReqId = authReqId,
                                             AuthReqExp = authReqExp,
                                             AuthZCode = authZCode,
-                                            UnstructuredData = unstructuredData
+                                            UnstructuredData = unstructuredData,
+                                            UserId = userId
                                         });
                                      break;
 
@@ -123,15 +133,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     cnn.Execute(
                                         "INSERT INTO \"CibaData\""
-                                        + " (\"ClientNotificationToken\", \"AuthReqId\", \"AuthReqExp\", \"AuthZCode\", \"UnstructuredData\")"
-                                        + " VALUES (:ClientNotificationToken, :AuthReqId, :AuthReqExp, :AuthZCode, :UnstructuredData)",
+                                        + " (\"ClientNotificationToken\", \"AuthReqId\", \"AuthReqExp\", \"AuthZCode\", \"UnstructuredData\", \"UserId\")"
+                                        + " VALUES (:ClientNotificationToken, :AuthReqId, :AuthReqExp, :AuthZCode, :UnstructuredData, :UserId)",
                                         new
                                         {
                                             ClientNotificationToken = clientNotificationToken,
                                             AuthReqId = authReqId,
                                             AuthReqExp = authReqExp,
                                             AuthZCode = authZCode,
-                                            UnstructuredData = unstructuredData
+                                            UnstructuredData = unstructuredData,
+                                            UserId = userId
                                         });
 
                                     break;
@@ -140,15 +151,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                     cnn.Execute(
                                         "INSERT INTO \"cibadata\""
-                                        + " (\"clientnotificationtoken\", \"authreqid\", \"authreqexp\", \"authzcode\", \"unstructureddata\")"
-                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData)",
+                                        + " (\"clientnotificationtoken\", \"authreqid\", \"authreqexp\", \"authzcode\", \"unstructureddata\", \"userid\")"
+                                        + " VALUES (@ClientNotificationToken, @AuthReqId, @AuthReqExp, @AuthZCode, @UnstructuredData, @UserId)",
                                          new
                                          {
                                              ClientNotificationToken = clientNotificationToken,
                                              AuthReqId = authReqId,
                                              AuthReqExp = authReqExp,
                                              AuthZCode = authZCode,
-                                             UnstructuredData = unstructuredData
+                                             UnstructuredData = unstructuredData,
+                                             UserId = userId
                                          });
 
                                     break;
@@ -172,9 +184,20 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         /// <summary>ReceiveResult</summary>
         /// <param name="authReqId">string</param>
+        /// <param name="userId">
+        /// 返答した利用者の ApplicationUser.Id（Bearer トークンから解決した利用者）。
+        /// **Create で記録した宛先と一致しなければ、書き込まない。**
+        /// </param>
         /// <param name="result">bool</param>
-        public static void ReceiveResult(string authReqId, bool result)
+        /// <returns>
+        /// 書き込んだら true。
+        /// **見つからない場合と、自分宛てでない場合を区別しない**（どちらも false）。
+        /// 区別すると、auth_req_id の存在を推測させる。
+        /// </returns>
+        public static bool ReceiveResult(string authReqId, string userId, bool result)
         {
+            bool retVal = false;
+
             if (Config.EnableCibaGrantType)
             {
                 // EnableCibaGrantType == true
@@ -183,6 +206,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     case EnumUserStoreType.Memory:
 
+                        // **authReqId で 1 件だけを特定する。**
+                        //   以前はここで authReqId を見ておらず、保留中の全レコードに
+                        //   結果を書き込んでいた（別の利用者の要求にも波及した）。
                         foreach (string clientNotificationToken in CibaProvider.CibaData.Keys)
                         {
                             if (CibaProvider.CibaData.ContainsKey(clientNotificationToken))
@@ -199,10 +225,24 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     Dictionary<string, string> dic
                                         = JsonConvert.DeserializeObject<Dictionary<string, string>>(temp);
 
+                                    if (authReqId != dic["authReqId"])
+                                    {
+                                        // 別の要求
+                                        continue;
+                                    }
+
+                                    if (!CibaProvider.IsSameUser(dic, userId))
+                                    {
+                                        // **宛先が違う。** 他人の要求には返答できない。
+                                        break;
+                                    }
+
                                     // 結果の登録
                                     dic["result"] = result.ToString();
                                     CibaProvider.CibaData[clientNotificationToken] = JsonConvert.SerializeObject(dic);
+                                    retVal = true;
 
+                                    break;
                                 }
                             }
                         }
@@ -220,25 +260,28 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             {
                                 case EnumUserStoreType.SqlServer:
 
-                                    cnn.Execute(
-                                        "UPDATE [CibaData] SET [Result] = @Result WHERE [AuthReqId] = @AuthReqId",
-                                        new { AuthReqId = authReqId, Result = result });
+                                    retVal = 0 < cnn.Execute(
+                                        "UPDATE [CibaData] SET [Result] = @Result"
+                                        + " WHERE [AuthReqId] = @AuthReqId AND [UserId] = @UserId",
+                                        new { AuthReqId = authReqId, UserId = userId, Result = result });
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
-                                    cnn.Execute(
-                                        "UPDATE \"CibaData\" SET \"Result\" = :Result WHERE \"AuthReqId\" = :AuthReqId",
-                                        new { AuthReqId = authReqId, Result = result });
+                                    retVal = 0 < cnn.Execute(
+                                        "UPDATE \"CibaData\" SET \"Result\" = :Result"
+                                        + " WHERE \"AuthReqId\" = :AuthReqId AND \"UserId\" = :UserId",
+                                        new { AuthReqId = authReqId, UserId = userId, Result = result });
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
-                                    cnn.Execute(
-                                        "UPDATE \"cibadata\" SET \"result\" = @Result WHERE \"authreqid\" = @AuthReqId",
-                                        new { AuthReqId = authReqId, Result = result });
+                                    retVal = 0 < cnn.Execute(
+                                        "UPDATE \"cibadata\" SET \"result\" = @Result"
+                                        + " WHERE \"authreqid\" = @AuthReqId AND \"userid\" = @UserId",
+                                        new { AuthReqId = authReqId, UserId = userId, Result = result });
 
                                     break;
                             }
@@ -252,9 +295,30 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 // EnableCibaGrantType == false
             }
 
-            // 空振っても呼び出し元は気にしない。
-            // （このプロファイルにはuserCodeが無いので）
-            return;
+            // **空振りは、呼び出し元に伝える。**
+            //   以前は void で、未知の auth_req_id でも成功（200 / OK）に見えていた。
+            return retVal;
+        }
+
+        /// <summary>レコードの宛先が、返答した利用者と一致するか</summary>
+        /// <param name="dic">CibaData のレコード</param>
+        /// <param name="userId">返答した利用者の ApplicationUser.Id</param>
+        /// <returns>一致すれば true</returns>
+        /// <remarks>
+        /// **記録が無いレコードは、一致しないものとして扱う。**
+        /// 本修正より前に作られた保留中のレコードには userId が無い。
+        /// 「記録が無ければ通す」にすると、確認を入れた意味がなくなる。
+        /// </remarks>
+        private static bool IsSameUser(Dictionary<string, string> dic, string userId)
+        {
+            string temp;
+
+            if (!dic.TryGetValue("userId", out temp) || string.IsNullOrEmpty(temp))
+            {
+                return false;
+            }
+
+            return temp == userId;
         }
 
         #endregion
@@ -281,12 +345,13 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 {
                     case EnumUserStoreType.Memory:
 
-                        string clientNotificationToken = "";
+                        // **一致したレコードのキーだけを覚える。**
+                        //   以前はループ変数に最後に残ったキーを消しており、
+                        //   一致したものとは別の保留要求を削除しうる状態だった。
+                        string clientNotificationToken = null;
 
                         foreach (string _clientNotificationToken in CibaProvider.CibaData.Keys)
                         {
-                            clientNotificationToken = _clientNotificationToken;
-
                             // レコードあり。
                             temp = CibaProvider.CibaData[_clientNotificationToken];
 
@@ -303,16 +368,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                                 if (authReqId == dic["authReqId"])
                                 {
+                                    clientNotificationToken = _clientNotificationToken;
+
                                     // Code
                                     authZCode = dic["authZCode"];
                                     // CibaState
                                     retVal = CibaProvider.GetState(dic["authReqExp"], dic["result"], out states);
+
+                                    break;
                                 }
                             }
                         }
 
                         // 削除（pendingのケースを除いて）
-                        if (states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
+                        if (clientNotificationToken != null
+                            && states != OAuth2AndOIDCEnum.CibaState.authorization_pending)
                         {
                             CibaProvider.CibaData.TryRemove(clientNotificationToken, out temp);
                         }
@@ -331,7 +401,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             switch (Config.UserStoreType)
                             {   
                                 case EnumUserStoreType.SqlServer:
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT [AuthReqExp], [AuthZCode], [Result] FROM [CibaData] WHERE [AuthReqId] = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
@@ -346,9 +416,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
                                         retVal = CibaProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            (dyn.Result == null) ? "" : ((bool)dyn.Result).ToString().ToLower(),
                                             out states);
                                     }
 
@@ -363,7 +436,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"AuthReqExp\", \"AuthZCode\", \"Result\" FROM \"CibaData\" WHERE \"AuthReqId\" = :AuthReqId",
                                         new { AuthReqId = authReqId });
 
@@ -378,9 +451,15 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.AuthZCode;
 
                                         // states判別
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
                                         retVal = CibaProvider.GetState(
                                             ((long)dyn.AuthReqExp).ToString(),
-                                            ((bool)dyn.Result).ToString().ToLower(),
+                                            // **Oracle に boolean が無い。** Result は NUMBER(3) で 0 / 1 / NULL。
+                                            //   ((bool)...) では変換できず、bool.TryParse が失敗して
+                                            //   irregularity_data になる（#207 で実測）。
+                                            (dyn.Result == null) ? "" : Convert.ToBoolean(dyn.Result).ToString().ToLower(),
                                             out states);
                                     }
 
@@ -395,7 +474,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
-                                    dyn = cnn.QueryFirst(
+                                    dyn = cnn.QueryFirstOrDefault(
                                         "SELECT \"authreqexp\", \"authzcode\", \"result\" FROM \"cibadata\" WHERE \"authreqid\" = @AuthReqId",
                                         new { AuthReqId = authReqId });
 
@@ -410,9 +489,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                                         authZCode = dyn.authzcode;
 
                                         // states判別
+                                        // **Result は未応答のとき NULL。** キャストすると落ちる。
+                                        //   GetState は空文字を「未応答」として扱い、
+                                        //   authorization_pending を返す。
                                         retVal = CibaProvider.GetState(
                                             ((long)dyn.authreqexp).ToString(),
-                                            ((bool)dyn.result).ToString().ToLower(),
+                                            (dyn.result == null) ? "" : ((bool)dyn.result).ToString().ToLower(),
                                             out states);
                                     }
 

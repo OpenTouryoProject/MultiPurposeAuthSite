@@ -46,6 +46,8 @@ SAML2 の IdP でもある。
 mpas_dev.bat（リポジトリ ルート）               隣に clone 済みの OpenTouryo からビルド出力を xcopy
 ```
 
+**`1_BuildAll.ps1` は、無ければ 2 番目（`develop`）を自動で呼ぶ**（`-Libs Force` で取り直す）。
+
 `OpenTouryoAssemblies/` は `.gitignore` 対象。
 
 ### 2.2 リポジトリを `C:\` 直下に配置する
@@ -231,7 +233,7 @@ services.AddDistributedMemoryCache(); // 開発用
 | `CibaAuthorize` | `/ciba_authz` | `OAuth2Endpoint.CibaAuthorize` |
 | `CibaPushResult` | `/ciba_result` | `OAuth2Endpoint.CibaPushResult` |
 | `SetDeviceToken` | `/SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` |
-| `TwoFactorAuthPushResult` | `/TwoFactorAuthPushResult` | `OAuth2Endpoint.TwoFactorAuthPushResult` |
+| `TwoFactorPushResult` | `/2fa_result` | `OAuth2Endpoint.TwoFactorPushResult`（#213） |
 | `TestHybridFlow` | `/TestHybridFlowWebAPI` | `OAuth2ResourceServer.TestHybridFlow` |
 | `ChageToUser` | `/ChageToUser` | `OAuth2ResourceServer.ChageToUser` |
 | `default` | `{controller=Home}/{action=Index}/{id?}` | — |
@@ -295,6 +297,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 | 機能 | net10.0（本ディレクトリ） | net48（`../MultiPurposeAuthSite`） |
 |---|---|---|
 | TOTP（Authenticator アプリ 2FA） | **✓ あり**（`EnableTwoFactorAuthenticator` / リカバリ コード / `ManageTwoFactorAuthenticator`） | ✗ 無し |
+| プッシュ 2FA（`MobileApp`） | **✓ あり**（`SendCode` の選択肢 ＋ `/2fa_result` ＋ `VerifyCode` の待ち受け。#213） | ✗ 無し（プロバイダ自体が無い） |
 | ユーザ・ロール管理画面 | **✗ 無し**（`Config.EnableAdministrationOfUsersAndRoles` を読む Controller が無い） | ✓ `UsersAdminController` / `RolesAdminController` |
 | FIDO2 サーバ用 WebAPI | ✗ 無し | △ `Fido2ServerController.cs` は在るが**ビルド対象外** |
 | 疎通用 WebAPI | ✓ `ValuesController` | ✗ |

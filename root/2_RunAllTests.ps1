@@ -31,6 +31,14 @@
 .PARAMETER Launch
     net10.0 版と net48 版を起動してからテストする（test.ps1 に渡す）。
 
+.PARAMETER UserStoreType
+    サイトが使う UserStore の種類（mem / sql / ora / npg）。既定は mem（test.ps1 に渡す）。
+    mem 以外では接続文字列が要る。詳細は test.ps1 の説明を参照。
+
+.PARAMETER ConnectionString
+    mem 以外のときに使う接続文字列（test.ps1 に渡す）。
+    省略した場合は、test.ps1 が環境変数から読む。
+
 .PARAMETER Url
     net10.0 版が待ち受ける URL（test.ps1 に渡す。既定 https://localhost:44300）。
 
@@ -75,6 +83,9 @@
 param(
     [switch]$Launch,
     [switch]$UpdateTestCases,
+    [ValidateSet('mem', 'sql', 'ora', 'npg')]
+    [string]$UserStoreType = 'mem',
+    [string]$ConnectionString,
     [string]$Url = 'https://localhost:44300',
     [string]$NetFxUrl = 'https://localhost:44302',
     [switch]$NoNetFx,
@@ -136,6 +147,8 @@ if ($NoNetFx)  { $splat.NoNetFx  = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }
+if ($UserStoreType)    { $splat.UserStoreType    = $UserStoreType }
+if ($ConnectionString) { $splat.ConnectionString = $ConnectionString }
 
 Write-Host "=== E2ETests ===" -ForegroundColor Cyan
 if (-not $Launch)

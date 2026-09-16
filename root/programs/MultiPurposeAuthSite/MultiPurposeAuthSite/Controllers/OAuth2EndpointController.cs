@@ -53,6 +53,9 @@
 //*  2026/09/11  玄人 幸道         /device_authz のエラー応答を 400 / 401 で返す（#196）
 //*  2026/09/11  玄人 幸道         /ciba_authz のエラー応答を 400 / 401 で返し、ユーザ不明を unknown_user_id に（#196）
 //*  2026/09/12  玄人 幸道         /ciba_result・/SetDeviceToken の失敗を 400 / 401 で返す（本文の NG は変えない）（#196）
+//*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
+//*  2026/09/13  玄人 幸道         CIBAの返答に所有者確認を追加。メモリ ストアの取り違えも修正
+//*  2026/09/16  玄人 幸道         /ciba_authz : 端末未登録・FCM送信失敗を JSON のエラー応答にする（#210）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -401,7 +404,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 無効なトークン（JWT でない、改竄・失効・期限切れなど）。
                     // RFC 6750 3.1 : invalid_token（401）。以前は invalid_request（400 に当たる）だった（#196）。
-                    err.Add(OAuth2AndOIDCConst.error, Token.CmnEndpoints.invalid_token);
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
                     err.Add(OAuth2AndOIDCConst.error_description, "Invalid token.");
                 }
             }
@@ -771,31 +774,69 @@ namespace MultiPurposeAuthSite.Controllers
 
                             long authReqExp = DateTimeOffset.Now.AddSeconds(_requested_expiry).ToUnixTimeSeconds();
 
+                            // **承認する手段（認証デバイス）があるかを、送る前に確かめる（#210）。**
+                            //   以前は空の宛先のまま送信し、処理されない例外で HTTP 500 になっていた。
+                            //   ユーザは見つかっているので unknown_user_id ではなく access_denied を返す。
+                            //   Create の前に確かめ、保留中のレコードを作らない。
+                            if (!Sts.CibaProvider.DebugModeWithOutAD
+                                && string.IsNullOrEmpty(user.DeviceToken))
+                            {
+                                err = OAuth2AndOIDCConst.access_denied;
+                                errDescription = "The authentication device is not registered.";
+
+                                return this.OAuth2Error(new Dictionary<string, string>()
+                                {
+                                    {OAuth2AndOIDCConst.error, err},
+                                    {OAuth2AndOIDCConst.error_description, errDescription}
+                                }, null);
+                            }
+
                             // CIBA情報をストア
+                            // **誰宛ての要求かを記録する**（user は login_hint で解決した利用者）。
                             Sts.CibaProvider.Create(
                                client_notification_token,
-                               authReqExp, code, binding_message, out authReqId);
+                               authReqExp, code, binding_message, user.Id, out authReqId);
 
 #pragma warning disable 162
 
                             // プッシュ通知を、userに送信
                             if (!Sts.CibaProvider.DebugModeWithOutAD)
                             {
-                                string deviceToken = user.DeviceToken;
+                                // **送信の失敗を、処理されない例外にしない（#210）。**
+                                //   以前はここで例外が外に出て、HTTP 500 と JSON でない本文（開発モードでは例外の平文）を返していた。
+                                //   CIBA 情報は上の Create で保存済みなので、失敗しても期限切れまで残る。
+                                try
+                                {
+                                    string deviceToken = user.DeviceToken;
 
-                                // - DeviceTokenを使用してプッシュ通知
-                                string temp = await FcmService.GetInstance().SendAsync(
-                                    user.DeviceToken, "CIBA", "Allow / Deny",
-                                    new Dictionary<string, string>()
+                                    // - DeviceTokenを使用してプッシュ通知
+                                    string temp = await FcmService.GetInstance().SendAsync(
+                                        user.DeviceToken, "CIBA", "Allow / Deny",
+                                        new Dictionary<string, string>()
+                                        {
+                                            { OAuth2AndOIDCConst.auth_req_id, authReqId},
+                                            { OAuth2AndOIDCConst.binding_message, binding_message}
+                                        });
+                                }
+                                catch (Exception)
+                                {
+                                    // 資格情報の誤り、宛先の拒否、通信障害など。
+                                    // **ここで返す。** 後続は成功のレスポンス（200 と auth_req_id）で、
+                                    // err を見ないため、設定するだけでは成功として返ってしまう。
+                                    err = OAuth2AndOIDCConst.server_error;
+                                    errDescription = "Failed to send the push notification.";
+
+                                    return this.OAuth2Error(new Dictionary<string, string>()
                                     {
-                                        { OAuth2AndOIDCConst.auth_req_id, authReqId},
-                                        { OAuth2AndOIDCConst.binding_message, binding_message}
-                                    });
+                                        {OAuth2AndOIDCConst.error, err},
+                                        {OAuth2AndOIDCConst.error_description, errDescription}
+                                    }, null);
+                                }
                             }
                             else
                             {
                                 // テストを通すため追加
-                                Sts.CibaProvider.ReceiveResult(authReqId, true);
+                                Sts.CibaProvider.ReceiveResult(authReqId, user.Id, true);
                             }
 
 #pragma warning restore 162
@@ -812,7 +853,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // login_hint のユーザが見つからない（CIBA Core 13 : unknown_user_id）。
                             // 以前は err / errDescription が空のまま返っていた（#196）。
-                            err = Token.CmnEndpoints.unknown_user_id;
+                            err = OAuth2AndOIDCConst.unknown_user_id;
                             errDescription = "The user identified by login_hint was not found.";
                         }
                         // 以降で、下記を束ねる。
@@ -888,7 +929,7 @@ namespace MultiPurposeAuthSite.Controllers
             if (user == null)
             {
                 // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-                return this.NGResult(401, "ciba_result", Token.CmnEndpoints.invalid_token);
+                return this.NGResult(401, "ciba_result", OAuth2AndOIDCConst.invalid_token);
             }
 
             // 変数
@@ -898,8 +939,14 @@ namespace MultiPurposeAuthSite.Controllers
             if (!string.IsNullOrEmpty(auth_req_id)
                 && bool.TryParse(temp, out bool result))
             {
-                Sts.CibaProvider.ReceiveResult(auth_req_id, result);
-                return this.Ok("OK");
+                if (Sts.CibaProvider.ReceiveResult(auth_req_id, user.Id, result))
+                {
+                    return this.Ok("OK");
+                }
+
+                // **自分宛ての要求ではない（または、その要求が無い）。**
+                //   区別して返すと、auth_req_id の存在を推測させるので、同じ応答にする。
+                return this.NGResult(400, "ciba_result", null);
             }
 
             // パラメタの不備（#196 : 400）
@@ -1134,7 +1181,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
-            return this.NGResult(401, "SetDeviceToken", Token.CmnEndpoints.invalid_token);
+            return this.NGResult(401, "SetDeviceToken", OAuth2AndOIDCConst.invalid_token);
         }
 
         #endregion

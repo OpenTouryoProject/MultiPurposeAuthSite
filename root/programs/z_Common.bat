@@ -124,30 +124,6 @@ set NUGET_MSBUILD=-MSBuildPath "%MSBUILDDIR%"
 
 echo NUGET_MSBUILD %NUGET_MSBUILD%
 
-@rem --------------------------------------------------
-@rem nuget.exe
-@rem
-@rem The net48 web app still uses packages.config
-@rem (MultiPurposeAuthSite\MultiPurposeAuthSite\packages.config), which
-@rem MSBuild -t:Restore does not handle, so nuget.exe restore is needed.
-@rem
-@rem nuget.exe is kept next to this file, as the OpenTouryo repository
-@rem does (root/programs/nuget.exe). PATH is searched as a fallback, for
-@rem a working tree where it is missing.
-@rem
-@rem Not an error here. The batches that build net48 check it themselves;
-@rem the net10.0 side does not need it.
-@rem --------------------------------------------------
-set NUGET_EXE=
-
-if exist "%~dp0nuget.exe" set NUGET_EXE="%~dp0nuget.exe"
-
-if not defined NUGET_EXE (
-  for /f "usebackq tokens=*" %%i in (`where nuget.exe 2^>nul`) do set NUGET_EXE="%%i"
-)
-
-echo NUGET_EXE %NUGET_EXE%
-
 @echo --------------------------------------------------
 @echo The choice of build configuration (Debug / Release).
 @echo BUILD_CONFIG names the configuration (Debug or Release).

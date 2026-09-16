@@ -28,6 +28,13 @@ cd root
 .\1_BuildAll.ps1 -List          # 対象の一覧（**ここが一次情報**）
 .\1_BuildAll.ps1 -Only net10.0 -SkipClean
 .\1_BuildAll.ps1 -WarnDetail    # 警告の内訳を出す
+.\1_BuildAll.ps1 -Libs Force    # OpenTouryo のアセンブリを取り直す
+```
+
+ビルドとは別に、**DDL がミラーかを確かめるスクリプト**がある（#206）。
+
+```powershell
+.\CompareDdl.ps1                # 3 つの RDB の DDL を突き合わせる
 ```
 
 バッチを直接ダブル クリックしてもよい。その場合は `root/programs` の
@@ -39,6 +46,7 @@ cd root
 | `-Only` | ステップ名またはバッチ名の部分一致で絞る |
 | `-List` | `-Only` に指定できる名前を出して終わる |
 | `-SkipClean` | クリーン処理を省略する |
+| `-Libs` | OpenTouryo のアセンブリ。`Auto`（既定。**無ければ取得**）/ `None`（取得しない）/ `Force`（取り直す） |
 | `-WarnDetail` | 警告を種類ごとに集計して出す |
 | `-IgnoreErrors` | 既知のエラーとして合否から外す正規表現。**除外分は別枠で必ず表示する** |
 | `-OutputDir` | ログの保存先。既定は `programs\Tests\E2ETests\Result`（`.gitignore` 済み） |
@@ -102,12 +110,15 @@ cd root
 | `0_ExecAllBat.bat` | 通し。クリーン → net48 → net10.0 |
 | `1_DeleteDir.bat` | `packages` `obj` `bin` `bld` `Temp` `Build` `PrecompiledWeb` `.vs` を再帰的に削除 |
 | `2_DeleteFile.bat` | `*.suo` `*.user` `*.tmp` `*.log` `*.bak` `*.skrold` を削除 |
-| `3_BuildLibsAtOtherRepos.bat` | OpenTouryo を ZIP で取得してビルドし、`OpenTouryoAssemblies` へ複写 |
-| `3_BuildLibsAtOtherReposInTimeOfDev.bat` | 同上（開発時用） |
+| `3_BuildLibsAtOtherRepos.bat` | OpenTouryo を ZIP（タグ `03-20`）で取得してビルドし、`OpenTouryoAssemblies` へ複写 |
+| `3_BuildLibsAtOtherReposInTimeOfDev.bat` | 同上（`develop` の ZIP）。**`1_BuildAll.ps1` が呼ぶのはこちら** |
 | `10_MultiPurposeAuthSite.bat` | net48 版（CommandLineTools ＋ MultiPurposeAuthSite） |
 | `10_MultiPurposeAuthSiteCore.bat` | net10.0 版（CommandLineToolsCore ＋ MultiPurposeAuthSiteCore） |
 | `z_Common.bat` | 共通処理。**すべてのビルド バッチが最初に呼ぶ** |
 | `z_Common2.bat` | `z_Common.bat` の devenv 版。**未使用**（バッチ内の注記を参照） |
+
+> **`3_` は `0_ExecAllBat.bat` からは呼ばれない（`rem` で外してある）。**
+> 取得の制御は `1_BuildAll.ps1 -Libs` に寄せた。両方を有効にすると二重に取得する。
 
 > **`2_DeleteFile.bat` は OpenTouryo では `1_DeleteFile.bat`。**
 > `0_ExecAllBat.bat` がその名前で呼んでいたため、削除ステップが**空振りしていた**。
@@ -121,7 +132,6 @@ OpenTouryo の `root/programs/CS/z_Common.bat` の移植。**足並みを揃え�
 |---|---|
 | `BUILDFILEPATH` | MSBuild.exe。**vswhere で解決**するので、Community 以外（Professional / Enterprise / BuildTools）でも見つかる |
 | `NUGET_MSBUILD` | `nuget.exe restore` に渡す `-MSBuildPath`。指定しないと SSMS 同梱の MSBuild を掴むことがある |
-| `NUGET_EXE` | `nuget.exe`。まず自分の隣、無ければ PATH |
 | `VisualStudioVersion` | **vswhere から取得**する。固定値だと、別の VS しか無い環境で `MSB4226` になる |
 | `COMMANDLINE` | `/p:Configuration=... /p:DebugType=... -v:d` |
 
@@ -149,11 +159,13 @@ root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/packages.config
 `packages.config` は **MSBuild の `-t:Restore` では復元できない。** `nuget.exe restore` が要る。
 このため `root/programs/nuget.exe` をリポジトリに置いてある（OpenTouryo と同じ）。
 
+**バッチは `"%~dp0nuget.exe"` と、自分の隣を直接呼ぶ。** カレント ディレクトリに依らない。
+
 一方 `CommonLibrary/NetFxLibrary.csproj` は `PackageReference` なので、
 そちらは MSBuild の Restore が要る。**両方を回す。**
 
 ```
-%NUGET_EXE% restore "...sln" %NUGET_MSBUILD%     ← packages.config
+"%~dp0nuget.exe" restore "...sln" %NUGET_MSBUILD% ← packages.config
 %BUILDFILEPATH% %COMMANDLINE% /t:Restore "...sln" ← PackageReference
 %BUILDFILEPATH% %COMMANDLINE% "...sln"            ← ビルド
 ```
@@ -244,8 +256,38 @@ net10.0      OK        0    0   39  58.9
 `root/programs/OpenTouryoAssemblies/Build_net48` と `Build_netcore100` を参照している。
 **`.gitignore` 済みなので、clone しただけでは無い。**
 
-`3_BuildLibsAtOtherRepos.bat` で取得するか、OpenTouryo を別途 clone してビルドし、
-`mpas_dev.bat` で複写する。
+**`1_BuildAll.ps1` は、無ければ取得してから建てる**（`-Libs Auto` が既定。
+`develop` の ZIP を取得してビルドし、`OpenTouryoAssemblies` へ複写する）。
+OpenTouryo 側を更新したときは `-Libs Force` で取り直す。
+
+手で用意することもできる。`3_BuildLibsAtOtherRepos.bat`（タグ `03-20`）を実行するか、
+OpenTouryo を別途 clone してビルドし、`mpas_dev.bat` で複写する。
+
+> **取得ステップの合否は、出力ではなくフォルダの実在で判定している。**
+> `xcopy` の失敗は `: error` の形で出ないため、出力解析では拾えない。
+
+### カレント ディレクトリ探索を切る環境では、取得が空振りする
+
+OpenTouryo のビルド バッチは、兄弟のバッチを**裸の名前**で呼ぶ（`call 2_Build_NuGet_net48.bat`）。
+**`NoDefaultCurrentDirectoryInExePath` が定義されている環境**では、カレント ディレクトリが
+実行ファイルの探索から外れるため、これが `is not recognized` になり、
+**何も建たないまま `xcopy` まで進む。**
+
+```
+'2_Build_NuGet_net48.bat' is not recognized as an internal or external command,
+File not found - Build_net48
+0 File(s) copied
+```
+
+`dir` や `where` では見つかるので、**パスの間違いに見えて原因を取り違えやすい。**
+`1_BuildAll.ps1` は取得ステップの間だけこの変数を外す。
+**空にするのでは足りない**（定義されていて空でも外れる）ので、消している。
+
+> **これはエージェント実行時だけの現象である。** 計測すると、この変数は
+> ユーザ / マシン環境にもレジストリにも無く、**プロセスにだけ注入されている**
+> （親プロセスは `claude.exe`）。
+> **人が通常のコンソール / Visual Studio / ダブル クリックで回す分には起きない。**
+> このため、バッチ側（裸の名前で兄弟バッチを呼ぶ箇所）は書き換えていない。
 
 ### `dotnet build` 単体では net48 は建たない
 
