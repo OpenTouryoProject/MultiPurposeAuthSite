@@ -68,6 +68,15 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("InvalidCode", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Failed to send the code. Please try again, or choose another destination. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string SendCodeError {
+            get {
+                return ResourceManager.GetString("SendCodeError", resourceCulture);
+            }
+        }
+        
         
         /// <summary>
         ///   E-Mail Confirmation is needed ! に類似しているローカライズされた文字列を検索します。

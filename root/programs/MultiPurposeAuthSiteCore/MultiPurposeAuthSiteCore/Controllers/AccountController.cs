@@ -31,6 +31,7 @@
 //*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
 //*  2026/09/08  玄人 幸道         エラー応答とRedirect URLをRFC 6749に合わせる（#187）
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認の待ち受け（TwoFactorPushStatus）を追加（#213）
+//*  2026/09/16  玄人 幸道         2FAのコード送信の失敗を、画面に戻して伝える（#214）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1386,32 +1387,49 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // user != null
 
-                // UIDから、2FAのプロバイダを取得する。
-                IList<string> userFactors = await UserManager.GetValidTwoFactorProvidersAsync(user);
-
-                // 2FAのプロバイダの一覧を取得する
-                List<SelectListItem> factorOptions = userFactors.Select(
-                    purpose => new SelectListItem { Text = purpose, Value = purpose }).ToList();
-
-                #region 2FAのラインナップに追加
-                // プッシュ通知
-                if (user.DeviceToken != null)
-                {
-                    factorOptions.Add(new SelectListItem { 
-                        Text = this._2FA_MobileApp,
-                        Value = this._2FA_MobileApp });
-                }
-                // , etc.
-                #endregion
-
                 // 2FA画面のコード送信画面に遷移
-                return View(new AccountSendCodeViewModel
-                {
-                    Providers = factorOptions,  // 2FAのプロバイダの一覧
-                    ReturnUrl = returnUrl,      // 戻り先のURL
-                    RememberMe = rememberMe     // アカウント記憶
-                });
+                return View(await this.CreateSendCodeViewModelAsync(user, returnUrl, rememberMe));
             }
+        }
+
+        /// <summary>
+        /// 2FA画面のコード送信画面のモデルを作る（#214）
+        /// </summary>
+        /// <param name="user">ApplicationUser</param>
+        /// <param name="returnUrl">戻り先のURL</param>
+        /// <param name="rememberMe">アカウント記憶</param>
+        /// <returns>AccountSendCodeViewModelを非同期に返す</returns>
+        /// <remarks>
+        /// 初期表示（GET）と、送信に失敗したときの再表示（POST）で共用する。
+        /// **2 箇所で一覧の作り方が食い違わないように、1 箇所にまとめる。**
+        /// </remarks>
+        private async Task<AccountSendCodeViewModel> CreateSendCodeViewModelAsync(
+            ApplicationUser user, string returnUrl, bool rememberMe)
+        {
+            // UIDから、2FAのプロバイダを取得する。
+            IList<string> userFactors = await UserManager.GetValidTwoFactorProvidersAsync(user);
+
+            // 2FAのプロバイダの一覧を取得する
+            List<SelectListItem> factorOptions = userFactors.Select(
+                purpose => new SelectListItem { Text = purpose, Value = purpose }).ToList();
+
+            #region 2FAのラインナップに追加
+            // プッシュ通知
+            if (user.DeviceToken != null)
+            {
+                factorOptions.Add(new SelectListItem {
+                    Text = this._2FA_MobileApp,
+                    Value = this._2FA_MobileApp });
+            }
+            // , etc.
+            #endregion
+
+            return new AccountSendCodeViewModel
+            {
+                Providers = factorOptions,  // 2FAのプロバイダの一覧
+                ReturnUrl = returnUrl,      // 戻り先のURL
+                RememberMe = rememberMe     // アカウント記憶
+            };
         }
 
         /// <summary>
@@ -1434,36 +1452,62 @@ namespace MultiPurposeAuthSite.Controllers
                 // 検証されたアカウントのUIDを取得
                 ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
 
-                // Generate the token and send it. トークンを生成して送信します。
-                // SelectedProviderではなく、Emailに固定（MobileAppだとエラーになる。
-                string code = await UserManager.GenerateTwoFactorTokenAsync(user, this._2FA_Email); //model.SelectedProvider);
+                if (user == null)
+                {
+                    // 2FA の途中ではない（GET と同じ扱い。#214）
+                    return View("Error");
+                }
 
-                // Identity2.0 では、GenerateTwoFactorTokenAsyncの中で
-                // 自動送信されていたが3.0では手動送信に変更された模様。
-                if (model.SelectedProvider == this._2FA_Email)
+                // **送信の失敗を、処理されない例外にしない**（#214）。
+                //   ネットワーク障害、資格情報の期限切れ、宛先の拒否などで失敗する。
+                //   以前は例外がそのまま出て、原因の分からないエラー画面になっていた。
+                string code = null;
+
+                try
                 {
-                    // Email
-                    await EmailSender.SendAsync(user.Email, "Two factor authentication code", code);
+                    // Generate the token and send it. トークンを生成して送信します。
+                    // SelectedProviderではなく、Emailに固定（MobileAppだとエラーになる。
+                    code = await UserManager.GenerateTwoFactorTokenAsync(user, this._2FA_Email); //model.SelectedProvider);
+
+                    // Identity2.0 では、GenerateTwoFactorTokenAsyncの中で
+                    // 自動送信されていたが3.0では手動送信に変更された模様。
+                    if (model.SelectedProvider == this._2FA_Email)
+                    {
+                        // Email
+                        await EmailSender.SendAsync(user.Email, "Two factor authentication code", code);
+                    }
+                    else if (model.SelectedProvider == this._2FA_SMS)
+                    {
+                        // SMS
+                        await SmsSender.SendAsync(user.PhoneNumber, code);
+                    }
+                    else if (model.SelectedProvider == this._2FA_MobileApp)
+                    {
+                        // MobileApp
+                        await FcmService.GetInstance().SendAsync(
+                            user.DeviceToken, "2FA", "Two factor authentication",
+                            new Dictionary<string, string>()
+                            {
+                                { "code", code}
+                            });
+                    }
+                    else
+                    {
+                        // TOTP authenticator
+                        code = "";
+                    }
                 }
-                else if (model.SelectedProvider == this._2FA_SMS)
+                catch (Exception ex)
                 {
-                    // SMS
-                    await SmsSender.SendAsync(user.PhoneNumber, code);
-                }
-                else if (model.SelectedProvider == this._2FA_MobileApp)
-                {
-                    // MobileApp
-                    await FcmService.GetInstance().SendAsync(
-                        user.DeviceToken, "2FA", "Two factor authentication",
-                        new Dictionary<string, string>()
-                        {
-                            { "code", code}
-                        });
-                }
-                else
-                {
-                    // TOTP authenticator
-                    code = "";
+                    // **原因は、記録に残す。** 例外を受け止めると、
+                    //   これまで OnException が ACCESS ログに書いていた内容が失われるため。
+                    Logging.MyDebugLogForEx(ex);
+
+                    // 送信できなかったことを画面で伝え、別の送信先を選び直せるようにする。
+                    ModelState.AddModelError("", Resources.AccountController.SendCodeError);
+
+                    return View(await this.CreateSendCodeViewModelAsync(
+                        user, model.ReturnUrl, model.RememberMe));
                 }
 
                 if (!string.IsNullOrEmpty(code))
@@ -1494,7 +1538,17 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // 再表示
-            return View();
+            // **モデルを渡さないとビューが落ちる**（Model.ReturnUrl などを読むため）（#214）。
+            ApplicationUser currentUser = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+            if (currentUser == null)
+            {
+                // 2FA の途中ではない
+                return View("Error");
+            }
+
+            return View(await this.CreateSendCodeViewModelAsync(
+                currentUser, model.ReturnUrl, model.RememberMe));
         }
 
         #endregion

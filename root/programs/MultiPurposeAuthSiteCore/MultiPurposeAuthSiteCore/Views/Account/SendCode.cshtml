@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/09/16  玄人 幸道         送信の失敗を表示するため ValidationSummary を追加（#214）
     //**********************************************************************************
 *@
 
@@ -34,6 +35,8 @@
 
 @using (Html.BeginForm("SendCode", "Account", new { ReturnUrl = Model.ReturnUrl }, FormMethod.Post, true, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" })) {
     @Html.AntiForgeryToken()
+    @* 送信に失敗したことを伝えるため（#214）。他の画面と同じ形。 *@
+    @Html.ValidationSummary("", new { @class = "text-danger" })
     @Html.Hidden("rememberMe", @Model.RememberMe)
     <h4>@AccountViews.SendCodeH4</h4>
     <hr />

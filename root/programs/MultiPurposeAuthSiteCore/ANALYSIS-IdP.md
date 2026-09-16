@@ -446,6 +446,26 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 >   （Open棟梁 の `AuthenticationHeader.GetCredentials` が `temp[1]` を確かめずに読む）
 >   → Open棟梁 の #586。`RT-196.5` で観測している
 
+### A-7-2. 2FA のコード送信で、送信の失敗が処理されない例外になる **[Core][netfx]** — **✅ 修正済み（#214）**
+
+**`/ciba_authz` と同じ形の不具合が、画面側（`/Account/SendCode`）にも残っていた。**
+送信（メール / SMS / プッシュ）を `try` / `catch` 無しで呼んでいたため、
+**DNS の一時障害で `FirebaseMessagingException` がそのまま外に出て、原因の分からないエラー画面**になった
+（#205 の確認中に実際に発生。`ACCESS` ログに `Account,SendCode(OnException)` として残っていた）。
+
+| 状況 | 修正前 | 修正後 |
+|---|---|---|
+| 送信に成功 | コードの入力画面へ | 変更なし |
+| **送信に失敗（通信障害、資格情報の誤りなど）** | **処理されない例外 → エラー画面** | **コードの送信画面に戻し、失敗を表示**（別の送信先を選び直せる） |
+| 入力の検証に失敗、または送信が false | **`View()` にモデルを渡さず `NullReferenceException`** | 同上（モデルを作り直して再表示） |
+
+- **例外は握り潰さず、`Logging.MyDebugLogForEx` で `ACCESS` ログに残す。**
+  受け止めると、これまで `OnException` が書いていた原因が失われるため
+- 表示のために `SendCode.cshtml` に `ValidationSummary` を足した（他の画面と同じ形。**無いと `ModelState` のエラーが出ない**）
+- 一覧を作る処理は `CreateSendCodeViewModelAsync` にまとめ、初期表示と再表示で共用する
+- **net48 版も同じ形だったので、あわせて直した**（`SendTwoFactorCodeAsync` がメール / SMS を送るため、同様に失敗しうる）
+- **E2E では測れない。** テストは 2FA を有効にしておらず、送信箱（`FcmOutboxDirectory`）は失敗しない
+
 ### A-8. 認可エラーのコードが全て `server_error` **[Lib]** — **✅ 修正済み（#187）**
 
 ```csharp
