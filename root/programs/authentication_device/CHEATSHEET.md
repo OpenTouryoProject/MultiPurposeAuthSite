@@ -215,6 +215,7 @@ flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.
 | OS の通知が出て、Message Stream に届かない | 通知が届いたとき、Flutter のタブが見えていなかった（重なっていた / 最小化していた） | 想定どおり。OS の通知をクリックする（8 節「バックグラウンドで確かめる」）か、8 節の手順 2 |
 | OS の通知をクリックしても何も起きない | `flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれない | 8 節「バックグラウンドで確かめる」（普段の Chrome で開く） |
 | Allow / Deny で `/ciba_result` が 400 | 要求の期限切れ、または宛先と違うユーザで応答した | 認証サイトでサインアウトし、`tanaka@gmail.com` でサインインし直す |
+| Installability に「`name` が無い」「`display` が不正」「アイコンが無い」がまとめて出る | `flutter run` は manifest を生成しない（`manifest.json` は正しい） | 8 節「PWA としてインストールして確かめる」 |
 
 ## 8. CIBA を確かめる（web）
 
@@ -262,3 +263,26 @@ flutter run -d web-server --web-port 5610 --dart-define-from-file=firebase_web.j
 5. Allow / Deny を押す → 自己テストの画面が移る（上の表）
 
 - service worker を変えたときは、DevTools → Application → Service workers で「Update on reload」にチェックを入れて再読み込みする（古い版のまま動くことがある）
+
+### PWA としてインストールして確かめる
+
+**`flutter run` では確かめられない。** manifest を生成しないため、DevTools の Installability が
+「`name` が無い」「`display` が不正」「アイコンが無い」とまとめてエラーになる（`manifest.json` 自体は正しい）。
+**ビルドした出力（`build/web`）を配信する。**
+
+```powershell
+cd root\programs\authentication_device
+flutter build web --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
+cd build\web
+python -m http.server 5610
+```
+
+1. 普段の Chrome で `http://localhost:5610/` を開く（`redirect_uri` は同じなので、サインインもそのまま試せる）
+2. アドレスバー右端のインストールのアイコン（または ⋮ →「キャスト、保存、共有」）からインストールする
+3. アプリのウィンドウで、サインインと CIBA を試す（手順は上と同じ）
+
+- **通知の経路は、アプリのウィンドウが見えているかどうかで決まる**（PWA でも同じ）。
+  見えていれば Message Stream、最小化 / 隠れていれば OS の通知になる
+- 通知をクリックすると、ブラウザのタブではなく**アプリのウィンドウ**が開く
+- `python -m http.server` は更新の扱いが素朴なので、service worker が古いまま残ることがある（上の行）
+- Installability に残る「Richer PWA Install UI …（screenshot を足すように）」は案内で、エラーではない

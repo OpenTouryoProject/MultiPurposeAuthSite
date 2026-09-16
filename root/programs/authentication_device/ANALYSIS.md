@@ -210,6 +210,8 @@ authentication_device/
     普段の Chrome（`flutter run -d web-server` で配信）で確認した。`flutter run -d chrome` の Chrome では、クリックが届かなかった（8 節 16）
   - **net48 版（`https://localhost:44302`、`mpas.netfx.json`）でも、サインイン・端末の登録・CIBA（フォアグラウンド / バックグラウンドの Allow）を確認した。**
     自己テストの移る先の表記は net48 版だけ違い、`?ret=OK: 正常終了`（それ以外は `OK: 異常終了`）。net10.0 版は `OK_NORMAL_END` / `OK_ABNORMAL_END`
+  - **PWA としてインストールした状態でも、サインイン・CIBA（フォアグラウンド / バックグラウンド）が動いた**（`build/web` を配信して確認）。
+    サインインは同じウィンドウ内で認証サイトの画面が開き、戻ってきた。通知のクリックでは、ブラウザのタブではなく**アプリのウィンドウ**が開いた
 - **web でまだ確かめていないこと:** HTTPS での配信（PWA としてのインストール）
 - `firebase_web.json` を渡さないときは、Firebase を初期化せずに起動する（プッシュは使えない）。
 
@@ -243,8 +245,8 @@ authentication_device/
     `flutter_bootstrap.js` を消すと、Web Push を受ける service worker が置き換わる可能性がある（実測はしていない）。
 14. **`--dart-define-from-file` の値はコンパイル時の定数。** ファイルを変えたら `flutter run` をやり直す（ホット リロードでは変わらない）。
 15. **web で認可画面へ移ると、`flutter run` とアプリの接続が切れる。** 戻った後のログは、Chrome の DevTools の Console で見る。
-16. **web の通知は、アプリのタブが「見えている」ときだけ画面に届く**（Message Stream に並ぶ）。見えていなければ OS の通知になる。
-    判定は Firebase の SDK（service worker）が `visibilityState === 'visible'` で行う（フォーカスは関係ない。重なって隠れている / 最小化は見えていない扱い）。
+16. **web の通知は、アプリの画面が「見えている」ときだけ画面に届く**（Message Stream に並ぶ）。見えていなければ OS の通知になる。
+    判定は Firebase の SDK（service worker）が `visibilityState === 'visible'` で行う（フォーカスは関係ない。重なって隠れている / 最小化は見えていない扱い）。**インストールした PWA のウィンドウでも同じ**（実測）。
     **OS の通知のクリックは、`web/firebase-messaging-sw.js` が自前で受け、通知の中身を URL のクエリに載せてアプリを開く**（#205 増分 3。`web_push_click.dart`）。
     SDK の `notificationclick` は、開く先（`fcmOptions.link` / `click_action`）が無い通知では閉じるだけで、`stopImmediatePropagation()` も呼ぶ。
     そのため、自前の処理は `firebase.messaging()` より**前に**登録している（後にすると、SDK の処理に止められる）。`firebase_messaging_web` に `onMessageOpenedApp` の実装は無い。
@@ -254,6 +256,10 @@ authentication_device/
     自己テストは `JsonReaderException` で落ちる。ユーザ ストアが `mem` だと、認証サイトの再起動でユーザも端末の登録も消える。
 18. **web のサインインは、ブラウザに残った認証サイトのサインイン状態で、サインイン画面を出さずに前のユーザのまま通る可能性がある**（実測はしていない）。
     ユーザを切り替えるときは、先に認証サイトでサインアウトする。宛先と違うユーザで応答すると、`/ciba_result` は 400 を返す。
+19. **`flutter run` は manifest を生成しない。** 配信される `/manifest.json` は `{"info":"manifest not generated in run mode."}` で、
+    `index.html` の `<base>` も `$FLUTTER_BASE_HREF` のまま。この状態で DevTools の Installability を見ると、
+    `name` が無い・`display` が不正・アイコンが無い、と**まとめてエラーになる**（manifest 自体は正しい）。
+    **PWA としての確認は、`flutter build web` の出力（`build/web`）を配信して行う。**
 
 ---
 
