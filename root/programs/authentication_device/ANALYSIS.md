@@ -220,6 +220,8 @@ authentication_device/
     サインインは同じウィンドウ内で認証サイトの画面が開き、戻ってきた。通知のクリックでは、ブラウザのタブではなく**アプリのウィンドウ**が開いた
   - **2FA のプッシュ承認（#213。2026-09-16）: `MobileApp` を選ぶ → コードの入力画面が待ち受ける → 認証デバイスの [Approve] で、手で入力せずにサインインが完了した。**
     **PWA としてインストールした状態で確認した**（手順は `CHEATSHEET.md` 9 節）。サーバ側の `/2fa_result` の失敗（401 / 400）は E2E で測っている（`RT-213.1`）
+  - **2FA のプッシュ承認（#216。2026-09-17）: net48 版（`https://localhost:44302`、`mpas.netfx.json`）でも同じ通しを確認した。**
+    net48 版は `MobileApp` を 2FAプロバイダとして登録している（`CommonLibrary/Manager/MobileAppTokenProvider`）
 - **web でまだ確かめていないこと:** HTTPS での配信（#211。スマートフォンから使うために要る。
   `http://localhost` は安全なコンテキスト扱いなので、PC でのインストールと Web Push はこれ無しで動いている）
 - `firebase_web.json` を渡さないときは、Firebase を初期化せずに起動する（プッシュは使えない）。
@@ -260,6 +262,10 @@ authentication_device/
     SDK の `notificationclick` は、開く先（`fcmOptions.link` / `click_action`）が無い通知では閉じるだけで、`stopImmediatePropagation()` も呼ぶ。
     そのため、自前の処理は `firebase.messaging()` より**前に**登録している（後にすると、SDK の処理に止められる）。`firebase_messaging_web` に `onMessageOpenedApp` の実装は無い。
     **`flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれなかった。** バックグラウンドの経路は、普段の Chrome（`-d web-server`）で確かめる。
+    **ただし 2FA の通知（#213 / #216）は、PWA のウィンドウの状態にかかわらず OS の通知で届いた**（観測。2026-09-17。net10.0 / net48 とも）。
+    送っている形は CIBA と同じ（`FcmService.SendAsync` の title / body / data）なので、**理由は分かっていない。**
+    調べるなら、`onBackgroundMessage` で `clients.matchAll({type:'window', includeUncontrolled:true})` の
+    `visibilityState` を出すのが早い（届いた瞬間に、どのクライアントが「見えている」扱いかが分かる）。
 17. **CIBA の自己テストは、宛先が `tanaka@gmail.com` に固定**（認証サイトの `HomeController.AssembleFAPICibaProfileStarterAsync`）。
     認証デバイスも `tanaka@gmail.com` でサインインして端末を登録しておく。登録が無いと `/ciba_authz` が HTTP 500（例外の平文）を返し、
     自己テストは `JsonReaderException` で落ちる。ユーザ ストアが `mem` だと、認証サイトの再起動でユーザも端末の登録も消える。
