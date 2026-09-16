@@ -262,10 +262,10 @@ authentication_device/
     SDK の `notificationclick` は、開く先（`fcmOptions.link` / `click_action`）が無い通知では閉じるだけで、`stopImmediatePropagation()` も呼ぶ。
     そのため、自前の処理は `firebase.messaging()` より**前に**登録している（後にすると、SDK の処理に止められる）。`firebase_messaging_web` に `onMessageOpenedApp` の実装は無い。
     **`flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれなかった。** バックグラウンドの経路は、普段の Chrome（`-d web-server`）で確かめる。
-    **ただし 2FA の通知（#213 / #216）は、PWA のウィンドウの状態にかかわらず OS の通知で届いた**（観測。2026-09-17。net10.0 / net48 とも）。
-    送っている形は CIBA と同じ（`FcmService.SendAsync` の title / body / data）なので、**理由は分かっていない。**
-    調べるなら、`onBackgroundMessage` で `clients.matchAll({type:'window', includeUncontrolled:true})` の
-    `visibilityState` を出すのが早い（届いた瞬間に、どのクライアントが「見えている」扱いかが分かる）。
+    **2FA の通知が常に OS 経由になるのは、これと同じ理由**（#213 / #216）。
+    2FA では、通知が届く瞬間に**認証サイトのウィンドウを操作している**ので、認証デバイスは必ず裏に回る。
+    実測（2026-09-17、PWA を最小化せず他のウィンドウの裏に置いた状態）:
+    `clients=1 / visibilityState=hidden / focused=false`。**CIBA も同じ配置なら同じになる。**
 17. **CIBA の自己テストは、宛先が `tanaka@gmail.com` に固定**（認証サイトの `HomeController.AssembleFAPICibaProfileStarterAsync`）。
     認証デバイスも `tanaka@gmail.com` でサインインして端末を登録しておく。登録が無いと `/ciba_authz` が HTTP 500（例外の平文）を返し、
     自己テストは `JsonReaderException` で落ちる。ユーザ ストアが `mem` だと、認証サイトの再起動でユーザも端末の登録も消える。
