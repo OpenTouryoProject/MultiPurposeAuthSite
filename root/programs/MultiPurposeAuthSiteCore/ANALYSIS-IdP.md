@@ -440,8 +440,8 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 >   あわせて、メモリのストアの 2 つの取り違えも直した。
 >   **（a）`ReceiveResult` が `auth_req_id` を見ず、保留中の全要求へ結果を書き込んでいた**（E2E : `EX-8.3`）。
 >   **（b）`ReceiveTokenReq` が、一致したものとは別の保留要求を削除しうる状態だった**（ループ変数の取り残し）。
->   E2E : `EX-8.3`。`EX-8.4`（別の利用者は承認できない）は、テスト基盤で 2 人目の利用者を作れないため Skip
-> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無い → #203
+>   E2E : `EX-8.3` / `EX-8.4`（別の利用者は承認できない。#212 で Skip を解消）
+> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無かった → **✅ 削除済み（#203）**
 > - `Authorization: Bearer`（方式だけで値が無い）で HTTP 500 になる
 >   （Open棟梁 の `AuthenticationHeader.GetCredentials` が `temp[1]` を確かめずに読む）
 >   → Open棟梁 の #586。`RT-196.5` で観測している

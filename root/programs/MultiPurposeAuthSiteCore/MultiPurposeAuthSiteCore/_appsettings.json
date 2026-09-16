@@ -233,7 +233,6 @@
     "ChageToUserWebAPI": "/ChageToUser",
     // プッシュ通知
     "SetDeviceTokenWebAPI": "/SetDeviceToken",
-    "TwoFactorAuthPushResultWebAPI": "/TwoFactorAuthPushResult",
     // HybridFlowのテスト用
     "TestHybridFlowWebAPI": "/TestHybridFlowWebAPI",
 

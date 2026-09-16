@@ -233,7 +233,6 @@ services.AddDistributedMemoryCache(); // 開発用
 | `CibaAuthorize` | `/ciba_authz` | `OAuth2Endpoint.CibaAuthorize` |
 | `CibaPushResult` | `/ciba_result` | `OAuth2Endpoint.CibaPushResult` |
 | `SetDeviceToken` | `/SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` |
-| `TwoFactorAuthPushResult` | `/TwoFactorAuthPushResult` | `OAuth2Endpoint.TwoFactorAuthPushResult` |
 | `TestHybridFlow` | `/TestHybridFlowWebAPI` | `OAuth2ResourceServer.TestHybridFlow` |
 | `ChageToUser` | `/ChageToUser` | `OAuth2ResourceServer.ChageToUser` |
 | `default` | `{controller=Home}/{action=Index}/{id?}` | — |

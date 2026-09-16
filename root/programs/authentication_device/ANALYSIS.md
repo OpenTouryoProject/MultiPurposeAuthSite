@@ -137,8 +137,8 @@ authentication_device/
   `Extensions/Sts/CibaProvider`）が送るタイトルと一致していないと画面が出ない。
 - **`/SetDeviceToken` の成功判定は `response.body == "\"OK\""`**（コード中のコメントに
   「AuthZ(N)の仕様による」とある）。サーバ側の戻り値を変えるとアプリが壊れる。
-- **2FA は「表示するだけ」で、`/TwoFactorAuthPushResult` は叩いていない。**
-  認証サイト側にエンドポイントはあるが、このアプリからは未実装。
+- **2FA は「表示するだけ」。** 送られるのは SMS / メールと同じ確認コードで、利用者は認証サイトの画面に入力する。
+  返答を受ける口（`/TwoFactorAuthPushResult`）は、ルートだけがあってアクションが無かったため削除した（#203）。
 
 ---
 
@@ -232,7 +232,7 @@ authentication_device/
    既定は `https://localhost:44300` なので、Android の実機では、届く URL を書いたファイルを渡す。
 5. **通知の種別判定が `title` の文字列一致**（4 節）。サーバ側の文言を変えると黙って壊れる。
 6. **`/SetDeviceToken` の成功判定が `"\"OK\""` の完全一致**（4 節）。
-7. **2FA のプッシュ結果を返す実装が無い**（4 節）。`/TwoFactorAuthPushResult` は未使用。
+7. **2FA は確認コードを表示するだけ**（4 節）。承認して完了させる仕組みは無い（`/TwoFactorAuthPushResult` は #203 で削除）。
 8. **`AppAuth.userinfoEndpoint` は宣言されているが呼ばれていない。**
 9. **`TokenChecker` は使われていない。** `fcm_page.dart` で `MetaCard('FCM Token', ...)` ごと
    コメント アウトされている。

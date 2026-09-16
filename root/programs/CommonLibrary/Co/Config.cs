@@ -36,6 +36,7 @@
 //*  2020/08/04  西野 大介         コンテナ化対応実施
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/12  玄人 幸道         FcmOutboxDirectory（プッシュ通知の送信箱。テスト用）を追加（#196）
+//*  2026/09/16  玄人 幸道         TwoFactorAuthPushResultWebAPI を削除（未実装のため）（#203）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1456,17 +1457,6 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("SetDeviceTokenWebAPI");
-            }
-        }
-
-        /// <summary>
-        /// 2FAのプッッシュ結果を受信するWebAPI
-        /// </summary>
-        public static string TwoFactorAuthPushResultWebAPI
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("TwoFactorAuthPushResultWebAPI");
             }
         }
 
