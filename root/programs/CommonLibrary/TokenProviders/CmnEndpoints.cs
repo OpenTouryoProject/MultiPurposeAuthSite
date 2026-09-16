@@ -71,6 +71,7 @@
 //*  2026/09/11  玄人 幸道         /userinfo の Bearer のエラー（invalid_token は 401、WWW-Authenticate の組み立て）を追加（#196）
 //*  2026/09/11  玄人 幸道         /ciba_authz の空のエラー コードを CIBA Core 13 のコードに（unknown_user_id を追加）（#196）
 //*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
+//*  2026/09/17  玄人 幸道         認可エラーを、可能ならリダイレクトで返す（#187 の残り）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -374,6 +375,43 @@ namespace MultiPurposeAuthSite.TokenProviders
         #region ValidateAuthZReqParam
 
         /// <summary>ValidateAuthZReqParam</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="response_type">string</param>
+        /// <param name="scope">string</param>
+        /// <param name="nonce">string</param>
+        /// <param name="valid_redirect_uri">string</param>
+        /// <param name="err">string</param>
+        /// <param name="errDescription">string</param>
+        /// <returns>成功 or 失敗</returns>
+        /// <remarks>
+        /// **エラーは、返せるなら RP へリダイレクトで返す**（RFC 6749 4.1.2.1。#187 の残り）。
+        /// 画面で止めると、RP からは何が起きたのか分からない。
+        ///
+        /// 判定そのもの（順序・エラー コード）は ValidateAuthZReqParamCore のまま変えない。
+        /// ここで足すのは、**失敗したときの返し先**だけ。
+        /// </remarks>
+        public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
+            string response_type, string scope, string nonce,
+            out string valid_redirect_uri, out string err, out string errDescription)
+        {
+            bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
+                client_id, redirect_uri, response_type, scope, nonce,
+                out valid_redirect_uri, out err, out errDescription);
+
+            if (!isValid && string.IsNullOrEmpty(valid_redirect_uri))
+            {
+                // **response_type の誤りなど、redirect_uri を確かめる前に失敗した場合。**
+                //   返してよい先かどうかは ResolveErrorRedirectUri が確かめる
+                //   （登録と一致しなければ空。その場合は、呼び出し元が画面で知らせる）。
+                valid_redirect_uri = CmnEndpoints.ResolveErrorRedirectUri(
+                    redirect_uri, client_id, response_type);
+            }
+
+            return isValid;
+        }
+
+        /// <summary>ValidateAuthZReqParam</summary>
         /// <param name="grant_type">string</param>
         /// <param name="client_id">string</param>
         /// <param name="redirect_uri">string</param>
@@ -384,7 +422,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
         /// <returns>成功 or 失敗</returns>
-        public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
+        private static bool ValidateAuthZReqParamCore(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription)
         {
@@ -703,6 +741,51 @@ namespace MultiPurposeAuthSite.TokenProviders
             return false;
         }
         #endregion
+
+        #endregion
+
+        #region ResolveErrorRedirectUri
+
+        /// <summary>エラーをリダイレクトで返してよい redirect_uri を決める（#187）</summary>
+        /// <param name="redirect_uri">string</param>
+        /// <param name="client_id">string</param>
+        /// <param name="response_type">string</param>
+        /// <returns>返してよい redirect_uri（無ければ空）</returns>
+        /// <remarks>
+        /// **成功したときの宛先には使わない。** エラー（error / error_description / state）を
+        /// RP に返してよいかだけを決める（RFC 6749 4.1.2.1）。
+        ///
+        /// **response_type が不明だと、種別ごとの登録（redirect_uri_code / redirect_uri_token）を引けない。**
+        /// 返してよいかは「このクライアントに登録された URI か」で決まるので、両方と突き合わせる。
+        /// 一致しなければ空を返し、呼び出し元は画面で知らせる（検証していない URI へ飛ばさない）。
+        /// </remarks>
+        private static string ResolveErrorRedirectUri(
+            string redirect_uri, string client_id, string response_type)
+        {
+            // CheckRedirectUri は ref で受けるが、ここでの失敗は呼び出し元に伝えない
+            // （エラーの内容は、元の判定で決まったものを使う）。
+            string dummyErr = "";
+            string dummyErrDescription = "";
+
+            if (CmnEndpoints.CheckRedirectUri(redirect_uri, client_id, response_type,
+                out string uri, ref dummyErr, ref dummyErrDescription))
+            {
+                return uri;
+            }
+
+            foreach (string responseType in new string[] {
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType,
+                OAuth2AndOIDCConst.ImplicitResponseType })
+            {
+                if (CmnEndpoints.CheckRedirectUri(redirect_uri, client_id, responseType,
+                    out uri, ref dummyErr, ref dummyErrDescription))
+                {
+                    return uri;
+                }
+            }
+
+            return "";
+        }
 
         #endregion
 

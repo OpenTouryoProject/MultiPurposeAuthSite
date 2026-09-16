@@ -501,6 +501,22 @@ redirect_uri 不一致・scope 不正のいずれでも `server_error` を返す
 > **未知の `grant_type` に `invalid_grant` を返している件は、まだ直していない**
 > （`OAuth2EndpointController` 側。正しくは `unsupported_grant_type`）。#196 で扱う。
 
+**対応（#187 の残り。2026-09-17）: エラーの「返し方」も直した。**
+
+コードは返し分けられていたが、**`response_type` の誤りは `redirect_uri` を確かめる前に弾いていた**ため、
+`valid_redirect_uri` が空のまま呼び出し元に戻り、**リダイレクトではなくエラー画面（HTTP 200）**になっていた。
+RP からは何が起きたのか分からない。
+
+- **判定の順序とエラー コードは変えていない。** `ValidateAuthZReqParam` をラッパにし、
+  **失敗して返し先が決まっていないときだけ**、返してよい `redirect_uri` を決める（`ResolveErrorRedirectUri`）
+- **返してよいかは「このクライアントに登録された URI か」で決める**（RFC 6749 4.1.2.1）。
+  `response_type` が不明だと種別ごとの登録（`redirect_uri_code` / `redirect_uri_token`）を引けないので、両方と突き合わせる。
+  一致しなければ空を返し、**画面で知らせる**（検証していない URI へは飛ばさない＝オープン リダイレクタにしない）
+- **成功したときの宛先には使わない。** 成功経路の `valid_redirect_uri` は元のまま
+- `client_id` が不正なときは、そもそも登録を引けないので画面のまま（`RT-187.5`）
+- E2E テスト : **`RT-187.4` の `Skip` を解消**（両ターゲットで `unsupported_response_type` がリダイレクトで返る）。
+  `RT-187.3` の観測も「リダイレクトして `error=unsupported_response_type`」に変わった
+
 ### A-9. discovery のキー名に末尾スペース **[Lib]** — **✅ 修正済み（#189 の一部）**
 
 ```csharp

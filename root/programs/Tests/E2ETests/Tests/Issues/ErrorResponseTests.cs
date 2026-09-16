@@ -32,6 +32,7 @@
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-185 / RT-187）
 //*  2026/09/11  玄人 幸道         RT-185.1 の注記を、#196（/token の 400 / 401）の対応に合わせる
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-185 / RT-187）
+//*  2026/09/17  玄人 幸道         RT-187.4 の Skip を解消（認可エラーをリダイレクトで返すようにした）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -274,8 +275,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <summary>RT-187.4 未知の response_type は unsupported_response_type でリダイレクトする</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
-        [SkippableTheory(Skip = "未修正。実測（2026/09/09, net10.0）では、"
-            + "リダイレクトではなくエラー画面（HTTP 200）になる。")]
+        [SkippableTheory]
         [MemberData(nameof(AllTargets))]
         public async Task RT187_04_未知のresponse_typeはunsupported_response_typeでリダイレクトする(string targetKey)
         {
@@ -285,7 +285,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "未知の response_type を unsupported_response_type でリダイレクトする",
                     "client_id と redirect_uri が妥当なら、エラーは**リダイレクトで RP へ返す。**"
                     + "画面で止めると、RP は何が起きたのか分からない。"
-                    + "ただし認可コードは発行されない（RT-187.3）ので、**安全側には倒れている。**",
+                    + "ただし認可コードは発行されない（RT-187.3）ので、**安全側には倒れている。**"
+                    + "以前はエラー画面（HTTP 200）になっていた（2026/09/09 実測）。",
                     "RFC 6749 §4.1.2.1（redirect_uri が妥当ならリダイレクトして error を返す）");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
