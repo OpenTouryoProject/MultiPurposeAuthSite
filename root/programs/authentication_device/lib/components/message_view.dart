@@ -48,6 +48,39 @@ class MessageView extends StatelessWidget {
     }
   }
 
+  /// Push 2FA Result（#213）
+  ///
+  /// プッシュ通知で受け取った 2FA のコードを、認証サイトへ送り返す。
+  /// **サインインを完了させるのは、待っているブラウザ側**
+  /// （2FA のセッションはブラウザの Cookie にあり、この端末からは触れない）。
+  void _pushTwoFactorResultApi(RemoteMessage? message) async {
+    String? accessToken = await AppAuth.getTokenValue();
+    http.Response response;
+
+    try {
+      response = await http.post(
+        Uri.parse(AppAuth.twoFactorPushResultEndpoint),
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Authorization": "Bearer ${accessToken}",
+        },
+        body: {
+          "code" : message?.data["code"],
+        });
+    } catch (e) {
+      // 接続できない（接続先の誤り、CORS、サーバの停止など）
+      print('Request failed: $e');
+      return;
+    }
+
+    if (response.statusCode == 200) {
+      print('2FA を承認しました。ブラウザ側でサインインが進みます。');
+    } else {
+      print('Request failed with status: ${response.statusCode}.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     MessageArguments? args =
@@ -93,7 +126,12 @@ class MessageView extends StatelessWidget {
                     style: TextStyle(fontSize: 18),
                   ),
                   this._row('Data', message.data.keys.toString()),
-                  this._row('code', message.data["code"], 12)
+                  this._row('code', message.data["code"], 12),
+                  SpaceBox.height(16),
+                  // **コードを送り返すと、待っているブラウザでサインインが完了する（#213）。**
+                  //   画面にコードを入力する従来の方法も、そのまま使える。
+                  MyElevatedButton('Approve Button',
+                      () => this._pushTwoFactorResultApi(message)),
                 ]),
               )
             ],

@@ -30,6 +30,7 @@
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/07  玄人 幸道         expires_inが常に0になる不具合を修正（#182）
 //*  2026/09/08  玄人 幸道         エラー応答とRedirect URLをRFC 6749に合わせる（#187）
+//*  2026/09/16  玄人 幸道         2FAのプッシュ承認の待ち受け（TwoFactorPushStatus）を追加（#213）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1598,6 +1599,73 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 再表示
             return View(model);
+        }
+
+        /// <summary>
+        /// 2FAのプッシュ承認の状態を返す（#213）
+        /// GET: /Account/TwoFactorPushStatus
+        /// </summary>
+        /// <returns>
+        /// 承認済みなら { "approved": true, "redirectUrl": "..." }、まだなら { "approved": false }
+        /// </returns>
+        /// <remarks>
+        /// **待っているのはブラウザである。**
+        /// 認証デバイスは `/2fa_result` に承認を送るだけで、サインインは完了できない
+        /// （2FA のセッションはブラウザの Cookie にあり、端末からは触れない）。
+        /// そこで、コードの入力画面（VerifyCode）からこの口をポーリングし、
+        /// 承認されていれば、そのコードでサインインを完了させる。
+        ///
+        /// 承認は 1 回取り出すと消える（TwoFactorPushProvider.Receive）。
+        /// </remarks>
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<ActionResult> TwoFactorPushStatus(string returnUrl, bool rememberBrowser)
+        {
+            // 2FA のセッション（Cookie）から利用者を取る
+            ApplicationUser user = await SignInManager.GetTwoFactorAuthenticationUserAsync();
+
+            if (user == null)
+            {
+                // 2FA の途中ではない
+                return this.Json(new { approved = false });
+            }
+
+            // 認証デバイスからの承認（無ければ null）
+            string code = Sts.TwoFactorPushProvider.Receive(user.Id);
+
+            if (string.IsNullOrEmpty(code))
+            {
+                // まだ承認されていない
+                return this.Json(new { approved = false });
+            }
+
+            // 承認されたコードでサインインを完了させる。
+            // **検証は、画面から入力された場合と同じ経路を通る**（プロバイダも同じく Email 固定）。
+            AspNetId.SignInResult result = await SignInManager.TwoFactorSignInAsync(
+                    provider: this._2FA_Email,
+                    code: code,
+                    isPersistent: rememberBrowser,
+                    rememberClient: rememberBrowser
+                );
+
+            if (result.Succeeded)
+            {
+                // セッションの初期化
+                this.InitSessionAfterlogin();
+
+                return this.Json(new
+                {
+                    approved = true,
+                    // **戻り先は、ローカルかを確かめてから返す**（RedirectToLocal と同じ判定）。
+                    //   外部のサイトへ誘導されないようにする。
+                    redirectUrl = this.Url.IsLocalUrl(returnUrl)
+                        ? returnUrl : this.Url.Action(nameof(HomeController.Index), "Home")
+                });
+            }
+
+            // 承認はあったが、サインインは成立しなかった（コードの期限切れ、ロックアウトなど）。
+            // 画面は、そのまま手入力での完了を続けられる。
+            return this.Json(new { approved = false });
         }
 
         #endregion

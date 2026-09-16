@@ -39,6 +39,7 @@
 | `/authorize` → `/token` | `Account.OAuth2Authorize` / `OAuth2Endpoint.OAuth2Token` | `Config.OAuth2AuthorizeEndpoint` / `OAuth2TokenEndpoint` |
 | `POST /SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` | `Config.SetDeviceTokenWebAPI` |
 | `POST /ciba_result` | `OAuth2Endpoint.CibaPushResult` | `Config.CibaPushResultEndpoint` |
+| `POST /2fa_result` | `OAuth2Endpoint.TwoFactorPushResult` | `Config.TwoFactorPushResultEndpoint`（net10.0 版のみ。#213） |
 | （宣言のみ・未使用）`/userinfo` | `OAuth2Endpoint.GetUserClaims` | `Config.OAuth2UserInfoEndpoint` |
 
 - **URL は `AppConfig.mpasBaseUrl`（`MPAS_BASE_URL`）＋ 上のパスで組み立てる（#205）。**
@@ -78,11 +79,11 @@ authentication_device/
 │   │   ├─ app.dart                      28 行  ルート定義（/ , /mypage , /message）
 │   │   ├─ appauth_page.dart            267 行  ★サインイン と デバイス トークン登録
 │   │   ├─ web_sign_in.dart             154 行  ★web のサインイン（認可コード + PKCE を自前で実装。#205）
-│   │   ├─ message_view.dart            132 行  ★通知詳細。2FA の code 表示 / CIBA の Allow・Deny
+│   │   ├─ message_view.dart            169 行  ★通知詳細。2FA の code 表示・Approve / CIBA の Allow・Deny
 │   │   └─ fcm_page/{fcm_page,message_list,permissions,token_checker}.dart
 │   ├─ configs/
 │   │   ├─ app_config.dart               17 行  ★接続先（`MPAS_BASE_URL`）
-│   │   ├─ app_auth.dart                 52 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
+│   │   ├─ app_auth.dart                 53 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
 │   │   ├─ app_fcm.dart                  29 行  ★通知チャネル定義 / VAPID キー / Firebase 初期化済みフラグ
 │   │   └─ app_firebase_web.dart         60 行  ★web の Firebase 構成（`FIREBASE_*`）/ service worker のパス（#205）
 │   ├─ common/                                MetaCard / MyDrawer / MyDropdownButton /
@@ -127,7 +128,8 @@ authentication_device/
 
 /mypage (FcmPage)     … 通知の権限状態 と 受信メッセージ一覧
 /message (MessageView)
-   notification.title == "2FA"  → data["code"] を表示するだけ
+   notification.title == "2FA"  → data["code"] を表示し、
+                                  [Approve] → POST /2fa_result (code)   ← #213
    notification.title == "CIBA" → data["binding_message"] / data["auth_req_id"] を表示し、
                                   [Allow] / [Deny] → POST /ciba_result (auth_req_id, result)
 ```
@@ -137,8 +139,12 @@ authentication_device/
   `Extensions/Sts/CibaProvider`）が送るタイトルと一致していないと画面が出ない。
 - **`/SetDeviceToken` の成功判定は `response.body == "\"OK\""`**（コード中のコメントに
   「AuthZ(N)の仕様による」とある）。サーバ側の戻り値を変えるとアプリが壊れる。
-- **2FA は「表示するだけ」。** 送られるのは SMS / メールと同じ確認コードで、利用者は認証サイトの画面に入力する。
-  返答を受ける口（`/TwoFactorAuthPushResult`）は、ルートだけがあってアクションが無かったため削除した（#203）。
+- **2FA で送られるのは、SMS / メールと同じ確認コード。** 画面に手で入力して完了させることもできるが、
+  **[Approve] を押すと、そのコードを `/2fa_result` に送り返して完了させられる（#213）。**
+  **サインインを完了させるのは、待っているブラウザ側である。** 2FA のセッションはブラウザの Cookie にあり、
+  この端末からは触れない。サーバは「誰がどのコードを承認したか」をメモリに記録するだけで、
+  認証サイトの `VerifyCode` 画面が 2 秒ごとに `/Account/TwoFactorPushStatus` を見て、サインインを終わらせる。
+  なお、返答を受ける口としてルートだけがあった `/TwoFactorAuthPushResult` は、アクションが無かったため削除してある（#203）。
 
 ---
 
@@ -212,7 +218,10 @@ authentication_device/
     自己テストの移る先の表記は net48 版だけ違い、`?ret=OK: 正常終了`（それ以外は `OK: 異常終了`）。net10.0 版は `OK_NORMAL_END` / `OK_ABNORMAL_END`
   - **PWA としてインストールした状態でも、サインイン・CIBA（フォアグラウンド / バックグラウンド）が動いた**（`build/web` を配信して確認）。
     サインインは同じウィンドウ内で認証サイトの画面が開き、戻ってきた。通知のクリックでは、ブラウザのタブではなく**アプリのウィンドウ**が開いた
-- **web でまだ確かめていないこと:** HTTPS での配信（PWA としてのインストール）
+  - **2FA のプッシュ承認（#213。2026-09-16）: `MobileApp` を選ぶ → コードの入力画面が待ち受ける → 認証デバイスの [Approve] で、手で入力せずにサインインが完了した。**
+    **PWA としてインストールした状態で確認した**（手順は `CHEATSHEET.md` 9 節）。サーバ側の `/2fa_result` の失敗（401 / 400）は E2E で測っている（`RT-213.1`）
+- **web でまだ確かめていないこと:** HTTPS での配信（#211。スマートフォンから使うために要る。
+  `http://localhost` は安全なコンテキスト扱いなので、PC でのインストールと Web Push はこれ無しで動いている）
 - `firebase_web.json` を渡さないときは、Firebase を初期化せずに起動する（プッシュは使えない）。
 
 **Android の実機での動作は、#209 以降は確認していない**（6 節）。
@@ -232,7 +241,7 @@ authentication_device/
    既定は `https://localhost:44300` なので、Android の実機では、届く URL を書いたファイルを渡す。
 5. **通知の種別判定が `title` の文字列一致**（4 節）。サーバ側の文言を変えると黙って壊れる。
 6. **`/SetDeviceToken` の成功判定が `"\"OK\""` の完全一致**（4 節）。
-7. **2FA は確認コードを表示するだけ**（4 節）。承認して完了させる仕組みは無い（`/TwoFactorAuthPushResult` は #203 で削除）。
+7. **2FA の [Approve] は net10.0 版だけで動く**（4 節）。net48 版には `MobileApp` の 2FA プロバイダ自体が無く、`/2fa_result` も無い（#213）。押しても 404 になる。
 8. **`AppAuth.userinfoEndpoint` は宣言されているが呼ばれていない。**
 9. **`TokenChecker` は使われていない。** `fcm_page.dart` で `MetaCard('FCM Token', ...)` ごと
    コメント アウトされている。

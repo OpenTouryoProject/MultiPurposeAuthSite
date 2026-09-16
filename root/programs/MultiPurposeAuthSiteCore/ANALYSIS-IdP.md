@@ -68,7 +68,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
 | | ID フェデレーション（他 IdP への委譲） | ✓ | |
-| | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | |
+| | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は net10.0 版のみ（#213） |
 
 **未実装**は 5 節にまとめた。
 
@@ -441,7 +441,7 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 >   **（a）`ReceiveResult` が `auth_req_id` を見ず、保留中の全要求へ結果を書き込んでいた**（E2E : `EX-8.3`）。
 >   **（b）`ReceiveTokenReq` が、一致したものとは別の保留要求を削除しうる状態だった**（ループ変数の取り残し）。
 >   E2E : `EX-8.3` / `EX-8.4`（別の利用者は承認できない。#212 で Skip を解消）
-> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無かった → **✅ 削除済み（#203）**
+> - `TwoFactorAuthPushResult` は、ルートだけが登録され、両アプリともアクションが無かった → **✅ 削除済み（#203）**。その後、**プッシュでの 2FA 承認そのものを `/2fa_result` として実装した（#213。net10.0 版のみ）**
 > - `Authorization: Bearer`（方式だけで値が無い）で HTTP 500 になる
 >   （Open棟梁 の `AuthenticationHeader.GetCredentials` が `temp[1]` を確かめずに読む）
 >   → Open棟梁 の #586。`RT-196.5` で観測している

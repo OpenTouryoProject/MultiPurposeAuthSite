@@ -37,6 +37,7 @@
 //*  2026/09/12  玄人 幸道         /SetDeviceToken・/ciba_result（RT-196.19 〜 196.20）を追加（#196 の 7 つ目）
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-196）
 //*  2026/09/16  玄人 幸道         /ciba_authz の端末未登録（RT-210.1）を追加（#210）
+//*  2026/09/16  玄人 幸道         /2fa_result の失敗（RT-213.1）を追加（#213）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -1114,6 +1115,57 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("送信そのものの失敗（server_error）は、E2E では測れない。"
                     + "test.ps1 -Launch は送信箱を使い、FcmService は宛先を検証せずファイルに書くため。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-213.1 /2fa_result の失敗</summary>
+        /// <param name="targetKey">core</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **net10.0 版のみ。** プッシュ（MobileApp）の 2FA プロバイダは net10.0 版にしかなく、
+        /// net48 版には /2fa_result も無い（#213）。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(CoreOnly))]
+        public async Task RT213_01_2fa_resultの失敗は400と401(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-213.1",
+                    "/2fa_result : 失敗は本文 NG のまま、トークンの不備は HTTP 401、コードの不備は 400",
+                    "認証デバイスが、プッシュ通知で受け取った 2FA のコードを送り返す口（#213）。"
+                    + "**合わないコードを記録させない**のが要点で、コードは保存する前に検証する。"
+                    + "存在を推測させないよう、合わないコードは「コードが無い」と同じ 400 ＋ NG で返す。",
+                    "RFC 6750 §3 / #213");
+
+                r.Target(client.Target.DisplayName + " / ユーザのトークンは認可コード フローで得る");
+                r.Note("成功（200 と OK）は E2E では測れない。"
+                    + "2FA を有効にした利用者のコードが要るが、共用のテスト ユーザで 2FA を有効にすると"
+                    + "他の全テストのサインインが変わるため。成功経路は手で確かめる（CHEATSHEET.md）。");
+
+                r.Step("(1) Authorization ヘッダを付けずに送る");
+
+                VerifyNG(r, "トークンなし", await client.TwoFactorPushResultAsync(null, "123456"), 401, null);
+
+                r.Step("(2) 無効なトークンで送る");
+
+                VerifyNG(r, "無効なトークン",
+                    await client.TwoFactorPushResultAsync("NOT-A-REAL-TOKEN", "123456"), 401, "invalid_token");
+
+                JsonResponse token = await Flows.RunAuthorizationCodeFlowAsync(client);
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: access_token が返ること");
+
+                r.Step("(3) ユーザの有効なトークンで、code を付けずに送る");
+
+                VerifyNG(r, "code なし", await client.TwoFactorPushResultAsync(token.AccessToken, null), 400, null);
+
+                r.Step("(4) ユーザの有効なトークンで、合わない code を送る");
+
+                VerifyNG(r, "合わない code",
+                    await client.TwoFactorPushResultAsync(token.AccessToken, "000000"), 400, null);
 
                 r.Done();
             }

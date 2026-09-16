@@ -31,6 +31,8 @@ class AppAuth {
   static const String userinfoEndpoint = "${AppConfig.mpasBaseUrl}/userinfo";
   static const String setDeviceTokenEndpoint = "${AppConfig.mpasBaseUrl}/SetDeviceToken";
   static const String cibaPushResultEndpoint = "${AppConfig.mpasBaseUrl}/ciba_result";
+  // 2FA のプッシュ承認（#213）。受け取ったコードを送り返す。
+  static const String twoFactorPushResultEndpoint = "${AppConfig.mpasBaseUrl}/2fa_result";
   static const String discoveryUrl =
     "${AppConfig.mpasBaseUrl}/.well-known/openid-configuration";
 

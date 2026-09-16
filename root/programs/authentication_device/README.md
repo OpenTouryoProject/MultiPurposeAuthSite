@@ -1,7 +1,7 @@
 Click [here](Readme.ja.md) for Japanese version of this file.
 
 # How to use
-Step-by-step procedures (settings files, starting the sites, trying CIBA) are in [CHEATSHEET.md](CHEATSHEET.md) (Japanese).
+Step-by-step procedures (settings files, starting the sites, trying CIBA and 2FA push approval) are in [CHEATSHEET.md](CHEATSHEET.md) (Japanese).
 
 ## Settings
 Values that differ by environment are passed with `--dart-define-from-file`, not written in the source.

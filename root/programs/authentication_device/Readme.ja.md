@@ -1,7 +1,7 @@
 ﻿このファイルの英語版は[こちら](README.md)から。
 
 # 使い方
-手順（設定ファイル、サイトの起動、CIBA の確かめ方）は [CHEATSHEET.md](CHEATSHEET.md) にまとめてあります。
+手順（設定ファイル、サイトの起動、CIBA と 2FA のプッシュ承認の確かめ方）は [CHEATSHEET.md](CHEATSHEET.md) にまとめてあります。
 
 ## 設定
 環境によって変わる値は、ソースに書かず、`--dart-define-from-file` で渡します。

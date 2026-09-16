@@ -38,6 +38,7 @@
 //*  2026/09/11  玄人 幸道         /device_authz を client_secret_basic で呼ぶ DeviceAuthorizationWithBasicAuthAsync を追加（#196）
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
 //*  2026/09/12  玄人 幸道         Authorization ヘッダ付きの POST を一般化し、認証デバイスの代わりの要求（/SetDeviceToken・/ciba_result）を追加（#196）
+//*  2026/09/16  玄人 幸道         /2fa_result を呼ぶ TwoFactorPushResultAsync を追加（#213）
 //**********************************************************************************
 
 using System;
@@ -708,6 +709,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             return this.PostJsonWithAuthorizationAsync("/ciba_result",
                 new Dictionary<string, string>() { { "auth_req_id", authReqId }, { "result", result } },
+                accessToken == null ? null : "Bearer " + accessToken);
+        }
+
+        /// <summary>
+        /// 2FA のプッシュ承認を送る（POST /2fa_result）。
+        /// 認証デバイスが、プッシュ通知で受け取ったコードを送り返すときと同じ形（#213）。
+        /// </summary>
+        /// <param name="accessToken">ユーザのアクセス トークン（null なら Authorization ヘッダを付けない）</param>
+        /// <param name="code">2FA のコード（プッシュ通知の data にある。null なら送らない）</param>
+        /// <returns>JsonResponse（本文は "OK" / "NG"）</returns>
+        public Task<JsonResponse> TwoFactorPushResultAsync(string accessToken, string code)
+        {
+            return this.PostJsonWithAuthorizationAsync("/2fa_result",
+                new Dictionary<string, string>() { { "code", code } },
                 accessToken == null ? null : "Bearer " + accessToken);
         }
 
