@@ -38,6 +38,7 @@
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-196）
 //*  2026/09/16  玄人 幸道         /ciba_authz の端末未登録（RT-210.1）を追加（#210）
 //*  2026/09/16  玄人 幸道         /2fa_result の失敗（RT-213.1）を追加（#213）
+//*  2026/09/16  玄人 幸道         RT-213.1 を net48 版でも測る（#216）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -1121,14 +1122,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         }
 
         /// <summary>RT-213.1 /2fa_result の失敗</summary>
-        /// <param name="targetKey">core</param>
+        /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         /// <remarks>
-        /// **net10.0 版のみ。** プッシュ（MobileApp）の 2FA プロバイダは net10.0 版にしかなく、
-        /// net48 版には /2fa_result も無い（#213）。
+        /// **両方で測る。** net48 版にも MobileApp の 2FA プロバイダと /2fa_result を足した（#216）。
+        /// コードを検証するプロバイダの名前は版によって違う（net10.0 : Email、net48 : MobileApp）が、
+        /// **外から見える振る舞い（401 / 400 と本文 NG）は同じ。**
         /// </remarks>
         [SkippableTheory]
-        [MemberData(nameof(CoreOnly))]
+        [MemberData(nameof(AllTargets))]
         public async Task RT213_01_2fa_resultの失敗は400と401(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))

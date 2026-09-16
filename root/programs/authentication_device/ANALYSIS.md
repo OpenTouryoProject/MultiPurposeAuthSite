@@ -39,7 +39,7 @@
 | `/authorize` → `/token` | `Account.OAuth2Authorize` / `OAuth2Endpoint.OAuth2Token` | `Config.OAuth2AuthorizeEndpoint` / `OAuth2TokenEndpoint` |
 | `POST /SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` | `Config.SetDeviceTokenWebAPI` |
 | `POST /ciba_result` | `OAuth2Endpoint.CibaPushResult` | `Config.CibaPushResultEndpoint` |
-| `POST /2fa_result` | `OAuth2Endpoint.TwoFactorPushResult` | `Config.TwoFactorPushResultEndpoint`（net10.0 版のみ。#213） |
+| `POST /2fa_result` | `OAuth2Endpoint.TwoFactorPushResult` | `Config.TwoFactorPushResultEndpoint`（#213 / net48 版は #216） |
 | （宣言のみ・未使用）`/userinfo` | `OAuth2Endpoint.GetUserClaims` | `Config.OAuth2UserInfoEndpoint` |
 
 - **URL は `AppConfig.mpasBaseUrl`（`MPAS_BASE_URL`）＋ 上のパスで組み立てる（#205）。**
@@ -241,7 +241,7 @@ authentication_device/
    既定は `https://localhost:44300` なので、Android の実機では、届く URL を書いたファイルを渡す。
 5. **通知の種別判定が `title` の文字列一致**（4 節）。サーバ側の文言を変えると黙って壊れる。
 6. **`/SetDeviceToken` の成功判定が `"\"OK\""` の完全一致**（4 節）。
-7. **2FA の [Approve] は net10.0 版だけで動く**（4 節）。net48 版には `MobileApp` の 2FA プロバイダ自体が無く、`/2fa_result` も無い（#213）。押しても 404 になる。
+7. **2FA の [Approve] は、両方の版で動く**（4 節）。**コードを検証するプロバイダの名前だけが版で違う**（net10.0 : `Email`、net48 : `MobileApp`）。アプリから見た振る舞い（`POST /2fa_result` に `code` を送る）は同じ（#213 / #216）。
 8. **`AppAuth.userinfoEndpoint` は宣言されているが呼ばれていない。**
 9. **`TokenChecker` は使われていない。** `fcm_page.dart` で `MetaCard('FCM Token', ...)` ごと
    コメント アウトされている。

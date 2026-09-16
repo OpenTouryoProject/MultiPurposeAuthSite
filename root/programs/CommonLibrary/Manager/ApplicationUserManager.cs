@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/09/16  玄人 幸道         MobileApp（プッシュ通知）の2FAプロバイダを登録（#216）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Entity;
@@ -150,6 +151,16 @@ namespace MultiPurposeAuthSite.Manager
             });
 
             manager.EmailService = new EmailService();
+
+            #endregion
+
+            #region MobileApp（プッシュ通知の 2FA。#216）
+
+            // **端末を登録している利用者にだけ、選択肢として出る**
+            //   （MobileAppTokenProvider.IsValidProviderForUserAsync が DeviceToken を見る）。
+            // コードの生成と検証は、メール / SMS と同じ仕組みに任せ、送り先だけを変える。
+            manager.RegisterTwoFactorProvider(
+                MobileAppTokenProvider.ProviderName, new MobileAppTokenProvider());
 
             #endregion
 

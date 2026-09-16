@@ -297,7 +297,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 | 機能 | net10.0（本ディレクトリ） | net48（`../MultiPurposeAuthSite`） |
 |---|---|---|
 | TOTP（Authenticator アプリ 2FA） | **✓ あり**（`EnableTwoFactorAuthenticator` / リカバリ コード / `ManageTwoFactorAuthenticator`） | ✗ 無し |
-| プッシュ 2FA（`MobileApp`） | **✓ あり**（`SendCode` の選択肢 ＋ `/2fa_result` ＋ `VerifyCode` の待ち受け。#213） | ✗ 無し（プロバイダ自体が無い） |
+| プッシュ 2FA（`MobileApp`） | ✓ あり（`SendCode` の中で一覧に足し、コードは `Email` で作る。#213） | ✓ あり（**2FAプロバイダとして登録**する。`Manager/MobileAppTokenProvider`。#216） |
 | ユーザ・ロール管理画面 | **✗ 無し**（`Config.EnableAdministrationOfUsersAndRoles` を読む Controller が無い） | ✓ `UsersAdminController` / `RolesAdminController` |
 | FIDO2 サーバ用 WebAPI | ✗ 無し | △ `Fido2ServerController.cs` は在るが**ビルド対象外** |
 | 疎通用 WebAPI | ✓ `ValuesController` | ✗ |
