@@ -117,11 +117,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// サインイン済みのクライアントを返す。
         /// </summary>
         /// <param name="targetKey">core / netfx</param>
+        /// <param name="userName">サインインする利用者（null ならテスト ユーザ）</param>
         /// <returns>IdPClient</returns>
-        protected async Task<IdPClient> SignedInClientAsync(string targetKey)
+        protected async Task<IdPClient> SignedInClientAsync(string targetKey, string userName = null)
         {
             IdPClient client = this.Client(targetKey);
-            await client.SignInAsync();
+            await client.SignInAsync(userName);
             return client;
         }
     }

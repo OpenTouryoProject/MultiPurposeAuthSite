@@ -330,11 +330,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         #region サインイン
 
         /// <summary>
-        /// テスト ユーザでサインインする。
-        /// UserStoreType=mem のとき、テスト ユーザは初回アクセスで作成される。
+        /// 指定した利用者でサインインする（省略時はテスト ユーザ）。
+        /// UserStoreType=mem のとき、利用者は初回アクセスで作成される。
+        ///
+        /// **2 人目の利用者も、同じパスワード（TestUserPWD）で作られる。**
+        /// 認証サイトは IsDebug のとき super_tanaka@gmail.com と tanaka@gmail.com を作る
+        /// （AccountController の CreateData）。EX-8.4 は、その 2 人目を使う。
         /// </summary>
+        /// <param name="userName">サインインする利用者（null ならテスト ユーザ）</param>
         /// <returns>Task</returns>
-        public async Task SignInAsync()
+        public async Task SignInAsync(string userName = null)
         {
             if (this.IsSignedIn)
             {
@@ -355,7 +360,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             Dictionary<string, string> form = new Dictionary<string, string>()
             {
                 { "__RequestVerificationToken", m.Groups["value"].Value },
-                { "Email", TestEnv.TestUserName },
+                { "Email", userName ?? TestEnv.TestUserName },
                 { "Password", this.Config.Get("TestUserPWD") },
                 { "RememberMe", "false" },
                 { "submitButtonName", "normal_signin" }
@@ -370,6 +375,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 throw new InvalidOperationException(
                     "サインインに失敗しました（HTTP " + (int)post.StatusCode
+                    + "、利用者 " + (userName ?? TestEnv.TestUserName)
                     + "）。TestUserPWD と testUserName を確認してください。");
             }
 

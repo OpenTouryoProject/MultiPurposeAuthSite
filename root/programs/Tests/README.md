@@ -142,6 +142,25 @@ OAuth2ClientEndpointsRootURI
 `UserStoreType` の既定は `mem`。テスト ユーザは初回アクセスで作られ、
 再起動で消えるので、テストの前後で状態を掃除する必要が無い。
 
+### 利用者は 2 人いる
+
+認証サイトは `IsDebug` のとき、**同じ `TestUserPWD` で 2 人**作る（`AccountController` の `CreateData`）。
+
+| 利用者 | 使い道 |
+|---|---|
+| `super_tanaka@gmail.com`（`TestEnv.TestUserName`） | 既定。`SignedInClientAsync` が何も指定しなければこちら |
+| `tanaka@gmail.com`（`TestEnv.SecondUserName`） | 「別の利用者」が要るとき（`EX-8.4`）と、「端末が無い利用者」が要るとき（`RT-210.1`） |
+
+別の利用者でサインインするには、利用者名を渡す。
+
+```csharp
+using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.SecondUserName))
+```
+
+> **2 人目には、端末（`device_token`）を登録しないこと。**
+> `RT-210.1`（#210）が「端末が登録されていない利用者」として使っているため、
+> 登録すると、実行順によってそのテストが失敗するようになる。
+
 **`sql` / `ora` / `npg` に切り替えられる**（`test.ps1 -UserStoreType`、#207）。
 設定ファイルは書き換えず、環境変数で上書きする（`FxContainerization=ON` のため、
 `GetConfigValue` と `GetConnectionString` のどちらも環境変数が優先される）。
