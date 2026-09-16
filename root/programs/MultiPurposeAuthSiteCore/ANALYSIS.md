@@ -28,7 +28,7 @@ SAML2 の IdP でもある。
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `.cs` 10 ファイル / 約 11,300 行、`.cshtml` 57 件。
+規模の目安: `.cs` 10 ファイル / 約 11,600 行、`.cshtml` 57 件。
 
 ---
 
@@ -112,14 +112,14 @@ MultiPurposeAuthSiteCore/
    ├─ Program.cs        … エントリポイント。OAuth2AndOIDCClient.HttpClient を差し込む
    ├─ Startup.cs        … DI 登録・パイプライン・ルーティング（494 行）
    ├─ Controllers/
-   │   ├─ AccountController.cs          4402 行  サインイン/アップ、2FA、外部ログイン、
+   │   ├─ AccountController.cs          4594 行  サインイン/アップ、2FA、外部ログイン、
    │   │                                          ID 連携、SAML2/OAuth2 の認可エンドポイント
-   │   ├─ ManageController.cs           3262 行  ユーザ属性・2FA・決済情報・GDPR
-   │   ├─ HomeController.cs             1442 行  ★テスト用クライアント（Starters）
-   │   ├─ OAuth2EndpointController.cs   1179 行  token / userinfo / revoke / introspect /
+   │   ├─ ManageController.cs           3263 行  ユーザ属性・2FA・決済情報・GDPR
+   │   ├─ HomeController.cs             1440 行  ★テスト用クライアント（Starters）
+   │   ├─ OAuth2EndpointController.cs   1343 行  token / userinfo / revoke / introspect /
    │   │                                          jwkcerts / ros / device_authz / ciba_* /
    │   │                                          .well-known / samlmetadata
-   │   ├─ OAuth2ResourceServerController.cs 222 行  リソース サーバ側の疎通用 WebAPI
+   │   ├─ OAuth2ResourceServerController.cs 223 行  リソース サーバ側の疎通用 WebAPI
    │   ├─ ErrorController.cs             85 行
    │   ├─ PingController.cs              54 行  死活監視
    │   └─ ValuesController.cs            58 行  疎通確認（`api/values/get`）

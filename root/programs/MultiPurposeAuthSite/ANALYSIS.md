@@ -25,7 +25,7 @@ Contributing.ja.md の「下位互換は高く維持し、破壊的な変更は�
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `.cs` 18 ファイル / 約 12,800 行、`.cshtml` 60 件。
+規模の目安: `.cs` 18 ファイル / 約 13,200 行、`.cshtml` 60 件。
 
 ---
 
@@ -105,21 +105,21 @@ MultiPurposeAuthSite/
    ├─ Global.asax(.cs)                349 行  Application_Error で ACCESS ログ、性能測定
    ├─ Startup.cs                       65 行  OWIN のエントリ（StartupAuth.Configure を呼ぶ）
    ├─ App_Start/
-   │   ├─ StartupAuth.cs              373 行  ★OWIN 認証ミドルウェアの設定
-   │   ├─ WebApiConfig.cs             177 行  Web API のルーティング
-   │   ├─ RouteConfig.cs               83 行  MVC のルーティング
-   │   ├─ BundleConfig.cs              90 行  バンドル＆ミニフィケーション
-   │   └─ FilterConfig.cs              49 行
+   │   ├─ StartupAuth.cs              468 行  ★OWIN 認証ミドルウェアの設定
+   │   ├─ WebApiConfig.cs             179 行  Web API のルーティング
+   │   ├─ RouteConfig.cs               84 行  MVC のルーティング
+   │   ├─ BundleConfig.cs              91 行  バンドル＆ミニフィケーション
+   │   └─ FilterConfig.cs              50 行
    ├─ Controllers/
-   │   ├─ AccountController.cs        4145 行
-   │   ├─ ManageController.cs         2971 行
-   │   ├─ HomeController.cs           1450 行  ★テスト用クライアント（Starters）
-   │   ├─ OAuth2EndpointController.cs 1163 行
-   │   ├─ UsersAdminController.cs      596 行  ★net48 のみ
-   │   ├─ RolesAdminController.cs      431 行  ★net48 のみ
-   │   ├─ Fido2ServerController.cs     260 行  ★ファイルは在るがビルド対象外（10 節）
+   │   ├─ AccountController.cs        4330 行
+   │   ├─ ManageController.cs         2981 行
+   │   ├─ HomeController.cs           1448 行  ★テスト用クライアント（Starters）
+   │   ├─ OAuth2EndpointController.cs 1332 行
+   │   ├─ UsersAdminController.cs      597 行  ★net48 のみ
+   │   ├─ RolesAdminController.cs      432 行  ★net48 のみ
+   │   ├─ Fido2ServerController.cs     261 行  ★ファイルは在るがビルド対象外（10 節）
    │   ├─ ErrorController.cs           232 行
-   │   ├─ OAuth2ResourceServerController.cs 202 行
+   │   ├─ OAuth2ResourceServerController.cs 203 行
    │   └─ PingController.cs             56 行
    ├─ Views/{Account,Manage,Home,UsersAdmin,RolesAdmin,Error,Shared}/*.cshtml
    ├─ Content/ Scripts/ fonts/ images/  … NuGet で入る静的ファイル（リポジトリに直接格納）

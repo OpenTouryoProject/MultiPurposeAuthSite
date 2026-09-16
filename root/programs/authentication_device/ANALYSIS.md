@@ -27,7 +27,7 @@
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `lib/` の `.dart` 20 ファイル / 約 1280 行。
+規模の目安: `lib/` の `.dart` 21 ファイル / 約 1380 行。
 
 ---
 
@@ -77,13 +77,14 @@ authentication_device/
 │   ├─ components/
 │   │   ├─ importer.dart                      ★共通 export（各ファイルはこれ 1 本を import する）
 │   │   ├─ app.dart                      28 行  ルート定義（/ , /mypage , /message）
-│   │   ├─ appauth_page.dart            267 行  ★サインイン と デバイス トークン登録
+│   │   ├─ appauth_page.dart            278 行  ★サインイン と デバイス トークン登録
 │   │   ├─ web_sign_in.dart             154 行  ★web のサインイン（認可コード + PKCE を自前で実装。#205）
-│   │   ├─ message_view.dart            169 行  ★通知詳細。2FA の code 表示・Approve / CIBA の Allow・Deny
+│   │   ├─ message_view.dart            170 行  ★通知詳細。2FA の code 表示・Approve / CIBA の Allow・Deny
+│   │   ├─ web_push_click.dart           46 行  ★OS の通知のクリックで開かれたときの受け取り（URL のクエリ。#205）
 │   │   └─ fcm_page/{fcm_page,message_list,permissions,token_checker}.dart
 │   ├─ configs/
 │   │   ├─ app_config.dart               17 行  ★接続先（`MPAS_BASE_URL`）
-│   │   ├─ app_auth.dart                 53 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
+│   │   ├─ app_auth.dart                 54 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
 │   │   ├─ app_fcm.dart                  29 行  ★通知チャネル定義 / VAPID キー / Firebase 初期化済みフラグ
 │   │   └─ app_firebase_web.dart         60 行  ★web の Firebase 構成（`FIREBASE_*`）/ service worker のパス（#205）
 │   ├─ common/                                MetaCard / MyDrawer / MyDropdownButton /
