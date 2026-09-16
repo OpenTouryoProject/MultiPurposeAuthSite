@@ -173,21 +173,30 @@ $env:OAuth2ClientEndpointsRootURI = 'https://localhost:44302'
 
 ### 認証デバイス
 
+**接続先は 2 つある。** net10.0 版なら `mpas.core.json`、net48 版なら `mpas.netfx.json` に差し替える（6 節）。
+
 ```powershell
 cd root\programs\authentication_device
 
-# web（サインイン ＋ プッシュ）
+# (a) 画面を作りながら動かす（ホット リロードが効く）
 flutter run -d chrome --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
 
-# web のビルド
+# (b) 通知まで確かめる（普段の Chrome で開く。**OS の通知のクリックはこちらでしか動かない**。8 節）
+flutter run -d web-server --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
+
+# (c) PWA としてインストールして確かめる（manifest が要るので、ビルドした出力を配信する。8 節）
 flutter build web --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
+cd build\web
+python -m http.server 5610
 
 # Android（Android SDK が要る）
 flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.json
 ```
 
 - **`--web-port 5610` は必須。** 認証サイトは `redirect_uri` を登録値（`http://localhost:5610/`）と完全一致で照合する
-- **`--dart-define-from-file` の値は、ホット リロードでは変わらない。** ファイルを変えたら `flutter run` をやり直す
+- **(a) では OS の通知のクリックが動かない**（`flutter run -d chrome` が起動する一時プロファイルの Chrome のため。8 節）
+- **接続先を切り替えたら、ブラウザ側も消す**（7 節「接続先を切り替えたら」）
+- **`--dart-define-from-file` の値は、ホット リロードでは変わらない。** ファイルを変えたら起動し直す
 - **認可画面へ移ると、`flutter run` のターミナルとの接続が切れる。** 戻った後のログは Chrome の DevTools（F12 → Console）で見る
 
 ## 6. 組み合わせ早見表
