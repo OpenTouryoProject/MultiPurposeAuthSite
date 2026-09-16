@@ -207,7 +207,8 @@ authentication_device/
 - `ios/Runner/Info.plist` に **`CFBundleURLTypes`（カスタム URL スキーム）の定義が無い。**
   このままでは AppAuth のリダイレクトが戻ってこない。
 - iOS 側の Firebase 構成ファイル（`GoogleService-Info.plist`）も無い。
-- **web は #205 で対応中。** net10.0 版に対して確認できていること（2026-09-14）:
+- **web（PWA）は #205 で対応済み**（PC まで。スマートフォン向けの HTTPS 配信は #211 に分けた）。
+  **両系統（net10.0 / net48）で実測した**内容は次のとおり（2026-09-14 〜 09-17）:
   - Firebase の web 構成（`firebase_web.json`）での初期化と、FCM トークンの取得
   - サインイン（認可コード ＋ PKCE を自前で実装。`web_sign_in.dart`。`client_secret` なしで交換できた）
   - `/SetDeviceToken` での端末の登録と、`/mypage` への遷移
