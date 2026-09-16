@@ -56,6 +56,8 @@
 //*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
 //*  2026/09/13  玄人 幸道         CIBAの返答に所有者確認を追加。メモリ ストアの取り違えも修正
 //*  2026/09/16  玄人 幸道         /ciba_authz : 端末未登録・FCM送信失敗を JSON のエラー応答にする（#210）
+//*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）を追加（#216）
+//*  2026/09/17  玄人 幸道         /ciba_authz : プッシュ通知の送信失敗の原因を、ACCESSログに残す（#210）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -66,6 +68,7 @@ using MultiPurposeAuthSite.Util;
 using Token = MultiPurposeAuthSite.TokenProviders;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
 using MultiPurposeAuthSite.Notifications;
+using MultiPurposeAuthSite.Log;
 
 using System;
 using System.IO;
@@ -818,8 +821,12 @@ namespace MultiPurposeAuthSite.Controllers
                                             { OAuth2AndOIDCConst.binding_message, binding_message}
                                         });
                                 }
-                                catch (Exception)
+                                catch (Exception ex)
                                 {
+                                    // **原因は、記録に残す。** 例外を受け止めると、
+                                    //   これまで OnException が ACCESS ログに書いていた内容が失われるため。
+                                    Logging.MyDebugLogForEx(ex);
+
                                     // 資格情報の誤り、宛先の拒否、通信障害など。
                                     // **ここで返す。** 後続は成功のレスポンス（200 と auth_req_id）で、
                                     // err を見ないため、設定するだけでは成功として返ってしまう。
@@ -1182,6 +1189,76 @@ namespace MultiPurposeAuthSite.Controllers
 
             // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）（#196 : 401）
             return this.NGResult(401, "SetDeviceToken", OAuth2AndOIDCConst.invalid_token);
+        }
+
+        /// <summary>
+        /// 2FAのプッシュ承認を受信
+        /// POST: /2fa_result
+        /// </summary>
+        /// <param name="formData">code</param>
+        /// <returns>
+        /// 成功は 200 と "OK"。失敗は本文 "NG" のまま、
+        /// トークンの不備は 401（WWW-Authenticate: Bearer）、コードの不備は 400（#216）
+        /// </returns>
+        /// <remarks>
+        /// 認証デバイス（authentication_device）が、プッシュ通知で受け取った 2FA のコードを送り返す。
+        /// **ブラウザの 2FA セッションは Cookie にあり、端末からは触れない**ので、
+        /// ここでは「誰がどのコードを承認したか」を記録するだけ。
+        /// サインインを完了させるのは、待っているブラウザ側（Account/TwoFactorPushStatus）。
+        ///
+        /// net10.0 版（#213）との違いは、コードを作ったプロバイダの名前だけ。
+        /// net48 版は MobileApp のプロバイダを登録しているので、それで検証する。
+        /// </remarks>
+        [HttpPost]
+        public async Task<IHttpActionResult> TwoFactorPushResult(FormDataCollection formData)
+        {
+            // クライアント認証（Bearer トークン）
+            if (!AuthenticationHeader.GetCredentials(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization], out string bearerToken))
+            {
+                // トークンが無い（RFC 6750 3.1 : エラー コードを付けない）
+                return this.NGResult(401, "2fa_result", null);
+            }
+
+            ApplicationUser user = null;
+
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            {
+                // ClientIdの取り出し
+                Claim ClientId = identity.Claims.Where(
+                    x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
+
+                user = PPIDExtension.GetUserFromSub(ClientId.Value, identity.Name);
+            }
+
+            if (user == null)
+            {
+                // 無効なトークン、またはユーザの無いトークン（RFC 6750 3.1 : invalid_token）
+                return this.NGResult(401, "2fa_result", OAuth2AndOIDCConst.invalid_token);
+            }
+
+            string code = (formData == null) ? null : (string)formData["code"];
+
+            if (string.IsNullOrEmpty(code))
+            {
+                // パラメタの不備
+                return this.NGResult(400, "2fa_result", null);
+            }
+
+            // **保存する前に、そのコードがこの利用者のものかを確かめる。**
+            //   他人のコードや、期限切れ・でたらめなコードを記録させないため。
+            //   プロバイダは、送信時（MobileAppTokenProvider）と揃える。
+            if (!await UserManager.VerifyTwoFactorTokenAsync(
+                user.Id, MobileAppTokenProvider.ProviderName, code))
+            {
+                // 合わないコード（存在を推測させないよう、パラメタの不備と同じ応答にする）
+                return this.NGResult(400, "2fa_result", null);
+            }
+
+            // 承認を記録する（待っているブラウザが拾う）
+            Sts.TwoFactorPushProvider.Create(user.Id, code);
+
+            return this.Ok("OK");
         }
 
         #endregion

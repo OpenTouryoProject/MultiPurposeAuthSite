@@ -27,7 +27,7 @@
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `lib/` の `.dart` 20 ファイル / 約 1280 行。
+規模の目安: `lib/` の `.dart` 21 ファイル / 約 1380 行。
 
 ---
 
@@ -39,7 +39,7 @@
 | `/authorize` → `/token` | `Account.OAuth2Authorize` / `OAuth2Endpoint.OAuth2Token` | `Config.OAuth2AuthorizeEndpoint` / `OAuth2TokenEndpoint` |
 | `POST /SetDeviceToken` | `OAuth2Endpoint.SetDeviceToken` | `Config.SetDeviceTokenWebAPI` |
 | `POST /ciba_result` | `OAuth2Endpoint.CibaPushResult` | `Config.CibaPushResultEndpoint` |
-| `POST /2fa_result` | `OAuth2Endpoint.TwoFactorPushResult` | `Config.TwoFactorPushResultEndpoint`（net10.0 版のみ。#213） |
+| `POST /2fa_result` | `OAuth2Endpoint.TwoFactorPushResult` | `Config.TwoFactorPushResultEndpoint`（#213 / net48 版は #216） |
 | （宣言のみ・未使用）`/userinfo` | `OAuth2Endpoint.GetUserClaims` | `Config.OAuth2UserInfoEndpoint` |
 
 - **URL は `AppConfig.mpasBaseUrl`（`MPAS_BASE_URL`）＋ 上のパスで組み立てる（#205）。**
@@ -77,13 +77,14 @@ authentication_device/
 │   ├─ components/
 │   │   ├─ importer.dart                      ★共通 export（各ファイルはこれ 1 本を import する）
 │   │   ├─ app.dart                      28 行  ルート定義（/ , /mypage , /message）
-│   │   ├─ appauth_page.dart            267 行  ★サインイン と デバイス トークン登録
+│   │   ├─ appauth_page.dart            278 行  ★サインイン と デバイス トークン登録
 │   │   ├─ web_sign_in.dart             154 行  ★web のサインイン（認可コード + PKCE を自前で実装。#205）
-│   │   ├─ message_view.dart            169 行  ★通知詳細。2FA の code 表示・Approve / CIBA の Allow・Deny
+│   │   ├─ message_view.dart            170 行  ★通知詳細。2FA の code 表示・Approve / CIBA の Allow・Deny
+│   │   ├─ web_push_click.dart           46 行  ★OS の通知のクリックで開かれたときの受け取り（URL のクエリ。#205）
 │   │   └─ fcm_page/{fcm_page,message_list,permissions,token_checker}.dart
 │   ├─ configs/
 │   │   ├─ app_config.dart               17 行  ★接続先（`MPAS_BASE_URL`）
-│   │   ├─ app_auth.dart                 53 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
+│   │   ├─ app_auth.dart                 54 行  ★client_id / redirect_uri / 各エンドポイント / トークン永続化
 │   │   ├─ app_fcm.dart                  29 行  ★通知チャネル定義 / VAPID キー / Firebase 初期化済みフラグ
 │   │   └─ app_firebase_web.dart         60 行  ★web の Firebase 構成（`FIREBASE_*`）/ service worker のパス（#205）
 │   ├─ common/                                MetaCard / MyDrawer / MyDropdownButton /
@@ -206,7 +207,8 @@ authentication_device/
 - `ios/Runner/Info.plist` に **`CFBundleURLTypes`（カスタム URL スキーム）の定義が無い。**
   このままでは AppAuth のリダイレクトが戻ってこない。
 - iOS 側の Firebase 構成ファイル（`GoogleService-Info.plist`）も無い。
-- **web は #205 で対応中。** net10.0 版に対して確認できていること（2026-09-14）:
+- **web（PWA）は #205 で対応済み**（PC まで。スマートフォン向けの HTTPS 配信は #211 に分けた）。
+  **両系統（net10.0 / net48）で実測した**内容は次のとおり（2026-09-14 〜 09-17）:
   - Firebase の web 構成（`firebase_web.json`）での初期化と、FCM トークンの取得
   - サインイン（認可コード ＋ PKCE を自前で実装。`web_sign_in.dart`。`client_secret` なしで交換できた）
   - `/SetDeviceToken` での端末の登録と、`/mypage` への遷移
@@ -220,6 +222,8 @@ authentication_device/
     サインインは同じウィンドウ内で認証サイトの画面が開き、戻ってきた。通知のクリックでは、ブラウザのタブではなく**アプリのウィンドウ**が開いた
   - **2FA のプッシュ承認（#213。2026-09-16）: `MobileApp` を選ぶ → コードの入力画面が待ち受ける → 認証デバイスの [Approve] で、手で入力せずにサインインが完了した。**
     **PWA としてインストールした状態で確認した**（手順は `CHEATSHEET.md` 9 節）。サーバ側の `/2fa_result` の失敗（401 / 400）は E2E で測っている（`RT-213.1`）
+  - **2FA のプッシュ承認（#216。2026-09-17）: net48 版（`https://localhost:44302`、`mpas.netfx.json`）でも同じ通しを確認した。**
+    net48 版は `MobileApp` を 2FAプロバイダとして登録している（`CommonLibrary/Manager/MobileAppTokenProvider`）
 - **web でまだ確かめていないこと:** HTTPS での配信（#211。スマートフォンから使うために要る。
   `http://localhost` は安全なコンテキスト扱いなので、PC でのインストールと Web Push はこれ無しで動いている）
 - `firebase_web.json` を渡さないときは、Firebase を初期化せずに起動する（プッシュは使えない）。
@@ -241,7 +245,7 @@ authentication_device/
    既定は `https://localhost:44300` なので、Android の実機では、届く URL を書いたファイルを渡す。
 5. **通知の種別判定が `title` の文字列一致**（4 節）。サーバ側の文言を変えると黙って壊れる。
 6. **`/SetDeviceToken` の成功判定が `"\"OK\""` の完全一致**（4 節）。
-7. **2FA の [Approve] は net10.0 版だけで動く**（4 節）。net48 版には `MobileApp` の 2FA プロバイダ自体が無く、`/2fa_result` も無い（#213）。押しても 404 になる。
+7. **2FA の [Approve] は、両方の版で動く**（4 節）。**コードを検証するプロバイダの名前だけが版で違う**（net10.0 : `Email`、net48 : `MobileApp`）。アプリから見た振る舞い（`POST /2fa_result` に `code` を送る）は同じ（#213 / #216）。
 8. **`AppAuth.userinfoEndpoint` は宣言されているが呼ばれていない。**
 9. **`TokenChecker` は使われていない。** `fcm_page.dart` で `MetaCard('FCM Token', ...)` ごと
    コメント アウトされている。
@@ -260,6 +264,10 @@ authentication_device/
     SDK の `notificationclick` は、開く先（`fcmOptions.link` / `click_action`）が無い通知では閉じるだけで、`stopImmediatePropagation()` も呼ぶ。
     そのため、自前の処理は `firebase.messaging()` より**前に**登録している（後にすると、SDK の処理に止められる）。`firebase_messaging_web` に `onMessageOpenedApp` の実装は無い。
     **`flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれなかった。** バックグラウンドの経路は、普段の Chrome（`-d web-server`）で確かめる。
+    **2FA の通知が常に OS 経由になるのは、これと同じ理由**（#213 / #216）。
+    2FA では、通知が届く瞬間に**認証サイトのウィンドウを操作している**ので、認証デバイスは必ず裏に回る。
+    実測（2026-09-17、PWA を最小化せず他のウィンドウの裏に置いた状態）:
+    `clients=1 / visibilityState=hidden / focused=false`。**CIBA も同じ配置なら同じになる。**
 17. **CIBA の自己テストは、宛先が `tanaka@gmail.com` に固定**（認証サイトの `HomeController.AssembleFAPICibaProfileStarterAsync`）。
     認証デバイスも `tanaka@gmail.com` でサインインして端末を登録しておく。登録が無いと `/ciba_authz` が HTTP 500（例外の平文）を返し、
     自己テストは `JsonReaderException` で落ちる。ユーザ ストアが `mem` だと、認証サイトの再起動でユーザも端末の登録も消える。

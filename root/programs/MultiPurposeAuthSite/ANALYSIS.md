@@ -9,6 +9,11 @@
 本書は「この Web アプリ固有の部分」だけを扱う。
 主要部（net10.0）は [`../MultiPurposeAuthSiteCore/ANALYSIS.md`](../MultiPurposeAuthSiteCore/ANALYSIS.md)。
 
+> **IdP / STS としてのプロトコル適合性、既知の不具合、近代化ロードマップは
+> [`../ANALYSIS-IdP.md`](../ANALYSIS-IdP.md) が一次情報。**
+> **指摘の 2/3 は `../CommonLibrary` に在り、この net48 版にも同じ症状が出る**（各項目の **[Lib]**）。
+> OAuth2 / OIDC まわりを触る前に必ず読むこと。本書はそこに重複して書かない。
+
 ---
 
 ## 1. これは何か
@@ -25,7 +30,7 @@ Contributing.ja.md の「下位互換は高く維持し、破壊的な変更は�
 - プロジェクト・ポリシーは **リポジトリ ルートの `AGENTS.md`（`CLAUDE.md` はそれへのポインタ）** に定義済み。
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
 
-規模の目安: `.cs` 18 ファイル / 約 12,800 行、`.cshtml` 60 件。
+規模の目安: `.cs` 18 ファイル / 約 13,200 行、`.cshtml` 60 件。
 
 ---
 
@@ -105,21 +110,21 @@ MultiPurposeAuthSite/
    ├─ Global.asax(.cs)                349 行  Application_Error で ACCESS ログ、性能測定
    ├─ Startup.cs                       65 行  OWIN のエントリ（StartupAuth.Configure を呼ぶ）
    ├─ App_Start/
-   │   ├─ StartupAuth.cs              373 行  ★OWIN 認証ミドルウェアの設定
-   │   ├─ WebApiConfig.cs             177 行  Web API のルーティング
-   │   ├─ RouteConfig.cs               83 行  MVC のルーティング
-   │   ├─ BundleConfig.cs              90 行  バンドル＆ミニフィケーション
-   │   └─ FilterConfig.cs              49 行
+   │   ├─ StartupAuth.cs              468 行  ★OWIN 認証ミドルウェアの設定
+   │   ├─ WebApiConfig.cs             179 行  Web API のルーティング
+   │   ├─ RouteConfig.cs               84 行  MVC のルーティング
+   │   ├─ BundleConfig.cs              91 行  バンドル＆ミニフィケーション
+   │   └─ FilterConfig.cs              50 行
    ├─ Controllers/
-   │   ├─ AccountController.cs        4145 行
-   │   ├─ ManageController.cs         2971 行
-   │   ├─ HomeController.cs           1450 行  ★テスト用クライアント（Starters）
-   │   ├─ OAuth2EndpointController.cs 1163 行
-   │   ├─ UsersAdminController.cs      596 行  ★net48 のみ
-   │   ├─ RolesAdminController.cs      431 行  ★net48 のみ
-   │   ├─ Fido2ServerController.cs     260 行  ★ファイルは在るがビルド対象外（10 節）
+   │   ├─ AccountController.cs        4330 行
+   │   ├─ ManageController.cs         2981 行
+   │   ├─ HomeController.cs           1448 行  ★テスト用クライアント（Starters）
+   │   ├─ OAuth2EndpointController.cs 1332 行
+   │   ├─ UsersAdminController.cs      597 行  ★net48 のみ
+   │   ├─ RolesAdminController.cs      432 行  ★net48 のみ
+   │   ├─ Fido2ServerController.cs     261 行  ★ファイルは在るがビルド対象外（10 節）
    │   ├─ ErrorController.cs           232 行
-   │   ├─ OAuth2ResourceServerController.cs 202 行
+   │   ├─ OAuth2ResourceServerController.cs 203 行
    │   └─ PingController.cs             56 行
    ├─ Views/{Account,Manage,Home,UsersAdmin,RolesAdmin,Error,Shared}/*.cshtml
    ├─ Content/ Scripts/ fonts/ images/  … NuGet で入る静的ファイル（リポジトリに直接格納）
@@ -186,7 +191,7 @@ net10.0 版は `Startup.UseEndpoints` の 1 箇所だが、**net48 は MVC と W
 | ファイル | 登録するもの |
 |---|---|
 | `App_Start/RouteConfig.cs` | `Saml2Request` / `OAuth2Authorize` / `DeviceAuthZVerify` ＋ Default |
-| `App_Start/WebApiConfig.cs` | `OAuth2Token` `GetUserClaims` `RevokeToken` `IntrospectToken` `JwksUri` `RequestObjectUri` `DeviceAuthZAuthorize` `CibaAuthorize` `CibaPushResult` `SetDeviceToken` `TestHybridFlow` `ChageToUser` ＋ `api/{controller}/{action}/{id}` |
+| `App_Start/WebApiConfig.cs` | `OAuth2Token` `GetUserClaims` `RevokeToken` `IntrospectToken` `JwksUri` `RequestObjectUri` `DeviceAuthZAuthorize` `CibaAuthorize` `CibaPushResult` `SetDeviceToken` `TwoFactorPushResult` `TestHybridFlow` `ChageToUser` ＋ `api/{controller}/{action}/{id}` |
 
 いずれもパスは `Config.*`（＝ `app.config`）から取り、`.Substring(1)` で先頭 `/` を落とす。
 固定パスは `[Route]` 属性の 2 つ（`.well-known/openid-configuration` / `samlmetadata`）。
@@ -307,6 +312,23 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
 12. **`Startup.cs` に `MultiPurposeAuthSite/Startup.cs` と
     `App_Start/StartupAuth.cs` の 2 つがある。** 前者は OWIN のエントリだけで、中身は後者。
 13. **`ErrorController` の基底が系統で違う**（8 節）。エラー処理を触るときは両方を見る。
+14. **✅ 修正済み: プロフィール変更後の再サインインが、ブラウザ記憶(2FA)を発行していた。**
+    `ManageController.ReSignInAsync` が
+    `SignInManager.SignInAsync(user, isPersistent: false, rememberBrowser: true)` を呼んでおり、
+    **画面から 2FA を有効にした操作それ自体が、そのブラウザを「記憶済み」にしていた。**
+    サインイン時の判定は「2FA が有効」かつ「ブラウザを記憶していない」なので、
+    有効にした本人のブラウザでは、2FA が要求されないままだった
+    （設定 `TwoFactorEnabled` を `"true"` にして作った利用者では起きない。`Manage` 画面を通らないため）。
+    `rememberBrowser: false` に変更した。
+    - **再サインインそのものは必要**（`SecurityStamp` が変わるため）。不要だったのは「ブラウザ記憶」だけ
+    - `ReSignInAsync` は `ManageController` の **11 箇所**（メール アドレス・電話番号・パスワードの変更ほか）
+      から呼ばれるので、影響は 2FA の有効化に限らなかった
+    - ブラウザ記憶を付けてよいのは、利用者が 2FA を通して選んだときだけ（`Account/VerifyCode`）
+    - **net10.0 版は元から渡していない**（`../MultiPurposeAuthSiteCore/Controllers/ManageController.cs`）。
+      net48 版だけ取り残されていた
+    - **E2E では測れない**（2FA を有効にすると、共用のテスト ユーザで他の全テストのサインインが変わるため）。
+      修正の前後で同じ手順（`Manage` で有効化 → サインアウト → サインイン。クッキーは触らない）を踏み、
+      **前は 2FA が飛ばされ、後は要求される**ことを手で確認した（2026-09-17）
 
 ---
 

@@ -69,7 +69,7 @@ The framework this site is built on is a separate repository. Problems in
 **A protocol-conformance review of the IdP implementation has been carried out, and the
 findings are written down.** Before reporting, please check:
 
-- **[`root/programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md`](root/programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md)**
+- **[`root/programs/ANALYSIS-IdP.md`](root/programs/ANALYSIS-IdP.md)**
   — the full list, with file and line references
 - Issues **[#182](https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues/182)** –
   **[#189](https://github.com/OpenTouryoProject/MultiPurposeAuthSite/issues/189)**

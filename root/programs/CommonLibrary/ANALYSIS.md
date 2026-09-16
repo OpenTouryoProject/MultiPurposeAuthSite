@@ -26,8 +26,8 @@ Controller / View / 起動処理だけを持ち、**ASP.NET Identity のスト�
   → **エージェントは git 操作（add/commit/push/checkout/branch/reset/restore/stash）を行わない。**
   作業結果はワーキング ツリーに残し、変更内容を報告するに留める。
 
-規模の目安: `.cs` 99 ファイル（`obj/` `bin/` 除く、`*.Designer.cs` 10 を含む）／
-実装コード約 22,000 行（`*.Designer.cs` を除く）。
+規模の目安: `.cs` 101 ファイル（`obj/` `bin/` 除く、`*.Designer.cs` 10 を含む）／
+実装コード約 23,000 行（`*.Designer.cs` を除く）。
 
 ---
 
@@ -107,7 +107,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 
 | ディレクトリ | 中身 | 主なクラス |
 |---|---|---|
-| `Co/` | 設定と定数 | `Config`(1723 行) `Const` |
+| `Co/` | 設定と定数 | `Config`(1740 行) `Const` |
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
 | `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1249) `DeviceAuthZProvider`(646) `CibaProvider`(505) `DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
@@ -134,7 +134,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<ApplicationUser> ほか
         \                                /
          \                              /
-          → CmnUserStore（3089 行）←──┘      … 実処理はここに集約
+          → CmnUserStore（3090 行）←──┘      … 実処理はここに集約
                     ↓
              CmnStore（Memory の実体 ＋ 子テーブル読み込み）
                     ↓
@@ -242,12 +242,12 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 
 | ファイル | 役割 |
 |---|---|
-| `TokenProviders/CmnEndpoints.cs`（2162 行） | **本体。** `.well-known/openid-configuration` の生成、認可要求の検証（`ValidateAuthZReqParam` / `ValidateCibaAuthZReqParam` / `CheckRedirectUri`）、応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`）、Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` ほか） |
+| `TokenProviders/CmnEndpoints.cs`（2787 行） | **本体。** `.well-known/openid-configuration` の生成、認可要求の検証（`ValidateAuthZReqParam` / `ValidateCibaAuthZReqParam` / `CheckRedirectUri`）、応答の生成（`CreateCodeInAuthZNRes` / `CreateAuthZRes4ImplicitFlow` / `CreateAuthNRes4HybridFlow`）、Token エンドポイントの各グラント（`GrantAuthorizationCodeCredentials` / `GrantRefreshTokenCredentials` / `GrantResourceOwnerCredentials` ほか） |
 | `TokenProviders/CmnAccessToken.cs` | アクセス トークンの生成（Claim 集合の組み立て → JWS 化）と検証 |
 | `TokenProviders/CmnIdToken.cs` | id_token |
 | `TokenProviders/CmnResponseObject.cs` | JARM（Response Object） |
 | `TokenProviders/AuthorizationCodeProvider.cs` / `RefreshTokenProvider.cs` | code / refresh_token の保管（Memory or DBMS） |
-| `Extensions/Sts/Helper.cs`（1249 行） | **クライアント情報のレジストリ**。`OAuth2ClientsInformation` から client_secret / redirect_uri / JWK 公開鍵 / `tls_client_auth_subject_dn` / subject_types / client mode を引く。加えて各フローの WebAPI 呼び出しヘルパ（シングルトン、`GetInstance`） |
+| `Extensions/Sts/Helper.cs`（1380 行） | **クライアント情報のレジストリ**。`OAuth2ClientsInformation` から client_secret / redirect_uri / JWK 公開鍵 / `tls_client_auth_subject_dn` / subject_types / client mode を引く。加えて各フローの WebAPI 呼び出しヘルパ（シングルトン、`GetInstance`） |
 | `Extensions/Sts/DeviceAuthZProvider.cs` | Device Authorization Grant |
 | `Extensions/Sts/CibaProvider.cs` | CIBA（FAPI）。FCM プッシュと連携 |
 | `Extensions/Sts/RevocationProvider.cs` / `IssuedTokenProvider.cs` | revoke / introspect の裏付けデータ |

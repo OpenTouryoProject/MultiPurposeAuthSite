@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/09/16  玄人 幸道         プッシュ承認の待ち受けを追加（#216）
     //**********************************************************************************
 *@
 
@@ -68,4 +69,41 @@
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{
     <!-- Footer 部の section -->
+
+    @* プッシュ承認の待ち受け（#216）。MobileApp のときだけ動かす。 *@
+    @if (Model.Provider == MultiPurposeAuthSite.Manager.MobileAppTokenProvider.ProviderName)
+    {
+        <p id="pushWaiting" class="text-muted">
+            認証デバイスで承認すると、自動でサインインします（コードの入力でも完了できます）。
+        </p>
+
+        <script>
+            (function () {
+                // 承認されたか、認証サイトに定期的に尋ねる。
+                // **待っているのはブラウザ**で、認証デバイスは /2fa_result に承認を送るだけ。
+                var url = '@Url.Action("TwoFactorPushStatus", "Account")'
+                    + '?returnUrl=' + encodeURIComponent('@Html.Raw(Model.ReturnUrl)')
+                    + '&rememberBrowser=' + (document.getElementById('RememberBrowser') || {}).checked;
+
+                var timer = setInterval(function () {
+                    fetch(url, { credentials: 'same-origin' })
+                        .then(function (res) { return res.ok ? res.json() : null; })
+                        .then(function (data) {
+                            if (data && data.approved && data.redirectUrl) {
+                                clearInterval(timer);
+                                window.location.href = data.redirectUrl;
+                            }
+                        })
+                        .catch(function () { /* 一時的な失敗は無視して、次回に試す */ });
+                }, 2000);
+
+                // 放置されたままにしない（2FA のコードの有効期間に合わせる）。
+                setTimeout(function () {
+                    clearInterval(timer);
+                    var p = document.getElementById('pushWaiting');
+                    if (p) { p.textContent = '自動での承認の待ち受けを終了しました。コードを入力してください。'; }
+                }, 3 * 60 * 1000);
+            })();
+        </script>
+    }
 }

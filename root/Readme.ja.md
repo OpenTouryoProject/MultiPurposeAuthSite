@@ -127,4 +127,4 @@ cd root
 | [CHEATSHEET.md](CHEATSHEET.md) | 手順だけを並べたもの |
 | [../AGENTS.md](../AGENTS.md) | 開発エージェントが守ること |
 | [../Contributing.ja.md](../Contributing.ja.md) | 投稿規約（コメント量、git-flow、PR の粒度） |
-| [programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md](programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md) | IdP としての適合性と、対応状況の一覧 |
+| [programs/ANALYSIS-IdP.md](programs/ANALYSIS-IdP.md) | IdP としての適合性と、対応状況の一覧 |

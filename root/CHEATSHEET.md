@@ -120,7 +120,7 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
 | エージェント固有の制約 | [`../AGENTS.md`](../AGENTS.md) |
 | ファイル形式ごとの約束 | [`CODING.md`](CODING.md) |
 | 領域ごとの構成 | 各フォルダの `ANALYSIS.md` |
-| 適合上の穴の一覧 | [`programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md`](programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md) |
+| 適合上の穴の一覧 | [`programs/ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) |
 
 **ファイル ヘッダの更新者名は、Claude Code なら「玄人 幸道」。**
 

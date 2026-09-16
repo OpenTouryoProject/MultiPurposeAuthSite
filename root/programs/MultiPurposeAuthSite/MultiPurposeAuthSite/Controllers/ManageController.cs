@@ -17,6 +17,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2026/09/17  玄人 幸道         再サインインでブラウザ記憶(2FA)を付けないようにした
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2886,10 +2887,18 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 認証されたユーザが無い
                 // 再度サインイン
+                // **ここでブラウザ記憶(2FA)を付けない。**
+                //   付けると、2FAを有効にする操作それ自体が、そのブラウザを「記憶済み」にしてしまい、
+                //   以後そのブラウザでは2FAが要求されなくなる（利用者は有効にしたつもりでいる）。
+                //   サインイン時の判定が「2FAが有効」かつ「ブラウザを記憶していない」であるため。
+                //   記憶するのは、利用者が2FAを通して「ブラウザ記憶」を選んだときだけ（Account/VerifyCode）。
+                //   net10.0版は、同じ引数を渡していない。
+                //
+                //   再サインインそのものは必要（SecurityStampが変わるため）。
                 await SignInManager.SignInAsync(
                         user,
                         isPersistent: false,        // アカウント記憶    // 既定値
-                        rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
+                        rememberBrowser: false);    // ブラウザ記憶(2FA)
 
                 Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
 

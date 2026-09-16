@@ -108,6 +108,7 @@
     <Compile Include="Manager\ApplicationRoleManager.cs" />
     <Compile Include="Manager\ApplicationSignInManager.cs" />
     <Compile Include="Manager\ApplicationUserManager.cs" />
+    <Compile Include="Manager\MobileAppTokenProvider.cs" />
     <Compile Include="Password\CustomPasswordHasher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Resources\AccountController.Designer.cs">

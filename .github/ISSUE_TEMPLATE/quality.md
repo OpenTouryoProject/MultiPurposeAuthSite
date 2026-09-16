@@ -26,7 +26,7 @@ labels: quality improvement
 
   root/programs/CommonLibrary/ANALYSIS.md
   root/programs/MultiPurposeAuthSiteCore/ANALYSIS.md
-  root/programs/MultiPurposeAuthSiteCore/ANALYSIS-IdP.md   … IdP のプロトコル適合性
+  root/programs/ANALYSIS-IdP.md   … IdP のプロトコル適合性
   root/programs/MultiPurposeAuthSite/ANALYSIS.md
   root/programs/CommandLineTools/ANALYSIS.md
   root/programs/authentication_device/ANALYSIS.md

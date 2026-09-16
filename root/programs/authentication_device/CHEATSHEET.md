@@ -173,21 +173,30 @@ $env:OAuth2ClientEndpointsRootURI = 'https://localhost:44302'
 
 ### 認証デバイス
 
+**接続先は 2 つある。** net10.0 版なら `mpas.core.json`、net48 版なら `mpas.netfx.json` に差し替える（6 節）。
+
 ```powershell
 cd root\programs\authentication_device
 
-# web（サインイン ＋ プッシュ）
+# (a) 画面を作りながら動かす（ホット リロードが効く）
 flutter run -d chrome --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
 
-# web のビルド
+# (b) 通知まで確かめる（普段の Chrome で開く。**OS の通知のクリックはこちらでしか動かない**。8 節）
+flutter run -d web-server --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
+
+# (c) PWA としてインストールして確かめる（manifest が要るので、ビルドした出力を配信する。8 節）
 flutter build web --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.core.json
+cd build\web
+python -m http.server 5610
 
 # Android（Android SDK が要る）
 flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.json
 ```
 
 - **`--web-port 5610` は必須。** 認証サイトは `redirect_uri` を登録値（`http://localhost:5610/`）と完全一致で照合する
-- **`--dart-define-from-file` の値は、ホット リロードでは変わらない。** ファイルを変えたら `flutter run` をやり直す
+- **(a) では OS の通知のクリックが動かない**（`flutter run -d chrome` が起動する一時プロファイルの Chrome のため。8 節）
+- **接続先を切り替えたら、ブラウザ側も消す**（7 節「接続先を切り替えたら」）
+- **`--dart-define-from-file` の値は、ホット リロードでは変わらない。** ファイルを変えたら起動し直す
 - **認可画面へ移ると、`flutter run` のターミナルとの接続が切れる。** 戻った後のログは Chrome の DevTools（F12 → Console）で見る
 
 ## 6. 組み合わせ早見表
@@ -209,6 +218,7 @@ flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.
 | 「トークン要求に接続できません」 | 接続先の誤り（`/MultiPurposeAuthSite` の有無）/ 証明書 / サイトが止まっている | 3 節 |
 | 「トークン要求が失敗しました（HTTP 401）… invalid_client」 | PKCE での交換が拒否された（`code` の使用済みを含む） | サインインからやり直す |
 | 認証サイトの URL が 404 | 起動方法と接続先ファイルが合っていない | 3 節 |
+| **接続先を切り替えてビルドし直したのに、前の版（net48 / net10.0）に遷移する** | **ブラウザが前のビルドを使っている。** `http://localhost:5610` は両方で同じオリジンなので、HTTP キャッシュと service worker がそのまま効く（`python -m http.server` は `Cache-Control` を付けない） | 下の「接続先を切り替えたら」 |
 | 「16 packages have newer versions…」 | `firebase_core_web` を 3.10.x に固定している（#209） | 想定どおり。`pubspec.yaml` のコメント |
 | Android から認証サイトに届かない | 接続先を渡していない（既定は `localhost`） | 3 節 |
 | 自己テストが `JsonReaderException: Unexpected character … S` | 宛先（`tanaka@gmail.com`）に端末が登録されていない。`/ciba_authz` が例外の平文を返した | 8 節の前提 |
@@ -216,6 +226,28 @@ flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.
 | OS の通知をクリックしても何も起きない | `flutter run -d chrome` が起動する Chrome（一時プロファイル）では、クリックの処理が呼ばれない | 8 節「バックグラウンドで確かめる」（普段の Chrome で開く） |
 | Allow / Deny で `/ciba_result` が 400 | 要求の期限切れ、または宛先と違うユーザで応答した | 認証サイトでサインアウトし、`tanaka@gmail.com` でサインインし直す |
 | Installability に「`name` が無い」「`display` が不正」「アイコンが無い」がまとめて出る | `flutter run` は manifest を生成しない（`manifest.json` は正しい） | 8 節「PWA としてインストールして確かめる」 |
+
+### 接続先を切り替えたら（`mpas.core.json` ⇄ `mpas.netfx.json`）
+
+**ビルドし直すだけでは足りない。ブラウザ側も消す。**
+
+1. `http://localhost:5610/` を開く → F12 → Application → Storage → **「Clear site data」**
+   （service worker の登録解除・Cache Storage・localStorage をまとめて消す）
+2. **Ctrl + Shift + R**（ハード リロード）
+3. 確認 : DevTools → Sources → `main.dart.js` で、**使わない方のポート**（`44302` / `44300`）を検索して 0 件
+
+- **保存済みのアクセス トークンも消える。** サインインからやり直しになる（想定どおり）
+- PWA としてインストールしていても同じオリジンなので、上で直る。直らなければ入れ直す
+- 開発中は、DevTools の Network タブで **「Disable cache」にチェックを入れたまま**にすると踏みにくい
+  （DevTools を開いている間だけ有効）
+- **ビルド出力が正しいかは、配信前に確かめられる**（ブラウザを疑う前に、こちらを先に見る）
+
+```powershell
+cd root\programs\authentication_device
+python -c "import io; b = io.open(r'build\web\main.dart.js','rb').read(); print('44300', b.count(b'localhost:44300')); print('44302', b.count(b'localhost:44302'))"
+```
+
+> `Select-String` は `main.dart.js` のような長い行で取りこぼすことがある（実測）。上のように数える。
 
 ## 8. CIBA を確かめる（web）
 
@@ -287,9 +319,9 @@ python -m http.server 5610
 - `python -m http.server` は更新の扱いが素朴なので、service worker が古いまま残ることがある（上の行）
 - Installability に残る「Richer PWA Install UI …（screenshot を足すように）」は案内で、エラーではない
 
-## 9. 2FA のプッシュ承認を確かめる（web、net10.0 版のみ）
+## 9. 2FA のプッシュ承認を確かめる（web）
 
-**net48 版には `MobileApp` の 2FA プロバイダが無い**ので、確かめられるのは net10.0 版だけ（#213）。
+**両方の版で確かめられる**（net10.0 : #213 / net48 : #216）。net48 版は `mpas.netfx.json` を渡し、5 節の手順で `https://localhost:44302` を起動する。
 
 **前提**
 
@@ -315,6 +347,13 @@ python -m http.server 5610
 - 待ち受けは **3 分で止まる**（そのあとは手入力で完了させる）
 - 合わないコードは記録されない（`/2fa_result` は保存の前に検証する）。E2E : `RT-213.1`
 
-> **この通しは実測済み**（2026-09-16、net10.0 版 ＋ PWA としてインストールした認証デバイス）。
-> コードの入力画面が待ち受け、[Approve] を押すとサインインが完了した。
+- **2FA の通知は、たいてい OS の通知になる。** 通知が届く瞬間に認証サイトのウィンドウを操作しているため、
+  認証デバイスのウィンドウが裏に回るから（**最小化していなくても、完全に隠れていれば `hidden` 扱い**）。
+  画面（Message Stream）で受けたいなら、8 節と同じく**重ならないように並べる**
+
+> **この通しは、両方の版で実測済み。**
+> - net10.0 版（#213）: 2026-09-16（PWA としてインストールした認証デバイス）
+> - net48 版（#216）: 2026-09-17
+>
+> どちらも、コードの入力画面が待ち受け、[Approve] を押すとサインインが完了した。
 > E2E で測っているのは、サーバ側の失敗（401 / 400）だけ（`RT-213.1`）。

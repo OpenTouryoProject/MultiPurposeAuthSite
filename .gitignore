@@ -11,6 +11,12 @@
 # Ignore the test / build log folder
 /root/programs/Tests/E2ETests/Result/
 
+# 手動での確認に使う、各自の起動スクリプト
+# （中身は authentication_device/CHEATSHEET.md 5 節・8 節に書いてある）
+/root/programs/authentication_device/test*.ps1
+/root/programs/MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore/test*.ps1
+/root/programs/MultiPurposeAuthSite/MultiPurposeAuthSite/test*.ps1
+
 # Ignore the Temp folder
 Temp/
 _Temp/
