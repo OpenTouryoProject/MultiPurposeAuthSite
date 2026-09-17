@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/09  玄人 幸道         新規（基本テストケースの追加）
+//*  2026/09/17  玄人 幸道         TC-3.2（トークン応答のキャッシュ制御）を観測から検証に格上げ（#218）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -157,16 +158,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
                 string cacheControl = token.Header("Cache-Control");
                 string pragma = token.Header("Pragma");
 
-                r.Observe("Cache-Control", cacheControl ?? "（ヘッダ無し）",
-                    "RFC 6749 §5.1 は no-store を MUST としている。");
+                // **値の完全一致では見ない。** net48 版は System.Web の Response.Cache を使うため、
+                //   Cache-Control が "no-store, no-cache" になる（RFC の要求は no-store が在ること）。
+                r.Verify("Cache-Control に no-store が付く",
+                    cacheControl != null && cacheControl.Contains("no-store"),
+                    "no-store を含む", cacheControl ?? "（ヘッダ無し）");
 
-                r.Observe("Pragma", pragma ?? "（ヘッダ無し）",
-                    "RFC 6749 §5.1 は no-cache を MUST としている。"
-                    + "HTTP/1.0 の後方互換のためのもの。");
+                r.Verify("Pragma に no-cache が付く",
+                    pragma != null && pragma.Contains("no-cache"),
+                    "no-cache を含む", pragma ?? "（ヘッダ無し）");
 
-                r.Note("**この 2 つは現状 MUST を満たしていない。**"
-                    + " 判定を NG にすると他の検証が実行されなくなるため、"
-                    + "ここでは観測にとどめ、別途 Issue として扱う。");
+                r.Note("どちらも #218 で付けた。それ以前は、両系統ともヘッダが無かった。"
+                    + "エラー応答（RFC 6749 §5.2）でも返るよう、アクションの入口で付けている。");
 
                 // トークンが本文に入っていること自体は確かめておく
                 // （ヘッダの話をする前提が成り立っているか）。

@@ -523,6 +523,25 @@ RP からは何が起きたのか分からない。
 - E2E テスト : **`RT-187.4` の `Skip` を解消**（両ターゲットで `unsupported_response_type` がリダイレクトで返る）。
   `RT-187.3` の観測も「リダイレクトして `error=unsupported_response_type`」に変わった
 
+### A-8-2. トークン応答にキャッシュ制御のヘッダが無い **[Core][netfx]** — **✅ 修正済み（#218 の 1 つ目）**
+
+RFC 6749 §5.1（成功）/ §5.2（エラー）は、**`Cache-Control: no-store` と `Pragma: no-cache` を MUST**
+としている。トークンを中間のキャッシュやブラウザの履歴に残さないため。
+
+**両系統とも、どこにも設定していなかった**（`no-store` で全文検索して 0 件）。
+E2E の `TC-3.2` は測っていたが、**観測にとどめて「別途 Issue」と書いたまま放置されていた**（#218）。
+
+- **アクションの入口で付ける**（`OAuth2EndpointController.OAuth2Token`）。
+  **成功・エラーのどちらの経路でも返す**ため、出口ごとに書かない
+- net10.0 は `Response.Headers` に直接入れて `no-store`。
+  **net48 は `System.Web` の `Response.Cache`**（`SetCacheability(NoCache)` ＋ `SetNoStore()`）を使う。
+  ヘッダを直接書くと ASP.NET のキャッシュ モジュールに上書きされうるため。
+  結果、net48 は `Cache-Control: no-store, no-cache` になる（RFC が求めるのは `no-store` が在ること）
+- E2E テスト : **`TC-3.2` を観測から検証に格上げ**（両ターゲットで成立）。
+  値は完全一致で見ず、`no-store` / `no-cache` を含むかで判定する
+- **`/token` だけに付けた。** `/introspect` や `/userinfo`、`/device_authz`（`device_code` を返す）、
+  `/ciba_authz`（`auth_req_id` を返す）にも付けるかは #218 で扱う（RFC 6749 の MUST は `/token` のもの）
+
 ### A-9. discovery のキー名に末尾スペース **[Lib]** — **✅ 修正済み（#189 の一部）**
 
 ```csharp

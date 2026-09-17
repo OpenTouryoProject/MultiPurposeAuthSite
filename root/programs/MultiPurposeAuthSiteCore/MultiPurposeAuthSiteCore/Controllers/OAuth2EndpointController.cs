@@ -59,6 +59,7 @@
 //*  2026/09/16  玄人 幸道         /ciba_authz : 端末未登録・FCM送信失敗を JSON のエラー応答にする（#210）
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）を追加（#213）
 //*  2026/09/17  玄人 幸道         /ciba_authz : プッシュ通知の送信失敗の原因を、ACCESSログに残す（#210）
+//*  2026/09/17  玄人 幸道         トークン応答に Cache-Control: no-store / Pragma: no-cache を付ける（#218）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -181,6 +182,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public IActionResult OAuth2Token(IFormCollection formData)
         {
+            // **トークンを含む応答は、キャッシュに残してはならない**（RFC 6749 5.1 / 5.2 の MUST）（#218）。
+            //   成功・エラーのどちらの経路でも返すので、入口で付ける。
+            this.SetNoStore();
+
             Dictionary<string, string> ret = null;
             // grant_typeが未知・未指定、フォームデータ無しの経路でも使うので初期化する（#185）。
             Dictionary<string, string> err = new Dictionary<string, string>();
@@ -1274,6 +1279,28 @@ namespace MultiPurposeAuthSite.Controllers
             Sts.TwoFactorPushProvider.Create(user.Id, code);
 
             return this.Ok("OK");
+        }
+
+        #endregion
+
+        #region キャッシュ制御
+
+        /// <summary>
+        /// トークンを含む応答が、キャッシュに残らないようにする（#218）
+        /// </summary>
+        /// <remarks>
+        /// RFC 6749 5.1（成功）/ 5.2（エラー）は、
+        /// **Cache-Control: no-store と Pragma: no-cache を MUST** としている。
+        /// 中間のキャッシュやブラウザの履歴にトークンを残さないため。
+        ///
+        /// **アクションの入口で呼ぶ。** 成功・エラーのどちらの経路でも返すため。
+        /// </remarks>
+        private void SetNoStore()
+        {
+            IHeaderDictionary headers = MyHttpContext.Current.Response.Headers;
+
+            headers["Cache-Control"] = "no-store";
+            headers["Pragma"] = "no-cache";
         }
 
         #endregion
