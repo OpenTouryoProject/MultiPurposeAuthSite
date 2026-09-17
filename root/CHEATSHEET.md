@@ -121,6 +121,7 @@ root\programs\Tests\test.ps1 -Launch     net10.0 : 44300 / net48 : 44302
 | ファイル形式ごとの約束 | [`CODING.md`](CODING.md) |
 | 領域ごとの構成 | 各フォルダの `ANALYSIS.md` |
 | 適合上の穴の一覧 | [`programs/ANALYSIS-IdP.md`](programs/ANALYSIS-IdP.md) |
+| 本番へ切り替えるときに見るもの | [`CONFIGURATION.md`](CONFIGURATION.md) 11 節 |
 
 **ファイル ヘッダの更新者名は、Claude Code なら「玄人 幸道」。**
 

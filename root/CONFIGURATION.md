@@ -350,3 +350,62 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | パッケージ | `packages.config` ＋ `PackageReference` | `PackageReference` |
 
 **両者は共通ライブラリを使う別アプリである。** 片方にしか無い問題があり得る。
+
+---
+
+## 11. 本番へ切り替えるときに見るもの
+
+**雛形の既定は「開発・テストで動く」状態である。** 本番へ出す前に、次を確認する。
+
+> **一覧の目的は、読み落としを減らすこと。** 各キーの意味は雛形のコメントが一次情報。
+
+### 設定
+
+| キー | 雛形の既定 | 本番 | なぜ |
+|---|---|---|---|
+| `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
+| `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
+| `EnabeDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**綴りは実装どおり `Enabe`**） |
+| `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
+| `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
+| `IsLockedDownRedirectEndpoint` | `false` | `true` | 自己テスト画面（`/Home/Saml2OAuth2Starters`）と、テスト用のリダイレクト先を閉じる |
+| `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
+| `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
+
+**net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
+
+```xml
+<!-- app.config -->
+<add key="IsDebug" value="false" />
+<add key="TestUserPWD" value="" />
+```
+
+```json
+// appsettings.json
+"IsDebug": "false",
+"TestUserPWD": "",
+```
+
+### 起動したあとの確かめ方
+
+| 見るもの | 期待 |
+|---|---|
+| `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownRedirectEndpoint`） |
+| 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
+| `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
+| `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnabeDebugTraceLog`） |
+
+### 注意（仕様上の落とし穴）
+
+1. **`IsDebug` は `UserStoreType = mem` のとき、設定を無視して常に `true`** を返す
+   （`CommonLibrary/Co/Config.cs`）。**`IsDebug=false` と書いても効かない。** 本番は DBMS 前提。
+2. **管理者ユーザ（`AdministratorUID`）は、`IsDebug` に関係なく無条件で作られる。**
+   テスト利用者だけが `IsDebug` と `TestUserPWD` で閉じられる。
+3. **まだ設定で閉じられない口がある。** `/TestHybridFlow`（Web API のルート）、
+   `ValuesController`（疎通用。net10.0 のみ）、`PingController`（両方）。扱いは #219 で検討中。
+4. **STS 専用モード**（`EnableSignupProcess` / `EnableEditingOfUserAttribute` /
+   `EnableAdministrationOfUsersAndRoles` を**全部 false**）にすると、サインアップ・属性の編集・
+   ユーザ管理が無効になる。**利用者ストアへの書き込みも止まる**ので、切替の影響が大きい。
+
+> **設定を変えたら、雛形（`_app.config` / `_appsettings.json`）にも反映する**（1 節）。
+> 本番の値そのものは書かない。
