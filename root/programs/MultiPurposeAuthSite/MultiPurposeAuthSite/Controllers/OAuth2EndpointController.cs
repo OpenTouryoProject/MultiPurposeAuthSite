@@ -60,6 +60,7 @@
 //*  2026/09/17  玄人 幸道         /ciba_authz : プッシュ通知の送信失敗の原因を、ACCESSログに残す（#210）
 //*  2026/09/17  玄人 幸道         トークン応答に Cache-Control: no-store / Pragma: no-cache を付ける（#218）
 //*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
+//*  2026/09/17  玄人 幸道         /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御を付ける（#218）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -322,6 +323,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<IHttpActionResult> GetUserClaims()
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             // 戻り値（エラー）
             Dictionary<string, string> err = new Dictionary<string, string>();
 
@@ -545,6 +550,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public IHttpActionResult IntrospectToken(FormDataCollection formData)
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             // 戻り値（エラー）
             Dictionary<string, string> err = new Dictionary<string, string>();
 
@@ -619,6 +628,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public async Task<IHttpActionResult> DeviceAuthZAuthorize(FormDataCollection formData)
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             string err = "";
             string errDescription = "";
 
@@ -721,6 +734,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public async Task<IHttpActionResult> CibaAuthorizeAsync(FormDataCollection formData)
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             string err = "";
             string errDescription = "";
 

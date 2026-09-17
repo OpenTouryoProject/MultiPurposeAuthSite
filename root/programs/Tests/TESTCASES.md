@@ -2599,3 +2599,34 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - 成功（200 と OK）は E2E では測れない。2FA を有効にした利用者のコードが要るが、共用のテスト ユーザで 2FA を有効にすると他の全テストのサインインが変わるため。成功経路は手で確かめる（CHEATSHEET.md）。
 
+## RT-218.1 /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御が付く
+
+| | |
+|---|---|
+| 観点 | **RFC が MUST としているのは /token だけ**（RFC 6749 §5.1 / §5.2）。しかしこの 4 つも、資格情報（device_code / auth_req_id）や利用者の属性を返すので、**中間キャッシュやブラウザ履歴に残ると困る点は同じ**。 |
+| 根拠 | RFC 6749 §5.1 / §5.2（/token の MUST）/ #218 |
+| テスト | `RT218_01_資格情報や属性を返す口にもキャッシュ制御が付く` |
+
+**手順**
+
+1. 認可コード フローでトークンを得る
+1. /introspect の応答ヘッダを見る
+1. /userinfo の応答ヘッダを見る
+1. /device_authz の応答ヘッダを見る
+1. /ciba_authz の応答ヘッダを見る（要求の中身は問わない）
+
+**検証（合否を判定する）**
+
+- /introspect : Cache-Control に no-store が付く
+- /introspect : Pragma に no-cache が付く
+- /userinfo : Cache-Control に no-store が付く
+- /userinfo : Pragma に no-cache が付く
+- /device_authz : Cache-Control に no-store が付く
+- /device_authz : Pragma に no-cache が付く
+- /ciba_authz : Cache-Control に no-store が付く
+- /ciba_authz : Pragma に no-cache が付く
+
+**補足**
+
+- (5) は要求が不正でもよい。**エラー応答にも付くこと**を確かめる（RFC 6749 §5.2 と同じ考え方）。
+

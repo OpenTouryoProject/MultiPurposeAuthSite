@@ -539,8 +539,10 @@ E2E の `TC-3.2` は測っていたが、**観測にとどめて「別途 Issue�
   結果、net48 は `Cache-Control: no-store, no-cache` になる（RFC が求めるのは `no-store` が在ること）
 - E2E テスト : **`TC-3.2` を観測から検証に格上げ**（両ターゲットで成立）。
   値は完全一致で見ず、`no-store` / `no-cache` を含むかで判定する
-- **`/token` だけに付けた。** `/introspect` や `/userinfo`、`/device_authz`（`device_code` を返す）、
-  `/ciba_authz`（`auth_req_id` を返す）にも付けるかは #218 で扱う（RFC 6749 の MUST は `/token` のもの）
+- **`/token` のほか、資格情報・属性を返す口にも付けた**（`/introspect`・`/userinfo`・
+  `/device_authz`（`device_code`）・`/ciba_authz`（`auth_req_id`）。#218 の案 C）。
+  **RFC が MUST としているのは `/token` だけ**だが、キャッシュに残ると困る性質は同じ。
+  E2E テスト : `RT-218.1`（4 口 × 2 ヘッダを、両ターゲットで確認）
 
 ### A-9. discovery のキー名に末尾スペース **[Lib]** — **✅ 修正済み（#189 の一部）**
 
