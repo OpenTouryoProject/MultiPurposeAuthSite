@@ -246,7 +246,7 @@
     "OAuth2ClientEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // Redirectエンドポイント
     // Redirectエンドポイント（テスト用）のロックダウン
-    "IsLockedDownRedirectEndpoint": "false",
+    "IsLockedDownTestEndpoints": "false",
     // - test_self_saml : AssertionConsumerService
     "Saml2ResponseEndpoint": "/Account/AssertionConsumerService",
     // - test_self_code : Authorization Codeグラント種別

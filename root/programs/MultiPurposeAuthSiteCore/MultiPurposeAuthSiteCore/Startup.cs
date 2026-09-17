@@ -21,6 +21,7 @@
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）のルートを追加（#213）
 //*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
+//*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -257,10 +258,14 @@ namespace MultiPurposeAuthSite
                 #endregion
 
                 #region ResourceServer
-                endpoints.MapControllerRoute(
-                    name: "TestHybridFlow",
-                    pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
-                    defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
+                // **テスト用の口は、閉じられるようにする**（#219）。
+                if (!Config.IsLockedDownTestEndpoints)
+                {
+                    endpoints.MapControllerRoute(
+                        name: "TestHybridFlow",
+                        pattern: Config.TestHybridFlowWebAPI.Substring(1), // 先頭の[/]を削除,
+                        defaults: new { controller = "OAuth2ResourceServer", action = "TestHybridFlow" });
+                }
 
                 endpoints.MapControllerRoute(
                     name: "ChageToUser",

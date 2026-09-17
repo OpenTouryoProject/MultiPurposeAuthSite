@@ -79,7 +79,7 @@ The following are known and deliberate:
 
 - **The test clients in `_appsettings.json` use the reserved redirect URIs
   `test_self_code` / `test_self_token`.** They exist so that the site can act as a client
-  against itself. `IsLockedDownRedirectEndpoint` closes them
+  against itself. `IsLockedDownTestEndpoints` closes them
 - **`IsDebug: true` creates test user accounts** on the first request to `/Account/Login`.
   It is a development setting
 - **Implicit and ROPC are enabled by default** (`EnableImplicitGrantType`,

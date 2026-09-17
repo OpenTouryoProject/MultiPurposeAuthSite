@@ -934,7 +934,7 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 また `CheckRedirectUri` には
 **「`Config.OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Manage` は
 どの client_id でも無条件に許可」** という自己テスト用の抜け道がある。
-`Config.IsLockedDownRedirectEndpoint` の対象外なので、**本番で閉じられない。**
+`Config.IsLockedDownTestEndpoints` の対象外なので、**本番で閉じられない。**
 
 ### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]**
 

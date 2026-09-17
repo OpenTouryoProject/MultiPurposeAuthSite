@@ -30,6 +30,7 @@
 //*  2026/09/08  玄人 幸道         エラー応答とRedirect URLをRFC 6749に合わせる（#187）
 //*  2026/09/16  玄人 幸道         2FAのコード送信の失敗を、画面に戻して伝える（#214）
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認の待ち受け（TwoFactorPushStatus）を追加（#216）
+//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1903,7 +1904,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> IDFederationRedirectEndPoint(string code, string state)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -2372,7 +2373,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 bool verified = false;
 
@@ -2450,7 +2451,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // IsLockedDownRedirectEndpoint == true;
+                // IsLockedDownTestEndpoints == true;
             }
 
             // エラー
@@ -3466,7 +3467,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state, string response)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 if (!string.IsNullOrEmpty(code)
                     || !string.IsNullOrEmpty(response))
@@ -3678,7 +3679,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // IsLockedDownRedirectEndpoint == true;
+                // IsLockedDownTestEndpoints == true;
             }
 
             // エラー
@@ -3698,7 +3699,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 // AccountVerifyCodeViewModelの検証
                 if (ModelState.IsValid)
@@ -3853,7 +3854,7 @@ namespace MultiPurposeAuthSite.Controllers
             string access_token, string id_token, string code, string state,
             string token_type, string expires_in, string response)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 // OAuth2のREQUIREDは、access_token, token_type, state
                 if (!string.IsNullOrEmpty(state)

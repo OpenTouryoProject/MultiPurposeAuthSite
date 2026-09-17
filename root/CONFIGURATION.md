@@ -68,6 +68,9 @@ set appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:443
 **net48 版にはこの仕組みが無い。** これは ASP.NET Core の構成の仕組みである。
 ただし、次の `FxContainerization` は**両方で使える。**
 
+> **設定ファイルに無いキーは、環境変数だけでは効かない**（実測。2026-09-17）。
+> 上書きであって、追加ではない。**新しいキーを試すときは、先にファイルへ足すこと。**
+
 ### `FxContainerization` — 環境変数を優先する（net48 / net10.0 の両方）
 
 `appSettings` の `FxContainerization` を `ON` にすると、
@@ -368,7 +371,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `EnabeDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**綴りは実装どおり `Enabe`**） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
-| `IsLockedDownRedirectEndpoint` | `false` | `true` | 自己テスト画面（`/Home/Saml2OAuth2Starters`）と、テスト用のリダイレクト先を閉じる |
+| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
@@ -390,10 +393,19 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 
 | 見るもの | 期待 |
 |---|---|
-| `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownRedirectEndpoint`） |
+| `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownTestEndpoints`） |
 | 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
 | `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnabeDebugTraceLog`） |
+
+### キーを改名した（`IsLockedDownRedirectEndpoint` → `IsLockedDownTestEndpoints`）
+
+閉じる対象がリダイレクト先だけではなくなったため、名前を実態に合わせた（#219）。
+
+- **旧いキー名も読む。** 新しいキー名が無ければ、旧いキー名を使う
+- **旧いキー名だけのときは、起動時に警告する**（下の「起動時の自動確認」）
+- **未設定のときは `false`（＝開く）。** だから「改名しただけ」だと、
+  既存の設定ファイル（旧キーしか無い）で**本番が黙って開いてしまう。** 互換を残したのはこのため
 
 ### 起動時の自動確認
 
@@ -413,8 +425,9 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    （`CommonLibrary/Co/Config.cs`）。**`IsDebug=false` と書いても効かない。** 本番は DBMS 前提。
 2. **管理者ユーザ（`AdministratorUID`）は、`IsDebug` に関係なく無条件で作られる。**
    テスト利用者だけが `IsDebug` と `TestUserPWD` で閉じられる。
-3. **まだ設定で閉じられない口がある。** `/TestHybridFlow`（Web API のルート）、
-   `ValuesController`（疎通用。net10.0 のみ）、`PingController`（両方）。扱いは #219 で検討中。
+3. **`/Ping` は閉じない。** セッションのタイムアウト防止に使われているため（#219）。
+   本番で塞ぐなら、前段（リバース プロキシなど）で行う。
+   `/TestHybridFlow` と `api/Values`（net10.0 のみ）は、`IsLockedDownTestEndpoints` で閉じる。
 4. **STS 専用モード**（`EnableSignupProcess` / `EnableEditingOfUserAttribute` /
    `EnableAdministrationOfUsersAndRoles` を**全部 false**）にすると、サインアップ・属性の編集・
    ユーザ管理が無効になる。**利用者ストアへの書き込みも止まる**ので、切替の影響が大きい。

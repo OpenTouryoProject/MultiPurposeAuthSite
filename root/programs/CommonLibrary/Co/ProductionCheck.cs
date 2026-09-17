@@ -81,9 +81,9 @@ namespace MultiPurposeAuthSite.Co
                             + "IsDebug が true なら、テスト利用者が作られます。");
                     }
 
-                    if (!Config.IsLockedDownRedirectEndpoint)
+                    if (!Config.IsLockedDownTestEndpoints)
                     {
-                        warnings.Add("IsLockedDownRedirectEndpoint が false です。"
+                        warnings.Add("IsLockedDownTestEndpoints が false です。"
                             + "自己テスト画面（/Home/Saml2OAuth2Starters）が開いています。");
                     }
 
@@ -91,6 +91,12 @@ namespace MultiPurposeAuthSite.Co
                     {
                         warnings.Add("FcmOutboxDirectory が設定されています。"
                             + "プッシュ通知は FCM に送られず、ファイルに書かれます。");
+                    }
+
+                    if (Config.UsesOldLockedDownKey)
+                    {
+                        warnings.Add("改名前のキー名（" + Config.OldLockedDownKey
+                            + "）が使われています。" + "IsLockedDownTestEndpoints に直してください。");
                     }
 
                     if (Config.EnabeDebugTraceLog)

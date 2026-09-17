@@ -286,7 +286,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 `_appsettings.json` の `OAuth2ClientsInformation` には
 `test_self_code` / `test_self_token` という**予約 redirect_uri** を持つテスト用クライアントが
-定義されている。**本番では `IsLockedDownRedirectEndpoint` を true にして塞ぐ。**
+定義されている。**本番では `IsLockedDownTestEndpoints` を true にして塞ぐ。**
 
 ---
 

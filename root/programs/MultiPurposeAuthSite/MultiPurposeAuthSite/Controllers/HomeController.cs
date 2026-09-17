@@ -25,6 +25,7 @@
 //*  2020/11/12  西野 大介         redirect_uri、ROへの対策漏れ。
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
+//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -660,7 +661,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult Saml2OAuth2Starters()
         {
-            if (Config.IsLockedDownRedirectEndpoint)
+            if (Config.IsLockedDownTestEndpoints)
             {
                 return View("Index");
             }
@@ -679,7 +680,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> Saml2OAuth2Starters(HomeSaml2OAuth2StartersViewModel model)
         {
-            if (Config.IsLockedDownRedirectEndpoint)
+            if (Config.IsLockedDownTestEndpoints)
             {
                 return View("Index");
             }

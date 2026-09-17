@@ -29,11 +29,14 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/09/07  西野 大介         新規作成
+//*  2026/09/17  玄人 幸道         テスト用の口として、閉じられるようにする（#219）
 //**********************************************************************************
 
 using System.Collections.Generic;
 
 using Microsoft.AspNetCore.Mvc;
+
+using MultiPurposeAuthSite.Co;
 using Microsoft.AspNetCore.Cors;
 
 namespace MultiPurposeAuthSite.Controllers
@@ -50,9 +53,15 @@ namespace MultiPurposeAuthSite.Controllers
         /// </returns>
         [HttpGet]
         [Route("[action]")]
-        public IEnumerable<string> Get()
+        public IActionResult Get()
         {
-            return new string[] { "value1", "value2" };
+            // **テスト用の口なので、閉じられるようにする**（#219）。
+            if (Config.IsLockedDownTestEndpoints)
+            {
+                return this.NotFound();
+            }
+
+            return this.Ok(new string[] { "value1", "value2" });
         }
     }
 }

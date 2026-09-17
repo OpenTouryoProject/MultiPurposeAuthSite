@@ -80,7 +80,7 @@
 - **`_appsettings.json` のテスト用クライアントは、予約値
   `test_self_code` / `test_self_token` をリダイレクト URI に使う。**
   サイトが自分自身のクライアントとして動作するために用意している。
-  `IsLockedDownRedirectEndpoint` で閉じられる
+  `IsLockedDownTestEndpoints` で閉じられる
 - **`IsDebug: true` は、`/Account/Login` への初回アクセス時にテスト ユーザを作成する。**
   開発用の設定である
 - **Implicit と ROPC が既定で有効**（`EnableImplicitGrantType` /

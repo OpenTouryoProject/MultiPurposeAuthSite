@@ -38,6 +38,7 @@
 //*  2026/09/12  玄人 幸道         FcmOutboxDirectory（プッシュ通知の送信箱。テスト用）を追加（#196）
 //*  2026/09/16  玄人 幸道         TwoFactorAuthPushResultWebAPI を削除（未実装のため）（#203）
 //*  2026/09/16  玄人 幸道         TwoFactorPushResultEndpoint を追加（#213）
+//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1543,13 +1544,38 @@ namespace MultiPurposeAuthSite.Co
         }
         
         /// <summary>
-        /// Redirectエンドポイントがロックダウンされているかどうか。
+        /// テスト用のエンドポイントがロックダウンされているかどうか。
         /// </summary>
-        public static bool IsLockedDownRedirectEndpoint
+        public static bool IsLockedDownTestEndpoints
         {
             get
             {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsLockedDownRedirectEndpoint"));
+                // **旧いキー名も読む（#219）。**
+                //   未設定は false（＝「開く」）なので、改名しただけだと
+                //   既存の設定ファイル（旧キーしか無い）で、本番が黙って開いてしまう。
+                string value = GetConfigParameter.GetConfigValue("IsLockedDownTestEndpoints");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    value = GetConfigParameter.GetConfigValue(Config.OldLockedDownKey);
+                }
+
+                return Convert.ToBoolean(value);
+            }
+        }
+
+        /// <summary>改名前のキー名（互換のために読む。#219）</summary>
+        public const string OldLockedDownKey = "IsLockedDownRedirectEndpoint";
+
+        /// <summary>
+        /// 改名前のキー名だけが設定されているか（起動時の警告に使う。#219）
+        /// </summary>
+        public static bool UsesOldLockedDownKey
+        {
+            get
+            {
+                return string.IsNullOrEmpty(GetConfigParameter.GetConfigValue("IsLockedDownTestEndpoints"))
+                    && !string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(Config.OldLockedDownKey));
             }
         }
 
