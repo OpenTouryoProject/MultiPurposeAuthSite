@@ -73,6 +73,7 @@
 //*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
 //*  2026/09/17  玄人 幸道         認可エラーを、可能ならリダイレクトで返す（#187 の残り）
 //*  2026/09/17  玄人 幸道         /introspect の token_type を RFC 7662 2.2 の意味に直す（#218）
+//*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1646,11 +1647,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="assertion">string</param>
         /// <param name="x509">X509Certificate2</param>
+        /// <param name="scope">string（トークン要求の scope。RFC 7521 4.1 / RFC 7523 2.1）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantJwtBearerTokenCredentials(
-            string grant_type, string assertion, X509Certificate2 x509,
+            string grant_type, string assertion, X509Certificate2 x509, string scope,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -1689,8 +1691,14 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+                                // **scope は、トークン要求のパラメタが優先**
+                                //   （RFC 7521 4.1 / RFC 7523 2.1。#218）。
+                                //   要求に無ければ、これまでどおり assertion の値を使う
+                                //   （要求に scope を付けていない利用者を壊さないため）。
+                                string requested = string.IsNullOrEmpty(scope) ? scopes : scope;
+
                                 // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
-                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(scopes.Split(' '), iss), null, "");
+                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(requested.Split(' '), iss), null, "");
 
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(

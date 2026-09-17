@@ -1080,6 +1080,17 @@ RFC 6749 §3.3 は「発行するスコープは要求と異なってよい」�
 E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）/ `RT-198.2`（password）/
 `RT-198.3`・`RT-198.4`（登録の `scope` による制限。client_credentials / 認可コード）。
 
+**対応（#218 の 3 つ目）: JWT Bearer（RFC 7523）が、トークン要求の `scope` を見ていなかった。**
+
+`GrantJwtBearerTokenCredentials` は **assertion の中の `scope` だけ**を読んでいた。
+`scope` は RFC 7521 §4.1 / RFC 7523 §2.1 で**トークン要求のパラメタ**として定義されており、
+**仕様どおり送るクライアントの指定が、黙って無視されていた。**
+
+- **要求に `scope` があれば、それを使う。** 無ければ、これまでどおり assertion の値を使う
+  （要求に `scope` を付けていない利用者を壊さないため）
+- どちらも `FilterSupportedScopes` を通す（#198 の絞り込みは維持）
+- E2E テスト : **`EX-7.5`**（送らないと `profile email`、`scope=email` を送ると `email` だけ。両ターゲットで実測）
+
 > **残っている点:** Implicit / Hybrid の応答（フラグメント）には、まだ `scope` を返していない
 > （RFC 6749 §4.2.2 は、要求と異なるなら必須）。
 

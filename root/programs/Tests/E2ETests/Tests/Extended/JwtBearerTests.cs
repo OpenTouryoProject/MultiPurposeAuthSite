@@ -29,10 +29,12 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
+//*  2026/09/17  玄人 幸道         EX-7.5（トークン要求の scope）を追加（#218）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -62,13 +64,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="client">IdPClient</param>
         /// <param name="assertion">assertion</param>
         /// <returns>JsonResponse</returns>
-        private static Task<JsonResponse> RequestAsync(IdPClient client, string assertion)
+        private static Task<JsonResponse> RequestAsync(
+            IdPClient client, string assertion, string scope = null)
         {
-            return client.TokenAsync(new Dictionary<string, string>()
+            Dictionary<string, string> form = new Dictionary<string, string>()
             {
                 { "grant_type", JwtBearerAssertion.GrantType },
                 { "assertion", assertion }
-            });
+            };
+
+            // **null なら送らない。** 「送らない」と「空で送る」を区別するため。
+            if (scope != null)
+            {
+                form.Add("scope", scope);
+            }
+
+            return client.TokenAsync(form);
         }
 
         /// <summary>EX-7.1 正常系</summary>
@@ -122,8 +133,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                         : "拒否した（error=" + (again.Error ?? "なし") + "）",
                     "jti による再利用の防止は任意（RFC 7523 §3 (7) : MAY）。");
 
-                r.Note("この実装は scope を assertion の中から読む。"
-                    + "RFC 7523 §2.1 では、scope はトークン要求のパラメタである。");
+                r.Note("**トークン要求に scope を付けなければ、assertion の中の scope を使う**（#218）。"
+                    + "付けた場合は、そちらが優先される（RFC 7521 §4.1 / RFC 7523 §2.1）。EX-7.5 で測る。");
 
                 r.Done();
             }
@@ -237,6 +248,59 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     "access_token を返さない",
                     token.AccessToken == null ? "返さなかった（error=" + (token.Error ?? "なし") + "）"
                                               : "**返してしまった**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-7.5 トークン要求の scope</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0705_トークン要求のscopeが使われる(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("EX-7.5",
+                    "トークン要求の scope が、assertion の中の scope より優先される",
+                    "**scope は、assertion の中身ではなくトークン要求のパラメタである。**"
+                    + "仕様どおり scope を送るクライアントの指定が黙って無視されると、"
+                    + "要らない権限の付いたトークンを受け取ることになる。",
+                    "RFC 7521 §4.1 / RFC 7523 §2.1（scope はトークン要求のパラメタ）/ #218");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient
+                    + "（assertion の中の scope は profile email）");
+
+                r.Step("(1) scope を送らずに要求し、発行されたスコープを見る（基準）");
+
+                JsonResponse baseline = await RequestAsync(
+                    client, JwtBearerAssertion.Create(client, reg.ClientId));
+
+                string baseScope = baseline.String("scope") ?? "";
+
+                r.Observe("送らないとき発行されたスコープ", baseScope,
+                    "assertion の中の scope（profile email）から、発行できるものだけが返る。");
+
+                // **前提が崩れていたら、黙って通さない。**
+                //   profile が発行されていないと、(2) の「消えたこと」に意味が無くなる。
+                Assert.Contains("profile", baseScope);
+
+                r.Step("(2) 同じ assertion に、トークン要求の scope=email を付けて要求する");
+
+                JsonResponse token = await RequestAsync(
+                    client, JwtBearerAssertion.Create(client, reg.ClientId), "email");
+
+                string issued = token.String("scope") ?? "";
+
+                r.Verify("要求した email が発行される", issued.Split(' ').Contains("email"),
+                    "email を含む", "scope = " + (issued == "" ? "（返らない）" : issued));
+
+                r.Verify("assertion にしか無い profile は発行されない",
+                    !issued.Split(' ').Contains("profile"),
+                    "profile を含まない", "scope = " + (issued == "" ? "（返らない）" : issued));
 
                 r.Done();
             }

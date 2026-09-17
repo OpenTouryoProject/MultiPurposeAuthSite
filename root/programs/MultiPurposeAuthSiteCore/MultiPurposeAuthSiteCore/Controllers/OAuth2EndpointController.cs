@@ -60,6 +60,7 @@
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）を追加（#213）
 //*  2026/09/17  玄人 幸道         /ciba_authz : プッシュ通知の送信失敗の原因を、ACCESSログに残す（#210）
 //*  2026/09/17  玄人 幸道         トークン応答に Cache-Control: no-store / Pragma: no-cache を付ける（#218）
+//*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -277,8 +278,10 @@ namespace MultiPurposeAuthSite.Controllers
                             break;
 
                         case OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType:
+                            // トークン要求の scope を渡す（RFC 7521 4.1 / RFC 7523 2.1）（#218）
+                            scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantJwtBearerTokenCredentials(
-                            grant_type, assertion, x509, out ret, out err))
+                            grant_type, assertion, x509, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
