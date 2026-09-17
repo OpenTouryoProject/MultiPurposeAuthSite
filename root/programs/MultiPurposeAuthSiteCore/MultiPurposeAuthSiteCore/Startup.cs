@@ -20,6 +20,7 @@
 //*  2020/07/29  西野 大介         SecurityStamp対応
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）のルートを追加（#213）
+//*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -92,6 +93,10 @@ namespace MultiPurposeAuthSite
         /// </summary>
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {            
+            // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
+            //   起動は止めない。警告を OPERATION ログに出すだけ。
+            ProductionCheck.WarnIfRisky();
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();

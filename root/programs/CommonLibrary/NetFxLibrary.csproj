@@ -68,6 +68,7 @@
   <ItemGroup>
     <Compile Include="Co\Config.cs" />
     <Compile Include="Co\Const.cs" />
+    <Compile Include="Co\ProductionCheck.cs" />
     <Compile Include="Data\CmnStore.cs" />
     <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />

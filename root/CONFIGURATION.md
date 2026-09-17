@@ -395,6 +395,18 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
 | `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnabeDebugTraceLog`） |
 
+### 起動時の自動確認
+
+**このチェックリストの読み落としを拾うため、起動時にも確かめている**（`Co/ProductionCheck`。両アプリ）。
+
+- 該当すると、`OPERATION` ログに `[設定の確認] …（CONFIGURATION.md 11 節）` が出る
+- **起動は止めない。** 設定を直せない状況で復旧できなくなるため
+- **`UserStoreType` が `mem` のときは何も言わない**（開発・テスト専用の構成なので、雑音にしかならない）。
+  ただし `AdministratorUID` / `AdministratorPWD` が雛形の値のままのときだけは、ストアによらず言う
+
+**ログに出ていないこと＝設定が正しいこと、ではない。** 確かめているのは上の表のうち、
+機械で判る範囲だけ（クライアント登録の中身などは見ていない）。
+
 ### 注意（仕様上の落とし穴）
 
 1. **`IsDebug` は `UserStoreType = mem` のとき、設定を無視して常に `true`** を返す
