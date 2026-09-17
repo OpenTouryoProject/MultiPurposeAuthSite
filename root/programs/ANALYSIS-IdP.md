@@ -611,11 +611,19 @@ token = Token.CmnAccessToken.ProtectFromPayload(
 
 E2E テスト: `EX-2.4` / `EX-2.5` / `EX-2.6`（ヒントの取り違え）/ `EX-3.2` / `EX-3.4` / `EX-3.7`（同）。
 
+**対応（#218 の 2 つ目）: `/introspect` の `token_type`。**
+
+「見つかった種類」（`access_token` / `refresh_token`）を入れていたが、
+RFC 7662 §2.2 の `token_type` は **RFC 6749 §5.1 の型**（`bearer` など）を指す。
+
+- **アクセス トークンには `bearer`** を返す。値はトークン応答（`CreateAccessTokenResponse`）と揃える
+- **リフレッシュ トークンには付けない。** §5.1 の型が無いため（RFC 7662 §2.2 の `token_type` は OPTIONAL）
+- E2E テスト : `EX-3.7` を**観測から検証に格上げ**（`bearer` が返る。大小文字は問わない）。
+  `EX-3.2`（リフレッシュ トークン）には「返らない」ことを観測として残した
+
 > **残っている点:**
 > エラー応答の HTTP ステータス（400 / 401）は #196 で対応した（`/revoke`・`/introspect` とも）。
-> `/introspect` の `token_type` には「見つかった種類」（`access_token` / `refresh_token`）を入れているが、
-> RFC 7662 §2.2 の `token_type` は `Bearer` などの型を指す。
-> また、メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
+> メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
 
 ---
 

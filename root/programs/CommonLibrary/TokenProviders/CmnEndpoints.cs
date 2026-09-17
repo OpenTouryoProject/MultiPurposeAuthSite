@@ -72,6 +72,7 @@
 //*  2026/09/11  玄人 幸道         /ciba_authz の空のエラー コードを CIBA Core 13 のコードに（unknown_user_id を追加）（#196）
 //*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
 //*  2026/09/17  玄人 幸道         認可エラーを、可能ならリダイレクトで返す（#187 の残り）
+//*  2026/09/17  玄人 幸道         /introspect の token_type を RFC 7662 2.2 の意味に直す（#218）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2165,7 +2166,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // メタデータの返却
                 ret.Add(OAuth2AndOIDCConst.active, true);
-                ret.Add(OAuth2AndOIDCConst.token_type, type);
+
+                // **token_type は「トークンの型」**（RFC 6749 5.1 の bearer など）であって、
+                //   見つかった種別（access_token / refresh_token）ではない（#218）。
+                //   トークン応答（CreateAccessTokenResponse）と同じ値を返す。
+                //   **リフレッシュ トークンには 5.1 の型が無いので、付けない**
+                //   （RFC 7662 2.2 では OPTIONAL）。
+                if (type == OAuth2AndOIDCConst.AccessToken)
+                {
+                    ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
+                }
 
                 string scopes = "";
                 foreach (Claim claim in identity.Claims)
