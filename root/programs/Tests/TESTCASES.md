@@ -2630,3 +2630,47 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - (5) は要求が不正でもよい。**エラー応答にも付くこと**を確かめる（RFC 6749 §5.2 と同じ考え方）。
 
+## RT-220.1 コンフィデンシャル クライアントでも、client_secret と PKCE を併用できる
+
+| | |
+|---|---|
+| 観点 | PKCE は当初「client_secret を持てないクライアントの代わり」だったが、**いまは種別によらない標準的な防壁**で、client_secret と併用される（OAuth 2.1 / 最近の RP ライブラリ）。**以前は、両方を送るとどの分岐にも入らず invalid_client になっていた**（#220）。 |
+| 根拠 | RFC 7636 / OAuth 2.1 §4.1.1（PKCE は全クライアント種別で必須）/ #220 |
+| テスト | `RT220_01_client_secretとPKCEを併用できる` |
+
+**手順**
+
+1. code_challenge_method=S256 で認可コードを得る
+1. client_secret と code_verifier の**両方**を送って交換する
+1. 対照 : client_secret は正しく、code_verifier だけ誤った要求を送る
+
+**検証（合否を判定する）**
+
+- トークンが返る
+- 誤った code_verifier ではトークンを発行しない
+
+**補足**
+
+- **PKCE を素通りさせていないこと**を確かめる。client_secret で認証が通っても、PKCE の検証に失敗すれば発行してはならない。
+
+## RT-220.2 plain の PKCE は、既定では受理される（設定で拒否できる）
+
+| | |
+|---|---|
+| 観点 | **plain は保護にならない**（横取りした者が challenge をそのまま送れる）。OAuth 2.1 / FAPI は S256 のみを許すが、**下位互換のため既定では受理する**。設定 RequirePkceS256 を true にすると拒否する（#220）。 |
+| 根拠 | RFC 7636 §4.2（plain は非推奨）/ OAuth 2.1 / #220 |
+| テスト | `RT220_02_plainのPKCEは既定では受理される` |
+
+**手順**
+
+1. code_challenge_method=plain で認可コードを得る
+1. 同じ値を code_verifier として交換する
+
+**検証（合否を判定する）**
+
+- 既定（RequirePkceS256=false）では受理される
+
+**補足**
+
+- **RequirePkceS256=true のときに拒否すること**は、E2E では測っていない（設定ファイルを変えて起動し直す必要があるため）。設定は CONFIGURATION.md を参照。
+

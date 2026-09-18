@@ -39,6 +39,7 @@
 //*  2026/09/16  玄人 幸道         TwoFactorAuthPushResultWebAPI を削除（未実装のため）（#203）
 //*  2026/09/16  玄人 幸道         TwoFactorPushResultEndpoint を追加（#213）
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
+//*  2026/09/17  玄人 幸道         PKCE で S256 だけを受け付ける設定を追加（#220）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1563,6 +1564,21 @@ namespace MultiPurposeAuthSite.Co
                 return Convert.ToBoolean(value);
             }
         }
+        /// <summary>
+        /// PKCE で S256 だけを受け付けるかどうか（#220）
+        /// </summary>
+        /// <remarks>
+        /// OAuth 2.1 / FAPI は S256 のみを許す。plain は保護にならない。
+        /// **既定は false（従来どおり plain も受理）。** 下位互換のため。
+        /// </remarks>
+        public static bool RequirePkceS256
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePkceS256"));
+            }
+        }
+
 
         /// <summary>改名前のキー名（互換のために読む。#219）</summary>
         public const string OldLockedDownKey = "IsLockedDownRedirectEndpoint";

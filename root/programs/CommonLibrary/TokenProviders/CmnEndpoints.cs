@@ -74,6 +74,7 @@
 //*  2026/09/17  玄人 幸道         認可エラーを、可能ならリダイレクトで返す（#187 の残り）
 //*  2026/09/17  玄人 幸道         /introspect の token_type を RFC 7662 2.2 の意味に直す（#218）
 //*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
+//*  2026/09/17  玄人 幸道         PKCE : client_secret との同時送信を通し、検証を 1 箇所にまとめた（#220）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -746,6 +747,63 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region VerifyPkce
+
+        /// <summary>PKCE（RFC 7636）の検証（#220）</summary>
+        /// <param name="code">認可コード</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code_verifier">code_verifier</param>
+        /// <param name="usedS256">S256 で検証できたか</param>
+        /// <returns>検証の成否</returns>
+        /// <remarks>
+        /// **クライアント認証とは別の検証である。** 呼び出し元は、認証の成否と併せて判断する。
+        ///
+        /// `plain` は保護にならないので、`RequirePkceS256` が true なら受け付けない
+        /// （既定は false ＝ 従来どおり受理。OAuth 2.1 / FAPI は S256 のみ）。
+        /// </remarks>
+        private static bool VerifyPkce(
+            string code, string client_id, string redirect_uri,
+            string code_verifier, out bool usedS256)
+        {
+            usedS256 = false;
+
+            AuthorizationCodeProvider.ReceiveChallenge(
+                code, client_id, redirect_uri,
+                out string code_challenge_method, out string code_challenge);
+
+            if (string.IsNullOrEmpty(code_challenge_method)
+                || string.IsNullOrEmpty(code_challenge))
+            {
+                // 認可要求で PKCE を使っていない（code_verifier だけ送られた）。
+                return false;
+            }
+
+            if (code_challenge_method.ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
+            {
+                usedS256 = (code_challenge
+                    == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier));
+
+                return usedS256;
+            }
+
+            if (code_challenge_method.ToLower() == OAuth2AndOIDCConst.PKCE_plain)
+            {
+                if (Config.RequirePkceS256)
+                {
+                    // plain は受け付けない設定（#220）
+                    return false;
+                }
+
+                return (code_challenge == code_verifier);
+            }
+
+            // 未知のメソッド
+            return false;
+        }
+
+        #endregion
+
         #region ResolveErrorRedirectUri
 
         /// <summary>エラーをリダイレクトで返してよい redirect_uri を決める（#187）</summary>
@@ -1151,42 +1209,35 @@ namespace MultiPurposeAuthSite.TokenProviders
                     else if (!string.IsNullOrEmpty(code_verifier)
                         && string.IsNullOrEmpty(client_secret))
                     {
-                        // PKCE (client_id & code_verifier)
-                        AuthorizationCodeProvider.ReceiveChallenge(
-                            code, client_id, redirect_uri,
-                            out string code_challenge_method, out string code_challenge);
+                        // パブリック クライアント : PKCE だけで認証する（client_id & code_verifier）
+                        authned = CmnEndpoints.VerifyPkce(
+                            code, client_id, redirect_uri, code_verifier, out bool usedS256);
 
-                        if (!string.IsNullOrEmpty(code_challenge_method))
+                        if (authned && usedS256)
                         {
-                            if (!string.IsNullOrEmpty(code_challenge))
-                            {
-                                if (code_challenge_method.ToLower() == OAuth2AndOIDCConst.PKCE_plain)
-                                {
-                                    if (code_challenge == code_verifier)
-                                    {
-                                        // passed.
-                                        authned = true;
-                                    }
-                                }
-                                else if (code_challenge_method.ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
-                                {
-                                    if (code_challenge == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
-                                    {
-                                        // passed.
-                                        authned = true;
-                                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                                    }
-                                }
-                            }
+                            // **従来どおりの格上げ。** PKCE のメソッドは本来「クライアント認証の強度」ではないが、
+                            //   fapi1 で登録されたクライアントが PKCE で通らなくなるため、ここでは変えない（#220）。
+                            permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
                         }
                     }
                     else if (!string.IsNullOrEmpty(code_verifier)
                         && !string.IsNullOrEmpty(client_secret))
                     {
-                        // "OAuth 2.0 authorization code flow with the PKCE extension"
-                        //  (client_id & client_secret & code_verifier)
-                        // これを実装する場合、client_id から Native か SPA否かを見極めて、
-                        // SPAの場合、通常のPKCE（前カバレッジ）を拒否する実装が必要になる。
+                        // **コンフィデンシャル クライアント ＋ PKCE**（client_id & client_secret & code_verifier）（#220）
+                        //
+                        //   PKCE は当初「client_secret を持てないクライアントの代わり」だったが、
+                        //   いまは**種別によらない標準的な防壁**で、client_secret と併用される
+                        //   （OAuth 2.1 / 最近の RP ライブラリ）。
+                        //   **認証は client_secret、PKCE はそれとは別に検証する。両方が通ること。**
+                        //   以前はこの分岐が空実装で、必ず invalid_client になっていた。
+                        authned = CmnEndpoints.ClientAuthentication(
+                            client_id, client_secret, ref x509, out permittedLevel);
+
+                        if (authned)
+                        {
+                            authned = CmnEndpoints.VerifyPkce(
+                                code, client_id, redirect_uri, code_verifier, out bool _);
+                        }
                     }
                     else if (!string.IsNullOrEmpty(assertion))
                     {

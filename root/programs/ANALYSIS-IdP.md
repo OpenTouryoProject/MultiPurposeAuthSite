@@ -873,7 +873,7 @@ string.Format("?code={0}&state={1}", code, state)
 `&` を含めればリダイレクト URL にパラメタを注入できる。
 `?` の無条件付与（A-6 と同じ）と併せて、リダイレクト URL の組み立てを一箇所に集約すべき。
 
-### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]**
+### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **一部 ✅ 修正済み（#220）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs:1010-1050
@@ -894,6 +894,26 @@ else if (code_verifier 有り && client_secret 有り) → 【空実装】
 
 さらに、**認可エンドポイント側で `code_challenge` を必須化していない**ため、
 PKCE 無しの認可コード フローがそのまま通る。
+
+**対応（#220 の 1 つ目）: 上の 1 と 2。**
+
+- **1（同時送信）: 直した。** 空実装だった分岐を実装し、
+  **クライアント認証（`client_secret`）と PKCE の検証を、別々に行って両方を求める**。
+  PKCE は当初「`client_secret` を持てないクライアントの代わり」だったが、
+  いまは**種別によらない標準的な防壁**で、`client_secret` と併用される
+- **2（`plain`）: 設定で拒否できるようにした**（`RequirePkceS256`）。
+  **既定は `false`（従来どおり受理）。** 下位互換のため
+- 検証は `VerifyPkce` にまとめ、パブリック クライアントの経路と共用する（同じ判定が 2 箇所に散らない）
+- E2E テスト : **`RT-220.1`**（`client_secret` ＋ `code_verifier` でトークンが返る／
+  **誤った `code_verifier` では発行しない**）、**`RT-220.2`**（`plain` は既定で受理）
+
+> **3（`permittedLevel` の格上げ）は、今回は触っていない。**
+> `S256` のときに `fapi1` へ格上げする実装をやめると、
+> **`fapi1` で登録されたクライアントが PKCE で通らなくなる**（`CheckClientMode` は
+> `clientMode <= permittedLevel` で判定するため）。**権限判定の設計から変える必要がある。**
+>
+> **`code_challenge` の必須化**（この節の最後）も、既定を変えると
+> PKCE 無しの既存クライアントが通らなくなるため、#220 の 2 つ目以降で扱う。
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
 

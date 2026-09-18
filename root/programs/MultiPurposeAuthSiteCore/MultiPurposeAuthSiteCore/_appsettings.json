@@ -207,6 +207,8 @@
     "EnableRefreshToken": "true",
 
     "EnableOpenIDConnect": "true",
+    // PKCE で S256 だけを受け付けるか（#220。true は OAuth 2.1 / FAPI 相当）
+    "RequirePkceS256": "false",
 
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
