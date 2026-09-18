@@ -32,6 +32,7 @@
 //*  2026/09/17  玄人 幸道         RT-220.2（plain の PKCE）を追加（#220）
 //*  2026/09/18  玄人 幸道         RT-220.3（code_challenge の要否）を追加（#220）
 //*  2026/09/18  玄人 幸道         RT-220.4（S256 と fapi クレーム）を追加（#220）
+//*  2026/09/18  玄人 幸道         RT-221.1 / RT-221.2（クライアント単位の PKCE）を追加（#221）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -309,6 +310,104 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**このクライアントは normal 登録。** fapi1 で登録されたクライアントが"
                     + "PKCE で通ること自体は、これまでどおり（permittedLevel の格上げは残している）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-221.1 クライアント単位の PKCE 必須化</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT221_01_クライアント単位でPKCEを必須にできる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                Flows.SkipIfClientNotRegistered(client, KnownClients.TestClient6);
+
+                TestReport r = this.Report("RT-221.1",
+                    "登録で require_pkce を true にしたクライアントは、PKCE 無しの認可を拒否する",
+                    "**サーバ全体の RequirePkce（#220）は、全クライアントが揃わないと有効にできない。**"
+                    + "移行の途中でも、**締められるクライアントから順に締められる**必要がある。"
+                    + "oauth2_oidc_mode=fapi1 でも PKCE は必須になるが、"
+                    + "**そちらは ROPC / client_credentials / refresh_token も巻き添えで塞ぐ**（#222）。",
+                    "OAuth 2.1 draft §4.1.1 / #221");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient6);
+
+                r.Target("client_name=" + KnownClients.TestClient6 + "（登録で require_pkce=true）");
+                r.Step("(1) code_challenge を送らずに認可リクエストを出す");
+
+                AuthZResponse without = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri);
+
+                r.Verify("認可コードを発行しない",
+                    string.IsNullOrEmpty(without.Code),
+                    "code を返さない",
+                    string.IsNullOrEmpty(without.Code)
+                        ? "返さなかった（error=" + (without.Error ?? "なし") + "）" : "**返してしまった**");
+
+                r.Verify("エラーは invalid_request",
+                    without.Error == "invalid_request",
+                    "invalid_request",
+                    without.Error ?? "（無し）");
+
+                r.Note("**認可エンドポイントで弾いている。** oauth2_oidc_mode=fapi1 の経路は"
+                    + "認可コードを発行してから /token で拒否するので、**利用者が同意まで進んだ後に失敗する**（#222）。");
+
+                r.Step("(2) 同じクライアントに、PKCE（S256）を付けて出す");
+
+                AuthZResponse with = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri,
+                    extra: new Dictionary<string, string>()
+                    {
+                        { "code_challenge", PkceTests.Challenge },
+                        { "code_challenge_method", "S256" }
+                    });
+
+                r.Verify("PKCE を付ければ認可コードが返る",
+                    !string.IsNullOrEmpty(with.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(with.Code)
+                        ? "**返らなかった**（error=" + (with.Error ?? "なし") + "）" : "あり（値は伏せる）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-221.2 他のクライアントには波及しない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT221_02_他のクライアントには波及しない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-221.2",
+                    "require_pkce は、そのクライアントにだけ効く",
+                    "**クライアント単位の設定が、他のクライアントに漏れないこと。**"
+                    + "サーバ全体の RequirePkce が false なら、登録で締めていないクライアントは"
+                    + "従来どおり PKCE 無しで通る（#221）。",
+                    "#221");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample + "（require_pkce は未設定）");
+                r.Step("code_challenge を送らずに認可リクエストを出す");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri);
+
+                r.Verify("認可コードが返る（従来どおり）",
+                    !string.IsNullOrEmpty(authz.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(authz.Code)
+                        ? "**返らなかった**（error=" + (authz.Error ?? "なし") + "）" : "あり（値は伏せる）");
+
+                r.Note("**サーバ全体の RequirePkce を true にすれば、こちらも通らなくなる。**"
+                    + "クライアント側の設定は「個別の引き上げ」であって、**床を下げることはできない**。");
 
                 r.Done();
             }

@@ -447,5 +447,27 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
    既存の登録を確かめてから切り替える。**Device AuthZ / CIBA は `RequirePkce` の対象外**
    （認可エンドポイントを通らないため）。
 
+   **`RequirePkce` は、クライアント単位でも指定できる**（#221）。
+   クライアント登録に `require_pkce` を書くと、**そのクライアントにだけ**必須になる。
+
+   ```json
+   "c4309326f39b1e0975fddb4bc93b56a0": {
+     "client_secret": "...",
+     "redirect_uri_code": "http://localhost:12347/",
+     "client_name": "TestClient6",
+     "require_pkce": "true"
+   }
+   ```
+
+   **判定は `RequirePkce`（サーバ全体）との OR。**
+   サーバ側が「全クライアント共通の床」、クライアント側は「個別の引き上げ」で、
+   **クライアント側から床を下げることはできない。**
+   **移行では、締められるクライアントから順に `require_pkce` を立て、
+   全部揃ったらサーバの `RequirePkce` を `true` にする**、という順序が取れる。
+
+   > **`oauth2_oidc_mode` を `fapi1` にしても PKCE は必須になるが、そちらは重い。**
+   > **ROPC / `client_credentials` / `refresh_token` も巻き添えで塞がる**（実測。#222）。
+   > 「PKCE だけ必須にしたい」なら `require_pkce` を使う。
+
 > **設定を変えたら、雛形（`_app.config` / `_appsettings.json`）にも反映する**（1 節）。
 > 本番の値そのものは書かない。

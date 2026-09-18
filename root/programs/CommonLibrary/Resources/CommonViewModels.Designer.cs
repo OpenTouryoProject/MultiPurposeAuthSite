@@ -313,6 +313,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Require PKCE for this client. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequirePkce {
+            get {
+                return ResourceManager.GetString("RequirePkce", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   OAuth2/OIDC ResponseMode. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ResponseMode {

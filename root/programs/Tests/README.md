@@ -51,6 +51,15 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 `client_id` も直書きしない。環境ごとに違う（`CreateClientsIdentity.exe` で生成する）ので、
 `client_name`（`TestClient` / `MVC_Sample` など）から引く。
 
+**雛形にクライアントを足したときは、実設定にも足す。** 実設定は各自のものなので、
+雛形（`_appsettings.json` / `_app.config`）を当て直すまでは登録されていない。
+その間、そのクライアントを使うテストは **Skip** する（`Flows.SkipIfClientNotRegistered`）。
+
+| client_name | 何のために登録してあるか |
+|---|---|
+| `TestClient5` | 登録の `scope` で、要求してよいスコープを制限（#198） |
+| `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221） |
+
 **テストの出力にトークンや秘密情報を書かないこと。**
 `JsonResponse.ToString()` はキー名とエラーだけを出す。
 

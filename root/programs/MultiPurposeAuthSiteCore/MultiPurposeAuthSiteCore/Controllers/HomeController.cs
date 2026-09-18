@@ -27,6 +27,7 @@
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
+//*  2026/09/18  玄人 幸道         require_pkce のクライアントを試す口を追加（#221）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -708,6 +709,14 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // Financial-grade API - CIBA用 Client
                         this.ClientName = "TestClient4";
+                    }
+                    else if (model.ClientType == HomeSaml2OAuth2StartersViewModel.RequirePkceClientType)
+                    {
+                        // **クライアント単位で PKCE を必須にした Client（#221）。**
+                        //   登録（OAuth2ClientsInformation）で require_pkce = true。
+                        //   これを選ぶと、**下のボタンはどれもこのクライアントで動く。**
+                        //   PKCE を付けないフローは、認可エンドポイントで invalid_request になる。
+                        this.ClientName = "TestClient6";
                     }
                     else
                     {

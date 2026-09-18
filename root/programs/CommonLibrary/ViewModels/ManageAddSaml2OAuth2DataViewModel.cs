@@ -19,6 +19,7 @@
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2019/12/25  西野 大介         PPID、PKCE 4 SPA対応による見直し
 //*  2020/03/04  西野 大介         CIBA対応実施
+//*  2026/09/18  玄人 幸道         クライアント単位の PKCE 必須化（require_pkce）を追加（#221）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -180,6 +181,20 @@ namespace MultiPurposeAuthSite.ViewModels
                 };
             }
         }
+        #endregion
+
+        #region RequirePkce
+        /// <summary>PKCEを必須とするか（#221）</summary>
+        /// <remarks>
+        /// **サーバ全体の Config.RequirePkce とは OR で組み合わせる。**
+        /// クライアント側で true にはできるが、**サーバが締めているものを緩めることはできない。**
+        ///
+        /// **保存済みの登録には、この項目が無い。** JSON に無ければ既定値の false になるので、
+        /// 従来どおりの動作が続く。
+        /// </remarks>
+        [Display(Name = "RequirePkce", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "require_pkce")]
+        public bool RequirePkce { get; set; }
         #endregion
 
         /// <summary>ClientName</summary>

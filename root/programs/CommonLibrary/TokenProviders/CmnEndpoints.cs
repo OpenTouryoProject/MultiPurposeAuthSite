@@ -534,7 +534,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   （code / code id_token / code token / code id_token token）で必須になる。
                 //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
                 //   ※ Device AuthZ / CIBA はこの口を通らないので、掛からない。
-                if (Config.RequirePkce
+                //
+                // **サーバ全体（Config）と、クライアント個別（登録の require_pkce）の OR（#221）。**
+                //   サーバは「全クライアント共通の床」、クライアント側は「個別の引き上げ」。
+                //   **クライアント側から、サーバが締めているものを緩めることはできない。**
+                //   移行では、締められるクライアントから順に true にしていく。
+                bool requirePkce = Config.RequirePkce
+                    || Helper.GetInstance().GetClientRequirePkce(client_id);
+
+                if (requirePkce
                     && response_type.ToLower().Split(' ').Any(
                         x => x == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                     && string.IsNullOrEmpty(code_challenge))
