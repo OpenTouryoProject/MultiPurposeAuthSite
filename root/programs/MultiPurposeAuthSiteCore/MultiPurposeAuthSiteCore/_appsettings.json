@@ -198,8 +198,8 @@
     "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
     // Grant Typeの有効・無効
     "EnableAuthorizationCodeGrantType": "true",
-    "EnableImplicitGrantType": "true",
-    "EnableResourceOwnerPasswordCredentialsGrantType": "true",
+    "EnableImplicitGrantType": "false",
+    "EnableResourceOwnerPasswordCredentialsGrantType": "false",
     "EnableClientCredentialsGrantType": "true",
     "EnableJwtBearerTokenFlowGrantType": "true",
     "EnableDeviceAuthZGrantType": "true",

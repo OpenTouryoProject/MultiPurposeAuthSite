@@ -1133,7 +1133,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
-| D-12 | **OAuth 2.1 への整合** | Implicit / ROPC が既定で有効（`_appsettings.json` は全て `true`）、PKCE 任意、`plain` 可 | 最新プロファイルとは逆方向 |
+| D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256` で拒否できる（既定は受理） | 残り : `code_challenge` の必須化、`permittedLevel` の分離（C-7 の 3） |
 | D-13 | レート制限 / ブルートフォース対策 | 未実装（`/token` `/device_authz` `/ciba_authz` とも無制限） | user_code・client_secret への総当たりが可能 |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
 
@@ -1211,7 +1211,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |
 | D-10 `typ: at+jwt`、`jku` の除去 |
-| D-12 Implicit / ROPC を既定 無効に（`_appsettings.json`）。**下位互換の方針上、廃止ではなく既定値の変更＋ obsolete 期間** |
+| ✅ **D-12 Implicit / ROPC を既定 無効に**（#220。コードは残し、設定で戻せる） |
 
 ### フェーズ 4 — 機能の追加
 
