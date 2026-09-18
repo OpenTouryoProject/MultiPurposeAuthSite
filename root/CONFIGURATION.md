@@ -373,6 +373,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
+| `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い |
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
@@ -432,6 +433,16 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 4. **STS 専用モード**（`EnableSignupProcess` / `EnableEditingOfUserAttribute` /
    `EnableAdministrationOfUsersAndRoles` を**全部 false**）にすると、サインアップ・属性の編集・
    ユーザ管理が無効になる。**利用者ストアへの書き込みも止まる**ので、切替の影響が大きい。
+5. **PKCE の 2 つのキーは、別のものを締める**（#220。どちらも既定 `false`）。
+
+   | キー | 何を求めるか | どこで弾くか | 有効にすると通らなくなるもの |
+   |---|---|---|---|
+   | `RequirePkce` | PKCE 自体（`code_challenge`） | 認可エンドポイント（`invalid_request`） | **PKCE を使っていない既存クライアント** |
+   | `RequirePkceS256` | 使うなら `S256` に限る | トークン エンドポイント | `plain` を使っているクライアント |
+
+   **両方 `true` が OAuth 2.1 相当。** ただし**クライアントが揃っていないと繋がらなくなる**ので、
+   既存の登録を確かめてから切り替える。**Device AuthZ / CIBA は `RequirePkce` の対象外**
+   （認可エンドポイントを通らないため）。
 
 > **設定を変えたら、雛形（`_app.config` / `_appsettings.json`）にも反映する**（1 節）。
 > 本番の値そのものは書かない。

@@ -30,9 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/17  玄人 幸道         新規（#220 : client_secret と PKCE の併用）
 //*  2026/09/17  玄人 幸道         RT-220.2（plain の PKCE）を追加（#220）
+//*  2026/09/18  玄人 幸道         RT-220.3（code_challenge の要否）を追加（#220）
+//*  2026/09/18  玄人 幸道         RT-220.4（S256 と fapi クレーム）を追加（#220）
 //**********************************************************************************
 
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -200,6 +203,112 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**RequirePkceS256=true のときに拒否すること**は、E2E では測っていない"
                     + "（設定ファイルを変えて起動し直す必要があるため）。設定は CONFIGURATION.md を参照。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-220.3 code_challenge の必須化</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT220_03_PKCE無しの認可は既定では通る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-220.3",
+                    "code_challenge を送らない認可リクエストは、既定では通る（設定で必須にできる）",
+                    "**OAuth 2.1 は、クライアントの種別によらず PKCE を必須とする。**"
+                    + "ただし必須にすると PKCE 無しの既存クライアントが通らなくなるため、"
+                    + "**既定は従来どおり任意**。設定 RequirePkce を true にすると、"
+                    + "認可エンドポイントで invalid_request になる（#220）。",
+                    "OAuth 2.1 draft §4.1.1 / RFC 7636 / #220");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample + "（code_challenge を送らない）");
+                r.Step("(1) code_challenge 無しで認可リクエストを出す");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri);
+
+                r.Verify("既定（RequirePkce=false）では認可コードが返る",
+                    !string.IsNullOrEmpty(authz.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(authz.Code)
+                        ? "**返らなかった**（error=" + (authz.Error ?? "なし") + "）" : "あり（値は伏せる）");
+
+                r.Note("**RequirePkce=true のときに invalid_request で拒否すること**は、E2E では測っていない"
+                    + "（設定ファイルを変えて起動し直す必要があるため）。設定は CONFIGURATION.md を参照。");
+
+                r.Note("**Device AuthZ / CIBA は、この判定の対象外**"
+                    + "（認可エンドポイントを通らないため）。EX-7 / EX-8 は影響を受けない。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-220.4 PKCE のメソッドと、トークンが名乗る水準</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT220_04_S256で取ったトークンがfapiを名乗らない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-220.4",
+                    "normal 登録のクライアントが S256 の PKCE を使っても、トークンは fapi を名乗らない",
+                    "**PKCE のメソッドは「クライアント認証の強度」ではない。**"
+                    + "S256 を使うと、その経路が認める上限（permittedLevel）は fapi1 まで上がるが、"
+                    + "**それはクライアントが何として登録されているか（clientMode）とは別**。"
+                    + "アクセス トークンの fapi クレームは clientMode で書く（#220）。",
+                    "FAPI 1.0 Advanced / RFC 7636 / #220");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample
+                    + "（normal 登録。client_secret は送らず、PKCE だけで認証する）");
+
+                Dictionary<string, string> pkce = new Dictionary<string, string>()
+                {
+                    { "code_challenge", PkceTests.Challenge },
+                    { "code_challenge_method", "S256" }
+                };
+
+                r.Step("(1) code_challenge_method=S256 で認可コードを得る");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri, extra: pkce);
+
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が取得できること");
+
+                r.Step("(2) client_secret を送らず、code_verifier だけで交換する");
+
+                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "authorization_code" },
+                    { "code", authz.Code },
+                    { "client_id", reg.ClientId },
+                    { "code_verifier", PkceTests.Verifier },
+                    { "redirect_uri", reg.RedirectUri }
+                });
+
+                Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: トークンが取得できること");
+
+                r.Step("(3) アクセス トークンのクレームを見る");
+
+                JsonElement payload = Jwt.Payload(token.AccessToken);
+
+                r.Verify("fapi クレームが載っていない",
+                    !Jwt.Has(payload, "fapi"),
+                    "fapi クレーム無し",
+                    Jwt.Has(payload, "fapi")
+                        ? "**fapi=" + Jwt.String(payload, "fapi") + " が載っている**" : "無し");
+
+                r.Note("**このクライアントは normal 登録。** fapi1 で登録されたクライアントが"
+                    + "PKCE で通ること自体は、これまでどおり（permittedLevel の格上げは残している）。");
 
                 r.Done();
             }

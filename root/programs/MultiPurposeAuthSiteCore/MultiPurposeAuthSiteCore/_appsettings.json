@@ -207,6 +207,8 @@
     "EnableRefreshToken": "true",
 
     "EnableOpenIDConnect": "true",
+    // PKCE を必須にするか（#220。true は OAuth 2.1 相当。Device AuthZ / CIBA は対象外）
+    "RequirePkce": "false",
     // PKCE で S256 だけを受け付けるか（#220。true は OAuth 2.1 / FAPI 相当）
     "RequirePkceS256": "false",
 
