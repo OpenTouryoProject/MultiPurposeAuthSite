@@ -149,10 +149,34 @@ gh issue comment <番号> --repo OpenTouryoProject/MultiPurposeAuthSite --body-f
 | 自己テスト（FAPI2 / CIBA）が HTTP 500 | 待ち受け URL と構成のルート URI が違う | [`CONFIGURATION.md`](CONFIGURATION.md) 5 節 |
 | http だと認可でエラー画面 | Cookie が `SameSite=None`。http では保持されない | [`CONFIGURATION.md`](CONFIGURATION.md) 5 節 |
 | テストが全件 Skip なのに緑に見える | サイトが起動していない。**成功 0 件は NG にしてある** | [`TESTING.md`](TESTING.md) 5 節 |
+| **net10.0 でログインはできるのに保護された画面へ進めない** | **前の起動の認証クッキーが残っている**（下の注記） | この節の下 |
+| **画面が例外になる（`[Display]` を付けた項目）** | `.resx` に足して **`.Designer.cs` を直していない**。実行時に反射で探すので、**ビルドでは分からない** | [`CODING.md`](CODING.md) 2 節 |
 | 差分がファイル全体になった | 改行コードを変えた（CRLF / LF が混在している） | [`CODING.md`](CODING.md) 3 節 |
 | bat で `'xxx' は…認識されていません` | 非 ASCII による解析ずれ | [`CODING.md`](CODING.md) 4 節 |
 | ps1 が 5.1 で落ちる / 表がずれる | BOM 無し、または 7 専用の引数、`Format-Table` | [`CODING.md`](CODING.md) 5 節 |
 | `*.bak` の控えが消えた | `2_DeleteFile.bat` の削除対象 | [`BUILDING.md`](BUILDING.md) 10 節 |
+
+### 古い認証クッキーが残っていると、ログインできなくなる（net10.0）
+
+**症状**: ログインの POST は **302**（＝認証は成功している）のに、
+`[Authorize]` の画面（`/authorize`、`/Manage/Index` など）でログイン画面に戻される。
+
+**原因**: 前の起動で発行された `.AspNetCore.Identity.Application` が残っている。
+**`UserStoreType = mem` では、デバッグを停止・再開するたびに利用者が消え、
+Data Protection の鍵も作り直される**ので、古いクッキーはもう照合できない。
+
+**直し方**: F12 → Application → Storage → **「Clear site data」**。
+
+**測れない理由を知っておくこと。**
+
+- **net48 版では起きない。** 別プロセス・別名のクッキー（`.AspNet.ApplicationCookie`）
+- **E2E でも起きない。** 毎回まっさらな `CookieContainer` で始めるうえ、
+  **`HttpClient` は `SameSite` / `Secure` の規則を適用しない**。
+  **ブラウザでしか出ない不具合は、E2E が緑でも残る**
+
+> **ブラウザに古い状態が残っていて、コードは正しいのに動かない**類は、
+> 認証デバイス側でも起きている（[`programs/authentication_device/CHEATSHEET.md`](programs/authentication_device/CHEATSHEET.md) 7 節）。
+> **まず Clear site data を試す。**
 
 ## 9. エージェントとして守ること
 

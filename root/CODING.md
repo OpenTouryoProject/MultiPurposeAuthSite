@@ -93,6 +93,24 @@ Git のコミット著者は人であり、これとは別。**エージェン�
 `NetFxLibrary.csproj` に `Include` を足し忘れると、
 net10.0 では通るのに net48 でだけ「型が無い」になる。
 
+### `.resx` に項目を足したら、`.Designer.cs` も直す
+
+**`.Designer.cs` はリポジトリに入っている生成コードで、`dotnet build` では再生成されない**
+（Visual Studio が `.resx` の保存時に作る）。
+
+```csharp
+[Display(Name = "RequirePkce", ResourceType = typeof(Resources.CommonViewModels))]
+```
+
+`DisplayAttribute` は、**実行時に同名の `public static` プロパティを反射で探す。**
+`.Designer.cs` に無ければ、**ビューを描画した時点で例外**になる。
+
+**ビルドでは分からない。** `Name` はただの文字列なので、コンパイル時に検証されない。
+**E2E でも分からない**ことが多い（管理画面を操作するテストが無い）。
+
+`.resx`（既定）と `.ja.resx`（サテライト）の両方に値を入れ、
+**`.Designer.cs` には既定の方に合わせてプロパティを 1 つ足す。**
+
 ### 構成ごとにシンボルを書き落とさない
 
 **`DefineConstants` は構成（Debug / Release）ごとに別々に書く。** 片方に書き忘れられる。
