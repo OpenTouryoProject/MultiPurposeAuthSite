@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/17  玄人 幸道         新規（#219 の B）
+//*  2026/09/18  玄人 幸道         RequirePkce / RequirePkceS256 の確認を追加（#220）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -102,6 +103,29 @@ namespace MultiPurposeAuthSite.Co
                     if (Config.EnabeDebugTraceLog)
                     {
                         warnings.Add("EnabeDebugTraceLog が true です。");
+                    }
+
+                    // **これは「開発向けの設定が残っている」ではない（#220）。**
+                    //   false は従来の OAuth 2.0 のままというだけで、それ自体は誤りではない。
+                    //   ただし**本番では意図して選ぶべき**なので、選ばれていないことを知らせる。
+                    //   有効にすると繋がらなくなるクライアントがあるため、**既定は false のまま。**
+                    List<string> loosePkce = new List<string>();
+
+                    if (!Config.RequirePkce)
+                    {
+                        loosePkce.Add("RequirePkce");
+                    }
+
+                    if (!Config.RequirePkceS256)
+                    {
+                        loosePkce.Add("RequirePkceS256");
+                    }
+
+                    if (loosePkce.Count != 0)
+                    {
+                        warnings.Add(string.Join(" / ", loosePkce) + " が false です。"
+                            + "OAuth 2.1 に寄せるなら true にしてください"
+                            + "（PKCE を使っていない、または plain のクライアントは通らなくなります）。");
                     }
                 }
 
