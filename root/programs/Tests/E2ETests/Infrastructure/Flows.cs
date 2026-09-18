@@ -32,12 +32,15 @@
 //*  2026/09/10  玄人 幸道         JWK Set の取得を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         scope を登録した TestClient5 を追加（#198 の後半）
 //*  2026/09/11  玄人 幸道         トークンの更新・失効・問い合わせ（RefreshAsync / RevokeAsync / IntrospectAsync）を、テスト クラスから移す
+//*  2026/09/18  玄人 幸道         既定で無効な機能を Skip する口を追加（#220）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+
+using Xunit;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 {
@@ -343,5 +346,28 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             return jwks.Json;
         }
+
+        #region 既定で無効な機能の Skip（#220）
+
+        /// <summary>
+        /// discovery に広告されていない grant_type なら Skip する（#220）
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="grantType">grant_type</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **OAuth 2.1 に寄せて、Implicit / ROPC は雛形の既定で無効にした（#220）。**
+        /// 有効にしている環境では従来どおり測り、無効な環境では Skip する。
+        /// discovery は設定を反映するので、そこを見れば分かる。
+        /// </remarks>
+        public static async Task SkipIfGrantTypeNotSupportedAsync(IdPClient client, string grantType)
+        {
+            JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
+
+            Skip.IfNot(discovery.ArrayContains("grant_types_supported", grantType),
+                "grant_type=" + grantType + " が無効です（#220 で既定を無効にした）。");
+        }
+
+        #endregion
     }
 }

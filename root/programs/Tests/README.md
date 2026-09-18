@@ -183,8 +183,8 @@ using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.Secon
 |---|---|
 | `Tests/Basic/CommonSecurityTests.cs` | TC-1 state / redirect_uri / スコープ / 有効期限 |
 | `Tests/Basic/AuthorizationCodeFlowTests.cs` | TC-2 正常系 / code 使い捨て / クライアント認証 / PKCE |
-| `Tests/Basic/ImplicitFlowTests.cs` | TC-3 フラグメント返却 / キャッシュ制御 |
-| `Tests/Basic/PasswordAndClientCredentialsTests.cs` | TC-4・TC-5 パスワード / クライアント資格情報 |
+| `Tests/Basic/TokenResponseTests.cs` | TC-3.2 トークン応答の約束（キャッシュ制御。フローに依らない） |
+| `Tests/Basic/ClientCredentialsTests.cs` | TC-5 クライアント資格情報（**OAuth 2.1 でも有効**） |
 | `Tests/Basic/OidcTests.cs` | TC-6 id_token の中身と署名 / alg:none の拒否 / UserInfo |
 
 **その次が `Tests/Extended/`。** 基本テストケースに含まれない、追加の仕様・拡張仕様（EX-1 〜 EX-8）。
@@ -207,6 +207,16 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 認証デバイスと同じ要求（`/SetDeviceToken`・`/ciba_result`）を送る。送信箱は `-Launch` のときだけ設定されるので、
 それ以外では `EX-8` は Skip する。認証リクエストのエラーの返し方は RT-196 で測っている（ES256 で署名した要求を `/ros` に登録する）。
 
+**`Tests/Obsolete/` は、OAuth 2.1 で廃止されたフロー**（#220）。
+
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/Obsolete/ImplicitFlowTests.cs` | `TC-3.1` | Implicit（フラグメント返却） |
+| `Tests/Obsolete/PasswordTests.cs` | `TC-4` | ROPC |
+
+**消さずに残す。** `-Launch` では有効にして起動するので、これまでどおり測る（後述）。
+**一覧（報告書・`TESTCASES.md`）では最後尾に置く。**
+
 **最後が `Tests/Issues/`。** 個別の Issue に対応する回帰テスト（RT）。
 
 | ファイル | 識別子 | 対象 |
@@ -219,7 +229,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 
-**フォルダは、識別子の群に合わせている**（`Basic` = TC、`Extended` = EX、`Issues` = RT）。
+**フォルダは、識別子の群に合わせている**（`Basic` = TC、`Extended` = EX、`Issues` = RT、`Obsolete` = 廃止されたフロー）。
 ただし**厳密な一対一ではない。** 回帰テストが既存のケースを対照として使うことがあり、
 `Tests/Issues/HttpStatusTests.cs` には EX が、`Tests/Extended/IntrospectionTests.cs` には
 RT が混ざっている。**対照は近くに置いたほうが読めるので、そこは揃えていない。**
@@ -253,6 +263,24 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 cd root
 .\2_RunAllTests.ps1 -Launch -UpdateTestCases
 ```
+
+## 既定で無効な機能のテスト（`Tests/Obsolete/`）
+
+**OAuth 2.1 で廃止されたフロー**（Implicit / ROPC）のテストは `Tests/Obsolete/` に置く（#220）。
+
+- **消さない。** 設定で有効にしている環境のために残す
+- **`-Launch` では、必ず測る。** `test.ps1` がサイトを起動する直前に、
+  `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` を
+  環境変数で `true` にする（`FxContainerization = ON` なので、キー名がそのまま環境変数名になる。
+  RootURI の渡し方と同じ）。**設定ファイルは書き換えない。**
+  無効のまま Skip にすると、**廃止したフローの回帰が効かなくなる**ため
+- **テスト自身も discovery を見て Skip する**（`Flows.SkipIfGrantTypeNotSupportedAsync`）。
+  `-Launch` を付けず、無効な環境へ向けて回したときのための保険
+- **`Tests/Issues/` にも、同じ理由で Skip するテストがある**（`RT-190.1` / `RT-190.2` / `RT-198.2`）。
+  置き場所ではなく、**依存する機能で決まる**
+- **一覧では最後尾に出る。** `2_RunAllTests.ps1` が、報告書と `TESTCASES.md` の並びで
+  `*.Tests.Obsolete.*` を後ろへ回す。**実行順は変えていない**（xUnit の既定のまま）。
+  識別子は `TC-3.1` / `TC-4` のままなので、位置だけが動く
 
 ## 未修正の項目
 

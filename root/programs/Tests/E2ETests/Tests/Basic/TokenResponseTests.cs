@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：ImplicitFlowTests
-//* クラス日本語名  ：TC-3 インプリシット フロー
+//* クラス名        ：TokenResponseTests
+//* クラス日本語名  ：TC トークン応答の共通の約束
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -28,11 +28,12 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2026/09/09  玄人 幸道         新規（基本テストケースの追加）
-//*  2026/09/17  玄人 幸道         TC-3.2（トークン応答のキャッシュ制御）を観測から検証に格上げ（#218）
+//*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/18  玄人 幸道         #220 でファイルを分けた（元 : Basic/ImplicitFlowTests.cs）
 //**********************************************************************************
 
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -43,86 +44,17 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
 {
     /// <summary>
-    /// TC-3. インプリシット フロー（Implicit Grant）。
-    ///
-    /// ＜前置き＞
-    ///   OAuth 2.0 Security BCP と OAuth 2.1 は、**このフローの使用を推奨していない。**
-    ///   ここでのテストは「実装されている以上、仕様どおりに振る舞うか」を見るもので、
-    ///   このフローを推奨する意味ではない。
+    /// TC-3.2 ほか。トークン応答そのものの約束（フローに依らない）。
     /// </summary>
-    public class ImplicitFlowTests : TargetTestBase
+    /// <remarks>
+    /// **元は ImplicitFlowTests に同居していた**が、Implicit とは無関係なので分けた（#220）。
+    /// </remarks>
+    public class TokenResponseTests : TargetTestBase
     {
         /// <summary>コンストラクタ</summary>
         /// <param name="output">ITestOutputHelper</param>
-        public ImplicitFlowTests(ITestOutputHelper output) : base(output)
+        public TokenResponseTests(ITestOutputHelper output) : base(output)
         {
-        }
-
-        /// <summary>TC-3.1 / TC-3.2 フラグメントで返り、クエリに漏れない</summary>
-        /// <param name="targetKey">core / netfx</param>
-        /// <returns>Task</returns>
-        [SkippableTheory]
-        [MemberData(nameof(AllTargets))]
-        public async Task TC0301_トークンがフラグメントで返りクエリに漏れない(string targetKey)
-        {
-            using (IdPClient client = await this.SignedInClientAsync(targetKey))
-            {
-                TestReport r = this.Report("TC-3.1",
-                    "インプリシットのトークンがフラグメントで返り、クエリに漏れない",
-                    "アクセス トークンは **URL フラグメント（#）**で返さなければならない。"
-                    + "クエリ（?）に入れると、Referer ヘッダやサーバのアクセス ログを通じて"
-                    + "第三者に渡る。",
-                    "RFC 6749 §4.2.2（フラグメントで返す）/ §10.3 / OIDC Core §3.2.2.5");
-
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
-
-                r.Target("client_name=" + KnownClients.TestClient
-                    + " / redirect_uri（token 用）= " + reg.RedirectUriToken);
-                r.Step("GET /authorize?response_type=id_token token&scope=openid&nonce=… を送る");
-
-                Dictionary<string, string> q = new Dictionary<string, string>()
-                {
-                    { "response_type", "id_token token" },
-                    { "client_id", reg.ClientId },
-                    { "scope", "openid" },
-                    { "redirect_uri", reg.RedirectUriToken },
-                    { "state", "state1" },
-                    { "nonce", "nonce1" },
-                    { "prompt", "none" }
-                };
-
-                AuthZResponse res = await client.AuthorizeAsync(q);
-
-                r.Verify("エラーにならない", string.IsNullOrEmpty(res.Error),
-                    "error なし", res.Error ?? ("error=" + res.Error + " / " + res.ErrorDescription));
-
-                r.Verify("フラグメント（#）で返る",
-                    res.Where == ParameterLocation.Fragment,
-                    "フラグメント", "返却位置 = " + res.Where);
-
-                r.Verify("access_token が返る",
-                    !string.IsNullOrEmpty(res.Get("access_token")),
-                    "access_token あり",
-                    res.Get("access_token") == null ? "なし" : "あり（値は伏せる）");
-
-                // Location の ? より前と # より後を分けて、漏れを見る。
-                string location = res.Location ?? "";
-                int hash = location.IndexOf('#');
-                string beforeFragment = (hash >= 0) ? location.Substring(0, hash) : location;
-
-                bool leaked =
-                    beforeFragment.IndexOf("access_token=", System.StringComparison.Ordinal) >= 0
-                    || beforeFragment.IndexOf("id_token=", System.StringComparison.Ordinal) >= 0;
-
-                r.Verify("クエリ（? より前）にトークンが含まれない", !leaked,
-                    "access_token / id_token がクエリに無い",
-                    leaked ? "**クエリに漏れている**" : "クエリには含まれていない");
-
-                r.Verify("state がそのまま返る", res.Get("state") == "state1",
-                    "state=state1", "state = " + (res.Get("state") ?? "なし"));
-
-                r.Done();
-            }
         }
 
         /// <summary>TC-3.2 トークン応答のキャッシュ制御</summary>

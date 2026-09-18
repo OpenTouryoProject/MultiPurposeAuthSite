@@ -450,8 +450,10 @@ function Get-IdPart
     return [int]$v
 }
 
+# **Obsolete（廃止されたフロー）は、一覧の最後尾に置く（#220）。**
+#   識別子は TC のままなので、名前空間で判る。
 $ordered = @($rows | Sort-Object `
-    @{ Expression = { Get-IdRank $_.TC } }, `
+    @{ Expression = { if ($_.名前 -like '*.Tests.Obsolete.*') { 7 } else { Get-IdRank $_.TC } } }, `
     @{ Expression = { Get-IdPart $_.TC 0 } }, `
     @{ Expression = { Get-IdPart $_.TC 1 } }, `
     名前)
