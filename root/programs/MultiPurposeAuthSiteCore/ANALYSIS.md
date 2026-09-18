@@ -195,6 +195,37 @@ services.AddTransient<ISmsSender, SmsSender>();
 `IdentityOptions`（ユーザ名 / パスワード / ロックアウト）は**すべて `Config.*` から取る**ので、
 挙動を変えたいときは `appsettings.json` を直す。
 
+**認証クッキーは `ConfigureApplicationCookie` で設定する**（✅ 修正済み。#223）。
+
+```csharp
+services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Account/Login";    // 接頭辞を直書きしない（PathBase が前置される）
+    options.LogoutPath = "/Account/LogOff";
+    options.ExpireTimeSpan = Config.AuthCookieExpiresFromHours;
+    options.SlidingExpiration = Config.AuthCookieSlidingExpiration;
+    options.Cookie.HttpOnly = true;
+});
+```
+
+> **以前は `authenticationBuilder.AddCookie(...)` に書いていたが、1 つも効いていなかった。**
+> それはスキーム `Cookies` の設定で、**サインインに使うのは `Identity.Application`**
+> （`AddIdentity` が既定にする）。ブラウザのクッキーも `.AspNetCore.Identity.Application` だけで、
+> `.AspNetCore.Cookies` は発行されていなかった。
+>
+> **ただし `Cookies` の登録そのものは外せない。** Open棟梁のフレームワーク
+> （`MyMVCCoreFilterAttribute`）がこのスキームを参照しており、登録が無いと
+> **`No authentication handler is registered for the scheme 'Cookies'` で落ちる**
+> （外して E2E を回し、net10.0 側が 91 件失敗して判明）。
+> **登録は残し、設定は書かない**（書いても効かないため）。
+>
+> そのため **`AuthCookieExpiresFromHours` / `AuthCookieSlidingExpiration` が net10.0 では無視され**、
+> 実効値は Identity の既定（14 日 / sliding）だった。**雛形の `336` 時間がちょうど 14 日**なので、
+> 誰も気付かなかった。net48 は `App_Start/StartupAuth.cs` で正しく適用している。
+>
+> **`SecurityStamp` の検証は書かない。** Identity が既定で設定しており、
+> 間隔は `SecurityStampValidatorOptions.ValidationInterval` で指定している。
+
 ### 4.2 外部ログイン
 
 `Config.{MicrosoftAccount,Google,Facebook,Twitter}Authentication` が true のときだけ
@@ -360,7 +391,11 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 1. **`10_MultiPurposeAuthSiteCore.bat` が存在しない `RestoreLib1/2.bat` を呼ぶ**（9 節）。
 2. **`log4net` 3.2.0 に既知の脆弱性**（9.1 節）。Open棟梁側は 3.3.0 で、版が割れている。
 3. **`C:\` 直下配置が前提**（2.2 節）。`appsettings.json` は絶対パスを直書きしている。
-4. **`/MultiPurposeAuthSite` 仮想パス前提**（2.5 節）。Cookie の `LoginPath` などが直書き。
+4. **`/MultiPurposeAuthSite` 仮想パス前提**（2.5 節）。
+   ~~Cookie の `LoginPath` などが直書き。~~
+   **✅ `LoginPath` / `LogoutPath` の直書きは解消した（#223。4.1 節）。**
+   `PathBase` は実行時に前置されるので、IIS Express（仮想アプリ）でも Kestrel でも正しく動く。
+   **設定値（`OAuth2AuthorizationServerEndpointsRootURI` など）の仮想パス前提は、そのまま残っている。**
 5. **初期データは `/Account/Login` の初回アクセスで作られる**（6 節）。
    「起動しただけでは管理者が居ない」ことに気付きにくい。
 6. **`IsDebug: true` でテスト ユーザが作られる**（6 節）。

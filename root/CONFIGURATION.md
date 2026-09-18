@@ -351,8 +351,15 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | クライアント登録 | JSON **文字列** | JSON **オブジェクト** |
 | 既定の起動 | IIS Express | IIS Express / Kestrel |
 | パッケージ | `packages.config` ＋ `PackageReference` | `PackageReference` |
+| 認証クッキーの設定 | `App_Start/StartupAuth.cs` | `Startup.cs` の `ConfigureApplicationCookie`（#223） |
 
 **両者は共通ライブラリを使う別アプリである。** 片方にしか無い問題があり得る。
+
+> **実例**: `AuthCookieExpiresFromHours` / `AuthCookieSlidingExpiration` は、
+> **net10.0 では長らく読まれていなかった**（#223）。
+> 設定は書かれていたが、**誰も使っていないスキームに対する指定**だったため。
+> **雛形の値（`336` 時間）が Identity の既定（14 日）と偶然一致していて、表面化しなかった。**
+> **「設定ファイルに在る」ことと「効いている」ことは別である。**
 
 ---
 

@@ -22,6 +22,7 @@
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）のルートを追加（#213）
 //*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
 //*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
+//*  2026/09/19  玄人 幸道         認証クッキーの設定を、実際に使うスキームへ移す（#223）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -403,23 +404,45 @@ namespace MultiPurposeAuthSite
 
             #region AuthCookie
 
-            authenticationBuilder.AddCookie(options =>
+            // **スキーム "Cookies" の登録は、外せない（#223）。**
+            //   Open棟梁のフレームワーク（MyMVCCoreFilterAttribute）がこのスキームを参照するため、
+            //   登録が無いと、次の例外で落ちる。
+            //     No authentication handler is registered for the scheme 'Cookies'.
+            //
+            //   **ただし、このサイトがサインインに使うのは Identity.Application。**
+            //   ここに LoginPath や ExpireTimeSpan を書いても**効かない**ので、書かない。
+            //   実際の設定は、下の ConfigureApplicationCookie で行う。
+            authenticationBuilder.AddCookie();
+
+            // **ASP.NET Core Identity のクッキー（Identity.Application）を設定する（#223）。**
+            //
+            //   以前は authenticationBuilder.AddCookie(options => ...) に書いていたが、
+            //   **それはスキーム "Cookies" の設定で、サインインには使われていなかった。**
+            //   AddIdentity が既定のスキームを Identity.Application にするため、
+            //   **書いた設定が 1 つも効いていなかった**（LoginPath も ExpireTimeSpan も）。
+            //
+            //   ConfigureApplicationCookie は Identity.Application を設定するので、
+            //   ここに書いたことが実際に効く。**AddIdentity より後に呼ぶこと。**
+            services.ConfigureApplicationCookie(options =>
                 {
-                    // https://community.auth0.com/t/asp-net-core-2-intermittent-correlation-failed-errors/11918/18
-                    options.LoginPath = "/MultiPurposeAuthSite/Account/Login";
-                    options.LogoutPath = "/MultiPurposeAuthSite/Account/LogOff";
-                    options.ReturnUrlParameter = CookieAuthenticationDefaults.ReturnUrlParameter; 
-                    options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
-                    options.SlidingExpiration = true;
+                    // **接頭辞を直書きしない。** PathBase は実行時に前置される
+                    //   （IIS Express の仮想アプリでは /MultiPurposeAuthSite が付く）。
+                    options.LoginPath = "/Account/Login";
+                    options.LogoutPath = "/Account/LogOff";
+                    options.ReturnUrlParameter = CookieAuthenticationDefaults.ReturnUrlParameter;
+
+                    // **net48 と同じ設定キーで揃える**（App_Start/StartupAuth.cs）。
+                    //   以前の net10.0 は、この 2 つを読んでいなかった。
+                    options.ExpireTimeSpan = Config.AuthCookieExpiresFromHours;
+                    options.SlidingExpiration = Config.AuthCookieSlidingExpiration;
 
                     //options.AccessDeniedPath = "/Identity/Account/AccessDenied";
                     //options.Cookie.Name = "YourAppCookieName";
                     options.Cookie.HttpOnly = true;
-                    
-                    options.Events = options.Events = new CookieAuthenticationEvents()
-                    {
-                        OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync
-                    };
+
+                    // ※ SecurityStamp の検証（OnValidatePrincipal）は書かない。
+                    //    Identity が既定で設定しており、間隔は
+                    //    SecurityStampValidatorOptions.ValidationInterval で指定している（下の方）。
                 });
 
             #endregion
