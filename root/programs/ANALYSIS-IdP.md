@@ -1177,7 +1177,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
-| D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
+| D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
 | D-13 | レート制限 / ブルートフォース対策 | 未実装（`/token` `/device_authz` `/ciba_authz` とも無制限） | user_code・client_secret への総当たりが可能 |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
 

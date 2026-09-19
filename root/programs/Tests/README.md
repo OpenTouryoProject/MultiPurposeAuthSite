@@ -240,7 +240,35 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 
-**フォルダは、識別子の群に合わせている**（`Basic` = TC、`Extended` = EX、`Issues` = RT、`Obsolete` = 廃止されたフロー）。
+**`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
+
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／使えない `refresh_token`） |
+| 〃 | `FA-2` | `fapi2`（`client_secret` も PKCE も通らない。x509 が要る） |
+| 〃 | `FA-3` | `device`（PKCE で通る。`CheckClientMode` の例外措置） |
+
+**今の振る舞いを記録するためのテスト。** 望ましくないと考える点（`fapi1` が使えない
+`refresh_token` を発行する等）は**「観測」として書き、合否には影響させない**。
+`permittedLevel` を作り直すとき（#222 の 3）に、**壊していないことを確かめる土台**になる。
+
+**`Tests/OAuth21/` は、OAuth 2.1 が許さない経路の抑止**（#222）。
+
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/OAuth21/ProfileTests.cs` | `21-1` | 締めた登録では Implicit / ROPC / PKCE 無しが塞がる |
+| 〃 | `21-2` | アクセス トークンは Authorization ヘッダでのみ受け付ける |
+
+**サーバ全体の設定は変えない。** `-Launch` は Implicit / ROPC を有効にして起動し、
+`RequirePkce` も `false` のまま。**締めるのはクライアント単位の登録**
+（`oauth2_oidc_mode` / `require_pkce`）なので、
+**「サーバは開いているのに、このクライアントでは塞がる」**という対照が効く。
+
+> **サーバ全体の `RequirePkce` / `RequirePkceS256` を `true` にしたときの挙動は測れない。**
+> 設定ファイルを変えて起動し直す必要があるため（`CONFIGURATION.md` 11 節）。
+
+**フォルダは、識別子の群に合わせている**（`Basic` = TC、`Extended` = EX、`Issues` = RT、
+`Fapi` = FA、`OAuth21` = 21、`Obsolete` = 廃止されたフロー）。
 ただし**厳密な一対一ではない。** 回帰テストが既存のケースを対照として使うことがあり、
 `Tests/Issues/HttpStatusTests.cs` には EX が、`Tests/Extended/IntrospectionTests.cs` には
 RT が混ざっている。**対照は近くに置いたほうが読めるので、そこは揃えていない。**

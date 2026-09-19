@@ -2695,6 +2695,158 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **サーバ全体の RequirePkce を true にすれば、こちらも通らなくなる。**クライアント側の設定は「個別の引き上げ」であって、**床を下げることはできない**。
 
+# FA
+
+## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
+
+| | |
+|---|---|
+| 観点 | **登録が上位のクライアントほど、通る経路が狭い。**CheckClientMode は「clientMode <= permittedLevel」で判定し、permittedLevel は**クライアント認証の強度**で決まる。client_secret では normal 止まりなので、fapi1 の登録は通らない。**PKCE の S256 を使うと permittedLevel が fapi1 に上がり、そこだけが通る。** |
+| 根拠 | FAPI 1.0 Advanced / #222 |
+| テスト | `FA0101_fapi1はPKCEの経路だけを通す` |
+
+**手順**
+
+1. 対照 : normal 登録のクライアントは、client_secret で通る
+1. fapi1 ＋ client_secret（PKCE 無し）
+1. fapi1 ＋ PKCE(S256)（client_secret 無し）
+1. fapi1 ＋ ROPC / client_credentials
+
+**検証（合否を判定する）**
+
+- 対照（normal）は通る
+- client_secret だけでは通らない
+- エラーは unsupported_grant_type
+- PKCE(S256) なら通る
+- ROPC は通らない
+- client_credentials は通らない
+
+**補足**
+
+- **ROPC / client_credentials は、サーバ全体では有効**（-Launch は Implicit / ROPC を有効にして起動する。#220）。**塞いでいるのは、このクライアントの登録**であることが、(1) の対照で分かる。
+
+## FA-1.2 fapi1 のクライアントは refresh_token を受け取るが、それを使うと拒否される
+
+| | |
+|---|---|
+| 観点 | **受け取ったのに必ず失敗する資格情報を渡している。**refresh_token の経路は permittedLevel=normal で判定するため、fapi1 の登録は通らない。**発行しない、あるいは経路を通す、のどちらかが筋。**本テストは**現状を記録する**もので、望ましさは判定しない（#222）。 |
+| 根拠 | RFC 6749 §6 / #222 |
+| テスト | `FA0102_fapi1は使えないrefresh_tokenを発行する` |
+
+**手順**
+
+1. 対照 : normal 登録では、refresh_token で更新できる
+1. fapi1 で PKCE(S256) のトークンを取る
+1. その refresh_token で更新を試みる
+
+**検証（合否を判定する）**
+
+- 対照（normal）は更新できる
+- refresh_token が発行される
+- 更新は拒否される
+
+**補足**
+
+- **望ましくない。** 使えない資格情報を渡している。直すなら「fapi1 では refresh_token を発行しない」か「refresh_token の経路を登録種別で判定し直す」のどちらか（#222 の 3）。
+
+## FA-2.1 oauth2_oidc_mode=fapi2 のクライアントは、client_secret でも PKCE でも通らない
+
+| | |
+|---|---|
+| 観点 | **fapi2 に達するのは x509（mTLS）だけ。**PKCE の S256 で上がるのは fapi1 までなので、**平文の経路は全滅する**。FAPI2 のクライアントは、Request Object（JAR）＋ 証明書で使う想定（`RT-197` が request_uri 経路を測っている）。 |
+| 根拠 | FAPI 2.0 / #222 |
+| テスト | `FA0201_fapi2はclient_secretもPKCEも通さない` |
+
+**手順**
+
+1. client_secret（PKCE 無し）
+1. PKCE(S256)（client_secret 無し）
+
+**検証（合否を判定する）**
+
+- client_secret では通らない
+- PKCE(S256) でも通らない
+- エラーは unsupported_grant_type
+
+**補足**
+
+- **これは設計どおり。** fapi2 の登録は、証明書（x509）を伴う経路でだけ通る。本 E2E は mTLS を張らないので、**通る側は測っていない**。
+
+## FA-3.1 oauth2_oidc_mode=device のクライアントは、PKCE(S256) の認可コードが通る
+
+| | |
+|---|---|
+| 観点 | **CheckClientMode には、device のための例外措置がある。**device は fapi2 より大きい値なので、本来は「permittedLevel と一致」が要るが、**clientMode=device かつ permittedLevel=fapi1（＝PKCE の S256）のときだけ通す**と書かれている（LIR 用）。**その例外が効いていることを測る。** |
+| 根拠 | RFC 8628（Device Authorization Grant）/ #222 |
+| テスト | `FA0301_deviceはPKCEの経路を通る` |
+
+**手順**
+
+1. PKCE(S256) で認可コードを取り、交換する
+
+**検証（合否を判定する）**
+
+- トークンが返る
+
+**補足**
+
+- **例外措置が無ければ、ここは通らない**（device > fapi2 なので一致判定になる）。`permittedLevel` を作り直すときは、この経路を壊さないこと（#222 の 3）。
+- **refresh_token は使えない。** 更新の経路は client_secret による認証を求めるので、client_secret を持たないこのクライアントは、そもそも要求を組み立てられない。
+
+# 21
+
+## 21-1.1 OAuth 2.1 が許さない経路（Implicit / ROPC / PKCE 無し）が、締めた登録では塞がる
+
+| | |
+|---|---|
+| 観点 | **サーバ全体は開いたままで測る。** -Launch は Implicit / ROPC を有効にし、RequirePkce も false のまま。**塞いでいるのはクライアントの登録**であることを、対照（normal 登録は通る）と並べて確かめる（#222）。 |
+| 根拠 | OAuth 2.1 draft §2.1.2 / §4.1.1 / #222 |
+| テスト | `OA2101_締めたクライアントでは許されない経路が塞がる` |
+
+**手順**
+
+1. 対照 : normal 登録は、PKCE 無しでも ROPC でも通る
+1. PKCE 無しの認可 : require_pkce のクライアントでは塞がる
+1. ROPC : fapi1 のクライアントでは塞がる
+1. Implicit : fapi1 のクライアントでは塞がる
+
+**検証（合否を判定する）**
+
+- 対照は PKCE 無しで認可コードが返る
+- 対照は ROPC が通る（＝サーバ全体では有効）
+- 認可コードを発行しない
+- エラーは invalid_request
+- ROPC は拒否される
+- access_token を返さない
+
+**補足**
+
+- **(1) との対比が要点。** 同じサーバ・同じ設定で、**登録の違いだけで経路が塞がっている**。移行では、締められるクライアントから順に登録を変えていける（#221）。
+
+## 21-2.1 アクセス トークンは Authorization ヘッダでのみ受け付ける（クエリ文字列では受けない）
+
+| | |
+|---|---|
+| 観点 | **OAuth 2.1 は、URI クエリ文字列でのトークン送信を禁止している**（RFC 6750 §2.3 の form-encoded / URI query は廃止）。**URL はログ・Referer・履歴に残る**ため。`ANALYSIS-IdP.md` の D-12 で「ヘッダのみ（要再確認）」としていた項目を、実際に測る。 |
+| 根拠 | OAuth 2.1 draft §4.3 / RFC 6750 §2.3 / #222 |
+| テスト | `OA2102_アクセストークンはヘッダでのみ受け付ける` |
+
+**手順**
+
+1. トークンを取得する
+1. 対照 : Authorization ヘッダで /userinfo を呼ぶ
+1. クエリ文字列（?access_token=...）で /userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- ヘッダなら答える
+- クエリ文字列では答えない
+- 401 を返す
+
+**補足**
+
+- **要求 URL はここに出さない**（トークンを含むため）。
+
 # TC. 基本テストケース
 
 ## TC-3.1 インプリシットのトークンがフラグメントで返り、クエリに漏れない

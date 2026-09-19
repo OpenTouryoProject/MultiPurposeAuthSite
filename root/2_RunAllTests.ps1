@@ -193,7 +193,7 @@ function Get-TrxResults([string]$path)
         #   EX-n.n        拡張仕様（Revocation / Introspection / Device / Hybrid など）
         #   RT-<Issue>.n  個別 Issue の回帰
         $tc = ""
-        $m = [regex]::Match($stdout, '\[([A-Z]{2}-[0-9]+(?:\.[0-9]+)?)\]')
+        $m = [regex]::Match($stdout, '\[([A-Z0-9]{2}-[0-9]+(?:\.[0-9]+)?)\]')
         if ($m.Success) { $tc = $m.Groups[1].Value }
 
         $rows += [pscustomobject]@{
@@ -276,7 +276,7 @@ function ConvertTo-Record
 
     foreach ($line in ($Text -split "`r?`n"))
     {
-        if ($line -match '^\s*\[[A-Z]{2}-[0-9.]+\]\s*(.+)$')
+        if ($line -match '^\s*\[[A-Z0-9]{2}-[0-9.]+\]\s*(.+)$')
         {
             $rec.タイトル = $Matches[1].Trim()
             continue
@@ -431,6 +431,8 @@ function Get-IdRank
         "TC"    { return 1 }
         "EX"    { return 2 }
         "RT"    { return 3 }
+        "FA"    { return 4 }   # FAPI（ClientMode ごとの経路。#222）
+        "21"    { return 5 }   # OAuth 2.1（許されない経路の抑止。#222）
         default { return 8 }
     }
 }
@@ -441,7 +443,7 @@ function Get-IdPart
 
     if (-not $Id) { return 0 }
 
-    $m = [regex]::Match($Id, '^[A-Z]{2}-([0-9]+)(?:\.([0-9]+))?$')
+    $m = [regex]::Match($Id, '^[A-Z0-9]{2}-([0-9]+)(?:\.([0-9]+))?$')
     if (-not $m.Success) { return 0 }
 
     $v = $m.Groups[$Index + 1].Value
