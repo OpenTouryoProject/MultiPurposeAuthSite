@@ -40,6 +40,7 @@
 //*  2026/09/11  玄人 幸道         scopes_supported に無いスコープを発行しないよう、一覧と絞り込みを追加（#198）
 //*  2026/09/11  玄人 幸道         クライアントの登録（scope）で、発行するスコープを絞る（#198 の後半）
 //*  2026/09/11  玄人 幸道         GetScopesSupported を Claim関連ヘルパ から scopes_supported の region へ移す
+//*  2026/09/18  玄人 幸道         クライアント単位の PKCE 必須化（require_pkce）を追加（#221）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1063,6 +1064,54 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // 登録が無い
             return null;
+        }
+
+        #endregion
+
+        #region Client PKCE
+
+        /// <summary>client_idから、PKCEを必須とするかどうかを取得する。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>必須なら true（登録が無ければ false）</returns>
+        /// <remarks>
+        /// **サーバ全体の Config.RequirePkce とは OR で組み合わせる（#221）。**
+        /// クライアント側で true にはできるが、**サーバが締めているものを緩めることはできない。**
+        ///
+        /// 未設定は false（＝サーバの設定に従う）。
+        /// **保存済みの登録には、この項目が無い。** JSON に無ければ既定値の false になるので、
+        /// 従来どおりの動作が続く（oauth2_oidc_mode のような「静かに緩む」問題は起きない）。
+        /// </remarks>
+        public bool GetClientRequirePkce(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey("require_pkce"))
+                {
+                    // **空文字列で Convert.ToBoolean は例外になる**ので、TryParse で読む。
+                    bool.TryParse(dic["require_pkce"], out bool require);
+                    return require;
+                }
+
+                return false;
+            }
+
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                ManageAddSaml2OAuth2DataViewModel model =
+                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+
+                return model.RequirePkce;
+            }
+
+            // 登録が無い
+            return false;
         }
 
         #endregion

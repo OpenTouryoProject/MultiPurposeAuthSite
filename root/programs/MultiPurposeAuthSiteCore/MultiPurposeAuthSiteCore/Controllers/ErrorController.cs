@@ -15,6 +15,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  20xx/xx/xx  ＸＸ ＸＸ         ＸＸＸＸ
+//*  2026/09/19  玄人 幸道         効いていない [Authorize] を外す（#223）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -37,7 +38,11 @@ using Touryo.Infrastructure.Framework.Util;
 
 namespace MultiPurposeAuthSite.Controllers
 {
-    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
+    // **[Authorize(AuthenticationSchemes = "Cookies")] を外した（#223）。**
+    //   **唯一のアクション Index が [AllowAnonymous] なので、そもそも何もしていなかった。**
+    //   加えて、このサイトがサインインに使うのは "Cookies" ではなく Identity.Application
+    //   （"Cookies" は Open棟梁のフレームワークが参照するスキーム）。
+    //   このまま残すと「エラー画面は認証が要る」と読めてしまうため、消す。
     public class ErrorController : MyBaseMVControllerCore
     {
         /// <summary>

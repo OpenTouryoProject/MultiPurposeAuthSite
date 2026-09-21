@@ -46,6 +46,15 @@ namespace MultiPurposeAuthSite.ViewModels
         [Display(Name = "ClarifyRedirectUri", ResourceType = typeof(Resources.CommonViewModels))]
         public bool ClarifyRedirectUri { get; set; }
 
+        /// <summary>
+        /// クライアント単位で PKCE を必須にした Client を選ぶときの値（#221）
+        /// </summary>
+        /// <remarks>
+        /// **ClientMode（列挙型）ではない。** require_pkce は登録の 1 項目であって、
+        /// クライアントの種別ではないため。"login User" と同じく、文字列で持つ。
+        /// </remarks>
+        public const string RequirePkceClientType = "require_pkce";
+
         /// <summary>ClientType</summary>
         [Display(Name = "ClientType", ResourceType = typeof(Resources.CommonViewModels))]
         public string ClientType { get; set; }
@@ -72,6 +81,13 @@ namespace MultiPurposeAuthSite.ViewModels
                     new SelectListItem() {
                         Text = "Financial-grade API - CIBA用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit() },
+                    // **クライアント単位で PKCE を必須にした Client（#221）。**
+                    //   ClientMode（列挙型）ではないので、値は文字列で持つ（"login User" と同じ扱い）。
+                    //   これを選ぶと、**下のボタンはどれも TestClient6 で動く。**
+                    //   PKCE を付けないフローは invalid_request になる（それが正しい）。
+                    new SelectListItem() {
+                        Text = "クライアント単位で PKCE 必須の Client (require_pkce)",
+                        Value = HomeSaml2OAuth2StartersViewModel.RequirePkceClientType },
                     new SelectListItem() {
                         Text = "ログイン・ユーザの Client",
                         Value = "login User" }

@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         JSON の null など、オブジェクトでない本文でも落ちないよう修正
 //*  2026/09/12  玄人 幸道         本文を文字列として読む Text を追加（"OK" / "NG" で答えるエンドポイント用）（#196）
+//*  2026/09/18  玄人 幸道         discovery の配列を見る ArrayContains を追加（#220）
 //**********************************************************************************
 
 using System;
@@ -207,6 +208,35 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return (value.ValueKind == JsonValueKind.String) ? value.GetString() : value.ToString();
+        }
+
+        /// <summary>配列のプロパティに、その文字列が入っているか（#220）</summary>
+        /// <param name="name">プロパティ名（grant_types_supported など）</param>
+        /// <param name="value">探す値</param>
+        /// <returns>入っていれば true（配列でなければ false）</returns>
+        public bool ArrayContains(string name, string value)
+        {
+            if (!this.IsJson || this.Json.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            JsonElement array;
+            if (!this.Json.TryGetProperty(name, out array)
+                || array.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (JsonElement item in array.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String && item.GetString() == value)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>プロパティの JsonValueKind を返す（無ければ Undefined）</summary>

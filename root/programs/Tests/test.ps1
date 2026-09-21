@@ -346,6 +346,11 @@ try {
         $env:ASPNETCORE_ENVIRONMENT = 'Development'
         $env:OAuth2AuthorizationServerEndpointsRootURI = $Url
         $env:OAuth2ClientEndpointsRootURI = $Url
+        # **Obsolete のテスト（Implicit / ROPC）も必ず測る（#220）。**
+        #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
+        #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
+        $env:EnableImplicitGrantType = 'true'
+        $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
 
         # UserStore の切り替え（#207）。mem のときは何も渡さない（構成ファイルのまま）。
         if ($UserStoreType -ne 'mem') {
@@ -411,6 +416,11 @@ try {
 
             $env:OAuth2AuthorizationServerEndpointsRootURI = $NetFxUrl
             $env:OAuth2ClientEndpointsRootURI = $NetFxUrl
+            # **Obsolete のテスト（Implicit / ROPC）も必ず測る（#220）。**
+            #   雛形の既定は無効にしたが、**テストでは有効にして起動する。**
+            #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
+            $env:EnableImplicitGrantType = 'true'
+            $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
 
             # UserStore の切り替え（#207）。npg はここに来ない（上で NoNetFx にしている）。
             if ($UserStoreType -ne 'mem') {

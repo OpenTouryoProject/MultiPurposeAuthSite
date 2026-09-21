@@ -32,6 +32,8 @@
 //*  2026/09/08  玄人 幸道         エラー応答とRedirect URLをRFC 6749に合わせる（#187）
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認の待ち受け（TwoFactorPushStatus）を追加（#213）
 //*  2026/09/16  玄人 幸道         2FAのコード送信の失敗を、画面に戻して伝える（#214）
+//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
+//*  2026/09/18  玄人 幸道         認可リクエストの code_challenge を検証に渡す（#220）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2173,7 +2175,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> IDFederationRedirectEndPoint(string code, string state)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
@@ -2635,7 +2637,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 bool verified = false;
 
@@ -2715,7 +2717,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // IsLockedDownRedirectEndpoint == true;
+                // IsLockedDownTestEndpoints == true;
             }
 
             // エラー
@@ -2834,6 +2836,9 @@ namespace MultiPurposeAuthSite.Controllers
             string errDescription = "";
 
             JObject claims = null;
+            // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
+            string code_challenge = StringExtractor.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.code_challenge, Request.GetEncodedUrl());
             string request_uri = StringExtractor.GetParameterFromQueryString(
                 OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
             if (!string.IsNullOrEmpty(request_uri))
@@ -2856,13 +2861,14 @@ namespace MultiPurposeAuthSite.Controllers
                     max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
                     prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
                     claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+                    code_challenge = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
                 }
             }
 
             if (this.CheckAuthTime(max_age)) {
                 if (Token.CmnEndpoints.ValidateAuthZReqParam(
                     client_id, redirect_uri, response_type, scope, nonce,
-                    out valid_redirect_uri, out err, out errDescription))
+                    out valid_redirect_uri, out err, out errDescription, code_challenge))
                 {
                     // Cookie認証チケットからClaimsPrincipalを取得しておく。
                     AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
@@ -3027,6 +3033,9 @@ namespace MultiPurposeAuthSite.Controllers
         {
             string prompt = ""; // ダミー
             JObject claims = null;
+            // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
+            string code_challenge = StringExtractor.GetParameterFromQueryString(
+                OAuth2AndOIDCConst.code_challenge, Request.GetEncodedUrl());
             string request_uri = StringExtractor.GetParameterFromQueryString(
                 OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
             if (!string.IsNullOrEmpty(request_uri))
@@ -3049,12 +3058,13 @@ namespace MultiPurposeAuthSite.Controllers
                     max_age = (string)requestObjectPayload[OAuth2AndOIDCConst.max_age];
                     prompt = (string)requestObjectPayload[OAuth2AndOIDCConst.prompt];
                     claims = (JObject)requestObjectPayload[OAuth2AndOIDCConst.claims];
+                    code_challenge = (string)requestObjectPayload[OAuth2AndOIDCConst.code_challenge];
                 }
             }
 
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out string valid_redirect_uri, out string err, out string errDescription))
+                out string valid_redirect_uri, out string err, out string errDescription, code_challenge))
             {
                 // Cookie認証チケットからClaimsPrincipalを取得しておく。
                 AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
@@ -3739,7 +3749,7 @@ namespace MultiPurposeAuthSite.Controllers
         [AllowAnonymous]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient(string code, string state, string response)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 if (!string.IsNullOrEmpty(code)
                     || !string.IsNullOrEmpty(response))
@@ -3951,7 +3961,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
             else
             {
-                // IsLockedDownRedirectEndpoint == true;
+                // IsLockedDownTestEndpoints == true;
             }
 
             // エラー
@@ -3971,7 +3981,7 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> OAuth2AuthorizationCodeGrantClient2(OAuth2AuthorizationCodeGrantClientViewModel model)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 // AccountVerifyCodeViewModelの検証
                 if (ModelState.IsValid)
@@ -4126,7 +4136,7 @@ namespace MultiPurposeAuthSite.Controllers
             string access_token, string id_token, string code, string state,
             string token_type, string expires_in, string response)
         {
-            if (!Config.IsLockedDownRedirectEndpoint)
+            if (!Config.IsLockedDownTestEndpoints)
             {
                 // OAuth2のREQUIREDは、access_token, token_type, state
                 if (!string.IsNullOrEmpty(state)

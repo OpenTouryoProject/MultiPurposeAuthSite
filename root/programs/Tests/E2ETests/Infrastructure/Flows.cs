@@ -32,12 +32,16 @@
 //*  2026/09/10  玄人 幸道         JWK Set の取得を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         scope を登録した TestClient5 を追加（#198 の後半）
 //*  2026/09/11  玄人 幸道         トークンの更新・失効・問い合わせ（RefreshAsync / RevokeAsync / IntrospectAsync）を、テスト クラスから移す
+//*  2026/09/18  玄人 幸道         既定で無効な機能を Skip する口を追加（#220）
+//*  2026/09/18  玄人 幸道         TestClient6 と、未登録なら Skip する口を追加（#221）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+
+using Xunit;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 {
@@ -68,6 +72,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>登録の scope で、要求してよいスコープを制限したクライアント（#198）</summary>
         public const string TestClient5 = "TestClient5";
+
+        /// <summary>クライアント単位で PKCE を必須にしたクライアント（#221）</summary>
+        public const string TestClient6 = "TestClient6";
     }
 
     /// <summary>クライアントの登録内容（テストから参照する分だけ）</summary>
@@ -343,5 +350,44 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             return jwks.Json;
         }
+
+        #region 既定で無効な機能の Skip（#220）
+
+        /// <summary>
+        /// discovery に広告されていない grant_type なら Skip する（#220）
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="grantType">grant_type</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **OAuth 2.1 に寄せて、Implicit / ROPC は雛形の既定で無効にした（#220）。**
+        /// 有効にしている環境では従来どおり測り、無効な環境では Skip する。
+        /// discovery は設定を反映するので、そこを見れば分かる。
+        /// </remarks>
+        public static async Task SkipIfGrantTypeNotSupportedAsync(IdPClient client, string grantType)
+        {
+            JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
+
+            Skip.IfNot(discovery.ArrayContains("grant_types_supported", grantType),
+                "grant_type=" + grantType + " が無効です（#220 で既定を無効にした）。");
+        }
+
+        /// <summary>
+        /// そのクライアントが構成ファイルに登録されていなければ Skip する（#221）
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientName">client_name</param>
+        /// <remarks>
+        /// **雛形に足したクライアントは、既存の環境の実設定には無い。**
+        /// 実設定は各自のものなので、雛形を当て直すまでは登録されていない。
+        /// その間は測れないので Skip する（**登録すれば、そのまま測れる**）。
+        /// </remarks>
+        public static void SkipIfClientNotRegistered(IdPClient client, string clientName)
+        {
+            Skip.If(string.IsNullOrEmpty(client.Config.FindClientIdByName(clientName)),
+                "client_name=" + clientName + " が構成ファイルに登録されていません（#221 で雛形に追加）。");
+        }
+
+        #endregion
     }
 }

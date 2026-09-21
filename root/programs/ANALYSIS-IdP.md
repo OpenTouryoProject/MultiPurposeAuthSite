@@ -523,6 +523,27 @@ RP からは何が起きたのか分からない。
 - E2E テスト : **`RT-187.4` の `Skip` を解消**（両ターゲットで `unsupported_response_type` がリダイレクトで返る）。
   `RT-187.3` の観測も「リダイレクトして `error=unsupported_response_type`」に変わった
 
+### A-8-2. トークン応答にキャッシュ制御のヘッダが無い **[Core][netfx]** — **✅ 修正済み（#218 の 1 つ目）**
+
+RFC 6749 §5.1（成功）/ §5.2（エラー）は、**`Cache-Control: no-store` と `Pragma: no-cache` を MUST**
+としている。トークンを中間のキャッシュやブラウザの履歴に残さないため。
+
+**両系統とも、どこにも設定していなかった**（`no-store` で全文検索して 0 件）。
+E2E の `TC-3.2` は測っていたが、**観測にとどめて「別途 Issue」と書いたまま放置されていた**（#218）。
+
+- **アクションの入口で付ける**（`OAuth2EndpointController.OAuth2Token`）。
+  **成功・エラーのどちらの経路でも返す**ため、出口ごとに書かない
+- net10.0 は `Response.Headers` に直接入れて `no-store`。
+  **net48 は `System.Web` の `Response.Cache`**（`SetCacheability(NoCache)` ＋ `SetNoStore()`）を使う。
+  ヘッダを直接書くと ASP.NET のキャッシュ モジュールに上書きされうるため。
+  結果、net48 は `Cache-Control: no-store, no-cache` になる（RFC が求めるのは `no-store` が在ること）
+- E2E テスト : **`TC-3.2` を観測から検証に格上げ**（両ターゲットで成立）。
+  値は完全一致で見ず、`no-store` / `no-cache` を含むかで判定する
+- **`/token` のほか、資格情報・属性を返す口にも付けた**（`/introspect`・`/userinfo`・
+  `/device_authz`（`device_code`）・`/ciba_authz`（`auth_req_id`）。#218 の案 C）。
+  **RFC が MUST としているのは `/token` だけ**だが、キャッシュに残ると困る性質は同じ。
+  E2E テスト : `RT-218.1`（4 口 × 2 ヘッダを、両ターゲットで確認）
+
 ### A-9. discovery のキー名に末尾スペース **[Lib]** — **✅ 修正済み（#189 の一部）**
 
 ```csharp
@@ -592,11 +613,19 @@ token = Token.CmnAccessToken.ProtectFromPayload(
 
 E2E テスト: `EX-2.4` / `EX-2.5` / `EX-2.6`（ヒントの取り違え）/ `EX-3.2` / `EX-3.4` / `EX-3.7`（同）。
 
+**対応（#218 の 2 つ目）: `/introspect` の `token_type`。**
+
+「見つかった種類」（`access_token` / `refresh_token`）を入れていたが、
+RFC 7662 §2.2 の `token_type` は **RFC 6749 §5.1 の型**（`bearer` など）を指す。
+
+- **アクセス トークンには `bearer`** を返す。値はトークン応答（`CreateAccessTokenResponse`）と揃える
+- **リフレッシュ トークンには付けない。** §5.1 の型が無いため（RFC 7662 §2.2 の `token_type` は OPTIONAL）
+- E2E テスト : `EX-3.7` を**観測から検証に格上げ**（`bearer` が返る。大小文字は問わない）。
+  `EX-3.2`（リフレッシュ トークン）には「返らない」ことを観測として残した
+
 > **残っている点:**
 > エラー応答の HTTP ステータス（400 / 401）は #196 で対応した（`/revoke`・`/introspect` とも）。
-> `/introspect` の `token_type` には「見つかった種類」（`access_token` / `refresh_token`）を入れているが、
-> RFC 7662 §2.2 の `token_type` は `Bearer` などの型を指す。
-> また、メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
+> メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
 
 ---
 
@@ -844,7 +873,7 @@ string.Format("?code={0}&state={1}", code, state)
 `&` を含めればリダイレクト URL にパラメタを注入できる。
 `?` の無条件付与（A-6 と同じ）と併せて、リダイレクト URL の組み立てを一箇所に集約すべき。
 
-### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]**
+### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **✅ 修正済み（#220 / #221）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs:1010-1050
@@ -862,9 +891,103 @@ else if (code_verifier 有り && client_secret 有り) → 【空実装】
    OAuth 2.1 / FAPI は `S256` のみを許す。
 3. **`S256` を使ったという理由だけで `permittedLevel` を `fapi1` に格上げしている**（`:1030` 付近）。
    PKCE のメソッドは「クライアント認証の強度」ではないので、権限判定と分離すべき。
+   **格上げの影響は権限判定だけでは終わらない。** `CmnAccessToken.ProtectFromPayload` は
+   `permittedLevel` を見て**アクセス トークンに `fapi` クレームを書く**ため、
+   **`normal` 登録のクライアントでも、`S256` の PKCE を使えば `fapi: fapi1` を名乗るトークンになる。**
+   （この repo の中では誰もこのクレームを読んでいない。効くのは、これを信頼する RS がある場合。）
 
 さらに、**認可エンドポイント側で `code_challenge` を必須化していない**ため、
 PKCE 無しの認可コード フローがそのまま通る。
+
+**対応（#220 の 1 つ目）: 上の 1 と 2。**
+
+- **1（同時送信）: 直した。** 空実装だった分岐を実装し、
+  **クライアント認証（`client_secret`）と PKCE の検証を、別々に行って両方を求める**。
+  PKCE は当初「`client_secret` を持てないクライアントの代わり」だったが、
+  いまは**種別によらない標準的な防壁**で、`client_secret` と併用される
+- **2（`plain`）: 設定で拒否できるようにした**（`RequirePkceS256`）。
+  **既定は `false`（従来どおり受理）。** 下位互換のため
+- 検証は `VerifyPkce` にまとめ、パブリック クライアントの経路と共用する（同じ判定が 2 箇所に散らない）
+- E2E テスト : **`RT-220.1`**（`client_secret` ＋ `code_verifier` でトークンが返る／
+  **誤った `code_verifier` では発行しない**）、**`RT-220.2`**（`plain` は既定で受理）
+
+**対応（#220 の残件）: `code_challenge` の必須化。**
+
+- **設定で必須にできるようにした**（`RequirePkce`）。**既定は `false`（従来どおり任意）。**
+  有効にすると、**認可エンドポイント**で `invalid_request` になる
+  （`ValidateAuthZReqParam`。エラーは #187 の仕組みで RP へリダイレクトで返る）
+- 対象は **`code` を発行する `response_type`**（`code` / `code id_token` / `code token` /
+  `code id_token token`）。**Device AuthZ / CIBA は認可エンドポイントを通らないので掛からない**
+- 値の出どころは `request_uri`（JAR / PAR）が在ればその中、無ければクエリ文字列。
+  `AuthorizationCodeProvider.GetAuthorizationRequestParams` と同じ決め方（#197）
+- **`RequirePkce` と `RequirePkceS256` は別物。** 前者は PKCE 自体を求め、後者は使うなら `S256` に限る
+- E2E テスト : **`RT-220.3`**（既定では `code_challenge` 無しでも認可コードが返る）
+
+**対応（#221）: クライアント単位の PKCE 必須化。**
+
+- **サーバ全体の設定だけでは、全クライアントが揃うまで有効にできない。**
+  クライアント登録に **`require_pkce`** を足し、**締められるものから順に締められる**ようにした
+- 判定は **`Config.RequirePkce || Helper.GetClientRequirePkce(client_id)` の OR**。
+  サーバ側が「床」、クライアント側は「個別の引き上げ」で、**床は下げられない**
+- 設定ファイル（`OAuth2ClientsInformation`）と、管理画面の登録（`saml2OAuth2Data`）の両方に対応
+- **保存済みの登録に項目が無くても `false`** になるので、従来どおりの動作が続く
+  （`oauth2_oidc_mode` の改名案が抱えていた「静かに緩む」問題は起きない）
+- E2E テスト : **`RT-221.1`**（`require_pkce` のクライアントは PKCE 無しを拒否し、付ければ通る）、
+  **`RT-221.2`**（他のクライアントには波及しない）
+
+**対応（#220 の残件）: 3（`permittedLevel` の分離）。**
+
+**2 つの意味が 1 つの変数に混ざっていたので、値を分けた。**
+
+| | 意味 | 決まり方 | 使い道 |
+|---|---|---|---|
+| `permittedLevel` | **その経路が、どこまでの登録種別を通すか** | クライアント認証の強度（`client_secret` / x509 / assertion / PKCE の `S256`） | 継続の可否の判定 |
+| `clientMode` | **そのクライアントが、何として登録されているか** | クライアント登録 | **トークンのクレーム** |
+
+- `CheckClientMode` に `out clientMode` を足し、**登録された種別を呼び出し元へ返す**
+- `ProtectFromPayload` へ渡す値を、`permittedLevel` から **`clientMode` に変えた**（2 箇所）。
+  これで **`normal` 登録のクライアントは、`S256` を使っても `fapi` を名乗らない**
+- **格上げ（`S256` → `fapi1`）そのものは残す。** 外すと `fapi1` で登録された
+  クライアントが PKCE で通らなくなる（`CheckClientMode` は `clientMode <= permittedLevel`）。
+  **格上げは「経路が認める上限」の話**なので、そこに置いてあるのは正しい
+- **`device` 登録のクライアント**（LIR で PKCE を使う経路）は、これまで `fapi: fapi1` を
+  名乗っていたが、**`device` クレームに変わる。** 登録どおりの名乗りになる
+- E2E テスト : **`RT-220.4`**（`normal` 登録のクライアントが `S256` で取ったトークンに
+  `fapi` クレームが載らない）
+
+> 他の `ProtectFromPayload` の呼び出し（Implicit / Device AuthZ / CIBA / `/ros`）は、
+> もともと `permittedLevel` ではなく**固定値**（`normal` / `device` / `fapi_ciba`）を
+> 渡しているので、影響を受けない。
+
+**判定側（`CheckClientMode`）の設計は、まだ分離していない（#222）。**
+
+E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は次のとおり。**
+
+| 登録（`oauth2_oidc_mode`） | 認可コード ＋ `client_secret` | 認可コード ＋ PKCE `S256` | ROPC | `client_credentials` | `refresh_token` |
+|---|---|---|---|---|---|
+| `normal`（対照） | 通る | 通る | 通る | 通る | 通る |
+| **`fapi1`** | 拒否 | **通る** | 拒否 | 拒否 | **拒否** |
+| **`fapi2`** | 拒否 | **拒否** | 拒否 | 拒否 | （到達せず） |
+| **`device`** | （`client_secret` 無し） | **通る** | — | — | （`client_secret` 無しで不可） |
+
+拒否はいずれも `unsupported_grant_type`。**`fapi2` は x509（mTLS）でしか通らない**ので、
+平文の経路は全滅する（設計どおり）。
+
+**設計上の問題が 3 つある。**
+
+1. **順序として扱っているが、順序ではない。** `device` / `fapi_ciba` は水準ではなく**種別**。
+   実際 `CheckClientMode` は、`permittedLevel > fapi2` のとき
+   「以下」ではなく「**一致**」に判定を切り替えている
+2. **例外がハードコードされている。** `clientMode = device` かつ `permittedLevel = fapi1`
+   （＝ PKCE の `S256`）のときだけ通す、という LIR 用の措置がある（`FA-3.1` が、この経路を固定している）
+3. **巻き添えが大きい。** `fapi1` にすると PKCE 以外の経路も塞がる。とくに
+   **`refresh_token` は、発行されるのに使えない**（`FA-1.2`。RP から見ると
+   「受け取ったのに必ず失敗する資格情報」）
+
+**あるべき形**は 1 次元の水準ではなく、
+**「この要求が何を証明したか」の集合**と**「このクライアントが何を要求するか」の集合**の照合。
+ただし **`ClientMode` の列挙は Open棟梁側**（別リポジトリ）に在り、認証・認可の中心でもあるため、
+**#222 では着手しない**（別 Issue）。上の E2E は、そのときに**壊していないことを確かめる土台**である。
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
 
@@ -905,7 +1028,7 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 また `CheckRedirectUri` には
 **「`Config.OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Manage` は
 どの client_id でも無条件に許可」** という自己テスト用の抜け道がある。
-`Config.IsLockedDownRedirectEndpoint` の対象外なので、**本番で閉じられない。**
+`Config.IsLockedDownTestEndpoints` の対象外なので、**本番で閉じられない。**
 
 ### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]**
 
@@ -1053,6 +1176,17 @@ RFC 6749 §3.3 は「発行するスコープは要求と異なってよい」�
 E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）/ `RT-198.2`（password）/
 `RT-198.3`・`RT-198.4`（登録の `scope` による制限。client_credentials / 認可コード）。
 
+**対応（#218 の 3 つ目）: JWT Bearer（RFC 7523）が、トークン要求の `scope` を見ていなかった。**
+
+`GrantJwtBearerTokenCredentials` は **assertion の中の `scope` だけ**を読んでいた。
+`scope` は RFC 7521 §4.1 / RFC 7523 §2.1 で**トークン要求のパラメタ**として定義されており、
+**仕様どおり送るクライアントの指定が、黙って無視されていた。**
+
+- **要求に `scope` があれば、それを使う。** 無ければ、これまでどおり assertion の値を使う
+  （要求に `scope` を付けていない利用者を壊さないため）
+- どちらも `FilterSupportedScopes` を通す（#198 の絞り込みは維持）
+- E2E テスト : **`EX-7.5`**（送らないと `profile email`、`scope=email` を送ると `email` だけ。両ターゲットで実測）
+
 > **残っている点:** Implicit / Hybrid の応答（フラグメント）には、まだ `scope` を返していない
 > （RFC 6749 §4.2.2 は、要求と異なるなら必須）。
 
@@ -1073,7 +1207,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
-| D-12 | **OAuth 2.1 への整合** | Implicit / ROPC が既定で有効（`_appsettings.json` は全て `true`）、PKCE 任意、`plain` 可 | 最新プロファイルとは逆方向 |
+| D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
 | D-13 | レート制限 / ブルートフォース対策 | 未実装（`/token` `/device_authz` `/ciba_authz` とも無制限） | user_code・client_secret への総当たりが可能 |
 | D-14 | **適合性テスト** | 仕組みが無い | OpenID Foundation Conformance Suite を回せば A・B の大半は自動で検出できる |
 
@@ -1146,12 +1280,12 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 
 | 項目 |
 |---|
-| C-7 PKCE：`code_verifier` ＋ `client_secret` の同時送信を正式サポート、`plain` 廃止、権限判定と分離 |
+| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）の再設計は残っている**（#222 で現状を E2E に固定した） |
 | C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`） |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |
 | D-10 `typ: at+jwt`、`jku` の除去 |
-| D-12 Implicit / ROPC を既定 無効に（`_appsettings.json`）。**下位互換の方針上、廃止ではなく既定値の変更＋ obsolete 期間** |
+| ✅ **D-12 Implicit / ROPC を既定 無効に**（#220。コードは残し、設定で戻せる） |
 
 ### フェーズ 4 — 機能の追加
 

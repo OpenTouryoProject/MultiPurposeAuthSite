@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-183 / 190 / 191）
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-183 / RT-190 / RT-191）
+//*  2026/09/18  玄人 幸道         既定で無効にした機能に依存するテストを Skip 対象にした（#220）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -176,6 +177,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                // **Implicit は雛形の既定で無効**（#220）。有効な環境でだけ測る。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "implicit");
+
                 TestReport r = this.Report("RT-190.1",
                     "Implicit / Hybrid フローで nonce が無ければ拒否される",
                     "**このフローでは nonce は必須。**"
@@ -226,6 +230,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                // **Implicit は雛形の既定で無効**（#220）。有効な環境でだけ測る。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "implicit");
+
                 TestReport r = this.Report("RT-190.2",
                     "Implicit フローで nonce があれば通る",
                     "**RT-190.1 の対照。** 必須チェックを足したことで、"

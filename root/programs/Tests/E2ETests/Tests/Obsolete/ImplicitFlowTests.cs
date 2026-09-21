@@ -20,7 +20,7 @@
 
 //**********************************************************************************
 //* クラス名        ：ImplicitFlowTests
-//* クラス日本語名  ：TC-3 インプリシット フロー
+//* クラス日本語名  ：TC Implicitフロー（OAuth 2.1 では廃止。#220）
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -28,10 +28,12 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2026/09/09  玄人 幸道         新規（基本テストケースの追加）
+//*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/18  玄人 幸道         #220 でファイルを分けた（元 : Tests/Basic）
 //**********************************************************************************
 
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -39,16 +41,15 @@ using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
+namespace MultiPurposeAuthSite.Tests.E2E.Tests.Obsolete
 {
     /// <summary>
-    /// TC-3. インプリシット フロー（Implicit Grant）。
-    ///
-    /// ＜前置き＞
-    ///   OAuth 2.0 Security BCP と OAuth 2.1 は、**このフローの使用を推奨していない。**
-    ///   ここでのテストは「実装されている以上、仕様どおりに振る舞うか」を見るもので、
-    ///   このフローを推奨する意味ではない。
+    /// TC-3. Implicit フロー。
     /// </summary>
+    /// <remarks>
+    /// **OAuth 2.1 では廃止されたフロー。** 雛形の既定でも無効にした（#220）。
+    /// 有効にしている環境のために残してあり、無効なら Skip する。
+    /// </remarks>
     public class ImplicitFlowTests : TargetTestBase
     {
         /// <summary>コンストラクタ</summary>
@@ -66,6 +67,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
+                // **Implicit は雛形の既定で無効**（#220）。有効な環境でだけ測る。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "implicit");
+
                 TestReport r = this.Report("TC-3.1",
                     "インプリシットのトークンがフラグメントで返り、クエリに漏れない",
                     "アクセス トークンは **URL フラグメント（#）**で返さなければならない。"
@@ -119,60 +123,6 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
 
                 r.Verify("state がそのまま返る", res.Get("state") == "state1",
                     "state=state1", "state = " + (res.Get("state") ?? "なし"));
-
-                r.Done();
-            }
-        }
-
-        /// <summary>TC-3.2 トークン応答のキャッシュ制御</summary>
-        /// <param name="targetKey">core / netfx</param>
-        /// <returns>Task</returns>
-        [SkippableTheory]
-        [MemberData(nameof(AllTargets))]
-        public async Task TC0302_トークン応答のキャッシュ制御(string targetKey)
-        {
-            using (IdPClient client = await this.SignedInClientAsync(targetKey))
-            {
-                TestReport r = this.Report("TC-3.2",
-                    "トークン応答に Cache-Control: no-store が付く",
-                    "トークンを含む応答は、中間キャッシュやブラウザ履歴に残してはならない。"
-                    + "RFC 6749 は **Cache-Control: no-store と Pragma: no-cache** を MUST としている。",
-                    "RFC 6749 §5.1（successful response）/ §5.2（error response）");
-
-                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
-
-                r.Target("client_name=" + KnownClients.MvcSample);
-                r.Step("POST /token で正常にトークンを取得し、応答ヘッダを見る");
-
-                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
-                    client, reg, redirectUri: reg.RedirectUri);
-
-                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が取得できること");
-
-                JsonResponse token = await Flows.ExchangeCodeAsync(
-                    client, reg, authz.Code, reg.RedirectUri);
-
-                Assert.True(string.IsNullOrEmpty(token.Error), "前提: トークンが取得できること");
-
-                string cacheControl = token.Header("Cache-Control");
-                string pragma = token.Header("Pragma");
-
-                r.Observe("Cache-Control", cacheControl ?? "（ヘッダ無し）",
-                    "RFC 6749 §5.1 は no-store を MUST としている。");
-
-                r.Observe("Pragma", pragma ?? "（ヘッダ無し）",
-                    "RFC 6749 §5.1 は no-cache を MUST としている。"
-                    + "HTTP/1.0 の後方互換のためのもの。");
-
-                r.Note("**この 2 つは現状 MUST を満たしていない。**"
-                    + " 判定を NG にすると他の検証が実行されなくなるため、"
-                    + "ここでは観測にとどめ、別途 Issue として扱う。");
-
-                // トークンが本文に入っていること自体は確かめておく
-                // （ヘッダの話をする前提が成り立っているか）。
-                r.Verify("この応答にトークンが含まれている（前提の確認）",
-                    !string.IsNullOrEmpty(token.AccessToken),
-                    "access_token あり", token.AccessToken == null ? "なし" : "あり");
 
                 r.Done();
             }

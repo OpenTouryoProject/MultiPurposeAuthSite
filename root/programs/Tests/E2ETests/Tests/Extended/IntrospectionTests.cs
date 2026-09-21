@@ -32,8 +32,10 @@
 //*  2026/09/11  玄人 幸道         EX-3.2 / 3.4 の Skip を解除、EX-3.7 を追加（#200）
 //*  2026/09/11  玄人 幸道         IntrospectAsync を Flows へ移す（RevocationTests への依存も解消）
 //*  2026/09/11  玄人 幸道         EX-3.6 の観測の注記を、#196（/introspect の 401）の対応に合わせる
+//*  2026/09/17  玄人 幸道         EX-3.7 を検証に格上げ、EX-3.2 に token_type の観測を追加（#218）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -166,6 +168,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 r.Verify("active が true（JSON の真偽値）", res.KindOf("active") == JsonValueKind.True,
                     "active=true", ActiveOf(res));
+
+                r.Observe("token_type", res.String("token_type") ?? "（返らない）",
+                    "**リフレッシュ トークンには RFC 6749 §5.1 の型が無いので、付けない**（#218）。"
+                    + "RFC 7662 §2.2 の token_type は OPTIONAL。");
 
                 r.Observe("返った項目", res.ToString());
 
@@ -373,8 +379,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     "active=true",
                     ActiveOf(res) + " / error=" + (res.Error ?? "なし"));
 
-                r.Observe("token_type", res.String("token_type") ?? "（返らない）",
-                    "見つかった種類が入る。RFC 7662 §2.2 の token_type は Bearer などの型を指すので、意味がずれている。");
+                // **RFC 6749 §5.1 の型**（bearer）が入る。以前は見つかった種別（access_token）が入っていた（#218）。
+                //   大小文字は問わない（RFC 6749 §5.1）。トークン応答と同じ値。
+                r.Verify("token_type が bearer である",
+                    string.Equals(res.String("token_type"), "bearer", StringComparison.OrdinalIgnoreCase),
+                    "bearer（大小文字は問わない）", res.String("token_type") ?? "（返らない）");
 
                 r.Done();
             }

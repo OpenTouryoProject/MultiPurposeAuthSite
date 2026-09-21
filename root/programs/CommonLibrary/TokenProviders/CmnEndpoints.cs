@@ -72,6 +72,11 @@
 //*  2026/09/11  玄人 幸道         /ciba_authz の空のエラー コードを CIBA Core 13 のコードに（unknown_user_id を追加）（#196）
 //*  2026/09/13  玄人 幸道         エラー コードを Open棟梁 の定数に寄せる（OpenTouryo #587）
 //*  2026/09/17  玄人 幸道         認可エラーを、可能ならリダイレクトで返す（#187 の残り）
+//*  2026/09/17  玄人 幸道         /introspect の token_type を RFC 7662 2.2 の意味に直す（#218）
+//*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
+//*  2026/09/17  玄人 幸道         PKCE : client_secret との同時送信を通し、検証を 1 箇所にまとめた（#220）
+//*  2026/09/18  玄人 幸道         PKCE : code_challenge の必須化を、認可エンドポイントに追加（#220）
+//*  2026/09/18  玄人 幸道         トークンのクレームを、permittedLevel から clientMode に分離（#220）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -383,6 +388,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="valid_redirect_uri">string</param>
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
+        /// <param name="code_challenge">string</param>
         /// <returns>成功 or 失敗</returns>
         /// <remarks>
         /// **エラーは、返せるなら RP へリダイレクトで返す**（RFC 6749 4.1.2.1。#187 の残り）。
@@ -390,14 +396,18 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// 判定そのもの（順序・エラー コード）は ValidateAuthZReqParamCore のまま変えない。
         /// ここで足すのは、**失敗したときの返し先**だけ。
+        ///
+        /// code_challenge は、Config.RequirePkce が true のときだけ見る（#220）。
+        /// 既定（false）では、渡さなくても従来どおり動く。
         /// </remarks>
         public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
-            out string valid_redirect_uri, out string err, out string errDescription)
+            out string valid_redirect_uri, out string err, out string errDescription,
+            string code_challenge = "")
         {
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription);
+                out valid_redirect_uri, out err, out errDescription, code_challenge);
 
             if (!isValid && string.IsNullOrEmpty(valid_redirect_uri))
             {
@@ -421,10 +431,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="valid_redirect_uri">string</param>
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
+        /// <param name="code_challenge">string</param>
         /// <returns>成功 or 失敗</returns>
         private static bool ValidateAuthZReqParamCore(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
-            out string valid_redirect_uri, out string err, out string errDescription)
+            out string valid_redirect_uri, out string err, out string errDescription,
+            string code_challenge)
         {
             valid_redirect_uri = "";
             // 各分岐で上書きする。ここは想定外のケースの既定値（#187）。
@@ -514,6 +526,33 @@ namespace MultiPurposeAuthSite.TokenProviders
                 redirect_uri, client_id, response_type,
                 out valid_redirect_uri, ref err, ref errDescription))
             {
+                #region code_challenge（PKCE）
+
+                // **OAuth 2.1 は、クライアントの種別によらず PKCE を必須とする（#220）。**
+                //   既定（RequirePkce = false）では従来どおり任意。
+                //   有効にすると、code を発行する response_type
+                //   （code / code id_token / code token / code id_token token）で必須になる。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                //   ※ Device AuthZ / CIBA はこの口を通らないので、掛からない。
+                //
+                // **サーバ全体（Config）と、クライアント個別（登録の require_pkce）の OR（#221）。**
+                //   サーバは「全クライアント共通の床」、クライアント側は「個別の引き上げ」。
+                //   **クライアント側から、サーバが締めているものを緩めることはできない。**
+                //   移行では、締められるクライアントから順に true にしていく。
+                bool requirePkce = Config.RequirePkce
+                    || Helper.GetInstance().GetClientRequirePkce(client_id);
+
+                if (requirePkce
+                    && response_type.ToLower().Split(' ').Any(
+                        x => x == OAuth2AndOIDCConst.AuthorizationCodeResponseType)
+                    && string.IsNullOrEmpty(code_challenge))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "code_challenge is required.";
+                    return false;
+                }
+
+                #endregion
 
                 // OIDCチェック２
                 if (scope.Split(' ').Any(x => x == OAuth2AndOIDCConst.Scope_Openid))
@@ -744,6 +783,63 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region VerifyPkce
+
+        /// <summary>PKCE（RFC 7636）の検証（#220）</summary>
+        /// <param name="code">認可コード</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <param name="code_verifier">code_verifier</param>
+        /// <param name="usedS256">S256 で検証できたか</param>
+        /// <returns>検証の成否</returns>
+        /// <remarks>
+        /// **クライアント認証とは別の検証である。** 呼び出し元は、認証の成否と併せて判断する。
+        ///
+        /// `plain` は保護にならないので、`RequirePkceS256` が true なら受け付けない
+        /// （既定は false ＝ 従来どおり受理。OAuth 2.1 / FAPI は S256 のみ）。
+        /// </remarks>
+        private static bool VerifyPkce(
+            string code, string client_id, string redirect_uri,
+            string code_verifier, out bool usedS256)
+        {
+            usedS256 = false;
+
+            AuthorizationCodeProvider.ReceiveChallenge(
+                code, client_id, redirect_uri,
+                out string code_challenge_method, out string code_challenge);
+
+            if (string.IsNullOrEmpty(code_challenge_method)
+                || string.IsNullOrEmpty(code_challenge))
+            {
+                // 認可要求で PKCE を使っていない（code_verifier だけ送られた）。
+                return false;
+            }
+
+            if (code_challenge_method.ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
+            {
+                usedS256 = (code_challenge
+                    == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier));
+
+                return usedS256;
+            }
+
+            if (code_challenge_method.ToLower() == OAuth2AndOIDCConst.PKCE_plain)
+            {
+                if (Config.RequirePkceS256)
+                {
+                    // plain は受け付けない設定（#220）
+                    return false;
+                }
+
+                return (code_challenge == code_verifier);
+            }
+
+            // 未知のメソッド
+            return false;
+        }
+
+        #endregion
+
         #region ResolveErrorRedirectUri
 
         /// <summary>エラーをリダイレクトで返してよい redirect_uri を決める（#187）</summary>
@@ -933,7 +1029,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // このフローが認められるか？
                 Dictionary<string, string> err = new Dictionary<string, string>();
-                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
+                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                    out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                 {
                     // 継続可
                 }
@@ -1030,7 +1127,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // このフローが認められるか？
                 Dictionary<string, string> err = new Dictionary<string, string>();
-                if (CmnEndpoints.CheckClientMode(client_id, permittedLevel, out jwkString, out err))
+                if (CmnEndpoints.CheckClientMode(client_id, permittedLevel,
+                    out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
                 {
                     // 継続可
                 }
@@ -1056,10 +1154,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // ★ 必要に応じて、scopeを調整する。
 
                 // access_token
+                // **クレームは、登録された種別（clientMode）で書く**（#220）。
+                //   permittedLevel は「経路が認める上限」なので、トークンの名乗りには使わない。
                 access_token = CmnAccessToken.ProtectFromPayload(
                 	client_id, tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                    null, permittedLevel, out string aud, out string sub);
+                    null, clientMode, out string aud, out string sub);
 
                 // Client認証のclient_idとToken類のaudをチェック
                 if (client_id != aud) { throw new Exception("[client_id != aud]"); }
@@ -1149,42 +1249,39 @@ namespace MultiPurposeAuthSite.TokenProviders
                     else if (!string.IsNullOrEmpty(code_verifier)
                         && string.IsNullOrEmpty(client_secret))
                     {
-                        // PKCE (client_id & code_verifier)
-                        AuthorizationCodeProvider.ReceiveChallenge(
-                            code, client_id, redirect_uri,
-                            out string code_challenge_method, out string code_challenge);
+                        // パブリック クライアント : PKCE だけで認証する（client_id & code_verifier）
+                        authned = CmnEndpoints.VerifyPkce(
+                            code, client_id, redirect_uri, code_verifier, out bool usedS256);
 
-                        if (!string.IsNullOrEmpty(code_challenge_method))
+                        if (authned && usedS256)
                         {
-                            if (!string.IsNullOrEmpty(code_challenge))
-                            {
-                                if (code_challenge_method.ToLower() == OAuth2AndOIDCConst.PKCE_plain)
-                                {
-                                    if (code_challenge == code_verifier)
-                                    {
-                                        // passed.
-                                        authned = true;
-                                    }
-                                }
-                                else if (code_challenge_method.ToUpper() == OAuth2AndOIDCConst.PKCE_S256)
-                                {
-                                    if (code_challenge == OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(code_verifier))
-                                    {
-                                        // passed.
-                                        authned = true;
-                                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                                    }
-                                }
-                            }
+                            // **S256 の PKCE を使ったので、fapi1 の経路まで認める（#220）。**
+                            //   permittedLevel は「この経路が、どこまでの登録種別を通すか」であって、
+                            //   **クライアントが何であるかではない。**
+                            //   これを外すと、fapi1 で登録されたクライアントが PKCE で通らなくなる
+                            //   （CheckClientMode は clientMode <= permittedLevel で判定するため）。
+                            //   **トークンのクレームには使わない**（CheckClientMode の clientMode を使う）。
+                            permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
                         }
                     }
                     else if (!string.IsNullOrEmpty(code_verifier)
                         && !string.IsNullOrEmpty(client_secret))
                     {
-                        // "OAuth 2.0 authorization code flow with the PKCE extension"
-                        //  (client_id & client_secret & code_verifier)
-                        // これを実装する場合、client_id から Native か SPA否かを見極めて、
-                        // SPAの場合、通常のPKCE（前カバレッジ）を拒否する実装が必要になる。
+                        // **コンフィデンシャル クライアント ＋ PKCE**（client_id & client_secret & code_verifier）（#220）
+                        //
+                        //   PKCE は当初「client_secret を持てないクライアントの代わり」だったが、
+                        //   いまは**種別によらない標準的な防壁**で、client_secret と併用される
+                        //   （OAuth 2.1 / 最近の RP ライブラリ）。
+                        //   **認証は client_secret、PKCE はそれとは別に検証する。両方が通ること。**
+                        //   以前はこの分岐が空実装で、必ず invalid_client になっていた。
+                        authned = CmnEndpoints.ClientAuthentication(
+                            client_id, client_secret, ref x509, out permittedLevel);
+
+                        if (authned)
+                        {
+                            authned = CmnEndpoints.VerifyPkce(
+                                code, client_id, redirect_uri, code_verifier, out bool _);
+                        }
                     }
                     else if (!string.IsNullOrEmpty(assertion))
                     {
@@ -1203,7 +1300,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, permittedLevel, out jwkString, out err))
+                    if (CmnEndpoints.CheckClientMode(client_id, permittedLevel,
+                        out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -1227,10 +1325,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
 
                     // access_token
+                    // **クレームは、登録された種別（clientMode）で書く**（#220）。
+                    //   permittedLevel は「経路が認める上限」なので、トークンの名乗りには使わない。
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        x509, permittedLevel, out string aud, out string sub);
+                        x509, clientMode, out string aud, out string sub);
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -1325,7 +1425,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                        out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -1446,7 +1547,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                        out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -1576,7 +1678,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                        out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -1645,11 +1748,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="grant_type">string</param>
         /// <param name="assertion">string</param>
         /// <param name="x509">X509Certificate2</param>
+        /// <param name="scope">string（トークン要求の scope。RFC 7521 4.1 / RFC 7523 2.1）</param>
         /// <param name="ret">Dictionary(string, string)</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantJwtBearerTokenCredentials(
-            string grant_type, string assertion, X509Certificate2 x509,
+            string grant_type, string assertion, X509Certificate2 x509, string scope,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -1676,7 +1780,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                         {
                             // このフローが認められるか？
-                            if (CmnEndpoints.CheckClientMode(iss, OAuth2AndOIDCEnum.ClientMode.normal, out jwkString, out err))
+                            if (CmnEndpoints.CheckClientMode(iss, OAuth2AndOIDCEnum.ClientMode.normal,
+                                out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                             {
                                 // JwtTokenを作る
 
@@ -1688,8 +1793,14 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                                 // ClaimsIdentityに、その他、所定のClaimを追加する。
                                 identity.AddClaim(new Claim(ClaimTypes.Name, sub));
+                                // **scope は、トークン要求のパラメタが優先**
+                                //   （RFC 7521 4.1 / RFC 7523 2.1。#218）。
+                                //   要求に無ければ、これまでどおり assertion の値を使う
+                                //   （要求に scope を付けていない利用者を壊さないため）。
+                                string requested = string.IsNullOrEmpty(scope) ? scopes : scope;
+
                                 // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
-                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(scopes.Split(' '), iss), null, "");
+                                identity = Helper.AddClaim(identity, iss, Helper.FilterSupportedScopes(requested.Split(' '), iss), null, "");
 
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(
@@ -1919,7 +2030,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？（fapi2に設定
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.fapi_ciba, out jwkString, out err))
+                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.fapi_ciba,
+                        out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -2165,7 +2277,16 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // メタデータの返却
                 ret.Add(OAuth2AndOIDCConst.active, true);
-                ret.Add(OAuth2AndOIDCConst.token_type, type);
+
+                // **token_type は「トークンの型」**（RFC 6749 5.1 の bearer など）であって、
+                //   見つかった種別（access_token / refresh_token）ではない（#218）。
+                //   トークン応答（CreateAccessTokenResponse）と同じ値を返す。
+                //   **リフレッシュ トークンには 5.1 の型が無いので、付けない**
+                //   （RFC 7662 2.2 では OPTIONAL）。
+                if (type == OAuth2AndOIDCConst.AccessToken)
+                {
+                    ret.Add(OAuth2AndOIDCConst.token_type, OAuth2AndOIDCConst.Bearer.ToLower());
+                }
 
                 string scopes = "";
                 foreach (Claim claim in identity.Claims)
@@ -2566,12 +2687,24 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>CheckClientMode</summary>
         /// <param name="client_id">ClientId</param>
         /// <param name="permittedLevel">当該フローのClientModeの許容レベル</param>
+        /// <param name="clientMode">クライアントに登録されたClientMode</param>
         /// <param name="jwkString">jwkString</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>継続の可否</returns>
+        /// <remarks>
+        /// **permittedLevel と clientMode は別のもの（#220）。**
+        /// - permittedLevel : **その経路が、どこまでを認めるか**（クライアント認証の強度で決まる）
+        /// - clientMode     : **そのクライアントが、何として登録されているか**
+        ///
+        /// 継続の可否は「clientMode &lt;= permittedLevel」で判定する（ここは従来どおり）。
+        /// **トークンに載せるクレームは clientMode を使う**（permittedLevel ではない）。
+        /// permittedLevel を使うと、normal のクライアントが PKCE の S256 を使っただけで
+        /// fapi1 と名乗るトークンになってしまうため。
+        /// </remarks>
         private static bool CheckClientMode(
             string client_id,
             OAuth2AndOIDCEnum.ClientMode permittedLevel,
+            out OAuth2AndOIDCEnum.ClientMode clientMode,
             out string jwkString,
             out Dictionary<string, string> err)
         {
@@ -2581,6 +2714,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             // out
             jwkString = "";
             err = new Dictionary<string, string>();
+            clientMode = OAuth2AndOIDCEnum.ClientMode.normal;
 
             // 要求値を最大値に設定
             OAuth2AndOIDCEnum.ClientMode clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
@@ -2619,6 +2753,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi_ciba;
                 }
+
+                // 登録された種別を、呼び出し元へ返す（トークンのクレームに使う。#220）
+                clientMode = clientModeEnum;
             }
 
             if ((int)permittedLevel <= (int)OAuth2AndOIDCEnum.ClientMode.fapi2)

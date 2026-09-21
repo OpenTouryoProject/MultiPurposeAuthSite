@@ -207,6 +207,9 @@
   <data name="ClientMode" xml:space="preserve">
     <value>Client の OAuth2/OIDCモード</value>
   </data>
+  <data name="RequirePkce" xml:space="preserve">
+    <value>この Client に PKCE を必須とする</value>
+  </data>
   <data name="ClientType" xml:space="preserve">
     <value>フローを制限するためのClientのタイプ。</value>
   </data>

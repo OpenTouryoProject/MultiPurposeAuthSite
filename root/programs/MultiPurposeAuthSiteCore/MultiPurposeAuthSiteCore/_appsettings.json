@@ -198,8 +198,8 @@
     "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
     // Grant Typeの有効・無効
     "EnableAuthorizationCodeGrantType": "true",
-    "EnableImplicitGrantType": "true",
-    "EnableResourceOwnerPasswordCredentialsGrantType": "true",
+    "EnableImplicitGrantType": "false",
+    "EnableResourceOwnerPasswordCredentialsGrantType": "false",
     "EnableClientCredentialsGrantType": "true",
     "EnableJwtBearerTokenFlowGrantType": "true",
     "EnableDeviceAuthZGrantType": "true",
@@ -207,6 +207,10 @@
     "EnableRefreshToken": "true",
 
     "EnableOpenIDConnect": "true",
+    // PKCE を必須にするか（#220。true は OAuth 2.1 相当。Device AuthZ / CIBA は対象外）
+    "RequirePkce": "false",
+    // PKCE で S256 だけを受け付けるか（#220。true は OAuth 2.1 / FAPI 相当）
+    "RequirePkceS256": "false",
 
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
@@ -246,7 +250,7 @@
     "OAuth2ClientEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // Redirectエンドポイント
     // Redirectエンドポイント（テスト用）のロックダウン
-    "IsLockedDownRedirectEndpoint": "false",
+    "IsLockedDownTestEndpoints": "false",
     // - test_self_saml : AssertionConsumerService
     "Saml2ResponseEndpoint": "/Account/AssertionConsumerService",
     // - test_self_code : Authorization Codeグラント種別
@@ -342,6 +346,15 @@
         "redirect_uri_code": "http://localhost:12346/",
         "client_name": "TestClient5",
         "scope": "openid profile email"
+      },
+      // このクライアントにだけ PKCE を必須にする（#221、E2E テスト用）。
+      // サーバ全体の RequirePkce との OR で効く。クライアント側から緩めることはできない。
+      // oauth2_oidc_mode = fapi1 と違い、**PKCE 以外の経路は塞がない。**
+      "c4309326f39b1e0975fddb4bc93b56a0": {
+        "client_secret": "RW9WsvNoDe9Hu5CpqcWyvRBmZQnY8qHKWQgqaRhNXJQ",
+        "redirect_uri_code": "test_self_code",
+        "client_name": "TestClient6",
+        "require_pkce": "true"
       }
     },
 

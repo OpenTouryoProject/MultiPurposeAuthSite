@@ -21,6 +21,7 @@
     //*  2020/01/07  西野 大介         PKCE for SPA対応実施
     //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
     //*  2020/12/18  西野 大介         Device AuthZ対応実施
+    //*  2026/09/18  玄人 幸道         無効な Implicit / ROPC は、リンクにせず文字だけにする（#220）
     //**********************************************************************************
 *@
 
@@ -83,9 +84,22 @@
             <li>
                 Implicit Flow
                 <ul>
-                    <li><input type="submit" name="submit.Implicit" value="Test Implicit Flow" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.Implicit_OIDC1" value="Test Implicit Flow 'id_token'(OIDC)" class="btn btn-link" /></li>
-                    <li><input type="submit" name="submit.Implicit_OIDC2" value="Test Implicit Flow 'id_token token'(OIDC)" class="btn btn-link" /></li>
+                    @*
+                        **Implicit は OAuth 2.1 で廃止され、雛形の既定でも無効にした（#220）。**
+                        無効なときは押せても失敗するだけなので、リンクにせず文字だけにする。
+                    *@
+                    @if (Config.EnableImplicitGrantType)
+                    {
+                        <li><input type="submit" name="submit.Implicit" value="Test Implicit Flow" class="btn btn-link" /></li>
+                        <li><input type="submit" name="submit.Implicit_OIDC1" value="Test Implicit Flow 'id_token'(OIDC)" class="btn btn-link" /></li>
+                        <li><input type="submit" name="submit.Implicit_OIDC2" value="Test Implicit Flow 'id_token token'(OIDC)" class="btn btn-link" /></li>
+                    }
+                    else
+                    {
+                        <li class="text-muted">Test Implicit Flow（無効）</li>
+                        <li class="text-muted">Test Implicit Flow 'id_token'(OIDC)（無効）</li>
+                        <li class="text-muted">Test Implicit Flow 'id_token token'(OIDC)（無効）</li>
+                    }
                 </ul>
             </li>
             <li>
@@ -120,7 +134,18 @@
             <li>
                 ResourceOwner Password Credentials Flow<br />
                 <ul>
-                    <li><input type="submit" name="submit.ResourceOwnerPasswordCredentialsFlow" value="Test ResourceOwner Password Credentials Flow" class="btn btn-link" /></li>
+                    @*
+                        **ROPC は OAuth 2.1 で廃止され、雛形の既定でも無効にした（#220）。**
+                        無効なときは押せても失敗するだけなので、リンクにせず文字だけにする。
+                    *@
+                    @if (Config.EnableResourceOwnerPasswordCredentialsGrantType)
+                    {
+                        <li><input type="submit" name="submit.ResourceOwnerPasswordCredentialsFlow" value="Test ResourceOwner Password Credentials Flow" class="btn btn-link" /></li>
+                    }
+                    else
+                    {
+                        <li class="text-muted">Test ResourceOwner Password Credentials Flow（無効）</li>
+                    }
                 </ul>
             </li>
             <li>

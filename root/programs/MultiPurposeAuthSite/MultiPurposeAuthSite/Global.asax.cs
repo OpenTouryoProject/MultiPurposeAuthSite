@@ -19,12 +19,15 @@
 //*  2011/12/07  西野 大介         Application_ErrorにACCESSログを追加
 //*  2012/04/05  西野 大介         Application_OnPreRequestHandlerExecute
 //*                                OnPostRequestHandlerExecuteにACCESSログを追加
+//*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
 //**********************************************************************************
 
 // System
 using System;
 using System.Web;
 using System.Web.SessionState;
+
+using MultiPurposeAuthSite.Co;
 
 // OpenTouryo
 using Touryo.Infrastructure.Public.Log;
@@ -68,6 +71,10 @@ namespace MultiPurposeAuthSite
         void Application_Start(object sender, EventArgs e)
         {
             // アプリケーションのスタートアップで実行するコード
+
+            // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
+            //   起動は止めない。警告を OPERATION ログに出すだけ。
+            ProductionCheck.WarnIfRisky();
         }
 
         /// <summary>

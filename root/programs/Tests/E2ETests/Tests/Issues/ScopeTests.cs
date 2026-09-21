@@ -32,6 +32,7 @@
 //*  2026/09/11  玄人 幸道         クライアントごとの制限（RT-198.3 / 198.4）を追加（#198 の後半）
 //*  2026/09/11  玄人 幸道         scopes の読み取りを Jwt.Strings へ移し、補助関数を先頭にまとめる
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-198）
+//*  2026/09/18  玄人 幸道         既定で無効にした機能に依存するテストを Skip 対象にした（#220）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -215,6 +216,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
             using (IdPClient client = this.Client(targetKey))
             {
+                // **ROPC は雛形の既定で無効**（#220）。有効な環境でだけ測る。
+                await Flows.SkipIfGrantTypeNotSupportedAsync(client, "password");
+
                 TestReport r = this.Report("RT-198.2",
                     "password : scopes_supported に無いスコープを発行しない",
                     "ユーザの文脈を持つトークンでも同じであること。"

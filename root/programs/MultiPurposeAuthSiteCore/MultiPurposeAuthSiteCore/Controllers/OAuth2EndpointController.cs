@@ -59,6 +59,9 @@
 //*  2026/09/16  玄人 幸道         /ciba_authz : 端末未登録・FCM送信失敗を JSON のエラー応答にする（#210）
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）を追加（#213）
 //*  2026/09/17  玄人 幸道         /ciba_authz : プッシュ通知の送信失敗の原因を、ACCESSログに残す（#210）
+//*  2026/09/17  玄人 幸道         トークン応答に Cache-Control: no-store / Pragma: no-cache を付ける（#218）
+//*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
+//*  2026/09/17  玄人 幸道         /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御を付ける（#218）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -181,6 +184,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public IActionResult OAuth2Token(IFormCollection formData)
         {
+            // **トークンを含む応答は、キャッシュに残してはならない**（RFC 6749 5.1 / 5.2 の MUST）（#218）。
+            //   成功・エラーのどちらの経路でも返すので、入口で付ける。
+            this.SetNoStore();
+
             Dictionary<string, string> ret = null;
             // grant_typeが未知・未指定、フォームデータ無しの経路でも使うので初期化する（#185）。
             Dictionary<string, string> err = new Dictionary<string, string>();
@@ -272,8 +279,10 @@ namespace MultiPurposeAuthSite.Controllers
                             break;
 
                         case OAuth2AndOIDCConst.JwtBearerTokenFlowGrantType:
+                            // トークン要求の scope を渡す（RFC 7521 4.1 / RFC 7523 2.1）（#218）
+                            scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantJwtBearerTokenCredentials(
-                            grant_type, assertion, x509, out ret, out err))
+                            grant_type, assertion, x509, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -334,6 +343,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<IActionResult> GetUserClaims()
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             // 戻り値（エラー）
             Dictionary<string, string> err = new Dictionary<string, string>();
 
@@ -561,6 +574,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public IActionResult IntrospectToken(IFormCollection formData)
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             // 戻り値（エラー）
             Dictionary<string, string> err = new Dictionary<string, string>();
 
@@ -638,6 +655,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public IActionResult DeviceAuthZAuthorize(IFormCollection formData)
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             string err = "";
             string errDescription = "";
 
@@ -740,6 +761,10 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpPost]
         public async Task<IActionResult> CibaAuthorizeAsync(IFormCollection formData)
         {
+            // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
+            //   RFC は MUST としていないが、困る性質は /token と同じ。
+            this.SetNoStore();
+
             string err = "";
             string errDescription = "";
 
@@ -1274,6 +1299,28 @@ namespace MultiPurposeAuthSite.Controllers
             Sts.TwoFactorPushProvider.Create(user.Id, code);
 
             return this.Ok("OK");
+        }
+
+        #endregion
+
+        #region キャッシュ制御
+
+        /// <summary>
+        /// トークンを含む応答が、キャッシュに残らないようにする（#218）
+        /// </summary>
+        /// <remarks>
+        /// RFC 6749 5.1（成功）/ 5.2（エラー）は、
+        /// **Cache-Control: no-store と Pragma: no-cache を MUST** としている。
+        /// 中間のキャッシュやブラウザの履歴にトークンを残さないため。
+        ///
+        /// **アクションの入口で呼ぶ。** 成功・エラーのどちらの経路でも返すため。
+        /// </remarks>
+        private void SetNoStore()
+        {
+            IHeaderDictionary headers = MyHttpContext.Current.Response.Headers;
+
+            headers["Cache-Control"] = "no-store";
+            headers["Pragma"] = "no-cache";
         }
 
         #endregion

@@ -38,6 +38,9 @@
 //*  2026/09/12  玄人 幸道         FcmOutboxDirectory（プッシュ通知の送信箱。テスト用）を追加（#196）
 //*  2026/09/16  玄人 幸道         TwoFactorAuthPushResultWebAPI を削除（未実装のため）（#203）
 //*  2026/09/16  玄人 幸道         TwoFactorPushResultEndpoint を追加（#213）
+//*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
+//*  2026/09/17  玄人 幸道         PKCE で S256 だけを受け付ける設定を追加（#220）
+//*  2026/09/18  玄人 幸道         PKCE（code_challenge）を必須にする設定を追加（#220）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1543,13 +1546,74 @@ namespace MultiPurposeAuthSite.Co
         }
         
         /// <summary>
-        /// Redirectエンドポイントがロックダウンされているかどうか。
+        /// テスト用のエンドポイントがロックダウンされているかどうか。
         /// </summary>
-        public static bool IsLockedDownRedirectEndpoint
+        public static bool IsLockedDownTestEndpoints
         {
             get
             {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("IsLockedDownRedirectEndpoint"));
+                // **旧いキー名も読む（#219）。**
+                //   未設定は false（＝「開く」）なので、改名しただけだと
+                //   既存の設定ファイル（旧キーしか無い）で、本番が黙って開いてしまう。
+                string value = GetConfigParameter.GetConfigValue("IsLockedDownTestEndpoints");
+
+                if (string.IsNullOrEmpty(value))
+                {
+                    value = GetConfigParameter.GetConfigValue(Config.OldLockedDownKey);
+                }
+
+                return Convert.ToBoolean(value);
+            }
+        }
+        /// <summary>
+        /// PKCE で S256 だけを受け付けるかどうか（#220）
+        /// </summary>
+        /// <remarks>
+        /// OAuth 2.1 / FAPI は S256 のみを許す。plain は保護にならない。
+        /// **既定は false（従来どおり plain も受理）。** 下位互換のため。
+        /// </remarks>
+        public static bool RequirePkceS256
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePkceS256"));
+            }
+        }
+
+        /// <summary>
+        /// 認可コード フローで code_challenge（PKCE）を必須にするかどうか（#220）
+        /// </summary>
+        /// <remarks>
+        /// OAuth 2.1 は、クライアントの種別によらず PKCE を必須とする。
+        /// **既定は false（従来どおり PKCE 無しでも通る）。** 下位互換のため。
+        ///
+        /// **RequirePkceS256 とは別のもの。**
+        /// - RequirePkce     : PKCE 自体を求める（認可エンドポイントで判定）
+        /// - RequirePkceS256 : 使うなら S256 に限る（トークン エンドポイントで判定）
+        ///
+        /// Device AuthZ / CIBA は認可エンドポイントを通らないので、この判定に掛からない。
+        /// </remarks>
+        public static bool RequirePkce
+        {
+            get
+            {
+                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequirePkce"));
+            }
+        }
+
+
+        /// <summary>改名前のキー名（互換のために読む。#219）</summary>
+        public const string OldLockedDownKey = "IsLockedDownRedirectEndpoint";
+
+        /// <summary>
+        /// 改名前のキー名だけが設定されているか（起動時の警告に使う。#219）
+        /// </summary>
+        public static bool UsesOldLockedDownKey
+        {
+            get
+            {
+                return string.IsNullOrEmpty(GetConfigParameter.GetConfigValue("IsLockedDownTestEndpoints"))
+                    && !string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(Config.OldLockedDownKey));
             }
         }
 

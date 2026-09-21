@@ -68,6 +68,9 @@ set appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:443
 **net48 版にはこの仕組みが無い。** これは ASP.NET Core の構成の仕組みである。
 ただし、次の `FxContainerization` は**両方で使える。**
 
+> **設定ファイルに無いキーは、環境変数だけでは効かない**（実測。2026-09-17）。
+> 上書きであって、追加ではない。**新しいキーを試すときは、先にファイルへ足すこと。**
+
 ### `FxContainerization` — 環境変数を優先する（net48 / net10.0 の両方）
 
 `appSettings` の `FxContainerization` を `ON` にすると、
@@ -348,5 +351,130 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | クライアント登録 | JSON **文字列** | JSON **オブジェクト** |
 | 既定の起動 | IIS Express | IIS Express / Kestrel |
 | パッケージ | `packages.config` ＋ `PackageReference` | `PackageReference` |
+| 認証クッキーの設定 | `App_Start/StartupAuth.cs` | `Startup.cs` の `ConfigureApplicationCookie`（#223） |
 
 **両者は共通ライブラリを使う別アプリである。** 片方にしか無い問題があり得る。
+
+> **実例**: `AuthCookieExpiresFromHours` / `AuthCookieSlidingExpiration` は、
+> **net10.0 では長らく読まれていなかった**（#223）。
+> 設定は書かれていたが、**誰も使っていないスキームに対する指定**だったため。
+> **雛形の値（`336` 時間）が Identity の既定（14 日）と偶然一致していて、表面化しなかった。**
+> **「設定ファイルに在る」ことと「効いている」ことは別である。**
+
+---
+
+## 11. 本番へ切り替えるときに見るもの
+
+**雛形の既定は「開発・テストで動く」状態である。** 本番へ出す前に、次を確認する。
+
+> **一覧の目的は、読み落としを減らすこと。** 各キーの意味は雛形のコメントが一次情報。
+
+### 設定
+
+| キー | 雛形の既定 | 本番 | なぜ |
+|---|---|---|---|
+| `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
+| `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
+| `EnabeDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**綴りは実装どおり `Enabe`**） |
+| `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
+| `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
+| `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
+| `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
+| `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い |
+| `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
+| `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
+
+**net48 / net10.0 で、キー名と既定値は同じ。** 書き方だけ違う（10 節）。
+
+```xml
+<!-- app.config -->
+<add key="IsDebug" value="false" />
+<add key="TestUserPWD" value="" />
+```
+
+```json
+// appsettings.json
+"IsDebug": "false",
+"TestUserPWD": "",
+```
+
+### 起動したあとの確かめ方
+
+| 見るもの | 期待 |
+|---|---|
+| `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownTestEndpoints`） |
+| 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
+| `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
+| `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnabeDebugTraceLog`） |
+
+### キーを改名した（`IsLockedDownRedirectEndpoint` → `IsLockedDownTestEndpoints`）
+
+閉じる対象がリダイレクト先だけではなくなったため、名前を実態に合わせた（#219）。
+
+- **旧いキー名も読む。** 新しいキー名が無ければ、旧いキー名を使う
+- **旧いキー名だけのときは、起動時に警告する**（下の「起動時の自動確認」）
+- **未設定のときは `false`（＝開く）。** だから「改名しただけ」だと、
+  既存の設定ファイル（旧キーしか無い）で**本番が黙って開いてしまう。** 互換を残したのはこのため
+
+### 起動時の自動確認
+
+**このチェックリストの読み落としを拾うため、起動時にも確かめている**（`Co/ProductionCheck`。両アプリ）。
+
+- 該当すると、`OPERATION` ログに `[設定の確認] …（CONFIGURATION.md 11 節）` が出る
+- **起動は止めない。** 設定を直せない状況で復旧できなくなるため
+- **`UserStoreType` が `mem` のときは何も言わない**（開発・テスト専用の構成なので、雑音にしかならない）。
+  ただし `AdministratorUID` / `AdministratorPWD` が雛形の値のままのときだけは、ストアによらず言う
+- **`RequirePkce` / `RequirePkceS256` の 1 件だけは、性質が違う**（#220）。
+  `false` は「開発向けの設定が残っている」ではなく、**従来の OAuth 2.0 のまま**というだけで、
+  それ自体は誤りではない。**本番では意図して選ぶべき**なので、選ばれていないことだけを知らせる
+
+**ログに出ていないこと＝設定が正しいこと、ではない。** 確かめているのは上の表のうち、
+機械で判る範囲だけ（クライアント登録の中身などは見ていない）。
+
+### 注意（仕様上の落とし穴）
+
+1. **`IsDebug` は `UserStoreType = mem` のとき、設定を無視して常に `true`** を返す
+   （`CommonLibrary/Co/Config.cs`）。**`IsDebug=false` と書いても効かない。** 本番は DBMS 前提。
+2. **管理者ユーザ（`AdministratorUID`）は、`IsDebug` に関係なく無条件で作られる。**
+   テスト利用者だけが `IsDebug` と `TestUserPWD` で閉じられる。
+3. **`/Ping` は閉じない。** セッションのタイムアウト防止に使われているため（#219）。
+   本番で塞ぐなら、前段（リバース プロキシなど）で行う。
+   `/TestHybridFlow` と `api/Values`（net10.0 のみ）は、`IsLockedDownTestEndpoints` で閉じる。
+4. **STS 専用モード**（`EnableSignupProcess` / `EnableEditingOfUserAttribute` /
+   `EnableAdministrationOfUsersAndRoles` を**全部 false**）にすると、サインアップ・属性の編集・
+   ユーザ管理が無効になる。**利用者ストアへの書き込みも止まる**ので、切替の影響が大きい。
+5. **PKCE の 2 つのキーは、別のものを締める**（#220。どちらも既定 `false`）。
+
+   | キー | 何を求めるか | どこで弾くか | 有効にすると通らなくなるもの |
+   |---|---|---|---|
+   | `RequirePkce` | PKCE 自体（`code_challenge`） | 認可エンドポイント（`invalid_request`） | **PKCE を使っていない既存クライアント** |
+   | `RequirePkceS256` | 使うなら `S256` に限る | トークン エンドポイント | `plain` を使っているクライアント |
+
+   **両方 `true` が OAuth 2.1 相当。** ただし**クライアントが揃っていないと繋がらなくなる**ので、
+   既存の登録を確かめてから切り替える。**Device AuthZ / CIBA は `RequirePkce` の対象外**
+   （認可エンドポイントを通らないため）。
+
+   **`RequirePkce` は、クライアント単位でも指定できる**（#221）。
+   クライアント登録に `require_pkce` を書くと、**そのクライアントにだけ**必須になる。
+
+   ```json
+   "c4309326f39b1e0975fddb4bc93b56a0": {
+     "client_secret": "...",
+     "redirect_uri_code": "http://localhost:12347/",
+     "client_name": "TestClient6",
+     "require_pkce": "true"
+   }
+   ```
+
+   **判定は `RequirePkce`（サーバ全体）との OR。**
+   サーバ側が「全クライアント共通の床」、クライアント側は「個別の引き上げ」で、
+   **クライアント側から床を下げることはできない。**
+   **移行では、締められるクライアントから順に `require_pkce` を立て、
+   全部揃ったらサーバの `RequirePkce` を `true` にする**、という順序が取れる。
+
+   > **`oauth2_oidc_mode` を `fapi1` にしても PKCE は必須になるが、そちらは重い。**
+   > **ROPC / `client_credentials` / `refresh_token` も巻き添えで塞がる**（実測。#222）。
+   > 「PKCE だけ必須にしたい」なら `require_pkce` を使う。
+
+> **設定を変えたら、雛形（`_app.config` / `_appsettings.json`）にも反映する**（1 節）。
+> 本番の値そのものは書かない。

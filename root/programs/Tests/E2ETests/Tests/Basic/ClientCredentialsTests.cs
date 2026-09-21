@@ -19,8 +19,8 @@
 #endregion
 
 //**********************************************************************************
-//* クラス名        ：PasswordAndClientCredentialsTests
-//* クラス日本語名  ：TC-4 パスワード / TC-5 クライアント クレデンシャル
+//* クラス名        ：ClientCredentialsTests
+//* クラス日本語名  ：TC クライアント資格情報グラント
 //*
 //* 作成日時        ：－
 //* 作成者          ：－
@@ -28,7 +28,8 @@
 //*
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
-//*  2026/09/09  玄人 幸道         新規（基本テストケースの追加）
+//*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/09/18  玄人 幸道         #220 でファイルを分けた（元 : Basic/PasswordAndClientCredentialsTests.cs）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -43,155 +44,18 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
 {
     /// <summary>
-    /// TC-4. リソース オーナー パスワード クレデンシャル。
-    /// TC-5. クライアント クレデンシャル。
-    ///
-    /// ＜前置き＞
-    ///   パスワード グラントは OAuth 2.0 Security BCP と OAuth 2.1 で**廃止**されている。
-    ///   ここでのテストは「実装されている以上、仕様どおりに振る舞うか」を見るもので、
-    ///   このフローを推奨する意味ではない。
+    /// TC-5. クライアント資格情報グラント。
     /// </summary>
-    public class PasswordAndClientCredentialsTests : TargetTestBase
+    /// <remarks>
+    /// **OAuth 2.1 でも有効なグラント**なので、Basic に残す（#220）。
+    /// </remarks>
+    public class ClientCredentialsTests : TargetTestBase
     {
         /// <summary>コンストラクタ</summary>
         /// <param name="output">ITestOutputHelper</param>
-        public PasswordAndClientCredentialsTests(ITestOutputHelper output) : base(output)
+        public ClientCredentialsTests(ITestOutputHelper output) : base(output)
         {
         }
-
-        #region TC-4 パスワード グラント
-
-        /// <summary>TC-4.1 正常系</summary>
-        /// <param name="targetKey">core / netfx</param>
-        /// <returns>Task</returns>
-        [SkippableTheory]
-        [MemberData(nameof(AllTargets))]
-        public async Task TC0401_正しい資格情報でトークンを取得できる(string targetKey)
-        {
-            using (IdPClient client = this.Client(targetKey))
-            {
-                TestReport r = this.Report("TC-4.1",
-                    "正しい username / password でトークンを取得できる",
-                    "トークン エンドポイントへ資格情報を直接送り、access_token を得られること。",
-                    "RFC 6749 §4.3（Resource Owner Password Credentials Grant）");
-
-                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
-
-                r.Target("client_name=" + KnownClients.MvcSample
-                    + " / username=" + TestEnv.TestUserName + "（パスワードは構成ファイルから読む）");
-                r.Step("POST /token に grant_type=password と username / password を送る");
-
-                // テスト ユーザは、サインイン画面への初回アクセスで作られる。
-                await client.GetAsync("/Account/Login");
-
-                Dictionary<string, string> form = new Dictionary<string, string>()
-                {
-                    { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
-                    { "password", client.Config.Get("TestUserPWD") },
-                    { "scope", "email profile" },
-                    { "client_id", reg.ClientId },
-                    { "client_secret", reg.ClientSecret }
-                };
-
-                JsonResponse token = await client.TokenAsync(form);
-
-                r.Verify("エラーにならない", string.IsNullOrEmpty(token.Error),
-                    "error なし",
-                    token.Error == null ? "error なし"
-                                        : "error=" + token.Error + " / " + token.ErrorDescription);
-
-                r.Verify("access_token が返る", !string.IsNullOrEmpty(token.AccessToken),
-                    "access_token あり", token.AccessToken == null ? "なし" : "あり（値は伏せる）");
-
-                if (!string.IsNullOrEmpty(token.AccessToken))
-                {
-                    JsonElement payload = Jwt.Payload(token.AccessToken);
-
-                    r.Verify("sub がテスト ユーザである",
-                        Jwt.String(payload, "sub") == TestEnv.TestUserName,
-                        TestEnv.TestUserName, "sub = " + (Jwt.String(payload, "sub") ?? "なし"));
-                }
-
-                r.Done();
-            }
-        }
-
-        /// <summary>TC-4.2 誤った資格情報</summary>
-        /// <param name="targetKey">core / netfx</param>
-        /// <returns>Task</returns>
-        [SkippableTheory]
-        [MemberData(nameof(AllTargets))]
-        public async Task TC0402_誤った資格情報が拒否される(string targetKey)
-        {
-            using (IdPClient client = this.Client(targetKey))
-            {
-                TestReport r = this.Report("TC-4.2",
-                    "誤ったパスワード / 存在しないユーザが拒否される",
-                    "誤った資格情報でトークンが出てはならない。"
-                    + "また、**「ユーザが居ない」と「パスワードが違う」を応答で区別できると、"
-                    + "ユーザ名の存在を調べられる。**両者の応答が同じであることも見る。",
-                    "RFC 6749 §4.3.2 / §5.2（invalid_grant）");
-
-                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
-
-                r.Target("client_name=" + KnownClients.MvcSample);
-                r.Step("(1) 実在するユーザ ＋ 誤ったパスワード");
-
-                Dictionary<string, string> wrongPassword = new Dictionary<string, string>()
-                {
-                    { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
-                    { "password", "WRONG-PASSWORD-WRONG-PASSWORD" },
-                    { "scope", "email" },
-                    { "client_id", reg.ClientId },
-                    { "client_secret", reg.ClientSecret }
-                };
-
-                JsonResponse t1 = await client.TokenAsync(wrongPassword);
-
-                r.Verify("誤ったパスワードでトークンを発行しない",
-                    string.IsNullOrEmpty(t1.AccessToken),
-                    "access_token を返さない",
-                    t1.AccessToken == null ? "返さなかった（error=" + (t1.Error ?? "なし") + "）"
-                                           : "**返してしまった**");
-
-                r.Step("(2) 存在しないユーザ");
-
-                Dictionary<string, string> unknownUser = new Dictionary<string, string>()
-                {
-                    { "grant_type", "password" },
-                    { "username", "no-such-user@example.com" },
-                    { "password", "WRONG-PASSWORD-WRONG-PASSWORD" },
-                    { "scope", "email" },
-                    { "client_id", reg.ClientId },
-                    { "client_secret", reg.ClientSecret }
-                };
-
-                JsonResponse t2 = await client.TokenAsync(unknownUser);
-
-                r.Verify("存在しないユーザでトークンを発行しない",
-                    string.IsNullOrEmpty(t2.AccessToken),
-                    "access_token を返さない",
-                    t2.AccessToken == null ? "返さなかった（error=" + (t2.Error ?? "なし") + "）"
-                                           : "**返してしまった**");
-
-                r.Observe("2 つの応答を区別できるか",
-                    "誤パスワード = error:" + (t1.Error ?? "なし")
-                    + " / desc:" + (t1.ErrorDescription ?? "なし")
-                    + "  ||  未知ユーザ = error:" + (t2.Error ?? "なし")
-                    + " / desc:" + (t2.ErrorDescription ?? "なし"),
-                    "同じ応答であることが望ましい（ユーザ名の存在が漏れないため）。");
-
-                r.Note("ブルート フォース対策（連続失敗でのロックアウト）と、"
-                    + "HTTPS 非適用時の拒否は、このテストでは扱わない。"
-                    + "前者は試行を繰り返す必要があり、後者は待ち受け構成の話であるため。");
-
-                r.Done();
-            }
-        }
-
-        #endregion
 
         #region TC-5 クライアント クレデンシャル
 

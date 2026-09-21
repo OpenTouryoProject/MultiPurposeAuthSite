@@ -284,7 +284,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 ```
 
 - `test_self_code` / `test_self_token` は**自己テスト用の予約値**（`Const.TestSelfCode` ほか）。
-  `IsLockedDownRedirectEndpoint` で本番時に閉じられる。
+  `IsLockedDownTestEndpoints` で本番時に閉じられる。
 - この節は `../CommandLineTools/CreateClientsIdentity` で雛形を生成できる。
 
 ### 7.4 署名鍵

@@ -126,6 +126,9 @@
   <data name="ClientMode" xml:space="preserve">
     <value>OAuth2/OIDC mode of Client.</value>
   </data>
+  <data name="RequirePkce" xml:space="preserve">
+    <value>Require PKCE for this client.</value>
+  </data>
   <data name="ClientName" xml:space="preserve">
     <value>Client name</value>
   </data>
