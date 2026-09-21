@@ -873,7 +873,7 @@ string.Format("?code={0}&state={1}", code, state)
 `&` を含めればリダイレクト URL にパラメタを注入できる。
 `?` の無条件付与（A-6 と同じ）と併せて、リダイレクト URL の組み立てを一箇所に集約すべき。
 
-### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **✅ 修正済み（#220）**
+### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **✅ 修正済み（#220 / #221）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs:1010-1050
@@ -958,6 +958,36 @@ PKCE 無しの認可コード フローがそのまま通る。
 > 他の `ProtectFromPayload` の呼び出し（Implicit / Device AuthZ / CIBA / `/ros`）は、
 > もともと `permittedLevel` ではなく**固定値**（`normal` / `device` / `fapi_ciba`）を
 > 渡しているので、影響を受けない。
+
+**判定側（`CheckClientMode`）の設計は、まだ分離していない（#222）。**
+
+E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は次のとおり。**
+
+| 登録（`oauth2_oidc_mode`） | 認可コード ＋ `client_secret` | 認可コード ＋ PKCE `S256` | ROPC | `client_credentials` | `refresh_token` |
+|---|---|---|---|---|---|
+| `normal`（対照） | 通る | 通る | 通る | 通る | 通る |
+| **`fapi1`** | 拒否 | **通る** | 拒否 | 拒否 | **拒否** |
+| **`fapi2`** | 拒否 | **拒否** | 拒否 | 拒否 | （到達せず） |
+| **`device`** | （`client_secret` 無し） | **通る** | — | — | （`client_secret` 無しで不可） |
+
+拒否はいずれも `unsupported_grant_type`。**`fapi2` は x509（mTLS）でしか通らない**ので、
+平文の経路は全滅する（設計どおり）。
+
+**設計上の問題が 3 つある。**
+
+1. **順序として扱っているが、順序ではない。** `device` / `fapi_ciba` は水準ではなく**種別**。
+   実際 `CheckClientMode` は、`permittedLevel > fapi2` のとき
+   「以下」ではなく「**一致**」に判定を切り替えている
+2. **例外がハードコードされている。** `clientMode = device` かつ `permittedLevel = fapi1`
+   （＝ PKCE の `S256`）のときだけ通す、という LIR 用の措置がある（`FA-3.1` が、この経路を固定している）
+3. **巻き添えが大きい。** `fapi1` にすると PKCE 以外の経路も塞がる。とくに
+   **`refresh_token` は、発行されるのに使えない**（`FA-1.2`。RP から見ると
+   「受け取ったのに必ず失敗する資格情報」）
+
+**あるべき形**は 1 次元の水準ではなく、
+**「この要求が何を証明したか」の集合**と**「このクライアントが何を要求するか」の集合**の照合。
+ただし **`ClientMode` の列挙は Open棟梁側**（別リポジトリ）に在り、認証・認可の中心でもあるため、
+**#222 では着手しない**（別 Issue）。上の E2E は、そのときに**壊していないことを確かめる土台**である。
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
 
@@ -1250,7 +1280,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 
 | 項目 |
 |---|
-| ✅ **C-7 PKCE**（#220。同時送信・`plain`・`code_challenge` の必須化・権限判定との分離） |
+| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）の再設計は残っている**（#222 で現状を E2E に固定した） |
 | C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`） |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |
