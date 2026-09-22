@@ -60,6 +60,17 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient5` | 登録の `scope` で、要求してよいスコープを制限（#198） |
 | `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221） |
 
+**構成ファイルに無いクライアントを、`test.ps1 -Launch` が環境変数で差し込むこともある**（#224）。
+雛形にも実設定にも足さずに済むので、**特定の組み合わせを試すためだけのクライアント**に使う。
+
+| client_name | 何か | 引き方 |
+|---|---|---|
+| `TestClient4_2` | `TestClient4`（fapi_ciba）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
+
+- net10.0 は `appSettings__OAuth2ClientsInformation__<client_id>__<項目>` で 1 件足し、
+  net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
+- **差し込むのは `-Launch` のときだけ。** 既に動いているサイトへ向けたときは、使うテストが Skip する
+
 **テストの出力にトークンや秘密情報を書かないこと。**
 `JsonResponse.ToString()` はキー名とエラーだけを出す。
 
@@ -244,10 +255,11 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／使えない `refresh_token`） |
+| `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／使えない `refresh_token`／`client_secret` と PKCE の併用も、Hybrid も通らない） |
 | 〃 | `FA-2` | `fapi2`（`client_secret` も PKCE も通らない。x509 が要る） |
 | 〃 | `FA-3` | `device`（PKCE で通る。`CheckClientMode` の例外措置） |
 | 〃 | `FA-4` | Device AuthZ グラントは `normal` / `device` の登録にだけ許す（#224） |
+| `Tests/Fapi/CibaClientModeTests.cs` | `FA-5` | CIBA を normal 登録で使うと、**利用者の承認の後で**トークンが拒否される（`TestClient4_2`） |
 
 **今の振る舞いを記録するためのテスト。** 望ましくないと考える点（`fapi1` が使えない
 `refresh_token` を発行する等）は**「観測」として書き、合否には影響させない**。

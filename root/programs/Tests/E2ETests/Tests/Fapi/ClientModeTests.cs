@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/19  玄人 幸道         新規（#222 : ClientMode 経路の E2E 整備）
 //*  2026/09/22  玄人 幸道         FA-4.1（Device AuthZ グラントは normal と device にだけ許す）を追加（#224）
+//*  2026/09/22  玄人 幸道         FA-1.3（client_secret と PKCE の併用）・FA-1.4（Hybrid）を追加（#224 の段階 0）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -309,6 +310,133 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Done();
             }
+        }
+
+        /// <summary>FA-1.3 fapi1 は client_secret と PKCE の併用を通さない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task FA0103_fapi1はclient_secretとPKCEの併用を通さない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("FA-1.3",
+                    "fapi1 のクライアントが client_secret と PKCE(S256) を両方送ると、拒否される",
+                    "**クライアント認証を client_secret で行った時点で、permittedLevel が normal に決まる。**"
+                    + "PKCE の S256 は、client_secret を送らないときにしか水準を上げない"
+                    + "（併用の経路では検証だけ行い、水準には使わない。#220）。"
+                    + "本テストは**今の振る舞いを記録する**（#224 の段階 0）。",
+                    "FAPI 1.0 Advanced §5.2.2 / RFC 7636 / #224");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
+
+                r.Target("client_name=" + KnownClients.TestClient1 + "（fapi1 登録。client_secret 登録あり）");
+                r.Step("PKCE(S256) で認可コードを取り、client_secret と code_verifier の両方を送って交換する");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri, extra: ClientModeTests.Pkce());
+
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が取得できること");
+
+                JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "authorization_code" },
+                    { "code", authz.Code },
+                    { "client_id", reg.ClientId },
+                    { "client_secret", reg.ClientSecret },
+                    { "code_verifier", ClientModeTests.Verifier },
+                    { "redirect_uri", reg.RedirectUri }
+                });
+
+                r.Verify("トークンを返さない",
+                    string.IsNullOrEmpty(token.AccessToken),
+                    "拒否される", ClientModeTests.Outcome(token));
+
+                r.Verify("エラーは unsupported_grant_type",
+                    token.Error == "unsupported_grant_type",
+                    "unsupported_grant_type", token.Error ?? "（無し）");
+
+                r.Note("**望ましいかどうかは、まだ決めていない**（#224 の段階 2）。"
+                    + "FAPI 1.0 Advanced は client_secret によるクライアント認証を認めていない"
+                    + "（private_key_jwt か mTLS）ので、**拒否のままが正しい可能性がある。**"
+                    + "一方、同じクライアントが client_secret を送らなければ通る（FA-1.1）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>FA-1.4 fapi1 は Hybrid フローを通さない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task FA0104_fapi1はHybridフローを通さない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("FA-1.4",
+                    "fapi1 のクライアントは、Hybrid フロー（code id_token）で code も id_token も受け取らない",
+                    "**Hybrid の経路は permittedLevel=normal で判定する**（認可エンドポイントで CheckClientMode）。"
+                    + "fapi1 の登録は normal を超えるので通らない。"
+                    + "本テストは**今の振る舞いを記録する**（#224 の段階 0）。",
+                    "OIDC Core §3.3 / FAPI 1.0 Advanced / #224");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
+                ClientRegistration normal = Flows.Registration(client, KnownClients.TestClient);
+
+                r.Target("client_name=" + KnownClients.TestClient1 + "（fapi1 登録）/ 対照="
+                    + KnownClients.TestClient + "（normal 登録）");
+
+                r.Step("(1) 対照 : normal 登録のクライアントは、Hybrid で code と id_token を受け取る");
+
+                AuthZResponse control = await ClientModeTests.HybridAsync(client, normal);
+
+                r.Verify("対照（normal）は code を受け取る",
+                    !string.IsNullOrEmpty(control.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(control.Code)
+                        ? "**無し**（error=" + (control.Error ?? "なし") + "）" : "あり（値は伏せる）");
+
+                r.Step("(2) fapi1 登録のクライアントで、同じ要求を送る");
+
+                AuthZResponse res = await ClientModeTests.HybridAsync(client, reg);
+
+                r.Verify("code を受け取らない",
+                    string.IsNullOrEmpty(res.Code),
+                    "code 無し",
+                    string.IsNullOrEmpty(res.Code) ? "無し" : "**あり**");
+
+                r.Verify("id_token を受け取らない",
+                    string.IsNullOrEmpty(res.Get("id_token")),
+                    "id_token 無し",
+                    string.IsNullOrEmpty(res.Get("id_token")) ? "無し" : "**あり**");
+
+                r.Observe("返り方",
+                    "HTTP " + (int)res.StatusCode + " / error=" + (res.Error ?? "なし")
+                    + " / 戻り先=" + (res.Redirected ? "リダイレクト" : "画面"),
+                    "拒否の返し方（RP へのリダイレクトか、エラー画面か）は記録するだけで、判定しない。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>Hybrid（code id_token）の認可リクエストを送る</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">ClientRegistration</param>
+        /// <returns>AuthZResponse</returns>
+        private static Task<AuthZResponse> HybridAsync(IdPClient client, ClientRegistration reg)
+        {
+            return client.AuthorizeAsync(new Dictionary<string, string>()
+            {
+                { "response_type", "code id_token" },
+                { "client_id", reg.ClientId },
+                { "scope", "openid" },
+                { "redirect_uri", reg.RedirectUriToken },
+                { "state", "state-fa14" },
+                { "nonce", "nonce-fa14" },
+                { "prompt", "none" }
+            });
         }
 
         #endregion

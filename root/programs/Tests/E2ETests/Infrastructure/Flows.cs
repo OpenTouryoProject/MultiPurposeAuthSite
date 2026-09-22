@@ -34,6 +34,7 @@
 //*  2026/09/11  玄人 幸道         トークンの更新・失効・問い合わせ（RefreshAsync / RevokeAsync / IntrospectAsync）を、テスト クラスから移す
 //*  2026/09/18  玄人 幸道         既定で無効な機能を Skip する口を追加（#220）
 //*  2026/09/18  玄人 幸道         TestClient6 と、未登録なら Skip する口を追加（#221）
+//*  2026/09/22  玄人 幸道         環境変数で差し込む TestClient4_2 と、その登録を引く口を追加（#224）
 //**********************************************************************************
 
 using System;
@@ -75,6 +76,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>クライアント単位で PKCE を必須にしたクライアント（#221）</summary>
         public const string TestClient6 = "TestClient6";
+
+        /// <summary>
+        /// TestClient4（fapi_ciba）を写し、登録種別だけ normal にしたクライアント（#224）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が環境変数でサイトへ差し込む
+        /// （Flows.InjectedRegistration で引く）。
+        /// </summary>
+        public const string TestClient4_2 = "TestClient4_2";
     }
 
     /// <summary>クライアントの登録内容（テストから参照する分だけ）</summary>
@@ -386,6 +394,35 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         {
             Skip.If(string.IsNullOrEmpty(client.Config.FindClientIdByName(clientName)),
                 "client_name=" + clientName + " が構成ファイルに登録されていません（#221 で雛形に追加）。");
+        }
+
+        /// <summary>
+        /// test.ps1 が環境変数で差し込んだクライアントの登録内容を引く（#224）。差し込まれていなければ Skip する
+        /// </summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientName">client_name（いまは TestClient4_2 だけ）</param>
+        /// <returns>ClientRegistration（client_id と client_secret だけ）</returns>
+        /// <remarks>
+        /// **構成ファイルには無いクライアント**なので、Registration では引けない。
+        /// 差し込むのは `test.ps1 -Launch` だけで、既に動いているサイトへ向けたときは Skip する。
+        /// </remarks>
+        public static ClientRegistration InjectedRegistration(IdPClient client, string clientName)
+        {
+            // test.ps1 -Launch が、起動したサイトに差し込んだ client_id を渡してくる。
+            string clientId = Environment.GetEnvironmentVariable("MPAS_TESTCLIENT4_2");
+
+            Skip.If(clientName != KnownClients.TestClient4_2 || string.IsNullOrEmpty(clientId),
+                "client_name=" + clientName + " は差し込まれていません"
+                + "（test.ps1 -Launch のときだけサイトへ差し込む。#224）。");
+
+            // client_secret と公開鍵は TestClient4 の写しなので、構成ファイルの TestClient4 から引ける。
+            ClientRegistration source = Flows.Registration(client, KnownClients.TestClient4);
+
+            return new ClientRegistration()
+            {
+                ClientId = clientId,
+                ClientSecret = source.ClientSecret
+            };
         }
 
         #endregion

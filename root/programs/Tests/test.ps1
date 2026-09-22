@@ -313,6 +313,72 @@ function New-IisExpressConfig
     $doc.Save($Path)
 }
 
+function Get-InjectedTestClient
+{
+    <#
+    .SYNOPSIS
+    テスト専用のクライアントを、環境変数で差し込むための値を作る（#224）。
+
+    .DESCRIPTION
+    **TestClient4（fapi_ciba）の登録を写し、名前と oauth2_oidc_mode だけを変える。**
+    公開鍵（jwk_ecdsa_publickey）ごと写すので、CIBA の要求の署名検証を通り、
+    **登録種別の判定まで届く**。雛形にも実設定にも手を入れない。
+
+    差し込み方は、アプリによって違う。
+      net10.0 : クライアント一覧は「節」として読むので、
+                appSettings__OAuth2ClientsInformation__<client_id>__<項目> で 1 件足せる
+      net48   : 1 個の値（JSON 文字列）として読むので、
+                OAuth2ClientsInformation を一覧ごと差し替える（FxContainerization=ON）
+
+    **JSON は構文解析しない。** 5.1 の ConvertFrom-Json は // コメントを読めない。
+    登録は入れ子の無い平らなオブジェクトなので、生のテキストから区画を取り出す。
+    **net48 は XML として読まない。** 属性値の改行が空白に潰れ、// が以降を飲む（CONFIGURATION.md 9 節）。
+
+    .OUTPUTS
+    ClientId / CoreEnv（環境変数名 → 値）/ NetFxValue。取り出せなければ $null。
+    #>
+    param(
+        [string] $Name,
+        [string] $Mode,
+        [string] $ClientId
+    )
+
+    $coreText  = [System.IO.File]::ReadAllText((Join-Path $coreDir 'appsettings.json'))
+    $netFxText = [System.IO.File]::ReadAllText((Join-Path $netFxDir 'app.config'))
+
+    # 写す元 : TestClient4 の区画（入れ子の無い { ... }）
+    $m = [regex]::Match($coreText, '\{[^{}]*"client_name"\s*:\s*"TestClient4"[^{}]*\}')
+    if (-not $m.Success) { return $null }
+
+    $fields = [ordered]@{}
+    foreach ($f in [regex]::Matches($m.Value, '"([A-Za-z0-9_]+)"\s*:\s*"([^"]*)"')) {
+        $fields[$f.Groups[1].Value] = $f.Groups[2].Value
+    }
+    $fields['client_name'] = $Name
+    $fields['oauth2_oidc_mode'] = $Mode
+
+    # net10.0 : 節へ 1 件足す
+    $coreEnv = @{}
+    foreach ($k in $fields.Keys) {
+        $coreEnv["appSettings__OAuth2ClientsInformation__${ClientId}__$k"] = $fields[$k]
+    }
+
+    # net48 : 一覧の末尾の } の手前に 1 件足す
+    $n = [regex]::Match($netFxText,
+        'key="OAuth2ClientsInformation"\s+value=''(.*?)''\s*/>',
+        [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    if (-not $n.Success) { return $null }
+
+    $body  = $n.Groups[1].Value.TrimEnd()
+    if (-not $body.EndsWith('}')) { return $null }
+
+    $pairs = ($fields.Keys | ForEach-Object { '"{0}": "{1}"' -f $_, $fields[$_] }) -join ', '
+    $netFxValue = $body.Substring(0, $body.Length - 1).TrimEnd() +
+        ",`r`n  `"$ClientId`": { $pairs }`r`n}"
+
+    return @{ ClientId = $ClientId; CoreEnv = $coreEnv; NetFxValue = $netFxValue }
+}
+
 $core  = $null
 $netFx = $null
 
@@ -320,6 +386,17 @@ try {
     if ($Launch) {
 
         New-Item -ItemType Directory -Force $LogDir | Out-Null
+
+        # **テスト専用のクライアントを差し込む**（#224）。
+        #   TestClient4（fapi_ciba）を写し、登録種別だけ normal にしたもの。
+        #   **CIBA を fapi_ciba 以外の登録で使うと拒否されるか**を測るために要る
+        #   （公開鍵ごと写すので、署名検証で先に落ちない）。設定ファイルは書き換えない。
+        $injected = Get-InjectedTestClient -Name 'TestClient4_2' -Mode 'normal' `
+            -ClientId 'e2e0tc42000000000000000000000000'
+
+        if ($null -eq $injected) {
+            Write-Warning 'TestClient4 の登録を取り出せなかったため、TestClient4_2 は差し込みません（FA-5 は Skip）。'
+        }
 
         if ($PSVersionTable.PSVersion.Major -lt 6) {
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
@@ -351,6 +428,13 @@ try {
         #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
         $env:EnableImplicitGrantType = 'true'
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
+
+        # テスト専用のクライアント（#224）: net10.0 は節へ 1 件足す
+        if ($null -ne $injected) {
+            foreach ($k in $injected.CoreEnv.Keys) {
+                Set-Item -Path ("Env:\" + $k) -Value $injected.CoreEnv[$k]
+            }
+        }
 
         # UserStore の切り替え（#207）。mem のときは何も渡さない（構成ファイルのまま）。
         if ($UserStoreType -ne 'mem') {
@@ -422,6 +506,11 @@ try {
             $env:EnableImplicitGrantType = 'true'
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
 
+            # テスト専用のクライアント（#224）: net48 は一覧ごと差し替える
+            if ($null -ne $injected) {
+                $env:OAuth2ClientsInformation = $injected.NetFxValue
+            }
+
             # UserStore の切り替え（#207）。npg はここに来ない（上で NoNetFx にしている）。
             if ($UserStoreType -ne 'mem') {
                 $env:UserStoreType = $UserStoreType
@@ -444,6 +533,16 @@ try {
             Write-Host '起動しました。' -ForegroundColor Green
             $env:MPAS_NETFX_BASEURL = $NetFxUrl
             $env:MPAS_NETFX_FCM_OUTBOX = $netFxOutbox
+        }
+
+        # テスト専用のクライアント（#224）: 差し込みの値はテスト側へ持ち込まない。
+        #   テストには client_id だけを渡す（client_secret は TestClient4 と同じなので、構成ファイルから読める）。
+        if ($null -ne $injected) {
+            foreach ($k in $injected.CoreEnv.Keys) {
+                Remove-Item -Path ("Env:\" + $k) -ErrorAction SilentlyContinue
+            }
+            Remove-Item Env:\OAuth2ClientsInformation -ErrorAction SilentlyContinue
+            $env:MPAS_TESTCLIENT4_2 = $injected.ClientId
         }
 
         # 役目は終わっている。テスト側へ持ち込まない。
@@ -512,6 +611,7 @@ finally {
         Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_FCM_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_FCM_OUTBOX -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_TESTCLIENT4_2 -ErrorAction SilentlyContinue
     }
 }
 

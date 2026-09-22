@@ -973,6 +973,16 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 拒否はいずれも `unsupported_grant_type`。**`fapi2` は x509（mTLS）でしか通らない**ので、
 平文の経路は全滅する（設計どおり）。
 
+**#224 の段階 0 で、未測定だったマスを埋めた**（E2E : `FA-1.3` / `FA-1.4` / `FA-4.1`）。
+
+| 登録 | 経路 | 結果 |
+|---|---|---|
+| fapi1 | 認可コード ＋ `client_secret` ＋ PKCE `S256`（併用） | 拒否（`unsupported_grant_type`）。`client_secret` で認証した時点で水準が normal に決まるため |
+| fapi1 | Hybrid（`code id_token`） | 拒否。**ただし `error=access_denied` のリダイレクトで返る**（`/token` 側は `unsupported_grant_type`。経路でエラー コードがそろっていない） |
+| fapi1 / fapi2 / fapi_ciba | Device AuthZ グラント | **修正前は client_secret だけで発行していた**（C-18）。修正後は `unauthorized_client` |
+| normal | CIBA | 拒否（`unsupported_grant_type`）。**ただしトークンの段階で。** 開始（`/ciba_authz`）は登録種別を見ないので、**利用者にプッシュ通知が届き、承認させた後で**拒否になる（`FA-5.1`）。測るために、TestClient4 を写して登録種別だけ normal にした `TestClient4_2` を、`test.ps1 -Launch` が環境変数で差し込む（公開鍵ごと写すので署名検証を通る。設定ファイルは変えない） |
+
+
 **設計上の問題が 3 つある。**
 
 1. **順序として扱っているが、順序ではない。** `device` / `fapi_ciba` は水準ではなく**種別**。
