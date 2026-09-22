@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#224 の段階 1 : permittedLevel の大小比較を、表に置き換える）
 //*  2026/09/22  玄人 幸道         既知でない登録値を fapi2 とみなさず、不正として扱う。MayUse を追加（#224 の段階 2）
+//*  2026/09/22  玄人 幸道         表の注記 : mTLS の行を E2E（FA-6.1）で守るようにした（#226）
 //**********************************************************************************
 
 using System.Linq;
@@ -146,7 +147,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </summary>
         /// <remarks>
         /// E2E で守られている行には、そのテストの識別子を書いた。
-        /// **private_key_jwt と mTLS の行は、E2E で守られていない**（mTLS は E2E で張れない）。
+        /// **private_key_jwt の行は、E2E で守られていない。**
+        /// mTLS の行は net10.0 版だけ E2E で守られている（net48 版は手動。#226）。
         /// </remarks>
         private static readonly Rule[] Rules = new Rule[]
         {
@@ -160,7 +162,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             new Rule(Flow.AuthorizationCode,     Proof.PkcePlain,           Normal),                  // RT-220.2
             new Rule(Flow.AuthorizationCode,     Proof.PkceS256,            Normal, Fapi1, Device),   // FA-1.1 / FA-3.1
             new Rule(Flow.AuthorizationCode,     Proof.PrivateKeyJwt,       Normal, Fapi1, Device),   // （E2E なし）
-            new Rule(Flow.AuthorizationCode,     Proof.Mtls,                Normal, Fapi1, Fapi2),    // （E2E なし）
+            new Rule(Flow.AuthorizationCode,     Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.1（net10.0 のみ）
 
             // 上記以外のグラント : 証明によらず normal だけ
             new Rule(Flow.RefreshToken,          Proof.Any,                 Normal),                  // FA-1.2

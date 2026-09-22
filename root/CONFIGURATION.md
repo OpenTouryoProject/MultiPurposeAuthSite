@@ -331,6 +331,27 @@ cd root
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
 
+### クライアント証明書（mTLS）を受け付ける
+
+**`fapi2` の登録は、mTLS（RFC 8705 の `tls_client_auth`）でしか通らない**（`ANALYSIS-IdP.md` C-7）。
+使うには、**サーバ側で、クライアント証明書を要求させる設定が要る。雛形のままでは要求しない**（#226 で実測）。
+
+**アプリは、証明書の Subject と、登録の `tls_client_auth_subject_dn` の一致だけを見る。**
+**発行元（チェーン）と失効の検証は、TLS の層（Kestrel / IIS）に任せている。**
+したがって、TLS の層で**信頼できる発行元だけを受け付ける**ように設定すること。
+
+| | 設定 | 検証 |
+|---|---|---|
+| net10.0（Kestrel） | `Kestrel:EndpointDefaults:ClientCertificateMode` を `AllowCertificate`（証明書の無いクライアントも通す）または `RequireCertificate`。`appsettings.json` でも環境変数（`Kestrel__EndpointDefaults__ClientCertificateMode`）でもよい | 既定でチェーンと失効を検証する。自己署名など信頼できない証明書は、TLS の段階で切れる |
+| net48（IIS） | サイトの `<access sslFlags="Ssl, SslNegotiateCert" />`（証明書を要求するが、無くても通す） | 信頼できない証明書は、アプリより前で **HTTP 403.16** になる |
+
+- **リバース プロキシで TLS を終端する場合、アプリには証明書が届かない。** 今の実装は、プロキシが転送するヘッダ
+  （`X-ARR-ClientCert` など）を読まない
+- `tls_client_auth_subject_dn` は **JSON の文字列**なので、`\\` は 1 文字の `\` になる。
+  照合するのは、.NET が返す `X509Certificate2.Subject` の文字列
+- **E2E のテスト専用のフック（`Tests/MtlsTestHook`）は、発行元を問わずに受け付ける。本番の構成で読ませないこと**
+  （`test.ps1 -Launch` が、起動したサイトにだけ `DOTNET_STARTUP_HOOKS` で渡す。Development 以外では何もしない）
+
 ## 9. 機械で読むときの落とし穴
 
 E2E テストの `AppConfig.cs` が実際に踏んだもの。同じことをするときは注意する。

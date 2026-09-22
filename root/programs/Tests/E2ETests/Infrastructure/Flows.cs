@@ -36,6 +36,7 @@
 //*  2026/09/18  玄人 幸道         TestClient6 と、未登録なら Skip する口を追加（#221）
 //*  2026/09/22  玄人 幸道         環境変数で差し込む TestClient4_2 と、その登録を引く口を追加（#224）
 //*  2026/09/22  玄人 幸道         登録値が不正な TestClient4_3 を追加（#224 の段階 2）
+//*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
 //**********************************************************************************
 
 using System;
@@ -90,6 +91,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **構成ファイルには無い。** TestClient4_2 と同じく test.ps1 -Launch が差し込む。
         /// </summary>
         public const string TestClient4_3 = "TestClient4_3";
+
+        /// <summary>
+        /// TestClient2（fapi2）を写し、tls_client_auth_subject_dn をテスト専用の値（MtlsSubjectDn）にしたクライアント（#226）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        public const string TestClient2_2 = "TestClient2_2";
+
+        /// <summary>
+        /// TestClient2_2 と同じ Subject で、登録種別を既知でない値（fapi_1）にしたクライアント（#226 / #224 の段階 2）。
+        /// </summary>
+        public const string TestClient2_3 = "TestClient2_3";
+
+        /// <summary>
+        /// TestClient2_2 / TestClient2_3 の tls_client_auth_subject_dn（#226）。
+        /// **test.ps1 の差し込みと同じ値にすること。** 雛形の TestClient1 / TestClient2 は同じ Subject を共有しているので使わない。
+        /// </summary>
+        public const string MtlsSubjectDn = "CN=mpas-e2e-mtls-client";
     }
 
     /// <summary>クライアントの登録内容（テストから参照する分だけ）</summary>
@@ -407,7 +425,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// test.ps1 が環境変数で差し込んだクライアントの登録内容を引く（#224）。差し込まれていなければ Skip する
         /// </summary>
         /// <param name="client">IdPClient</param>
-        /// <param name="clientName">client_name（TestClient4_2 / TestClient4_3）</param>
+        /// <param name="clientName">client_name（TestClient4_2 / TestClient4_3 / TestClient2_2 / TestClient2_3）</param>
         /// <returns>ClientRegistration（client_id と client_secret だけ）</returns>
         /// <remarks>
         /// **構成ファイルには無いクライアント**なので、Registration では引けない。
@@ -416,21 +434,33 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static ClientRegistration InjectedRegistration(IdPClient client, string clientName)
         {
             // test.ps1 -Launch が、起動したサイトに差し込んだ client_id を渡してくる（MPAS_<client_name の大文字>）。
-            bool known = clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3;
-            string clientId = known
+            //   写す元 : TestClient4_x は TestClient4、TestClient2_x は TestClient2
+            string sourceName = null;
+            if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3)
+            {
+                sourceName = KnownClients.TestClient4;
+            }
+            else if (clientName == KnownClients.TestClient2_2 || clientName == KnownClients.TestClient2_3)
+            {
+                sourceName = KnownClients.TestClient2;
+            }
+
+            string clientId = sourceName != null
                 ? Environment.GetEnvironmentVariable("MPAS_" + clientName.ToUpperInvariant()) : null;
 
             Skip.If(string.IsNullOrEmpty(clientId),
                 "client_name=" + clientName + " は差し込まれていません"
                 + "（test.ps1 -Launch のときだけサイトへ差し込む。#224）。");
 
-            // client_secret と公開鍵は TestClient4 の写しなので、構成ファイルの TestClient4 から引ける。
-            ClientRegistration source = Flows.Registration(client, KnownClients.TestClient4);
+            // client_secret・redirect_uri・公開鍵は写す元と同じなので、構成ファイルの写す元から引ける。
+            ClientRegistration source = Flows.Registration(client, sourceName);
 
             return new ClientRegistration()
             {
                 ClientId = clientId,
-                ClientSecret = source.ClientSecret
+                ClientSecret = source.ClientSecret,
+                RedirectUri = source.RedirectUri,
+                RedirectUriToken = source.RedirectUriToken
             };
         }
 

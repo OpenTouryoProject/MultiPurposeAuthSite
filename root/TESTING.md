@@ -240,6 +240,59 @@ net48 版は ASP.NET なので Kestrel では動かない。`test.ps1` は IIS E
 > `1_DeleteDir.bat` の削除対象に `.vs` が入っているため。
 > `test.ps1` が使うのは自前で作る方なので、こちらは影響を受けない。
 
+### mTLS（`FA-6`）と、net48 版の `-NetFxMtls`
+
+**mTLS（クライアント証明書）のテストは、既定では net10.0 版だけを測る**（#226）。
+`-Launch` は、テスト専用のフック `programs/Tests/MtlsTestHook` を net10.0 版にだけ読ませ、
+発行元を問わずにクライアント証明書を受け付けさせる（アプリのコードは変えない）。
+証明書はテストがその場で作る自己署名のもので、証明書ストアには入れない。
+
+**net48 版（IIS Express）は、準備だけを手動で行い、`-NetFxMtls` を付けて回す。**
+IIS は信頼できない証明書を、アプリより前で **HTTP 403.16** として断る。
+自己署名の証明書を通す設定は IIS に無いので、**テスト用 CA をコンピューターの信頼されたルートに入れる**（管理者権限）。
+`-NetFxMtls` を付けなければ、net48 版のケースは作らない（Skip にもならない）。
+
+> **この手順は、まだ一度も実施していない**（#226 の時点）。
+> とくに、失効の情報（CRL）を持たない証明書を IIS（http.sys）が通すかは確かめていない。
+> 初めて実施したときに結果をここへ書き足すこと。
+
+**準備**（管理者の PowerShell。5.1 / 7 のどちらでもよい）
+
+```powershell
+# テスト用 CA（有効期間は短くしておく）
+$ca = New-SelfSignedCertificate -Subject 'CN=MPAS E2E Test CA' `
+    -KeyUsage CertSign, CRLSign, DigitalSignature `
+    -TextExtension @('2.5.29.19={critical}{text}ca=true') `
+    -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(7)
+
+# クライアント証明書 2 枚（Subject は KnownClients.MtlsSubjectDn / MtlsTests.OtherSubjectDn と同じ）
+foreach ($cn in 'mpas-e2e-mtls-client', 'mpas-e2e-mtls-other') {
+    New-SelfSignedCertificate -Subject "CN=$cn" -Signer $ca `
+        -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.2') `
+        -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(7) | Out-Null
+}
+
+# CA の公開部分だけを、コンピューターの信頼されたルートへ
+$cer = Join-Path $env:TEMP 'mpas-e2e-ca.cer'
+Export-Certificate -Cert $ca -FilePath $cer | Out-Null
+Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+Remove-Item $cer
+```
+
+**実行**（通常の PowerShell でよい。テストは `CurrentUser\My` の証明書を使う）
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -NetFxMtls
+```
+
+**後片付け**（管理者の PowerShell。**必ず行うこと**。信頼されたルートに、テスト用の CA を残さない）
+
+```powershell
+$subjects = 'CN=MPAS E2E Test CA', 'CN=mpas-e2e-mtls-client', 'CN=mpas-e2e-mtls-other'
+Get-ChildItem Cert:\LocalMachine\Root, Cert:\CurrentUser\My |
+    Where-Object { $subjects -contains $_.Subject } | Remove-Item
+```
+
 ### 取り違えは検出する
 
 **net48 版と net10.0 版は、構成ファイルの既定ではどちらも同じ URL を指している。**

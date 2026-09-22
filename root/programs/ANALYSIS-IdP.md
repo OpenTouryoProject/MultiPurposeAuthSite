@@ -1010,7 +1010,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   **問題 3（`refresh_token` など）は、表の行を書き換える段階 2 で扱う**
 - **以前の判定と全マスで一致することを確かめた**（経路 9 × 証明 7 × 登録の文字列 9。
   未知の文字列・空も含む。以前のコードで生じない組み合わせ（認可コード × 証明なし）を除く）。
-  **E2E で守られていない行がある** : 認可コードの **private_key_jwt** と **mTLS**（mTLS は E2E で張れない）
+  **E2E で守られていない行がある** : 認可コードの **private_key_jwt**。
+  **mTLS の行は #226 で E2E を張った**（`FA-6`。net10.0 版は既定で、net48 版は準備のうえ `-NetFxMtls` で）
 - **既知のどれにも当たらない登録値（空・書き間違い）は、`fapi2` として扱う**（以前のまま。段階 2 の候補）
 - 変わったのは、拒否したときの `error_description` の文面だけ
   （`This client (<種別>) is not allowed to use this flow.`。エラー コードは `unsupported_grant_type` のまま）
@@ -1023,8 +1024,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | B | 拒否の時点 | 認可エンドポイント（Implicit / Hybrid）はログイン・同意の後、CIBA はプッシュ通知・承認の後で拒否 | **要求を検証する時点で断る**（認可エンドポイントは `redirect_uri` を確かめた直後。`/ciba_authz` は `iss` を確かめた直後） | `FA-1.4` / `FA-5.1` |
 | C | エラー コード | `/token` は `unsupported_grant_type`、Hybrid は `access_denied`、Device AuthZ は `unauthorized_client` | **`unauthorized_client` に揃えた**（RFC 6749 §4.1.2.1 / §4.2.2.1 / §5.2、CIBA Core §13） | `FA-1.1` ほか |
 | D | `fapi1` で `client_secret` と PKCE の併用 | 拒否 | **変えない**（FAPI 1.0 Advanced は `client_secret` を認めない。設計どおり） | `FA-1.3` |
-| E | 既知でない登録値（書き間違い・空） | `fapi2` とみなす | **不正な登録として拒否する**（「一番厳しい種別」に倒す作りは、種別が増えると意味が変わる）。`oauth2_oidc_mode` を書いていない登録は従来どおり `normal` | `FA-5.2` |
-| F | mTLS で認証したクライアントの refresh / ROPC / client_credentials | `normal` の登録のみ | **見送り**（E2E で mTLS を張れない。#226 で張れるかを調べる） | — |
+| E | 既知でない登録値（書き間違い・空） | `fapi2` とみなす | **不正な登録として拒否する**（「一番厳しい種別」に倒す作りは、種別が増えると意味が変わる）。`oauth2_oidc_mode` を書いていない登録は従来どおり `normal` | `FA-5.2` / **`FA-6.3`**（以前との違いが出るのは mTLS の経路だけ。#226） |
+| F | mTLS で認証したクライアントの refresh / ROPC / client_credentials | `normal` の登録のみ | **見送り**（表は変えていない。mTLS の E2E は #226 で張ったので、変えるときは `FA-6` に足して測れる） | — |
 
 - **B の早い判定は「その経路を、何かの証明で使えるか」**（`ClientModePolicy.MayUse`）で見る。
   認可エンドポイントの時点では、トークン エンドポイントでの証明（`client_secret` / PKCE など）がまだ分からないため。
@@ -1356,7 +1357,7 @@ x509 を渡していなかったので、`fapi2` でも**証明書に束縛さ�
 
 | 項目 |
 |---|
-| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換え**（#224 の段階 1）、**振る舞いを見直した**（段階 2 : 使えない `refresh_token` を出さない・早い拒否・`unauthorized_client`・不正な登録値の拒否）。**mTLS の経路の E2E は #226** |
+| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換え**（#224 の段階 1）、**振る舞いを見直した**（段階 2 : 使えない `refresh_token` を出さない・早い拒否・`unauthorized_client`・不正な登録値の拒否）。**mTLS の経路の E2E も張った**（#226。`FA-6`） |
 | C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`） |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |

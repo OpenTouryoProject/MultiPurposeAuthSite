@@ -67,6 +67,8 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 |---|---|---|
 | `TestClient4_2` | `TestClient4`（fapi_ciba）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
 | `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | `Flows.InjectedRegistration` |
+| `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | `Flows.InjectedRegistration` |
+| `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | `Flows.InjectedRegistration` |
 
 - net10.0 は `appSettings__OAuth2ClientsInformation__<client_id>__<項目>` で 1 件足し、
   net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
@@ -261,10 +263,20 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | 〃 | `FA-3` | `device`（PKCE で通る。表の「PKCE の S256」の行） |
 | 〃 | `FA-4` | Device AuthZ グラントは `normal` / `device` の登録にだけ許す（#224） |
 | `Tests/Fapi/CibaClientModeTests.cs` | `FA-5` | CIBA を `fapi_ciba` 以外の登録（`TestClient4_2`）や、既知でない登録値（`TestClient4_3`）で使うと、**開始（`/ciba_authz`）で**断る |
+| `Tests/Fapi/MtlsTests.cs` | `FA-6` | **mTLS**（#226）: `fapi2` は Subject が一致する証明書の認可コードで通る／証明書なし・不一致は `invalid_client`／既知でない登録値は証明書が一致しても通さない。**net48 版は `-NetFxMtls` のときだけ**（下記） |
 
 判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
 **登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
-**E2E で守られていない行がある** : 認可コードの private_key_jwt と mTLS（#226）。
+**E2E で守られていない行がある** : 認可コードの private_key_jwt。mTLS は net10.0 版だけ（`FA-6`）。
+
+**mTLS（`FA-6`）は、net10.0 版だけを測る**（#226）。
+Kestrel は既定でクライアント証明書を要求せず、要求させても自己署名の証明書はチェーンの検証で落ちる。
+そこで `test.ps1 -Launch` が、**テスト専用のフック `Tests/MtlsTestHook`** を `DOTNET_STARTUP_HOOKS` で
+net10.0 版にだけ読ませ、発行元を問わずに受け付けさせる（**アプリのコードは変えない**。Development 以外では何もしない）。
+証明書は、テストがその場で作る自己署名のもので、**証明書ストアには入れない**（`Infrastructure/TestCertificate.cs`）。
+net48 版（IIS Express）は、IIS が自己署名の証明書をアプリより前で 403.16 として断るため、既定では測らない。
+**準備（テスト用 CA をコンピューターの信頼されたルートに入れる。管理者権限）だけを手動で行い、
+`-NetFxMtls` を付けて回す**（[`../../TESTING.md`](../../TESTING.md) 5 節）。付けなければ net48 版のケースは作らない。
 
 **`Tests/OAuth21/` は、OAuth 2.1 が許さない経路の抑止**（#222）。
 
@@ -299,6 +311,7 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 | `IdPClient.cs` | サインイン、認可、トークン、UserInfo、失効・問い合わせ、デバイス認可、CIBA、認証デバイスの代わりの要求、自己テストの起動 |
 | `FcmOutbox.cs` | プッシュ通知の送信箱（テスト用）の読み取り。認証デバイスの代わりに受け取る |
 | `Flows.cs` | 認可コード フローの組み立て、トークンの更新・失効・問い合わせ、クライアントの解決 |
+| `TestCertificate.cs` | mTLS 用のクライアント証明書。net10.0 版は自己署名をその場で作る（ストアに入れない）、net48 版は `CurrentUser\My` に用意したもの（#226） |
 | `RequestObject.cs` | Request Object（CIBA の認証リクエストを含む）の組み立てと PAR への登録 |
 | `JwtBearerAssertion.cs` | JWT Bearer グラント（RFC 7523）の assertion の組み立て |
 | `JwsSigner.cs` | RS256 / ES256 の署名（Request Object・assertion・CIBA の要求で共用） |

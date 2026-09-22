@@ -82,6 +82,14 @@
 .PARAMETER NoNetFx
     net48 版を起動しない。その分のテストは Skip される。
 
+.PARAMETER NetFxMtls
+    net48 版でも mTLS のテスト（FA-6）を回す（#226）。**準備が要る**（TESTING.md「net48 版の mTLS」）。
+    IIS Express にクライアント証明書を要求させ（sslFlags="Ssl, SslNegotiateCert"）、
+    テストは CurrentUser\My に用意した証明書を使う。
+    IIS は信頼できない証明書をアプリより前で 403.16 として断るので、
+    **発行元（テスト用 CA）を、コンピューターの信頼されたルートに入れておく必要がある**（管理者権限）。
+    付けなければ、FA-6 は net10.0 版だけを測る（net48 版のケースは作らない。Skip にもならない）。
+
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
@@ -100,6 +108,7 @@
     .\test.ps1 -Launch
     .\test.ps1 -Launch -NoNetFx
     .\test.ps1 -Filter "FullyQualifiedName~RequestObjectTests"
+    .\test.ps1 -Launch -NetFxMtls -Filter "FullyQualifiedName~MtlsTests"
 
 .EXAMPLE
     # SQL Server のストアで回す（接続文字列は環境変数から）
@@ -119,6 +128,7 @@ param(
     [string] $Url = 'https://localhost:44300',
     [string] $NetFxUrl = 'https://localhost:44302',
     [switch] $NoNetFx,
+    [switch] $NetFxMtls,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
@@ -288,7 +298,8 @@ function New-IisExpressConfig
     param(
         [string] $Path,
         [string] $SitePath,
-        [int]    $Port
+        [int]    $Port,
+        [switch] $ClientCertificate
     )
 
     if (-not (Test-Path $iisTmpl)) {
@@ -309,6 +320,16 @@ function New-IisExpressConfig
     $site.bindings.binding.protocol = 'https'
     $site.bindings.binding.bindingInformation = "*:${Port}:localhost"
 
+    # **mTLS のテストのとき（-NetFxMtls）だけ、クライアント証明書を要求させる**（#226）。
+    #   SslNegotiateCert は「要求するが、無くても通す」。他のテストには影響しない。
+    #   管理者権限は要らない（このファイルは test.ps1 が自前で作るもの）。
+    if ($ClientCertificate) {
+        $location = $doc.CreateElement('location')
+        $location.SetAttribute('path', 'MPAS48')
+        $location.InnerXml = '<system.webServer><security><access sslFlags="Ssl, SslNegotiateCert" /></security></system.webServer>'
+        [void]$doc.configuration.AppendChild($location)
+    }
+
     New-Item -ItemType Directory -Force (Split-Path -Parent $Path) | Out-Null
     $doc.Save($Path)
 }
@@ -320,9 +341,12 @@ function Get-InjectedTestClient
     テスト専用のクライアントを、環境変数で差し込むための値を作る（#224）。
 
     .DESCRIPTION
-    **TestClient4（fapi_ciba）の登録を写し、名前と oauth2_oidc_mode だけを変える。**
-    公開鍵（jwk_ecdsa_publickey）ごと写すので、CIBA の要求の署名検証を通り、
+    **既存の登録（既定は TestClient4）を写し、名前と oauth2_oidc_mode、-Override の項目だけを変える。**
+    公開鍵（jwk_*_publickey）ごと写すので、署名検証を通り、
     **登録種別の判定まで届く**。雛形にも実設定にも手を入れない。
+
+    **写す値は、JSON の生のテキスト**（\\ などのエスケープを含むまま）。
+    -Override の値も、JSON の文字列として書く。
 
     差し込み方は、アプリによって違う。
       net10.0 : クライアント一覧は「節」として読むので、
@@ -344,26 +368,32 @@ function Get-InjectedTestClient
         [string] $Name,
         [string] $Mode,
         [string] $ClientId,
-        [string] $NetFxBody = ''
+        [string] $NetFxBody = '',
+        [string] $Source = 'TestClient4',
+        [hashtable] $Override = @{}
     )
 
     $coreText  = [System.IO.File]::ReadAllText((Join-Path $coreDir 'appsettings.json'))
 
-    # 写す元 : TestClient4 の区画（入れ子の無い { ... }）
-    $m = [regex]::Match($coreText, '\{[^{}]*"client_name"\s*:\s*"TestClient4"[^{}]*\}')
+    # 写す元の区画（入れ子の無い { ... }）
+    $m = [regex]::Match($coreText,
+        '\{[^{}]*"client_name"\s*:\s*"' + [regex]::Escape($Source) + '"[^{}]*\}')
     if (-not $m.Success) { return $null }
 
     $fields = [ordered]@{}
-    foreach ($f in [regex]::Matches($m.Value, '"([A-Za-z0-9_]+)"\s*:\s*"([^"]*)"')) {
+    foreach ($f in [regex]::Matches($m.Value, '"([A-Za-z0-9_]+)"\s*:\s*"((?:[^"\\]|\\.)*)"')) {
         $fields[$f.Groups[1].Value] = $f.Groups[2].Value
     }
     $fields['client_name'] = $Name
     $fields['oauth2_oidc_mode'] = $Mode
+    foreach ($k in $Override.Keys) { $fields[$k] = $Override[$k] }
 
     # net10.0 : 節へ 1 件足す
+    #   環境変数は JSON ではないので、エスケープを戻した値を渡す（\\ → \ など）。
     $coreEnv = @{}
     foreach ($k in $fields.Keys) {
-        $coreEnv["appSettings__OAuth2ClientsInformation__${ClientId}__$k"] = $fields[$k]
+        $coreEnv["appSettings__OAuth2ClientsInformation__${ClientId}__$k"] =
+            [regex]::Unescape($fields[$k])
     }
 
     # net48 : 一覧の末尾の } の手前に 1 件足す
@@ -394,21 +424,28 @@ try {
 
         New-Item -ItemType Directory -Force $LogDir | Out-Null
 
-        # **テスト専用のクライアントを差し込む**（#224）。
-        #   TestClient4（fapi_ciba）を写し、登録種別だけ変えたもの
+        # **テスト専用のクライアントを差し込む**（#224 / #226）。
+        #   既存の登録を写し、登録種別などだけ変えたもの
         #   （公開鍵ごと写すので、署名検証で先に落ちない）。設定ファイルは書き換えない。
         #     TestClient4_2 : normal  … CIBA を fapi_ciba 以外の登録で使うと拒否されるか
         #     TestClient4_3 : fapi_1  … 既知でない登録値（書き間違い）なら拒否されるか（#224 の段階 2）
+        #     TestClient2_2 : fapi2   … mTLS で通るか（#226）。Subject はテスト専用の値
+        #     TestClient2_3 : fapi_1  … 同じ証明書でも、登録値が不正なら拒否されるか（#226 / #224 の E）
+        #   ※ Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
+        $mtlsDn = @{ tls_client_auth_subject_dn = 'CN=mpas-e2e-mtls-client' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
-            @{ Name = 'TestClient4_2'; Mode = 'normal'; ClientId = 'e2e0tc42000000000000000000000000' },
-            @{ Name = 'TestClient4_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc43000000000000000000000000' })) {
+            @{ Name = 'TestClient4_2'; Mode = 'normal'; ClientId = 'e2e0tc42000000000000000000000000'; Source = 'TestClient4'; Override = @{} },
+            @{ Name = 'TestClient4_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc43000000000000000000000000'; Source = 'TestClient4'; Override = @{} },
+            @{ Name = 'TestClient2_2'; Mode = 'fapi2';  ClientId = 'e2e0tc22000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
+            @{ Name = 'TestClient2_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc23000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }
 
-            $one = Get-InjectedTestClient -Name $c.Name -Mode $c.Mode -ClientId $c.ClientId -NetFxBody $base
+            $one = Get-InjectedTestClient -Name $c.Name -Mode $c.Mode -ClientId $c.ClientId -NetFxBody $base `
+                -Source $c.Source -Override $c.Override
             if ($null -eq $one) {
                 $injected = $null
                 $injectedIds.Clear()
@@ -426,7 +463,7 @@ try {
         }
 
         if ($null -eq $injected) {
-            Write-Warning 'TestClient4 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 は Skip）。'
+            Write-Warning 'TestClient4 / TestClient2 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 は Skip）。'
         }
 
         if ($PSVersionTable.PSVersion.Major -lt 6) {
@@ -496,10 +533,31 @@ try {
             throw "net10.0 版の実行ファイルが見つかりません : $coreDir\bin\$Configuration"
         }
 
+        # **mTLS のテストのために、クライアント証明書を受け付けさせる（#226）。**
+        #   アプリのコードは変えず、テスト専用のフック（Tests\MtlsTestHook）を起動時に読ませる。
+        #   Kestrel は既定でクライアント証明書を要求せず、要求させても自己署名の証明書はチェーンの検証で落ちるため。
+        #   **このサイトにだけ渡す**（環境変数は起動時にコピーされるので、直後に消す）。
+        $mtlsHook = $null
+        dotnet build (Join-Path $PSScriptRoot 'MtlsTestHook\MtlsTestHook.csproj') `
+            -c $Configuration -v:q -nologo | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            $mtlsHook = Get-ChildItem -Recurse -ErrorAction SilentlyContinue `
+                -Path (Join-Path $PSScriptRoot "MtlsTestHook\bin\$Configuration") `
+                -Filter 'MtlsTestHook.dll' | Select-Object -First 1
+        }
+        if ($null -eq $mtlsHook) {
+            Write-Warning 'MtlsTestHook を作れなかったため、mTLS は受け付けません（FA-6 は Skip）。'
+        }
+        else {
+            $env:DOTNET_STARTUP_HOOKS = $mtlsHook.FullName
+        }
+
         $core = Start-Process -FilePath $coreExe.FullName `
             -ArgumentList @('--urls', $Url) `
             -WorkingDirectory $coreDir -PassThru -WindowStyle Hidden `
             -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr
+
+        Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
 
         Wait-Site -Name 'net10.0 版' -SiteUrl $Url -Process $core `
             -OutLog $coreOut -ErrLog $coreErr
@@ -507,6 +565,7 @@ try {
         Write-Host '起動しました。' -ForegroundColor Green
         $env:MPAS_CORE_BASEURL = $Url
         $env:MPAS_CORE_FCM_OUTBOX = $coreOutbox
+        if ($null -ne $mtlsHook) { $env:MPAS_CORE_MTLS = 'true' }   # FA-6 を回してよい（#226）
 
         # --------------------------------------------------------------
         # net48 版（IIS Express）
@@ -527,7 +586,8 @@ try {
             $netFxOut = Join-Path $LogDir 'IisExpress.out.log'
             $netFxErr = Join-Path $LogDir 'IisExpress.err.log'
 
-            New-IisExpressConfig -Path $iisCfg -SitePath $netFxDir -Port ([uri]$NetFxUrl).Port
+            New-IisExpressConfig -Path $iisCfg -SitePath $netFxDir -Port ([uri]$NetFxUrl).Port `
+                -ClientCertificate:$NetFxMtls
 
             $env:OAuth2AuthorizationServerEndpointsRootURI = $NetFxUrl
             $env:OAuth2ClientEndpointsRootURI = $NetFxUrl
@@ -564,10 +624,11 @@ try {
             Write-Host '起動しました。' -ForegroundColor Green
             $env:MPAS_NETFX_BASEURL = $NetFxUrl
             $env:MPAS_NETFX_FCM_OUTBOX = $netFxOutbox
+            if ($NetFxMtls) { $env:MPAS_NETFX_MTLS = 'true' }   # FA-6 を net48 版でも回す（#226）
         }
 
         # テスト専用のクライアント（#224）: 差し込みの値はテスト側へ持ち込まない。
-        #   テストには client_id だけを渡す（client_secret は TestClient4 と同じなので、構成ファイルから読める）。
+        #   テストには client_id だけを渡す（client_secret などは写す元と同じなので、構成ファイルから読める）。
         if ($null -ne $injected) {
             foreach ($k in $injected.CoreEnv.Keys) {
                 Remove-Item -Path ("Env:\" + $k) -ErrorAction SilentlyContinue
@@ -646,6 +707,11 @@ finally {
         Remove-Item Env:\MPAS_NETFX_FCM_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_TESTCLIENT4_2 -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_TESTCLIENT4_3 -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_TESTCLIENT2_2 -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_TESTCLIENT2_3 -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_MTLS -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_NETFX_MTLS -ErrorAction SilentlyContinue
+        Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
     }
 }
 
