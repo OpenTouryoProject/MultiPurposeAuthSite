@@ -247,6 +247,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／使えない `refresh_token`） |
 | 〃 | `FA-2` | `fapi2`（`client_secret` も PKCE も通らない。x509 が要る） |
 | 〃 | `FA-3` | `device`（PKCE で通る。`CheckClientMode` の例外措置） |
+| 〃 | `FA-4` | Device AuthZ グラントは `normal` / `device` の登録にだけ許す（#224） |
 
 **今の振る舞いを記録するためのテスト。** 望ましくないと考える点（`fapi1` が使えない
 `refresh_token` を発行する等）は**「観測」として書き、合否には影響させない**。

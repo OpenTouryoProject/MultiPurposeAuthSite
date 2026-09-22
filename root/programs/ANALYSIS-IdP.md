@@ -1190,6 +1190,36 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 > **残っている点:** Implicit / Hybrid の応答（フラグメント）には、まだ `scope` を返していない
 > （RFC 6749 §4.2.2 は、要求と異なるなら必須）。
 
+### C-18. Device AuthZ グラントが登録種別を判定していなかった **[Lib]** — **✅ 修正済み（#224）**
+
+#224 の段階 0（未測定の経路を測る）で見つかった。
+
+他のグラント（認可コード / refresh / ROPC / client_credentials / JWT Bearer / CIBA）は
+`CheckClientMode` で登録種別（`oauth2_oidc_mode`）を判定しているが、
+**`GrantDeviceAuthZ` だけが呼んでいなかった。** 行っていたのはクライアント認証
+（`DeviceAuthZClientAuthentication`）だけで、**client_secret が合えば、どの登録種別でもトークンを出していた。**
+
+| 登録種別 | 修正前 | 修正後 |
+|---|---|---|
+| device / normal | 発行 | 発行（従来どおり） |
+| **fapi1 / fapi2 / fapi_ciba** | **client_secret だけで発行** | **`unauthorized_client`（400）** |
+
+**`fapi1` / `fapi2` / `fapi_ciba` の登録は、より強いクライアント認証を求めている**
+（PKCE / private_key_jwt / mTLS）。この経路では、それを満たさずにトークンが出ていた。
+x509 を渡していなかったので、`fapi2` でも**証明書に束縛されないトークン**になっていた。
+
+**対応:**
+
+- `CmnEndpoints.IsDeviceAuthZAllowed` を新設し、**`normal` と `device` の登録にだけ許す**
+- **開始**（両アプリの `/device_authz`）で判定する … 利用者が `user_code` を承認した後で失敗させないため
+- **トークン発行**（`GrantDeviceAuthZ`）でも判定する … 二重の防御
+- エラーは `unauthorized_client`（RFC 6749 §5.2「認証済みのクライアントに許されていないグラント」）
+- E2E テスト : **`FA-4.1`**（fapi1 / fapi2 / fapi_ciba は開始で拒否、normal / device は従来どおり）。
+  **トークン発行側の判定は、開始側で弾かれるため到達できず、単独では測っていない**
+
+> **登録種別の判定の作り直し**（`permittedLevel` をやめる。#224 の段階 1）までのつなぎとして、
+> 許す種別を明示する形にしてある。作り直すときは、この判定も表に取り込むこと。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能

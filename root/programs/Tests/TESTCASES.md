@@ -2793,6 +2793,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **例外措置が無ければ、ここは通らない**（device > fapi2 なので一致判定になる）。`permittedLevel` を作り直すときは、この経路を壊さないこと（#222 の 3）。
 - **refresh_token は使えない。** 更新の経路は client_secret による認証を求めるので、client_secret を持たないこのクライアントは、そもそも要求を組み立てられない。
 
+## FA-4.1 Device AuthZ グラントは、登録種別が normal と device のクライアントにだけ許す
+
+| | |
+|---|---|
+| 観点 | **このグラントは client_secret（またはパブリック）で通る。**fapi1 / fapi2 / fapi_ciba の登録は、より強いクライアント認証（PKCE / private_key_jwt / mTLS）を求めているので、この経路を使わせてはならない。**以前は登録種別を判定しておらず、client_secret だけでトークンが出ていた**（#224）。 |
+| 根拠 | RFC 8628 / RFC 6749 §5.2（unauthorized_client）/ #224 |
+| テスト | `FA0401_DeviceAuthZはnormalとdeviceの登録にだけ許す` |
+
+**手順**
+
+1. 対照 : device / normal の登録は、開始できる
+1. fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される
+
+**検証（合否を判定する）**
+
+- TestClient3 は device_code を得る
+- MVC_Sample は device_code を得る
+- TestClient1 は unauthorized_client（400）
+- TestClient2 は unauthorized_client（400）
+- TestClient4 は unauthorized_client（400）
+
+**補足**
+
+- **client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。
+- **トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、この E2E では単独で測っていない。
+
 # 21
 
 ## 21-1.1 OAuth 2.1 が許さない経路（Implicit / ROPC / PKCE 無し）が、締めた登録では塞がる

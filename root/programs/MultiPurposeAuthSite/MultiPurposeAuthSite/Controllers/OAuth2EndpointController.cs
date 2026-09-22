@@ -61,6 +61,7 @@
 //*  2026/09/17  玄人 幸道         トークン応答に Cache-Control: no-store / Pragma: no-cache を付ける（#218）
 //*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
 //*  2026/09/17  玄人 幸道         /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御を付ける（#218）
+//*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -659,6 +660,19 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client},
                         {OAuth2AndOIDCConst.error_description, "Invalid credential."}
+                    }, "device_authz");
+                }
+
+                // **登録種別で、このグラントを許すか**（normal と device だけ）。
+                //   利用者が user_code を承認した後で失敗させないよう、開始の時点で弾く。
+                //   トークン発行（CmnEndpoints.GrantDeviceAuthZ）でも同じ判定をしている。
+                if (!Token.CmnEndpoints.IsDeviceAuthZAllowed(client_id))
+                {
+                    return this.OAuth2Error(new Dictionary<string, string>()
+                    {
+                        {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client},
+                        {OAuth2AndOIDCConst.error_description,
+                            "This client is not allowed to use the device authorization grant."}
                     }, "device_authz");
                 }
 

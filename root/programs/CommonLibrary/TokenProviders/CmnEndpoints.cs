@@ -77,6 +77,7 @@
 //*  2026/09/17  玄人 幸道         PKCE : client_secret との同時送信を通し、検証を 1 箇所にまとめた（#220）
 //*  2026/09/18  玄人 幸道         PKCE : code_challenge の必須化を、認可エンドポイントに追加（#220）
 //*  2026/09/18  玄人 幸道         トークンのクレームを、permittedLevel から clientMode に分離（#220）
+//*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1878,6 +1879,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
+                // **登録種別で、このグラントを許すか。** 許すのは normal と device だけ。
+                //   fapi1 / fapi2 / fapi_ciba の登録は、このグラントでは発行しない。
+                //   RFC 6749 5.2 : 認証済みのクライアントに許されていないグラントは unauthorized_client。
+                if (!CmnEndpoints.IsDeviceAuthZAllowed(client_id))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "This client is not allowed to use the device authorization grant.");
+                    return false;
+                }
+
                 #endregion
 
                 #region 発行
@@ -2588,6 +2600,30 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region Device AuthZ
+
+        /// <summary>
+        /// Device AuthZ グラントを、このクライアントに許すか（登録種別で判定する）
+        /// </summary>
+        /// <param name="client_id">string</param>
+        /// <returns>許すなら true</returns>
+        /// <remarks>
+        /// **許すのは normal と device の登録だけ。**
+        /// fapi1 / fapi2 / fapi_ciba の登録は、より強いクライアント認証
+        /// （PKCE / private_key_jwt / mTLS など）を求めている。
+        /// このグラントは client_secret だけで通るので、**使わせると、登録で求めた強さを満たさずに
+        /// トークンが出てしまう。**
+        ///
+        /// ※ 他のグラントは CheckClientMode で登録種別を見ているが、このグラントには判定が無かった。
+        ///    登録種別の判定の作り直し（permittedLevel をやめる）は別途行うので、
+        ///    ここでは許す種別を明示する形にしておく。
+        /// </remarks>
+        public static bool IsDeviceAuthZAllowed(string client_id)
+        {
+            string clientMode = Helper.GetInstance().GetClientMode(client_id);
+
+            return clientMode == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit()
+                || clientMode == OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit();
+        }
 
         /// <summary>Device AuthZのクライアント認証</summary>
         /// <param name="client_id">string</param>

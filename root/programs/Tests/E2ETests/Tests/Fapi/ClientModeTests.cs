@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/19  玄人 幸道         新規（#222 : ClientMode 経路の E2E 整備）
+//*  2026/09/22  玄人 幸道         FA-4.1（Device AuthZ グラントは normal と device にだけ許す）を追加（#224）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -42,7 +43,7 @@ using Xunit.Abstractions;
 namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 {
     /// <summary>
-    /// FA-1〜3. クライアント登録の <c>oauth2_oidc_mode</c> によって、
+    /// FA-1〜4. クライアント登録の <c>oauth2_oidc_mode</c> によって、
     /// **どの経路が通り、どの経路が塞がるか**を測る。
     /// </summary>
     /// <remarks>
@@ -405,6 +406,91 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                 r.Done();
             }
+        }
+
+        #endregion
+
+        #region FA-4 Device AuthZ グラント
+
+        /// <summary>FA-4.1 Device AuthZ グラントは normal と device の登録にだけ許す</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task FA0401_DeviceAuthZはnormalとdeviceの登録にだけ許す(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("FA-4.1",
+                    "Device AuthZ グラントは、登録種別が normal と device のクライアントにだけ許す",
+                    "**このグラントは client_secret（またはパブリック）で通る。**"
+                    + "fapi1 / fapi2 / fapi_ciba の登録は、より強いクライアント認証"
+                    + "（PKCE / private_key_jwt / mTLS）を求めているので、この経路を使わせてはならない。"
+                    + "**以前は登録種別を判定しておらず、client_secret だけでトークンが出ていた**（#224）。",
+                    "RFC 8628 / RFC 6749 §5.2（unauthorized_client）/ #224");
+
+                r.Target("device=" + KnownClients.TestClient3 + " / normal=" + KnownClients.MvcSample
+                    + " / fapi1=" + KnownClients.TestClient1 + " / fapi2=" + KnownClients.TestClient2
+                    + " / fapi_ciba=" + KnownClients.TestClient4);
+
+                r.Step("(1) 対照 : device / normal の登録は、開始できる");
+
+                foreach (string name in new string[] { KnownClients.TestClient3, KnownClients.MvcSample })
+                {
+                    JsonResponse start = await ClientModeTests.StartDeviceAuthZAsync(
+                        client, Flows.Registration(client, name));
+
+                    r.Verify(name + " は device_code を得る",
+                        !string.IsNullOrEmpty(start.String("device_code")),
+                        "device_code あり",
+                        string.IsNullOrEmpty(start.String("device_code"))
+                            ? "**得られなかった**（" + (int)start.StatusCode + " / " + (start.Error ?? "なし") + "）"
+                            : "あり（値は伏せる）");
+                }
+
+                r.Step("(2) fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される");
+
+                foreach (string name in new string[]
+                    { KnownClients.TestClient1, KnownClients.TestClient2, KnownClients.TestClient4 })
+                {
+                    JsonResponse start = await ClientModeTests.StartDeviceAuthZAsync(
+                        client, Flows.Registration(client, name));
+
+                    r.Verify(name + " は unauthorized_client（400）",
+                        start.StatusCode == System.Net.HttpStatusCode.BadRequest
+                            && start.Error == "unauthorized_client",
+                        "400 / unauthorized_client",
+                        (int)start.StatusCode + " / " + (start.Error ?? "（無し）"));
+                }
+
+                r.Note("**client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、"
+                    + "**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。");
+
+                r.Note("**トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、"
+                    + "この E2E では単独で測っていない。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>Device AuthZ を開始する（機密クライアントは client_secret も送る）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="reg">ClientRegistration</param>
+        /// <returns>JsonResponse</returns>
+        private static Task<JsonResponse> StartDeviceAuthZAsync(IdPClient client, ClientRegistration reg)
+        {
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "client_id", reg.ClientId },
+                { "scope", "profile email" }
+            };
+
+            if (!string.IsNullOrEmpty(reg.ClientSecret))
+            {
+                form["client_secret"] = reg.ClientSecret;
+            }
+
+            return client.DeviceAuthorizationAsync(form);
         }
 
         #endregion
