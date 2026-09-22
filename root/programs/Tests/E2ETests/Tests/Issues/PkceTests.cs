@@ -33,6 +33,7 @@
 //*  2026/09/18  玄人 幸道         RT-220.3（code_challenge の要否）を追加（#220）
 //*  2026/09/18  玄人 幸道         RT-220.4（S256 と fapi クレーム）を追加（#220）
 //*  2026/09/18  玄人 幸道         RT-221.1 / RT-221.2（クライアント単位の PKCE）を追加（#221）
+//*  2026/09/22  玄人 幸道         観点の文面を、ClientModePolicy の表に合わせた（#224 の段階 1。判定は変えていない）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -262,7 +263,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 TestReport r = this.Report("RT-220.4",
                     "normal 登録のクライアントが S256 の PKCE を使っても、トークンは fapi を名乗らない",
                     "**PKCE のメソッドは「クライアント認証の強度」ではない。**"
-                    + "S256 を使うと、その経路が認める上限（permittedLevel）は fapi1 まで上がるが、"
+                    + "S256 を使うと、その経路で通す登録種別（ClientModePolicy の表。#224）に fapi1 が加わるが、"
                     + "**それはクライアントが何として登録されているか（clientMode）とは別**。"
                     + "アクセス トークンの fapi クレームは clientMode で書く（#220）。",
                     "FAPI 1.0 Advanced / RFC 7636 / #220");
@@ -309,7 +310,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         ? "**fapi=" + Jwt.String(payload, "fapi") + " が載っている**" : "無し");
 
                 r.Note("**このクライアントは normal 登録。** fapi1 で登録されたクライアントが"
-                    + "PKCE で通ること自体は、これまでどおり（permittedLevel の格上げは残している）。");
+                    + "PKCE で通ること自体は、これまでどおり（表の「PKCE の S256」の行が fapi1 を通す）。");
 
                 r.Done();
             }

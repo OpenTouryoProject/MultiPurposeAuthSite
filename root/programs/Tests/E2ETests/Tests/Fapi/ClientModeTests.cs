@@ -31,6 +31,7 @@
 //*  2026/09/19  玄人 幸道         新規（#222 : ClientMode 経路の E2E 整備）
 //*  2026/09/22  玄人 幸道         FA-4.1（Device AuthZ グラントは normal と device にだけ許す）を追加（#224）
 //*  2026/09/22  玄人 幸道         FA-1.3（client_secret と PKCE の併用）・FA-1.4（Hybrid）を追加（#224 の段階 0）
+//*  2026/09/22  玄人 幸道         観点の文面を、ClientModePolicy の表に合わせた（#224 の段階 1。判定は変えていない）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -48,10 +49,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
     /// **どの経路が通り、どの経路が塞がるか**を測る。
     /// </summary>
     /// <remarks>
-    /// **判定は CmnEndpoints.CheckClientMode が行う。**
-    /// 「clientMode &lt;= permittedLevel」で、permittedLevel は
-    /// **クライアント認証の強度**で決まる（client_secret なら normal、PKCE の S256 なら fapi1、
-    /// x509 なら fapi2）。**登録が上位のクライアントほど、通る経路が狭い。**
+    /// **判定は CmnEndpoints.CheckClientMode が、ClientModePolicy の表で行う（#224）。**
+    /// 表は「経路 × その要求で何を証明したか（client_secret / PKCE の S256 / x509 など）」から、
+    /// 通す登録種別を引く。**登録が上位のクライアントほど、通る経路が狭い。**
     ///
     /// **本クラスは、今の振る舞いを記録する。** 望ましくないと考える点は
     /// 「観測」として書き、合否には影響させない。
@@ -163,10 +163,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 TestReport r = this.Report("FA-1.1",
                     "oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る",
                     "**登録が上位のクライアントほど、通る経路が狭い。**"
-                    + "CheckClientMode は「clientMode <= permittedLevel」で判定し、"
-                    + "permittedLevel は**クライアント認証の強度**で決まる。"
-                    + "client_secret では normal 止まりなので、fapi1 の登録は通らない。"
-                    + "**PKCE の S256 を使うと permittedLevel が fapi1 に上がり、そこだけが通る。**",
+                    + "CheckClientMode は ClientModePolicy の表（経路 × 何を証明したか）で判定する。"
+                    + "認可コードを client_secret で取る行は normal だけを通すので、fapi1 の登録は通らない。"
+                    + "**PKCE の S256 で取る行は fapi1 も通すので、そこだけが通る。**",
                     "FAPI 1.0 Advanced / #222");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
@@ -251,7 +250,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 TestReport r = this.Report("FA-1.2",
                     "fapi1 のクライアントは refresh_token を受け取るが、それを使うと拒否される",
                     "**受け取ったのに必ず失敗する資格情報を渡している。**"
-                    + "refresh_token の経路は permittedLevel=normal で判定するため、"
+                    + "表の refresh_token の行は、証明によらず normal だけを通すため、"
                     + "fapi1 の登録は通らない。**発行しない、あるいは経路を通す、のどちらかが筋。**"
                     + "本テストは**現状を記録する**もので、望ましさは判定しない（#222）。",
                     "RFC 6749 §6 / #222");
@@ -323,9 +322,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             {
                 TestReport r = this.Report("FA-1.3",
                     "fapi1 のクライアントが client_secret と PKCE(S256) を両方送ると、拒否される",
-                    "**クライアント認証を client_secret で行った時点で、permittedLevel が normal に決まる。**"
-                    + "PKCE の S256 は、client_secret を送らないときにしか水準を上げない"
-                    + "（併用の経路では検証だけ行い、水準には使わない。#220）。"
+                    "**表の「認可コード × client_secret と PKCE の併用」の行は、normal だけを通す。**"
+                    + "fapi1 を通すのは、client_secret を送らない「PKCE の S256」の行だけ"
+                    + "（併用の経路では PKCE は検証だけ行い、判定には使わない。#220）。"
                     + "本テストは**今の振る舞いを記録する**（#224 の段階 0）。",
                     "FAPI 1.0 Advanced §5.2.2 / RFC 7636 / #224");
 
@@ -377,8 +376,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             {
                 TestReport r = this.Report("FA-1.4",
                     "fapi1 のクライアントは、Hybrid フロー（code id_token）で code も id_token も受け取らない",
-                    "**Hybrid の経路は permittedLevel=normal で判定する**（認可エンドポイントで CheckClientMode）。"
-                    + "fapi1 の登録は normal を超えるので通らない。"
+                    "**表の Hybrid の行は normal だけを通す**（認可エンドポイントで CheckClientMode）。"
+                    + "fapi1 の登録は通らない。"
                     + "本テストは**今の振る舞いを記録する**（#224 の段階 0）。",
                     "OIDC Core §3.3 / FAPI 1.0 Advanced / #224");
 
@@ -496,7 +495,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
         #region FA-3 device
 
-        /// <summary>FA-3.1 device は PKCE の経路を通る（例外措置）</summary>
+        /// <summary>FA-3.1 device は PKCE の経路を通る（以前の例外措置。今は表の 1 行）</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
@@ -507,10 +506,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             {
                 TestReport r = this.Report("FA-3.1",
                     "oauth2_oidc_mode=device のクライアントは、PKCE(S256) の認可コードが通る",
-                    "**CheckClientMode には、device のための例外措置がある。**"
-                    + "device は fapi2 より大きい値なので、本来は「permittedLevel と一致」が要るが、"
-                    + "**clientMode=device かつ permittedLevel=fapi1（＝PKCE の S256）のときだけ通す**"
-                    + "と書かれている（LIR 用）。**その例外が効いていることを測る。**",
+                    "**表の「認可コード × PKCE の S256」の行は、device も通す**（LIR 用）。"
+                    + "以前の大小比較では device は fapi2 より大きい値で、この経路は例外措置として"
+                    + "ハードコードされていた（#224 の段階 1 で表に置き換えた）。**その行が効いていることを測る。**",
                     "RFC 8628（Device Authorization Grant）/ #222");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
@@ -526,8 +524,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     token != null && !string.IsNullOrEmpty(token.AccessToken),
                     "トークンが返る", ClientModeTests.Outcome(token));
 
-                r.Note("**例外措置が無ければ、ここは通らない**（device > fapi2 なので一致判定になる）。"
-                    + "`permittedLevel` を作り直すときは、この経路を壊さないこと（#222 の 3）。");
+                r.Note("**表のこの行から device を外すと、ここは通らない。**"
+                    + "表を書き換えるときは、この経路を壊さないこと（#224）。");
 
                 r.Note("**refresh_token は使えない。** 更新の経路は client_secret による認証を求めるので、"
                     + "client_secret を持たないこのクライアントは、そもそも要求を組み立てられない。");

@@ -36,6 +36,7 @@
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
+//*  2026/09/22  玄人 幸道         ProtectFromPayload の引数名を permittedLevel から clientMode に（#224）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -317,7 +318,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="access_token_payload">AccessTokenのPayload</param>
         /// <param name="expiresUtc">DateTimeOffset</param>
         /// <param name="x509">X509Certificate2</param>
-        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <param name="clientMode">クライアントに登録された ClientMode（クレームに書く。#220 / #224）</param>
         /// <param name="audience">out string</param>
         /// <param name="subject">out string</param>
         /// <param name="alg">string</param>
@@ -325,7 +326,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static string ProtectFromPayload(
             string clientId, string access_token_payload,
             DateTimeOffset expiresUtc, X509Certificate2 x509,
-            OAuth2AndOIDCEnum.ClientMode permittedLevel,
+            OAuth2AndOIDCEnum.ClientMode clientMode,
             out string audience, out string subject, string alg = JwtConst.RS256)
         {
             string jti = Guid.NewGuid().ToString("N");
@@ -378,19 +379,19 @@ namespace MultiPurposeAuthSite.TokenProviders
                 payload[OAuth2AndOIDCConst.cnf] = dic;
             }
 
-            if (permittedLevel == OAuth2AndOIDCEnum.ClientMode.normal)
+            if (clientMode == OAuth2AndOIDCEnum.ClientMode.normal)
             {
                 // ...
             }
-            else if (permittedLevel == OAuth2AndOIDCEnum.ClientMode.device)
+            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.device)
             {
                 // - device
-                payload["device"] = permittedLevel.ToStringByEmit();
+                payload["device"] = clientMode.ToStringByEmit();
             }
             else // fapi1, fapi2, fapi_ciba
             {
                 // - fapi
-                payload[OAuth2AndOIDCConst.fapi] = permittedLevel.ToStringByEmit();
+                payload[OAuth2AndOIDCConst.fapi] = clientMode.ToStringByEmit();
             }
 
             json = JsonConvert.SerializeObject(payload);

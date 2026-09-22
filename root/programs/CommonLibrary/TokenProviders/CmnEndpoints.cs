@@ -78,6 +78,7 @@
 //*  2026/09/18  玄人 幸道         PKCE : code_challenge の必須化を、認可エンドポイントに追加（#220）
 //*  2026/09/18  玄人 幸道         トークンのクレームを、permittedLevel から clientMode に分離（#220）
 //*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
+//*  2026/09/22  玄人 幸道         登録種別の判定を、permittedLevel の大小比較から ClientModePolicy の表に置き換える（#224 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1030,7 +1031,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // このフローが認められるか？
                 Dictionary<string, string> err = new Dictionary<string, string>();
-                if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                if (CmnEndpoints.CheckClientMode(client_id,
+                    ClientModePolicy.Flow.Implicit, ClientModePolicy.Proof.None,
                     out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                 {
                     // 継続可
@@ -1116,19 +1118,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 #region CheckClientMode
 
-                // 初期値の許容レベルは最低レベルに設定
-                OAuth2AndOIDCEnum.ClientMode permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-
                 // ★ 未実装
-                // TokenBindingの有無で、permittedLevelを変更する。
-                // TokenBindingの無
-                //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
-                // TokenBindingの有
-                //permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                // TokenBinding を実装するなら、証明（ClientModePolicy.Proof）の 1 つとして扱う。
+                //   いまは証明なし（Proof.None）で判定する（#224）。
 
-                // このフローが認められるか？
+                // このフローが認められるか？（経路 × 証明 → ClientModePolicy の表で引く。#224）
                 Dictionary<string, string> err = new Dictionary<string, string>();
-                if (CmnEndpoints.CheckClientMode(client_id, permittedLevel,
+                if (CmnEndpoints.CheckClientMode(client_id,
+                    ClientModePolicy.Flow.Hybrid, ClientModePolicy.Proof.None,
                     out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
                 {
                     // 継続可
@@ -1156,7 +1153,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 // access_token
                 // **クレームは、登録された種別（clientMode）で書く**（#220）。
-                //   permittedLevel は「経路が認める上限」なので、トークンの名乗りには使わない。
+                //   経路や証明（ClientModePolicy の表。#224）は、トークンの名乗りには使わない。
                 access_token = CmnAccessToken.ProtectFromPayload(
                 	client_id, tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
@@ -1233,8 +1230,10 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (Config.EnableAuthorizationCodeGrantType)
             {
-                // 初期値の許容レベルは最低レベルに設定
-                OAuth2AndOIDCEnum.ClientMode permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                // この要求で、クライアントが何を証明したか（#224）。
+                //   以前は水準（permittedLevel）を持ち、登録種別との大小で判定していた。
+                //   いまは「経路 × 証明 → 通す登録種別」を ClientModePolicy の表で引く。
+                ClientModePolicy.Proof proof = ClientModePolicy.Proof.None;
 
                 #region 認証
 
@@ -1245,7 +1244,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         // client_id & (client_secret or x509)
                         authned = CmnEndpoints.ClientAuthentication(
-                            client_id, client_secret, ref x509, out permittedLevel);
+                            client_id, client_secret, ref x509, out proof);
                     }
                     else if (!string.IsNullOrEmpty(code_verifier)
                         && string.IsNullOrEmpty(client_secret))
@@ -1254,16 +1253,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                         authned = CmnEndpoints.VerifyPkce(
                             code, client_id, redirect_uri, code_verifier, out bool usedS256);
 
-                        if (authned && usedS256)
-                        {
-                            // **S256 の PKCE を使ったので、fapi1 の経路まで認める（#220）。**
-                            //   permittedLevel は「この経路が、どこまでの登録種別を通すか」であって、
-                            //   **クライアントが何であるかではない。**
-                            //   これを外すと、fapi1 で登録されたクライアントが PKCE で通らなくなる
-                            //   （CheckClientMode は clientMode <= permittedLevel で判定するため）。
-                            //   **トークンのクレームには使わない**（CheckClientMode の clientMode を使う）。
-                            permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                        }
+                        // S256 か plain か（#224）。通す登録種別は ClientModePolicy の表で決まる。
+                        //   以前は S256 のとき水準を fapi1 に格上げしていた。表では
+                        //   「認可コード × PKCE S256 → normal / fapi1 / device」の 1 行にあたる。
+                        proof = usedS256
+                            ? ClientModePolicy.Proof.PkceS256 : ClientModePolicy.Proof.PkcePlain;
                     }
                     else if (!string.IsNullOrEmpty(code_verifier)
                         && !string.IsNullOrEmpty(client_secret))
@@ -1276,19 +1270,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **認証は client_secret、PKCE はそれとは別に検証する。両方が通ること。**
                         //   以前はこの分岐が空実装で、必ず invalid_client になっていた。
                         authned = CmnEndpoints.ClientAuthentication(
-                            client_id, client_secret, ref x509, out permittedLevel);
+                            client_id, client_secret, ref x509, out ClientModePolicy.Proof _);
 
                         if (authned)
                         {
                             authned = CmnEndpoints.VerifyPkce(
                                 code, client_id, redirect_uri, code_verifier, out bool _);
                         }
+
+                        proof = ClientModePolicy.Proof.ClientSecretAndPkce;
                     }
                     else if (!string.IsNullOrEmpty(assertion))
                     {
                         // assertion
                         authned = CmnEndpoints.ClientAuthentication(
-                            assertion, out client_id, ref x509, out permittedLevel);
+                            assertion, out client_id, ref x509, out proof);
                     }
                 }
 
@@ -1301,7 +1297,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, permittedLevel,
+                    if (CmnEndpoints.CheckClientMode(client_id,
+                        ClientModePolicy.Flow.AuthorizationCode, proof,
                         out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
                     {
                         // 継続可
@@ -1327,7 +1324,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     // access_token
                     // **クレームは、登録された種別（clientMode）で書く**（#220）。
-                    //   permittedLevel は「経路が認める上限」なので、トークンの名乗りには使わない。
+                    //   経路や証明（ClientModePolicy の表。#224）は、トークンの名乗りには使わない。
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
@@ -1412,11 +1409,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region 認証
 
                 bool authned = false;
+                ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
                     // client_id & (client_secret or x509)
                     authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509,　out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                        ref x509, out proof);
                 }
 
                 #endregion
@@ -1426,7 +1424,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                    if (CmnEndpoints.CheckClientMode(client_id,
+                        ClientModePolicy.Flow.RefreshToken, proof,
                         out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
@@ -1534,11 +1533,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region 認証
 
                 bool authned = false;
+                ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
                 {
                     // client_id & client_secret
-                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                    authned = CmnEndpoints.ClientAuthentication(
+                    	client_id, client_secret, ref x509, out proof);
                 }
 
                 #endregion
@@ -1548,7 +1548,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                    if (CmnEndpoints.CheckClientMode(client_id,
+                        ClientModePolicy.Flow.ResourceOwnerPassword, proof,
                         out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
@@ -1665,11 +1666,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region 認証
 
                 bool authned = false;
+                ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
                 {
                     // client_id & client_secret
                     authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                        ref x509, out proof);
                 }
 
                 #endregion
@@ -1679,7 +1681,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.normal,
+                    if (CmnEndpoints.CheckClientMode(client_id,
+                        ClientModePolicy.Flow.ClientCredentials, proof,
                         out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
@@ -1781,7 +1784,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                         if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                         {
                             // このフローが認められるか？
-                            if (CmnEndpoints.CheckClientMode(iss, OAuth2AndOIDCEnum.ClientMode.normal,
+                            if (CmnEndpoints.CheckClientMode(iss,
+                                ClientModePolicy.Flow.JwtBearer, ClientModePolicy.Proof.None,
                                 out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                             {
                                 // JwtTokenを作る
@@ -2028,11 +2032,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #region 認証
 
                 bool authned = false;
+                ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.CibaGrantType)
                 {
                     // client_id & (client_secret or x509)
                     authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                        ref x509, out proof);
                 }
 
                 #endregion
@@ -2042,7 +2047,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？（fapi2に設定
-                    if (CmnEndpoints.CheckClientMode(client_id, OAuth2AndOIDCEnum.ClientMode.fapi_ciba,
+                    if (CmnEndpoints.CheckClientMode(client_id,
+                        ClientModePolicy.Flow.Ciba, proof,
                         out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
                     {
                         // 継続可
@@ -2561,12 +2567,16 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
-        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <param name="proof">何を証明したか（client_secret か mTLS か）</param>
         /// <returns>bool</returns>
+        /// <remarks>
+        /// **以前は水準（permittedLevel）を返していた**（client_secret なら normal、x509 なら fapi2）。
+        /// いまは何を証明したかを返し、通す登録種別は ClientModePolicy の表で決める（#224）。
+        /// </remarks>
         public static bool ClientAuthentication(string client_id, string client_secret,
-            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+            ref X509Certificate2 x509, out ClientModePolicy.Proof proof)
         {
-            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+            proof = ClientModePolicy.Proof.None;
 
             // client_id & client_secret
             if (!string.IsNullOrEmpty(client_id))
@@ -2577,7 +2587,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // クライアント認証（client_secret）を行なう。
                     if (client_secret == Helper.GetInstance().GetClientSecret(client_id))
                     {
-                        //permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+                        proof = ClientModePolicy.Proof.ClientSecret;
                         x509 = null; // client_secretがあった場合、x509を無効化
                         return true;
                     }
@@ -2588,13 +2598,35 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // クライアント認証（X509Certificate2）を行なう。
                     if (x509.Subject == Helper.GetInstance().GetTlsClientAuthSubjectDn(client_id))
                     {
-                        permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi2;
+                        proof = ClientModePolicy.Proof.Mtls;
                         return true;
                     }
                 }
             }
 
             return false;
+        }
+
+        /// <summary>ClientAuthentication（互換の入口）</summary>
+        /// <param name="client_id">string</param>
+        /// <param name="client_secret">string</param>
+        /// <param name="x509">X509Certificate2</param>
+        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <returns>bool</returns>
+        /// <remarks>
+        /// **水準を返す以前の形を、呼び出し元のために残してある**（両アプリの revoke / introspect）。
+        /// そこでは水準を使っていない。**新しく使うときは、証明を返す版を使うこと**（#224）。
+        /// </remarks>
+        public static bool ClientAuthentication(string client_id, string client_secret,
+            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+        {
+            bool authned = CmnEndpoints.ClientAuthentication(
+                client_id, client_secret, ref x509, out ClientModePolicy.Proof proof);
+
+            permittedLevel = (proof == ClientModePolicy.Proof.Mtls)
+                ? OAuth2AndOIDCEnum.ClientMode.fapi2 : OAuth2AndOIDCEnum.ClientMode.normal;
+
+            return authned;
         }
 
         #endregion
@@ -2614,15 +2646,14 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// トークンが出てしまう。**
         ///
         /// ※ 他のグラントは CheckClientMode で登録種別を見ているが、このグラントには判定が無かった。
-        ///    登録種別の判定の作り直し（permittedLevel をやめる）は別途行うので、
-        ///    ここでは許す種別を明示する形にしておく。
+        ///    段階 1 で ClientModePolicy の表に取り込んだ（#224）。
         /// </remarks>
         public static bool IsDeviceAuthZAllowed(string client_id)
         {
-            string clientMode = Helper.GetInstance().GetClientMode(client_id);
-
-            return clientMode == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit()
-                || clientMode == OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit();
+            // 表の「Device AuthZ → normal / device」の行で判定する（#224 の段階 1）。
+            return ClientModePolicy.IsAllowed(
+                ClientModePolicy.Parse(Helper.GetInstance().GetClientMode(client_id)),
+                ClientModePolicy.Flow.DeviceAuthZ, ClientModePolicy.Proof.Any);
         }
 
         /// <summary>Device AuthZのクライアント認証</summary>
@@ -2655,7 +2686,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 return CmnEndpoints.ClientAuthentication(
                     client_id, client_secret, ref x509,
-                    out OAuth2AndOIDCEnum.ClientMode permittedLevel);
+                    out ClientModePolicy.Proof _);
             }
 
             // パブリック クライアントは、client_idの確認のみ
@@ -2670,10 +2701,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="client_id">string</param>
         /// <param name="client_secret">string</param>
         /// <param name="x509">X509Certificate2</param>
-        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <param name="proof">何を証明したか（成功なら private_key_jwt）</param>
         /// <returns>bool</returns>
         public static bool ClientAuthentication(string assertion, out string client_id,
-            ref X509Certificate2 x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel)
+            ref X509Certificate2 x509, out ClientModePolicy.Proof proof)
         {
             if (!string.IsNullOrEmpty(assertion))
             {
@@ -2697,7 +2728,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         // aud 検証
                         if (aud == Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint)
                         {
-                            permittedLevel = OAuth2AndOIDCEnum.ClientMode.fapi1;
+                            proof = ClientModePolicy.Proof.PrivateKeyJwt;
                             client_id = iss;
                             return true;
                         }
@@ -2705,7 +2736,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
 
-            permittedLevel = OAuth2AndOIDCEnum.ClientMode.normal;
+            proof = ClientModePolicy.Proof.None;
             client_id = "";
             return false;
         }
@@ -2722,133 +2753,69 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>CheckClientMode</summary>
         /// <param name="client_id">ClientId</param>
-        /// <param name="permittedLevel">当該フローのClientModeの許容レベル</param>
+        /// <param name="flow">経路</param>
+        /// <param name="proof">その要求で、クライアントが何を証明したか</param>
         /// <param name="clientMode">クライアントに登録されたClientMode</param>
         /// <param name="jwkString">jwkString</param>
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>継続の可否</returns>
         /// <remarks>
-        /// **permittedLevel と clientMode は別のもの（#220）。**
-        /// - permittedLevel : **その経路が、どこまでを認めるか**（クライアント認証の強度で決まる）
-        /// - clientMode     : **そのクライアントが、何として登録されているか**
+        /// **「経路 × 証明 → 通す登録種別」を ClientModePolicy の表で引く（#224 の段階 1）。**
+        /// 以前は水準（permittedLevel）との大小で判定していた。表は、その判定をそのまま展開したもので、
+        /// **判定の結果は 1 つも変えていない**（全組み合わせを突き合わせて確認した）。
         ///
-        /// 継続の可否は「clientMode &lt;= permittedLevel」で判定する（ここは従来どおり）。
-        /// **トークンに載せるクレームは clientMode を使う**（permittedLevel ではない）。
-        /// permittedLevel を使うと、normal のクライアントが PKCE の S256 を使っただけで
-        /// fapi1 と名乗るトークンになってしまうため。
+        /// **トークンに載せるクレームは clientMode を使う**（#220）。
         /// </remarks>
         private static bool CheckClientMode(
             string client_id,
-            OAuth2AndOIDCEnum.ClientMode permittedLevel,
+            ClientModePolicy.Flow flow,
+            ClientModePolicy.Proof proof,
             out OAuth2AndOIDCEnum.ClientMode clientMode,
             out string jwkString,
             out Dictionary<string, string> err)
         {
-            // ret
-            bool retval = false;
-
             // out
             jwkString = "";
             err = new Dictionary<string, string>();
             clientMode = OAuth2AndOIDCEnum.ClientMode.normal;
 
-            // 要求値を最大値に設定
-            OAuth2AndOIDCEnum.ClientMode clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
-
-            // clientMode <= permittedLevel であればOK。
-            string clientModeString = "";
             if (string.IsNullOrEmpty(client_id))
             {
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                 err.Add(OAuth2AndOIDCConst.error_description, string.Format("client_id is not set."));
                 return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
             }
-            else
+
+            // 登録された種別（既知のどれにも当たらない値は fapi2 として扱う。以前どおり）
+            string clientModeString = Helper.GetInstance().GetClientMode(client_id);
+            clientMode = ClientModePolicy.Parse(clientModeString);
+
+            if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
             {
-                clientModeString = Helper.GetInstance().GetClientMode(client_id);
-
-                if (clientModeString == OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit())
-                {
-                    clientModeEnum = (int)OAuth2AndOIDCEnum.ClientMode.normal;
-                }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit())
-                {
-                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi1;
-                }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
-                {
-                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi2;
-                    jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                        Helper.GetInstance().GetJwkRsaPublickey(client_id)), CustomEncode.us_ascii);
-                }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit())
-                {
-                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.device;
-                }
-                else if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit())
-                {
-                    clientModeEnum = OAuth2AndOIDCEnum.ClientMode.fapi_ciba;
-                }
-
-                // 登録された種別を、呼び出し元へ返す（トークンのクレームに使う。#220）
-                clientMode = clientModeEnum;
+                // fapi2 の登録は、JWK（RSA 公開鍵）も読む
+                jwkString = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
+                    Helper.GetInstance().GetJwkRsaPublickey(client_id)), CustomEncode.us_ascii);
             }
 
-            if ((int)permittedLevel <= (int)OAuth2AndOIDCEnum.ClientMode.fapi2)
+            if (ClientModePolicy.IsAllowed(clientMode, flow, proof))
             {
-                // permittedLevelがfapi2以下の場合
-                if ((int)clientModeEnum <= (int)permittedLevel)
-                {
-                    // permittedLevelがclientMode以上
-                    retval = true;
-                }
-                else
-                {
-                    // permittedLevelがclientMode未満
-                    if (clientModeEnum == OAuth2AndOIDCEnum.ClientMode.device
-                        && permittedLevel == OAuth2AndOIDCEnum.ClientMode.fapi1)
-                    {
-                        // LIRでPKCEを使用した場合、
-                        // ・clientModeEnum = device
-                        // ・permittedLevel = fapi1
-                        // ...となるので例外措置を施す。
-                        retval = true;
-                    }
-                    else
-                    {
-                        // 上記以外の場合、
-                        retval = false;
-                    }
-                }
+                return true;
+            }
+
+            // エラーを追加（エラー コードは以前どおり。説明文は水準の言い回しをやめた。#224）
+            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
+
+            if (string.IsNullOrEmpty(clientModeString))
+            {
+                err.Add(OAuth2AndOIDCConst.error_description, string.Format("This client is not set the mode."));
             }
             else
             {
-                // permittedLevelがfapi2より大きい場合
-                // 大小関係は意味を持たず、一致している必要がある。
-                if ((int)clientModeEnum == (int)permittedLevel)
-                    retval = true;
-                else
-                    retval = false;
+                err.Add(OAuth2AndOIDCConst.error_description, string.Format(
+                    "This client ({0}) is not allowed to use this flow.", clientModeString));
             }
 
-            if (!retval)
-            {
-                // エラーを追加
-                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
-
-                if (string.IsNullOrEmpty(clientModeString))
-                {
-                    err.Add(OAuth2AndOIDCConst.error_description, string.Format("This client is not set the mode."));
-                }
-                else
-                {
-                    err.Add(OAuth2AndOIDCConst.error_description, string.Format(
-                        "This client is set the {0} mode, but this flow permitted up to {1} mode.",
-                        clientModeString, permittedLevel.ToStringByEmit()));
-                }
-            }
-
-            return retval;
+            return false;
         }
 
         #endregion

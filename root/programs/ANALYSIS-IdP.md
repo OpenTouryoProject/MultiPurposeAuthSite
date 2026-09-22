@@ -859,8 +859,8 @@ Memory Provider の `ConcurrentDictionary` も未使用の code を回収しな�
 - ローテーション（使用時に削除）は行っているが、
   **ローテーション済みトークンを再提示されても検知・失効（family revocation）をしない。**
   OAuth 2.0 Security BCP §4.14 が求める挙動。
-- `permittedLevel` を `ClientMode.normal` にハードコードしているため、
-  **FAPI クライアントがリフレッシュすると保証レベルが落ちる。**
+- `refresh_token` の経路は、**証明によらず `normal` の登録にしか許されていない**
+  （`ClientModePolicy` の表。#224）。**FAPI クライアントは、発行された `refresh_token` を使えない**（`FA-1.2`。C-7）。
 
 ### C-6. `state` を URL エンコードせずに連結している **[Core]**
 
@@ -941,15 +941,15 @@ PKCE 無しの認可コード フローがそのまま通る。
 
 | | 意味 | 決まり方 | 使い道 |
 |---|---|---|---|
-| `permittedLevel` | **その経路が、どこまでの登録種別を通すか** | クライアント認証の強度（`client_secret` / x509 / assertion / PKCE の `S256`） | 継続の可否の判定 |
+| `permittedLevel`（#224 の段階 1 で表に置き換えた。下記） | **その経路が、どこまでの登録種別を通すか** | クライアント認証の強度（`client_secret` / x509 / assertion / PKCE の `S256`） | 継続の可否の判定 |
 | `clientMode` | **そのクライアントが、何として登録されているか** | クライアント登録 | **トークンのクレーム** |
 
 - `CheckClientMode` に `out clientMode` を足し、**登録された種別を呼び出し元へ返す**
 - `ProtectFromPayload` へ渡す値を、`permittedLevel` から **`clientMode` に変えた**（2 箇所）。
   これで **`normal` 登録のクライアントは、`S256` を使っても `fapi` を名乗らない**
 - **格上げ（`S256` → `fapi1`）そのものは残す。** 外すと `fapi1` で登録された
-  クライアントが PKCE で通らなくなる（`CheckClientMode` は `clientMode <= permittedLevel`）。
-  **格上げは「経路が認める上限」の話**なので、そこに置いてあるのは正しい
+  クライアントが PKCE で通らなくなる。**格上げは「経路が認める上限」の話**なので、
+  そこに置いてあるのは正しい（#224 の段階 1 で、表の「認可コード × PKCE の `S256`」の行になった）
 - **`device` 登録のクライアント**（LIR で PKCE を使う経路）は、これまで `fapi: fapi1` を
   名乗っていたが、**`device` クレームに変わる。** 登録どおりの名乗りになる
 - E2E テスト : **`RT-220.4`**（`normal` 登録のクライアントが `S256` で取ったトークンに
@@ -959,7 +959,7 @@ PKCE 無しの認可コード フローがそのまま通る。
 > もともと `permittedLevel` ではなく**固定値**（`normal` / `device` / `fapi_ciba`）を
 > 渡しているので、影響を受けない。
 
-**判定側（`CheckClientMode`）の設計は、まだ分離していない（#222）。**
+**判定側（`CheckClientMode`）の設計（#222 で現状を固定し、#224 で表に置き換えた）。**
 
 E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は次のとおり。**
 
@@ -977,7 +977,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 | 登録 | 経路 | 結果 |
 |---|---|---|
-| fapi1 | 認可コード ＋ `client_secret` ＋ PKCE `S256`（併用） | 拒否（`unsupported_grant_type`）。`client_secret` で認証した時点で水準が normal に決まるため |
+| fapi1 | 認可コード ＋ `client_secret` ＋ PKCE `S256`（併用） | 拒否（`unsupported_grant_type`）。併用の経路は、PKCE を検証だけに使い、`client_secret` の認証として扱うため |
 | fapi1 | Hybrid（`code id_token`） | 拒否。**ただし `error=access_denied` のリダイレクトで返る**（`/token` 側は `unsupported_grant_type`。経路でエラー コードがそろっていない） |
 | fapi1 / fapi2 / fapi_ciba | Device AuthZ グラント | **修正前は client_secret だけで発行していた**（C-18）。修正後は `unauthorized_client` |
 | normal | CIBA | 拒否（`unsupported_grant_type`）。**ただしトークンの段階で。** 開始（`/ciba_authz`）は登録種別を見ないので、**利用者にプッシュ通知が届き、承認させた後で**拒否になる（`FA-5.1`）。測るために、TestClient4 を写して登録種別だけ normal にした `TestClient4_2` を、`test.ps1 -Launch` が環境変数で差し込む（公開鍵ごと写すので署名検証を通る。設定ファイルは変えない） |
@@ -997,7 +997,21 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 **あるべき形**は 1 次元の水準ではなく、
 **「この要求が何を証明したか」の集合**と**「このクライアントが何を要求するか」の集合**の照合。
 ただし **`ClientMode` の列挙は Open棟梁側**（別リポジトリ）に在り、認証・認可の中心でもあるため、
-**#222 では着手しない**（別 Issue）。上の E2E は、そのときに**壊していないことを確かめる土台**である。
+**#222 では着手しない**（別 Issue : #224）。上の E2E は、そのときに**壊していないことを確かめる土台**である。
+
+**#224 の段階 1 : 大小比較を表に置き換えた（振る舞いは変えていない）。**
+
+- `CommonLibrary/TokenProviders/ClientModePolicy.cs` を新設。
+  **「経路 × その要求で何を証明したか」→ 通す登録種別**の表で引く。表に無い組み合わせは拒否
+- 上の問題 1・2 は、表の形そのもので解消した（`device` / `fapi_ciba` は「以下」ではなく、行ごとに列挙する。
+  LIR 用の例外は「認可コード × PKCE の `S256`」の行に `device` を含めるだけになった）。
+  **問題 3（`refresh_token` など）は、表の行を書き換える段階 2 で扱う**
+- **以前の判定と全マスで一致することを確かめた**（経路 9 × 証明 7 × 登録の文字列 9。
+  未知の文字列・空も含む。以前のコードで生じない組み合わせ（認可コード × 証明なし）を除く）。
+  **E2E で守られていない行がある** : 認可コードの **private_key_jwt** と **mTLS**（mTLS は E2E で張れない）
+- **既知のどれにも当たらない登録値（空・書き間違い）は、`fapi2` として扱う**（以前のまま。段階 2 の候補）
+- 変わったのは、拒否したときの `error_description` の文面だけ
+  （`This client (<種別>) is not allowed to use this flow.`。エラー コードは `unsupported_grant_type` のまま）
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
 
@@ -1227,8 +1241,8 @@ x509 を渡していなかったので、`fapi2` でも**証明書に束縛さ�
 - E2E テスト : **`FA-4.1`**（fapi1 / fapi2 / fapi_ciba は開始で拒否、normal / device は従来どおり）。
   **トークン発行側の判定は、開始側で弾かれるため到達できず、単独では測っていない**
 
-> **登録種別の判定の作り直し**（`permittedLevel` をやめる。#224 の段階 1）までのつなぎとして、
-> 許す種別を明示する形にしてある。作り直すときは、この判定も表に取り込むこと。
+> **#224 の段階 1 で、この判定も表（`ClientModePolicy`）の「Device AuthZ」の行に取り込んだ。**
+> 許す種別（`normal` / `device`）は変えていない。
 
 ---
 
@@ -1320,7 +1334,7 @@ x509 を渡していなかったので、`fapi2` でも**証明書に束縛さ�
 
 | 項目 |
 |---|
-| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）の再設計は残っている**（#222 で現状を E2E に固定した） |
+| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換えた**（#224 の段階 1。振る舞いは不変）。**表の行の見直しは残っている**（#224 の段階 2） |
 | C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`） |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |
