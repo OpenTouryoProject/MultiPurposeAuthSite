@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#224 の段階 1 : permittedLevel の大小比較を、表に置き換える）
+//*  2026/09/22  玄人 幸道         既知でない登録値を fapi2 とみなさず、不正として扱う。MayUse を追加（#224 の段階 2）
 //**********************************************************************************
 
 using System.Linq;
@@ -53,6 +54,10 @@ namespace MultiPurposeAuthSite.TokenProviders
     ///
     /// **段階 1 では、判定の結果を 1 つも変えていない。** 以前の判定を、そのまま表に展開したもの。
     /// 振る舞いを変えるときは、この表の行を書き換える（#224 の段階 2）。
+    ///
+    /// **表は、トークンを出す時点（証明が分かった後）の判定に使う。** それより前の段階
+    /// （認可エンドポイント、/ciba_authz、refresh_token を渡すかどうか）では、
+    /// 証明がまだ分からないので MayUse（その経路を、何かの証明で使えるか）で見る。
     /// </remarks>
     public static class ClientModePolicy
     {
@@ -185,25 +190,57 @@ namespace MultiPurposeAuthSite.TokenProviders
             return rule != null && rule.Allowed.Contains(clientMode);
         }
 
+        /// <summary>この登録種別が、この経路を（何かの証明で）使えるか</summary>
+        /// <param name="clientMode">登録種別</param>
+        /// <param name="flow">経路</param>
+        /// <returns>どれかの行が通すなら true</returns>
+        /// <remarks>
+        /// **証明が分かる前に、見込みの無い要求を断るために使う**（#224 の段階 2）。
+        /// ・認可エンドポイント / /ciba_authz : 利用者に操作させた後で拒否しない
+        /// ・refresh_token : 使えない資格情報を渡さない
+        /// 通すかどうかの最終的な判定は、トークンを出す時点で IsAllowed が行う。
+        /// </remarks>
+        public static bool MayUse(OAuth2AndOIDCEnum.ClientMode clientMode, Flow flow)
+        {
+            return ClientModePolicy.Rules.Any(
+                x => x.Flow == flow && x.Allowed.Contains(clientMode));
+        }
+
         /// <summary>登録種別の文字列（oauth2_oidc_mode）を解釈する</summary>
         /// <param name="clientModeString">登録の値</param>
-        /// <returns>登録種別</returns>
+        /// <param name="clientMode">登録種別（解釈できなければ normal。使わないこと）</param>
+        /// <returns>既知の値なら true</returns>
         /// <remarks>
-        /// **既知のどれにも当たらない値（空・書き間違い）は、fapi2 として扱う。**
-        /// 以前の判定がそうだったため（初期値が fapi2 のまま残っていた）。段階 1 では変えない。
+        /// **既知のどれにも当たらない値（空・書き間違い）は、不正な登録として扱う**（#224 の段階 2）。
+        /// 以前は fapi2 とみなしていた（初期値が fapi2 のまま残っていた）。
+        /// 「一番厳しい種別」に倒す作りは、種別が増えると意味が変わるため、やめた。
+        ///
+        /// なお、**oauth2_oidc_mode を書いていない登録は normal**（Helper.GetClientMode の既定値）で、ここには来ない。
         /// </remarks>
-        public static OAuth2AndOIDCEnum.ClientMode Parse(string clientModeString)
+        public static bool TryParse(string clientModeString, out OAuth2AndOIDCEnum.ClientMode clientMode)
         {
             foreach (OAuth2AndOIDCEnum.ClientMode mode in
                 new OAuth2AndOIDCEnum.ClientMode[] { Normal, Fapi1, Fapi2, Device, FapiCiba })
             {
                 if (clientModeString == mode.ToStringByEmit())
                 {
-                    return mode;
+                    clientMode = mode;
+                    return true;
                 }
             }
 
-            return Fapi2;
+            clientMode = Normal;
+            return false;
+        }
+
+        /// <summary>登録された種別で、この経路を（何かの証明で）使えるか</summary>
+        /// <param name="clientModeString">登録の値（oauth2_oidc_mode）</param>
+        /// <param name="flow">経路</param>
+        /// <returns>使えるなら true。既知でない登録値なら false</returns>
+        public static bool MayUse(string clientModeString, Flow flow)
+        {
+            return ClientModePolicy.TryParse(clientModeString, out OAuth2AndOIDCEnum.ClientMode clientMode)
+                && ClientModePolicy.MayUse(clientMode, flow);
         }
 
         #endregion

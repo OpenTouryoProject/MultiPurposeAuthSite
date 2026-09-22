@@ -66,6 +66,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | client_name | 何か | 引き方 |
 |---|---|---|
 | `TestClient4_2` | `TestClient4`（fapi_ciba）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
+| `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | `Flows.InjectedRegistration` |
 
 - net10.0 は `appSettings__OAuth2ClientsInformation__<client_id>__<項目>` で 1 件足し、
   net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
@@ -255,15 +256,15 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／使えない `refresh_token`／`client_secret` と PKCE の併用も、Hybrid も通らない） |
+| `Tests/Fapi/ClientModeTests.cs` | `FA-1` | `fapi1`（PKCE の経路だけが通る／`refresh_token` を発行しない／`client_secret` と PKCE の併用も、Hybrid も通らない） |
 | 〃 | `FA-2` | `fapi2`（`client_secret` も PKCE も通らない。x509 が要る） |
-| 〃 | `FA-3` | `device`（PKCE で通る。`CheckClientMode` の例外措置） |
+| 〃 | `FA-3` | `device`（PKCE で通る。表の「PKCE の S256」の行） |
 | 〃 | `FA-4` | Device AuthZ グラントは `normal` / `device` の登録にだけ許す（#224） |
-| `Tests/Fapi/CibaClientModeTests.cs` | `FA-5` | CIBA を normal 登録で使うと、**利用者の承認の後で**トークンが拒否される（`TestClient4_2`） |
+| `Tests/Fapi/CibaClientModeTests.cs` | `FA-5` | CIBA を `fapi_ciba` 以外の登録（`TestClient4_2`）や、既知でない登録値（`TestClient4_3`）で使うと、**開始（`/ciba_authz`）で**断る |
 
-**今の振る舞いを記録するためのテスト。** 望ましくないと考える点（`fapi1` が使えない
-`refresh_token` を発行する等）は**「観測」として書き、合否には影響させない**。
-`permittedLevel` を作り直すとき（#222 の 3）に、**壊していないことを確かめる土台**になる。
+判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
+**登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
+**E2E で守られていない行がある** : 認可コードの private_key_jwt と mTLS（#226）。
 
 **`Tests/OAuth21/` は、OAuth 2.1 が許さない経路の抑止**（#222）。
 
@@ -365,7 +366,7 @@ cd root
 ## 制約
 
 - **FAPI2 のクライアントは、`client_secret` だけのトークン要求を受け付けない**
-  （`unsupported_grant_type`）。mTLS / private_key_jwt が要る。
+  （`unauthorized_client`。#224 の段階 2 までは `unsupported_grant_type`）。mTLS / private_key_jwt が要る。
   このため `redirect_uri` の照合は、`normal` モードのクライアントに
   自前の Request Object を渡して測っている。
 - net48 版の起動には **IIS Express が要る**（`%ProgramFiles%\IIS Express`）。

@@ -79,6 +79,8 @@
 //*  2026/09/18  玄人 幸道         トークンのクレームを、permittedLevel から clientMode に分離（#220）
 //*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
 //*  2026/09/22  玄人 幸道         登録種別の判定を、permittedLevel の大小比較から ClientModePolicy の表に置き換える（#224 の段階 1）
+//*  2026/09/22  玄人 幸道         登録種別で拒否するときは unauthorized_client。認可エンドポイントと /ciba_authz でも先に判定する。
+//*                                使えない refresh_token は発行しない。既知でない登録値は不正として拒否する（#224 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -528,6 +530,25 @@ namespace MultiPurposeAuthSite.TokenProviders
                 redirect_uri, client_id, response_type,
                 out valid_redirect_uri, ref err, ref errDescription))
             {
+                #region 登録種別（#224 の段階 2）
+
+                // **この response_type の経路を、登録種別で使えるか。**
+                //   以前は、利用者がログイン・同意した後（トークンを作る時点）で初めて拒否していた。
+                //   ここでは証明（client_secret / PKCE など）がまだ分からないので、
+                //   「何かの証明で使えるか」（ClientModePolicy.MayUse）で見る。最終の判定は従来どおりトークンの時点。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                //   RFC 6749 4.1.2.1 / 4.2.2.1 : このクライアントに許されていない要求は unauthorized_client。
+                if (!ClientModePolicy.MayUse(
+                    Helper.GetInstance().GetClientMode(client_id),
+                    CmnEndpoints.GetFlowOfResponseType(response_type)))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This client is not allowed to use this response_type.";
+                    return false;
+                }
+
+                #endregion
+
                 #region code_challenge（PKCE）
 
                 // **OAuth 2.1 は、クライアントの種別によらず PKCE を必須とする（#220）。**
@@ -607,6 +628,28 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region GetFlowOfResponseType
+
+        /// <summary>response_type から、ClientModePolicy の経路を引く（#224 の段階 2）</summary>
+        /// <param name="response_type">response_type（既知の値であることは確かめ済み）</param>
+        /// <returns>経路</returns>
+        /// <remarks>
+        /// code だけなら認可コード、code を含まなければ Implicit、code と他を含めば Hybrid。
+        /// </remarks>
+        private static ClientModePolicy.Flow GetFlowOfResponseType(string response_type)
+        {
+            string[] types = response_type.ToLower().Split(' ');
+
+            if (!types.Any(x => x == OAuth2AndOIDCConst.AuthorizationCodeResponseType))
+            {
+                return ClientModePolicy.Flow.Implicit;
+            }
+
+            return types.Length == 1 ? ClientModePolicy.Flow.AuthorizationCode : ClientModePolicy.Flow.Hybrid;
+        }
+
+        #endregion
+
         #region ValidateAuthZCibaReqParam
 
         /// <summary>ValidateCibaAuthZReqParam</summary>
@@ -665,6 +708,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // 登録されていないクライアント（CIBA Core 13 : invalid_client）。以前はコードが空だった（#196）。
                     err = OAuth2AndOIDCConst.invalid_client;
                     errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
+                    return false;
+                }
+
+                // **登録種別で CIBA を使えるか（#224 の段階 2）。**
+                //   以前はトークンの時点（GrantCiba）で初めて拒否していたため、
+                //   利用者にプッシュ通知が届き、承認させた後で失敗していた。
+                //   CIBA Core 13 : このクライアントに許されていない要求は unauthorized_client。
+                if (!ClientModePolicy.MayUse(
+                    Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.Ciba))
+                {
+                    err = OAuth2AndOIDCConst.unauthorized_client;
+                    errDescription = "This client is not allowed to use CIBA.";
                     return false;
                 }
             }
@@ -1339,8 +1394,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
 
                     // refresh_token
+                    // **登録種別で refresh_token の経路を使えないなら、発行しない**（#224 の段階 2）。
+                    //   以前は発行していたが、使うと必ず拒否された（受け取ったのに使えない資格情報）。
                     string refresh_token = "";
-                    if (Config.EnableRefreshToken)
+                    if (Config.EnableRefreshToken
+                        && ClientModePolicy.MayUse(clientMode, ClientModePolicy.Flow.RefreshToken))
                     {
                         refresh_token = RefreshTokenProvider.Create(tokenPayload);
                     }
@@ -1939,8 +1997,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     }
 
                     // refresh_token
+                    // **登録種別で refresh_token の経路を使えないなら、発行しない**（#224 の段階 2）。
+                    //   device の登録は refresh_token の経路を使えない（normal の登録は従来どおり発行する）。
                     string refresh_token = "";
-                    if (Config.EnableRefreshToken)
+                    if (Config.EnableRefreshToken
+                        && ClientModePolicy.MayUse(
+                            Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.RefreshToken))
                     {
                         refresh_token = RefreshTokenProvider.Create(tokenPayload);
                     }
@@ -2651,9 +2713,9 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool IsDeviceAuthZAllowed(string client_id)
         {
             // 表の「Device AuthZ → normal / device」の行で判定する（#224 の段階 1）。
-            return ClientModePolicy.IsAllowed(
-                ClientModePolicy.Parse(Helper.GetInstance().GetClientMode(client_id)),
-                ClientModePolicy.Flow.DeviceAuthZ, ClientModePolicy.Proof.Any);
+            //   この行は証明を問わないので、MayUse で足りる。既知でない登録値は拒否（段階 2）。
+            return ClientModePolicy.MayUse(
+                Helper.GetInstance().GetClientMode(client_id), ClientModePolicy.Flow.DeviceAuthZ);
         }
 
         /// <summary>Device AuthZのクライアント認証</summary>
@@ -2765,6 +2827,9 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **判定の結果は 1 つも変えていない**（全組み合わせを突き合わせて確認した）。
         ///
         /// **トークンに載せるクレームは clientMode を使う**（#220）。
+        ///
+        /// 段階 2 で、拒否のエラー コードを unauthorized_client に改め（以前は unsupported_grant_type）、
+        /// **既知でない登録値は fapi2 とみなさず、不正として拒否する**ようにした。
         /// </remarks>
         private static bool CheckClientMode(
             string client_id,
@@ -2786,9 +2851,29 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
             }
 
-            // 登録された種別（既知のどれにも当たらない値は fapi2 として扱う。以前どおり）
+            // 登録された種別
             string clientModeString = Helper.GetInstance().GetClientMode(client_id);
-            clientMode = ClientModePolicy.Parse(clientModeString);
+
+            // RFC 6749 5.2 : 認証済みのクライアントに許されていないグラントは unauthorized_client。
+            //   以前は unsupported_grant_type（サーバがそのグラントを扱わない、の意）を返していた（#224 の段階 2）。
+            if (!ClientModePolicy.TryParse(clientModeString, out clientMode))
+            {
+                // **既知のどれにも当たらない登録値（空・書き間違い）は、不正な登録として拒否する。**
+                //   以前は fapi2 とみなしていた（#224 の段階 2）。
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+
+                if (string.IsNullOrEmpty(clientModeString))
+                {
+                    err.Add(OAuth2AndOIDCConst.error_description, "This client is not set the mode.");
+                }
+                else
+                {
+                    err.Add(OAuth2AndOIDCConst.error_description, string.Format(
+                        "The mode of this client ({0}) is invalid.", clientModeString));
+                }
+
+                return false;
+            }
 
             if (clientModeString == OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit())
             {
@@ -2802,18 +2887,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return true;
             }
 
-            // エラーを追加（エラー コードは以前どおり。説明文は水準の言い回しをやめた。#224）
-            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unsupported_grant_type);
-
-            if (string.IsNullOrEmpty(clientModeString))
-            {
-                err.Add(OAuth2AndOIDCConst.error_description, string.Format("This client is not set the mode."));
-            }
-            else
-            {
-                err.Add(OAuth2AndOIDCConst.error_description, string.Format(
-                    "This client ({0}) is not allowed to use this flow.", clientModeString));
-            }
+            // エラーを追加（説明文は水準の言い回しをやめた。#224）
+            err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+            err.Add(OAuth2AndOIDCConst.error_description, string.Format(
+                "This client ({0}) is not allowed to use this flow.", clientModeString));
 
             return false;
         }

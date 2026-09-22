@@ -2314,7 +2314,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - request_uri 経路で認可コードが発行される
 - トークンを発行しない
-- unsupported_grant_type で拒否される
+- unauthorized_client で拒否される
 
 ## RT-197.3 自前で署名した Request Object でも、認可コードが発行される
 
@@ -2716,7 +2716,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - 対照（normal）は通る
 - client_secret だけでは通らない
-- エラーは unsupported_grant_type
+- エラーは unauthorized_client
 - PKCE(S256) なら通る
 - ROPC は通らない
 - client_credentials は通らない
@@ -2725,35 +2725,33 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **ROPC / client_credentials は、サーバ全体では有効**（-Launch は Implicit / ROPC を有効にして起動する。#220）。**塞いでいるのは、このクライアントの登録**であることが、(1) の対照で分かる。
 
-## FA-1.2 fapi1 のクライアントは refresh_token を受け取るが、それを使うと拒否される
+## FA-1.2 fapi1 のクライアントには、refresh_token を発行しない
 
 | | |
 |---|---|
-| 観点 | **受け取ったのに必ず失敗する資格情報を渡している。**表の refresh_token の行は、証明によらず normal だけを通すため、fapi1 の登録は通らない。**発行しない、あるいは経路を通す、のどちらかが筋。**本テストは**現状を記録する**もので、望ましさは判定しない（#222）。 |
-| 根拠 | RFC 6749 §6 / #222 |
-| テスト | `FA0102_fapi1は使えないrefresh_tokenを発行する` |
+| 観点 | **使えない資格情報は渡さない。**表の refresh_token の行は、証明によらず normal だけを通すため、fapi1 の登録は使えない。以前は発行していて、使うと必ず拒否された（#222 で記録）。#224 の段階 2 で、**登録種別で使えない経路の refresh_token は発行しない**ようにした。 |
+| 根拠 | RFC 6749 §5.1（refresh_token は任意）/ #224 |
+| テスト | `FA0102_fapi1にはrefresh_tokenを発行しない` |
 
 **手順**
 
 1. 対照 : normal 登録では、refresh_token で更新できる
 1. fapi1 で PKCE(S256) のトークンを取る
-1. その refresh_token で更新を試みる
 
 **検証（合否を判定する）**
 
 - 対照（normal）は更新できる
-- refresh_token が発行される
-- 更新は拒否される
+- refresh_token は発行されない
 
 **補足**
 
-- **望ましくない。** 使えない資格情報を渡している。直すなら「fapi1 では refresh_token を発行しない」か「refresh_token の経路を登録種別で判定し直す」のどちらか（#222 の 3）。
+- **(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。発行しないのは、このクライアントの登録種別による。
 
 ## FA-1.3 fapi1 のクライアントが client_secret と PKCE(S256) を両方送ると、拒否される
 
 | | |
 |---|---|
-| 観点 | **表の「認可コード × client_secret と PKCE の併用」の行は、normal だけを通す。**fapi1 を通すのは、client_secret を送らない「PKCE の S256」の行だけ（併用の経路では PKCE は検証だけ行い、判定には使わない。#220）。本テストは**今の振る舞いを記録する**（#224 の段階 0）。 |
+| 観点 | **表の「認可コード × client_secret と PKCE の併用」の行は、normal だけを通す。**fapi1 を通すのは、client_secret を送らない「PKCE の S256」の行だけ（併用の経路では PKCE は検証だけ行い、判定には使わない。#220）。FAPI 1.0 Advanced は client_secret を認めていないので、拒否は設計どおり（#224）。 |
 | 根拠 | FAPI 1.0 Advanced §5.2.2 / RFC 7636 / #224 |
 | テスト | `FA0103_fapi1はclient_secretとPKCEの併用を通さない` |
 
@@ -2764,18 +2762,18 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - トークンを返さない
-- エラーは unsupported_grant_type
+- エラーは unauthorized_client
 
 **補足**
 
-- **望ましいかどうかは、まだ決めていない**（#224 の段階 2）。FAPI 1.0 Advanced は client_secret によるクライアント認証を認めていない（private_key_jwt か mTLS）ので、**拒否のままが正しい可能性がある。**一方、同じクライアントが client_secret を送らなければ通る（FA-1.1）。
+- **設計どおり**（#224 の段階 2 で、拒否のままとすることにした）。FAPI 1.0 Advanced は client_secret によるクライアント認証を認めていない（private_key_jwt か mTLS）。同じクライアントが client_secret を送らなければ通る（FA-1.1）のは、PKCE の S256 の行による。
 
-## FA-1.4 fapi1 のクライアントは、Hybrid フロー（code id_token）で code も id_token も受け取らない
+## FA-1.4 fapi1 のクライアントは、Hybrid フロー（code id_token）で code も id_token も受け取らず、unauthorized_client が RP へ返る
 
 | | |
 |---|---|
-| 観点 | **表の Hybrid の行は normal だけを通す**（認可エンドポイントで CheckClientMode）。fapi1 の登録は通らない。本テストは**今の振る舞いを記録する**（#224 の段階 0）。 |
-| 根拠 | OIDC Core §3.3 / FAPI 1.0 Advanced / #224 |
+| 観点 | **表の Hybrid の行は normal だけを通す。**以前はトークンを作る時点で拒否し、error=access_denied を返していた（#224 の段階 0 で記録）。段階 2 で、**要求を検証する時点**（redirect_uri を確かめた直後）で判定し、unauthorized_client を RP へリダイレクトで返すようにした。 |
+| 根拠 | RFC 6749 §4.2.2.1 / OIDC Core §3.3 / FAPI 1.0 Advanced / #224 |
 | テスト | `FA0104_fapi1はHybridフローを通さない` |
 
 **手順**
@@ -2788,11 +2786,8 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 対照（normal）は code を受け取る
 - code を受け取らない
 - id_token を受け取らない
-
-**観測（判定しない）**
-
-- 返り方
-  - 拒否の返し方（RP へのリダイレクトか、エラー画面か）は記録するだけで、判定しない。
+- RP へリダイレクトで返す
+- エラーは unauthorized_client
 
 ## FA-2.1 oauth2_oidc_mode=fapi2 のクライアントは、client_secret でも PKCE でも通らない
 
@@ -2811,7 +2806,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - client_secret では通らない
 - PKCE(S256) でも通らない
-- エラーは unsupported_grant_type
+- エラーは unauthorized_client
 
 **補足**
 
@@ -2832,11 +2827,12 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - トークンが返る
+- refresh_token は発行されない
 
 **補足**
 
 - **表のこの行から device を外すと、ここは通らない。**表を書き換えるときは、この経路を壊さないこと（#224）。
-- **refresh_token は使えない。** 更新の経路は client_secret による認証を求めるので、client_secret を持たないこのクライアントは、そもそも要求を組み立てられない。
+- **refresh_token の経路は normal の登録だけ**なので、device の登録には発行しない（#224 の段階 2。以前は発行していたが、使えなかった）。
 
 ## FA-4.1 Device AuthZ グラントは、登録種別が normal と device のクライアントにだけ許す
 
@@ -2864,35 +2860,51 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。
 - **トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、この E2E では単独で測っていない。
 
-## FA-5.1 CIBA を normal 登録のクライアントで使うと、トークンの段階で拒否される
+## FA-5.1 CIBA を normal 登録のクライアントで使うと、開始（/ciba_authz）で unauthorized_client になる
 
 | | |
 |---|---|
-| 観点 | **CIBA のトークン発行（GrantCiba）は、登録種別が fapi_ciba と一致するときだけ通す。**一方、開始（/ciba_authz）は登録種別を見ていない。そのため**利用者にプッシュ通知が届き、承認させた後で**拒否になる。本テストは**今の振る舞いを記録する**（#224 の段階 0）。 |
-| 根拠 | OpenID Connect CIBA Core / #224 |
-| テスト | `FA0501_CIBAはfapi_cibaの登録にだけトークンを出す` |
+| 観点 | **利用者にプッシュ通知を送る前に断る。**以前は開始で登録種別を見ておらず、利用者に通知が届き、承認させた後でトークンの段階（unsupported_grant_type）で拒否していた（#224 の段階 0 で記録）。段階 2 で、開始の時点で判定するようにした（Device AuthZ の C-18 と同じ考え方）。 |
+| 根拠 | OpenID Connect CIBA Core §13 / #224 |
+| テスト | `FA0501_CIBAはfapi_ciba以外の登録を開始で断る` |
 
 **手順**
 
-1. 利用者 : 認証デバイスを登録する
+1. 利用者 : 認証デバイスを登録する（通知を受けられる状態にしておく）
 1. normal 登録のクライアントで、CIBA の認証リクエストを送る
-1. 利用者 : プッシュ通知を受け、認証デバイスで「許可」を押す
-1. クライアント : ポーリングする
 
 **検証（合否を判定する）**
 
 - 端末の登録 : HTTP 200
 - 端末の登録 : 本文は OK
-- 開始は受け付けられる（登録種別を見ていない）
-- プッシュ通知が送られる（auth_req_id を載せて）
-- 宛先は、登録した端末
-- 返答 : HTTP 200
-- トークンを返さない
-- エラーは unsupported_grant_type
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは unauthorized_client
 
 **補足**
 
-- **拒否が遅い。** 利用者はプッシュ通知を受け、承認まで済ませている。開始（/ciba_authz）で登録種別を見れば、利用者を煩わせずに済む（#224 の段階 2 の候補。Device AuthZ は開始でも弾くようにした。C-18）。
+- **(1) で端末を登録してあるので、以前の実装なら通知が送られていた。**開始で断ったので、auth_req_id は発行されず、利用者は何も操作しない。
+
+## FA-5.2 oauth2_oidc_mode が既知でない値（fapi_1）のクライアントは、開始（/ciba_authz）で unauthorized_client になる
+
+| | |
+|---|---|
+| 観点 | **既知でない登録値は、不正な登録として拒否する**（#224 の段階 2）。以前は fapi2 とみなしていた。「一番厳しい種別」に倒す作りは、種別が増えると意味が変わるため、やめた。なお oauth2_oidc_mode を書いていない登録は normal で、これには当たらない。 |
+| 根拠 | #224 |
+| テスト | `FA0502_登録種別が既知でない値ならCIBAを断る` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する
+1. 登録値が不正なクライアントで、CIBA の認証リクエストを送る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは unauthorized_client
 
 # 21
 

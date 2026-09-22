@@ -32,6 +32,8 @@
 //*  2026/09/22  玄人 幸道         FA-4.1（Device AuthZ グラントは normal と device にだけ許す）を追加（#224）
 //*  2026/09/22  玄人 幸道         FA-1.3（client_secret と PKCE の併用）・FA-1.4（Hybrid）を追加（#224 の段階 0）
 //*  2026/09/22  玄人 幸道         観点の文面を、ClientModePolicy の表に合わせた（#224 の段階 1。判定は変えていない）
+//*  2026/09/22  玄人 幸道         拒否のエラー コードを unauthorized_client に、FA-1.2 を「発行しない」に、
+//*                                FA-1.4 を認可エンドポイントでの拒否に改めた（#224 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -189,9 +191,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     withSecret != null && string.IsNullOrEmpty(withSecret.AccessToken),
                     "拒否される", ClientModeTests.Outcome(withSecret));
 
-                r.Verify("エラーは unsupported_grant_type",
-                    withSecret != null && withSecret.Error == "unsupported_grant_type",
-                    "unsupported_grant_type",
+                r.Verify("エラーは unauthorized_client",
+                    withSecret != null && withSecret.Error == "unauthorized_client",
+                    "unauthorized_client",
                     withSecret == null ? "（認可で失敗）" : (withSecret.Error ?? "（無し）"));
 
                 r.Step("(3) fapi1 ＋ PKCE(S256)（client_secret 無し）");
@@ -238,22 +240,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             }
         }
 
-        /// <summary>FA-1.2 fapi1 は使えない refresh_token を発行する</summary>
+        /// <summary>FA-1.2 fapi1 には refresh_token を発行しない</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task FA0102_fapi1は使えないrefresh_tokenを発行する(string targetKey)
+        public async Task FA0102_fapi1にはrefresh_tokenを発行しない(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("FA-1.2",
-                    "fapi1 のクライアントは refresh_token を受け取るが、それを使うと拒否される",
-                    "**受け取ったのに必ず失敗する資格情報を渡している。**"
-                    + "表の refresh_token の行は、証明によらず normal だけを通すため、"
-                    + "fapi1 の登録は通らない。**発行しない、あるいは経路を通す、のどちらかが筋。**"
-                    + "本テストは**現状を記録する**もので、望ましさは判定しない（#222）。",
-                    "RFC 6749 §6 / #222");
+                    "fapi1 のクライアントには、refresh_token を発行しない",
+                    "**使えない資格情報は渡さない。**"
+                    + "表の refresh_token の行は、証明によらず normal だけを通すため、fapi1 の登録は使えない。"
+                    + "以前は発行していて、使うと必ず拒否された（#222 で記録）。"
+                    + "#224 の段階 2 で、**登録種別で使えない経路の refresh_token は発行しない**ようにした。",
+                    "RFC 6749 §5.1（refresh_token は任意）/ #224");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
                 ClientRegistration normal = Flows.Registration(client, KnownClients.MvcSample);
@@ -284,28 +286,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 Assert.False(token == null || string.IsNullOrEmpty(token.AccessToken),
                     "前提: fapi1 で PKCE のトークンが取得できること");
 
-                r.Verify("refresh_token が発行される",
-                    !string.IsNullOrEmpty(token.RefreshToken),
-                    "発行される",
-                    string.IsNullOrEmpty(token.RefreshToken) ? "発行されない" : "発行される（値は伏せる）");
+                r.Verify("refresh_token は発行されない",
+                    string.IsNullOrEmpty(token.RefreshToken),
+                    "発行されない",
+                    string.IsNullOrEmpty(token.RefreshToken) ? "発行されない" : "**発行された**（値は伏せる）");
 
-                r.Step("(3) その refresh_token で更新を試みる");
-
-                JsonResponse refreshed = await client.TokenAsync(new Dictionary<string, string>()
-                {
-                    { "grant_type", "refresh_token" },
-                    { "refresh_token", token.RefreshToken },
-                    { "client_id", reg.ClientId },
-                    { "client_secret", reg.ClientSecret }
-                });
-
-                r.Verify("更新は拒否される",
-                    string.IsNullOrEmpty(refreshed.AccessToken),
-                    "拒否される", ClientModeTests.Outcome(refreshed));
-
-                r.Note("**望ましくない。** 使えない資格情報を渡している。"
-                    + "直すなら「fapi1 では refresh_token を発行しない」か"
-                    + "「refresh_token の経路を登録種別で判定し直す」のどちらか（#222 の 3）。");
+                r.Note("**(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。"
+                    + "発行しないのは、このクライアントの登録種別による。");
 
                 r.Done();
             }
@@ -325,7 +312,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     "**表の「認可コード × client_secret と PKCE の併用」の行は、normal だけを通す。**"
                     + "fapi1 を通すのは、client_secret を送らない「PKCE の S256」の行だけ"
                     + "（併用の経路では PKCE は検証だけ行い、判定には使わない。#220）。"
-                    + "本テストは**今の振る舞いを記録する**（#224 の段階 0）。",
+                    + "FAPI 1.0 Advanced は client_secret を認めていないので、拒否は設計どおり（#224）。",
                     "FAPI 1.0 Advanced §5.2.2 / RFC 7636 / #224");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
@@ -352,14 +339,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     string.IsNullOrEmpty(token.AccessToken),
                     "拒否される", ClientModeTests.Outcome(token));
 
-                r.Verify("エラーは unsupported_grant_type",
-                    token.Error == "unsupported_grant_type",
-                    "unsupported_grant_type", token.Error ?? "（無し）");
+                r.Verify("エラーは unauthorized_client",
+                    token.Error == "unauthorized_client",
+                    "unauthorized_client", token.Error ?? "（無し）");
 
-                r.Note("**望ましいかどうかは、まだ決めていない**（#224 の段階 2）。"
+                r.Note("**設計どおり**（#224 の段階 2 で、拒否のままとすることにした）。"
                     + "FAPI 1.0 Advanced は client_secret によるクライアント認証を認めていない"
-                    + "（private_key_jwt か mTLS）ので、**拒否のままが正しい可能性がある。**"
-                    + "一方、同じクライアントが client_secret を送らなければ通る（FA-1.1）。");
+                    + "（private_key_jwt か mTLS）。"
+                    + "同じクライアントが client_secret を送らなければ通る（FA-1.1）のは、PKCE の S256 の行による。");
 
                 r.Done();
             }
@@ -375,11 +362,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("FA-1.4",
-                    "fapi1 のクライアントは、Hybrid フロー（code id_token）で code も id_token も受け取らない",
-                    "**表の Hybrid の行は normal だけを通す**（認可エンドポイントで CheckClientMode）。"
-                    + "fapi1 の登録は通らない。"
-                    + "本テストは**今の振る舞いを記録する**（#224 の段階 0）。",
-                    "OIDC Core §3.3 / FAPI 1.0 Advanced / #224");
+                    "fapi1 のクライアントは、Hybrid フロー（code id_token）で code も id_token も受け取らず、unauthorized_client が RP へ返る",
+                    "**表の Hybrid の行は normal だけを通す。**"
+                    + "以前はトークンを作る時点で拒否し、error=access_denied を返していた（#224 の段階 0 で記録）。"
+                    + "段階 2 で、**要求を検証する時点**（redirect_uri を確かめた直後）で判定し、"
+                    + "unauthorized_client を RP へリダイレクトで返すようにした。",
+                    "RFC 6749 §4.2.2.1 / OIDC Core §3.3 / FAPI 1.0 Advanced / #224");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
                 ClientRegistration normal = Flows.Registration(client, KnownClients.TestClient);
@@ -411,10 +399,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     "id_token 無し",
                     string.IsNullOrEmpty(res.Get("id_token")) ? "無し" : "**あり**");
 
-                r.Observe("返り方",
-                    "HTTP " + (int)res.StatusCode + " / error=" + (res.Error ?? "なし")
-                    + " / 戻り先=" + (res.Redirected ? "リダイレクト" : "画面"),
-                    "拒否の返し方（RP へのリダイレクトか、エラー画面か）は記録するだけで、判定しない。");
+                r.Verify("RP へリダイレクトで返す",
+                    res.Redirected,
+                    "リダイレクト",
+                    res.Redirected ? "リダイレクト" : "**画面**（HTTP " + (int)res.StatusCode + "）");
+
+                r.VerifyEqual("エラーは unauthorized_client", "unauthorized_client", res.Error ?? "（無し）");
 
                 r.Done();
             }
@@ -479,9 +469,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     withPkce != null && string.IsNullOrEmpty(withPkce.AccessToken),
                     "拒否される", ClientModeTests.Outcome(withPkce));
 
-                r.Verify("エラーは unsupported_grant_type",
-                    withPkce != null && withPkce.Error == "unsupported_grant_type",
-                    "unsupported_grant_type",
+                r.Verify("エラーは unauthorized_client",
+                    withPkce != null && withPkce.Error == "unauthorized_client",
+                    "unauthorized_client",
                     withPkce == null ? "（認可で失敗）" : (withPkce.Error ?? "（無し）"));
 
                 r.Note("**これは設計どおり。** fapi2 の登録は、証明書（x509）を伴う経路でだけ通る。"
@@ -527,8 +517,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 r.Note("**表のこの行から device を外すと、ここは通らない。**"
                     + "表を書き換えるときは、この経路を壊さないこと（#224）。");
 
-                r.Note("**refresh_token は使えない。** 更新の経路は client_secret による認証を求めるので、"
-                    + "client_secret を持たないこのクライアントは、そもそも要求を組み立てられない。");
+                r.Verify("refresh_token は発行されない",
+                    token == null || string.IsNullOrEmpty(token.RefreshToken),
+                    "発行されない",
+                    token == null || string.IsNullOrEmpty(token.RefreshToken)
+                        ? "発行されない" : "**発行された**（値は伏せる）");
+
+                r.Note("**refresh_token の経路は normal の登録だけ**なので、device の登録には発行しない"
+                    + "（#224 の段階 2。以前は発行していたが、使えなかった）。");
 
                 r.Done();
             }

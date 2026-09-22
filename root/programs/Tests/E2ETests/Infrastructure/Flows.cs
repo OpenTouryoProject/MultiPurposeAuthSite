@@ -35,6 +35,7 @@
 //*  2026/09/18  玄人 幸道         既定で無効な機能を Skip する口を追加（#220）
 //*  2026/09/18  玄人 幸道         TestClient6 と、未登録なら Skip する口を追加（#221）
 //*  2026/09/22  玄人 幸道         環境変数で差し込む TestClient4_2 と、その登録を引く口を追加（#224）
+//*  2026/09/22  玄人 幸道         登録値が不正な TestClient4_3 を追加（#224 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -83,6 +84,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// （Flows.InjectedRegistration で引く）。
         /// </summary>
         public const string TestClient4_2 = "TestClient4_2";
+
+        /// <summary>
+        /// TestClient4（fapi_ciba）を写し、登録種別を既知でない値（fapi_1）にしたクライアント（#224 の段階 2）。
+        /// **構成ファイルには無い。** TestClient4_2 と同じく test.ps1 -Launch が差し込む。
+        /// </summary>
+        public const string TestClient4_3 = "TestClient4_3";
     }
 
     /// <summary>クライアントの登録内容（テストから参照する分だけ）</summary>
@@ -400,7 +407,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// test.ps1 が環境変数で差し込んだクライアントの登録内容を引く（#224）。差し込まれていなければ Skip する
         /// </summary>
         /// <param name="client">IdPClient</param>
-        /// <param name="clientName">client_name（いまは TestClient4_2 だけ）</param>
+        /// <param name="clientName">client_name（TestClient4_2 / TestClient4_3）</param>
         /// <returns>ClientRegistration（client_id と client_secret だけ）</returns>
         /// <remarks>
         /// **構成ファイルには無いクライアント**なので、Registration では引けない。
@@ -408,10 +415,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public static ClientRegistration InjectedRegistration(IdPClient client, string clientName)
         {
-            // test.ps1 -Launch が、起動したサイトに差し込んだ client_id を渡してくる。
-            string clientId = Environment.GetEnvironmentVariable("MPAS_TESTCLIENT4_2");
+            // test.ps1 -Launch が、起動したサイトに差し込んだ client_id を渡してくる（MPAS_<client_name の大文字>）。
+            bool known = clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3;
+            string clientId = known
+                ? Environment.GetEnvironmentVariable("MPAS_" + clientName.ToUpperInvariant()) : null;
 
-            Skip.If(clientName != KnownClients.TestClient4_2 || string.IsNullOrEmpty(clientId),
+            Skip.If(string.IsNullOrEmpty(clientId),
                 "client_name=" + clientName + " は差し込まれていません"
                 + "（test.ps1 -Launch のときだけサイトへ差し込む。#224）。");
 

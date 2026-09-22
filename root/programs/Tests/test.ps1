@@ -334,17 +334,20 @@ function Get-InjectedTestClient
     登録は入れ子の無い平らなオブジェクトなので、生のテキストから区画を取り出す。
     **net48 は XML として読まない。** 属性値の改行が空白に潰れ、// が以降を飲む（CONFIGURATION.md 9 節）。
 
+    **2 件目以降は、-NetFxBody に前の NetFxValue を渡す。** net48 は一覧ごと差し替えるので、
+    前に足した分の上へ、さらに足す。
+
     .OUTPUTS
     ClientId / CoreEnv（環境変数名 → 値）/ NetFxValue。取り出せなければ $null。
     #>
     param(
         [string] $Name,
         [string] $Mode,
-        [string] $ClientId
+        [string] $ClientId,
+        [string] $NetFxBody = ''
     )
 
     $coreText  = [System.IO.File]::ReadAllText((Join-Path $coreDir 'appsettings.json'))
-    $netFxText = [System.IO.File]::ReadAllText((Join-Path $netFxDir 'app.config'))
 
     # 写す元 : TestClient4 の区画（入れ子の無い { ... }）
     $m = [regex]::Match($coreText, '\{[^{}]*"client_name"\s*:\s*"TestClient4"[^{}]*\}')
@@ -364,12 +367,16 @@ function Get-InjectedTestClient
     }
 
     # net48 : 一覧の末尾の } の手前に 1 件足す
-    $n = [regex]::Match($netFxText,
-        'key="OAuth2ClientsInformation"\s+value=''(.*?)''\s*/>',
-        [System.Text.RegularExpressions.RegexOptions]::Singleline)
-    if (-not $n.Success) { return $null }
+    if ([string]::IsNullOrEmpty($NetFxBody)) {
+        $netFxText = [System.IO.File]::ReadAllText((Join-Path $netFxDir 'app.config'))
+        $n = [regex]::Match($netFxText,
+            'key="OAuth2ClientsInformation"\s+value=''(.*?)''\s*/>',
+            [System.Text.RegularExpressions.RegexOptions]::Singleline)
+        if (-not $n.Success) { return $null }
+        $NetFxBody = $n.Groups[1].Value
+    }
 
-    $body  = $n.Groups[1].Value.TrimEnd()
+    $body  = $NetFxBody.TrimEnd()
     if (-not $body.EndsWith('}')) { return $null }
 
     $pairs = ($fields.Keys | ForEach-Object { '"{0}": "{1}"' -f $_, $fields[$_] }) -join ', '
@@ -388,14 +395,38 @@ try {
         New-Item -ItemType Directory -Force $LogDir | Out-Null
 
         # **テスト専用のクライアントを差し込む**（#224）。
-        #   TestClient4（fapi_ciba）を写し、登録種別だけ normal にしたもの。
-        #   **CIBA を fapi_ciba 以外の登録で使うと拒否されるか**を測るために要る
+        #   TestClient4（fapi_ciba）を写し、登録種別だけ変えたもの
         #   （公開鍵ごと写すので、署名検証で先に落ちない）。設定ファイルは書き換えない。
-        $injected = Get-InjectedTestClient -Name 'TestClient4_2' -Mode 'normal' `
-            -ClientId 'e2e0tc42000000000000000000000000'
+        #     TestClient4_2 : normal  … CIBA を fapi_ciba 以外の登録で使うと拒否されるか
+        #     TestClient4_3 : fapi_1  … 既知でない登録値（書き間違い）なら拒否されるか（#224 の段階 2）
+        $injected = $null
+        $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
+        foreach ($c in @(
+            @{ Name = 'TestClient4_2'; Mode = 'normal'; ClientId = 'e2e0tc42000000000000000000000000' },
+            @{ Name = 'TestClient4_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc43000000000000000000000000' })) {
+
+            $base = ''
+            if ($null -ne $injected) { $base = $injected.NetFxValue }
+
+            $one = Get-InjectedTestClient -Name $c.Name -Mode $c.Mode -ClientId $c.ClientId -NetFxBody $base
+            if ($null -eq $one) {
+                $injected = $null
+                $injectedIds.Clear()
+                break
+            }
+
+            if ($null -eq $injected) {
+                $injected = $one
+            }
+            else {
+                foreach ($k in $one.CoreEnv.Keys) { $injected.CoreEnv[$k] = $one.CoreEnv[$k] }
+                $injected.NetFxValue = $one.NetFxValue
+            }
+            $injectedIds['MPAS_' + $c.Name.ToUpperInvariant()] = $c.ClientId
+        }
 
         if ($null -eq $injected) {
-            Write-Warning 'TestClient4 の登録を取り出せなかったため、TestClient4_2 は差し込みません（FA-5 は Skip）。'
+            Write-Warning 'TestClient4 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 は Skip）。'
         }
 
         if ($PSVersionTable.PSVersion.Major -lt 6) {
@@ -542,7 +573,9 @@ try {
                 Remove-Item -Path ("Env:\" + $k) -ErrorAction SilentlyContinue
             }
             Remove-Item Env:\OAuth2ClientsInformation -ErrorAction SilentlyContinue
-            $env:MPAS_TESTCLIENT4_2 = $injected.ClientId
+            foreach ($k in $injectedIds.Keys) {
+                Set-Item -Path ("Env:\" + $k) -Value $injectedIds[$k]
+            }
         }
 
         # 役目は終わっている。テスト側へ持ち込まない。
@@ -612,6 +645,7 @@ finally {
         Remove-Item Env:\MPAS_CORE_FCM_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_FCM_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_TESTCLIENT4_2 -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_TESTCLIENT4_3 -ErrorAction SilentlyContinue
     }
 }
 
