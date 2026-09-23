@@ -61,6 +61,8 @@
 //*  2026/09/17  玄人 幸道         トークン応答に Cache-Control: no-store / Pragma: no-cache を付ける（#218）
 //*  2026/09/17  玄人 幸道         JWT Bearer で、トークン要求の scope を尊重する（#218）
 //*  2026/09/17  玄人 幸道         /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御を付ける（#218）
+//*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
+//*  2026/09/23  玄人 幸道         証明書に紐づくトークン（cnf）を、提示された証明書と照合する
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -336,6 +338,17 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
                 {
+                    // **証明書に紐づくトークンは、その証明書を提示した要求でしか使えない**（RFC 8705 3）。
+                    //   紐づいていないトークン（cnf 無し）は、これまでどおり bearer として扱う。
+                    if (!Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
+                    {
+                        err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_token);
+                        err.Add(OAuth2AndOIDCConst.error_description,
+                            "The access token is bound to a client certificate.");
+
+                        return this.UserInfoError(err);
+                    }
+
                     // ClientIdの取り出し
                     Claim ClientId = identity.Claims.Where(
                         x => x.Type == OAuth2AndOIDCConst.UrnAudienceClaim).FirstOrDefault<Claim>();
@@ -662,6 +675,19 @@ namespace MultiPurposeAuthSite.Controllers
                     }, "device_authz");
                 }
 
+                // **登録種別で、このグラントを許すか**（normal と device だけ）。
+                //   利用者が user_code を承認した後で失敗させないよう、開始の時点で弾く。
+                //   トークン発行（CmnEndpoints.GrantDeviceAuthZ）でも同じ判定をしている。
+                if (!Token.CmnEndpoints.IsDeviceAuthZAllowed(client_id))
+                {
+                    return this.OAuth2Error(new Dictionary<string, string>()
+                    {
+                        {OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client},
+                        {OAuth2AndOIDCConst.error_description,
+                            "This client is not allowed to use the device authorization grant."}
+                    }, "device_authz");
+                }
+
                 // scopeパラメタ
                 string scope = formData[OAuth2AndOIDCConst.scope];
 
@@ -949,7 +975,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             ApplicationUser user = null;
 
-            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(
@@ -1192,7 +1220,9 @@ namespace MultiPurposeAuthSite.Controllers
                 return this.NGResult(401, "SetDeviceToken", null);
             }
 
-            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(
@@ -1247,7 +1277,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             ApplicationUser user = null;
 
-            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity))
+            // 証明書に紐づくトークンは、その証明書を提示した要求でしか使えない（RFC 8705 3）
+            if (Token.CmnAccessToken.VerifyAccessToken(bearerToken, out JObject claims, out ClaimsIdentity identity)
+                && Token.CmnAccessToken.VerifyCertificateBinding(identity, Request.GetClientCertificate()))
             {
                 // ClientIdの取り出し
                 Claim ClientId = identity.Claims.Where(

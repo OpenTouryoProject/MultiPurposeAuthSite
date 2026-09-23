@@ -65,7 +65,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
 | | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
 | | PPID（`subject_types`: `public` / `pairwise` / `uname`） | ✓ | `Util/PPIDExtension` |
-| | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | `/token` のみ |
+| | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
 | | `.well-known/openid-configuration` | ✓ | 不足あり（3 節） |
 | | `/ros`（Request Object 登録） | ✓ | **PAR ではない独自仕様** |
@@ -859,8 +859,9 @@ Memory Provider の `ConcurrentDictionary` も未使用の code を回収しな�
 - ローテーション（使用時に削除）は行っているが、
   **ローテーション済みトークンを再提示されても検知・失効（family revocation）をしない。**
   OAuth 2.0 Security BCP §4.14 が求める挙動。
-- `permittedLevel` を `ClientMode.normal` にハードコードしているため、
-  **FAPI クライアントがリフレッシュすると保証レベルが落ちる。**
+- `refresh_token` の経路は、**証明によらず `normal` の登録にしか許されていない**
+  （`ClientModePolicy` の表。#224）。**`normal` 以外の登録には、`refresh_token` を発行しない**
+  （#224 の段階 2。以前は発行していたが、使えなかった。`FA-1.2` / `FA-3.1`。C-7）。
 
 ### C-6. `state` を URL エンコードせずに連結している **[Core]**
 
@@ -873,7 +874,7 @@ string.Format("?code={0}&state={1}", code, state)
 `&` を含めればリダイレクト URL にパラメタを注入できる。
 `?` の無条件付与（A-6 と同じ）と併せて、リダイレクト URL の組み立てを一箇所に集約すべき。
 
-### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **✅ 修正済み（#220 / #221）**
+### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **✅ 修正済み（#220 / #221 / #224）**
 
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs:1010-1050
@@ -941,15 +942,15 @@ PKCE 無しの認可コード フローがそのまま通る。
 
 | | 意味 | 決まり方 | 使い道 |
 |---|---|---|---|
-| `permittedLevel` | **その経路が、どこまでの登録種別を通すか** | クライアント認証の強度（`client_secret` / x509 / assertion / PKCE の `S256`） | 継続の可否の判定 |
+| `permittedLevel`（#224 の段階 1 で表に置き換えた。下記） | **その経路が、どこまでの登録種別を通すか** | クライアント認証の強度（`client_secret` / x509 / assertion / PKCE の `S256`） | 継続の可否の判定 |
 | `clientMode` | **そのクライアントが、何として登録されているか** | クライアント登録 | **トークンのクレーム** |
 
 - `CheckClientMode` に `out clientMode` を足し、**登録された種別を呼び出し元へ返す**
 - `ProtectFromPayload` へ渡す値を、`permittedLevel` から **`clientMode` に変えた**（2 箇所）。
   これで **`normal` 登録のクライアントは、`S256` を使っても `fapi` を名乗らない**
 - **格上げ（`S256` → `fapi1`）そのものは残す。** 外すと `fapi1` で登録された
-  クライアントが PKCE で通らなくなる（`CheckClientMode` は `clientMode <= permittedLevel`）。
-  **格上げは「経路が認める上限」の話**なので、そこに置いてあるのは正しい
+  クライアントが PKCE で通らなくなる。**格上げは「経路が認める上限」の話**なので、
+  そこに置いてあるのは正しい（#224 の段階 1 で、表の「認可コード × PKCE の `S256`」の行になった）
 - **`device` 登録のクライアント**（LIR で PKCE を使う経路）は、これまで `fapi: fapi1` を
   名乗っていたが、**`device` クレームに変わる。** 登録どおりの名乗りになる
 - E2E テスト : **`RT-220.4`**（`normal` 登録のクライアントが `S256` で取ったトークンに
@@ -959,7 +960,7 @@ PKCE 無しの認可コード フローがそのまま通る。
 > もともと `permittedLevel` ではなく**固定値**（`normal` / `device` / `fapi_ciba`）を
 > 渡しているので、影響を受けない。
 
-**判定側（`CheckClientMode`）の設計は、まだ分離していない（#222）。**
+**判定側（`CheckClientMode`）の設計（#222 で現状を固定し、#224 で表に置き換えた）。**
 
 E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は次のとおり。**
 
@@ -970,8 +971,19 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | **`fapi2`** | 拒否 | **拒否** | 拒否 | 拒否 | （到達せず） |
 | **`device`** | （`client_secret` 無し） | **通る** | — | — | （`client_secret` 無しで不可） |
 
-拒否はいずれも `unsupported_grant_type`。**`fapi2` は x509（mTLS）でしか通らない**ので、
-平文の経路は全滅する（設計どおり）。
+拒否はいずれも `unsupported_grant_type`（#224 の段階 2 で `unauthorized_client` に改めた）。
+**`fapi2` は x509（mTLS）でしか通らない**ので、平文の経路は全滅する（設計どおり）。
+**`fapi1` の `refresh_token` は、段階 2 で発行しないようにした**（下記）。
+
+**#224 の段階 0 で、未測定だったマスを埋めた**（E2E : `FA-1.3` / `FA-1.4` / `FA-4.1`）。
+
+| 登録 | 経路 | 結果 |
+|---|---|---|
+| fapi1 | 認可コード ＋ `client_secret` ＋ PKCE `S256`（併用） | 拒否（`unsupported_grant_type`）。併用の経路は、PKCE を検証だけに使い、`client_secret` の認証として扱うため。**段階 2 で「設計どおり」と判断**（D） |
+| fapi1 | Hybrid（`code id_token`） | 拒否。**ただし `error=access_denied` のリダイレクトで返る**（`/token` 側は `unsupported_grant_type`。経路でエラー コードがそろっていない）。**段階 2 で、要求の検証時に `unauthorized_client` を返すよう改めた**（B / C） |
+| fapi1 / fapi2 / fapi_ciba | Device AuthZ グラント | **修正前は client_secret だけで発行していた**（C-18）。修正後は `unauthorized_client` |
+| normal | CIBA | 拒否（`unsupported_grant_type`）。**ただしトークンの段階で。** 開始（`/ciba_authz`）は登録種別を見ないので、**利用者にプッシュ通知が届き、承認させた後で**拒否になる（`FA-5.1`）。**段階 2 で、開始の時点で `unauthorized_client` を返すよう改めた**（B / C）。測るために、TestClient4 を写して登録種別だけ normal にした `TestClient4_2` を、`test.ps1 -Launch` が環境変数で差し込む（公開鍵ごと写すので署名検証を通る。設定ファイルは変えない） |
+
 
 **設計上の問題が 3 つある。**
 
@@ -987,7 +999,42 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 **あるべき形**は 1 次元の水準ではなく、
 **「この要求が何を証明したか」の集合**と**「このクライアントが何を要求するか」の集合**の照合。
 ただし **`ClientMode` の列挙は Open棟梁側**（別リポジトリ）に在り、認証・認可の中心でもあるため、
-**#222 では着手しない**（別 Issue）。上の E2E は、そのときに**壊していないことを確かめる土台**である。
+**#222 では着手しない**（別 Issue : #224）。上の E2E は、そのときに**壊していないことを確かめる土台**である。
+
+**#224 の段階 1 : 大小比較を表に置き換えた（振る舞いは変えていない）。**
+
+- `CommonLibrary/TokenProviders/ClientModePolicy.cs` を新設。
+  **「経路 × その要求で何を証明したか」→ 通す登録種別**の表で引く。表に無い組み合わせは拒否
+- 上の問題 1・2 は、表の形そのもので解消した（`device` / `fapi_ciba` は「以下」ではなく、行ごとに列挙する。
+  LIR 用の例外は「認可コード × PKCE の `S256`」の行に `device` を含めるだけになった）。
+  **問題 3（`refresh_token` など）は、表の行を書き換える段階 2 で扱う**
+- **以前の判定と全マスで一致することを確かめた**（経路 9 × 証明 7 × 登録の文字列 9。
+  未知の文字列・空も含む。以前のコードで生じない組み合わせ（認可コード × 証明なし）を除く）。
+  **E2E で守られていない行がある** : 認可コードの **private_key_jwt**。
+  **mTLS の行は #226 で E2E を張った**（`FA-6`。net10.0 版は既定で、net48 版は準備のうえ `-NetFxMtls` で。**両方とも実測済み**）
+- **既知のどれにも当たらない登録値（空・書き間違い）は、`fapi2` として扱う**（以前のまま。段階 2 の候補）
+- 変わったのは、拒否したときの `error_description` の文面だけ
+  （`This client (<種別>) is not allowed to use this flow.`。エラー コードは `unsupported_grant_type` のまま）
+
+**#224 の段階 2 : 振る舞いを変えた。** 項目ごとに判断した結果は次のとおり。
+
+| | 項目 | 以前 | 段階 2 | E2E |
+|---|---|---|---|---|
+| A | 使えない `refresh_token` | `fapi1` / `device` の登録にも発行し、使うと拒否 | **登録種別で `refresh_token` の経路を使えないなら、発行しない** | `FA-1.2` / `FA-3.1` |
+| B | 拒否の時点 | 認可エンドポイント（Implicit / Hybrid）はログイン・同意の後、CIBA はプッシュ通知・承認の後で拒否 | **要求を検証する時点で断る**（認可エンドポイントは `redirect_uri` を確かめた直後。`/ciba_authz` は `iss` を確かめた直後） | `FA-1.4` / `FA-5.1` |
+| C | エラー コード | `/token` は `unsupported_grant_type`、Hybrid は `access_denied`、Device AuthZ は `unauthorized_client` | **`unauthorized_client` に揃えた**（RFC 6749 §4.1.2.1 / §4.2.2.1 / §5.2、CIBA Core §13） | `FA-1.1` ほか |
+| D | `fapi1` で `client_secret` と PKCE の併用 | 拒否 | **変えない**（FAPI 1.0 Advanced は `client_secret` を認めない。設計どおり） | `FA-1.3` |
+| E | 既知でない登録値（書き間違い・空） | `fapi2` とみなす | **不正な登録として拒否する**（「一番厳しい種別」に倒す作りは、種別が増えると意味が変わる）。`oauth2_oidc_mode` を書いていない登録は従来どおり `normal` | `FA-5.2` / **`FA-6.3`**（以前との違いが出るのは mTLS の経路だけ。#226） |
+| F | mTLS で認証したクライアントの refresh / ROPC / client_credentials | `normal` の登録のみ | **見送り**（表は変えていない。mTLS の E2E は #226 で張ったので、変えるときは `FA-6` に足して測れる） | — |
+
+- **B の早い判定は「その経路を、何かの証明で使えるか」**（`ClientModePolicy.MayUse`）で見る。
+  認可エンドポイントの時点では、トークン エンドポイントでの証明（`client_secret` / PKCE など）がまだ分からないため。
+  **最終の判定は従来どおり、トークンを出す時点の表**（`IsAllowed`）
+- **利用者への影響**
+  - RP から見えるエラー コードが変わる（`unsupported_grant_type` / `access_denied` → `unauthorized_client`）。
+    **登録どおりに使っている RP には影響しない**（もともと拒否される要求だけが対象）
+  - `fapi1` / `device` の登録のクライアントには、`refresh_token` が返らなくなる（もともと使えなかった）
+  - `oauth2_oidc_mode` に既知でない値を書いた登録は、全経路で拒否される（以前も、mTLS 以外はほぼ拒否されていた）
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
 
@@ -1190,6 +1237,66 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 > **残っている点:** Implicit / Hybrid の応答（フラグメント）には、まだ `scope` を返していない
 > （RFC 6749 §4.2.2 は、要求と異なるなら必須）。
 
+### C-18. Device AuthZ グラントが登録種別を判定していなかった **[Lib]** — **✅ 修正済み（#224）**
+
+#224 の段階 0（未測定の経路を測る）で見つかった。
+
+他のグラント（認可コード / refresh / ROPC / client_credentials / JWT Bearer / CIBA）は
+`CheckClientMode` で登録種別（`oauth2_oidc_mode`）を判定しているが、
+**`GrantDeviceAuthZ` だけが呼んでいなかった。** 行っていたのはクライアント認証
+（`DeviceAuthZClientAuthentication`）だけで、**client_secret が合えば、どの登録種別でもトークンを出していた。**
+
+| 登録種別 | 修正前 | 修正後 |
+|---|---|---|
+| device / normal | 発行 | 発行（従来どおり） |
+| **fapi1 / fapi2 / fapi_ciba** | **client_secret だけで発行** | **`unauthorized_client`（400）** |
+
+**`fapi1` / `fapi2` / `fapi_ciba` の登録は、より強いクライアント認証を求めている**
+（PKCE / private_key_jwt / mTLS）。この経路では、それを満たさずにトークンが出ていた。
+x509 を渡していなかったので、`fapi2` でも**証明書に束縛されないトークン**になっていた。
+
+**対応:**
+
+- `CmnEndpoints.IsDeviceAuthZAllowed` を新設し、**`normal` と `device` の登録にだけ許す**
+- **開始**（両アプリの `/device_authz`）で判定する … 利用者が `user_code` を承認した後で失敗させないため
+- **トークン発行**（`GrantDeviceAuthZ`）でも判定する … 二重の防御
+- エラーは `unauthorized_client`（RFC 6749 §5.2「認証済みのクライアントに許されていないグラント」）
+- E2E テスト : **`FA-4.1`**（fapi1 / fapi2 / fapi_ciba は開始で拒否、normal / device は従来どおり）。
+  **トークン発行側の判定は、開始側で弾かれるため到達できず、単独では測っていない**
+
+> **#224 の段階 1 で、この判定も表（`ClientModePolicy`）の「Device AuthZ」の行に取り込んだ。**
+> 許す種別（`normal` / `device`）は変えていない。段階 2 で、他の経路のエラー コードも `unauthorized_client` に揃えた。
+
+### C-19. mTLS のトークンの紐づけ（`cnf`）が、形式違いで、照合もしていなかった **[Lib/Core/Net48]** — **✅ 修正済み**
+
+#226（mTLS の E2E）の作業中に見つけた。**2 点あり、どちらも sender-constrained（RFC 8705）の要件を満たしていなかった。**
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| `cnf` の値 | キーは `x5t#S256` だが、**値は証明書の SHA-1 サムプリント（16 進 40 文字）**。キーの `#S256` / `#S512` も**証明書の署名アルゴリズム**で選んでいた | **証明書（DER）の SHA-256 を BASE64URL**（RFC 8705 §3.1）。キーは常に `x5t#S256` |
+| `/userinfo` | **`cnf` を見ていない。** 証明書に紐づくトークンを、**証明書なしで受け付けていた** | 提示された証明書と照合し、合わなければ `invalid_token`（401） |
+
+**紐づけは、トークンが漏えいした場合の防御である。** 照合していなければ、その防御は働かない。
+RFC 8705 §3 は、保護されたリソースが照合することを求めている。
+また、RFC のとおりに照合する外部のリソース サーバとは、値の形式が違うため紐づけが一致しない。
+
+**対応:**
+
+- `CmnAccessToken` に `VerifyCertificateBinding`（`cnf` と提示された証明書の照合）を新設
+- 両アプリの `/userinfo` で照合する。**`cnf` の無いトークンは、これまでどおり bearer として扱う**
+- 認証デバイス向けの口（`/ciba_result` `/SetDeviceToken` `/2fa_result`）でも、同じ照合を通す
+  - **これらを叩く認証デバイス（`AuthenticationDevice_Web`）はパブリック クライアント**で、証明書を提示しない。
+    そのトークンに `cnf` は載らないので、**既定の構成では振る舞いが変わらない**
+  - それでも通すのは、**`cnf` を持つトークンを、この口に持ち込めてしまう**ため。
+    とくに `/ciba_result` は CIBA の要求を「許可」する口で、CIBA のトークンは
+    RP が mTLS で取れば `cnf` を持つ（`cnf` が載るのは、認可コード / `refresh_token` / CIBA の 3 経路）
+  - **紐づいたトークンをこれらの口にも出す配置では、サーバ側で証明書を要求させる設定が要る**（`CONFIGURATION.md` 8 節）
+- E2E テスト : **`FA-6.4`**（`cnf` の値が RFC の形式であること、同じ証明書なら 200、
+  証明書なし・別の証明書なら `invalid_token`（401））
+
+> **`/revoke` `/introspect` は、クライアント認証として証明書を見る口**（C-2）であり、
+> ここで言う「保護されたリソース」ではない。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -1280,7 +1387,7 @@ E2E テスト: `TC-1.4`（認可コード）/ `RT-198.1`（client_credentials）
 
 | 項目 |
 |---|
-| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）の再設計は残っている**（#222 で現状を E2E に固定した） |
+| ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換え**（#224 の段階 1）、**振る舞いを見直した**（段階 2 : 使えない `refresh_token` を出さない・早い拒否・`unauthorized_client`・不正な登録値の拒否）。**mTLS の経路の E2E も張った**（#226。`FA-6`） |
 | C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`） |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    E2E 専用 : net10.0 版に、テストのときだけ mTLS（クライアント証明書）を受け付けさせる（#226）。
+    アプリからは参照しない。test.ps1 -Launch が DOTNET_STARTUP_HOOKS で、起動したサイトにだけ読ませる。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>MtlsTestHook</AssemblyName>
+    <RootNamespace>MultiPurposeAuthSite.Tests.MtlsTestHook</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

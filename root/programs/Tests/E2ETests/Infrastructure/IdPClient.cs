@@ -39,12 +39,15 @@
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（/ciba_authz）を送る CibaAuthorizeAsync を追加（#196）
 //*  2026/09/12  玄人 幸道         Authorization ヘッダ付きの POST を一般化し、認証デバイスの代わりの要求（/SetDeviceToken・/ciba_result）を追加（#196）
 //*  2026/09/16  玄人 幸道         /2fa_result を呼ぶ TwoFactorPushResultAsync を追加（#213）
+//*  2026/09/22  玄人 幸道         クライアント証明書を添えてトークン エンドポイントを呼ぶ TokenWithCertificateAsync を追加（#226）
+//*  2026/09/23  玄人 幸道         クライアント証明書を添えて UserInfo を呼ぶ UserInfoWithCertificateAsync を追加
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -526,6 +529,93 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             IDictionary<string, string> form, string clientId, string clientSecret)
         {
             return this.PostJsonWithBasicAuthAsync("/token", form, clientId, clientSecret);
+        }
+
+        /// <summary>
+        /// トークン エンドポイントを、クライアント証明書（mTLS）を添えて呼ぶ（#226）。
+        /// </summary>
+        /// <param name="form">フォーム（値が null の項目は送らない）</param>
+        /// <param name="certificate">クライアント証明書（null なら添えない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **接続ごとに証明書が決まるので、この要求だけ別の HttpClient で送る。**
+        /// サインインのクッキーは使わない（トークン エンドポイントはクライアント認証だけで動く）。
+        /// サーバがクライアント証明書を受け付けるのは、test.ps1 -Launch が net10.0 版に
+        /// テスト専用のフック（Tests/MtlsTestHook）を読ませたときだけ。
+        /// </remarks>
+        public async Task<JsonResponse> TokenWithCertificateAsync(
+            IDictionary<string, string> form, X509Certificate2 certificate)
+        {
+            using (HttpClientHandler handler = new HttpClientHandler())
+            {
+                handler.AllowAutoRedirect = false;
+                handler.ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+                if (certificate != null)
+                {
+                    handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+                    handler.ClientCertificates.Add(certificate);
+                }
+
+                using (HttpClient http = new HttpClient(handler))
+                {
+                    http.Timeout = TimeSpan.FromSeconds(60);
+
+                    Dictionary<string, string> body = new Dictionary<string, string>();
+                    foreach (KeyValuePair<string, string> kv in form)
+                    {
+                        if (kv.Value != null)
+                        {
+                            body.Add(kv.Key, kv.Value);
+                        }
+                    }
+
+                    HttpResponseMessage res = await http.PostAsync(
+                        this.Absolute("/token"), new FormUrlEncodedContent(body));
+
+                    return await ToJsonResponseAsync(res);
+                }
+            }
+        }
+
+        /// <summary>
+        /// UserInfo エンドポイントを、クライアント証明書（mTLS）を添えて呼ぶ
+        /// </summary>
+        /// <param name="accessToken">アクセス トークン</param>
+        /// <param name="certificate">クライアント証明書（null なら添えない）</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **証明書に紐づくトークン（cnf）が、その証明書の要求でだけ使えることを測るために要る**（RFC 8705 3）。
+        /// 接続ごとに証明書が決まるので、この要求だけ別の HttpClient で送る。
+        /// </remarks>
+        public async Task<JsonResponse> UserInfoWithCertificateAsync(
+            string accessToken, X509Certificate2 certificate)
+        {
+            using (HttpClientHandler handler = new HttpClientHandler())
+            {
+                handler.AllowAutoRedirect = false;
+                handler.ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+                if (certificate != null)
+                {
+                    handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+                    handler.ClientCertificates.Add(certificate);
+                }
+
+                using (HttpClient http = new HttpClient(handler))
+                {
+                    http.Timeout = TimeSpan.FromSeconds(60);
+
+                    HttpRequestMessage req = new HttpRequestMessage(
+                        HttpMethod.Get, this.Absolute("/userinfo"));
+                    req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + accessToken);
+
+                    HttpResponseMessage res = await http.SendAsync(req);
+                    return await ToJsonResponseAsync(res);
+                }
+            }
         }
 
         /// <summary>UserInfoエンドポイントを呼ぶ</summary>

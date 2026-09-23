@@ -277,7 +277,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
   "client_secret": "...", "client_name": "TestClient",
   "redirect_uri_code": "test_self_code", "redirect_uri_token": "test_self_token",
   "subject_types": "uname",          // public / pairwise / uname
-  "oauth2_oidc_mode": "fapi1",       // fapi1 / fapi2 / device / fapi_ciba
+  "oauth2_oidc_mode": "fapi1",       // normal / fapi1 / fapi2 / device / fapi_ciba（省略時は normal。既知でない値は不正として拒否。#224）
   "jwk_rsa_publickey": "...", "jwk_ecdsa_publickey": "...",
   "tls_client_auth_subject_dn": "..."
 }

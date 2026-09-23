@@ -36,6 +36,8 @@
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/09/07  玄人 幸道         nonceをstateから捏造しないよう修正（#191）
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
+//*  2026/09/22  玄人 幸道         ProtectFromPayload の引数名を permittedLevel から clientMode に（#224）
+//*  2026/09/23  玄人 幸道         cnf を RFC 8705 の形式で書き、提示された証明書と照合する口を追加
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -317,7 +319,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="access_token_payload">AccessTokenのPayload</param>
         /// <param name="expiresUtc">DateTimeOffset</param>
         /// <param name="x509">X509Certificate2</param>
-        /// <param name="permittedLevel">OAuth2AndOIDCEnum.ClientMode</param>
+        /// <param name="clientMode">クライアントに登録された ClientMode（クレームに書く。#220 / #224）</param>
         /// <param name="audience">out string</param>
         /// <param name="subject">out string</param>
         /// <param name="alg">string</param>
@@ -325,7 +327,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static string ProtectFromPayload(
             string clientId, string access_token_payload,
             DateTimeOffset expiresUtc, X509Certificate2 x509,
-            OAuth2AndOIDCEnum.ClientMode permittedLevel,
+            OAuth2AndOIDCEnum.ClientMode clientMode,
             out string audience, out string subject, string alg = JwtConst.RS256)
         {
             string jti = Guid.NewGuid().ToString("N");
@@ -361,36 +363,30 @@ namespace MultiPurposeAuthSite.TokenProviders
             // - cnf
             if (x509 != null)
             {
+                // **RFC 8705 3.1 : cnf の x5t#S256 は、証明書（DER）の SHA-256 を BASE64URL したもの。**
+                //   以前は SHA-1 のサムプリント（16 進）を入れ、キーの #S256 / #S512 も
+                //   **証明書の署名アルゴリズム**で選んでいた。どちらも仕様と違い、
+                //   RFC のとおりに照合するリソース サーバとは紐づけが一致しない。
                 JObject dic = new JObject();
-                string key = OAuth2AndOIDCConst.x5t;
-                string val = x509.Thumbprint;
+                dic.Add(OAuth2AndOIDCConst.x5t + CmnAccessToken.S256,
+                    CmnAccessToken.ComputeCertificateThumbprint(x509));
 
-                if (x509.SignatureAlgorithm.FriendlyName == "sha256RSA")
-                {
-                    key += CmnAccessToken.S256;
-                }
-                else if (x509.SignatureAlgorithm.FriendlyName == "sha512RSA")
-                {
-                    key += CmnAccessToken.S512;
-                }
-
-                dic.Add(key, val);
                 payload[OAuth2AndOIDCConst.cnf] = dic;
             }
 
-            if (permittedLevel == OAuth2AndOIDCEnum.ClientMode.normal)
+            if (clientMode == OAuth2AndOIDCEnum.ClientMode.normal)
             {
                 // ...
             }
-            else if (permittedLevel == OAuth2AndOIDCEnum.ClientMode.device)
+            else if (clientMode == OAuth2AndOIDCEnum.ClientMode.device)
             {
                 // - device
-                payload["device"] = permittedLevel.ToStringByEmit();
+                payload["device"] = clientMode.ToStringByEmit();
             }
             else // fapi1, fapi2, fapi_ciba
             {
                 // - fapi
-                payload[OAuth2AndOIDCConst.fapi] = permittedLevel.ToStringByEmit();
+                payload[OAuth2AndOIDCConst.fapi] = clientMode.ToStringByEmit();
             }
 
             json = JsonConvert.SerializeObject(payload);
@@ -473,6 +469,68 @@ namespace MultiPurposeAuthSite.TokenProviders
             return CmnAccessToken.VerifyAccessToken(jwt, out claims, out identity);
         }
         
+        /// <summary>証明書（DER）の SHA-256 を BASE64URL した値（RFC 8705 3.1 の x5t#S256）</summary>
+        /// <param name="x509">クライアント証明書</param>
+        /// <returns>BASE64URL の文字列</returns>
+        private static string ComputeCertificateThumbprint(X509Certificate2 x509)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                return CustomEncode.ToBase64UrlString(sha256.ComputeHash(x509.RawData));
+            }
+        }
+
+        /// <summary>
+        /// トークンの cnf（証明書への紐づけ）と、提示されたクライアント証明書を照合する（RFC 8705 3）
+        /// </summary>
+        /// <param name="identity">VerifyAccessToken が返した ClaimsIdentity</param>
+        /// <param name="x509">TLS で提示されたクライアント証明書（無ければ null）</param>
+        /// <returns>使ってよければ true</returns>
+        /// <remarks>
+        /// **証明書に紐づけたトークン（sender-constrained）は、その証明書を提示した要求でしか使えない。**
+        /// RFC 8705 3 は、保護されたリソースに照合を求めている。
+        /// 紐づいていないトークン（cnf 無し）は、これまでどおり bearer として扱う。
+        ///
+        /// **紐づいているのに証明書が無い要求は拒否する。** 以前は照合しておらず、
+        /// 漏えいしたトークンを証明書なしで使えた。
+        /// </remarks>
+        public static bool VerifyCertificateBinding(ClaimsIdentity identity, X509Certificate2 x509)
+        {
+            if (identity == null)
+            {
+                return false;
+            }
+
+            Claim cnf = identity.Claims.FirstOrDefault(
+                x => x.Type.StartsWith(OAuth2AndOIDCConst.UrnCnfX5tClaim));
+
+            if (cnf == null)
+            {
+                // 紐づいていないトークン
+                return true;
+            }
+
+            if (x509 == null)
+            {
+                // 紐づいているのに、証明書が提示されていない
+                return false;
+            }
+
+            string expected = "";
+
+            if (cnf.Type == OAuth2AndOIDCConst.UrnCnfX5tClaim + CmnAccessToken.S256)
+            {
+                expected = CmnAccessToken.ComputeCertificateThumbprint(x509);
+            }
+            else
+            {
+                // 未知の方式（#S512 など）は、照合できないので通さない
+                return false;
+            }
+
+            return string.Equals(cnf.Value, expected, StringComparison.Ordinal);
+        }
+
         /// <summary>Verify</summary>
         /// <param name="jwt">string</param>
         /// <param name="claims">out JObject</param>

@@ -48,6 +48,10 @@
 .PARAMETER NoNetFx
     net48 版を起動しない（test.ps1 に渡す）。その分のテストは Skip される。
 
+.PARAMETER NetFxMtls
+    net48 版でも mTLS のテスト（FA-6）を回す（test.ps1 に渡す。#226）。
+    **準備が要る**（TESTING.md「net48 版の mTLS」）。付けなければ、FA-6 は net10.0 版だけを測る。
+
 .PARAMETER Filter
     dotnet test の --filter に渡す式（test.ps1 に渡す）。
 
@@ -78,6 +82,7 @@
      日時        更新者            内容
      ----------  ----------------  -------------------------------------------------
      2026/09/08  玄人 幸道         新規作成（OpenTouryo の 2_RunAllTests.ps1 に倣う）
+     2026/09/23  玄人 幸道         -NetFxMtls を追加（net48 版でも mTLS のテストを回す。#226）
 #>
 [CmdletBinding()]
 param(
@@ -89,6 +94,7 @@ param(
     [string]$Url = 'https://localhost:44300',
     [string]$NetFxUrl = 'https://localhost:44302',
     [switch]$NoNetFx,
+    [switch]$NetFxMtls,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
@@ -144,6 +150,7 @@ $splat = @{
 }
 if ($Launch)   { $splat.Launch   = $true }
 if ($NoNetFx)  { $splat.NoNetFx  = $true }
+if ($NetFxMtls) { $splat.NetFxMtls = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }

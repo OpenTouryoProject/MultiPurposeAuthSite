@@ -70,6 +70,14 @@ set appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:443
 
 > **設定ファイルに無いキーは、環境変数だけでは効かない**（実測。2026-09-17）。
 > 上書きであって、追加ではない。**新しいキーを試すときは、先にファイルへ足すこと。**
+>
+> **ただし、「節」として読む設定は例外**（実測。2026-09-22、#224）。
+> クライアント一覧（`OAuth2ClientsInformation`）は節ごと読む（`GetAnyConfigSection`）ので、
+> `appSettings__OAuth2ClientsInformation__<client_id>__<項目>` で**ファイルに無いクライアントを足せる。**
+> 1 個の値として読むキー（`GetConfigValue`）は、上のとおり足せない。
+> net48 はクライアント一覧を 1 個の値（JSON 文字列）として読むので、
+> `FxContainerization=ON` のうえで `OAuth2ClientsInformation` を**一覧ごと差し替える**必要がある。
+> E2E はこれを使って、テスト専用のクライアントを差し込んでいる（`Tests/README.md`）。
 
 ### `FxContainerization` — 環境変数を優先する（net48 / net10.0 の両方）
 
@@ -322,6 +330,34 @@ cd root
 
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
+
+### クライアント証明書（mTLS）を受け付ける
+
+**`fapi2` の登録は、mTLS（RFC 8705 の `tls_client_auth`）でしか通らない**（`ANALYSIS-IdP.md` C-7）。
+使うには、**サーバ側で、クライアント証明書を要求させる設定が要る。雛形のままでは要求しない**（#226 で実測）。
+
+**アプリは、証明書の Subject と、登録の `tls_client_auth_subject_dn` の一致だけを見る。**
+**発行元（チェーン）と失効の検証は、TLS の層（Kestrel / IIS）に任せている。**
+したがって、TLS の層で**信頼できる発行元だけを受け付ける**ように設定すること。
+
+| | 設定 | 検証 |
+|---|---|---|
+| net10.0（Kestrel） | `Kestrel:EndpointDefaults:ClientCertificateMode` を `AllowCertificate`（証明書の無いクライアントも通す）または `RequireCertificate`。`appsettings.json` でも環境変数（`Kestrel__EndpointDefaults__ClientCertificateMode`）でもよい | 既定でチェーンと失効を検証する。自己署名など信頼できない証明書は、TLS の段階で切れる |
+| net48（IIS） | サイトの `<access sslFlags="Ssl, SslNegotiateCert" />`（証明書を要求するが、無くても通す） | 信頼できない証明書は、アプリより前で **HTTP 403.16** になる |
+
+- **証明書を要求させる口は、`/token` だけでは足りない。**
+  mTLS で発行したトークンは証明書に紐づく（`cnf`）ので、**そのトークンを受ける口でも照合する**（RFC 8705 §3。`ANALYSIS-IdP.md` C-19）。
+  照合には証明書の提示が要るため、**`/userinfo` にも同じ設定が要る。**
+  紐づいたトークンを `/ciba_result` `/SetDeviceToken` `/2fa_result` にも出すなら、それらにも要る
+  （認証デバイスは証明書を使わないので、通常は不要）。
+  net48（IIS）は、サイト全体ではなく**口ごとに**掛けること。サイト全体に掛けると、
+  サーバが自分自身を呼ぶ経路（FAPI2 の自己テスト）が証明書を求められて止まる（実測）
+- **リバース プロキシで TLS を終端する場合、アプリには証明書が届かない。** 今の実装は、プロキシが転送するヘッダ
+  （`X-ARR-ClientCert` など）を読まない
+- `tls_client_auth_subject_dn` は **JSON の文字列**なので、`\\` は 1 文字の `\` になる。
+  照合するのは、.NET が返す `X509Certificate2.Subject` の文字列
+- **E2E のテスト専用のフック（`Tests/MtlsTestHook`）は、発行元を問わずに受け付ける。本番の構成で読ませないこと**
+  （`test.ps1 -Launch` が、起動したサイトにだけ `DOTNET_STARTUP_HOOKS` で渡す。Development 以外では何もしない）
 
 ## 9. 機械で読むときの落とし穴
 

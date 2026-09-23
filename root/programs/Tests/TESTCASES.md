@@ -2314,7 +2314,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - request_uri 経路で認可コードが発行される
 - トークンを発行しない
-- unsupported_grant_type で拒否される
+- unauthorized_client で拒否される
 
 ## RT-197.3 自前で署名した Request Object でも、認可コードが発行される
 
@@ -2634,7 +2634,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **PKCE のメソッドは「クライアント認証の強度」ではない。**S256 を使うと、その経路が認める上限（permittedLevel）は fapi1 まで上がるが、**それはクライアントが何として登録されているか（clientMode）とは別**。アクセス トークンの fapi クレームは clientMode で書く（#220）。 |
+| 観点 | **PKCE のメソッドは「クライアント認証の強度」ではない。**S256 を使うと、その経路で通す登録種別（ClientModePolicy の表。#224）に fapi1 が加わるが、**それはクライアントが何として登録されているか（clientMode）とは別**。アクセス トークンの fapi クレームは clientMode で書く（#220）。 |
 | 根拠 | FAPI 1.0 Advanced / RFC 7636 / #220 |
 | テスト | `RT220_04_S256で取ったトークンがfapiを名乗らない` |
 
@@ -2650,7 +2650,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **このクライアントは normal 登録。** fapi1 で登録されたクライアントがPKCE で通ること自体は、これまでどおり（permittedLevel の格上げは残している）。
+- **このクライアントは normal 登録。** fapi1 で登録されたクライアントがPKCE で通ること自体は、これまでどおり（表の「PKCE の S256」の行が fapi1 を通す）。
 
 ## RT-221.1 登録で require_pkce を true にしたクライアントは、PKCE 無しの認可を拒否する
 
@@ -2701,7 +2701,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **登録が上位のクライアントほど、通る経路が狭い。**CheckClientMode は「clientMode <= permittedLevel」で判定し、permittedLevel は**クライアント認証の強度**で決まる。client_secret では normal 止まりなので、fapi1 の登録は通らない。**PKCE の S256 を使うと permittedLevel が fapi1 に上がり、そこだけが通る。** |
+| 観点 | **登録が上位のクライアントほど、通る経路が狭い。**CheckClientMode は ClientModePolicy の表（経路 × 何を証明したか）で判定する。認可コードを client_secret で取る行は normal だけを通すので、fapi1 の登録は通らない。**PKCE の S256 で取る行は fapi1 も通すので、そこだけが通る。** |
 | 根拠 | FAPI 1.0 Advanced / #222 |
 | テスト | `FA0101_fapi1はPKCEの経路だけを通す` |
 
@@ -2716,7 +2716,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - 対照（normal）は通る
 - client_secret だけでは通らない
-- エラーは unsupported_grant_type
+- エラーは unauthorized_client
 - PKCE(S256) なら通る
 - ROPC は通らない
 - client_credentials は通らない
@@ -2725,29 +2725,69 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **ROPC / client_credentials は、サーバ全体では有効**（-Launch は Implicit / ROPC を有効にして起動する。#220）。**塞いでいるのは、このクライアントの登録**であることが、(1) の対照で分かる。
 
-## FA-1.2 fapi1 のクライアントは refresh_token を受け取るが、それを使うと拒否される
+## FA-1.2 fapi1 のクライアントには、refresh_token を発行しない
 
 | | |
 |---|---|
-| 観点 | **受け取ったのに必ず失敗する資格情報を渡している。**refresh_token の経路は permittedLevel=normal で判定するため、fapi1 の登録は通らない。**発行しない、あるいは経路を通す、のどちらかが筋。**本テストは**現状を記録する**もので、望ましさは判定しない（#222）。 |
-| 根拠 | RFC 6749 §6 / #222 |
-| テスト | `FA0102_fapi1は使えないrefresh_tokenを発行する` |
+| 観点 | **使えない資格情報は渡さない。**表の refresh_token の行は、証明によらず normal だけを通すため、fapi1 の登録は使えない。以前は発行していて、使うと必ず拒否された（#222 で記録）。#224 の段階 2 で、**登録種別で使えない経路の refresh_token は発行しない**ようにした。 |
+| 根拠 | RFC 6749 §5.1（refresh_token は任意）/ #224 |
+| テスト | `FA0102_fapi1にはrefresh_tokenを発行しない` |
 
 **手順**
 
 1. 対照 : normal 登録では、refresh_token で更新できる
 1. fapi1 で PKCE(S256) のトークンを取る
-1. その refresh_token で更新を試みる
 
 **検証（合否を判定する）**
 
 - 対照（normal）は更新できる
-- refresh_token が発行される
-- 更新は拒否される
+- refresh_token は発行されない
 
 **補足**
 
-- **望ましくない。** 使えない資格情報を渡している。直すなら「fapi1 では refresh_token を発行しない」か「refresh_token の経路を登録種別で判定し直す」のどちらか（#222 の 3）。
+- **(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。発行しないのは、このクライアントの登録種別による。
+
+## FA-1.3 fapi1 のクライアントが client_secret と PKCE(S256) を両方送ると、拒否される
+
+| | |
+|---|---|
+| 観点 | **表の「認可コード × client_secret と PKCE の併用」の行は、normal だけを通す。**fapi1 を通すのは、client_secret を送らない「PKCE の S256」の行だけ（併用の経路では PKCE は検証だけ行い、判定には使わない。#220）。FAPI 1.0 Advanced は client_secret を認めていないので、拒否は設計どおり（#224）。 |
+| 根拠 | FAPI 1.0 Advanced §5.2.2 / RFC 7636 / #224 |
+| テスト | `FA0103_fapi1はclient_secretとPKCEの併用を通さない` |
+
+**手順**
+
+1. PKCE(S256) で認可コードを取り、client_secret と code_verifier の両方を送って交換する
+
+**検証（合否を判定する）**
+
+- トークンを返さない
+- エラーは unauthorized_client
+
+**補足**
+
+- **設計どおり**（#224 の段階 2 で、拒否のままとすることにした）。FAPI 1.0 Advanced は client_secret によるクライアント認証を認めていない（private_key_jwt か mTLS）。同じクライアントが client_secret を送らなければ通る（FA-1.1）のは、PKCE の S256 の行による。
+
+## FA-1.4 fapi1 のクライアントは、Hybrid フロー（code id_token）で code も id_token も受け取らず、unauthorized_client が RP へ返る
+
+| | |
+|---|---|
+| 観点 | **表の Hybrid の行は normal だけを通す。**以前はトークンを作る時点で拒否し、error=access_denied を返していた（#224 の段階 0 で記録）。段階 2 で、**要求を検証する時点**（redirect_uri を確かめた直後）で判定し、unauthorized_client を RP へリダイレクトで返すようにした。 |
+| 根拠 | RFC 6749 §4.2.2.1 / OIDC Core §3.3 / FAPI 1.0 Advanced / #224 |
+| テスト | `FA0104_fapi1はHybridフローを通さない` |
+
+**手順**
+
+1. 対照 : normal 登録のクライアントは、Hybrid で code と id_token を受け取る
+1. fapi1 登録のクライアントで、同じ要求を送る
+
+**検証（合否を判定する）**
+
+- 対照（normal）は code を受け取る
+- code を受け取らない
+- id_token を受け取らない
+- RP へリダイレクトで返す
+- エラーは unauthorized_client
 
 ## FA-2.1 oauth2_oidc_mode=fapi2 のクライアントは、client_secret でも PKCE でも通らない
 
@@ -2766,17 +2806,17 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - client_secret では通らない
 - PKCE(S256) でも通らない
-- エラーは unsupported_grant_type
+- エラーは unauthorized_client
 
 **補足**
 
-- **これは設計どおり。** fapi2 の登録は、証明書（x509）を伴う経路でだけ通る。本 E2E は mTLS を張らないので、**通る側は測っていない**。
+- **これは設計どおり。** fapi2 の登録は、証明書（x509）を伴う経路でだけ通る。**通る側は FA-6.1 で測る**（net10.0 版のみ。net48 版は手動。#226）。
 
 ## FA-3.1 oauth2_oidc_mode=device のクライアントは、PKCE(S256) の認可コードが通る
 
 | | |
 |---|---|
-| 観点 | **CheckClientMode には、device のための例外措置がある。**device は fapi2 より大きい値なので、本来は「permittedLevel と一致」が要るが、**clientMode=device かつ permittedLevel=fapi1（＝PKCE の S256）のときだけ通す**と書かれている（LIR 用）。**その例外が効いていることを測る。** |
+| 観点 | **表の「認可コード × PKCE の S256」の行は、device も通す**（LIR 用）。以前の大小比較では device は fapi2 より大きい値で、この経路は例外措置としてハードコードされていた（#224 の段階 1 で表に置き換えた）。**その行が効いていることを測る。** |
 | 根拠 | RFC 8628（Device Authorization Grant）/ #222 |
 | テスト | `FA0301_deviceはPKCEの経路を通る` |
 
@@ -2787,11 +2827,176 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 **検証（合否を判定する）**
 
 - トークンが返る
+- refresh_token は発行されない
 
 **補足**
 
-- **例外措置が無ければ、ここは通らない**（device > fapi2 なので一致判定になる）。`permittedLevel` を作り直すときは、この経路を壊さないこと（#222 の 3）。
-- **refresh_token は使えない。** 更新の経路は client_secret による認証を求めるので、client_secret を持たないこのクライアントは、そもそも要求を組み立てられない。
+- **表のこの行から device を外すと、ここは通らない。**表を書き換えるときは、この経路を壊さないこと（#224）。
+- **refresh_token の経路は normal の登録だけ**なので、device の登録には発行しない（#224 の段階 2。以前は発行していたが、使えなかった）。
+
+## FA-4.1 Device AuthZ グラントは、登録種別が normal と device のクライアントにだけ許す
+
+| | |
+|---|---|
+| 観点 | **このグラントは client_secret（またはパブリック）で通る。**fapi1 / fapi2 / fapi_ciba の登録は、より強いクライアント認証（PKCE / private_key_jwt / mTLS）を求めているので、この経路を使わせてはならない。**以前は登録種別を判定しておらず、client_secret だけでトークンが出ていた**（#224）。 |
+| 根拠 | RFC 8628 / RFC 6749 §5.2（unauthorized_client）/ #224 |
+| テスト | `FA0401_DeviceAuthZはnormalとdeviceの登録にだけ許す` |
+
+**手順**
+
+1. 対照 : device / normal の登録は、開始できる
+1. fapi1 / fapi2 / fapi_ciba の登録は、開始の時点で拒否される
+
+**検証（合否を判定する）**
+
+- TestClient3 は device_code を得る
+- MVC_Sample は device_code を得る
+- TestClient1 は unauthorized_client（400）
+- TestClient2 は unauthorized_client（400）
+- TestClient4 は unauthorized_client（400）
+
+**補足**
+
+- **client_secret は正しいものを送っている。** 拒否の理由は認証の失敗ではなく、**登録種別がこのグラントを許さないこと**（だから invalid_client ではなく unauthorized_client）。
+- **トークン発行（/token）側でも同じ判定をしている**が、開始で弾かれるため到達できず、この E2E では単独で測っていない。
+
+## FA-5.1 CIBA を normal 登録のクライアントで使うと、開始（/ciba_authz）で unauthorized_client になる
+
+| | |
+|---|---|
+| 観点 | **利用者にプッシュ通知を送る前に断る。**以前は開始で登録種別を見ておらず、利用者に通知が届き、承認させた後でトークンの段階（unsupported_grant_type）で拒否していた（#224 の段階 0 で記録）。段階 2 で、開始の時点で判定するようにした（Device AuthZ の C-18 と同じ考え方）。 |
+| 根拠 | OpenID Connect CIBA Core §13 / #224 |
+| テスト | `FA0501_CIBAはfapi_ciba以外の登録を開始で断る` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する（通知を受けられる状態にしておく）
+1. normal 登録のクライアントで、CIBA の認証リクエストを送る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは unauthorized_client
+
+**補足**
+
+- **(1) で端末を登録してあるので、以前の実装なら通知が送られていた。**開始で断ったので、auth_req_id は発行されず、利用者は何も操作しない。
+
+## FA-5.2 oauth2_oidc_mode が既知でない値（fapi_1）のクライアントは、開始（/ciba_authz）で unauthorized_client になる
+
+| | |
+|---|---|
+| 観点 | **既知でない登録値は、不正な登録として拒否する**（#224 の段階 2）。以前は fapi2 とみなしていた。「一番厳しい種別」に倒す作りは、種別が増えると意味が変わるため、やめた。なお oauth2_oidc_mode を書いていない登録は normal で、これには当たらない。 |
+| 根拠 | #224 |
+| テスト | `FA0502_登録種別が既知でない値ならCIBAを断る` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する
+1. 登録値が不正なクライアントで、CIBA の認証リクエストを送る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは unauthorized_client
+
+## FA-6.1 oauth2_oidc_mode=fapi2 のクライアントは、mTLS（Subject が一致する証明書）の認可コードで通る
+
+| | |
+|---|---|
+| 観点 | **fapi2 を通すのは、ClientModePolicy の表の「認可コード × mTLS」の行だけ。**FA-2.1 は client_secret / PKCE では通らないことを測っており、本テストは**その対照（通る側）**。net48 版は -NetFxMtls のときだけ（TESTING.md）。 |
+| 根拠 | RFC 8705 §2.1（tls_client_auth）/ FAPI 2.0 / #226 |
+| テスト | `FA0601_fapi2はmTLSの認可コードで通る` |
+
+**手順**
+
+1. 認可コードを取り、Subject が一致する自己署名の証明書を添えて交換する（client_secret は送らない）
+
+**検証（合否を判定する）**
+
+- トークンが返る
+- fapi クレームは登録どおり fapi2
+- アクセス トークンに cnf が載る（証明書に紐づく）
+- refresh_token は発行されない
+
+**補足**
+
+- **refresh_token の経路は normal の登録だけ**なので、fapi2 には発行しない（#224 の段階 2）。
+
+## FA-6.2 mTLS のクライアントは、証明書が無い・Subject が一致しないと invalid_client（401）になる
+
+| | |
+|---|---|
+| 観点 | **クライアント認証は、証明書の Subject と登録の tls_client_auth_subject_dn の一致で行う。**client_secret を送らず、証明書も一致しなければ、認証に失敗する（RFC 6749 §5.2 : invalid_client）。 |
+| 根拠 | RFC 8705 §2.1 / RFC 6749 §5.2 / #226 |
+| テスト | `FA0602_証明書が無いかSubjectが違うならinvalid_client` |
+
+**手順**
+
+1. 証明書を添えずに交換する
+1. Subject が違う証明書を添えて交換する
+
+**検証（合否を判定する）**
+
+- トークンを返さない
+- HTTP 401
+- エラーは invalid_client
+- トークンを返さない
+- HTTP 401
+- エラーは invalid_client
+
+## FA-6.3 oauth2_oidc_mode が既知でない値（fapi_1）のクライアントは、Subject が一致する証明書でも通らない
+
+| | |
+|---|---|
+| 観点 | **既知でない登録値は、不正な登録として拒否する**（#224 の段階 2 の E）。以前は fapi2 とみなしていたので、**この経路（認可コード × mTLS）では通っていた**。FA-5.2（CIBA）は以前の扱いでも拒否されるため区別できず、違いが出るのはここだけ。 |
+| 根拠 | #224 / #226 |
+| テスト | `FA0603_登録種別が既知でない値なら証明書が一致しても通さない` |
+
+**手順**
+
+1. 認可リクエストを送る
+1. 証明書で認証できることを、トークン エンドポイント（client_credentials）で確かめる
+
+**検証（合否を判定する）**
+
+- 認可コードを発行しない
+- エラーは unauthorized_client
+- トークンを返さない
+- エラーは unauthorized_client（認証は通っている）
+- 説明は「登録値が不正」
+
+## FA-6.4 mTLS で得たアクセス トークンは cnf を持ち、その証明書を提示した要求でしか使えない
+
+| | |
+|---|---|
+| 観点 | **cnf は、トークンを証明書に紐づける**（sender-constrained。RFC 8705 3）。値は**証明書（DER）の SHA-256 を BASE64URL したもの**（同 3.1）。保護されたリソース（ここでは /userinfo）は、**提示された証明書と照合して**、合わなければ受け付けない。紐づいていないトークン（cnf 無し）は、これまでどおり bearer として扱う。 |
+| 根拠 | RFC 8705 §3 / §3.1 / RFC 6750 §3.1 |
+| テスト | `FA0604_証明書に紐づくトークンはその証明書の要求でしか使えない` |
+
+**手順**
+
+1. mTLS でトークンを取り、cnf の値を確かめる
+1. 同じ証明書を提示して /userinfo を呼ぶ
+1. 証明書を提示せずに /userinfo を呼ぶ
+1. 別の証明書を提示して /userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- cnf の x5t#S256 は、証明書の SHA-256（BASE64URL）
+- HTTP 200
+- sub が返る
+- HTTP 401
+- エラーは invalid_token
+- 利用者の属性を返さない
+- HTTP 401
+- エラーは invalid_token
 
 # 21
 

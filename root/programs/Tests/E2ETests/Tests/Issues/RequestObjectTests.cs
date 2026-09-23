@@ -33,6 +33,7 @@
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（RT-197）
 //*  2026/09/11  玄人 幸道         #197 の修正に合わせ、RT-197.5 の Skip を解除し、RT-197.6 を検証に変更
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-197）
+//*  2026/09/22  玄人 幸道         RT-197.2 の期待するエラー コードを unauthorized_client に改めた（#224 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -150,8 +151,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "access_token を返さない",
                     token.AccessToken == null ? "返さなかった" : "**返してしまった**");
 
-                r.VerifyEqual("unsupported_grant_type で拒否される",
-                    "unsupported_grant_type", token.Error);
+                // 登録種別で許されていないグラントは unauthorized_client（RFC 6749 §5.2。#224 の段階 2 で改めた）
+                r.VerifyEqual("unauthorized_client で拒否される",
+                    "unauthorized_client", token.Error);
 
                 r.Done();
             }

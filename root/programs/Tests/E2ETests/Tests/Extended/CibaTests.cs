@@ -31,6 +31,7 @@
 //*  2026/09/12  玄人 幸道         新規（プッシュ通知を送信箱で受け、認証デバイスの返答をテストが送る）（#196）
 //*  2026/09/13  玄人 幸道         EX-8.3（返答の及ぶ範囲）・EX-8.4（別の利用者は承認できない）を追加
 //*  2026/09/16  玄人 幸道         EX-8.4 の Skip を解消（2 人目の利用者でサインインできるようにした）
+//*  2026/09/22  玄人 幸道         補助処理を internal にして、FA-5（#224）からも使う
 //**********************************************************************************
 
 using System;
@@ -62,8 +63,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
     /// /ciba_result は、**auth_req_id で 1 件を特定し、その要求が返答者宛てかを確かめてから**結果を書き込む。
     /// 以前はメモリのストアで auth_req_id を見ておらず、保留中の全ての要求へ書き込んでいた（EX-8.3 で回帰を見る）。
     /// </summary>
+    [Collection(CibaTests.DeviceCollection)]
     public class CibaTests : TargetTestBase
     {
+        /// <summary>
+        /// 既定の利用者に端末（device_token）を登録するテストのコレクション（#224）。
+        /// </summary>
+        /// <remarks>
+        /// **同じコレクションのクラスは、並行して動かない。** 端末の登録は利用者ごとに 1 つなので、
+        /// 並行すると奪い合い、プッシュ通知が別の端末へ行く。FA-5（CibaClientModeTests）も入れる。
+        /// </remarks>
+        internal const string DeviceCollection = "CIBA の端末登録";
+
         /// <summary>grant_type</summary>
         private const string GrantType = "urn:openid:params:grant-type:ciba";
 
@@ -77,7 +88,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="r">TestReport</param>
         /// <param name="client">IdPClient（サインイン済み）</param>
         /// <returns>ユーザのアクセス トークンと、登録したデバイス・トークン</returns>
-        private static async Task<(string AccessToken, string DeviceToken)> RegisterDeviceAsync(
+        internal static async Task<(string AccessToken, string DeviceToken)> RegisterDeviceAsync(
             TestReport r, IdPClient client)
         {
             // 認証デバイスは、サインインして得たユーザのトークンで、自分の宛先（device_token）を登録する。
@@ -99,7 +110,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="reg">CIBA のクライアント</param>
         /// <param name="bindingMessage">binding_message（認証デバイスに表示される）</param>
         /// <returns>JsonResponse</returns>
-        private static async Task<JsonResponse> StartAsync(
+        internal static async Task<JsonResponse> StartAsync(
             IdPClient client, ClientRegistration reg, string bindingMessage)
         {
             string requestUri = await RequestObjectBuilder.RegisterAsync(client,
@@ -122,7 +133,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="reg">CIBA のクライアント</param>
         /// <param name="authReqId">auth_req_id</param>
         /// <returns>JsonResponse</returns>
-        private static Task<JsonResponse> PollAsync(IdPClient client, ClientRegistration reg, string authReqId)
+        internal static Task<JsonResponse> PollAsync(IdPClient client, ClientRegistration reg, string authReqId)
         {
             return client.TokenAsync(new Dictionary<string, string>()
             {
@@ -139,7 +150,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
         /// <param name="authReqId">auth_req_id</param>
         /// <param name="deviceToken">登録したデバイス・トークン</param>
         /// <returns>プッシュ通知</returns>
-        private static async Task<FcmOutbox.Message> ReceivePushAsync(
+        internal static async Task<FcmOutbox.Message> ReceivePushAsync(
             TestReport r, IdPClient client, string authReqId, string deviceToken)
         {
             FcmOutbox.Message push = await FcmOutbox.WaitForAsync(

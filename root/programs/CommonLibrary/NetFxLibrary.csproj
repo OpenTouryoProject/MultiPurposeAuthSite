@@ -91,6 +91,7 @@
     <Compile Include="Notifications\EmailService.cs" />
     <Compile Include="Notifications\CmnSms.cs" />
     <Compile Include="Notifications\SmsService.cs" />
+    <Compile Include="TokenProviders\ClientModePolicy.cs" />
     <Compile Include="TokenProviders\CmnEndpoints.cs" />
     <Compile Include="TokenProviders\CmnIdToken.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
