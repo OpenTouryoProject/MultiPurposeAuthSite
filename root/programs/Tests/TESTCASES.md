@@ -1805,6 +1805,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - response_modes_supported に *.jwt がある（JARM）
 - authorization_signing_alg_values_supported がある（RS256）
 
+## RT-189.5 code_challenge_methods_supported は設定どおりで、service_documentation にプレースホルダを出さない
+
+| | |
+|---|---|
+| 観点 | **広告は、実装に合わせる。**`plain` を受けるかどうかは `RequirePkceS256`（サーバ全体の設定）だけで決まるので、締めた配置では `plain` を広告しない。`service_documentation` は任意の項目なので、**値が無ければ出さない**（以前は "・・・" というプレースホルダを配っていた）。 |
+| 根拠 | OAuth 2.1 / FAPI（S256 のみ）/ OIDC Discovery 1.0 §3 / #228 の 9・12 |
+| テスト | `RT189_05_広告が実装と食い違わない` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- code_challenge_methods_supported に S256 がある
+- 既定では plain も広告する（実装が受け付けるため）
+- service_documentation にプレースホルダが出ない
+
+**観測（判定しない）**
+
+- RequirePkceS256 = true のとき
+  - その場合、plain は広告されない（Discovery は要求のたびに設定を読む）。
+
 ## RT-190.1 Implicit / Hybrid フローで nonce が無ければ拒否される
 
 | | |

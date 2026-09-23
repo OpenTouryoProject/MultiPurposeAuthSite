@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/24  玄人 幸道         新規（#189 の 2〜8 : 誤りの修正と、実装済みの項目の広告）
+//*  2026/09/24  玄人 幸道         RT-189.5（広告と実装をそろえる。#228 の 9・12）を追加
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -273,6 +274,57 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     DiscoveryTests.ArrayContains(json, "authorization_signing_alg_values_supported", "RS256"),
                     "配列（RS256 を含む）",
                     DiscoveryTests.KindOf(json, "authorization_signing_alg_values_supported"));
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-189.5 広告が実装と食い違わない（#228 の 9・12）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT189_05_広告が実装と食い違わない(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-189.5",
+                    "code_challenge_methods_supported は設定どおりで、service_documentation にプレースホルダを出さない",
+                    "**広告は、実装に合わせる。**"
+                    + "`plain` を受けるかどうかは `RequirePkceS256`（サーバ全体の設定）だけで決まるので、"
+                    + "締めた配置では `plain` を広告しない。"
+                    + "`service_documentation` は任意の項目なので、**値が無ければ出さない**"
+                    + "（以前は \"・・・\" というプレースホルダを配っていた）。",
+                    "OAuth 2.1 / FAPI（S256 のみ）/ OIDC Discovery 1.0 §3 / #228 の 9・12");
+
+                r.Target(client.Target.DisplayName);
+                r.Step("GET /.well-known/openid-configuration");
+
+                JsonElement json = await DiscoveryTests.DiscoveryAsync(client);
+
+                r.Verify("code_challenge_methods_supported に S256 がある",
+                    DiscoveryTests.ArrayContains(json, "code_challenge_methods_supported", "S256"),
+                    "S256 を含む",
+                    DiscoveryTests.KindOf(json, "code_challenge_methods_supported"));
+
+                // **テストは既定（RequirePkceS256 = false）で回る。**
+                //   true 側は設定ファイルを変えて起動し直す必要があるため、ここでは測れない（TESTING.md 5 節）。
+                r.Verify("既定では plain も広告する（実装が受け付けるため）",
+                    DiscoveryTests.ArrayContains(json, "code_challenge_methods_supported", "plain"),
+                    "plain を含む",
+                    DiscoveryTests.KindOf(json, "code_challenge_methods_supported"));
+
+                r.Observe("RequirePkceS256 = true のとき",
+                    "測っていない（設定を変えて起動し直す必要がある）",
+                    "その場合、plain は広告されない（Discovery は要求のたびに設定を読む）。");
+
+                string doc = json.TryGetProperty("service_documentation", out JsonElement sd)
+                    ? sd.GetString() : null;
+
+                r.Verify("service_documentation にプレースホルダが出ない",
+                    doc == null || !doc.Contains("・"),
+                    "出ない（設定が空なら、キーごと出さない）",
+                    doc == null ? "キーが無い" : "\"" + doc + "\"");
 
                 r.Done();
             }

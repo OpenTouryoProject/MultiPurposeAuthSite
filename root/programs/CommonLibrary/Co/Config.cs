@@ -1581,6 +1581,21 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
+        /// </summary>
+        /// <remarks>
+        /// **任意の項目**（OIDC Discovery 1.0 §3）。**既定は空で、空なら Discovery に出さない。**
+        /// 以前は "・・・" というプレースホルダを配っていた。
+        /// </remarks>
+        public static string ServiceDocumentation
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("ServiceDocumentation");
+            }
+        }
+
+        /// <summary>
         /// 認可コード フローで code_challenge（PKCE）を必須にするかどうか（#220）
         /// </summary>
         /// <remarks>

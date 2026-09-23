@@ -580,16 +580,20 @@ CIBA クライアントはこのキーを見つけられない。
 > **`"false"` は危い。** 多くの実装で**真**として読まれるので、
 > 「user_code に対応していない」が「対応している」に反転する。
 
-**残り（仕様方針の判断を伴うため、別 Issue に切り出す想定。#189 の 9〜14）**
+**#228（仕様方針の判断を伴うもの。#189 の 9〜14）で決めたこと**
 
-| 現状 | 論点 |
-|---|---|
-| `code_challenge_methods_supported` に `plain` | OAuth 2.1 / FAPI は `S256` のみ。実装は `plain` も受けるので、**広告をやめるなら実装も締める**（`RequirePkceS256`。#220） |
-| `subject_types_supported` に `uname` | 登録済みの値は `public` / `pairwise` のみ（独自拡張であることを明示するか外す。#151） |
-| `request_object_endpoint`（独自名） | PAR にするなら `pushed_authorization_request_endpoint`（D-2） |
-| `service_documentation: "・・・"` | プレースホルダのまま |
-| `claims_supported` に profile / address 系が無い | そもそも未実装 |
-| `end_session_endpoint` / `registration_endpoint` / `authorization_response_iss_parameter_supported` が無い | いずれも未実装（#129 / RFC 9207） |
+| # | 決定 | 理由 | E2E |
+|---|---|---|---|
+| 9 | **設定に合わせて広告する**。`RequirePkceS256` が `true` なら `["S256"]`、既定（`false`）なら `["plain","S256"]` | 広告と実装を一致させる。**既定の挙動は変えない。** `RequirePkceS256` はサーバ全体の設定なので、要求者によらず 1 つに決まる（クライアント単位の `require_pkce` は「必須にするか」で別の話。Discovery にクライアント別の項目は無い） | `RT-189.5` |
+| 12 | **設定値にする**（`ServiceDocumentation`。既定は空、空なら出さない） | 任意の項目なので、嘘のプレースホルダ（`"・・・"`）を配らない | `RT-189.5` |
+| 10 | **変えない**（#151 に委ねる） | `uname` は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）。広告だけ直すと、実際の `sub` とズレる | — |
+| 11 | **変えない**（D-2＝#229 に委ねる） | `request_object_endpoint` は FAPI1 の Request Object（JAR）の置き場所を示す独自拡張。**名前だけ PAR に寄せると、中身が PAR でないのに PAR と読まれる** | — |
+| 13 | **別 Issue（#230）**（`profile` / `address` のクレームは未実装。D-7） | 広告だけ足すと嘘になる | — |
+| 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、#129 と関連） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
+
+> **`request_object_endpoint`（`/ros`）と PAR（RFC 9126）の差**（D-2）。
+> `/ros` は Request Object の署名だけで受け付け、応答の `exp` は空文字、`request_uri` は使い切りにしていない。
+> PAR は**クライアント認証**（トークン エンドポイントと同じ）、**`expires_in` 必須**、**一回限り**を求める。
 
 ### A-11. `/revoke` `/introspect` がヒントを必須にし、無効なトークンをエラーにする **[Core][Lib]** — **✅ 修正済み（#200）**
 
@@ -1316,13 +1320,13 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 
 | # | 仕様 | 状況 | 影響 |
 |---|---|---|---|
-| D-1 | **RP-Initiated Logout / Front-Channel / Back-Channel Logout / Session Management** | **未実装**（`end_session` の実装も discovery も無し） | RP からのログアウト連携ができない。SSO の解除手段が無い |
-| D-2 | **PAR（RFC 9126）** | 独自の `/ros` のみ。`request_uri` の払い出しは在るが、クライアント認証・`expires_in`・ワンタイム性が無い | FAPI 2.0 Security Profile は PAR を必須としている |
+| D-1 | **RP-Initiated Logout / Front-Channel / Back-Channel Logout / Session Management** | **未実装**（`end_session` の実装も discovery も無し）。**#232** | RP からのログアウト連携ができない。SSO の解除手段が無い |
+| D-2 | **PAR（RFC 9126）** | 独自の `/ros` のみ。`request_uri` の払い出しは在るが、クライアント認証・`expires_in`・ワンタイム性が無い。**#229** | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
-| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | 未実装 | Mix-Up 攻撃への対策が RP 側任せ |
+| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | 未実装。**#231** | Mix-Up 攻撃への対策が RP 側任せ |
 | D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
-| D-7 | `profile` / `address` スコープのクレーム | **空実装**（`// ・・・`）。`name` `given_name` `family_name` 等を返さない | `scopes_supported` に載っているのに何も返らない |
+| D-7 | `profile` / `address` スコープのクレーム | **空実装**（`// ・・・`）。`name` `given_name` `family_name` 等を返さない。**#230** | `scopes_supported` に載っているのに何も返らない |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
@@ -1381,7 +1385,7 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 | ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
-| ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残りは仕様方針の判断を伴う 9〜14 |
+| ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残り（仕様方針の判断を伴う 9〜14）は #228 |
 
 ### フェーズ 2 — セキュリティの底上げ
 

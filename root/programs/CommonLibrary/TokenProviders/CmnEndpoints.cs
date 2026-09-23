@@ -82,6 +82,7 @@
 //*  2026/09/22  玄人 幸道         登録種別で拒否するときは unauthorized_client。認可エンドポイントと /ciba_authz でも先に判定する。
 //*                                使えない refresh_token は発行しない。既知でない登録値は不正として拒否する（#224 の段階 2）
 //*  2026/09/24  玄人 幸道         Discovery の誤りを直し、実装済みの項目を広告する（#189 の 2〜8）
+//*  2026/09/24  玄人 幸道         code_challenge_methods_supported を設定に合わせ、service_documentation を設定値にする（#228）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -357,10 +358,21 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region OAuth PKCE
 
-            OpenIDConfig.Add("code_challenge_methods_supported", new List<string> {
-                OAuth2AndOIDCConst.PKCE_plain,
-                OAuth2AndOIDCConst.PKCE_S256
-            });
+            // **広告は、実装に合わせる**（#228 の 9）。
+            //   plain を受けるかどうかは RequirePkceS256（サーバ全体の設定）だけで決まる。
+            //   締めた配置では plain を広告しない。
+            //   ※ クライアント単位の require_pkce（#221）は「PKCE を必須にするか」であって、
+            //     ここ（対応するメソッド）とは別。Discovery にクライアント別の項目は無い。
+            List<string> code_challenge_methods_supported = new List<string>();
+
+            if (!Config.RequirePkceS256)
+            {
+                code_challenge_methods_supported.Add(OAuth2AndOIDCConst.PKCE_plain);
+            }
+
+            code_challenge_methods_supported.Add(OAuth2AndOIDCConst.PKCE_S256);
+
+            OpenIDConfig.Add("code_challenge_methods_supported", code_challenge_methods_supported);
 
             #endregion
 
@@ -402,7 +414,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 "page"
             });
 
-            OpenIDConfig.Add("service_documentation", "・・・");
+            // **プレースホルダを配らない**（#228 の 12）。
+            //   任意の項目なので、設定が空なら出さない。
+            if (!string.IsNullOrEmpty(Config.ServiceDocumentation))
+            {
+                OpenIDConfig.Add("service_documentation", Config.ServiceDocumentation);
+            }
             #endregion
 
             #endregion

@@ -210,7 +210,12 @@
     // PKCE を必須にするか（#220。true は OAuth 2.1 相当。Device AuthZ / CIBA は対象外）
     "RequirePkce": "false",
     // PKCE で S256 だけを受け付けるか（#220。true は OAuth 2.1 / FAPI 相当）
+    //   Discovery の code_challenge_methods_supported は、この値に合わせて広告する（#228）
     "RequirePkceS256": "false",
+
+    // Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
+    //   **空なら Discovery に出さない**（任意の項目）
+    "ServiceDocumentation": "",
 
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
