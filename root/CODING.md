@@ -296,7 +296,8 @@ if ($PSVersionTable.PSVersion.Major -ge 6)
 }
 else
 {
-    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    # **スクリプト ブロックではなく、コンパイルしたデリゲートを使う**（下記）
+    [MpasTestTls]::TrustAll()
     [System.Net.ServicePointManager]::SecurityProtocol =
         [System.Net.SecurityProtocolType]::Tls12
 
@@ -306,6 +307,37 @@ else
     $code = [int]$res.StatusCode
     $res.Close()
 }
+```
+
+**5.1 のコールバックは、スクリプト ブロックにしない**（#226 で実測）。
+
+サーバがクライアント証明書を要求すると（mTLS）、**サーバ証明書の検証が
+ランスペースの無いスレッドから呼ばれる。** スクリプト ブロックだと
+
+```
+このスレッドには、スクリプトを実行するために使用できる実行空間が存在しません
+```
+
+になり、**ハンドシェイクごと落ちる**（呼び出し側には「接続が切断されました」としか見えない）。
+要求されないうちは同期的に呼ばれるので、**mTLS を使うまで表面化しない。**
+
+```powershell
+Add-Type -TypeDefinition @"
+using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+
+public static class MpasTestTls
+{
+    public static void TrustAll()
+    {
+        ServicePointManager.ServerCertificateValidationCallback =
+            delegate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+            { return true; };
+    }
+}
+"@
+[MpasTestTls]::TrustAll()
 ```
 
 ```powershell
@@ -340,6 +372,30 @@ pwsh           -NoProfile -File "root\0_RunAll.ps1" -SkipClean
 # **単体でも起動してみること。** 通しでは表面化しない不具合がある
 powershell.exe -NoProfile -File "root\1_BuildAll.ps1" -List
 powershell.exe -NoProfile -File "root\2_RunAllTests.ps1" -Launch
+```
+
+### 子プロセスの日本語が化ける（5.1）
+
+**`dotnet` の出力は UTF-8。5.1 は既定（ANSI = 932）で読むため化ける。**
+
+```
+  蠕ｩ蜈・ｯｾ雎｡縺ｮ繝励Ο繧ｸ繧ｧ繧ｯ繝医ｒ豎ｺ螳壹＠縺ｦ縺・∪縺・..   ← 「復元対象のプロジェクトを決定しています...」
+```
+
+7 は既定が UTF-8 なので出ない。**5.1 のときだけ、実行の間の読み取りを UTF-8 にし、終わったら戻す。**
+コンソールの設定を変えるので、`finally` で必ず戻すこと（`chcp` を呼ぶ必要は無い）。
+
+```powershell
+$prev = $null
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    try {
+        $prev = [Console]::OutputEncoding
+        [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    }
+    catch { $prev = $null }   # コンソールが無いとき
+}
+try     { & dotnet @args }
+finally { if ($null -ne $prev) { try { [Console]::OutputEncoding = $prev } catch { } } }
 ```
 
 ### ネイティブ コマンドの標準エラーで止まる（5.1）

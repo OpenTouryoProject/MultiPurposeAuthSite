@@ -219,6 +219,9 @@ $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWe
 #   HttpClient + コールバック               NG    OK
 #
 #   5.1 の NG : 「接続が切断されました: 送信時に、予期しないエラーが発生しました。」
+#
+# **5.1 の証明書検証コールバックは、コンパイルしたデリゲートにすること**（#226）。
+# スクリプト ブロックだと、クライアント証明書のネゴシエーション時に別スレッドから呼ばれ、実行できない。
 #   7   の NG : 「The SSL connection could not be established」
 #
 # 生の SslStream は 5.1 でも 1.2 / 1.3 の両方で成功するので、
@@ -321,11 +324,13 @@ function New-IisExpressConfig
     $site.bindings.binding.bindingInformation = "*:${Port}:localhost"
 
     # **mTLS のテストのとき（-NetFxMtls）だけ、クライアント証明書を要求させる**（#226）。
-    #   SslNegotiateCert は「要求するが、無くても通す」。他のテストには影響しない。
+    #   SslNegotiateCert は「要求するが、無くても通す」。
+    #   **/token にだけ掛ける。** サイト全体に掛けると、net48 版の FAPI2 の自己テスト
+    #   （サーバが自分自身を HTTPS で呼ぶ）が証明書を求められて止まり、RT-197.1 が時間切れになる（実測）。
     #   管理者権限は要らない（このファイルは test.ps1 が自前で作るもの）。
     if ($ClientCertificate) {
         $location = $doc.CreateElement('location')
-        $location.SetAttribute('path', 'MPAS48')
+        $location.SetAttribute('path', 'MPAS48/token')
         $location.InnerXml = '<system.webServer><security><access sslFlags="Ssl, SslNegotiateCert" /></security></system.webServer>'
         [void]$doc.configuration.AppendChild($location)
     }
@@ -419,6 +424,21 @@ function Get-InjectedTestClient
 $core  = $null
 $netFx = $null
 
+# **子プロセス（dotnet）の出力は UTF-8。5.1 は既定（ANSI）で読むため化ける。**
+#   例 : 「復元対象のプロジェクト...」が「蠕ｩ蜈・ｯｾ雎｡...」になり、テスト名の日本語も読めなくなる。
+#   7 は既定が UTF-8 なので影響しない。**この実行の間だけ変え、最後に戻す**（コンソールの設定が残らないように）。
+$prevConsoleEncoding = $null
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    try {
+        $prevConsoleEncoding = [Console]::OutputEncoding
+        [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    }
+    catch {
+        # コンソールが無い（完全にリダイレクトされた）場合など。読めるかは環境任せになる。
+        $prevConsoleEncoding = $null
+    }
+}
+
 try {
     if ($Launch) {
 
@@ -467,7 +487,31 @@ try {
         }
 
         if ($PSVersionTable.PSVersion.Major -lt 6) {
-            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+            # **コールバックは、スクリプト ブロックではなくコンパイルしたデリゲートにする。**
+            #   クライアント証明書のネゴシエーション（-NetFxMtls）が入ると、
+            #   サーバ証明書の検証が**ランスペースの無いスレッド**で呼ばれ、
+            #   スクリプト ブロックでは
+            #     「このスレッドには、スクリプトを実行するために使用できる実行空間が存在しません」
+            #   になってハンドシェイクごと落ちる（起動待ちが 90 秒で失敗する）。実測で切り分けた（#226）。
+            if (-not ('MpasTestTls' -as [type])) {
+                Add-Type -TypeDefinition @"
+using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+
+public static class MpasTestTls
+{
+    public static void TrustAll()
+    {
+        ServicePointManager.ServerCertificateValidationCallback =
+            delegate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+            { return true; };
+    }
+}
+"@
+            }
+            [MpasTestTls]::TrustAll()
+
             [System.Net.ServicePointManager]::SecurityProtocol =
                 [System.Net.SecurityProtocolType]::Tls12
         }
@@ -712,6 +756,11 @@ finally {
         Remove-Item Env:\MPAS_CORE_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
+    }
+
+    # コンソールの文字コードを戻す（この実行の間だけ UTF-8 にしている）
+    if ($null -ne $prevConsoleEncoding) {
+        try { [Console]::OutputEncoding = $prevConsoleEncoding } catch { }
     }
 }
 

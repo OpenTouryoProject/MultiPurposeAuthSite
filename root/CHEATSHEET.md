@@ -35,6 +35,48 @@ cd root\programs\Tests
 
 合否の読み方 → [`BUILDING.md`](BUILDING.md) 3 節 / [`TESTING.md`](TESTING.md) 5 節
 
+### net48 版の mTLS（`FA-6`）だけ、準備が要る
+
+**net10.0 版は、通常の通しで測っている**（`-Launch` がテスト専用のフックを読ませる）。
+**net48 版は、証明書を用意したうえで `-NetFxMtls` を付けたときだけ測る。**
+
+1. 準備（**管理者の PowerShell**。テスト用 CA と証明書 2 枚を作り、CA を信頼されたルートへ）
+
+```powershell
+$ca = New-SelfSignedCertificate -Subject 'CN=MPAS E2E Test CA' `
+    -KeyUsage CertSign, CRLSign, DigitalSignature `
+    -TextExtension @('2.5.29.19={critical}{text}ca=true') `
+    -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(7)
+
+foreach ($cn in 'mpas-e2e-mtls-client', 'mpas-e2e-mtls-other') {
+    New-SelfSignedCertificate -Subject "CN=$cn" -Signer $ca `
+        -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.2') `
+        -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(7) | Out-Null
+}
+
+$cer = Join-Path $env:TEMP 'mpas-e2e-ca.cer'
+Export-Certificate -Cert $ca -FilePath $cer | Out-Null
+Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
+Remove-Item $cer
+```
+
+2. 実行（通常の PowerShell でよい）
+
+```powershell
+cd root
+.\2_RunAllTests.ps1 -Launch -NetFxMtls
+```
+
+3. 後片付け（**管理者の PowerShell**。**必ず行う。**信頼されたルートに残さない）
+
+```powershell
+$subjects = 'CN=MPAS E2E Test CA', 'CN=mpas-e2e-mtls-client', 'CN=mpas-e2e-mtls-other'
+Get-ChildItem Cert:\LocalMachine\Root, Cert:\CurrentUser\My |
+    Where-Object { $subjects -contains $_.Subject } | Remove-Item
+```
+
+**5.1 / 7 のどちらでも回る**（実測済み。2026/09/23）。背景 → [`TESTING.md`](TESTING.md) 5 節
+
 ## 2. ログの置き場所
 
 **すべて 1 か所に出る。** `root\programs\Tests\E2ETests\Result`（`.gitignore` 済み）。
