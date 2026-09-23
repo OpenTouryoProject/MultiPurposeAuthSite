@@ -1734,6 +1734,77 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 認可コードを発行しない
 - 指定された redirect_uri へリダイレクトしない
 
+## RT-189.1 Discovery が device_authorization_endpoint と device_code のグラントを広告する
+
+| | |
+|---|---|
+| 観点 | **実装しているのに広告していなかった。**`/device_authz` を公開し、`device_code` のグラントも実装しているのに、Discovery は `Config.EnableDeviceAuthZGrantType` を一度も見ていなかった。RP は Discovery だけを見て設定するので、**使えるのに使えないと判断される。** |
+| 根拠 | RFC 8628 §4 / #189 の 6・7 |
+| テスト | `RT189_01_DeviceAuthorizationGrantを広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+1. 広告された口が、実際に応答することを確かめる
+
+**検証（合否を判定する）**
+
+- device_authorization_endpoint がある
+- grant_types_supported に device_code が入る
+- その URL は存在する（404 ではない）
+
+## RT-189.2 Discovery の値が、仕様どおりの型（boolean / 配列）で返る
+
+| | |
+|---|---|
+| 観点 | **素直に読む RP は、型が違うと落ちる。**boolean を文字列の "false" で返すと、多くの実装では**真**として読まれる。配列であるべき項目を文字列で返すと、解析でそのまま失敗する。 |
+| 根拠 | CIBA Core §4 / OIDC Discovery 1.0 §3 / #189 の 3・4 |
+| テスト | `RT189_02_値の型が仕様どおり` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- backchannel_user_code_parameter_supported は boolean
+- backchannel_authentication_request_signing_alg_values_supported は配列
+
+## RT-189.3 mTLS の紐づけは tls_client_certificate_bound_access_tokens（boolean）で広告する
+
+| | |
+|---|---|
+| 観点 | **以前は草案の名前（mutual_tls_sender_constrained_access_tokens）に、文字列の "true" を入れていた。**RFC 8705 §3.3 の名前で出さなければ、RP は**この IdP が紐づけに対応していない**と読む。紐づけそのものは `FA-6.4` で測っている。 |
+| 根拠 | RFC 8705 §3.3 / #189 の 2 |
+| テスト | `RT189_03_mTLSの紐づけをRFCの名前で広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- tls_client_certificate_bound_access_tokens が boolean の true
+- 草案の名前は載せない
+
+## RT-189.4 id_token の暗号化は alg と enc の対で、JARM は応答の署名アルゴリズムまで広告する
+
+| | |
+|---|---|
+| 観点 | **片方だけでは使えない。** 暗号化は alg（鍵）と enc（本文）の両方が要り、`*.jwt` の response_mode を出すなら、RP は**何で検証するか**を知る必要がある。実装は JWE が RSA-OAEP ＋ A256GCM、JARM の署名が RS256。 |
+| 根拠 | OIDC Discovery 1.0 §3 / JARM §7 / #189 の 5・8 |
+| テスト | `RT189_04_暗号化とJARMは対の項目まで広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- id_token_encryption_enc_values_supported がある（A256GCM）
+- response_modes_supported に *.jwt がある（JARM）
+- authorization_signing_alg_values_supported がある（RS256）
+
 ## RT-190.1 Implicit / Hybrid フローで nonce が無ければ拒否される
 
 | | |

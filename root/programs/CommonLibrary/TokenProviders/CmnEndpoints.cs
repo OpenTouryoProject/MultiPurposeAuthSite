@@ -81,6 +81,7 @@
 //*  2026/09/22  玄人 幸道         登録種別の判定を、permittedLevel の大小比較から ClientModePolicy の表に置き換える（#224 の段階 1）
 //*  2026/09/22  玄人 幸道         登録種別で拒否するときは unauthorized_client。認可エンドポイントと /ciba_authz でも先に判定する。
 //*                                使えない refresh_token は発行しない。既知でない登録値は不正として拒否する（#224 の段階 2）
+//*  2026/09/24  玄人 幸道         Discovery の誤りを直し、実装済みの項目を広告する（#189 の 2〜8）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -214,6 +215,19 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 grant_types_supported.Add(OAuth2AndOIDCConst.CibaGrantType);
             }
+
+            // **Device Authorization Grant は、広告していなかった**（#189 の 6・7）。
+            //   実装済み（/device_authz と device_code のグラント）なのに Discovery から
+            //   Config.EnableDeviceAuthZGrantType を一度も見ていなかったため、
+            //   RP の自動設定が通らなかった。
+            if (Config.EnableDeviceAuthZGrantType)
+            {
+                grant_types_supported.Add(OAuth2AndOIDCConst.DeviceAuthZGrantType);
+
+                // RFC 8628 §4
+                OpenIDConfig.Add("device_authorization_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.DeviceAuthZAuthorizeEndpoint);
+            }
             #endregion
 
             #region response_modes
@@ -240,8 +254,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                     "RS256", "ES256"
                 });
 
+                // **alg と enc は対で広告する**（OIDC Discovery 1.0 §3。#189 の 5）。
+                //   実装は JWE_RsaOaepAesGcm（Open棟梁）で、鍵の暗号化が RSA-OAEP、本文が A256GCM。
                 OpenIDConfig.Add("id_token_encryption_alg_values_supported", new List<string> {
                     "RSA-OAEP"
+                });
+
+                OpenIDConfig.Add("id_token_encryption_enc_values_supported", new List<string> {
+                    "A256GCM"
                 });
                 #endregion
 
@@ -298,6 +318,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 response_modes_supported.Add("query.jwt");
                 response_modes_supported.Add("fragment.jwt");
                 response_modes_supported.Add("form_post.jwt");
+
+                // **応答の署名アルゴリズムを広告していなかった**（JARM §7。#189 の 8）。
+                //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
+                //   実装は CmnResponseObject の JWS(RS256)。
+                OpenIDConfig.Add("authorization_signing_alg_values_supported", new List<string> {
+                    "RS256"
+                });
                 #endregion
             }
 
@@ -341,7 +368,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region FAPI
 
-            OpenIDConfig.Add("mutual_tls_sender_constrained_access_tokens", "true");
+            // **RFC 8705 §3.3 の名前は tls_client_certificate_bound_access_tokens、値は boolean**（#189 の 2）。
+            //   以前は mutual_tls_sender_constrained_access_tokens（草案の名前）に文字列の "true" を入れていた。
+            OpenIDConfig.Add("tls_client_certificate_bound_access_tokens", true);
 
             #endregion
 
@@ -359,8 +388,12 @@ namespace MultiPurposeAuthSite.TokenProviders
             // FAPI-CIBA プロファイルの
             // RequestObjectの署名は、ES256 と PS256のみ許可
             // ちなみに、Tokenの署名は、FAPI2に準拠する。
-            OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", "ES256");
-            OpenIDConfig.Add("backchannel_user_code_parameter_supported", "false");
+            // **配列と boolean で広告する**（CIBA Core §4。#189 の 3・4）。
+            //   以前は文字列だったため、素直に読む RP は型で落ちる。
+            OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", new List<string> {
+                "ES256"
+            });
+            OpenIDConfig.Add("backchannel_user_code_parameter_supported", false);
 
             #endregion
 

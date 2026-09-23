@@ -41,7 +41,7 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
-**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196 で対応済み（全エンドポイント）、A-10 は #189 の残りに紐づく。
+**フェーズ 1 は A-6 / A-8 / A-10 / A-11 が完了**し、A-7 は #196 で対応済み（全エンドポイント）。A-10 の残り（#189 の 9〜14）は仕様方針の判断を伴う。
 セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。C-17（#198）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
@@ -558,25 +558,38 @@ CIBA クライアントはこのキーを見つけられない。
 **前後に空白のあるキーは他に無い**ことを確かめてある。
 このキーを読んでいるコードはリポジトリ内に無い（外部の CIBA クライアントだけが読む）。
 
-> **#189 はこの 1 件だけ対応済みで、他の項目（A-10）は未対応のまま。**
+> **#189 のうち、この 1 件を先に対応した。残りは A-10。**
 
-### A-10. discovery のその他の不整合 **[Lib]**
+### A-10. discovery のその他の不整合 **[Lib]** — **✅ 誤りと未広告は修正済み（#189 の 2〜8）**
 
-| 現状 | あるべき姿 |
+**Discovery は RP が最初に読む唯一の入口である。** 誤りは「読めない」「型で落ちる」に直結し、
+広告していない項目は「実装しているのに使えない」と判断される。
+
+**修正したもの（#189 の 2〜8）**
+
+| # | 修正前 | 修正後 | E2E |
+|---|---|---|---|
+| 2 | `mutual_tls_sender_constrained_access_tokens: "true"`（草案の名前・文字列） | `tls_client_certificate_bound_access_tokens: true`（RFC 8705 §3.3） | `RT-189.3` |
+| 3 | `backchannel_user_code_parameter_supported: "false"` | `false`（boolean） | `RT-189.2` |
+| 4 | `backchannel_authentication_request_signing_alg_values_supported: "ES256"` | `["ES256"]`（配列） | `RT-189.2` |
+| 5 | `id_token_encryption_alg_values_supported` のみ | `..._enc_values_supported: ["A256GCM"]` を対で追加（実装は `JWE_RsaOaepAesGcm`） | `RT-189.4` |
+| 6 | `device_authorization_endpoint` が無い | 追加（RFC 8628 §4） | `RT-189.1` |
+| 7 | `grant_types_supported` に device_code が無い | `Config.EnableDeviceAuthZGrantType` を見て追加 | `RT-189.1` |
+| 8 | JARM の alg が無い | `authorization_signing_alg_values_supported: ["RS256"]`（実装は `CmnResponseObject` の JWS(RS256)） | `RT-189.4` |
+
+> **`"false"` は危い。** 多くの実装で**真**として読まれるので、
+> 「user_code に対応していない」が「対応している」に反転する。
+
+**残り（仕様方針の判断を伴うため、別 Issue に切り出す想定。#189 の 9〜14）**
+
+| 現状 | 論点 |
 |---|---|
-| `device_authorization_endpoint` が無い | RFC 8628 §4。`/device_authz` を公開しているのに広告していない |
-| `grant_types_supported` に device_code が無い | `Config.EnableDeviceAuthZGrantType` が discovery から参照されていない |
-| `mutual_tls_sender_constrained_access_tokens: "true"` | RFC 8705 §3.3 の正式名は `tls_client_certificate_bound_access_tokens`、値は boolean |
-| `backchannel_user_code_parameter_supported: "false"` | boolean |
-| `backchannel_authentication_request_signing_alg_values_supported: "ES256"` | 配列 |
-| `id_token_encryption_alg_values_supported` のみ | `..._enc_values_supported` も対で必要 |
-| `code_challenge_methods_supported` に `plain` | OAuth 2.1 / FAPI は `S256` のみ |
-| `subject_types_supported` に `uname` | 登録済みの値は `public` / `pairwise` のみ（独自拡張であることを明示するか外す） |
-| `request_object_endpoint`（独自名） | PAR にするなら `pushed_authorization_request_endpoint` |
+| `code_challenge_methods_supported` に `plain` | OAuth 2.1 / FAPI は `S256` のみ。実装は `plain` も受けるので、**広告をやめるなら実装も締める**（`RequirePkceS256`。#220） |
+| `subject_types_supported` に `uname` | 登録済みの値は `public` / `pairwise` のみ（独自拡張であることを明示するか外す。#151） |
+| `request_object_endpoint`（独自名） | PAR にするなら `pushed_authorization_request_endpoint`（D-2） |
 | `service_documentation: "・・・"` | プレースホルダのまま |
-| `end_session_endpoint` / `registration_endpoint` が無い | 5 節（未実装のため） |
-| `authorization_response_iss_parameter_supported` が無い | RFC 9207（未実装のため） |
-| JARM の `authorization_signing_alg_values_supported` が無い | JARM を広告しているのに alg を出していない |
+| `claims_supported` に profile / address 系が無い | そもそも未実装 |
+| `end_session_endpoint` / `registration_endpoint` / `authorization_response_iss_parameter_supported` が無い | いずれも未実装（#129 / RFC 9207） |
 
 ### A-11. `/revoke` `/introspect` がヒントを必須にし、無効なトークンをエラーにする **[Core][Lib]** — **✅ 修正済み（#200）**
 
@@ -1368,7 +1381,7 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 | ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
-| A-10 discovery の項目整備 → **#189 の残り 13 項目** |
+| ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残りは仕様方針の判断を伴う 9〜14 |
 
 ### フェーズ 2 — セキュリティの底上げ
 
