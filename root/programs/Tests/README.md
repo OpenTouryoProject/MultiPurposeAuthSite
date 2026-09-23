@@ -263,7 +263,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | 〃 | `FA-3` | `device`（PKCE で通る。表の「PKCE の S256」の行） |
 | 〃 | `FA-4` | Device AuthZ グラントは `normal` / `device` の登録にだけ許す（#224） |
 | `Tests/Fapi/CibaClientModeTests.cs` | `FA-5` | CIBA を `fapi_ciba` 以外の登録（`TestClient4_2`）や、既知でない登録値（`TestClient4_3`）で使うと、**開始（`/ciba_authz`）で**断る |
-| `Tests/Fapi/MtlsTests.cs` | `FA-6` | **mTLS**（#226）: `fapi2` は Subject が一致する証明書の認可コードで通る／証明書なし・不一致は `invalid_client`／既知でない登録値は証明書が一致しても通さない。**net48 版は `-NetFxMtls` のときだけ**（下記） |
+| `Tests/Fapi/MtlsTests.cs` | `FA-6` | **mTLS**（#226）: `fapi2` は Subject が一致する証明書の認可コードで通る／証明書なし・不一致は `invalid_client`／既知でない登録値は証明書が一致しても通さない／**トークンの `cnf` は RFC 8705 の形式で、その証明書の要求でしか使えない**。**net48 版は `-NetFxMtls` のときだけ**（下記） |
 
 判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
 **登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
@@ -277,7 +277,7 @@ net10.0 版にだけ読ませ、発行元を問わずに受け付けさせる（
 net48 版（IIS Express）は、IIS が自己署名の証明書をアプリより前で 403.16 として断るため、既定では測らない。
 **準備（テスト用 CA をコンピューターの信頼されたルートに入れる。管理者権限）だけを手動で行い、
 `-NetFxMtls` を付けて回す**（[`../../TESTING.md`](../../TESTING.md) 5 節）。付けなければ net48 版のケースは作らない。
-**実測済み**（2026/09/23。net48 版でも `FA-6` の 3 件が通る）。
+**実測済み**（2026/09/23。net48 版でも `FA-6` の 4 件が通る）。
 
 **`Tests/OAuth21/` は、OAuth 2.1 が許さない経路の抑止**（#222）。
 

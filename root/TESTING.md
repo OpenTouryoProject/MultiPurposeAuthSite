@@ -253,11 +253,13 @@ IIS は信頼できない証明書を、アプリより前で **HTTP 403.16** �
 `-NetFxMtls` を付けなければ、net48 版のケースは作らない（Skip にもならない）。
 
 > **実施済み（2026/09/23。Windows 11 / IIS Express 10）。**
-> net48 版でも `FA-6` の 3 件が通った（`-NetFxMtls` 付きで 274 件 / 失敗 0 / Skip 0）。
+> net48 版でも `FA-6` の 4 件が通った（`-NetFxMtls` 付きで 276 件 / 失敗 0 / Skip 0）。
 > **失効の情報（CRL）を持たない証明書でも、IIS は通した。**
 >
-> **クライアント証明書を要求させるのは `/token` だけ**（`applicationhost.config` の `location path="MPAS48/token"`）。
-> サイト全体に掛けると、**net48 版の FAPI2 の自己テスト**（サーバが自分自身を HTTPS で呼ぶ）が
+> **クライアント証明書を要求させるのは `/token` と `/userinfo` だけ**
+> （`applicationhost.config` の `location path="MPAS48/token"` / `"MPAS48/userinfo"`）。
+> `/token` は mTLS のクライアント認証、`/userinfo` は証明書に紐づくトークン（`cnf`）の照合に要る。
+> **サイト全体に掛けない。** net48 版の FAPI2 の自己テスト（サーバが自分自身を HTTPS で呼ぶ）が
 > 証明書を求められて止まり、`RT-197.1` が 60 秒で時間切れになる（実測で切り分けた）。
 >
 > なお、**5.1 で起動待ちが 90 秒で失敗する不具合**が、この手順で見つかって直っている（#226）。

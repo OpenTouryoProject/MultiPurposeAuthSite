@@ -325,14 +325,19 @@ function New-IisExpressConfig
 
     # **mTLS のテストのとき（-NetFxMtls）だけ、クライアント証明書を要求させる**（#226）。
     #   SslNegotiateCert は「要求するが、無くても通す」。
-    #   **/token にだけ掛ける。** サイト全体に掛けると、net48 版の FAPI2 の自己テスト
+    #   **掛けるのは /token と /userinfo だけ。** サイト全体に掛けると、net48 版の FAPI2 の自己テスト
     #   （サーバが自分自身を HTTPS で呼ぶ）が証明書を求められて止まり、RT-197.1 が時間切れになる（実測）。
     #   管理者権限は要らない（このファイルは test.ps1 が自前で作るもの）。
     if ($ClientCertificate) {
-        $location = $doc.CreateElement('location')
-        $location.SetAttribute('path', 'MPAS48/token')
-        $location.InnerXml = '<system.webServer><security><access sslFlags="Ssl, SslNegotiateCert" /></security></system.webServer>'
-        [void]$doc.configuration.AppendChild($location)
+        # /token   : mTLS のクライアント認証
+        # /userinfo: 証明書に紐づくトークン（cnf）の照合
+        # ※ 変数名は $path にしない。**引数の $Path（保存先）を上書きする**（大文字小文字を区別しない）
+        foreach ($locationPath in 'MPAS48/token', 'MPAS48/userinfo') {
+            $location = $doc.CreateElement('location')
+            $location.SetAttribute('path', $locationPath)
+            $location.InnerXml = '<system.webServer><security><access sslFlags="Ssl, SslNegotiateCert" /></security></system.webServer>'
+            [void]$doc.configuration.AppendChild($location)
+        }
     }
 
     New-Item -ItemType Directory -Force (Split-Path -Parent $Path) | Out-Null

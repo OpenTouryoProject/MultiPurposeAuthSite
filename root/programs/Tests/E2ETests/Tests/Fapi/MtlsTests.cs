@@ -30,10 +30,12 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/22  玄人 幸道         新規（#226 : mTLS の経路を E2E で確かめる）
 //*  2026/09/23  玄人 幸道         -NetFxMtls のとき、net48 版でも回す（#226）
+//*  2026/09/23  玄人 幸道         FA-6.4（cnf の形式と、/userinfo での照合）を追加
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -125,6 +127,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 { "client_id", reg.ClientId },
                 { "redirect_uri", reg.RedirectUri }
             }, certificate);
+        }
+
+        /// <summary>応答に sub が入っているか</summary>
+        /// <param name="res">JsonResponse</param>
+        /// <returns>入っていれば true</returns>
+        private static bool HasSub(JsonResponse res)
+        {
+            return res.Json.ValueKind == JsonValueKind.Object
+                && res.Json.TryGetProperty("sub", out JsonElement _);
         }
 
         /// <summary>結果の表現（トークンの値は出さない）</summary>
@@ -290,6 +301,81 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                     r.Verify("説明は「登録値が不正」",
                         (cc.ErrorDescription ?? "").Contains("is invalid"),
                         "The mode of this client (…) is invalid.", cc.ErrorDescription ?? "（無し）");
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>FA-6.4 証明書に紐づくトークンは、その証明書の要求でしか使えない</summary>
+        /// <param name="targetKey">core（-NetFxMtls のときは netfx も）</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(MtlsTargets))]
+        public async Task FA0604_証明書に紐づくトークンはその証明書の要求でしか使えない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                MtlsTests.SkipIfNoMtls(client.Target);
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient2_2);
+
+                TestReport r = this.Report("FA-6.4",
+                    "mTLS で得たアクセス トークンは cnf を持ち、その証明書を提示した要求でしか使えない",
+                    "**cnf は、トークンを証明書に紐づける**（sender-constrained。RFC 8705 3）。"
+                    + "値は**証明書（DER）の SHA-256 を BASE64URL したもの**（同 3.1）。"
+                    + "保護されたリソース（ここでは /userinfo）は、**提示された証明書と照合して**、"
+                    + "合わなければ受け付けない。紐づいていないトークン（cnf 無し）は、これまでどおり bearer として扱う。",
+                    "RFC 8705 §3 / §3.1 / RFC 6750 §3.1");
+
+                r.Target("client_name=" + KnownClients.TestClient2_2 + "（fapi2 登録）");
+
+                using (X509Certificate2 cert = TestCertificate.ForTarget(client.Target, KnownClients.MtlsSubjectDn))
+                using (X509Certificate2 other = TestCertificate.ForTarget(client.Target, MtlsTests.OtherSubjectDn))
+                {
+                    r.Step("(1) mTLS でトークンを取り、cnf の値を確かめる");
+
+                    JsonResponse token = await MtlsTests.CodeWithCertificateAsync(client, reg, cert);
+                    Assert.False(string.IsNullOrEmpty(token.AccessToken), "前提: トークンが返ること");
+
+                    JsonElement claims = Jwt.Payload(token.AccessToken);
+                    string thumbprint = "";
+
+                    if (claims.TryGetProperty("cnf", out JsonElement cnf)
+                        && cnf.TryGetProperty("x5t#S256", out JsonElement x5t))
+                    {
+                        thumbprint = x5t.GetString() ?? "";
+                    }
+
+                    string expected = Base64Url.Encode(SHA256.HashData(cert.RawData));
+
+                    r.Verify("cnf の x5t#S256 は、証明書の SHA-256（BASE64URL）",
+                        thumbprint == expected,
+                        "RFC 8705 3.1 の値",
+                        string.IsNullOrEmpty(thumbprint) ? "**無し**"
+                            : (thumbprint == expected ? "一致" : "**別の値**（長さ " + thumbprint.Length + "）"));
+
+                    r.Step("(2) 同じ証明書を提示して /userinfo を呼ぶ");
+
+                    JsonResponse ok = await client.UserInfoWithCertificateAsync(token.AccessToken, cert);
+
+                    r.VerifyEqual("HTTP 200", "200", ((int)ok.StatusCode).ToString());
+                    r.Verify("sub が返る", MtlsTests.HasSub(ok), "sub あり", MtlsTests.HasSub(ok) ? "あり" : "**無し**");
+
+                    r.Step("(3) 証明書を提示せずに /userinfo を呼ぶ");
+
+                    JsonResponse none = await client.UserInfoWithCertificateAsync(token.AccessToken, null);
+
+                    r.VerifyEqual("HTTP 401", "401", ((int)none.StatusCode).ToString());
+                    r.VerifyEqual("エラーは invalid_token", "invalid_token", none.Error ?? "（無し）");
+                    r.Verify("利用者の属性を返さない", !MtlsTests.HasSub(none),
+                        "sub 無し", MtlsTests.HasSub(none) ? "**返してしまった**" : "無し");
+
+                    r.Step("(4) 別の証明書を提示して /userinfo を呼ぶ");
+
+                    JsonResponse mismatch = await client.UserInfoWithCertificateAsync(token.AccessToken, other);
+
+                    r.VerifyEqual("HTTP 401", "401", ((int)mismatch.StatusCode).ToString());
+                    r.VerifyEqual("エラーは invalid_token", "invalid_token", mismatch.Error ?? "（無し）");
                 }
 
                 r.Done();

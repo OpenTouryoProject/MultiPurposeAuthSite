@@ -345,6 +345,13 @@ cd root
 | net10.0（Kestrel） | `Kestrel:EndpointDefaults:ClientCertificateMode` を `AllowCertificate`（証明書の無いクライアントも通す）または `RequireCertificate`。`appsettings.json` でも環境変数（`Kestrel__EndpointDefaults__ClientCertificateMode`）でもよい | 既定でチェーンと失効を検証する。自己署名など信頼できない証明書は、TLS の段階で切れる |
 | net48（IIS） | サイトの `<access sslFlags="Ssl, SslNegotiateCert" />`（証明書を要求するが、無くても通す） | 信頼できない証明書は、アプリより前で **HTTP 403.16** になる |
 
+- **証明書を要求させる口は、`/token` だけでは足りない。**
+  mTLS で発行したトークンは証明書に紐づく（`cnf`）ので、**そのトークンを受ける口でも照合する**（RFC 8705 §3。`ANALYSIS-IdP.md` C-19）。
+  照合には証明書の提示が要るため、**`/userinfo` にも同じ設定が要る。**
+  紐づいたトークンを `/ciba_result` `/SetDeviceToken` `/2fa_result` にも出すなら、それらにも要る
+  （認証デバイスは証明書を使わないので、通常は不要）。
+  net48（IIS）は、サイト全体ではなく**口ごとに**掛けること。サイト全体に掛けると、
+  サーバが自分自身を呼ぶ経路（FAPI2 の自己テスト）が証明書を求められて止まる（実測）
 - **リバース プロキシで TLS を終端する場合、アプリには証明書が届かない。** 今の実装は、プロキシが転送するヘッダ
   （`X-ARR-ClientCert` など）を読まない
 - `tls_client_auth_subject_dn` は **JSON の文字列**なので、`\\` は 1 文字の `\` になる。

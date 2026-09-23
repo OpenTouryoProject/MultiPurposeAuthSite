@@ -65,7 +65,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
 | | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
 | | PPID（`subject_types`: `public` / `pairwise` / `uname`） | ✓ | `Util/PPIDExtension` |
-| | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | `/token` のみ |
+| | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
 | | `.well-known/openid-configuration` | ✓ | 不足あり（3 節） |
 | | `/ros`（Request Object 登録） | ✓ | **PAR ではない独自仕様** |
@@ -1266,6 +1266,36 @@ x509 を渡していなかったので、`fapi2` でも**証明書に束縛さ�
 
 > **#224 の段階 1 で、この判定も表（`ClientModePolicy`）の「Device AuthZ」の行に取り込んだ。**
 > 許す種別（`normal` / `device`）は変えていない。段階 2 で、他の経路のエラー コードも `unauthorized_client` に揃えた。
+
+### C-19. mTLS のトークンの紐づけ（`cnf`）が、形式違いで、照合もしていなかった **[Lib/Core/Net48]** — **✅ 修正済み**
+
+#226（mTLS の E2E）の作業中に見つけた。**2 点あり、どちらも sender-constrained（RFC 8705）の要件を満たしていなかった。**
+
+| | 修正前 | 修正後 |
+|---|---|---|
+| `cnf` の値 | キーは `x5t#S256` だが、**値は証明書の SHA-1 サムプリント（16 進 40 文字）**。キーの `#S256` / `#S512` も**証明書の署名アルゴリズム**で選んでいた | **証明書（DER）の SHA-256 を BASE64URL**（RFC 8705 §3.1）。キーは常に `x5t#S256` |
+| `/userinfo` | **`cnf` を見ていない。** 証明書に紐づくトークンを、**証明書なしで受け付けていた** | 提示された証明書と照合し、合わなければ `invalid_token`（401） |
+
+**紐づけは、トークンが漏えいした場合の防御である。** 照合していなければ、その防御は働かない。
+RFC 8705 §3 は、保護されたリソースが照合することを求めている。
+また、RFC のとおりに照合する外部のリソース サーバとは、値の形式が違うため紐づけが一致しない。
+
+**対応:**
+
+- `CmnAccessToken` に `VerifyCertificateBinding`（`cnf` と提示された証明書の照合）を新設
+- 両アプリの `/userinfo` で照合する。**`cnf` の無いトークンは、これまでどおり bearer として扱う**
+- 認証デバイス向けの口（`/ciba_result` `/SetDeviceToken` `/2fa_result`）でも、同じ照合を通す
+  - **これらを叩く認証デバイス（`AuthenticationDevice_Web`）はパブリック クライアント**で、証明書を提示しない。
+    そのトークンに `cnf` は載らないので、**既定の構成では振る舞いが変わらない**
+  - それでも通すのは、**`cnf` を持つトークンを、この口に持ち込めてしまう**ため。
+    とくに `/ciba_result` は CIBA の要求を「許可」する口で、CIBA のトークンは
+    RP が mTLS で取れば `cnf` を持つ（`cnf` が載るのは、認可コード / `refresh_token` / CIBA の 3 経路）
+  - **紐づいたトークンをこれらの口にも出す配置では、サーバ側で証明書を要求させる設定が要る**（`CONFIGURATION.md` 8 節）
+- E2E テスト : **`FA-6.4`**（`cnf` の値が RFC の形式であること、同じ証明書なら 200、
+  証明書なし・別の証明書なら `invalid_token`（401））
+
+> **`/revoke` `/introspect` は、クライアント認証として証明書を見る口**（C-2）であり、
+> ここで言う「保護されたリソース」ではない。
 
 ---
 
