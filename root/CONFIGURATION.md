@@ -331,6 +331,16 @@ cd root
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
 
+**同梱の証明書は、テスト用の自己署名である。** 本番では使わないこと（パスワードも雛形に書いてある）。
+
+- `SpRp_ClientCertPfxFilePath`（`SHA256RSAClientCert.pfx`）は、**アプリが外向きに呼ぶときの
+  HttpClient に必ず載る**（`Extensions/Sts/Helper.cs`）。サーバが要求すれば、これを提示する
+- **Subject は、クライアント登録の `tls_client_auth_subject_dn` と一致させること。**
+  雛形では `TestClient1` / `TestClient2` の値（`CN=MPAS Test Client`）
+- 作り直すバッチは `GenClientCertByOpenSSL.bat`（先頭に `_` の付いたファイルができる。
+  確かめてから名前を変えて置き換える）
+- **期限切れにしないこと。** 期限切れの証明書を提示すると、要求した相手との TLS がそこで失敗する
+
 ### クライアント証明書（mTLS）を受け付ける
 
 **`fapi2` の登録は、mTLS（RFC 8705 の `tls_client_auth`）でしか通らない**（`ANALYSIS-IdP.md` C-7）。
