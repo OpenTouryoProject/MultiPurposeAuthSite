@@ -89,6 +89,7 @@
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）のエンドポイントを追加（#229）
 //*  2026/09/24  玄人 幸道         CIBA の認証要求を request で直接受け取る（CIBA Core 7.1.1。#233）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を検証する（CIBA Core 7.1.1。#234 の段階 1）
+//*  2026/09/25  玄人 幸道         CIBA の認証要求を jti で使い切りにする（#234 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -993,6 +994,48 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2）</summary>
+        private const string CibaJtiKeyPrefix = "ciba:jti:";
+
+        #region ConsumeCibaJti
+
+        /// <summary>CIBA の認証要求を使い切りにする（#234 の段階 2）</summary>
+        /// <param name="jti">署名した認証要求の一意な識別子</param>
+        /// <returns>まだ使われていなければ true（使ったものとして記録する）</returns>
+        /// <remarks>
+        /// **記録先は Request Object のストアを使い回す。**
+        /// #188 で入れた有効期限（`RequestObjectExpireTimeSpanFromSeconds`。既定 300 秒）と
+        /// 掃除がそのまま効き、**新しい表を作らずに済む**（DDL を 3 方言とも変えなくてよい）。
+        /// 名前と用途がずれるので、**キーに接頭辞を付けて**、Request Object 本体と混ざらないようにする。
+        ///
+        /// **保持は、このストアの有効期限まで。**
+        /// 要求の `exp` がそれより長いと、記録が消えた後は同じ `jti` を受け付ける。
+        /// （既定では、要求の `exp` を 300 秒以内にしておけば隙間は無い）
+        ///
+        /// **厳密な排他はしていない。** 同じ `jti` の要求が同時に届くと、
+        /// 両方が「まだ使われていない」と判定され得る。
+        /// 防ぎたいのは繰り返しの再送で、同時到着はそれに当たらない。
+        /// </remarks>
+        private static bool ConsumeCibaJti(string jti)
+        {
+            string key = CmnEndpoints.CibaJtiKeyPrefix + jti;
+
+            if (!string.IsNullOrEmpty(RequestObjectProvider.Get(key)))
+            {
+                // 既に使われている（期限内）。
+                return false;
+            }
+
+            // **期限切れで読めなくなった行が、まだ残っていることがある**（掃除は間隔を空けて行う）。
+            //   そのまま Create すると、DBMS では主キーの重複になる。先に消しておく。
+            RequestObjectProvider.Delete(key);
+            RequestObjectProvider.Create(key, "used");
+
+            return true;
+        }
+
+        #endregion
+
         #region ValidateAuthZCibaReqParam
 
         /// <summary>ValidateCibaAuthZReqParam</summary>
@@ -1018,7 +1061,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             string exp = "";
             //string iat = "";
             string nbf = "";
-            //string jti = "";            
+            string jti = "";            
             #endregion
 
             #region 初期化
@@ -1123,6 +1166,25 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
             // jti
+            // **同じ要求を二度受け付けない（#234 の段階 2）。**
+            //   CIBA Core 7.1.1 は jti を「署名した認証要求の一意な識別子」としている。
+            //   見ないと、**同じ要求 JWT を exp まで何度でも送り直せる**（利用者に通知が繰り返し届く）。
+            if (!CmnEndpoints.GetCibaClaim(
+                json, OAuth2AndOIDCConst.jti,
+                out jti, out err, out errDescription))
+            {
+                return false;
+            }
+            else
+            {
+                if (!CmnEndpoints.ConsumeCibaJti(jti))
+                {
+                    // CIBA Core 13 : invalid_request
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "The jti was already used.";
+                    return false;
+                }
+            }
             // scope
             if (!CmnEndpoints.GetCibaClaim(
                 json, OAuth2AndOIDCConst.scope,

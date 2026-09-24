@@ -407,5 +407,67 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Done();
             }
         }
+
+        /// <summary>RT-234.3 同じ jti の認証要求を二度は受け付けない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23403_同じjtiの要求を二度は受け付けない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-234.3",
+                    "同じ認証要求（同じ jti）を送り直すと、invalid_request で断る",
+                    "**CIBA Core §7.1.1 は jti を「署名した認証要求の一意な識別子」としている。**"
+                    + "見ないと、**同じ要求 JWT を exp まで何度でも送り直せる**。"
+                    + "`/ciba_authz` はクライアント認証をしないので（段階 3 で入れる）、"
+                    + "要求を手に入れた者が、利用者に通知を繰り返し送れてしまう。"
+                    + "`request_uri` の経路も同じで、`/ros` に預け直せば新しい参照を取れた。",
+                    "CIBA Core §7.1.1 / §13 / #234 の段階 2");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("client_name=" + KnownClients.TestClient4
+                    + "（既定の login_hint ＝ 存在しない利用者。**通知を出さずに jti の消費だけを見る**）");
+
+                r.Step("(1) 認証要求を 1 回送る");
+
+                // 既定の login_hint は存在しない利用者なので、検証は通るが利用者が見つからない。
+                // **jti は、利用者を探す前の検証で消費される。**
+                string jws = await RequestObjectBuilder.CreateCibaAsync(
+                    client, reg.ClientId, new Dictionary<string, object>());
+
+                JsonResponse first = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "request", jws }
+                });
+
+                r.VerifyEqual("1 回目 : エラーは unknown_user_id（検証は通っている）",
+                    "unknown_user_id", first.Error ?? "（無し）");
+
+                r.Step("(2) まったく同じ要求を、もう一度送る");
+
+                JsonResponse second = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "request", jws }
+                });
+
+                r.VerifyEqual("2 回目 : HTTP 400", "400", ((int)second.StatusCode).ToString());
+
+                r.VerifyEqual("2 回目 : エラーは invalid_request（jti は使用済み）",
+                    "invalid_request", second.Error ?? "（無し）");
+
+                r.Verify("2 回目 : エラーが変わる（1 回目と同じ応答ではない）",
+                    first.Error != second.Error,
+                    "1 回目と違うエラー",
+                    "1 回目 = " + (first.Error ?? "（無し）") + " / 2 回目 = " + (second.Error ?? "（無し）"));
+
+                r.Note("**記録は Request Object のストアを使い回している**（接頭辞付きのキー）。"
+                    + "#188 で入れた有効期限と掃除がそのまま効くので、新しい表を作っていない。");
+
+                r.Done();
+            }
+        }
     }
 }
