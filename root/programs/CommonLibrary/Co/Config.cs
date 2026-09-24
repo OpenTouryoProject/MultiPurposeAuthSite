@@ -1615,6 +1615,22 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// PAR（RFC 9126）のエンドポイント（#229）
+        /// </summary>
+        /// <remarks>
+        /// **独自の /ros（Request Object の預け先）とは別の口。**
+        /// /ros は署名付き JWT を生の本文で受け、クライアント認証をしない（後方互換のため残す）。
+        /// こちらは RFC 9126 のとおり、**フォーム形式＋クライアント認証**で受ける。
+        /// </remarks>
+        public static string PushedAuthorizationRequestEndpoint
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("PushedAuthorizationRequestEndpoint");
+            }
+        }
+
+        /// <summary>
         /// Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
         /// </summary>
         /// <remarks>

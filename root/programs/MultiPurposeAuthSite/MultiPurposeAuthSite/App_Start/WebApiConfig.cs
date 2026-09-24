@@ -108,6 +108,12 @@ namespace MultiPurposeAuthSite
             );
 
             config.Routes.MapHttpRoute(
+                name: "PushedAuthorizationRequest",
+                routeTemplate: Config.PushedAuthorizationRequestEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" }
+            );
+
+            config.Routes.MapHttpRoute(
                 name: "RequestObjectUri",
                 routeTemplate: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" }

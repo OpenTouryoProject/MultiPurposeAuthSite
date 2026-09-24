@@ -34,6 +34,7 @@
 //*  2026/09/16  玄人 幸道         2FAのコード送信の失敗を、画面に戻して伝える（#214）
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         認可リクエストの code_challenge を検証に渡す（#220）
+//*  2026/09/24  玄人 幸道         クエリ文字列の request_uri / code_challenge を、デコードされた値で読む（#229）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2837,10 +2838,12 @@ namespace MultiPurposeAuthSite.Controllers
 
             JObject claims = null;
             // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
-            string code_challenge = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.code_challenge, Request.GetEncodedUrl());
-            string request_uri = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
+            // **クエリ文字列は、デコードされた値で読む**（#229）。
+            //   以前は GetEncodedUrl から生のまま取り出していたため、
+            //   **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
+            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
+            string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
+            string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
@@ -3034,10 +3037,12 @@ namespace MultiPurposeAuthSite.Controllers
             string prompt = ""; // ダミー
             JObject claims = null;
             // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
-            string code_challenge = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.code_challenge, Request.GetEncodedUrl());
-            string request_uri = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
+            // **クエリ文字列は、デコードされた値で読む**（#229）。
+            //   以前は GetEncodedUrl から生のまま取り出していたため、
+            //   **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
+            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
+            string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
+            string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(

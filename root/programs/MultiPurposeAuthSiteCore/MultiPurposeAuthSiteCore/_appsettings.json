@@ -217,6 +217,9 @@
     //   **空なら Discovery に出さない**（任意の項目）
     "ServiceDocumentation": "",
 
+    // PAR（RFC 9126）のエンドポイント（#229。独自の /ros とは別の口）
+    "PushedAuthorizationRequestEndpoint": "/par",
+
     // 認可コードの有効期限（秒）（#188。RFC 6749 4.1.2 は 10 分以内を推奨）
     "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
     // Request Object（/ros に預けたもの）の有効期限（秒）（#188）

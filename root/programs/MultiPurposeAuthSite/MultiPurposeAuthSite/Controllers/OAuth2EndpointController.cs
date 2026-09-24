@@ -64,6 +64,7 @@
 //*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
 //*  2026/09/23  玄人 幸道         証明書に紐づくトークン（cnf）を、提示された証明書と照合する
 //*  2026/09/24  玄人 幸道         /ros の応答に有効期限（exp）を入れ、CIBA では使い終わった Request Object を消す（#188）
+//*  2026/09/24  玄人 幸道         PAR（RFC 9126）の /par を追加（#229）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1038,6 +1039,64 @@ namespace MultiPurposeAuthSite.Controllers
                         OAuth2AndOIDCParams.JwkSetFilePath,
                         Encoding.GetEncoding(CustomEncode.UTF_8)))
             };
+        }
+
+        #endregion
+
+        #region /par (PAR : RFC 9126)
+
+        /// <summary>
+        /// 認可要求を先に預かり、request_uri を払い出す WebAPI（PAR。RFC 9126）（#229）
+        /// POST: /par
+        /// </summary>
+        /// <param name="formData">FormDataCollection</param>
+        /// <returns>成功は 201、エラーは 400 / 401</returns>
+        /// <remarks>
+        /// **独自の /ros とは別の口。** /ros は署名付き JWT を生の本文で受け、クライアント認証をしない
+        /// （後方互換のため残している）。こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
+        /// </remarks>
+        [HttpPost]
+        public IHttpActionResult PushedAuthorizationRequest(FormDataCollection formData)
+        {
+            // **資格情報を受け取るので、キャッシュに残さない**（#218 と同じ理由）。
+            this.SetNoStore();
+
+            Dictionary<string, string> err = new Dictionary<string, string>();
+
+            if (formData == null)
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
+
+                return this.OAuth2Error(err, "par");
+            }
+
+            // client_secret_basic
+            if (!AuthenticationHeader.GetCredentials(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string client_id, out string client_secret))
+            {
+                // client_secret_post
+                client_id = formData[OAuth2AndOIDCConst.client_id];
+                client_secret = formData[OAuth2AndOIDCConst.client_secret];
+            }
+
+            // private_key_jwt / mTLS
+            string assertion = formData[OAuth2AndOIDCConst.assertion];
+            X509Certificate2 x509 = Request.GetClientCertificate();
+
+            NameValueCollection parameters = formData.ReadAsNameValueCollection();
+
+            if (Token.CmnEndpoints.PushedAuthorizationRequest(
+                client_id, client_secret, assertion, x509, parameters,
+                out Dictionary<string, string> ret, out err))
+            {
+                // RFC 9126 §2.2 : 成功は 201
+                return this.Content(HttpStatusCode.Created,
+                    ret, new System.Net.Http.Formatting.JsonMediaTypeFormatter());
+            }
+
+            return this.OAuth2Error(err, "par");
         }
 
         #endregion

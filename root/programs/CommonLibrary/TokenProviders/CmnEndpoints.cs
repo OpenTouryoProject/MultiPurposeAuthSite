@@ -86,6 +86,7 @@
 //*  2026/09/24  玄人 幸道         Request Object を、認可応答を作った時点で消す（ワンタイム化。#188 の段階 2）
 //*  2026/09/24  玄人 幸道         refresh_token のローテーションで、一族（FamilyId）を引き継ぐ（#188 の段階 3）
 //*  2026/09/24  玄人 幸道         認可応答に iss を付ける（RFC 9207。#231）
+//*  2026/09/24  玄人 幸道         PAR（RFC 9126）のエンドポイントを追加（#229）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -315,6 +316,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 OpenIDConfig.Add("request_uri_parameter_supported", true);
                 OpenIDConfig.Add("request_object_endpoint",
                     Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri);
+
+                // **PAR（RFC 9126）の口**（#229）。
+                //   request_object_endpoint（独自の /ros）は、後方互換のため残している。
+                //   こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
+                OpenIDConfig.Add("pushed_authorization_request_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.PushedAuthorizationRequestEndpoint);
+
+                // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
+                OpenIDConfig.Add("require_pushed_authorization_requests", false);
                 #endregion
 
                 #region ResponseObject(JARM)
@@ -702,6 +712,177 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return types.Length == 1 ? ClientModePolicy.Flow.AuthorizationCode : ClientModePolicy.Flow.Hybrid;
+        }
+
+        #endregion
+
+        #region PushedAuthorizationRequest（PAR）
+
+        /// <summary>
+        /// PAR（RFC 9126）: 認可要求を先に預かり、request_uri を払い出す（#229）
+        /// </summary>
+        /// <param name="client_id">client_id（フォーム）</param>
+        /// <param name="client_secret">client_secret（フォーム。Basic 認証のときは呼び出し元が取り出す）</param>
+        /// <param name="assertion">client_assertion（private_key_jwt）</param>
+        /// <param name="x509">クライアント証明書（mTLS）</param>
+        /// <param name="parameters">フォームのパラメタ（request を含むことがある）</param>
+        /// <param name="ret">応答（request_uri / expires_in）</param>
+        /// <param name="err">エラー</param>
+        /// <returns>成否</returns>
+        /// <remarks>
+        /// **独自の /ros との違いは、クライアント認証と、要求の検証、応答の形。**
+        ///
+        /// | | /ros（独自。後方互換で残す） | ここ（RFC 9126） |
+        /// |---|---|---|
+        /// | 認証 | Request Object の署名だけ | **トークン エンドポイントと同じクライアント認証**（§2） |
+        /// | 本文 | 署名付き JWT を生で | **フォーム**（request に JAR を入れてもよい） |
+        /// | 応答 | iss / aud / request_uri / exp | **request_uri / expires_in**（§2.2） |
+        ///
+        /// 有効期限と使い切りは、#188 で入れた RequestObjectProvider の仕組みをそのまま使う。
+        /// </remarks>
+        public static bool PushedAuthorizationRequest(
+            string client_id, string client_secret, string assertion, X509Certificate2 x509,
+            NameValueCollection parameters,
+            out Dictionary<string, string> ret, out Dictionary<string, string> err)
+        {
+            ret = null;
+            err = new Dictionary<string, string>();
+
+            #region クライアント認証
+
+            bool authned = false;
+
+            if (!string.IsNullOrEmpty(assertion))
+            {
+                // private_key_jwt
+                authned = CmnEndpoints.ClientAuthentication(
+                    assertion, out client_id, ref x509, out ClientModePolicy.Proof _);
+            }
+            else
+            {
+                // client_secret（basic / post）または mTLS
+                authned = CmnEndpoints.ClientAuthentication(
+                    client_id, client_secret, ref x509, out ClientModePolicy.Proof _);
+            }
+
+            if (!authned)
+            {
+                // RFC 9126 §2.3 : クライアント認証の失敗は invalid_client（401）
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
+                err.Add(OAuth2AndOIDCConst.error_description, "Invalid credential.");
+                return false;
+            }
+
+            #endregion
+
+            #region 預かる中身を決める（request（JAR）か、フォームのパラメタか）
+
+            // **request_uri は受け付けない**（RFC 9126 §2.1）。
+            if (!string.IsNullOrEmpty(parameters[OAuth2AndOIDCConst.request_uri]))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description, "request_uri is not allowed here.");
+                return false;
+            }
+
+            JObject payload = null;
+            string request = parameters["request"];
+
+            if (!string.IsNullOrEmpty(request))
+            {
+                // **署名付き Request Object（JAR）。** /ros と同じ鍵で検証する。
+                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(client_id);
+
+                if (string.IsNullOrEmpty(pubKey))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                    err.Add(OAuth2AndOIDCConst.error_description, "This client has no registered key for the request object.");
+                    return false;
+                }
+
+                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                if (!RequestObject.Verify(request, out string iss, pubKey))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error_description, "The request object is not verified.");
+                    return false;
+                }
+
+                if (iss != client_id)
+                {
+                    // **認証したクライアントと、要求の中の iss が食い違う。**
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error_description, "The request object was not issued by this client.");
+                    return false;
+                }
+
+                payload = (JObject)JsonConvert.DeserializeObject(
+                    CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(request.Split('.')[1]), CustomEncode.us_ascii));
+            }
+            else
+            {
+                // **フォームのパラメタ。** 認可エンドポイントに送るはずの値を、そのまま預かる。
+                payload = new JObject();
+
+                foreach (string key in parameters.AllKeys)
+                {
+                    if (string.IsNullOrEmpty(key)) continue;
+
+                    switch (key)
+                    {
+                        // クライアント認証の値は預からない
+                        case OAuth2AndOIDCConst.client_secret:
+                        case "client_assertion":
+                        case "client_assertion_type":
+                            break;
+
+                        default:
+                            payload[key] = parameters[key];
+                            break;
+                    }
+                }
+
+                // **認証したクライアントの client_id を使う**（フォームの値は上書きする）。
+                payload[OAuth2AndOIDCConst.client_id] = client_id;
+            }
+
+            #endregion
+
+            #region 認可エンドポイントと同じ検証（RFC 9126 §2.1）
+
+            if (!CmnEndpoints.ValidateAuthZReqParam(
+                (string)payload[OAuth2AndOIDCConst.client_id],
+                (string)payload[OAuth2AndOIDCConst.redirect_uri],
+                (string)payload[OAuth2AndOIDCConst.response_type],
+                (string)payload[OAuth2AndOIDCConst.scope] ?? "",
+                (string)payload[OAuth2AndOIDCConst.nonce],
+                out string _, out string error, out string errorDescription,
+                (string)payload[OAuth2AndOIDCConst.code_challenge] ?? ""))
+            {
+                err.Add(OAuth2AndOIDCConst.error, error);
+                err.Add(OAuth2AndOIDCConst.error_description, errorDescription);
+                return false;
+            }
+
+            #endregion
+
+            #region 預かる
+
+            string urn = Guid.NewGuid().ToString("N");
+
+            RequestObjectProvider.Create(urn, payload.ToString(Formatting.None));
+
+            ret = new Dictionary<string, string>()
+            {
+                { OAuth2AndOIDCConst.request_uri, OAuth2AndOIDCConst.UrnRequestUriBase + urn },
+                { "expires_in", ((int)Config.RequestObjectExpireTimeSpanFromSeconds.TotalSeconds).ToString() }
+            };
+
+            return true;
+
+            #endregion
         }
 
         #endregion
