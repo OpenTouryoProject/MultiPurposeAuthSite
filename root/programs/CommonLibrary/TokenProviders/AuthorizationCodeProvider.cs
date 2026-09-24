@@ -34,6 +34,7 @@
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
 //*  2026/09/11  玄人 幸道         request_uri 経路でも redirect_uri / PKCE を code に紐付ける（#197）
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
+//*  2026/09/24  玄人 幸道         期限切れの行を、書き込みのついでにまとめて消す（#188 の案 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -118,6 +119,96 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return entry.Value;
         }
+
+
+        #region 掃除（期限切れの行）
+
+        /// <summary>前回まとめて消した時刻</summary>
+        private static DateTime LastSweep = DateTime.MinValue;
+
+        /// <summary>まとめて消す間隔</summary>
+        /// <remarks>
+        /// **常駐の仕組み（バッチ・タイマ）を増やさず、書き込みのついでに消す**（#188 の案 4）。
+        /// 参照時にも期限切れは消えるが、**一度も参照されない行は残る**ため。
+        /// 間隔を空けるのは、書き込みのたびに全件を走査しないため。
+        /// </remarks>
+        private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(10);
+
+        /// <summary>間隔を過ぎていたら、期限切れの行をまとめて消す</summary>
+        private static void SweepIfNeeded()
+        {
+            DateTime now = DateTime.Now;
+
+            lock (AuthorizationCodeProvider.SweepLock)
+            {
+                if (now - AuthorizationCodeProvider.LastSweep < AuthorizationCodeProvider.SweepInterval)
+                {
+                    return;
+                }
+
+                AuthorizationCodeProvider.LastSweep = now;
+            }
+
+            DateTime limit = AuthorizationCodeProvider.ExpireLimit;
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    foreach (KeyValuePair<string, CodeEntry> kv in AuthorizationCodeProvider.AuthenticationCodes)
+                    {
+                        if (kv.Value.CreatedDate < limit)
+                        {
+                            AuthorizationCodeProvider.AuthenticationCodes.TryRemove(kv.Key, out CodeEntry _);
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "DELETE FROM [AuthenticationCodeDictionary] WHERE [CreatedDate] <= @Limit",
+                                    new { Limit = limit });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"AuthenticationCodeDictionary\" WHERE \"CreatedDate\" <= :Limit",
+                                    new { Limit = limit });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"authenticationcodedictionary\" WHERE \"createddate\" <= @Limit",
+                                    new { Limit = limit });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>掃除の間隔を測るための錠</summary>
+        private static readonly object SweepLock = new object();
+
+        #endregion
 
         #region Create
 
@@ -206,6 +297,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 新しいCodeのticketをストアに保存
             string jsonString = JsonConvert.SerializeObject(temp);
+
+            // 期限切れの行を、間隔を空けてまとめて消す（#188 の案 4）
+            AuthorizationCodeProvider.SweepIfNeeded();
 
             switch (Config.UserStoreType)
             {

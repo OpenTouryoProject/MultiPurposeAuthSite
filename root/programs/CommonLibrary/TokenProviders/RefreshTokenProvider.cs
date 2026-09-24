@@ -31,6 +31,7 @@
 //*  2018/12/26  西野 大介         新規（分割
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
 //*  2026/09/24  玄人 幸道         再利用の検知と、一族（FamilyId）ごとの失効（#188 の段階 3）
+//*  2026/09/24  玄人 幸道         期限切れの行を、書き込みのついでにまとめて消す（#188 の案 4）
 //**********************************************************************************
 
 using System;
@@ -105,6 +106,96 @@ namespace MultiPurposeAuthSite.TokenProviders
             get { return DateTime.Now - Config.OAuth2RefreshTokenExpireTimeSpanFromDays; }
         }
 
+
+        #region 掃除（期限切れの行）
+
+        /// <summary>前回まとめて消した時刻</summary>
+        private static DateTime LastSweep = DateTime.MinValue;
+
+        /// <summary>まとめて消す間隔</summary>
+        /// <remarks>
+        /// **常駐の仕組み（バッチ・タイマ）を増やさず、書き込みのついでに消す**（#188 の案 4）。
+        /// 参照時にも期限切れは消えるが、**一度も参照されない行は残る**ため。
+        /// 間隔を空けるのは、書き込みのたびに全件を走査しないため。
+        /// </remarks>
+        private static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(10);
+
+        /// <summary>間隔を過ぎていたら、期限切れの行をまとめて消す</summary>
+        private static void SweepIfNeeded()
+        {
+            DateTime now = DateTime.Now;
+
+            lock (RefreshTokenProvider.SweepLock)
+            {
+                if (now - RefreshTokenProvider.LastSweep < RefreshTokenProvider.SweepInterval)
+                {
+                    return;
+                }
+
+                RefreshTokenProvider.LastSweep = now;
+            }
+
+            DateTime limit = RefreshTokenProvider.ExpireLimit;
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    foreach (KeyValuePair<string, TokenEntry> kv in RefreshTokenProvider.RefreshTokens)
+                    {
+                        if (kv.Value.CreatedDate < limit)
+                        {
+                            RefreshTokenProvider.RefreshTokens.TryRemove(kv.Key, out TokenEntry _);
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "DELETE FROM [RefreshTokenDictionary] WHERE [CreatedDate] <= @Limit",
+                                    new { Limit = limit });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"RefreshTokenDictionary\" WHERE \"CreatedDate\" <= :Limit",
+                                    new { Limit = limit });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"refreshtokendictionary\" WHERE \"createddate\" <= @Limit",
+                                    new { Limit = limit });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>掃除の間隔を測るための錠</summary>
+        private static readonly object SweepLock = new object();
+
+        #endregion
+
         #region Create
 
         /// <summary>新しい一族として発行する（認可コードなどからの初回）</summary>
@@ -121,6 +212,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>refresh_token</returns>
         public static string Create(string payload, string familyId)
         {
+            // 期限切れの行を、間隔を空けてまとめて消す（#188 の案 4）
+            //   **使用済みの行は、期限までは消さない。** 再利用の検知に要るため。
+            RefreshTokenProvider.SweepIfNeeded();
+
             string tokenId = Guid.NewGuid().ToString("N");
 
             if (string.IsNullOrEmpty(familyId))
