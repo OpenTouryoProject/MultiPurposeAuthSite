@@ -84,6 +84,8 @@ CREATE TABLE "RefreshTokenDictionary"(
     "Key" NVARCHAR2(256) NOT NULL,           -- PK
     "Value" NVARCHAR2(2000) NOT NULL,        -- RefreshToken
     "CreatedDate" DATE NOT NULL,
+    "FamilyId" NVARCHAR2(64) NOT NULL,       -- 一族（同じ認可から派生したもの）の識別子（#188）
+    "UsedDate" DATE,                         -- 使った時刻（NULL なら未使用）（#188）
     CONSTRAINT "PK.RefreshTokenDictionary" PRIMARY KEY ("Key")
 );
 

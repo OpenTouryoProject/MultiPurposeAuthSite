@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         RefreshAsync を Flows へ、scopes の読み取りを Jwt.Strings へ移す
+//*  2026/09/24  玄人 幸道         EX-1.2 を一族ごとの失効の検証に変え、EX-1.4（失効も一族ごと）を追加（#188 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -174,12 +175,74 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 JsonResponse third = await Flows.RefreshAsync(client, reg, second.RefreshToken);
 
-                r.Observe("旧が再び提示された後も、新は使えるか",
+                r.Verify("旧が再び提示された後は、新も使えない（一族ごと失効）",
+                    string.IsNullOrEmpty(third.AccessToken),
+                    "使えない",
                     !string.IsNullOrEmpty(third.AccessToken)
-                        ? "使えた"
-                        : "使えない（error=" + (third.Error ?? "なし") + "）",
-                    "BCP は、使用済みの refresh_token が再び提示されたら、"
-                    + "**どちらが正規か分からないので、有効な方も失効させる**ことを勧めている。");
+                        ? "**使えてしまった**"
+                        : "使えない（error=" + (third.Error ?? "なし") + "）");
+
+                r.Note("**使用済みが再び提示されたら、その一族（同じ認可から派生した refresh_token）をすべて失効させる**"
+                    + "（#188 の段階 3）。漏れたトークンと正規のトークンを、サーバは見分けられないため"
+                    + "（BCP §4.14.2）。正規の利用者は、認可からやり直すことになる。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>EX-1.4 失効は一族ごと（#188 の段階 3）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task EX0104_失効させると派生した新しいrefresh_tokenも使えない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("EX-1.4",
+                    "refresh_token を失効させると、そこから派生した新しい refresh_token も使えない",
+                    "**漏れたトークンを失効させたのに、そこから派生した新しいトークンが生き残っては意味がない。**"
+                    + "RFC 7009 §2.1 は、refresh_token を失効させるとき、"
+                    + "**同じ認可グラントに基づくトークンも無効にすべき**としている。"
+                    + "この実装は、同じ認可から派生した refresh_token を**一族**として扱い、まとめて失効させる（#188）。",
+                    "RFC 7009 §2.1 / #188");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                r.Target("client_name=" + KnownClients.MvcSample);
+                r.Step("(1) 認可コード フローで refresh_token（旧）を得る");
+
+                JsonResponse first = await Flows.RunAuthorizationCodeFlowAsync(
+                    client, KnownClients.MvcSample, "openid email");
+
+                Assert.False(string.IsNullOrEmpty(first.RefreshToken),
+                    "前提: refresh_token が発行されること");
+
+                r.Step("(2) 旧で更新し、新しい refresh_token（新）を得る");
+
+                JsonResponse second = await Flows.RefreshAsync(client, reg, first.RefreshToken);
+
+                Assert.False(string.IsNullOrEmpty(second.RefreshToken),
+                    "前提: 更新が成功し、新しい refresh_token が返ること");
+
+                r.Step("(3) 新を失効させる（POST /revoke）");
+
+                JsonResponse revoke = await Flows.RevokeAsync(
+                    client, reg, second.RefreshToken, "refresh_token");
+
+                r.VerifyEqual("失効の要求は HTTP 200", "200", ((int)revoke.StatusCode).ToString());
+
+                r.Step("(4) 失効させた新で、更新を試みる");
+
+                JsonResponse afterRevoke = await Flows.RefreshAsync(client, reg, second.RefreshToken);
+
+                r.Verify("使えない", string.IsNullOrEmpty(afterRevoke.AccessToken),
+                    "使えない",
+                    string.IsNullOrEmpty(afterRevoke.AccessToken)
+                        ? "使えない（error=" + (afterRevoke.Error ?? "なし") + "）" : "**使えてしまった**");
+
+                r.Note("**旧（使用済み）も、同じ一族なので残っていない。**"
+                    + "失効の対象を 1 本だけにすると、漏れた側が生き残る余地ができる。");
 
                 r.Done();
             }

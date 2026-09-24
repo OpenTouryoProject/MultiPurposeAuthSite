@@ -5,7 +5,7 @@
 #region Apache License
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License. 
+// you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/26  西野 大介         新規（分割
 //*  2026/09/24  玄人 幸道         有効期限を検証する（期限切れは無いものとして扱う）（#188）
+//*  2026/09/24  玄人 幸道         再利用の検知と、一族（FamilyId）ごとの失効（#188 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -45,6 +46,20 @@ using Dapper;
 namespace MultiPurposeAuthSite.TokenProviders
 {
     /// <summary>RefreshTokenのpayloadを一時保存する。</summary>
+    /// <remarks>
+    /// **ローテーションと、再利用の検知（#188 の段階 3）。**
+    ///
+    /// 更新のたびに新しい refresh_token を発行する（ローテーション）。
+    /// 以前は「使ったら行を消す」方式だったので、**使用済みだったのか、元から無いのかを区別できなかった。**
+    /// いまは消さずに `UsedDate` を入れ、**使用済みが再び提示されたら、その一族（FamilyId）ごと失効させる。**
+    ///
+    /// - `FamilyId` : **1 回の認可から派生した refresh_token のまとまり**（GUID）。
+    ///   最初の発行で作り、更新では引き継ぐ。認可をやり直せば別の値になる
+    /// - `UsedDate` : 使った時刻。NULL なら未使用
+    ///
+    /// **なぜ一族ごとか。** 漏れたトークンと正規のトークンは、サーバから見分けられない。
+    /// OAuth 2.0 Security BCP §4.14.2 は、この場合に一族の失効を挙げている。
+    /// </remarks>
     public class RefreshTokenProvider
     {
         /// <summary>
@@ -54,13 +69,28 @@ namespace MultiPurposeAuthSite.TokenProviders
         private static ConcurrentDictionary<string, TokenEntry>
             RefreshTokens = new ConcurrentDictionary<string, TokenEntry>();
 
-        /// <summary>メモリ ストアの 1 件（値と作成時刻）（#188）</summary>
+        /// <summary>メモリ ストアの 1 件（#188）</summary>
         private class TokenEntry
         {
             /// <summary>値</summary>
             public string Value = "";
             /// <summary>作成時刻</summary>
             public DateTime CreatedDate = DateTime.MinValue;
+            /// <summary>一族の識別子（同じ認可から派生したもの）</summary>
+            public string FamilyId = "";
+            /// <summary>使った時刻（NULL なら未使用）</summary>
+            public DateTime? UsedDate = null;
+        }
+
+        /// <summary>DBMS から読むときの 1 行（#188）</summary>
+        private class TokenRow
+        {
+            /// <summary>値</summary>
+            public string Value { get; set; }
+            /// <summary>一族の識別子</summary>
+            public string FamilyId { get; set; }
+            /// <summary>使った時刻（NULL なら未使用）</summary>
+            public DateTime? UsedDate { get; set; }
         }
 
         /// <summary>
@@ -69,60 +99,47 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <remarks>
         /// Config.OAuth2RefreshTokenExpireTimeSpanFromDays（既定 14 日）は、
         /// 以前は**定義だけで、どこからも参照されていなかった**（事実上の無期限）。
-        ///
-        /// **DBMS では SELECT の条件に入れる**ので、期限切れの行は「見つからない」になり、
-        /// これまでの「存在しない token」と同じ経路（空を返す ＝ invalid_grant）に合流する。
         /// </remarks>
         private static DateTime ExpireLimit
         {
             get { return DateTime.Now - Config.OAuth2RefreshTokenExpireTimeSpanFromDays; }
         }
 
-        /// <summary>メモリ ストアから、期限内の値を取り出す（期限切れは消す）（#188）</summary>
-        /// <param name="tokenId">refresh_token</param>
-        /// <param name="remove">取り出せたら消すか（ローテーション・失効）</param>
-        /// <returns>値（無い・期限切れなら空）</returns>
-        private static string GetFromMemory(string tokenId, bool remove)
-        {
-            TokenEntry entry = null;
-
-            if (!RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out entry))
-            {
-                return "";
-            }
-
-            if (entry.CreatedDate < RefreshTokenProvider.ExpireLimit)
-            {
-                // 期限切れ。参照した時点で消す。
-                RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out TokenEntry _);
-                return "";
-            }
-
-            if (remove)
-            {
-                RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out TokenEntry _);
-            }
-
-            return entry.Value;
-        }
-
         #region Create
 
-        /// <summary>Create</summary>
-        /// <param name="payload">string</param>
-        /// <returns>token id</returns>
+        /// <summary>新しい一族として発行する（認可コードなどからの初回）</summary>
+        /// <param name="payload">payload</param>
+        /// <returns>refresh_token</returns>
         public static string Create(string payload)
         {
-            string tokenId = Guid.NewGuid().ToString("n") + Guid.NewGuid().ToString("n");
+            return RefreshTokenProvider.Create(payload, Guid.NewGuid().ToString("N"));
+        }
+
+        /// <summary>一族を引き継いで発行する（ローテーション）</summary>
+        /// <param name="payload">payload</param>
+        /// <param name="familyId">一族の識別子</param>
+        /// <returns>refresh_token</returns>
+        public static string Create(string payload, string familyId)
+        {
+            string tokenId = Guid.NewGuid().ToString("N");
+
+            if (string.IsNullOrEmpty(familyId))
+            {
+                familyId = Guid.NewGuid().ToString("N");
+            }
 
             if (Config.EnableRefreshToken)
             {
-                // EnableRefreshToken == true
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
                         RefreshTokenProvider.RefreshTokens.TryAdd(tokenId,
-                            new TokenEntry { Value = payload, CreatedDate = DateTime.Now });
+                            new TokenEntry
+                            {
+                                Value = payload,
+                                CreatedDate = DateTime.Now,
+                                FamilyId = familyId
+                            });
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -138,24 +155,30 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 case EnumUserStoreType.SqlServer:
 
                                     cnn.Execute(
-                                        "INSERT INTO [RefreshTokenDictionary] ([Key], [Value], [CreatedDate]) VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now });
+                                        "INSERT INTO [RefreshTokenDictionary]"
+                                        + " ([Key], [Value], [CreatedDate], [FamilyId])"
+                                        + " VALUES (@Key, @Value, @CreatedDate, @FamilyId)",
+                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now, FamilyId = familyId });
 
                                     break;
 
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"RefreshTokenDictionary\" (\"Key\", \"Value\", \"CreatedDate\") VALUES (:Key, :Value, :CreatedDate)",
-                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now });
+                                        "INSERT INTO \"RefreshTokenDictionary\""
+                                        + " (\"Key\", \"Value\", \"CreatedDate\", \"FamilyId\")"
+                                        + " VALUES (:Key, :Value, :CreatedDate, :FamilyId)",
+                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now, FamilyId = familyId });
 
                                     break;
 
                                 case EnumUserStoreType.PostgreSQL:
 
                                     cnn.Execute(
-                                        "INSERT INTO \"refreshtokendictionary\" (\"key\", \"value\", \"createddate\") VALUES (@Key, @Value, @CreatedDate)",
-                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now });
+                                        "INSERT INTO \"refreshtokendictionary\""
+                                        + " (\"key\", \"value\", \"createddate\", \"familyid\")"
+                                        + " VALUES (@Key, @Value, @CreatedDate, @FamilyId)",
+                                        new { Key = tokenId, Value = payload, CreatedDate = DateTime.Now, FamilyId = familyId });
 
                                     break;
                             }
@@ -163,280 +186,301 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                         break;
                 }
-            }
-            else
-            {
-                // EnableRefreshToken == false
+
+                return tokenId;
             }
 
-            return tokenId;
+            return "";
         }
 
         #endregion
 
-        #region Receive
+        #region Receive（ローテーションと再利用の検知）
 
-        /// <summary>Receive</summary>
-        /// <param name="tokenId">string</param>
-        /// <returns>payload</returns>
+        /// <summary>使う（ローテーション）</summary>
+        /// <param name="tokenId">refresh_token</param>
+        /// <returns>payload（使えなければ空）</returns>
         public static string Receive(string tokenId)
         {
-            if (Config.EnableRefreshToken)
+            return RefreshTokenProvider.Receive(tokenId, out string _);
+        }
+
+        /// <summary>使う（ローテーション）</summary>
+        /// <param name="tokenId">refresh_token</param>
+        /// <param name="familyId">一族の識別子（次の発行で引き継ぐ）</param>
+        /// <returns>payload（使えなければ空）</returns>
+        /// <remarks>
+        /// **使用済みが再び提示されたら、その一族をすべて失効させる**（#188 の段階 3）。
+        /// 漏れたトークンと正規のトークンを見分けられないため（BCP §4.14.2）。
+        /// 期限切れ・存在しない場合と同じく、空を返す（呼び出し元は invalid_grant にする）。
+        /// </remarks>
+        public static string Receive(string tokenId, out string familyId)
+        {
+            familyId = "";
+
+            TokenRow row = RefreshTokenProvider.Find(tokenId);
+
+            if (row == null)
             {
-                // EnableRefreshToken == true
-                string payload = null;
-                IEnumerable<string> values = null;
-                List<string> list = null;
-
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-                        payload = RefreshTokenProvider.GetFromMemory(tokenId, remove: true);
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    values = cnn.Query<string>(
-                                        "SELECT [Value] FROM [RefreshTokenDictionary]"
-                                        + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
-                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        payload = values.AsList()[0];
-
-                                        cnn.Execute(
-                                            "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = tokenId });
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    values = cnn.Query<string>(
-                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\""
-                                        + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
-                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        payload = values.AsList()[0];
-
-                                        cnn.Execute(
-                                            "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = tokenId });
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    values = cnn.Query<string>(
-                                       "SELECT \"value\" FROM \"refreshtokendictionary\""
-                                       + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
-                                       new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        payload = values.AsList()[0];
-
-                                        cnn.Execute(
-                                            "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = tokenId });
-                                    }
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-
-                return payload;
+                // 存在しない、または期限切れ
+                return "";
             }
-            else
+
+            if (row.UsedDate != null)
             {
-                // EnableRefreshToken == false
-                return null;
+                // **再利用。** 一族ごと失効させる。
+                RefreshTokenProvider.RevokeFamily(row.FamilyId);
+                return "";
             }
+
+            RefreshTokenProvider.MarkAsUsed(tokenId);
+
+            familyId = row.FamilyId;
+            return row.Value;
         }
 
         #endregion
 
-        #region Reference
+        #region Refer（覗く）
 
-        /// <summary>Reference</summary>
-        /// <param name="tokenId">string</param>
-        /// <returns>payload</returns>
-        /// <remarks>OAuth 2.0 Token Introspectionのサポートのために必要</remarks>
+        /// <summary>覗く（消費しない）</summary>
+        /// <param name="tokenId">refresh_token</param>
+        /// <returns>payload（使えなければ空）</returns>
+        /// <remarks>
+        /// **使用済み・期限切れは「無い」と同じ。** introspect が active: true を返さないようにする（#188）。
+        /// </remarks>
         public static string Refer(string tokenId)
         {
-            if (Config.EnableRefreshToken)
+            TokenRow row = RefreshTokenProvider.Find(tokenId);
+
+            if (row == null || row.UsedDate != null)
             {
-                // EnableRefreshToken == true
-                string payload = null;
-                IEnumerable<string> values = null;
-                List<string> list = null;
-
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-                        payload = RefreshTokenProvider.GetFromMemory(tokenId, remove: false);
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    values = cnn.Query<string>(
-                                        "SELECT [Value] FROM [RefreshTokenDictionary]"
-                                        + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
-                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        payload = values.AsList()[0];
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    values = cnn.Query<string>(
-                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\""
-                                        + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
-                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        payload = values.AsList()[0];
-                                    }
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    values = cnn.Query<string>(
-                                      "SELECT \"value\" FROM \"refreshtokendictionary\""
-                                      + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
-                                      new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
-
-                                    list = values.AsList();
-                                    if (list.Count != 0)
-                                    {
-                                        payload = values.AsList()[0];
-                                    }
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-
-                return payload;
+                return "";
             }
-            else
-            {
-                // EnableRefreshToken == false
-                return null;
-            }
+
+            return row.Value;
         }
 
         #endregion
 
-        #region Delete
+        #region Delete（失効）
 
-        /// <summary>DeleteDirectly</summary>
-        /// <param name="tokenId">string</param>
-        /// <returns>削除できたか否か</returns>
-        /// <remarks>OAuth 2.0 Token Revocationサポート</remarks>
+        /// <summary>失効させる（一族ごと）</summary>
+        /// <param name="tokenId">refresh_token</param>
+        /// <returns>失効させたか</returns>
+        /// <remarks>
+        /// **一族ごと失効させる**（#188 の段階 3）。
+        /// RFC 7009 §2.1 は、refresh_token を失効させるとき、
+        /// **同じ認可グラントに基づくトークンも無効にすべき**としている。
+        /// 漏れたトークンを失効させたのに、そこから派生した新しいトークンが生き残るのは、利用者の意図と違う。
+        /// </remarks>
         public static bool Delete(string tokenId)
         {
-            int ret = 0;
+            TokenRow row = RefreshTokenProvider.Find(tokenId);
 
-            if (Config.EnableRefreshToken)
+            if (row == null)
             {
-                // EnableRefreshToken == true
-                string payload = null;
-
-                switch (Config.UserStoreType)
-                {
-                    case EnumUserStoreType.Memory:
-                        payload = RefreshTokenProvider.GetFromMemory(tokenId, remove: true);
-                        if (!string.IsNullOrEmpty(payload))
-                        {
-                            // 1 refresh : 1 access なので、単に捨てればOK。
-                            ret = 1;
-                        }
-                        break;
-
-                    case EnumUserStoreType.SqlServer:
-                    case EnumUserStoreType.ODPManagedDriver:
-                    case EnumUserStoreType.PostgreSQL: // DMBMS
-
-                        using (IDbConnection cnn = DataAccess.CreateConnection())
-                        {
-                            cnn.Open();
-
-                            switch (Config.UserStoreType)
-                            {
-                                case EnumUserStoreType.SqlServer:
-
-                                    // 1 refresh : 1 access なので、単に捨てればOK。
-                                    ret = cnn.Execute(
-                                        "DELETE FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = tokenId });
-
-                                    break;
-
-                                case EnumUserStoreType.ODPManagedDriver:
-
-                                    // 1 refresh : 1 access なので、単に捨てればOK。
-                                    ret = cnn.Execute(
-                                        "DELETE FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = tokenId });
-
-                                    break;
-
-                                case EnumUserStoreType.PostgreSQL:
-
-                                    // 1 refresh : 1 access なので、単に捨てればOK。
-                                    ret = cnn.Execute(
-                                        "DELETE FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = tokenId });
-
-                                    break;
-                            }
-                        }
-
-                        break;
-                }
-            }
-            else
-            {
-                // EnableRefreshToken == false
+                // 存在しない、または期限切れ
+                return false;
             }
 
-            return !(ret == 0);
+            RefreshTokenProvider.RevokeFamily(row.FamilyId);
+
+            return true;
+        }
+
+        #endregion
+
+        #region 内部（探す・使用済みにする・一族を失効させる）
+
+        /// <summary>期限内の 1 行を探す（期限切れは消す）</summary>
+        /// <param name="tokenId">refresh_token</param>
+        /// <returns>行（無い・期限切れなら null）</returns>
+        private static TokenRow Find(string tokenId)
+        {
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    TokenEntry entry = null;
+
+                    if (!RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out entry))
+                    {
+                        return null;
+                    }
+
+                    if (entry.CreatedDate < RefreshTokenProvider.ExpireLimit)
+                    {
+                        // 期限切れ。参照した時点で消す。
+                        RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out TokenEntry _);
+                        return null;
+                    }
+
+                    return new TokenRow
+                    {
+                        Value = entry.Value,
+                        FamilyId = entry.FamilyId,
+                        UsedDate = entry.UsedDate
+                    };
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                return cnn.QueryFirstOrDefault<TokenRow>(
+                                    "SELECT [Value], [FamilyId], [UsedDate] FROM [RefreshTokenDictionary]"
+                                    + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
+                                    new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                return cnn.QueryFirstOrDefault<TokenRow>(
+                                    "SELECT \"Value\", \"FamilyId\", \"UsedDate\" FROM \"RefreshTokenDictionary\""
+                                    + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
+                                    new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                return cnn.QueryFirstOrDefault<TokenRow>(
+                                    "SELECT \"value\" AS \"Value\", \"familyid\" AS \"FamilyId\","
+                                    + " \"useddate\" AS \"UsedDate\" FROM \"refreshtokendictionary\""
+                                    + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
+                                    new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
+                        }
+                    }
+
+                    break;
+            }
+
+            return null;
+        }
+
+        /// <summary>使用済みにする（消さない）</summary>
+        /// <param name="tokenId">refresh_token</param>
+        private static void MarkAsUsed(string tokenId)
+        {
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    TokenEntry entry = null;
+
+                    if (RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out entry))
+                    {
+                        entry.UsedDate = DateTime.Now;
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "UPDATE [RefreshTokenDictionary] SET [UsedDate] = @UsedDate WHERE [Key] = @Key",
+                                    new { Key = tokenId, UsedDate = DateTime.Now });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "UPDATE \"RefreshTokenDictionary\" SET \"UsedDate\" = :UsedDate WHERE \"Key\" = :Key",
+                                    new { Key = tokenId, UsedDate = DateTime.Now });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "UPDATE \"refreshtokendictionary\" SET \"useddate\" = @UsedDate WHERE \"key\" = @Key",
+                                    new { Key = tokenId, UsedDate = DateTime.Now });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>一族ごと失効させる（消す）</summary>
+        /// <param name="familyId">一族の識別子</param>
+        private static void RevokeFamily(string familyId)
+        {
+            if (string.IsNullOrEmpty(familyId))
+            {
+                return;
+            }
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+
+                    foreach (KeyValuePair<string, TokenEntry> kv in RefreshTokenProvider.RefreshTokens)
+                    {
+                        if (kv.Value.FamilyId == familyId)
+                        {
+                            RefreshTokenProvider.RefreshTokens.TryRemove(kv.Key, out TokenEntry _);
+                        }
+                    }
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                cnn.Execute(
+                                    "DELETE FROM [RefreshTokenDictionary] WHERE [FamilyId] = @FamilyId",
+                                    new { FamilyId = familyId });
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"RefreshTokenDictionary\" WHERE \"FamilyId\" = :FamilyId",
+                                    new { FamilyId = familyId });
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                cnn.Execute(
+                                    "DELETE FROM \"refreshtokendictionary\" WHERE \"familyid\" = @FamilyId",
+                                    new { FamilyId = familyId });
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
         }
 
         #endregion

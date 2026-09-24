@@ -84,6 +84,7 @@
 //*  2026/09/24  玄人 幸道         Discovery の誤りを直し、実装済みの項目を広告する（#189 の 2〜8）
 //*  2026/09/24  玄人 幸道         code_challenge_methods_supported を設定に合わせ、service_documentation を設定値にする（#228）
 //*  2026/09/24  玄人 幸道         Request Object を、認可応答を作った時点で消す（ワンタイム化。#188 の段階 2）
+//*  2026/09/24  玄人 幸道         refresh_token のローテーションで、一族（FamilyId）を引き継ぐ（#188 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1594,7 +1595,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     #region 発行
 
-                    string tokenPayload = RefreshTokenProvider.Receive(refresh_token);
+                    // **一族（FamilyId）を引き継ぐ**（#188 の段階 3）。
+                    //   使用済みが再び提示されたら、Receive の中で一族ごと失効させ、空を返す。
+                    string tokenPayload = RefreshTokenProvider.Receive(refresh_token, out string familyId);
 
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
@@ -1615,7 +1618,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string new_refresh_token = "";
                         if (Config.EnableRefreshToken)
                         {
-                            new_refresh_token = RefreshTokenProvider.Create(tokenPayload);
+                            new_refresh_token = RefreshTokenProvider.Create(tokenPayload, familyId);
                         }
 
                         // オペレーション・トレース・ログ出力

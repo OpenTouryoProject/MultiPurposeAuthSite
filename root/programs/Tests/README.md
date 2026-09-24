@@ -214,7 +214,7 @@ using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.Secon
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/Extended/RefreshTokenTests.cs` | `EX-1` | refresh_token の更新・ローテーション・発行先との結び付け（RFC 6749 §6 / RFC 9700） |
+| `Tests/Extended/RefreshTokenTests.cs` | `EX-1` | refresh_token の更新・ローテーション・**再利用の検知と一族ごとの失効**（#188）・発行先との結び付け（RFC 6749 §6 / RFC 9700 / RFC 7009） |
 | `Tests/Extended/RevocationTests.cs` | `EX-2` | トークンの失効（RFC 7009） |
 | `Tests/Extended/IntrospectionTests.cs` | `EX-3` | トークンの問い合わせ（RFC 7662） |
 | `Tests/Extended/DeviceAuthorizationTests.cs` | `EX-4` | Device Authorization Grant（RFC 8628） |

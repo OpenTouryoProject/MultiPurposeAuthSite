@@ -105,6 +105,8 @@ CREATE TABLE [RefreshTokenDictionary](
     [Key] [nvarchar](256) NOT NULL,          -- PK
     [Value] [nvarchar](max) NOT NULL,        -- RefreshToken
     [CreatedDate] [smalldatetime] NOT NULL,
+    [FamilyId] [nvarchar](64) NOT NULL,      -- 一族（同じ認可から派生したもの）の識別子（#188）
+    [UsedDate] [smalldatetime] NULL,         -- 使った時刻（NULL なら未使用）（#188）
     CONSTRAINT [PK.RefreshTokenDictionary] PRIMARY KEY NONCLUSTERED ([Key] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
