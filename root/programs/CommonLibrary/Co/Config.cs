@@ -41,6 +41,8 @@
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/17  玄人 幸道         PKCE で S256 だけを受け付ける設定を追加（#220）
 //*  2026/09/18  玄人 幸道         PKCE（code_challenge）を必須にする設定を追加（#220）
+//*  2026/09/24  玄人 幸道         Discovery の service_documentation を設定値にする（#228）
+//*  2026/09/24  玄人 幸道         認可コードと Request Object の有効期限の設定を追加（#188）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
