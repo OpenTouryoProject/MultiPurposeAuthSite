@@ -87,6 +87,7 @@
 //*  2026/09/24  玄人 幸道         refresh_token のローテーションで、一族（FamilyId）を引き継ぐ（#188 の段階 3）
 //*  2026/09/24  玄人 幸道         認可応答に iss を付ける（RFC 9207。#231）
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）のエンドポイントを追加（#229）
+//*  2026/09/24  玄人 幸道         CIBA の認証要求を request で直接受け取る（CIBA Core 7.1.1。#233）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -883,6 +884,110 @@ namespace MultiPurposeAuthSite.TokenProviders
             return true;
 
             #endregion
+        }
+
+        #endregion
+
+        #region ReceiveCibaRequest
+
+        /// <summary>
+        /// CIBA の認証要求を受け取る（#233）
+        /// </summary>
+        /// <param name="request">署名付き JWT（CIBA Core §7.1.1）</param>
+        /// <param name="request_uri">/ros に預けたものの参照（独自拡張。後方互換）</param>
+        /// <param name="payload">要求の中身</param>
+        /// <param name="err">error</param>
+        /// <param name="errDescription">error_description</param>
+        /// <returns>受け取れたか</returns>
+        /// <remarks>
+        /// **CIBA Core が定めているのは `request`（署名付き JWT）を直接送る形**（§7.1.1）で、
+        /// **`request_uri` にあたる仕組みは無い。**
+        /// これまでは `/ros` に預けて `request_uri` を渡す独自の形だけを受け付けており、
+        /// 標準の CIBA クライアントからは使えなかった。
+        ///
+        /// **両方を受け付ける。** `request` があればそちらを使う（下位互換のため `request_uri` も残す）。
+        /// `request_uri` の受け口は、`/ros` の廃止（#229 の完了報告を参照）と合わせて外す。
+        ///
+        /// 署名の検証は、登録された `jwk_ecdsa_publickey` で行う（FAPI-CIBA は ES256）。
+        /// </remarks>
+        public static bool ReceiveCibaRequest(
+            string request, string request_uri,
+            out JObject payload, out string err, out string errDescription)
+        {
+            payload = null;
+            err = OAuth2AndOIDCConst.invalid_request;
+            errDescription = "";
+
+            if (!string.IsNullOrEmpty(request))
+            {
+                // **CIBA Core §7.1.1 : 署名した認証要求を request で受け取る。**
+                string json = "";
+
+                try
+                {
+                    json = CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(request.Split('.')[1]), CustomEncode.us_ascii);
+                }
+                catch
+                {
+                    // JWT でない文字列を渡されても、例外にしない（#185 と同じ方針）。
+                    errDescription = "The request is not a JWT.";
+                    return false;
+                }
+
+                JObject unverified = (JObject)JsonConvert.DeserializeObject(json);
+
+                if (unverified == null || unverified[OAuth2AndOIDCConst.iss] == null)
+                {
+                    errDescription = "The request has no iss.";
+                    return false;
+                }
+
+                // 署名の検証に使う公開鍵は、登録（iss ＝ client_id）から引く。
+                string pubKey = Helper.GetInstance().GetJwkECDsaPublickey(
+                    (string)unverified[OAuth2AndOIDCConst.iss]);
+
+                if (string.IsNullOrEmpty(pubKey))
+                {
+                    // 登録されていないクライアント（CIBA Core 13 : invalid_client）
+                    err = OAuth2AndOIDCConst.invalid_client;
+                    errDescription = Resources.ApplicationOAuthBearerTokenProvider.Invalid_client_id;
+                    return false;
+                }
+
+                pubKey = CustomEncode.ByteToString(
+                    CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                if (!RequestObject.VerifyCiba(request, out string _, pubKey))
+                {
+                    errDescription = "The request is not verified.";
+                    return false;
+                }
+
+                payload = unverified;
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(request_uri))
+            {
+                // **独自拡張（後方互換）。** /ros に預けたものを引く。
+                string json = RequestObjectProvider.Get(
+                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+
+                // 存在しない・期限切れの request_uri では空になる（#185 / #188）。
+                payload = (JObject)JsonConvert.DeserializeObject(json ?? "");
+
+                if (payload == null)
+                {
+                    errDescription = "Invalid request_uri.";
+                    return false;
+                }
+
+                return true;
+            }
+
+            errDescription = "request or request_uri is required.";
+            return false;
         }
 
         #endregion

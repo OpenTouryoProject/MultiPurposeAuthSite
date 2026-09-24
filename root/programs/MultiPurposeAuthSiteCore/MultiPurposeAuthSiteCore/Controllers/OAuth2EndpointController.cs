@@ -66,6 +66,7 @@
 //*  2026/09/23  玄人 幸道         証明書に紐づくトークン（cnf）を、提示された証明書と照合する
 //*  2026/09/24  玄人 幸道         /ros の応答に有効期限（exp）を入れ、CIBA では使い終わった Request Object を消す（#188）
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）の /par を追加（#229）
+//*  2026/09/24  玄人 幸道         /ciba_authz で request を直接受け取る（CIBA Core 7.1.1。#233）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -783,7 +784,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /ciba_authz
         /// </summary>
         /// <param name="formData">
-        /// request_uri
+        /// request（CIBA Core 7.1.1）または request_uri（独自拡張。後方互換）
         /// </param>
         /// <returns>成功は 200、エラーは 400 / 401（CIBA Core 7.3 / 13）（#196）</returns>
         [HttpPost]
@@ -798,17 +799,19 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (formData != null)
             {
+                // **CIBA Core 7.1.1 : 署名した認証要求を request で直接受け取る（#233）。**
+                //   request_uri（/ros に預ける形）は独自拡張で、CIBA Core には無い。
+                //   後方互換のため当面残す（両方あれば request を優先する）。
+                string request = formData[OAuth2AndOIDCConst.request];
                 string request_uri = formData[OAuth2AndOIDCConst.request_uri];
 
                 string authReqId = "";
 
-                if (!string.IsNullOrEmpty(request_uri))
+                if (!string.IsNullOrEmpty(request) || !string.IsNullOrEmpty(request_uri))
                 {
-                    string jsonStr = Sts.RequestObjectProvider.Get(
-                        request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
-
-                    // 存在しないrequest_uriではnullになる（#185）。
-                    JObject jsonObj = (JObject)JsonConvert.DeserializeObject(jsonStr);
+                    // 受け取りと署名検証は、両アプリで同じ（CommonLibrary）。
+                    bool received = Token.CmnEndpoints.ReceiveCibaRequest(
+                        request, request_uri, out JObject jsonObj, out err, out errDescription);
 
                     string client_id = "";
                     string scope = "";
@@ -818,11 +821,9 @@ namespace MultiPurposeAuthSite.Controllers
                     string requested_expiry = "";
                     string login_hint = "";
 
-                    if (jsonObj == null)
+                    if (!received)
                     {
-                        // 不正なrequest_uri
-                        err = OAuth2AndOIDCConst.invalid_request;
-                        errDescription = "Invalid request_uri.";
+                        // 受け取れなかった（err, errDescriptionは設定済み）。
                     }
                     else if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
                         jsonObj, out client_id, out scope,
@@ -876,8 +877,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
                             //   CIBA は認可エンドポイントを通らないので、ここで消す。
-                            Sts.RequestObjectProvider.Delete(
-                                request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                            //   request で直接受け取ったときは預けたものが無いので、消す対象も無い（#233）。
+                            if (!string.IsNullOrEmpty(request_uri))
+                            {
+                                Sts.RequestObjectProvider.Delete(
+                                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                            }
 
                             // CIBA情報をストア
                             // **誰宛ての要求かを記録する**（user は login_hint で解決した利用者）。
@@ -960,7 +965,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 不正なRequest
                     err = OAuth2AndOIDCConst.invalid_request;
-                    errDescription = "request_uri is null or empty.";
+                    errDescription = "request or request_uri is required.";
                 }
             }
             else

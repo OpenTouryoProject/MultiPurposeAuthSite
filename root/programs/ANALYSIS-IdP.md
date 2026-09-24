@@ -399,10 +399,21 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 | **ユーザの端末（認証デバイス）が未登録** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `access_denied` |
 | **プッシュ通知（FCM）の送信に失敗** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `server_error` |
 
-- `/ciba_authz` は、クライアントを HTTP 認証ではなく、`/ros` に登録した署名付きの要求（ES256）で識別する。
+- `/ciba_authz` は、クライアントを HTTP 認証ではなく、**署名付きの要求（ES256）で識別する**。
   そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
-- 未登録のクライアントや必須のクレームの欠落は、`/ros` の登録（署名と必須項目の検証）で先に断られるので、
-  `/ciba_authz` では実際には起きにくい（防御として正しいコードにした）
+- **要求の受け取り方は 2 つある**（#233。`CmnEndpoints.ReceiveCibaRequest`）。
+
+  | | 送り方 | 位置付け |
+  |---|---|---|
+  | `request` | 署名付き JWT を、そのままフォームで POST | **CIBA Core §7.1.1。標準の送り方**（#233 で追加） |
+  | `request_uri` | `/ros` に預け、その参照を POST | **CIBA Core に無い独自拡張。** 後方互換で残す |
+
+  **両方あれば `request` を使う。** 署名の検証は同じ（登録済みの `jwk_ecdsa_publickey`）で、
+  検証を通った中身を `ValidateCibaAuthZReqParam` に渡す流れも変わらない。
+  `request` の経路では**預けたものが無いので、使用後に消す対象も無い**（`request_uri` のときだけ `Delete` する）
+- 未登録のクライアントや必須のクレームの欠落は、`request_uri`（`/ros` に登録）の経路では
+  登録の時点で先に断られるので、`/ciba_authz` では起きにくかった。
+  **`request` の経路では `/ciba_authz` が最初の関門になる**ので、ここの判定が実際に効く
 - `unknown_user_id` は Open棟梁 の定数に無いので `CmnEndpoints` で定義した。
   クレームの欠落は、Open棟梁 の `CmnJwtToken.CheckClaims` が返す `server_error` を、`invalid_request` に読み替える（`GetCibaClaim`）
 - E2E テスト : `RT-196.16`（`request_uri` なし・存在しない → 400）/
@@ -1164,11 +1175,12 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 > 1. 同梱の自己テスト（FAPI2）が Open棟梁の
 >    `OAuth2AndOIDCClient.RegisterRequestObjectAsync(Uri, string)` を使っており、**資格情報を渡す引数が無い**
 >    （OpenTouryo #592）
-> 2. **CIBA も `/ros` に依存している。** 認証要求を `/ros` に預け、その `request_uri` を `/ciba_authz` に渡している。
->    **これは CIBA Core に無い独自拡張**で（§7.1.1 は `request` パラメタで直接送る形。`request_uri` の仕組みは無い）、
->    標準の CIBA クライアントからは使えない。**#233** で、`/ciba_authz` が `request` を直接受け取れるようにする
+> 2. ~~**CIBA も `/ros` に依存している。**~~ → **✅ 解消（#233）。**
+>    `/ciba_authz` が **CIBA Core §7.1.1 の `request`（署名付き JWT）を直接受け取る**ようにした。
+>    `request_uri` の受け口は後方互換で残しているが、**CIBA が `/ros` を必要とすることは無くなった**（`RT-233`）。
+>    （同梱の自己テストを `request` に移すには、Open棟梁 #592 の対応が要る）
 >
-> この 2 つが片付き、広告している口の移行期間を置ければ、`/ros` の廃止を検討できる。
+> **残るのは 1 だけ。** これが片付き、広告している口の移行期間を置ければ、`/ros` の廃止を検討できる。
 
 修正前は、署名検証は行っていた（`RequestObject.Verify` / `VerifyCiba`）ものの、
 

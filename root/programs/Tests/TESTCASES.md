@@ -2992,6 +2992,98 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - authorization_response_iss_parameter_supported が boolean の true
 
+## RT-233.1 /ciba_authz に request（署名付き JWT）を直接送ると、CIBA が成立する
+
+| | |
+|---|---|
+| 観点 | **CIBA Core が定めている送り方**（§7.1.1 : 署名した認証要求を request パラメタで POST）。以前は /ros に預けた request_uri しか受け付けておらず、これは CIBA Core に無い独自拡張だった。**標準の CIBA クライアントが繋がるかどうか**を、ここで見る。 |
+| 根拠 | CIBA Core §7.1.1 / #233 |
+| テスト | `RT23301_requestを直接送ってCIBAが成立する` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する（POST /SetDeviceToken）
+1. クライアント : request に署名付き JWT を入れて POST /ciba_authz
+1. サーバ → 認証デバイス : プッシュ通知を受け取る（送信箱）
+1. 利用者 : 認証デバイスで「許可」を押す（POST /ciba_result、result=true）
+1. クライアント : ポーリングしてトークンを取る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- 認証リクエスト : HTTP 200
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- request に入れた binding_message が載る
+- 返答 : HTTP 200
+- access_token が返る
+
+**補足**
+
+- **/ros を一度も呼んでいない。** 認証要求は request で直接渡している。
+
+## RT-233.2 request と request_uri の両方を送ると、request が使われる
+
+| | |
+|---|---|
+| 観点 | **後方互換のため request_uri の受け口を残す**ので、両方が届き得る。そのとき**どちらが効くかを決めておく**（仕様にある request を優先）。決めていないと、実装によって結果が変わる。 |
+| 根拠 | CIBA Core §7.1.1 / #233 |
+| テスト | `RT23302_両方あればrequestを優先する` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する
+1. /ros に別の binding_message の要求を預けて、request_uri を得る
+1. クライアント : request と request_uri の両方を入れて POST /ciba_authz
+1. プッシュ通知の binding_message を見る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- 認証リクエスト : HTTP 200
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- request 側の binding_message が届く（request_uri 側ではない）
+
+## RT-233.3 署名が壊れている request は、認証要求として受け付けない
+
+| | |
+|---|---|
+| 観点 | **request は署名だけがクライアントの証明**である（/ciba_authz は HTTP のクライアント認証を行わない）。署名を確かめずに中身を信じると、誰でも他人のクライアントを名乗れる。**利用者に通知を送る前に断る**こと。 |
+| 根拠 | CIBA Core §7.1.1 / §13 / #233 |
+| テスト | `RT23303_署名が壊れたrequestを断る` |
+
+**手順**
+
+1. 正しい request を作り、署名の部分だけを書き換える
+1. POST /ciba_authz
+
+**検証（合否を判定する）**
+
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは invalid_request
+
+## RT-233.4 request も request_uri も無い認証要求は、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **受け口を 2 つにしたので、「どちらも無い」が新しい入口になる。**エラーの形（400 と invalid_request）が変わっていないことを見る。 |
+| 根拠 | CIBA Core §13 / #233 |
+| テスト | `RT23304_requestもrequest_uriも無ければ断る` |
+
+**手順**
+
+1. POST /ciba_authz（scope だけを入れ、request も request_uri も入れない）
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- エラーは invalid_request
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
