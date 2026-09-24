@@ -401,6 +401,10 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 
 - `/ciba_authz` は、クライアントを HTTP 認証ではなく、**署名付きの要求（ES256）で識別する**。
   そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
+- **ただし CIBA Core §7.1 は、この口でのクライアント認証を MUST としている**（FAPI-CIBA は
+  `private_key_jwt` を要求）。**`ClientAuthentication` を呼んでいないのは、この口だけ**
+  （`/token`・`/device_authz` は呼んでいる）。加えて `ValidateCibaAuthZReqParam` は
+  **`aud` と `jti` を検証していない**（どちらもコメントのみ）。**#234** で扱う
 - **要求の受け取り方は 2 つある**（#233。`CmnEndpoints.ReceiveCibaRequest`）。
 
   | | 送り方 | 位置付け |
@@ -1167,20 +1171,28 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 
 > **#229 で、RFC 9126 の口（`/par`）を別に設けた。**
 > `/ros` は**クライアント認証をしない**（署名だけ）ので、登録済みの鍵さえあれば誰でも預けられる。
-> `/par` は**トークン エンドポイントと同じクライアント認証**を求める。
-> 新しい RP は `/par` を使う。`/ros` は既存の RP と同梱の自己テストのために残している。
+> `/par` は**トークン エンドポイントと同じクライアント認証**を求める。**新しい RP は `/par` を使う。**
 >
-> **`/ros` を消せない理由は 2 つある。**
+> **`/ros` は残す。** 一時は廃止を見込んでいたが、**RFC 9101（JAR）§5.2.1 が、この形を認めている。**
 >
-> 1. 同梱の自己テスト（FAPI2）が Open棟梁の
->    `OAuth2AndOIDCClient.RegisterRequestObjectAsync(Uri, string)` を使っており、**資格情報を渡す引数が無い**
->    （OpenTouryo #592）
-> 2. ~~**CIBA も `/ros` に依存している。**~~ → **✅ 解消（#233）。**
->    `/ciba_authz` が **CIBA Core §7.1.1 の `request`（署名付き JWT）を直接受け取る**ようにした。
->    `request_uri` の受け口は後方互換で残しているが、**CIBA が `/ros` を必要とすることは無くなった**（`RT-233`）。
->    （同梱の自己テストを `request` に移すには、Open棟梁 #592 の対応が要る）
+> > The client stores the Request Object resource either locally or remotely at a URI the
+> > authorization server can access. **Such a facility may be provided by the authorization server** …
+> > For example, **the authorization server may provide a URL to which the client POSTs the
+> > Request Object and obtains the Request URI.**
 >
-> **残るのは 1 だけ。** これが片付き、広告している口の移行期間を置ければ、`/ros` の廃止を検討できる。
+> ただし **RFC 9101 は中身を何も規定していない**（認証方法も応答形式も）。
+> したがって `/ros` は**相互運用できる口ではなく、この IdP の任意機能**である。
+> FAPI 2.0 Security Profile は PAR を必須としているので、**本命は `/par`** という関係は変わらない。
+>
+> 廃止しないのであれば、**両アプリに二重に書かれたままにする理由も無い**（`/par` と
+> CIBA の受け取りは `CmnEndpoints` に集約済みで、`/ros` だけが残っている）。**#235** で共通化する。
+>
+> **CIBA での `request_uri` は、これとは別の話。**
+> `/ciba_authz` が `request_uri` を受けるのは **CIBA Core に無い独自拡張**で（§7.1.1 は `request` で直接送る形。
+> **初期のドラフトには `request_uri` があったが、最終版にも FAPI-CIBA にも無い**）、
+> **#233 で `request` を直接受け取れるようにした**（`RT-233`）。
+> `request_uri` の受け口は後方互換で残しているが、**こちらは将来外す。**
+> （同梱の自己テストを `request` に移すには、Open棟梁 #592 の対応が要る）
 
 修正前は、署名検証は行っていた（`RequestObject.Verify` / `VerifyCiba`）ものの、
 
@@ -1417,7 +1429,7 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 | # | 仕様 | 状況 | 影響 |
 |---|---|---|---|
 | D-1 | **RP-Initiated Logout / Front-Channel / Back-Channel Logout / Session Management** | **未実装**（`end_session` の実装も discovery も無し）。**#232** | RP からのログアウト連携ができない。SSO の解除手段が無い |
-| D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。独自の `/ros` は後方互換で残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
+| D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。`/ros` は **RFC 9101 §5.2.1 の任意機能**として残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
 | D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`） | Mix-Up 攻撃への対策 |
