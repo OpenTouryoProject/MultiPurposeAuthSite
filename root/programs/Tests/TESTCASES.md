@@ -2836,6 +2836,82 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **サーバ全体の RequirePkce を true にすれば、こちらも通らなくなる。**クライアント側の設定は「個別の引き上げ」であって、**床を下げることはできない**。
 
+## RT-231.1 認可コードを返す応答に、iss（発行者）が付く
+
+| | |
+|---|---|
+| 観点 | **RP が複数の IdP を使うとき、応答の取り違えを誘う攻撃（Mix-Up）がある。**RP は `iss` を見て、**自分が要求した IdP からの応答か**を確かめられる。以前は付けていなかったので、対策が RP 側任せだった。 |
+| 根拠 | RFC 9207 §2 / #231 |
+| テスト | `RT231_01_成功の認可応答にissが付く` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. 認可コードを要求する
+
+**検証（合否を判定する）**
+
+- 認可コードが返る
+- 応答の iss が Discovery の issuer と一致する
+
+**補足**
+
+- issuer = https://ssoauth.opentouryo.com
+
+## RT-231.2 エラーを返す応答にも、iss が付く
+
+| | |
+|---|---|
+| 観点 | **エラーも取り違えの対象になる。** RFC 9207 §2 は、**成功・失敗のどちらの認可応答にも** `iss` を含めることを求めている。エラーだけ付けないと、RP は「どの IdP が断ったのか」を確かめられない。 |
+| 根拠 | RFC 9207 §2 / RFC 6749 §4.1.2.1 / #231 |
+| テスト | `RT231_02_失敗の認可応答にもissが付く` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. 未知の response_type で認可を要求する（RP へエラーが返る）
+
+**検証（合否を判定する）**
+
+- RP へリダイレクトで返る
+- エラーは unsupported_response_type
+- エラー応答の iss が Discovery の issuer と一致する
+
+## RT-231.3 JARM（response_mode=query.jwt）では、平文の iss を付けない（JWT の中に入っている）
+
+| | |
+|---|---|
+| 観点 | **JARM は応答を認可サーバの署名付き JWT に包む。**その JWT に `iss` が入っており、**署名で守られている分だけ強い。**平文の `iss` を重ねて付ける必要はない。 |
+| 根拠 | JARM / RFC 9207 §2 / #231 |
+| テスト | `RT231_03_JARMでは平文のissを付けない` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. response_mode=query.jwt で認可を要求する
+
+**検証（合否を判定する）**
+
+- response（JWT）が返る
+- 平文の iss は付かない
+- JWT の中の iss が Discovery の issuer と一致する
+
+## RT-231.4 Discovery が authorization_response_iss_parameter_supported: true を広告する
+
+| | |
+|---|---|
+| 観点 | **RP は Discovery を見て、`iss` を確かめる処理を有効にする。**広告していなければ、対応していても使われない。 |
+| 根拠 | RFC 9207 §3 / #231 |
+| テスト | `RT231_04_Discoveryがissの対応を広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- authorization_response_iss_parameter_supported が boolean の true
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

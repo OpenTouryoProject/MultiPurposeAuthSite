@@ -85,6 +85,7 @@
 //*  2026/09/24  玄人 幸道         code_challenge_methods_supported を設定に合わせ、service_documentation を設定値にする（#228）
 //*  2026/09/24  玄人 幸道         Request Object を、認可応答を作った時点で消す（ワンタイム化。#188 の段階 2）
 //*  2026/09/24  玄人 幸道         refresh_token のローテーションで、一族（FamilyId）を引き継ぐ（#188 の段階 3）
+//*  2026/09/24  玄人 幸道         認可応答に iss を付ける（RFC 9207。#231）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -330,6 +331,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 });
                 #endregion
             }
+
+            // **認可応答に iss を付けることを広告する**（RFC 9207 §3。#231）
+            OpenIDConfig.Add("authorization_response_iss_parameter_supported", true);
 
             OpenIDConfig.Add("jwks_uri",
                     Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri);
@@ -2632,6 +2636,19 @@ namespace MultiPurposeAuthSite.TokenProviders
             string redirectUri, Dictionary<string, string> parameters, bool useFragment = false)
         {
             StringBuilder sb = new StringBuilder();
+
+            // **どの認可サーバからの応答かを示す**（RFC 9207。#231）。
+            //   RP が複数の IdP を使うとき、応答を取り違えさせる攻撃（Mix-Up）への対策。
+            //   **成功にも失敗にも付ける**（同 §2）。
+            //
+            //   JARM（response=...）のときは付けない。**署名された JWT の中に iss が入っており**
+            //   （CmnResponseObject）、そちらが同じ役目を果たすため。
+            if (!parameters.ContainsKey(OAuth2AndOIDCConst.iss)
+                && !parameters.ContainsKey("response"))
+            {
+                parameters = new Dictionary<string, string>(parameters);
+                parameters[OAuth2AndOIDCConst.iss] = Config.IssuerId;
+            }
 
             foreach (KeyValuePair<string, string> p in parameters)
             {

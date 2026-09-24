@@ -1392,7 +1392,7 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 | D-2 | **PAR（RFC 9126）** | 独自の `/ros` のみ。`request_uri` の払い出しは在るが、クライアント認証・`expires_in`・ワンタイム性が無い。**#229** | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
-| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | 未実装。**#231** | Mix-Up 攻撃への対策が RP 側任せ |
+| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`） | Mix-Up 攻撃への対策 |
 | D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
 | D-7 | `profile` / `address` スコープのクレーム | **空実装**（`// ・・・`）。`name` `given_name` `family_name` 等を返さない。**#230** | `scopes_supported` に載っているのに何も返らない |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
