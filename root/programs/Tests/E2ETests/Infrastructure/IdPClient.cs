@@ -41,6 +41,7 @@
 //*  2026/09/16  玄人 幸道         /2fa_result を呼ぶ TwoFactorPushResultAsync を追加（#213）
 //*  2026/09/22  玄人 幸道         クライアント証明書を添えてトークン エンドポイントを呼ぶ TokenWithCertificateAsync を追加（#226）
 //*  2026/09/23  玄人 幸道         クライアント証明書を添えて UserInfo を呼ぶ UserInfoWithCertificateAsync を追加
+//*  2026/09/25  玄人 幸道         Discovery の issuer を引く IssuerAsync を追加（#234 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -113,6 +114,33 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             this._http.Dispose();
             this._handler.Dispose();
         }
+
+        #region Discovery
+
+        /// <summary>Discovery が広告する issuer（キャッシュする）</summary>
+        private string _issuer;
+
+        /// <summary>
+        /// OP の Issuer Identifier を、Discovery から引く。
+        /// </summary>
+        /// <returns>issuer</returns>
+        /// <remarks>
+        /// **テストに値を書かない。** issuer は設定キー（IssuerId）で決まり、
+        /// **待ち受けている URL とは別の値**（既定は https://ssoauth.opentouryo.com）。
+        /// CIBA の認証要求の aud は、この値でなければならない（CIBA Core 7.1.1。#234）。
+        /// </remarks>
+        public async Task<string> IssuerAsync()
+        {
+            if (string.IsNullOrEmpty(this._issuer))
+            {
+                JsonResponse res = await this.GetJsonAsync("/.well-known/openid-configuration");
+                this._issuer = res.String("issuer");
+            }
+
+            return this._issuer;
+        }
+
+        #endregion
 
         #region 素のHTTP
 

@@ -32,6 +32,7 @@
 //*  2026/09/10  玄人 幸道         署名鍵の読み込みを JwtBearerAssertion と共用（internal 化）
 //*  2026/09/11  玄人 幸道         署名と BASE64URL を JwsSigner / Base64Url へ移す（JwtBearerAssertion と共用）
 //*  2026/09/11  玄人 幸道         CIBA の認証リクエスト（ES256 で署名）を作る CreateCiba を追加（#196）
+//*  2026/09/25  玄人 幸道         aud に Discovery の issuer を使うため CreateCibaAsync に改めた（#234 の段階 1）
 //**********************************************************************************
 
 using System;
@@ -55,6 +56,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>request_uri の接頭辞</summary>
         public const string RequestUriPrefix = "urn:oauth:request:";
+
+        /// <summary>
+        /// クレームを取り除く指定。
+        /// <c>CreateCibaAsync</c> の parameters に
+        /// <c>{ RequestObjectBuilder.RemoveClaim, "aud" }</c> のように入れる。
+        /// </summary>
+        public const string RemoveClaim = "__remove_claim__";
 
         /// <summary>
         /// Request Object（署名付きJWT）を作る。
@@ -102,7 +110,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="clientId">client_id（iss に入れる）</param>
         /// <param name="parameters">既定の値を上書きするクレーム</param>
         /// <returns>JWS</returns>
-        public static string CreateCiba(
+        /// <remarks>
+        /// **aud は Discovery の issuer を使う**（CIBA Core 7.1.1 : OP の Issuer Identifier。#234 の段階 1）。
+        /// 待ち受けている URL とは別の値なので、**テストに書かずに引く**。
+        /// </remarks>
+        public static async Task<string> CreateCibaAsync(
             IdPClient client, string clientId, IDictionary<string, object> parameters)
         {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -111,7 +123,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 // CIBA Core 7.1.1 : 署名した認証リクエストのクレーム（/ros はこれらが揃っていることを確かめる）
                 { "iss", clientId },
-                { "aud", client.Target.BaseUrl },
+                { "aud", await client.IssuerAsync() },
                 { "iat", now },
                 { "nbf", now },
                 { "exp", now + 600 },
@@ -124,6 +136,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             foreach (KeyValuePair<string, object> p in parameters)
             {
+                if (p.Key == RequestObjectBuilder.RemoveClaim)
+                {
+                    // 必須クレームの欠落を試すため、取り除く（値の上書きでは試せない）。
+                    payload.Remove((string)p.Value);
+                    continue;
+                }
+
                 payload[p.Key] = p.Value;
             }
 

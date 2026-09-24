@@ -114,7 +114,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
             IdPClient client, ClientRegistration reg, string bindingMessage)
         {
             string requestUri = await RequestObjectBuilder.RegisterAsync(client,
-                RequestObjectBuilder.CreateCiba(client, reg.ClientId, new Dictionary<string, object>()
+                await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
                     { "login_hint", TestEnv.TestUserName },
                     { "binding_message", bindingMessage }

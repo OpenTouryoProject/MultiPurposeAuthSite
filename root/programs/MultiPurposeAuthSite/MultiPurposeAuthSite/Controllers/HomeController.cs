@@ -27,6 +27,7 @@
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         require_pkce のクライアントを試す口を追加（#221）
+//*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -544,7 +545,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             string requestObject = RequestObject.CreateCiba(
                 this.ClientId, // FAPI2用か自前のクライアント
-                cibaAuthorizeEndpoint, // RequestObjectRegUriではなく。
+                // **aud は OP の Issuer Identifier（CIBA Core 7.1.1。#234 の段階 1）。**
+                //   以前は /ciba_authz のエンドポイント URL を入れていた。
+                Config.IssuerId,
                 DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds().ToString(),
                 DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
                 "hoge " + OAuth2AndOIDCConst.Scope_Openid,

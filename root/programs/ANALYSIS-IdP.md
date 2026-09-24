@@ -403,8 +403,22 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
 - **ただし CIBA Core §7.1 は、この口でのクライアント認証を MUST としている**（FAPI-CIBA は
   `private_key_jwt` を要求）。**`ClientAuthentication` を呼んでいないのは、この口だけ**
-  （`/token`・`/device_authz` は呼んでいる）。加えて `ValidateCibaAuthZReqParam` は
-  **`aud` と `jti` を検証していない**（どちらもコメントのみ）。**#234** で扱う
+  （`/token`・`/device_authz` は呼んでいる）。**#234 の段階 3** で入れる
+- **`aud` を検証するようにした**（**#234 の段階 1**）。CIBA Core §7.1.1 は
+  **`aud` に OP の Issuer Identifier を入れること**を MUST としている（`Config.IssuerId` ＝
+  Discovery の `issuer`、トークンの `iss`、認可応答の `iss` と同じ値）。
+  見ないと、**別の認可サーバ宛てに作られた要求**を、同じクライアントの鍵が登録されていれば受け付けてしまう。
+
+  **直す前は、呼び出し側の 2 つとも仕様と違う値を入れていた。**
+
+  | | `aud` に入れていた値 |
+  |---|---|
+  | 同梱の自己テスト（`HomeController`） | `/ciba_authz` の**エンドポイント URL** |
+  | E2E | サイトの **base URL** |
+
+  どちらも Issuer Identifier に直した。E2E は **Discovery の `issuer` を読んで使う**
+  （`IdPClient.IssuerAsync`）ので、設定を変えても追随する（`RT-234.1` / `RT-234.2`）
+- **`jti` は未検証**（`//string jti = "";`）。同じ要求を `exp` まで送り直せる。**#234 の段階 2** で使い切りにする
 - **要求の受け取り方は 2 つある**（#233。`CmnEndpoints.ReceiveCibaRequest`）。
 
   | | 送り方 | 位置付け |

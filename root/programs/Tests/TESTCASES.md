@@ -3084,6 +3084,52 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - HTTP 400
 - エラーは invalid_request
 
+## RT-234.1 aud が OP の Issuer Identifier でない認証要求は、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **CIBA Core §7.1.1 は、aud に OP の Issuer Identifier を入れることを MUST としている。**見ないと、**別の認可サーバ宛てに作られた要求**を、同じクライアントの鍵が登録されているこの IdP でも受け付けてしまう。以前は exp / nbf だけを見ており、aud は取り出してもいなかった。 |
+| 根拠 | CIBA Core §7.1.1 / §13 / #234 の段階 1 |
+| テスト | `RT23401_audがissuerでなければ断る` |
+
+**手順**
+
+1. Discovery から issuer を読む（テストに値を書かない）
+1. aud に別の認可サーバの識別子を入れた request を送る
+
+**検証（合否を判定する）**
+
+- issuer が広告されている
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは invalid_request
+
+**観測（判定しない）**
+
+- issuer
+  - **待ち受けている URL とは別の値**（設定キー IssuerId）。aud はこちらでなければならない。
+
+**補足**
+
+- **署名は正しい。** 正しい鍵で署名されていても、宛先が違えば受け付けない。
+
+## RT-234.2 aud が入っていない認証要求は、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **CIBA Core §7.1.1 の必須クレーム**（aud / iss / exp / iat / nbf / jti）の 1 つ。欠落は、Open棟梁 が返す server_error ではなく invalid_request に読み替える（#196 と同じ扱い）。 |
+| 根拠 | CIBA Core §7.1.1 / §13 / #234 の段階 1 |
+| テスト | `RT23402_audが無ければ断る` |
+
+**手順**
+
+1. aud を入れずに request を作って送る
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- エラーは invalid_request
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

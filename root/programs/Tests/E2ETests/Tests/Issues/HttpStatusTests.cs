@@ -143,7 +143,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             IdPClient client, ClientRegistration reg, IDictionary<string, object> overrides)
         {
             string requestUri = await RequestObjectBuilder.RegisterAsync(
-                client, RequestObjectBuilder.CreateCiba(client, reg.ClientId, overrides));
+                client, await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId, overrides));
 
             Assert.False(string.IsNullOrEmpty(requestUri),
                 "前提: /ros が、ES256 で署名した CIBA の要求を受け付けること");

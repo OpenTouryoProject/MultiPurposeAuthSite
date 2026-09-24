@@ -72,10 +72,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="reg">CIBA のクライアント</param>
         /// <param name="bindingMessage">binding_message（認証デバイスに表示される）</param>
         /// <returns>JWS</returns>
-        private static string CreateRequest(
+        private static Task<string> CreateRequestAsync(
             IdPClient client, ClientRegistration reg, string bindingMessage)
         {
-            return RequestObjectBuilder.CreateCiba(client, reg.ClientId, new Dictionary<string, object>()
+            return RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId, new Dictionary<string, object>()
             {
                 { "login_hint", TestEnv.TestUserName },
                 { "binding_message", bindingMessage }
@@ -114,7 +114,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
                 {
-                    { "request", CibaRequestTests.CreateRequest(client, reg, bindingMessage) }
+                    { "request", await CibaRequestTests.CreateRequestAsync(client, reg, bindingMessage) }
                 });
 
                 string authReqId = start.String("auth_req_id");
@@ -186,7 +186,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Step("(2) /ros に別の binding_message の要求を預けて、request_uri を得る");
 
                 string requestUri = await RequestObjectBuilder.RegisterAsync(client,
-                    CibaRequestTests.CreateRequest(client, reg, viaRequestUri));
+                    await CibaRequestTests.CreateRequestAsync(client, reg, viaRequestUri));
 
                 Assert.False(string.IsNullOrEmpty(requestUri), "前提: /ros が CIBA の要求を受け付けること");
 
@@ -194,7 +194,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
                 {
-                    { "request", CibaRequestTests.CreateRequest(client, reg, viaRequest) },
+                    { "request", await CibaRequestTests.CreateRequestAsync(client, reg, viaRequest) },
                     { "request_uri", requestUri }
                 });
 
@@ -239,7 +239,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(1) 正しい request を作り、署名の部分だけを書き換える");
 
-                string jws = CibaRequestTests.CreateRequest(client, reg, "E2E-broken");
+                string jws = await CibaRequestTests.CreateRequestAsync(client, reg, "E2E-broken");
                 string[] parts = jws.Split('.');
                 string signature = parts[2];
 
@@ -293,6 +293,111 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
                 {
                     { "scope", "openid" }
+                });
+
+                r.VerifyEqual("HTTP 400", "400", ((int)start.StatusCode).ToString());
+
+                r.VerifyEqual("エラーは invalid_request", "invalid_request", start.Error ?? "（無し）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-234.1 aud が Issuer Identifier でなければ断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23401_audがissuerでなければ断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-234.1",
+                    "aud が OP の Issuer Identifier でない認証要求は、invalid_request で断る",
+                    "**CIBA Core §7.1.1 は、aud に OP の Issuer Identifier を入れることを MUST としている。**"
+                    + "見ないと、**別の認可サーバ宛てに作られた要求**を、"
+                    + "同じクライアントの鍵が登録されているこの IdP でも受け付けてしまう。"
+                    + "以前は exp / nbf だけを見ており、aud は取り出してもいなかった。",
+                    "CIBA Core §7.1.1 / §13 / #234 の段階 1");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Step("(1) Discovery から issuer を読む（テストに値を書かない）");
+
+                string issuer = await client.IssuerAsync();
+
+                r.Verify("issuer が広告されている", !string.IsNullOrEmpty(issuer),
+                    "issuer あり", issuer ?? "（無し）");
+
+                r.Observe("issuer", issuer ?? "（無し）",
+                    "**待ち受けている URL とは別の値**（設定キー IssuerId）。aud はこちらでなければならない。");
+
+                r.Step("(2) aud に別の認可サーバの識別子を入れた request を送る");
+
+                string otherAud = "https://another-op.example.invalid";
+
+                string jws = await RequestObjectBuilder.CreateCibaAsync(
+                    client, reg.ClientId, new Dictionary<string, object>()
+                    {
+                        { "login_hint", TestEnv.TestUserName },
+                        { "binding_message", "E2E-aud" },
+                        { "aud", otherAud }
+                    });
+
+                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "request", jws }
+                });
+
+                string authReqId = start.String("auth_req_id");
+
+                r.Verify("auth_req_id を返さない（利用者へ通知しない）",
+                    string.IsNullOrEmpty(authReqId),
+                    "返さない",
+                    string.IsNullOrEmpty(authReqId) ? "返さなかった" : "**返した**（値は伏せる）");
+
+                r.VerifyEqual("HTTP 400", "400", ((int)start.StatusCode).ToString());
+
+                r.VerifyEqual("エラーは invalid_request", "invalid_request", start.Error ?? "（無し）");
+
+                r.Note("**署名は正しい。** 正しい鍵で署名されていても、宛先が違えば受け付けない。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-234.2 aud が無い認証要求を断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23402_audが無ければ断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-234.2",
+                    "aud が入っていない認証要求は、invalid_request で断る",
+                    "**CIBA Core §7.1.1 の必須クレーム**（aud / iss / exp / iat / nbf / jti）の 1 つ。"
+                    + "欠落は、Open棟梁 が返す server_error ではなく invalid_request に読み替える（#196 と同じ扱い）。",
+                    "CIBA Core §7.1.1 / §13 / #234 の段階 1");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("client_name=" + KnownClients.TestClient4 + "（aud を外した request）");
+
+                r.Step("(1) aud を入れずに request を作って送る");
+
+                string jws = await RequestObjectBuilder.CreateCibaAsync(
+                    client, reg.ClientId, new Dictionary<string, object>()
+                    {
+                        { "login_hint", TestEnv.TestUserName },
+                        { "binding_message", "E2E-no-aud" },
+                        { RequestObjectBuilder.RemoveClaim, "aud" }
+                    });
+
+                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "request", jws }
                 });
 
                 r.VerifyEqual("HTTP 400", "400", ((int)start.StatusCode).ToString());

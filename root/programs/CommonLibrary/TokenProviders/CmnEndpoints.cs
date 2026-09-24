@@ -88,6 +88,7 @@
 //*  2026/09/24  玄人 幸道         認可応答に iss を付ける（RFC 9207。#231）
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）のエンドポイントを追加（#229）
 //*  2026/09/24  玄人 幸道         CIBA の認証要求を request で直接受け取る（CIBA Core 7.1.1。#233）
+//*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を検証する（CIBA Core 7.1.1。#234 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1013,7 +1014,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             out string err, out string errDescription)
         {
             #region 定義
-            //string aud = "";
+            string aud = "";
             string exp = "";
             //string iat = "";
             string nbf = "";
@@ -1066,6 +1067,26 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
             }
             // aud
+            // **CIBA Core 7.1.1 : aud は OP の Issuer Identifier でなければならない（#234 の段階 1）。**
+            //   以前は取り出しも検証もしていなかった（この行はコメントだけだった）。
+            //   見ないと、**別の認可サーバ宛てに作られた要求**を、
+            //   同じクライアントの鍵が登録されているこの IdP でも受け付けてしまう。
+            if (!CmnEndpoints.GetCibaClaim(
+                json, OAuth2AndOIDCConst.aud,
+                out aud, out err, out errDescription))
+            {
+                return false;
+            }
+            else
+            {
+                if (aud != Config.IssuerId)
+                {
+                    // CIBA Core 13 : invalid_request
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "The aud is not the issuer identifier.";
+                    return false;
+                }
+            }
             // exp
             if (!CmnEndpoints.GetCibaClaim(
                     json, OAuth2AndOIDCConst.exp,
