@@ -34,6 +34,7 @@
 //*  2026/09/11  玄人 幸道         #197 の修正に合わせ、RT-197.5 の Skip を解除し、RT-197.6 を検証に変更
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-197）
 //*  2026/09/22  玄人 幸道         RT-197.2 の期待するエラー コードを unauthorized_client に改めた（#224 の段階 2）
+//*  2026/09/24  玄人 幸道         RT-188.4（request_uri は使い切り）を追加（#188 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -365,6 +366,71 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         #endregion
 
         #region ヘルパ
+
+        /// <summary>RT-188.4 request_uri は使い切り（2 回目の認可には使えない）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT188_04_request_uriは使い切り(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-188.4",
+                    "一度 認可に使った request_uri は、2 回目の認可要求には使えない",
+                    "**預けた認可要求を、何度でも使い回せてはいけない。**"
+                    + "以前は `Delete` が呼ばれず、期限内なら**同じ request_uri で何度でも認可できた**。"
+                    + "1 回の認可の中では複数回読む（同意画面・コードの生成）ので、"
+                    + "**認可応答を作り終えた時点**で消している（#188 の段階 2）。",
+                    "RFC 9126 §2.2（PAR は一回限りを求める）/ RFC 9101 / #188");
+
+                r.Target(client.Target.DisplayName + " / client_name=" + KnownClients.TestClient);
+
+                r.Step("(1) Request Object を預け、その request_uri で認可する");
+
+                Dictionary<string, object> parameters = new Dictionary<string, object>()
+                {
+                    { "response_type", "code" },
+                    { "redirect_uri", reg.RedirectUri },
+                    { "scope", "openid email" },
+                    { "state", "state-rt1884" },
+                    { "nonce", "nonce-rt1884" },
+                    { "prompt", "none" }
+                };
+
+                string url = await RequestObjectBuilder.BuildAuthorizeUrlAsync(
+                    client, reg.ClientId, parameters);
+
+                Assert.False(string.IsNullOrEmpty(url), "前提: request_uri が払い出されること");
+
+                AuthZResponse first = await client.AuthorizeAndGrantAsync(url);
+
+                r.Verify("1 回目は認可コードが返る",
+                    !string.IsNullOrEmpty(first.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(first.Code)
+                        ? "**無し**（error=" + (first.Error ?? "なし") + "）" : "あり（値は伏せる）");
+
+                Assert.False(string.IsNullOrEmpty(first.Code), "前提: 1 回目が成功すること");
+
+                r.Step("(2) まったく同じ URL（同じ request_uri）で、もう一度 認可する");
+
+                AuthZResponse second = await client.AuthorizeAndGrantAsync(url);
+
+                r.Verify("2 回目は認可コードを返さない",
+                    string.IsNullOrEmpty(second.Code),
+                    "code 無し",
+                    string.IsNullOrEmpty(second.Code) ? "無し" : "**返してしまった**");
+
+                r.Observe("2 回目の返り方",
+                    "HTTP " + (int)second.StatusCode + " / error=" + (second.Error ?? "なし"),
+                    "消した後は「存在しない request_uri」と同じ扱いになる。返し方は記録するだけで、判定しない。");
+
+                r.Done();
+            }
+        }
 
         /// <summary>
         /// Request Object を自前で組み立てて登録し、認可リクエストを送る。

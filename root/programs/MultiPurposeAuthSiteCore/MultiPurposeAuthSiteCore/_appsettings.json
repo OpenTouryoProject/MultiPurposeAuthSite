@@ -217,6 +217,11 @@
     //   **空なら Discovery に出さない**（任意の項目）
     "ServiceDocumentation": "",
 
+    // 認可コードの有効期限（秒）（#188。RFC 6749 4.1.2 は 10 分以内を推奨）
+    "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
+    // Request Object（/ros に預けたもの）の有効期限（秒）（#188）
+    "RequestObjectExpireTimeSpanFromSeconds": "300",
+
     // AuthorizationServerエンドポイント
     "OAuth2AuthorizationServerEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // 認可エンドポイント

@@ -67,6 +67,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         private static ConcurrentDictionary<string, RequestObjectBean>
             RequestObjects = new ConcurrentDictionary<string, RequestObjectBean>();
 
+        /// <summary>
+        /// **これより古い Request Object は、無いものとして扱う**（#188）
+        /// </summary>
+        /// <remarks>
+        /// 預けてから認可要求に使うまでの短い時間だけ有効にする
+        /// （Config.RequestObjectExpireTimeSpanFromSeconds。既定 300 秒）。
+        /// 以前は CreatedDate を書くだけで読んでおらず、事実上の無期限だった。
+        ///
+        /// **使い切り（ワンタイム）にはしていない。** 1 回の認可の中で複数回読むため
+        /// （同意画面・コード発行・CIBA の開始）、消す場所を決める必要がある（#188 の段階 2 / #229）。
+        /// </remarks>
+        private static DateTime ExpireLimit
+        {
+            get { return DateTime.Now - Config.RequestObjectExpireTimeSpanFromSeconds; }
+        }
+
         #region Create
 
         /// <summary>Create</summary>
@@ -148,7 +164,8 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 case EnumUserStoreType.Memory:
 
                     RequestObjectBean requestObject = null;
-                    if (RequestObjectProvider.RequestObjects.TryGetValue(urn, out requestObject))
+                    if (RequestObjectProvider.RequestObjects.TryGetValue(urn, out requestObject)
+                        && requestObject.CreatedDate >= RequestObjectProvider.ExpireLimit)
                     {
                         requestObjectValue = requestObject.Value;
                     }
@@ -168,21 +185,27 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                             case EnumUserStoreType.SqlServer:
 
                                 requestObjectValue = cnn.ExecuteScalar<string>(
-                                    "SELECT [Value] FROM [RequestObject] WHERE [Urn] = @Urn", new { Urn = urn });
+                                    "SELECT [Value] FROM [RequestObject]"
+                                    + " WHERE [Urn] = @Urn AND [CreatedDate] > @Limit",
+                                    new { Urn = urn, Limit = RequestObjectProvider.ExpireLimit });
 
                                 break;
 
                             case EnumUserStoreType.ODPManagedDriver:
 
                                 requestObjectValue = cnn.ExecuteScalar<string>(
-                                    "SELECT \"Value\" FROM \"RequestObject\" WHERE \"Urn\" = :Urn", new { Urn = urn });
+                                    "SELECT \"Value\" FROM \"RequestObject\""
+                                    + " WHERE \"Urn\" = :Urn AND \"CreatedDate\" > :Limit",
+                                    new { Urn = urn, Limit = RequestObjectProvider.ExpireLimit });
 
                                 break;
 
                             case EnumUserStoreType.PostgreSQL:
 
                                 requestObjectValue = cnn.ExecuteScalar<string>(
-                                    "SELECT \"value\" FROM \"requestobject\" WHERE \"urn\" = @Urn", new { Urn = urn });
+                                    "SELECT \"value\" FROM \"requestobject\""
+                                    + " WHERE \"urn\" = @Urn AND \"createddate\" > @Limit",
+                                    new { Urn = urn, Limit = RequestObjectProvider.ExpireLimit });
 
                                 break;
                         }

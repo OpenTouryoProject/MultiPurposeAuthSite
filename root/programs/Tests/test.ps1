@@ -90,6 +90,15 @@
     **発行元（テスト用 CA）を、コンピューターの信頼されたルートに入れておく必要がある**（管理者権限）。
     付けなければ、FA-6 は net10.0 版だけを測る（net48 版のケースは作らない。Skip にもならない）。
 
+.PARAMETER ShortLifetimes
+    **有効期限のテスト（RT-188）専用。** 認可コード・Request Object・refresh_token の寿命を
+    ごく短くしてサイトを起動する（#188）。
+
+    **-Filter と併せて使うこと。** 寿命が短いので、他のテストは落ちる。
+      .\test.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
+
+    付けなければ、有効期限のテストはケースを作らない（Skip にもならない）。
+
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
@@ -109,6 +118,7 @@
     .\test.ps1 -Launch -NoNetFx
     .\test.ps1 -Filter "FullyQualifiedName~RequestObjectTests"
     .\test.ps1 -Launch -NetFxMtls -Filter "FullyQualifiedName~MtlsTests"
+    .\test.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
 
 .EXAMPLE
     # SQL Server のストアで回す（接続文字列は環境変数から）
@@ -129,6 +139,7 @@ param(
     [string] $NetFxUrl = 'https://localhost:44302',
     [switch] $NoNetFx,
     [switch] $NetFxMtls,
+    [switch] $ShortLifetimes,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
@@ -491,6 +502,16 @@ try {
             Write-Warning 'TestClient4 / TestClient2 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 は Skip）。'
         }
 
+        # **有効期限のテスト（#188）は、寿命をごく短くして測る。**
+        #   既定（認可コード 600 秒 / Request Object 300 秒 / refresh_token 14 日）を待つのは現実的でない。
+        #   **他のテストは落ちるので、-Filter と併せて使う。**
+        if ($ShortLifetimes) {
+            Write-Warning '-ShortLifetimes : 寿命をごく短くして起動します。-Filter と併せて使ってください（#188）。'
+            $env:OAuth2AuthorizationCodeExpireTimeSpanFromSeconds = '2'
+            $env:RequestObjectExpireTimeSpanFromSeconds = '2'
+            $env:OAuth2RefreshTokenExpireTimeSpanFromDays = '0'
+        }
+
         if ($PSVersionTable.PSVersion.Major -lt 6) {
             # **コールバックは、スクリプト ブロックではなくコンパイルしたデリゲートにする。**
             #   クライアント証明書のネゴシエーション（-NetFxMtls）が入ると、
@@ -676,6 +697,13 @@ public static class MpasTestTls
             if ($NetFxMtls) { $env:MPAS_NETFX_MTLS = 'true' }   # FA-6 を net48 版でも回す（#226）
         }
 
+        if ($ShortLifetimes) {
+            Remove-Item Env:\OAuth2AuthorizationCodeExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+            Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+            Remove-Item Env:\OAuth2RefreshTokenExpireTimeSpanFromDays -ErrorAction SilentlyContinue
+            $env:MPAS_SHORT_LIFETIMES = 'true'   # RT-188 を回してよい（#188）
+        }
+
         # テスト専用のクライアント（#224）: 差し込みの値はテスト側へ持ち込まない。
         #   テストには client_id だけを渡す（client_secret などは写す元と同じなので、構成ファイルから読める）。
         if ($null -ne $injected) {
@@ -703,8 +731,19 @@ public static class MpasTestTls
 
     $testArgs = @('test', $csproj, '-c', $Configuration, '--logger', 'console;verbosity=normal')
 
-    if ($Filter) {
-        $testArgs += @('--filter', $Filter)
+    # **有効期限のテスト（RT-188）は、既定では走らせない**（#188）。
+    #   ごく短い寿命で起動したときにだけ意味があり、既定の寿命では測れない。
+    #   xUnit は「ケースが 0 件の Theory」を失敗として数えるため、
+    #   **ケースを作らないのではなく、ここで除外する。**
+    $expr = $Filter
+
+    if (-not $ShortLifetimes) {
+        $exclude = 'FullyQualifiedName!~LifetimeTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    if ($expr) {
+        $testArgs += @('--filter', $expr)
     }
 
     if ($TrxPath) {
@@ -760,6 +799,10 @@ finally {
         Remove-Item Env:\MPAS_TESTCLIENT2_3 -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_MTLS -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_SHORT_LIFETIMES -ErrorAction SilentlyContinue
+        Remove-Item Env:\OAuth2AuthorizationCodeExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+        Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+        Remove-Item Env:\OAuth2RefreshTokenExpireTimeSpanFromDays -ErrorAction SilentlyContinue
         Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
     }
 

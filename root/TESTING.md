@@ -304,6 +304,22 @@ Get-ChildItem Cert:\LocalMachine\Root, Cert:\CurrentUser\My |
     Where-Object { $subjects -contains $_.Subject } | Remove-Item
 ```
 
+### 有効期限（`RT-188`）と `-ShortLifetimes`
+
+**既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待つのは現実的でない。**
+そこで `-ShortLifetimes` が、寿命をごく短くしてサイトを起動する（#188）。
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
+```
+
+- **`-Filter` と併せて使う。** 寿命が短いので、他のテストは落ちる
+- **既定の通しでは、`RT-188` を除外している**（`test.ps1` が `FullyQualifiedName!~LifetimeTests` を足す）。
+  既定の寿命では測れず、**xUnit は「ケースが 0 件の Theory」を失敗として数える**ため
+- そのため **`RT-188` は `TESTCASES.md`（原本）に載らない。**
+  原本は通しの結果から作るので、`-ShortLifetimes` の実行で `-UpdateTestCases` を付けないこと
+  （付けると、その 6 件だけの原本に置き換わる）
+
 ### 取り違えは検出する
 
 **net48 版と net10.0 版は、構成ファイルの既定ではどちらも同じ URL を指している。**

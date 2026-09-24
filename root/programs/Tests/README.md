@@ -249,11 +249,12 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/Issues/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
-| `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
+| `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け。`RT-188.4`（使い切り）もここ |
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
+| `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 
 **`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
 
@@ -269,6 +270,15 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
 **登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
 **E2E で守られていない行がある** : 認可コードの private_key_jwt。mTLS は net10.0 版だけ（`FA-6`）。
+
+**有効期限（`RT-188`）は、`-ShortLifetimes` で起動したときだけ回る**（#188）。
+既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待てないため、
+寿命をごく短くして起動する。**既定の通しでは除外している**ので、`TESTCASES.md`（原本）にも載らない
+（[`../../TESTING.md`](../../TESTING.md) 5 節）。
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
+```
 
 **mTLS（`FA-6`）は、net10.0 版だけを測る**（#226）。
 Kestrel は既定でクライアント証明書を要求せず、要求させても自己署名の証明書はチェーンの検証で落ちる。

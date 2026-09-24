@@ -50,8 +50,60 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// RefreshTokens
         /// ConcurrentDictionaryは、.NET 4.0の新しいスレッドセーフなHashtable
         /// </summary>
-        private static ConcurrentDictionary<string, string>
-            RefreshTokens = new ConcurrentDictionary<string, string>();
+        private static ConcurrentDictionary<string, TokenEntry>
+            RefreshTokens = new ConcurrentDictionary<string, TokenEntry>();
+
+        /// <summary>メモリ ストアの 1 件（値と作成時刻）（#188）</summary>
+        private class TokenEntry
+        {
+            /// <summary>値</summary>
+            public string Value = "";
+            /// <summary>作成時刻</summary>
+            public DateTime CreatedDate = DateTime.MinValue;
+        }
+
+        /// <summary>
+        /// **これより古い refresh_token は、無いものとして扱う**（#188）
+        /// </summary>
+        /// <remarks>
+        /// Config.OAuth2RefreshTokenExpireTimeSpanFromDays（既定 14 日）は、
+        /// 以前は**定義だけで、どこからも参照されていなかった**（事実上の無期限）。
+        ///
+        /// **DBMS では SELECT の条件に入れる**ので、期限切れの行は「見つからない」になり、
+        /// これまでの「存在しない token」と同じ経路（空を返す ＝ invalid_grant）に合流する。
+        /// </remarks>
+        private static DateTime ExpireLimit
+        {
+            get { return DateTime.Now - Config.OAuth2RefreshTokenExpireTimeSpanFromDays; }
+        }
+
+        /// <summary>メモリ ストアから、期限内の値を取り出す（期限切れは消す）（#188）</summary>
+        /// <param name="tokenId">refresh_token</param>
+        /// <param name="remove">取り出せたら消すか（ローテーション・失効）</param>
+        /// <returns>値（無い・期限切れなら空）</returns>
+        private static string GetFromMemory(string tokenId, bool remove)
+        {
+            TokenEntry entry = null;
+
+            if (!RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out entry))
+            {
+                return "";
+            }
+
+            if (entry.CreatedDate < RefreshTokenProvider.ExpireLimit)
+            {
+                // 期限切れ。参照した時点で消す。
+                RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out TokenEntry _);
+                return "";
+            }
+
+            if (remove)
+            {
+                RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out TokenEntry _);
+            }
+
+            return entry.Value;
+        }
 
         #region Create
 
@@ -68,7 +120,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryAdd(tokenId, payload);
+                        RefreshTokenProvider.RefreshTokens.TryAdd(tokenId,
+                            new TokenEntry { Value = payload, CreatedDate = DateTime.Now });
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -137,7 +190,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out payload);
+                        payload = RefreshTokenProvider.GetFromMemory(tokenId, remove: true);
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -153,7 +206,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 case EnumUserStoreType.SqlServer:
 
                                     values = cnn.Query<string>(
-                                        "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = tokenId });
+                                        "SELECT [Value] FROM [RefreshTokenDictionary]"
+                                        + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
+                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
@@ -169,7 +224,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     values = cnn.Query<string>(
-                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = tokenId });
+                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\""
+                                        + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
+                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
@@ -185,7 +242,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 case EnumUserStoreType.PostgreSQL:
 
                                     values = cnn.Query<string>(
-                                       "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = tokenId });
+                                       "SELECT \"value\" FROM \"refreshtokendictionary\""
+                                       + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
+                                       new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
@@ -232,7 +291,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        RefreshTokenProvider.RefreshTokens.TryGetValue(tokenId, out payload);
+                        payload = RefreshTokenProvider.GetFromMemory(tokenId, remove: false);
                         break;
 
                     case EnumUserStoreType.SqlServer:
@@ -248,7 +307,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 case EnumUserStoreType.SqlServer:
 
                                     values = cnn.Query<string>(
-                                        "SELECT [Value] FROM [RefreshTokenDictionary] WHERE [Key] = @Key", new { Key = tokenId });
+                                        "SELECT [Value] FROM [RefreshTokenDictionary]"
+                                        + " WHERE [Key] = @Key AND [CreatedDate] > @Limit",
+                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
@@ -261,7 +322,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 case EnumUserStoreType.ODPManagedDriver:
 
                                     values = cnn.Query<string>(
-                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\" WHERE \"Key\" = :Key", new { Key = tokenId });
+                                        "SELECT \"Value\" FROM \"RefreshTokenDictionary\""
+                                        + " WHERE \"Key\" = :Key AND \"CreatedDate\" > :Limit",
+                                        new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
@@ -274,7 +337,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 case EnumUserStoreType.PostgreSQL:
 
                                     values = cnn.Query<string>(
-                                      "SELECT \"value\" FROM \"refreshtokendictionary\" WHERE \"key\" = @Key", new { Key = tokenId });
+                                      "SELECT \"value\" FROM \"refreshtokendictionary\""
+                                      + " WHERE \"key\" = @Key AND \"createddate\" > @Limit",
+                                      new { Key = tokenId, Limit = RefreshTokenProvider.ExpireLimit });
 
                                     list = values.AsList();
                                     if (list.Count != 0)
@@ -318,7 +383,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 switch (Config.UserStoreType)
                 {
                     case EnumUserStoreType.Memory:
-                        if (RefreshTokenProvider.RefreshTokens.TryRemove(tokenId, out payload))
+                        payload = RefreshTokenProvider.GetFromMemory(tokenId, remove: true);
+                        if (!string.IsNullOrEmpty(payload))
                         {
                             // 1 refresh : 1 access なので、単に捨てればOK。
                             ret = 1;

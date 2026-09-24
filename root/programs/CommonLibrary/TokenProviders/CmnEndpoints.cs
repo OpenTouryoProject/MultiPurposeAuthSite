@@ -83,6 +83,7 @@
 //*                                使えない refresh_token は発行しない。既知でない登録値は不正として拒否する（#224 の段階 2）
 //*  2026/09/24  玄人 幸道         Discovery の誤りを直し、実装済みの項目を広告する（#189 の 2〜8）
 //*  2026/09/24  玄人 幸道         code_challenge_methods_supported を設定に合わせ、service_documentation を設定値にする（#228）
+//*  2026/09/24  玄人 幸道         Request Object を、認可応答を作った時点で消す（ワンタイム化。#188 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1073,6 +1074,41 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Create Response
 
+        #region ConsumeRequestObject
+
+        /// <summary>
+        /// 認可応答を作り終えた Request Object を消す（ワンタイム化）（#188 の段階 2）
+        /// </summary>
+        /// <param name="queryString">認可リクエストのクエリ文字列（request_uri が在れば消す）</param>
+        /// <remarks>
+        /// **1 回の認可の中では、同じ request_uri を何度も読む。**
+        /// 同意画面（Controller）、コードの生成（AuthorizationCodeProvider）と続くため、
+        /// **最初の読み取りで消すと、その認可自体が壊れる。**
+        /// そこで**認可応答を作り終えた時点**（ここ）で消し、
+        /// **2 回目の認可要求には使えない**ようにする。
+        ///
+        /// 消し忘れても期限で無効になる（#188 の段階 1）。ここは**使い回しを断つ**ためのもの。
+        /// </remarks>
+        private static void ConsumeRequestObject(NameValueCollection queryString)
+        {
+            if (queryString == null)
+            {
+                return;
+            }
+
+            string request_uri = queryString[OAuth2AndOIDCConst.request_uri];
+
+            if (string.IsNullOrEmpty(request_uri))
+            {
+                return;
+            }
+
+            RequestObjectProvider.Delete(
+                request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+        }
+
+        #endregion
+
         #region CreateCodeInAuthZNRes
 
         /// <summary>CreateCodeInAuthZNRes</summary>
@@ -1101,6 +1137,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
                 client_id, name,                                                        // Client Account
                 Helper.GetInstance().GetClientIdByName(identity.Name), identity.Name)); // User Account
+
+            // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
+            CmnEndpoints.ConsumeRequestObject(queryString);
 
             return code;
         }
@@ -1188,6 +1227,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
                     client_id, name,                                                        // Client Account
                     Helper.GetInstance().GetClientIdByName(identity.Name), identity.Name)); // User Account
+
+                // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
+                CmnEndpoints.ConsumeRequestObject(queryString);
 
                 #endregion
             }
@@ -1290,6 +1332,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     "{0}({1}) passed the authorization endpoint of Hybrid by {2}({3}).",
                     client_id, name,                                         // Client Account
                     PPIDExtension.GetUserNameFromSub(client_id, sub), sub)); // User Account (PPID化により...)
+
+                // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
+                CmnEndpoints.ConsumeRequestObject(queryString);
 
                 #endregion
             }

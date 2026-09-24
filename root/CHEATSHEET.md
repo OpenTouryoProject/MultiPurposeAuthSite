@@ -35,6 +35,16 @@ cd root\programs\Tests
 
 合否の読み方 → [`BUILDING.md`](BUILDING.md) 3 節 / [`TESTING.md`](TESTING.md) 5 節
 
+### 有効期限（`RT-188`）は、寿命を短くして回す
+
+```powershell
+cd root
+.\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
+```
+
+**`-Filter` と併せて使う**（寿命が短いので他のテストは落ちる）。**`-UpdateTestCases` は付けない**（原本が壊れる）。
+背景 → [`TESTING.md`](TESTING.md) 5 節
+
 ### net48 版の mTLS（`FA-6`）だけ、準備が要る
 
 **net10.0 版は、通常の通しで測っている**（`-Launch` がテスト専用のフックを読ませる）。

@@ -52,6 +52,10 @@
     net48 版でも mTLS のテスト（FA-6）を回す（test.ps1 に渡す。#226）。
     **準備が要る**（TESTING.md「net48 版の mTLS」）。付けなければ、FA-6 は net10.0 版だけを測る。
 
+.PARAMETER ShortLifetimes
+    有効期限のテスト（RT-188）専用。寿命をごく短くしてサイトを起動する（test.ps1 に渡す。#188）。
+    **-Filter と併せて使うこと**（寿命が短いので、他のテストは落ちる）。
+
 .PARAMETER Filter
     dotnet test の --filter に渡す式（test.ps1 に渡す）。
 
@@ -95,6 +99,7 @@ param(
     [string]$NetFxUrl = 'https://localhost:44302',
     [switch]$NoNetFx,
     [switch]$NetFxMtls,
+    [switch]$ShortLifetimes,
     [string]$Filter,
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
@@ -151,6 +156,7 @@ $splat = @{
 if ($Launch)   { $splat.Launch   = $true }
 if ($NoNetFx)  { $splat.NoNetFx  = $true }
 if ($NetFxMtls) { $splat.NetFxMtls = $true }
+if ($ShortLifetimes) { $splat.ShortLifetimes = $true }
 if ($Url)      { $splat.Url      = $Url }
 if ($NetFxUrl) { $splat.NetFxUrl = $NetFxUrl }
 if ($Filter)   { $splat.Filter   = $Filter }

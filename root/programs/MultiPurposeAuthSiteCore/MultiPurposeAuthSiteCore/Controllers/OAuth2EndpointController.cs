@@ -872,6 +872,11 @@ namespace MultiPurposeAuthSite.Controllers
                                 }, null);
                             }
 
+                            // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
+                            //   CIBA は認可エンドポイントを通らないので、ここで消す。
+                            Sts.RequestObjectProvider.Delete(
+                                request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+
                             // CIBA情報をストア
                             // **誰宛ての要求かを記録する**（user は login_hint で解決した利用者）。
                             Sts.CibaProvider.Create(
@@ -1126,7 +1131,11 @@ namespace MultiPurposeAuthSite.Controllers
                             iss = Config.IssuerId,
                             aud = iss,
                             request_uri = request_uri,
-                            exp = "" // 有効期限（存続期間は短く、好ましくは一回限
+                            // **有効期限を返す**（#188。以前は空文字だった）。
+                            //   NumericDate（RFC 7519 2章）＝ 秒。
+                            //   使い切り（ワンタイム）は、消す場所を決めてから（#188 の段階 2 / #229）。
+                            exp = DateTimeOffset.Now.Add(
+                                Config.RequestObjectExpireTimeSpanFromSeconds).ToUnixTimeSeconds()
                         }, Newtonsoft.Json.Formatting.None));
                 }
             }

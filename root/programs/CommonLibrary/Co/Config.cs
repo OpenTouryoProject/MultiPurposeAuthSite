@@ -1096,6 +1096,38 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
+        /// OAuth2の認可コードの有効期限（秒）（#188）
+        /// </summary>
+        /// <remarks>
+        /// **RFC 6749 §4.1.2 は「短命（10 分以内を推奨）」を求めている。**
+        /// 以前は CreatedDate を書くだけで読んでおらず、事実上の無期限だった。
+        /// </remarks>
+        public static TimeSpan OAuth2AuthorizationCodeExpireTimeSpanFromSeconds
+        {
+            get
+            {
+                return TimeSpan.FromSeconds(int.Parse(
+                    GetConfigParameter.GetConfigValue("OAuth2AuthorizationCodeExpireTimeSpanFromSeconds")));
+            }
+        }
+
+        /// <summary>
+        /// Request Object（/ros に預けたもの）の有効期限（秒）（#188）
+        /// </summary>
+        /// <remarks>
+        /// **預けてから認可要求に使うまでの短い時間だけ有効にする。**
+        /// 以前は CreatedDate を書くだけで読んでおらず、事実上の無期限だった。
+        /// </remarks>
+        public static TimeSpan RequestObjectExpireTimeSpanFromSeconds
+        {
+            get
+            {
+                return TimeSpan.FromSeconds(int.Parse(
+                    GetConfigParameter.GetConfigValue("RequestObjectExpireTimeSpanFromSeconds")));
+            }
+        }
+
+        /// <summary>
         /// OAuth2のRefreshTokenの有効期限（日）
         /// </summary>
         public static TimeSpan OAuth2RefreshTokenExpireTimeSpanFromDays

@@ -253,7 +253,8 @@ Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_ur
 > 認可コード フローと Hybrid フローの両方がこの関数を通るので、1 か所で両方に効く。
 >
 > Request Object は Controller でも読んでいるが、`RequestObjectProvider.Get` は消費しない（C-11）ので読み直せる。
-> **C-11 でワンタイム化するときは、読む回数を 1 回にまとめる必要がある。**
+> **ワンタイム化（C-11。#188 の段階 2）は、読む回数を減らすのではなく、
+> 認可応答を作り終えた時点で消すことで実現した**（`CmnEndpoints.ConsumeRequestObject`）。
 >
 > E2E テスト（`root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs`）:
 > `RT-197.5`（誤った `redirect_uri` → `invalid_grant`）/
@@ -869,13 +870,29 @@ RFC 6749 §4.1.2 は「短命であること（推奨 10 分以内）」を求�
 Memory Provider の `ConcurrentDictionary` も未使用の code を回収しないため、
 **メモリ リークになる**（DBMS 側も行が残り続ける）。
 
-### C-5. refresh_token に有効期限も再利用検知も無い **[Lib]**
+### C-5. refresh_token に有効期限も再利用検知も無い **[Lib]** — **✅ 有効期限は修正済み（#188 の段階 1）**
+
+**有効期限は、#188 の段階 1 で実際に検証するようにした**（`RT-188`）。
+認可コード（新しい設定キー。既定 600 秒）・Request Object（同。既定 300 秒）・
+refresh_token（既存の `OAuth2RefreshTokenExpireTimeSpanFromDays`。既定 14 日）の 3 つで、
+**期限切れは「無いもの」と同じ扱い**（存在しない code / token と同じ経路に合流する）。
+
+- メモリ ストアは作成時刻を持っていなかったので、値と作成時刻の組に変えた
+- DBMS は `CreatedDate` を書くだけで読んでいなかったので、**SELECT の条件に入れた**（3 方言とも）
+- **期限切れは、参照した時点で消す**（メモリ ストア。DBMS は使用時の DELETE で消える）
+- `/ros` の応答の `exp`（以前は空文字）に、期限を入れるようにした
+
+**残っている（この節の本題）**
+
+- **再利用検知（family revocation）は未実装**（#188 の段階 3。DDL の変更を伴う）
+- Request Object の使い切り（ワンタイム）は**対応済み**（#188 の段階 2。C-11）
 
 - `Config.OAuth2RefreshTokenExpireTimeSpanFromDays`（既定 14 日）は
   **`Co/Config.cs` の定義以外どこからも参照されていない。** → 事実上の無期限。
 - ローテーション（使用時に削除）は行っているが、
   **ローテーション済みトークンを再提示されても検知・失効（family revocation）をしない。**
   OAuth 2.0 Security BCP §4.14 が求める挙動。
+- 有効期限は #188 で検証するようにした（上記）。以下は**再利用検知と、経路の制限**の話
 - `refresh_token` の経路は、**証明によらず `normal` の登録にしか許されていない**
   （`ClientModePolicy` の表。#224）。**`normal` 以外の登録には、`refresh_token` を発行しない**
   （#224 の段階 2。以前は発行していたが、使えなかった。`FA-1.2` / `FA-3.1`。C-7）。
@@ -1094,18 +1111,28 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 どの client_id でも無条件に許可」** という自己テスト用の抜け道がある。
 `Config.IsLockedDownTestEndpoints` の対象外なので、**本番で閉じられない。**
 
-### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]**
+### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]** — **✅ 修正済み（#188）**
 
-- 署名検証は行っている（`RequestObject.Verify` / `VerifyCiba`）。
-- しかし `RequestObjectProvider` は `CreatedDate` を書くだけで**読まない**。
-- `/ros` の応答が返す `exp` は **空文字列**（`exp = ""`）。
-- 認可エンドポイントで消費した後も **`Delete` が呼ばれない**（`Delete` メソッドは在るが未使用）。
+修正前は、署名検証は行っていた（`RequestObject.Verify` / `VerifyCiba`）ものの、
 
-コード中のコメント「存続期間は短く、好ましくは一回限」がそのまま未実装項目になっている。
+- `RequestObjectProvider` は `CreatedDate` を書くだけで**読まなかった**
+- `/ros` の応答が返す `exp` は **空文字列**（`exp = ""`）だった
+- 認可エンドポイントで消費した後も **`Delete` が呼ばれなかった**（メソッドは在るが未使用）
 
-> **注意（#197）:** `AuthorizationCodeProvider.Create` も、`redirect_uri` / PKCE の値を得るために
-> Request Object を読むようになった（Controller と合わせて 2 回読む）。
-> ワンタイム化するときは、読む回数を 1 回にまとめること（A-5 を参照）。
+コード中のコメント「存続期間は短く、好ましくは一回限」が、そのまま未実装項目になっていた。
+
+**対応（#188 の段階 1・2）:**
+
+| | 修正後 | E2E |
+|---|---|---|
+| 有効期限 | `Config.RequestObjectExpireTimeSpanFromSeconds`（既定 300 秒）で判定。`/ros` の応答の `exp` にも出す | `RT-188.3` |
+| ワンタイム | **認可応答を作り終えた時点で消す**（`CmnEndpoints.ConsumeRequestObject`）。CIBA は `/ciba_authz` で消す | `RT-188.4` |
+
+> **消す場所が要点だった。** 1 回の認可の中で、同じ `request_uri` を複数回読む
+> （Controller の同意画面 → `AuthorizationCodeProvider.Create`）。
+> **最初の読み取りで消すと、その認可自体が壊れる。**
+> 読む回数を 1 回にまとめるのではなく、**応答を作り終えた時点で消す**ことで、
+> 「2 回目の認可要求には使えない」を実現した。
 
 ### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]**
 
