@@ -18,6 +18,7 @@
 //*  2026/09/17  玄人 幸道         新規（#219 の B）
 //*  2026/09/18  玄人 幸道         RequirePkce / RequirePkceS256 の確認を追加（#220）
 //*  2026/09/25  玄人 幸道         CibaProvider.DebugModeWithOutAD の確認を追加
+//*  2026/09/25  玄人 幸道         改名した設定キーの警告を、一覧（Config.RenamedKeys）から出す（#236）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -112,15 +113,17 @@ namespace MultiPurposeAuthSite.Co
 
 #pragma warning restore 162
 
-                    if (Config.UsesOldLockedDownKey)
+                    // **改名したキーは、一覧から確かめる**（Config.RenamedKeys）。
+                    //   旧いキー名でも動くが、**放置すると、いつ読まれなくなるか分からない。**
+                    foreach (KeyValuePair<string, string> old in Config.OldKeysStillUsed())
                     {
-                        warnings.Add("改名前のキー名（" + Config.OldLockedDownKey
-                            + "）が使われています。" + "IsLockedDownTestEndpoints に直してください。");
+                        warnings.Add("改名前のキー名（" + old.Key + "）が使われています。"
+                            + old.Value + " に直してください。");
                     }
 
-                    if (Config.EnabeDebugTraceLog)
+                    if (Config.EnableDebugTraceLog)
                     {
-                        warnings.Add("EnabeDebugTraceLog が true です。");
+                        warnings.Add("EnableDebugTraceLog が true です。");
                     }
 
                     // **これは「開発向けの設定が残っている」ではない（#220）。**

@@ -421,14 +421,14 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|---|---|
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
-| `EnabeDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**綴りは実装どおり `Enabe`**） |
+| `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
 | `ServiceDocumentation` | `""`（空） | **任意** | Discovery の `service_documentation`。**空なら出さない**（#228）。文書を公開しているなら、その URL |
-| `PushedAuthorizationRequestEndpoint` | `/par` | 既定のまま | PAR（RFC 9126）の口（#229）。独自の `/ros` とは別 |
+| `AuthRequestPushUri` | `/par` | 既定のまま | PAR（RFC 9126）の口（#229）。独自の `/ros`（`RequestObjectRegUri`）とは別。**改名した**（旧 `PushedAuthorizationRequestEndpoint`。下の 12 節） |
 | `OAuth2AuthorizationCodeExpireTimeSpanFromSeconds` | `600` | 既定のまま（または短く） | 認可コードの寿命（#188）。RFC 6749 §4.1.2 は 10 分以内を推奨 |
 | `RequestObjectExpireTimeSpanFromSeconds` | `300` | 既定のまま（または短く） | `/ros` に預けた Request Object の寿命（#188）。応答の `exp` にも出る |
 | `OAuth2RefreshTokenExpireTimeSpanFromDays` | `14` | 運用に合わせる | **#188 で、実際に検証するようになった**（以前は事実上の無期限）。短くすると、既存のトークンが失効する |
@@ -460,7 +460,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownTestEndpoints`） |
 | 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
-| `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnabeDebugTraceLog`） |
+| `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnableDebugTraceLog`） |
 
 ### キーを改名した（`IsLockedDownRedirectEndpoint` → `IsLockedDownTestEndpoints`）
 
@@ -533,3 +533,36 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 
 > **設定を変えたら、雛形（`_app.config` / `_appsettings.json`）にも反映する**（1 節）。
 > 本番の値そのものは書かない。
+
+---
+
+## 12. 改名した設定キー（#236）
+
+**改名しても、旧いキー名を読み続ける。** 配備済みの設定ファイルがあり、
+**改名だけで黙って既定値に戻ると危ない**ため（`IsLockedDownTestEndpoints` は、
+既定が「開く」なので特に）。
+
+一覧は **`Config.RenamedKeys`** が一次情報で、**起動時に `ProductionCheck` が
+「旧いキー名が使われています」と警告する**（`UserStoreType` が `mem` 以外のとき）。
+
+| 旧いキー名 | 新しいキー名 | なぜ | 旧キーも読む |
+|---|---|---|---|
+| `IsLockedDownRedirectEndpoint` | `IsLockedDownTestEndpoints` | 閉じる対象がリダイレクト先だけではなくなった（#219） | **読む** |
+| `EnabeDebugTraceLog` | `EnableDebugTraceLog` | **綴りの誤り**（`Enabe`） | **読む** |
+| `IdFederationAuthorizeEndPoint` | `IdFederationAuthorizeEndpoint` | `EndPoint` の `P` を、他のキーに揃えた | **読む** |
+| `IdFederationRedirectEndPoint` | `IdFederationRedirectEndpoint` | 同上 | **読む** |
+| `IdFederationTokenEndPoint` | `IdFederationTokenEndpoint` | 同上 | **読む** |
+| `IdFederationUserInfoEndPoint` | `IdFederationUserInfoEndpoint` | 同上 | **読む** |
+| `PushedAuthorizationRequestEndpoint` | `AuthRequestPushUri` | **クライアント側も読む設定**なので、`RequestObjectRegUri` / `JwkSetUri` と同じ形に寄せた。**Open棟梁 側へ移す予定** | **読まない**（#229 で入れたばかりで、配備実績が無い） |
+
+**`IdFederationRedirectEndpoint` の値に含まれる `Account/IDFederationRedirectEndPoint` は、
+画面の口（アクション名）なので変えていない。** 変えると、委譲先に登録した `redirect_uri` と
+食い違う。
+
+### 揃えていないもの
+
+| 接尾辞 | 例 | 理由 |
+|---|---|---|
+| `...RootURI` | `OAuth2AuthorizationServerEndpointsRootURI` | **エンドポイントではなく、その根っこ**（種別が違う） |
+| `...Uri` | `JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` | **クライアント側も読む設定**で、**実装が Open棟梁 側**にある（`OAuth2AndOIDCParams`）。この実装だけでは改名できない |
+| `...Endpoint` | それ以外 | こちらに揃えた |

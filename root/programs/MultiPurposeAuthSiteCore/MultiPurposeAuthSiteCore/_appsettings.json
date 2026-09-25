@@ -80,7 +80,7 @@
     // ASP.NET Identity
     // Debugかどうか
     "IsDebug": "true",
-    "EnabeDebugTraceLog": "true",
+    "EnableDebugTraceLog": "true",
 
     // User store type (mem, sql, ora, npg)
     "UserStoreType": "mem",
@@ -216,9 +216,6 @@
     // Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
     //   **空なら Discovery に出さない**（任意の項目）
     "ServiceDocumentation": "",
-
-    // PAR（RFC 9126）のエンドポイント（#229。独自の /ros とは別の口）
-    "PushedAuthorizationRequestEndpoint": "/par",
 
     // 認可コードの有効期限（秒）（#188。RFC 6749 4.1.2 は 10 分以内を推奨）
     "OAuth2AuthorizationCodeExpireTimeSpanFromSeconds": "600",
@@ -380,19 +377,23 @@
     "EnableAdministrationOfUsersAndRoles": "true",
     // IDフェデレーション
     // 認可エンドポイント
-    "IdFederationAuthorizeEndPoint": "https://localhost:44301/MultiPurposeAuthSite/authorize",
+    "IdFederationAuthorizeEndpoint": "https://localhost:44301/MultiPurposeAuthSite/authorize",
     // Redirectエンドポイント
-    "IdFederationRedirectEndPoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
+    "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
     // Tokenエンドポイント
-    "IdFederationTokenEndPoint": "https://localhost:44301/MultiPurposeAuthSite/token",
+    "IdFederationTokenEndpoint": "https://localhost:44301/MultiPurposeAuthSite/token",
     // UserInfoエンドポイント
-    "IdFederationUserInfoEndPoint": "https://localhost:44301/MultiPurposeAuthSite/userinfo",
+    "IdFederationUserInfoEndpoint": "https://localhost:44301/MultiPurposeAuthSite/userinfo",
 
     // OAuth2, OIDC認証
 
-    // Client-Server共通設定
+    // Client-Server共通設定（クライアント側も読む。実装は Open棟梁 の OAuth2AndOIDCParams）
     "JwkSetUri": "/jwkcerts",
+    // Request Object を預ける独自の口（RFC 9101 5.2.1 が認めている任意機能）
     "RequestObjectRegUri": "/ros",
+    // 認可リクエストを先に預ける口（PAR。RFC 9126）（#229）
+    //   /ros が JWT だけを預かるのに対し、こちらはフォームで受け、クライアント認証も行う
+    "AuthRequestPushUri": "/par",
 
     // Client側設定
     "OAuth2AndOidcClientID": "06d20f595b694114b710c1d85e21bb8e",

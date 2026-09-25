@@ -109,7 +109,7 @@ namespace MultiPurposeAuthSite
 
             config.Routes.MapHttpRoute(
                 name: "PushedAuthorizationRequest",
-                routeTemplate: Config.PushedAuthorizationRequestEndpoint.Substring(1), // 先頭の[/]を削除
+                routeTemplate: Config.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" }
             );
 

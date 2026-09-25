@@ -43,6 +43,7 @@
 //*  2026/09/18  玄人 幸道         PKCE（code_challenge）を必須にする設定を追加（#220）
 //*  2026/09/24  玄人 幸道         Discovery の service_documentation を設定値にする（#228）
 //*  2026/09/24  玄人 幸道         認可コードと Request Object の有効期限の設定を追加（#188）
+//*  2026/09/25  玄人 幸道         設定キーの改名と、旧キーの読み替え（#236）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -233,11 +234,12 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>DebugTraceLogを有効にする</summary>
-        public static bool EnabeDebugTraceLog
+        /// <remarks>**改名した**（綴りが `Enabe` だった。#236）。旧いキー名も読む。</remarks>
+        public static bool EnableDebugTraceLog
         {
             get
             {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("EnabeDebugTraceLog"));
+                return Convert.ToBoolean(Config.GetRenamedConfigValue("EnableDebugTraceLog"));
             }
         }
 
@@ -1589,14 +1591,8 @@ namespace MultiPurposeAuthSite.Co
                 // **旧いキー名も読む（#219）。**
                 //   未設定は false（＝「開く」）なので、改名しただけだと
                 //   既存の設定ファイル（旧キーしか無い）で、本番が黙って開いてしまう。
-                string value = GetConfigParameter.GetConfigValue("IsLockedDownTestEndpoints");
-
-                if (string.IsNullOrEmpty(value))
-                {
-                    value = GetConfigParameter.GetConfigValue(Config.OldLockedDownKey);
-                }
-
-                return Convert.ToBoolean(value);
+                return Convert.ToBoolean(
+                    Config.GetRenamedConfigValue("IsLockedDownTestEndpoints"));
             }
         }
         /// <summary>
@@ -1621,12 +1617,16 @@ namespace MultiPurposeAuthSite.Co
         /// **独自の /ros（Request Object の預け先）とは別の口。**
         /// /ros は署名付き JWT を生の本文で受け、クライアント認証をしない（後方互換のため残す）。
         /// こちらは RFC 9126 のとおり、**フォーム形式＋クライアント認証**で受ける。
+        ///
+        /// **キー名は `AuthRequestPushUri`**（#236 で改名。旧 `PushedAuthorizationRequestEndpoint`）。
+        /// `RequestObjectRegUri` と同じく**クライアント側も読む設定**なので、名前をそちらに寄せた。
+        /// **Open棟梁 の OAuth2AndOIDCParams に移す予定**で、それまでは、ここで読む。
         /// </remarks>
-        public static string PushedAuthorizationRequestEndpoint
+        public static string AuthRequestPushUri
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("PushedAuthorizationRequestEndpoint");
+                return GetConfigParameter.GetConfigValue("AuthRequestPushUri");
             }
         }
 
@@ -1667,20 +1667,67 @@ namespace MultiPurposeAuthSite.Co
         }
 
 
-        /// <summary>改名前のキー名（互換のために読む。#219）</summary>
-        public const string OldLockedDownKey = "IsLockedDownRedirectEndpoint";
+        #region 改名した設定キー
+
+        /// <summary>改名した設定キー（新しい名前 → 改名前の名前。#236）</summary>
+        /// <remarks>
+        /// **改名しても、旧いキー名を読み続ける**（#219 で始めた扱い）。
+        /// 設定ファイルは配備済みのものがあり、**改名だけで黙って既定値に戻ると危ない**ため。
+        /// 旧いキー名だけが設定されている場合は、起動時に ProductionCheck が警告する。
+        ///
+        /// **ここに載せたキーは、Config 側も新しい名前で読むこと**
+        /// （<see cref="GetRenamedConfigValue"/> を通す）。
+        /// </remarks>
+        public static readonly Dictionary<string, string> RenamedKeys =
+            new Dictionary<string, string>()
+            {
+                // テスト用の口をまとめて閉じるキー（#219）
+                { "IsLockedDownTestEndpoints", "IsLockedDownRedirectEndpoint" },
+                // 綴りの誤り（Enabe → Enable。#236）
+                { "EnableDebugTraceLog", "EnabeDebugTraceLog" },
+                // EndPoint → Endpoint（この実装の他のキーに揃えた。#236）
+                { "IdFederationAuthorizeEndpoint", "IdFederationAuthorizeEndPoint" },
+                { "IdFederationRedirectEndpoint", "IdFederationRedirectEndPoint" },
+                { "IdFederationTokenEndpoint", "IdFederationTokenEndPoint" },
+                { "IdFederationUserInfoEndpoint", "IdFederationUserInfoEndPoint" },
+            };
+
+        /// <summary>改名した設定キーの値を読む（新しい名前を優先し、無ければ旧い名前）</summary>
+        /// <param name="key">新しいキー名（<see cref="RenamedKeys"/> に載っているもの）</param>
+        /// <returns>値</returns>
+        private static string GetRenamedConfigValue(string key)
+        {
+            string value = GetConfigParameter.GetConfigValue(key);
+
+            if (string.IsNullOrEmpty(value))
+            {
+                value = GetConfigParameter.GetConfigValue(Config.RenamedKeys[key]);
+            }
+
+            return value;
+        }
 
         /// <summary>
-        /// 改名前のキー名だけが設定されているか（起動時の警告に使う。#219）
+        /// 旧いキー名だけが設定されているものを返す（起動時の警告に使う）
         /// </summary>
-        public static bool UsesOldLockedDownKey
+        /// <returns>「旧いキー名 → 新しいキー名」の一覧（無ければ空）</returns>
+        public static List<KeyValuePair<string, string>> OldKeysStillUsed()
         {
-            get
+            List<KeyValuePair<string, string>> used = new List<KeyValuePair<string, string>>();
+
+            foreach (KeyValuePair<string, string> renamed in Config.RenamedKeys)
             {
-                return string.IsNullOrEmpty(GetConfigParameter.GetConfigValue("IsLockedDownTestEndpoints"))
-                    && !string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(Config.OldLockedDownKey));
+                if (string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(renamed.Key))
+                    && !string.IsNullOrEmpty(GetConfigParameter.GetConfigValue(renamed.Value)))
+                {
+                    used.Add(new KeyValuePair<string, string>(renamed.Value, renamed.Key));
+                }
             }
+
+            return used;
         }
+
+        #endregion
 
         #endregion
 
@@ -1823,44 +1870,44 @@ namespace MultiPurposeAuthSite.Co
         /// <summary>
         /// IDフェデレーション時の認可エンドポイント
         /// </summary>
-        public static string IdFederationAuthorizeEndPoint
+        public static string IdFederationAuthorizeEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("IdFederationAuthorizeEndPoint");
+                return Config.GetRenamedConfigValue("IdFederationAuthorizeEndpoint");
             }
         }
 
         /// <summary>
         /// IDフェデレーション時のRedirectエンドポイント
         /// </summary>
-        public static string IdFederationRedirectEndPoint
+        public static string IdFederationRedirectEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("IdFederationRedirectEndPoint");
+                return Config.GetRenamedConfigValue("IdFederationRedirectEndpoint");
             }
         }
 
         /// <summary>
         /// IDフェデレーション時のTokenエンドポイント
         /// </summary>
-        public static string IdFederationTokenEndPoint
+        public static string IdFederationTokenEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("IdFederationTokenEndPoint");
+                return Config.GetRenamedConfigValue("IdFederationTokenEndpoint");
             }
         }
 
         /// <summary>
         /// IDフェデレーション時のUserInfoエンドポイント
         /// </summary>
-        public static string IdFederationUserInfoEndPoint
+        public static string IdFederationUserInfoEndpoint
         {
             get
             {
-                return GetConfigParameter.GetConfigValue("IdFederationUserInfoEndPoint");
+                return Config.GetRenamedConfigValue("IdFederationUserInfoEndpoint");
             }
         }
 

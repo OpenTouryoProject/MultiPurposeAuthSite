@@ -45,7 +45,7 @@ namespace MultiPurposeAuthSite.Log
 {
     /// <summary>Logging</summary>
     /// <remarks>
-    /// DebugTraceは、別フラグ（EnabeDebugTraceLog）で制御
+    /// DebugTraceは、別フラグ（EnableDebugTraceLog）で制御
     /// </remarks>
     public class Logging
     {
@@ -61,7 +61,7 @@ namespace MultiPurposeAuthSite.Log
             }
 
             // プロビジョニング、プロダクト環境
-            if (Config.EnabeDebugTraceLog)
+            if (Config.EnableDebugTraceLog)
             {
                 LogIF.DebugLog("ACCESS", log);
             }
@@ -97,7 +97,7 @@ namespace MultiPurposeAuthSite.Log
             }
 
             // プロビジョニング、プロダクト環境
-            if (Config.EnabeDebugTraceLog)
+            if (Config.EnableDebugTraceLog)
             {
                 LogIF.DebugLog("SQLTRACE", log);
             }

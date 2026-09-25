@@ -457,7 +457,7 @@ namespace MultiPurposeAuthSite.Controllers
                     HttpContext.Session.SetString("id_federation_signin_state", state);
 
                     // redirect_uri
-                    string redirect_uri = Config.IdFederationRedirectEndPoint;
+                    string redirect_uri = Config.IdFederationRedirectEndpoint;
 
                     // nonce // 記号は入れない。
                     string nonce = GetPassword.Generate(20, 0);
@@ -467,7 +467,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string scope = Const.IdFederationScopes;
 
                     return Redirect(
-                        Config.IdFederationAuthorizeEndPoint +
+                        Config.IdFederationAuthorizeEndpoint +
                         "?client_id=" + client_id +
                         "&response_type=code" +
                         "&scope=" + scope +
@@ -2201,11 +2201,11 @@ namespace MultiPurposeAuthSite.Controllers
                     #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                     // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri = Config.IdFederationRedirectEndPoint;
+                    string redirect_uri = Config.IdFederationRedirectEndpoint;
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                             new Uri(Config.IdFederationTokenEndPoint),
+                             new Uri(Config.IdFederationTokenEndpoint),
                             client_id, client_secret, redirect_uri, code, "");
 
                     #endregion
@@ -2248,7 +2248,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region /userinfoエンドポイント
                     // /userinfoエンドポイントにアクセスする場合
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
-                        new Uri(Config.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
+                        new Uri(Config.IdFederationUserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
 
                     #region ユーザの登録・更新
