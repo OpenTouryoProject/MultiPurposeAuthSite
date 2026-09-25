@@ -122,10 +122,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
             Assert.False(string.IsNullOrEmpty(requestUri), "前提: /ros が CIBA の要求を受け付けること");
 
-            return await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+            // CIBA Core 7.1 : この口はクライアント認証が要る（#234 の段階 3）。
+            return await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
             {
                 { "request_uri", requestUri }
-            });
+            }, reg.ClientId, reg.ClientSecret);
         }
 
         /// <summary>クライアント : トークンを要求する（ポーリングの 1 回分）</summary>

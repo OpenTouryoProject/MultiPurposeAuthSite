@@ -34,6 +34,7 @@
 //*  2026/09/11  玄人 幸道         /introspect（RT-196.11 〜 196.13）を追加（#196 の 4 つ目）
 //*  2026/09/11  玄人 幸道         /device_authz（RT-196.14 〜 196.15）を追加（#196 の 5 つ目）
 //*  2026/09/11  玄人 幸道         /ciba_authz（RT-196.16 〜 196.18）を追加（#196 の 6 つ目）
+//*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を添えた（#234 の段階 3）
 //*  2026/09/12  玄人 幸道         /SetDeviceToken・/ciba_result（RT-196.19 〜 196.20）を追加（#196 の 7 つ目）
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-196）
 //*  2026/09/16  玄人 幸道         /ciba_authz の端末未登録（RT-210.1）を追加（#210）
@@ -902,19 +903,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**指していない・指す先が無い要求は、要求の誤りとして 400 で返す。**",
                     "CIBA Core §13（invalid_request は 400）/ #196");
 
+                // /ciba_authz はクライアント認証が要る（CIBA Core 7.1。#234 の段階 3）。
+                // ここで見たいのは request_uri の不備なので、認証は通しておく。
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
                 r.Target(client.Target.DisplayName);
                 r.Step("(1) request_uri を付けずに POST /ciba_authz を送る");
 
-                JsonResponse none = await client.CibaAuthorizeAsync(new Dictionary<string, string>());
+                JsonResponse none = await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>(), reg.ClientId, reg.ClientSecret);
 
                 VerifyError(r, "request_uri なし", none, 400, "invalid_request");
 
                 r.Step("(2) 登録されていない request_uri を送る");
 
-                JsonResponse unknown = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse unknown = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request_uri", RequestObjectBuilder.RequestUriPrefix + "00000000000000000000000000000000" }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 VerifyError(r, "存在しない request_uri", unknown, 400, "invalid_request");
 
@@ -947,24 +953,27 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string noOpenid = await RegisterCibaRequestAsync(client, reg,
                     new Dictionary<string, object>() { { "scope", "profile" } });
 
-                VerifyError(r, "openid なし", await client.CibaAuthorizeAsync(
-                    new Dictionary<string, string>() { { "request_uri", noOpenid } }), 400, "invalid_scope");
+                VerifyError(r, "openid なし", await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>() { { "request_uri", noOpenid } },
+                    reg.ClientId, reg.ClientSecret), 400, "invalid_scope");
 
                 r.Step("(2) nbf が未来の要求（まだ有効になっていない）");
 
                 string notYet = await RegisterCibaRequestAsync(client, reg,
                     new Dictionary<string, object>() { { "nbf", now + 600 } });
 
-                VerifyError(r, "nbf が未来", await client.CibaAuthorizeAsync(
-                    new Dictionary<string, string>() { { "request_uri", notYet } }), 400, "invalid_request");
+                VerifyError(r, "nbf が未来", await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>() { { "request_uri", notYet } },
+                    reg.ClientId, reg.ClientSecret), 400, "invalid_request");
 
                 r.Step("(3) exp が過去の要求（期限切れ）");
 
                 string expired = await RegisterCibaRequestAsync(client, reg,
                     new Dictionary<string, object>() { { "exp", now - 600 } });
 
-                VerifyError(r, "exp が過去", await client.CibaAuthorizeAsync(
-                    new Dictionary<string, string>() { { "request_uri", expired } }), 400, "invalid_request");
+                VerifyError(r, "exp が過去", await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>() { { "request_uri", expired } },
+                    reg.ClientId, reg.ClientSecret), 400, "invalid_request");
 
                 r.Done();
             }
@@ -993,8 +1002,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string requestUri = await RegisterCibaRequestAsync(client, reg,
                     new Dictionary<string, object>() { { "login_hint", "unknown-user@example.invalid" } });
 
-                VerifyError(r, "ユーザ不明", await client.CibaAuthorizeAsync(
-                    new Dictionary<string, string>() { { "request_uri", requestUri } }), 400, "unknown_user_id");
+                VerifyError(r, "ユーザ不明", await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>() { { "request_uri", requestUri } },
+                    reg.ClientId, reg.ClientSecret), 400, "unknown_user_id");
 
                 r.Note("成功経路（見つかったユーザへのプッシュ通知）は FCM に送るので、E2E では測らない。");
 
@@ -1111,8 +1121,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string requestUri = await RegisterCibaRequestAsync(client, reg,
                     new Dictionary<string, object>() { { "login_hint", NoDeviceUser } });
 
-                VerifyError(r, "端末未登録", await client.CibaAuthorizeAsync(
-                    new Dictionary<string, string>() { { "request_uri", requestUri } }), 400, "access_denied");
+                VerifyError(r, "端末未登録", await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>() { { "request_uri", requestUri } },
+                    reg.ClientId, reg.ClientSecret), 400, "access_denied");
 
                 r.Note("送信そのものの失敗（server_error）は、E2E では測れない。"
                     + "test.ps1 -Launch は送信箱を使い、FcmService は宛先を検証せずファイルに書くため。");

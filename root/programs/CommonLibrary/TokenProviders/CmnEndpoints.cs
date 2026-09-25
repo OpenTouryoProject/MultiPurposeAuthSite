@@ -90,6 +90,7 @@
 //*  2026/09/24  玄人 幸道         CIBA の認証要求を request で直接受け取る（CIBA Core 7.1.1。#233）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を検証する（CIBA Core 7.1.1。#234 の段階 1）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求を jti で使い切りにする（#234 の段階 2）
+//*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -895,6 +896,10 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <summary>
         /// CIBA の認証要求を受け取る（#233）
         /// </summary>
+        /// <param name="client_id">client_id（client_secret_basic / post）</param>
+        /// <param name="client_secret">client_secret（client_secret_basic / post）</param>
+        /// <param name="assertion">client_assertion（private_key_jwt）</param>
+        /// <param name="x509">クライアント証明書（mTLS）</param>
         /// <param name="request">署名付き JWT（CIBA Core §7.1.1）</param>
         /// <param name="request_uri">/ros に預けたものの参照（独自拡張。後方互換）</param>
         /// <param name="payload">要求の中身</param>
@@ -911,14 +916,46 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// `request_uri` の受け口は、`/ros` の廃止（#229 の完了報告を参照）と合わせて外す。
         ///
         /// 署名の検証は、登録された `jwk_ecdsa_publickey` で行う（FAPI-CIBA は ES256）。
+        ///
+        /// **クライアント認証も、ここで行う**（CIBA Core §7.1 : MUST。#234 の段階 3）。
+        /// 以前は署名だけで識別しており、`/token` や `/device_authz` と違って
+        /// `ClientAuthentication` を呼んでいなかった。
         /// </remarks>
         public static bool ReceiveCibaRequest(
+            string client_id, string client_secret, string assertion, X509Certificate2 x509,
             string request, string request_uri,
             out JObject payload, out string err, out string errDescription)
         {
             payload = null;
             err = OAuth2AndOIDCConst.invalid_request;
             errDescription = "";
+
+            #region クライアント認証（CIBA Core 7.1 : MUST）
+
+            bool authned = false;
+
+            if (!string.IsNullOrEmpty(assertion))
+            {
+                // private_key_jwt（FAPI-CIBA が求める方式）
+                authned = CmnEndpoints.ClientAuthentication(
+                    assertion, out client_id, ref x509, out ClientModePolicy.Proof _);
+            }
+            else
+            {
+                // client_secret（basic / post）または mTLS
+                authned = CmnEndpoints.ClientAuthentication(
+                    client_id, client_secret, ref x509, out ClientModePolicy.Proof _);
+            }
+
+            if (!authned)
+            {
+                // CIBA Core 13 : クライアント認証の失敗は invalid_client（401）
+                err = OAuth2AndOIDCConst.invalid_client;
+                errDescription = "Invalid credential.";
+                return false;
+            }
+
+            #endregion
 
             if (!string.IsNullOrEmpty(request))
             {
@@ -967,7 +1004,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 payload = unverified;
-                return true;
+                return CmnEndpoints.VerifyCibaRequestIssuer(
+                    client_id, payload, ref err, ref errDescription);
             }
 
             if (!string.IsNullOrEmpty(request_uri))
@@ -985,7 +1023,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                     return false;
                 }
 
-                return true;
+                return CmnEndpoints.VerifyCibaRequestIssuer(
+                    client_id, payload, ref err, ref errDescription);
             }
 
             errDescription = "request or request_uri is required.";
@@ -996,6 +1035,36 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2）</summary>
         private const string CibaJtiKeyPrefix = "ciba:jti:";
+
+        #region VerifyCibaRequestIssuer
+
+        /// <summary>認証したクライアントと、要求の iss が同じかを確かめる（#234 の段階 3）</summary>
+        /// <param name="client_id">クライアント認証で確かめた client_id</param>
+        /// <param name="payload">要求の中身</param>
+        /// <param name="err">error</param>
+        /// <param name="errDescription">error_description</param>
+        /// <returns>同じなら true</returns>
+        /// <remarks>
+        /// **認証を入れただけでは足りない。**
+        /// CIBA Core §7.1.1 は `iss` を「クライアントの client_id」と定めており、
+        /// これを確かめないと、**自分の資格情報で認証し、他人の要求を代わりに送れる**。
+        /// （要求の署名は、その他人の鍵で正しく検証できてしまう）
+        /// </remarks>
+        private static bool VerifyCibaRequestIssuer(
+            string client_id, JObject payload, ref string err, ref string errDescription)
+        {
+            if ((string)payload[OAuth2AndOIDCConst.iss] != client_id)
+            {
+                // CIBA Core 13 : invalid_request
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "The iss does not match the authenticated client.";
+                return false;
+            }
+
+            return true;
+        }
+
+        #endregion
 
         #region ConsumeCibaJti
 

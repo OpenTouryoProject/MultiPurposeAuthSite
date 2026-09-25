@@ -29,6 +29,7 @@
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         require_pkce のクライアントを試す口を追加（#221）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
+//*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -554,18 +555,12 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 検証できた。
 
-                // RequestObjectを登録する。
-                response = await Helper.GetInstance().RegisterRequestObjectAsync(
-                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
-
-                // レスポンスを確認し、request_uriを抽出。
-                string request_uri = (string)((JObject)JsonConvert
-                    .DeserializeObject(response))[OAuth2AndOIDCConst.request_uri];
-
-                // request_uriの認可リクエストを投げる（WebAPIで）。
+                // **認証要求を request で直接送る（CIBA Core 7.1.1。#234 の段階 3）。**
+                //   以前は /ros に預けて request_uri を渡していた（CIBA Core に無い独自拡張）。
+                //   /ciba_authz はクライアント認証を求めるようになったので、資格情報も添える（7.1）。
                 response = await Helper.GetInstance().CibaAuthZRequestAsync(
-                    new Uri(cibaAuthorizeEndpoint), request_uri);
+                    new Uri(cibaAuthorizeEndpoint), requestObject,
+                    this.ClientId, Helper.GetInstance().GetClientSecret(this.ClientId));
 
                 // レスポンスを確認し、auth_req_idを抽出。
                 string auth_req_id = (string)((JObject)JsonConvert

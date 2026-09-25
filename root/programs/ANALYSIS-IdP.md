@@ -399,11 +399,24 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 | **ユーザの端末（認証デバイス）が未登録** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `access_denied` |
 | **プッシュ通知（FCM）の送信に失敗** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `server_error` |
 
-- `/ciba_authz` は、クライアントを HTTP 認証ではなく、**署名付きの要求（ES256）で識別する**。
-  そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
-- **ただし CIBA Core §7.1 は、この口でのクライアント認証を MUST としている**（FAPI-CIBA は
-  `private_key_jwt` を要求）。**`ClientAuthentication` を呼んでいないのは、この口だけ**
-  （`/token`・`/device_authz` は呼んでいる）。**#234 の段階 3** で入れる
+- **クライアント認証を求めるようにした**（**#234 の段階 3**）。CIBA Core §7.1 は
+  **この口でのクライアント認証を MUST** としており（FAPI-CIBA は `private_key_jwt` を要求）、
+  **`ClientAuthentication` を呼んでいないのは、この口だけだった**（`/token`・`/device_authz` は呼んでいた）。
+  以前は署名付きの要求（ES256）だけでクライアントを識別していた。
+
+  受け付ける方式は `/token`・`/par` と同じ（`client_secret_basic` / `client_secret_post` /
+  `private_key_jwt` / `tls_client_auth`）。**401 には `WWW-Authenticate` を付ける**ようにした
+  （HTTP 認証を行うようになったため。RFC 6749 §5.2。以前は `realm` に `null` を渡していた）。
+
+  **認証しただけでは足りない。** CIBA Core §7.1.1 は `iss` を「クライアントの `client_id`」と定めており、
+  **認証したクライアントと要求の `iss` の一致**も確かめる（`VerifyCibaRequestIssuer`）。
+  でないと、**自分の資格情報で認証して、他人の要求を代わりに送れる**
+  （要求の署名は、その他人の鍵で正しく検証できてしまう）。`RT-234.4` / `RT-234.5`
+
+  **同梱の自己テストも、これに合わせて移した。** `/ros` に預けて `request_uri` を渡す形をやめ、
+  **`request` を直接送り、資格情報を添える**（`Helper.CibaAuthZRequestAsync` のオーバーロード）。
+  Open棟梁 の `OAuth2AndOIDCClient.CibaAuthZRequestAsync(Uri, string)` は
+  資格情報を渡す引数が無いため使わず、`/chage_to_user` などと同じく自前で組み立てている（OpenTouryo #592）
 - **`aud` を検証するようにした**（**#234 の段階 1**）。CIBA Core §7.1.1 は
   **`aud` に OP の Issuer Identifier を入れること**を MUST としている（`Config.IssuerId` ＝
   Discovery の `issuer`、トークンの `iss`、認可応答の `iss` と同じ値）。

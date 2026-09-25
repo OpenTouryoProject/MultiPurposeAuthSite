@@ -67,6 +67,7 @@
 //*  2026/09/24  玄人 幸道         /ros の応答に有効期限（exp）を入れ、CIBA では使い終わった Request Object を消す（#188）
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）の /par を追加（#229）
 //*  2026/09/24  玄人 幸道         /ciba_authz で request を直接受け取る（CIBA Core 7.1.1。#233）
+//*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -805,15 +806,31 @@ namespace MultiPurposeAuthSite.Controllers
                 string request = formData[OAuth2AndOIDCConst.request];
                 string request_uri = formData[OAuth2AndOIDCConst.request_uri];
 
+                // **クライアント認証の資格情報を取り出す（CIBA Core 7.1 : MUST。#234 の段階 3）。**
+                //   /par・/token と同じ取り出し方。
+                // client_secret_basic
+                if (!AuthenticationHeader.GetCredentials(
+                    MyHttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                    out string client_id, out string client_secret))
+                {
+                    // client_secret_post
+                    client_id = formData[OAuth2AndOIDCConst.client_id];
+                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
+                }
+
+                // private_key_jwt / mTLS
+                string assertion = formData[OAuth2AndOIDCConst.assertion];
+                X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
+
                 string authReqId = "";
 
                 if (!string.IsNullOrEmpty(request) || !string.IsNullOrEmpty(request_uri))
                 {
                     // 受け取りと署名検証は、両アプリで同じ（CommonLibrary）。
                     bool received = Token.CmnEndpoints.ReceiveCibaRequest(
+                        client_id, client_secret, assertion, x509,
                         request, request_uri, out JObject jsonObj, out err, out errDescription);
 
-                    string client_id = "";
                     string scope = "";
                     string client_notification_token = "";
                     string binding_message = "";
@@ -826,7 +843,7 @@ namespace MultiPurposeAuthSite.Controllers
                         // 受け取れなかった（err, errDescriptionは設定済み）。
                     }
                     else if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
-                        jsonObj, out client_id, out scope,
+                        jsonObj, out string _, out scope,
                         out client_notification_token, out binding_message,
                         out user_code, out requested_expiry, out login_hint,
                         out err, out errDescription))
@@ -976,12 +993,13 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // エラー（CIBA Core 13 : invalid_client は 401、それ以外は 400）（#196）
-            // HTTP 認証ではなく署名した要求でクライアントを識別するので、WWW-Authenticate は付けない（realm に null）。
+            // **クライアント認証を行うようになったので、401 には WWW-Authenticate を付ける**
+            //   （Authorization ヘッダで認証を試みたクライアントには必須。RFC 6749 5.2。#234 の段階 3）。
             return this.OAuth2Error(new Dictionary<string, string>()
             {
                 {OAuth2AndOIDCConst.error, err},
                 {OAuth2AndOIDCConst.error_description, errDescription}
-            }, null);
+            }, "ciba_authz");
         }
 
         /// <summary>

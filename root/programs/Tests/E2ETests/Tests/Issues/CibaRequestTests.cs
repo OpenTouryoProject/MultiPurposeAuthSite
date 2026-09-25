@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/24  玄人 幸道         新規（#233）
+//*  2026/09/25  玄人 幸道         aud の検証（RT-234.1 / .2）と jti の使い切り（RT-234.3）を追加（#234）
+//*  2026/09/25  玄人 幸道         クライアント認証（RT-234.4 / .5）を追加し、各要求に資格情報を添えた（#234 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -112,10 +114,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) クライアント : request に署名付き JWT を入れて POST /ciba_authz");
 
-                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request", await CibaRequestTests.CreateRequestAsync(client, reg, bindingMessage) }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 string authReqId = start.String("auth_req_id");
 
@@ -192,11 +194,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(3) クライアント : request と request_uri の両方を入れて POST /ciba_authz");
 
-                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request", await CibaRequestTests.CreateRequestAsync(client, reg, viaRequest) },
                     { "request_uri", requestUri }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 string authReqId = start.String("auth_req_id");
 
@@ -251,10 +253,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) POST /ciba_authz");
 
-                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request", string.Join(".", parts) }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 string authReqId = start.String("auth_req_id");
 
@@ -286,14 +288,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "エラーの形（400 と invalid_request）が変わっていないことを見る。",
                     "CIBA Core §13 / #233");
 
+                // ここで見たいのは「どちらも無い」ことなので、クライアント認証は通しておく。
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
                 r.Target("空のフォームで POST /ciba_authz");
 
                 r.Step("(1) POST /ciba_authz（scope だけを入れ、request も request_uri も入れない）");
 
-                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "scope", "openid" }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 r.VerifyEqual("HTTP 400", "400", ((int)start.StatusCode).ToString());
 
@@ -344,10 +349,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         { "aud", otherAud }
                     });
 
-                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request", jws }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 string authReqId = start.String("auth_req_id");
 
@@ -395,10 +400,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         { RequestObjectBuilder.RemoveClaim, "aud" }
                     });
 
-                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request", jws }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 r.VerifyEqual("HTTP 400", "400", ((int)start.StatusCode).ToString());
 
@@ -438,20 +443,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string jws = await RequestObjectBuilder.CreateCibaAsync(
                     client, reg.ClientId, new Dictionary<string, object>());
 
-                JsonResponse first = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse first = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request", jws }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 r.VerifyEqual("1 回目 : エラーは unknown_user_id（検証は通っている）",
                     "unknown_user_id", first.Error ?? "（無し）");
 
                 r.Step("(2) まったく同じ要求を、もう一度送る");
 
-                JsonResponse second = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                JsonResponse second = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
                 {
                     { "request", jws }
-                });
+                }, reg.ClientId, reg.ClientSecret);
 
                 r.VerifyEqual("2 回目 : HTTP 400", "400", ((int)second.StatusCode).ToString());
 
@@ -465,6 +470,124 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**記録は Request Object のストアを使い回している**（接頭辞付きのキー）。"
                     + "#188 で入れた有効期限と掃除がそのまま効くので、新しい表を作っていない。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-234.4 クライアント認証の無い認証要求を断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23404_クライアント認証が無ければ断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-234.4",
+                    "クライアント認証の無い認証要求は、invalid_client（401）で断る",
+                    "**CIBA Core §7.1 は、この口でのクライアント認証を MUST としている**"
+                    + "（FAPI-CIBA は private_key_jwt を求める）。"
+                    + "以前は署名だけで識別しており、`/token` や `/device_authz` と違って"
+                    + "`ClientAuthentication` を呼んでいなかった。"
+                    + "**署名が正しくても、資格情報が無ければ受け付けない。**",
+                    "CIBA Core §7.1 / §13 / #234 の段階 3");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                r.Target("client_name=" + KnownClients.TestClient4 + "（正しく署名した request。資格情報だけを付けない）");
+
+                r.Step("(1) 資格情報を付けずに POST /ciba_authz");
+
+                string jws = await CibaRequestTests.CreateRequestAsync(client, reg, "E2E-noauth");
+
+                JsonResponse start = await client.CibaAuthorizeAsync(new Dictionary<string, string>()
+                {
+                    { "request", jws }
+                });
+
+                string authReqId = start.String("auth_req_id");
+
+                r.Verify("auth_req_id を返さない（利用者へ通知しない）",
+                    string.IsNullOrEmpty(authReqId),
+                    "返さない",
+                    string.IsNullOrEmpty(authReqId) ? "返さなかった" : "**返した**（値は伏せる）");
+
+                r.VerifyEqual("HTTP 401", "401", ((int)start.StatusCode).ToString());
+
+                r.VerifyEqual("エラーは invalid_client", "invalid_client", start.Error ?? "（無し）");
+
+                // **Authorization ヘッダで認証を試みたクライアントには必須**（RFC 6749 §5.2）。
+                // 署名だけで識別していた頃は、付けない方が正しかった（realm に null を渡していた）。
+                string challenge = start.Header("WWW-Authenticate");
+
+                r.Verify("WWW-Authenticate が付く（RFC 6749 §5.2）",
+                    challenge != null,
+                    "付く",
+                    challenge ?? "**付かない**");
+
+                r.Step("(2) 誤った client_secret で POST /ciba_authz");
+
+                JsonResponse wrong = await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>()
+                    {
+                        { "request", await CibaRequestTests.CreateRequestAsync(client, reg, "E2E-badauth") }
+                    }, reg.ClientId, "wrong-secret");
+
+                r.VerifyEqual("HTTP 401", "401", ((int)wrong.StatusCode).ToString());
+
+                r.VerifyEqual("エラーは invalid_client", "invalid_client", wrong.Error ?? "（無し）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-234.5 認証したクライアントと iss が違えば断る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23405_認証したクライアントとissが違えば断る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-234.5",
+                    "自分の資格情報で認証し、他人の client_id を iss にした要求は断る",
+                    "**認証を入れただけでは足りない。**"
+                    + "CIBA Core §7.1.1 は `iss` を「クライアントの client_id」と定めている。"
+                    + "**これを確かめないと、自分の資格情報で認証して、他人の要求を代わりに送れる**"
+                    + "（要求の署名は、その他人の鍵で正しく検証できてしまう）。",
+                    "CIBA Core §7.1 / §7.1.1 / #234 の段階 3");
+
+                ClientRegistration ciba = Flows.Registration(client, KnownClients.TestClient4);
+                ClientRegistration other = Flows.Registration(client, KnownClients.TestClient1);
+
+                r.Target("iss=" + KnownClients.TestClient4 + " の要求を、"
+                    + KnownClients.TestClient1 + " の資格情報で送る");
+
+                r.Step("(1) CIBA クライアントの鍵で、正しく署名した要求を作る");
+
+                string jws = await CibaRequestTests.CreateRequestAsync(client, ciba, "E2E-mismatch");
+
+                r.Step("(2) 別のクライアントの資格情報で認証して送る");
+
+                JsonResponse start = await client.CibaAuthorizeWithBasicAuthAsync(
+                    new Dictionary<string, string>() { { "request", jws } },
+                    other.ClientId, other.ClientSecret);
+
+                string authReqId = start.String("auth_req_id");
+
+                r.Verify("auth_req_id を返さない（利用者へ通知しない）",
+                    string.IsNullOrEmpty(authReqId),
+                    "返さない",
+                    string.IsNullOrEmpty(authReqId) ? "返さなかった" : "**返した**（値は伏せる）");
+
+                r.VerifyEqual("HTTP 400", "400", ((int)start.StatusCode).ToString());
+
+                r.VerifyEqual("エラーは invalid_request", "invalid_request", start.Error ?? "（無し）");
+
+                r.Note("**認証そのものは通っている**（資格情報は正しい）。"
+                    + "断っているのは、認証したクライアントと要求の iss が違うため。");
 
                 r.Done();
             }

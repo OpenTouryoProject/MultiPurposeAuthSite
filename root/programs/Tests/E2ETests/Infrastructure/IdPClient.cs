@@ -42,6 +42,7 @@
 //*  2026/09/22  玄人 幸道         クライアント証明書を添えてトークン エンドポイントを呼ぶ TokenWithCertificateAsync を追加（#226）
 //*  2026/09/23  玄人 幸道         クライアント証明書を添えて UserInfo を呼ぶ UserInfoWithCertificateAsync を追加
 //*  2026/09/25  玄人 幸道         Discovery の issuer を引く IssuerAsync を追加（#234 の段階 1）
+//*  2026/09/25  玄人 幸道         /ciba_authz をクライアント認証つきで呼べるようにした（#234 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -795,6 +796,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> CibaAuthorizeAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/ciba_authz", form);
+        }
+
+        /// <summary>
+        /// CIBA の認証リクエストを、client_secret_basic で送る（POST /ciba_authz）。
+        /// </summary>
+        /// <param name="form">フォーム（request または request_uri）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **CIBA Core §7.1 は、この口でのクライアント認証を MUST としている**（#234 の段階 3）。
+        /// 認証を付けない <see cref="CibaAuthorizeAsync(IDictionary{string, string})"/> は、
+        /// **断られることを確かめる**ために残してある。
+        /// </remarks>
+        public Task<JsonResponse> CibaAuthorizeWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/ciba_authz", form, clientId, clientSecret);
         }
 
         #endregion
