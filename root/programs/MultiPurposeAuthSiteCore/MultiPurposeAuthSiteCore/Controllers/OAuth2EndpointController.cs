@@ -402,7 +402,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 #region OpenID Connect
 
                                 case OAuth2AndOIDCConst.Scope_Profile:
-                                    // ・・・
+                                    // **返す項目は設定で決まる**（#230。UserClaims）。
+                                    Sts.UserClaims.AddClaims(
+                                        userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Profile);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Email:
                                     userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
@@ -413,7 +415,9 @@ namespace MultiPurposeAuthSite.Controllers
                                     userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Address:
-                                    // ・・・
+                                    // **返す項目は設定で決まる**（#230。UserClaims）。
+                                    Sts.UserClaims.AddClaims(
+                                        userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Address);
                                     break;
 
                                 #endregion

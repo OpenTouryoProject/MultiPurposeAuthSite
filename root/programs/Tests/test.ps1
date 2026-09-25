@@ -238,6 +238,16 @@ $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWe
 # 生の SslStream は 5.1 でも 1.2 / 1.3 の両方で成功するので、
 # **TLS そのものの問題ではない。**
 # 版差の原因を追うより、それぞれで通ることを確認した方法を使う。
+# **テストで使うクレームの対応付け（#230）。**
+#   キーはクレーム名（address.<副フィールド> と書くと address オブジェクトを組み立てる）、
+#   値は UnstructuredData の中のキー（usd1 / usd2 は /Manage/AddUnstructuredData で入れられる）
+#   または user:<項目>。**両サイトへ同じ内容を差し込む**（RT-230 が参照する）。
+$script:UserClaimsMapping = [ordered]@{
+    'name'                = 'usd1'
+    'address.locality'    = 'usd2'
+    'preferred_username'  = 'user:UserName'
+}
+
 function Wait-Site
 {
     param(
@@ -574,6 +584,14 @@ public static class MpasTestTls
             }
         }
 
+        # **profile / address のクレームの対応付け（#230）。**
+        #   この実装は氏名・住所の項目を持たず、入れ物は UnstructuredData（中身は導入する側が決める）。
+        #   テストは、画面から入れられる usd1 / usd2 を値の在り処にする。
+        #   net10.0 は「節」として読むので、appSettings__<キー>__<クレーム名> で足せる。
+        foreach ($m in $script:UserClaimsMapping.GetEnumerator()) {
+            Set-Item -Path ("Env:\appSettings__UserClaimsMapping__" + $m.Key) -Value $m.Value
+        }
+
         # UserStore の切り替え（#207）。mem のときは何も渡さない（構成ファイルのまま）。
         if ($UserStoreType -ne 'mem') {
             $env:UserStoreType = $UserStoreType
@@ -671,6 +689,11 @@ public static class MpasTestTls
             if ($null -ne $injected) {
                 $env:OAuth2ClientsInformation = $injected.NetFxValue
             }
+
+            # クレームの対応付け（#230）。net48 は 1 個の値（JSON 文字列）として読む。
+            $env:UserClaimsMapping = '{' + (
+                ($script:UserClaimsMapping.GetEnumerator() | ForEach-Object {
+                    '"{0}": "{1}"' -f $_.Key, $_.Value }) -join ', ') + '}'
 
             # UserStore の切り替え（#207）。npg はここに来ない（上で NoNetFx にしている）。
             if ($UserStoreType -ne 'mem') {

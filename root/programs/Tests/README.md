@@ -74,6 +74,21 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
   net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
 - **差し込むのは `-Launch` のときだけ。** 既に動いているサイトへ向けたときは、使うテストが Skip する
 
+**クレームの対応付け（`UserClaimsMapping`）も、同じやり方で差し込む**（#230）。
+
+この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるので、
+**「どのキーをどのクレームとして返すか」だけが設定**になっている。
+テストは、画面（`/Manage/AddUnstructuredData`）から入れられる `usd1` / `usd2` を値の在り処にする。
+
+| クレーム | 値の在り処 |
+|---|---|
+| `name` | `usd1` |
+| `address.locality` | `usd2`（`address` オブジェクトの副フィールドとして組み立てられる） |
+| `preferred_username` | `user:UserName`（`ApplicationUser` の項目。白名簿） |
+
+差し込みが無いときは `RT-230` が Skip する（`claims_supported` を見て判定）。
+値を入れたテストは、**最後に空へ戻す**（既定の利用者に入るので、他のテストへ持ち越さない）。
+
 **テストの出力にトークンや秘密情報を書かないこと。**
 `JsonResponse.ToString()` はキー名とエラーだけを出す。
 
@@ -256,6 +271,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
 | `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない |
 | `Tests/Issues/IssuerParameterTests.cs` | `RT-231` | 認可応答の `iss`（RFC 9207）。成功・失敗・JARM・Discovery の広告 |
+| `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |
 | `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`） |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 

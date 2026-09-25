@@ -285,7 +285,9 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #region claims
                 OpenIDConfig.Add("claims_parameter_supported", false); // RequestObjectでのみサポート
-                OpenIDConfig.Add("claims_supported", new List<string> {
+                // **profile / address のクレームは、対応付けから作る**（#230）。
+                //   固定の一覧にすると「広告しているのに返らない」が起きる（#228 の 13）。
+                List<string> claimsSupported = new List<string> {
                     //Jwt
                     OAuth2AndOIDCConst.iss,
                     OAuth2AndOIDCConst.aud,
@@ -310,7 +312,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                     OAuth2AndOIDCConst.c_hash,
                     OAuth2AndOIDCConst.s_hash //,
                     //OAuth2AndOIDCConst.auth
-                });
+                };
+
+                claimsSupported.AddRange(UserClaims.GetSupportedClaims());
+
+                OpenIDConfig.Add("claims_supported", claimsSupported);
                 #endregion
 
                 #region RequestObject

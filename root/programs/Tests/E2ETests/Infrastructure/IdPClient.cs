@@ -785,6 +785,54 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         #endregion
 
+        #region 非構造化データ（/Manage/AddUnstructuredData）
+
+        /// <summary>
+        /// 非構造化データ（UnstructuredData）を、画面から設定する（#230）。
+        /// </summary>
+        /// <param name="data1">usd1 に入る値</param>
+        /// <param name="data2">usd2 に入る値</param>
+        /// <returns>保存できたか</returns>
+        /// <remarks>
+        /// **`profile` / `address` のクレームの値は、ここに入る**（`UserClaimsMapping` が指す先）。
+        /// 画面は ViewModel を丸ごと JSON にして保存するので、**usd1 / usd2 しか入れられない。**
+        /// テストは、この 2 つを値の在り処として使う。
+        ///
+        /// `CanEditUnstructuredData` と `EnableEditingOfUserAttribute` が有効であること
+        /// （雛形の既定は両方 true）。サインイン済みである必要がある。
+        /// </remarks>
+        public async Task<bool> SetUnstructuredDataAsync(string data1, string data2)
+        {
+            HttpResponseMessage get = await this.GetAsync("/Manage/AddUnstructuredData");
+            string html = await get.Content.ReadAsStringAsync();
+
+            if (get.StatusCode != HttpStatusCode.OK)
+            {
+                return false;
+            }
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "UnstructuredData1", data1 ?? "" },
+                { "UnstructuredData2", data2 ?? "" }
+            };
+
+            Match m = AntiforgeryRegex.Match(html);
+
+            if (m.Success)
+            {
+                form.Add("__RequestVerificationToken", m.Groups["value"].Value);
+            }
+
+            HttpResponseMessage post = await this.PostFormAsync("/Manage/AddUnstructuredData", form);
+
+            // 成功すると、管理画面へリダイレクトする。
+            return post.StatusCode == HttpStatusCode.Found
+                || post.StatusCode == HttpStatusCode.Redirect;
+        }
+
+        #endregion
+
         #region CIBA（/ciba_authz）
 
         /// <summary>

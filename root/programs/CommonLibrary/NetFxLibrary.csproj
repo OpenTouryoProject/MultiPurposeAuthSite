@@ -76,6 +76,7 @@
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
+    <Compile Include="Extensions\Sts\UserClaims.cs" />
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />
     <Compile Include="TokenProviders\AuthorizationCodeProvider.cs" />

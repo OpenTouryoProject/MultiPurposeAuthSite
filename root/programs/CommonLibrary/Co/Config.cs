@@ -44,6 +44,7 @@
 //*  2026/09/24  玄人 幸道         Discovery の service_documentation を設定値にする（#228）
 //*  2026/09/24  玄人 幸道         認可コードと Request Object の有効期限の設定を追加（#188）
 //*  2026/09/25  玄人 幸道         設定キーの改名と、旧キーの読み替え（#236）
+//*  2026/09/25  玄人 幸道         UserClaimsMapping（profile / address のクレームの対応付け）を追加（#230）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1539,6 +1540,47 @@ namespace MultiPurposeAuthSite.Co
 
                 return section.Get<Dictionary<string, Dictionary<string, string>>>();
 #endif
+            }
+        }
+
+        /// <summary>
+        /// profile / address のクレームの対応付け（#230）
+        /// </summary>
+        /// <remarks>
+        /// **「どのキーを、どのクレームとして返すか」だけを持つ。**
+        /// 値の在り処は `ApplicationUser.UnstructuredData`（JSON）の中のパス、
+        /// または `user:&lt;項目&gt;`（白名簿。<see cref="Extensions.Sts.UserClaims"/>）。
+        ///
+        /// **既定は空で、何も返らない**（従来どおり）。設定した分だけ返る。
+        /// どのクレームがどの scope に属するかは**仕様が決めている**ので、ここには書かせない
+        /// （OIDC Core §5.4。表は `UserClaims`）。
+        ///
+        /// 読み方は `OAuth2ClientsInformation` と同じ（net48 は JSON 文字列、net10.0 は節）。
+        /// </remarks>
+        public static Dictionary<string, string> UserClaimsMapping
+        {
+            get
+            {
+                Dictionary<string, string> mapping = null;
+
+#if NETFX
+                string json = GetConfigParameter.GetConfigValue("UserClaimsMapping");
+
+                if (!string.IsNullOrEmpty(json))
+                {
+                    mapping = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+                }
+#else
+                IConfigurationSection section = GetConfigParameter
+                    .GetAnyConfigSection("appSettings:UserClaimsMapping");
+
+                if (section != null)
+                {
+                    mapping = section.Get<Dictionary<string, string>>();
+                }
+#endif
+                // **未設定・空は「対応付け無し」として扱う。** null を返して呼び先を壊さない。
+                return mapping ?? new Dictionary<string, string>();
             }
         }
 

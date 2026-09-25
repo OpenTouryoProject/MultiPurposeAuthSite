@@ -1472,7 +1472,7 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
 | D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`） | Mix-Up 攻撃への対策 |
 | D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
-| D-7 | `profile` / `address` スコープのクレーム | **空実装**（`// ・・・`）。`name` `given_name` `family_name` 等を返さない。**#230** | `scopes_supported` に載っているのに何も返らない |
+| D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
