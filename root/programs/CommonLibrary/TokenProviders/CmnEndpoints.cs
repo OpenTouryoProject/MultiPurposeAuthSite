@@ -92,6 +92,7 @@
 //*  2026/09/25  玄人 幸道         CIBA の認証要求を jti で使い切りにする（#234 の段階 2）
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
 //*  2026/09/25  玄人 幸道         /ros の処理を、両アプリの Controller から移した（#235）
+//*  2026/09/25  玄人 幸道         client_assertion（RFC 7523 2.2）を読む（#238）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -727,6 +728,60 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region GetClientAssertion
+
+        /// <summary>client_assertion（RFC 7523 §2.2）</summary>
+        /// <remarks>Open棟梁 の定数に無いので、ここで定義する（#238）。</remarks>
+        public const string ClientAssertion = "client_assertion";
+
+        /// <summary>client_assertion_type（RFC 7523 §2.2）</summary>
+        public const string ClientAssertionType = "client_assertion_type";
+
+        /// <summary>client_assertion_type の値（RFC 7523 §2.2）</summary>
+        public const string JwtBearerClientAssertionType =
+            "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+
+        /// <summary>
+        /// クライアント認証のアサーションを取り出す（#238）
+        /// </summary>
+        /// <param name="clientAssertion">client_assertion（RFC 7523 §2.2 の名前）</param>
+        /// <param name="clientAssertionType">client_assertion_type</param>
+        /// <param name="assertion">assertion（この実装が従来読んでいた名前）</param>
+        /// <returns>アサーション（無い・受け付けられないなら空）</returns>
+        /// <remarks>
+        /// **RFC 7523 §2.2 が定めているのは `client_assertion`**（＋ `client_assertion_type`）。
+        /// `assertion` は **JWT Bearer グラント**（§2.1）のパラメタで、別物である。
+        /// この実装は 3 つの口（`/token`・`/par`・`/ciba_authz`）で `assertion` を読んでいたため、
+        /// **仕様に従うクライアントが private_key_jwt で認証できなかった。**
+        ///
+        /// **両方を受ける。** `client_assertion` を優先し、無ければ `assertion` も読む
+        /// （Open棟梁 の既存のクライアントは `assertion` を送るため。OpenTouryo #592）。
+        ///
+        /// **`client_assertion_type` が来ていて、値が違うなら受け付けない**（空を返す）。
+        /// 呼び先はアサーション無しとして扱い、**クライアント認証の失敗**（`invalid_client`）になる。
+        /// </remarks>
+        public static string GetClientAssertion(
+            string clientAssertion, string clientAssertionType, string assertion)
+        {
+            if (!string.IsNullOrEmpty(clientAssertion))
+            {
+                // **型が明示されていれば、確かめる。**
+                //   省略されていても受ける（この実装が従来、型を見ていなかったため）。
+                if (!string.IsNullOrEmpty(clientAssertionType)
+                    && clientAssertionType != CmnEndpoints.JwtBearerClientAssertionType)
+                {
+                    return "";
+                }
+
+                return clientAssertion;
+            }
+
+            // 従来の名前（後方互換）
+            return assertion ?? "";
+        }
+
+        #endregion
+
         #region RegisterRequestObject
 
         /// <summary>
@@ -938,10 +993,11 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     switch (key)
                     {
-                        // クライアント認証の値は預からない
+                        // クライアント認証の値は預からない（#238 で assertion も対象にした）
                         case OAuth2AndOIDCConst.client_secret:
-                        case "client_assertion":
-                        case "client_assertion_type":
+                        case CmnEndpoints.ClientAssertion:
+                        case CmnEndpoints.ClientAssertionType:
+                        case OAuth2AndOIDCConst.assertion:
                             break;
 
                         default:

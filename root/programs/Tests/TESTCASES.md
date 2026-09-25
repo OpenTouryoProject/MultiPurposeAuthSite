@@ -3289,6 +3289,93 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **認証そのものは通っている**（資格情報は正しい）。断っているのは、認証したクライアントと要求の iss が違うため。
 
+## RT-238.1 RFC 7523 §2.2 の client_assertion で、private_key_jwt のクライアント認証が通る
+
+| | |
+|---|---|
+| 観点 | **仕様の名前は `client_assertion`**（＋ `client_assertion_type`）。この実装は `assertion` だけを読んでいたため、**仕様に従うクライアントは private_key_jwt で認証できなかった**（#238）。Open棟梁 の PAR / CIBA のクライアント（OpenTouryo#592）は `client_assertion` を送る。 |
+| 根拠 | RFC 7523 §2.2 / RFC 9126 §2 / #238 |
+| テスト | `RT23801_client_assertionでparに預けられる` |
+
+**手順**
+
+1. client_assertion（RS256）を作り、client_assertion_type を添えて POST /par
+
+**検証（合否を判定する）**
+
+- HTTP 201（RFC 9126 §2.2）
+- request_uri が返る
+
+**補足**
+
+- **client_secret は送っていない。** 署名したアサーションだけで認証している。
+
+## RT-238.2 従来の名前（assertion）でも、private_key_jwt のクライアント認証が通る
+
+| | |
+|---|---|
+| 観点 | **Open棟梁 の既存のクライアントは `assertion` を送る**（`GetAccessTokenByCodeAsync` の private_key_jwt）。名前を仕様に合わせるだけだと、**既存のクライアントが繋がらなくなる。**`client_assertion` を優先し、**無ければ `assertion` も読む。** |
+| 根拠 | RFC 7523 §2.2 / #238 |
+| テスト | `RT23802_従来のassertionでも通る` |
+
+**手順**
+
+1. assertion（従来の名前）で POST /par
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- request_uri が返る
+
+## RT-238.3 client_assertion_type が仕様の値でなければ、クライアント認証を通さない
+
+| | |
+|---|---|
+| 観点 | **RFC 7523 §2.2 は型を URN で定めている**（`urn:ietf:params:oauth:client-assertion-type:jwt-bearer`）。型が違うものを受け付けると、**別の種類のアサーションを取り違える**。**省略されていれば受ける**（この実装は従来、型を見ていなかったため）。 |
+| 根拠 | RFC 7523 §2.2 / #238 |
+| テスト | `RT23803_client_assertion_typeが違えば断る` |
+
+**手順**
+
+1. client_assertion_type に別の URN を入れて POST /par
+
+**検証（合否を判定する）**
+
+- HTTP 401
+- エラーは invalid_client
+- request_uri は返らない
+
+**補足**
+
+- **型が違うときは「アサーション無し」として扱う**ので、クライアント認証の失敗（invalid_client）になる。
+
+## RT-238.4 トークン エンドポイントでも、client_assertion で認証してトークンを得られる
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、クライアント認証を private_key_jwt か mTLS に限っている。**fapi2 の登録は client_secret を通さない（`FA-2.1`）ので、**この経路が通らないと、fapi2 のクライアントはトークンを得られない。** |
+| 根拠 | RFC 7523 §2.2 / FAPI 2.0 / #238 |
+| テスト | `RT23804_tokenでもclient_assertionが通る` |
+
+**手順**
+
+1. FAPI2 の自己テストで、request_uri 経路の code を得る
+1. client_assertion を添えて、code をトークンに交換する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token が返る
+
+**観測（判定しない）**
+
+- 応答
+  - 切り分け用（値は伏せられる）。
+
+**補足**
+
+- **client_secret は送っていない**（fapi2 の登録は受け付けない）。`client_id` も送っていない（アサーションの `iss` から引く）。
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

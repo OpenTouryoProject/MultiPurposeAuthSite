@@ -215,8 +215,12 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 // JWTアサーション
-                string assertion = "";
-                assertion = formData[OAuth2AndOIDCConst.assertion];
+                //   **RFC 7523 §2.2 の名前は client_assertion**（#238）。
+                //   従来の assertion も読む（Open棟梁 の既存のクライアントが送るため）。
+                string assertion = Token.CmnEndpoints.GetClientAssertion(
+                    formData[Token.CmnEndpoints.ClientAssertion],
+                    formData[Token.CmnEndpoints.ClientAssertionType],
+                    formData[OAuth2AndOIDCConst.assertion]);
 
                 // クライアント証明書
 
@@ -823,7 +827,10 @@ namespace MultiPurposeAuthSite.Controllers
                 }
 
                 // private_key_jwt / mTLS
-                string assertion = formData[OAuth2AndOIDCConst.assertion];
+                string assertion = Token.CmnEndpoints.GetClientAssertion(
+                    formData[Token.CmnEndpoints.ClientAssertion],
+                    formData[Token.CmnEndpoints.ClientAssertionType],
+                    formData[OAuth2AndOIDCConst.assertion]);
                 X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
 
                 string authReqId = "";
@@ -1132,7 +1139,10 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // private_key_jwt / mTLS
-            string assertion = formData[OAuth2AndOIDCConst.assertion];
+            string assertion = Token.CmnEndpoints.GetClientAssertion(
+                formData[Token.CmnEndpoints.ClientAssertion],
+                formData[Token.CmnEndpoints.ClientAssertionType],
+                formData[OAuth2AndOIDCConst.assertion]);
             X509Certificate2 x509 = Request.HttpContext.Connection.ClientCertificate;
 
             NameValueCollection parameters = new NameValueCollection();

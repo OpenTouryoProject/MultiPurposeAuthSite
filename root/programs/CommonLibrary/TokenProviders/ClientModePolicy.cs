@@ -31,6 +31,7 @@
 //*  2026/09/22  玄人 幸道         新規（#224 の段階 1 : permittedLevel の大小比較を、表に置き換える）
 //*  2026/09/22  玄人 幸道         既知でない登録値を fapi2 とみなさず、不正として扱う。MayUse を追加（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         表の注記 : mTLS の行を E2E（FA-6.1）で守るようにした（#226）
+//*  2026/09/25  玄人 幸道         認可コード × private_key_jwt に fapi2 を足した（#238）
 //**********************************************************************************
 
 using System.Linq;
@@ -161,7 +162,11 @@ namespace MultiPurposeAuthSite.TokenProviders
             new Rule(Flow.AuthorizationCode,     Proof.ClientSecretAndPkce, Normal),                  // FA-1.3
             new Rule(Flow.AuthorizationCode,     Proof.PkcePlain,           Normal),                  // RT-220.2
             new Rule(Flow.AuthorizationCode,     Proof.PkceS256,            Normal, Fapi1, Device),   // FA-1.1 / FA-3.1
-            new Rule(Flow.AuthorizationCode,     Proof.PrivateKeyJwt,       Normal, Fapi1, Device),   // （E2E なし）
+            // **fapi2 を足した（#238）。** FAPI 2.0 はクライアント認証を
+            //   MTLS か private_key_jwt に限っており、**fapi2 は client_secret を通さない**ので、
+            //   ここを塞ぐと mTLS を使えない fapi2 のクライアントがトークンを取れない。
+            //   この行に E2E が無かったため、元の実装から引き継いだ穴が残っていた。
+            new Rule(Flow.AuthorizationCode,     Proof.PrivateKeyJwt,       Normal, Fapi1, Fapi2, Device),   // RT-238.4
             new Rule(Flow.AuthorizationCode,     Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.1（net10.0 のみ）
 
             // 上記以外のグラント : 証明によらず normal だけ

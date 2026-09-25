@@ -1460,6 +1460,32 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 > **`/revoke` `/introspect` は、クライアント認証として証明書を見る口**（C-2）であり、
 > ここで言う「保護されたリソース」ではない。
 
+### C-20. `private_key_jwt` が、仕様と違う名前でしか通らなかった **[Lib][Core][NetFx]** — **✅ 修正済み（#238）**
+
+**RFC 7523 §2.2 が定めるのは `client_assertion`**（＋ `client_assertion_type`）。
+`assertion` は **JWT Bearer グラント**（§2.1）のパラメタで、別物である。
+
+この実装は **3 つの口（`/token`・`/par`・`/ciba_authz`）で `assertion` を読んでいた**ため、
+**仕様に従うクライアントは `private_key_jwt` で認証できなかった。**
+
+**両方を受けるようにした**（`CmnEndpoints.GetClientAssertion`）。
+`client_assertion` を優先し、無ければ `assertion` も読む
+（Open棟梁 の既存のクライアントが `assertion` を送るため。OpenTouryo #592）。
+`client_assertion_type` が来ていれば、値が RFC 7523 の URN であることを確かめる
+（違えば「アサーション無し」として扱い、`invalid_client` になる）。
+
+**同時に、`ClientModePolicy` の穴も塞いだ。**
+
+| 経路 × 証明 | 通していた登録種別 | 修正後 |
+|---|---|---|
+| 認可コード × `private_key_jwt` | normal / fapi1 / device | **＋ fapi2** |
+
+**FAPI 2.0 はクライアント認証を MTLS か `private_key_jwt` に限っている**のに、
+`fapi2` は `client_secret` も通らないため、**mTLS を使えない fapi2 クライアントはトークンを取れなかった。**
+表の該当行には「（E2E なし）」と書いてあり、**測っていなかったから残っていた**（#224 で引き継いだもの）。
+
+**E2E に `private_key_jwt` の認証が無かったことが、両方の原因**である（`RT-238.1`〜`.4` で塞いだ）。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
