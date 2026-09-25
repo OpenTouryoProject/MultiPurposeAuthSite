@@ -194,13 +194,23 @@ namespace MultiPurposeAuthSite.Controllers
                     client_secret = formData[OAuth2AndOIDCConst.client_secret];
                 }
 
-                // JWTアサーション
-                //   **RFC 7523 §2.2 の名前は client_assertion**（#238）。
-                //   従来の assertion も読む（Open棟梁 の既存のクライアントが送るため）。
-                string assertion = Token.CmnEndpoints.GetClientAssertion(
+                // **JWT アサーションは 2 種類ある。混ぜないこと（#238）。**
+                //
+                //   client_assertion（RFC 7523 §2.2）: **クライアント認証**。client_secret の代わり。
+                //   assertion        （RFC 7523 §2.1）: **グラントそのもの**。誰の認可かを表す。
+                //
+                //   両方を同時に送れる（グラントは assertion、認証は client_assertion）。
+                //   **この実装は従来どちらも assertion で受けていた**ので、
+                //   client_assertion を優先しつつ、無ければ assertion も読む（後方互換）。
+
+                // クライアント認証のアサーション
+                string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
                     formData[Token.CmnEndpoints.ClientAssertion],
                     formData[Token.CmnEndpoints.ClientAssertionType],
                     formData[OAuth2AndOIDCConst.assertion]);
+
+                // グラントのアサーション（grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer）
+                string assertion = formData[OAuth2AndOIDCConst.assertion];
 
                 // クライアント証明書
                 X509Certificate2 x509 = Request.GetClientCertificate();
@@ -231,7 +241,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
 
                             if (Token.CmnEndpoints.GrantAuthorizationCodeCredentials(
-                                grant_type, client_id, client_secret, assertion, x509,
+                                grant_type, client_id, client_secret, clientAssertion, x509,
                                 code, code_verifier, redirect_uri, out ret, out err))
                             {
                                 return this.Ok(ret);
