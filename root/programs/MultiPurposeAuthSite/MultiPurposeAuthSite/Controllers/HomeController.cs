@@ -29,6 +29,7 @@
 //*  2026/09/18  玄人 幸道         require_pkce のクライアントを試す口を追加（#221）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
+//*  2026/09/25  玄人 幸道         CIBA の自己テストの結果文字列を net10.0 版に揃えた
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -605,7 +606,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string userInfo = await Helper.GetInstance().
                             GetUserInfoAsync((string)temp[OAuth2AndOIDCConst.AccessToken]);
 
-                        result = "正常終了";
+                        result = "NORMAL_END";
                     }
                     else
                     {
@@ -621,13 +622,13 @@ namespace MultiPurposeAuthSite.Controllers
                             // authorization_pending以外
                             // 終了
                             continueLoop = false;
-                            result = "異常終了";
+                            result = "ABNORMAL_END";
                         }
                     }
                 }
 
                 // 完了（SAMLのテストコードっぽくした）
-                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK: " + result;
+                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK_" + result;
             }
             else
             {
