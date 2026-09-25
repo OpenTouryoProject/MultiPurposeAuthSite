@@ -1137,67 +1137,17 @@ namespace MultiPurposeAuthSite.Controllers
             // RequestObjectを取り出す。
             string body = new StreamReader(HttpContext.Current.Request.InputStream).ReadToEnd();
 
-            if (!string.IsNullOrEmpty(body))
+            // **処理は CommonLibrary（#235）。** 両アプリに同じものを書いていた。
+            //   ここは、本文を渡して応答を包むだけ。
+            if (Token.CmnEndpoints.RegisterRequestObject(body, out Dictionary<string, object> ret))
             {
-                // 公開鍵取得にissが必要。
-                // - issを取り出す。
-                string requestObjectString = CustomEncode.ByteToString(
-                    CustomEncode.FromBase64UrlString(body.Split('.')[1]), CustomEncode.us_ascii);
-                JObject requestObject = (JObject)JsonConvert.DeserializeObject(requestObjectString);
-
-                string iss = "";
-                string pubKey = "";
-                bool result = false;
-                if (requestObject.ContainsKey("client_notification_token"))
+                // 成功
+                return new HttpResponseMessage()
                 {
-                    // CIBA
-
-                    // - 公開鍵取得を取り出す。
-                    iss = (string)requestObject[OAuth2AndOIDCConst.iss];
-                    pubKey = Sts.Helper.GetInstance().GetJwkECDsaPublickey(iss);
-                    pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                    // 署名検証
-                    result = RequestObject.VerifyCiba(body, out iss, pubKey);
-                }
-                else
-                {
-                    // F-API2 CC
-
-                    // - 公開鍵取得を取り出す。
-                    iss = (string)requestObject[OAuth2AndOIDCConst.iss];
-                    pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
-                    pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                    // 署名検証
-                    result = RequestObject.Verify(body, out iss, pubKey);
-                }
-
-                if (result)
-                {
-                    string urn = Guid.NewGuid().ToString("N");
-                    string request_uri = OAuth2AndOIDCConst.UrnRequestUriBase + urn;
-
-                    // RequestObjectの登録
-                    Sts.RequestObjectProvider.Create(urn, requestObjectString);
-
-                    // 成功
-                    return new HttpResponseMessage()
-                    {
-                        Content = new JsonContent(JsonConvert.SerializeObject(new
-                        {
-                            iss = Config.IssuerId,
-                            aud = iss,
-                            request_uri = request_uri,
-                            // **有効期限を返す**（#188。以前は空文字だった）。
-                            //   NumericDate（RFC 7519 2章）＝ 秒。
-                            //   使い切り（ワンタイム）は、消す場所を決めてから（#188 の段階 2 / #229）。
-                            exp = DateTimeOffset.Now.Add(
-                                Config.RequestObjectExpireTimeSpanFromSeconds).ToUnixTimeSeconds()
-                        }, Newtonsoft.Json.Formatting.None)),
-                        StatusCode = HttpStatusCode.Created
-                    };
-                }
+                    Content = new JsonContent(JsonConvert.SerializeObject(
+                        ret, Newtonsoft.Json.Formatting.None)),
+                    StatusCode = HttpStatusCode.Created
+                };
             }
 
             // 失敗

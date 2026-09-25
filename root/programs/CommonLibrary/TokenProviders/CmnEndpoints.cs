@@ -91,6 +91,7 @@
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を検証する（CIBA Core 7.1.1。#234 の段階 1）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求を jti で使い切りにする（#234 の段階 2）
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
+//*  2026/09/25  玄人 幸道         /ros の処理を、両アプリの Controller から移した（#235）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -716,6 +717,101 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return types.Length == 1 ? ClientModePolicy.Flow.AuthorizationCode : ClientModePolicy.Flow.Hybrid;
+        }
+
+        #endregion
+
+        #region RegisterRequestObject
+
+        /// <summary>
+        /// Request Object を預かる（`/ros`）（#235）
+        /// </summary>
+        /// <param name="requestObject">本文に入っていた署名付き JWT</param>
+        /// <param name="ret">応答（iss / aud / request_uri / exp）</param>
+        /// <returns>預かれたか（false なら 400）</returns>
+        /// <remarks>
+        /// **両アプリの Controller に同じものが書かれていたので、ここへ移した（#235）。**
+        /// **振る舞いは変えていない。** 署名だけを確かめ、**クライアント認証はしない**。
+        ///
+        /// **この口は RFC 9101（JAR）§5.2.1 が認めている任意機能**
+        /// （「認可サーバが、Request Object を POST して request_uri を得る URL を提供してもよい」）。
+        /// ただし RFC は中身を規定していないので、**相互運用できる口ではない。**
+        /// 新しい RP は `/par`（RFC 9126。クライアント認証とパラメタの検証も行う。#229）を使う。
+        ///
+        /// CIBA と FAPI2 CC で、署名検証に使う鍵の種類が違う（ES256 / RS256）。
+        /// **`client_notification_token` があるかどうかで見分ける**（従来どおり）。
+        ///
+        /// **応答を組み立てるのは Controller 側**（net48 は HttpResponseMessage、
+        /// net10.0 は Created で包む）。ここは中身だけを返す。
+        /// </remarks>
+        public static bool RegisterRequestObject(string requestObject, out Dictionary<string, object> ret)
+        {
+            ret = null;
+
+            if (string.IsNullOrEmpty(requestObject))
+            {
+                return false;
+            }
+
+            // 公開鍵取得にissが必要。
+            // - issを取り出す。
+            string requestObjectString = CustomEncode.ByteToString(
+                CustomEncode.FromBase64UrlString(requestObject.Split('.')[1]), CustomEncode.us_ascii);
+            JObject payload = (JObject)JsonConvert.DeserializeObject(requestObjectString);
+
+            string iss = "";
+            string pubKey = "";
+            bool result = false;
+
+            if (payload.ContainsKey(OAuth2AndOIDCConst.client_notification_token))
+            {
+                // CIBA
+
+                // - 公開鍵取得を取り出す。
+                iss = (string)payload[OAuth2AndOIDCConst.iss];
+                pubKey = Helper.GetInstance().GetJwkECDsaPublickey(iss);
+                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                // 署名検証
+                result = RequestObject.VerifyCiba(requestObject, out iss, pubKey);
+            }
+            else
+            {
+                // F-API2 CC
+
+                // - 公開鍵取得を取り出す。
+                iss = (string)payload[OAuth2AndOIDCConst.iss];
+                pubKey = Helper.GetInstance().GetJwkRsaPublickey(iss);
+                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                // 署名検証
+                result = RequestObject.Verify(requestObject, out iss, pubKey);
+            }
+
+            if (!result)
+            {
+                return false;
+            }
+
+            string urn = Guid.NewGuid().ToString("N");
+
+            // RequestObjectの登録
+            RequestObjectProvider.Create(urn, requestObjectString);
+
+            // 従来と同じ並びで入れる（**JSON の項目の順序は、RP に対する取り決めではない**。
+            //   差分を読みやすくするためだけ）。`exp` は**数値**で返す（文字列にしない）。
+            ret = new Dictionary<string, object>()
+            {
+                { OAuth2AndOIDCConst.iss, Config.IssuerId },
+                { OAuth2AndOIDCConst.aud, iss },
+                { OAuth2AndOIDCConst.request_uri, OAuth2AndOIDCConst.UrnRequestUriBase + urn },
+                // **有効期限を返す**（#188。以前は空文字だった）。
+                //   NumericDate（RFC 7519 2章）＝ 秒。**数値で返す**（文字列にしない）。
+                { OAuth2AndOIDCConst.exp, DateTimeOffset.Now.Add(
+                    Config.RequestObjectExpireTimeSpanFromSeconds).ToUnixTimeSeconds() },
+            };
+
+            return true;
         }
 
         #endregion
