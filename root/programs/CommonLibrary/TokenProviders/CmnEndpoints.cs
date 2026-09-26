@@ -94,6 +94,7 @@
 //*  2026/09/25  玄人 幸道         /ros の処理を、両アプリの Controller から移した（#235）
 //*  2026/09/25  玄人 幸道         client_assertion（RFC 7523 2.2）を読む（#238）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
+//*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -729,6 +730,80 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region JWT の読み取り（#241）
+
+        /// <summary>JWT の payload を読む（JWT でなければ null）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>payload（読めなければ null）</returns>
+        /// <remarks>
+        /// **外から来た文字列を、例外にせず読む**（#241）。
+        /// 公開鍵を引くには payload の `iss` が要るので、**署名検証の前に読む**ことになる。
+        /// そこで壊れた値を渡されると、以前は処理されない例外で **HTTP 500** になっていた。
+        ///
+        /// | 渡された値 | 以前 |
+        /// |---|---|
+        /// | `.` が無い | `Split('.')[1]` が IndexOutOfRangeException |
+        /// | Base64URL でない | FormatException |
+        /// | JSON がオブジェクトでない | null が返り、呼び先で NullReferenceException |
+        ///
+        /// **`JObject` で読む**（`Dictionary&lt;string, string&gt;` だと、
+        /// 入れ子のクレーム（`cnf` など）で変換に失敗する）。
+        /// </remarks>
+        public static JObject TryReadJwtPayload(string jwt)
+        {
+            if (string.IsNullOrEmpty(jwt))
+            {
+                return null;
+            }
+
+            string[] parts = jwt.Split('.');
+
+            if (parts.Length < 2)
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonConvert.DeserializeObject(CustomEncode.ByteToString(
+                    CustomEncode.FromBase64UrlString(parts[1]), CustomEncode.us_ascii)) as JObject;
+            }
+            catch
+            {
+                // Base64URL でない、JSON でない（外から来た値なので、例外にしない）。
+                return null;
+            }
+        }
+
+        /// <summary>登録された公開鍵（Base64URL の JWK）を復号する（無ければ空）</summary>
+        /// <param name="base64UrlJwk">登録された値</param>
+        /// <returns>JWK の JSON（無ければ空）</returns>
+        /// <remarks>
+        /// **未登録のクライアントでは空が返る**（#241）。
+        /// 以前は空かどうかを確かめる前に復号しており、
+        /// `FromBase64UrlString(null)` が NullReferenceException になって **HTTP 500** だった。
+        /// </remarks>
+        public static string DecodeRegisteredJwk(string base64UrlJwk)
+        {
+            if (string.IsNullOrEmpty(base64UrlJwk))
+            {
+                return "";
+            }
+
+            try
+            {
+                return CustomEncode.ByteToString(
+                    CustomEncode.FromBase64UrlString(base64UrlJwk), CustomEncode.us_ascii);
+            }
+            catch
+            {
+                // 登録の値が壊れている（運用の誤り）。**要求の側の誤りと区別せず、認証失敗にする。**
+                return "";
+            }
+        }
+
+        #endregion
+
         #region GetClientAssertion
 
         /// <summary>client_assertion（RFC 7523 §2.2）</summary>
@@ -817,37 +892,48 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 公開鍵取得にissが必要。
             // - issを取り出す。
-            string requestObjectString = CustomEncode.ByteToString(
-                CustomEncode.FromBase64UrlString(requestObject.Split('.')[1]), CustomEncode.us_ascii);
-            JObject payload = (JObject)JsonConvert.DeserializeObject(requestObjectString);
+            //   **JWT でない値を渡されても、例外にしない**（#241）。
+            JObject payload = CmnEndpoints.TryReadJwtPayload(requestObject);
 
-            string iss = "";
+            if (payload == null)
+            {
+                return false;
+            }
+
+            string requestObjectString = payload.ToString(Formatting.None);
+            string iss = (string)payload[OAuth2AndOIDCConst.iss];
             string pubKey = "";
             bool result = false;
+
+            if (string.IsNullOrEmpty(iss))
+            {
+                // iss が無ければ、公開鍵を引けない（#241）。
+                return false;
+            }
 
             if (payload.ContainsKey(OAuth2AndOIDCConst.client_notification_token))
             {
                 // CIBA
 
                 // - 公開鍵取得を取り出す。
-                iss = (string)payload[OAuth2AndOIDCConst.iss];
-                pubKey = Helper.GetInstance().GetJwkECDsaPublickey(iss);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+                pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                    Helper.GetInstance().GetJwkECDsaPublickey(iss));
 
                 // 署名検証
-                result = RequestObject.VerifyCiba(requestObject, out iss, pubKey);
+                result = !string.IsNullOrEmpty(pubKey)
+                    && RequestObject.VerifyCiba(requestObject, out iss, pubKey);
             }
             else
             {
                 // F-API2 CC
 
                 // - 公開鍵取得を取り出す。
-                iss = (string)payload[OAuth2AndOIDCConst.iss];
-                pubKey = Helper.GetInstance().GetJwkRsaPublickey(iss);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+                pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                    Helper.GetInstance().GetJwkRsaPublickey(iss));
 
                 // 署名検証
-                result = RequestObject.Verify(requestObject, out iss, pubKey);
+                result = !string.IsNullOrEmpty(pubKey)
+                    && RequestObject.Verify(requestObject, out iss, pubKey);
             }
 
             if (!result)
@@ -3531,13 +3617,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // assertionがあった場合、x509を無効化
                 x509 = null;
 
-                // pubKey
-                Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                        assertion.Split('.')[1]), CustomEncode.us_ascii));
+                // **JWT でない値・iss の無い JWT・未登録のクライアントで、例外にしない**（#241）。
+                //   ここは /token・/par・/ciba_authz・/revoke・/introspect の全てから通る（#238 / #239）。
+                JObject payload = CmnEndpoints.TryReadJwtPayload(assertion);
+                string assertionIss = (payload == null)
+                    ? "" : (string)payload[OAuth2AndOIDCConst.iss];
 
-                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(dic[OAuth2AndOIDCConst.iss]);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+                // pubKey
+                string pubKey = string.IsNullOrEmpty(assertionIss)
+                    ? "" : CmnEndpoints.DecodeRegisteredJwk(
+                        Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
 
                 if (!string.IsNullOrEmpty(pubKey))
                 {

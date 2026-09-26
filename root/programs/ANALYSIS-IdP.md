@@ -811,6 +811,38 @@ E2E テスト: `EX-4.5`（使用済み）/ `EX-4.7`（発行していない・�
 
 ---
 
+### B-8. JWT でない値で HTTP 500 になっていた **[Lib]** — **✅ 修正済み（#241）**
+
+**公開鍵は payload の `iss` で引く**ので、**署名検証の前に payload を読む**ことになる。
+そこに外から来た壊れた値を渡されると、処理されない例外で **HTTP 500**（JSON でない本文）になっていた。
+
+| 場所 | 壊れ方 |
+|---|---|
+| `/ros`（`RegisterRequestObject`） | `Split('.')[1]` が IndexOutOfRange / Base64URL の復号で FormatException / `JObject` が null |
+| `client_assertion` の検証（`ClientAuthentication`） | 同上 ＋ **`iss` が無いと辞書の参照で例外** |
+| 公開鍵の復号（両方） | **空かどうかを確かめる前に復号**していたため、**未登録のクライアント**で NullReferenceException |
+
+**`client_assertion` は #238 / #239 で受け口が増えていた**ので
+（`/token` の各グラント・`/par`・`/ciba_authz`・`/revoke`・`/introspect`）、
+**どの口からでも 500 に落とせる**状態だった。**実測で 5 パターンすべて 500**（両アプリ）。
+
+**対応 :** 解析を 1 か所にまとめた。
+
+| | 内容 |
+|---|---|
+| `CmnEndpoints.TryReadJwtPayload` | JWT でなければ **null**（例外にしない）。**`JObject` で読む**（`Dictionary<string, string>` だと入れ子のクレームで失敗する） |
+| `CmnEndpoints.DecodeRegisteredJwk` | 登録値が空・壊れていれば **空文字**（復号は空でないと確かめた後） |
+
+`/ros` は **400**、`client_assertion` は**アサーション無しとして扱い 401（`invalid_client`）**。
+後者は、`client_assertion_type` が誤りのときと同じ扱い（#238）。
+
+**先に書いた 2 箇所は、もともと落としていた**（`ReceiveCibaRequest` は `try`/`catch` で 400、
+`PushedAuthorizationRequest` は payload を自分で読まない）。**未対処だったのは古い 2 箇所**である。
+
+E2E : `RT-241.1`（`/ros`）/ `RT-241.2`（`client_assertion`）/ `RT-241.3`（`iss` 無し・未登録）
+
+---
+
 ## 4. C. セキュリティ上の弱点
 
 ### C-1. `/device_authz` にクライアント認証が無い **[Core][Lib]** — **✅ 修正済み（#193）**
