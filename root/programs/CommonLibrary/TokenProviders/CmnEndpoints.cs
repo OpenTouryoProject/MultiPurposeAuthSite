@@ -95,6 +95,7 @@
 //*  2026/09/25  玄人 幸道         client_assertion（RFC 7523 2.2）を読む（#238）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
 //*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
+//*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -726,6 +727,67 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return types.Length == 1 ? ClientModePolicy.Flow.AuthorizationCode : ClientModePolicy.Flow.Hybrid;
+        }
+
+        #endregion
+
+        #region Basic の資格情報（#237）
+
+        /// <summary>
+        /// Authorization ヘッダ（Basic）から資格情報を取り出す（#237）
+        /// </summary>
+        /// <param name="authHeader">Authorization ヘッダの値</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <returns>Basic の資格情報があったか</returns>
+        /// <remarks>
+        /// **RFC 6749 §2.3.1 は、`client_id` と `client_secret` を
+        /// `application/x-www-form-urlencoded` で符号化してから Base64 にする**ことを求めている。
+        /// 以前は復号しておらず、**仕様に従うクライアントは、記号を含む秘密だと認証できなかった**
+        /// （`+` `/` `=` `%` `:` など。特に `:` は分割位置がずれる）。
+        ///
+        /// **復号後と復号前の両方を受ける。**
+        /// 復号後で認証できなければ、復号前の値を返す（**符号化しないクライアントを壊さない**）。
+        /// Open棟梁 の既存のクライアントは符号化しない（OpenTouryo #592 で送り側も符号化するようになったが、
+        /// 配備済みのものは残る）。
+        ///
+        /// **英数字だけの値では、どちらも同じ文字列になる**ので、この分岐は効かない。
+        ///
+        /// ここで照合を試すのは**読むだけ**（設定・ストアの参照）なので、副作用は無い。
+        /// **フォーム（`client_secret_post`）の値は復号しない。**
+        /// そちらは枠組みが既に復号しており、二重に復号すると壊れる。
+        /// </remarks>
+        public static bool GetBasicCredentials(
+            string authHeader, out string client_id, out string client_secret)
+        {
+            client_id = "";
+            client_secret = "";
+
+            if (!AuthenticationHeader.GetCredentials(authHeader,
+                out string decodedId, out string decodedSecret,
+                out string rawId, out string rawSecret))
+            {
+                return false;
+            }
+
+            client_id = decodedId;
+            client_secret = decodedSecret;
+
+            if (decodedId != rawId || decodedSecret != rawSecret)
+            {
+                // 符号化されていた（または、符号化しないクライアントが記号を含む値を送った）。
+                //   **復号後で認証できなければ、復号前で扱う。**
+                X509Certificate2 none = null;
+
+                if (!CmnEndpoints.ClientAuthentication(
+                    decodedId, decodedSecret, ref none, out ClientModePolicy.Proof _))
+                {
+                    client_id = rawId;
+                    client_secret = rawSecret;
+                }
+            }
+
+            return true;
         }
 
         #endregion

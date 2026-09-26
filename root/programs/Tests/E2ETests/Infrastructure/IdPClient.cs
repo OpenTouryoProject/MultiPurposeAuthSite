@@ -43,6 +43,7 @@
 //*  2026/09/23  玄人 幸道         クライアント証明書を添えて UserInfo を呼ぶ UserInfoWithCertificateAsync を追加
 //*  2026/09/25  玄人 幸道         Discovery の issuer を引く IssuerAsync を追加（#234 の段階 1）
 //*  2026/09/25  玄人 幸道         /ciba_authz をクライアント認証つきで呼べるようにした（#234 の段階 3）
+//*  2026/09/27  玄人 幸道         Basic を符号化せずに送る口（urlEncode）を追加（#237）
 //**********************************************************************************
 
 using System;
@@ -216,12 +217,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="form">フォーム（値が null の項目は送らない）</param>
         /// <param name="clientId">client_id</param>
         /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <param name="urlEncode">RFC 6749 §2.3.1 の符号化を行うか（既定 : 行う）</param>
         /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **符号化しない口（urlEncode=false）は、#237 で足した。**
+        /// 符号化しないクライアント（配備済みの Open棟梁 など）も受けられることを測るため。
+        /// 英数字だけの秘密では、どちらも同じヘッダになる。
+        /// </remarks>
         public Task<JsonResponse> PostJsonWithBasicAuthAsync(
-            string pathOrUrl, IDictionary<string, string> form, string clientId, string clientSecret)
+            string pathOrUrl, IDictionary<string, string> form,
+            string clientId, string clientSecret, bool urlEncode = true)
         {
             // RFC 6749 2.3.1 : form-urlencode してから ":" で繋ぎ、BASE64 にする。
-            string credential = WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret);
+            string credential = urlEncode
+                ? WebUtility.UrlEncode(clientId) + ":" + WebUtility.UrlEncode(clientSecret)
+                : clientId + ":" + clientSecret;
 
             return this.PostJsonWithAuthorizationAsync(pathOrUrl, form,
                 "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(credential)));
@@ -553,11 +563,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="form">フォーム（値が null の項目は送らない）</param>
         /// <param name="clientId">client_id</param>
         /// <param name="clientSecret">client_secret（出力しないこと）</param>
+        /// <param name="urlEncode">RFC 6749 §2.3.1 の符号化を行うか（既定 : 行う。#237）</param>
         /// <returns>JsonResponse</returns>
         public Task<JsonResponse> TokenWithBasicAuthAsync(
-            IDictionary<string, string> form, string clientId, string clientSecret)
+            IDictionary<string, string> form, string clientId, string clientSecret, bool urlEncode = true)
         {
-            return this.PostJsonWithBasicAuthAsync("/token", form, clientId, clientSecret);
+            return this.PostJsonWithBasicAuthAsync("/token", form, clientId, clientSecret, urlEncode);
         }
 
         /// <summary>

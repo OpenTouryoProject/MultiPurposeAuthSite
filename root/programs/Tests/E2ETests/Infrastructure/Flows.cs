@@ -37,6 +37,7 @@
 //*  2026/09/22  玄人 幸道         環境変数で差し込む TestClient4_2 と、その登録を引く口を追加（#224）
 //*  2026/09/22  玄人 幸道         登録値が不正な TestClient4_3 を追加（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
+//*  2026/09/27  玄人 幸道         記号を含む client_secret の TestClient_2 / TestClient_3 を追加（#237）
 //**********************************************************************************
 
 using System;
@@ -102,6 +103,40 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// TestClient2_2 と同じ Subject で、登録種別を既知でない値（fapi_1）にしたクライアント（#226 / #224 の段階 2）。
         /// </summary>
         public const string TestClient2_3 = "TestClient2_3";
+
+        /// <summary>
+        /// TestClient（normal）を写し、client_secret を**記号を含む値**（SymbolSecret）にしたクライアント（#237）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        public const string TestClient_2 = "TestClient_2";
+
+        /// <summary>
+        /// TestClient（normal）を写し、client_secret を**「:」を含む値**（ColonSecret）にしたクライアント（#237）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        public const string TestClient_3 = "TestClient_3";
+
+        /// <summary>
+        /// TestClient_2 の client_secret（#237）。
+        /// **test.ps1 の差し込みと同じ値にすること。**
+        /// </summary>
+        /// <remarks>
+        /// **テスト専用の値**（差し込みで作るクライアントのもの）なので、ここに書いてよい。
+        /// 「+」は form-urlencoded の復号で空白に変わるため、
+        /// **符号化して送ったか否かで、受け側に届く値が変わる**（RFC 6749 §2.3.1）。
+        /// 「/」「=」は、base64 の秘密によく現れる（符号化すると %2F / %3D）。
+        /// </remarks>
+        public const string SymbolSecret = "e2e+ab/cd=ef";
+
+        /// <summary>
+        /// TestClient_3 の client_secret（#237）。
+        /// **test.ps1 の差し込みと同じ値にすること。**
+        /// </summary>
+        /// <remarks>
+        /// **「:」は Basic の分割位置そのもの**なので、符号化しないと資格情報として読めない
+        /// （"id:e2e:ab+cd" は 3 つに割れる）。符号化したときだけ通る。
+        /// </remarks>
+        public const string ColonSecret = "e2e:ab+cd";
 
         /// <summary>
         /// TestClient2_2 / TestClient2_3 の tls_client_auth_subject_dn（#226）。
@@ -425,7 +460,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// test.ps1 が環境変数で差し込んだクライアントの登録内容を引く（#224）。差し込まれていなければ Skip する
         /// </summary>
         /// <param name="client">IdPClient</param>
-        /// <param name="clientName">client_name（TestClient4_2 / TestClient4_3 / TestClient2_2 / TestClient2_3）</param>
+        /// <param name="clientName">client_name（TestClient4_2 / TestClient4_3 / TestClient2_2 / TestClient2_3 / TestClient_2 / TestClient_3）</param>
         /// <returns>ClientRegistration（client_id と client_secret だけ）</returns>
         /// <remarks>
         /// **構成ファイルには無いクライアント**なので、Registration では引けない。
@@ -434,8 +469,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static ClientRegistration InjectedRegistration(IdPClient client, string clientName)
         {
             // test.ps1 -Launch が、起動したサイトに差し込んだ client_id を渡してくる（MPAS_<client_name の大文字>）。
-            //   写す元 : TestClient4_x は TestClient4、TestClient2_x は TestClient2
+            //   写す元 : TestClient4_x は TestClient4、TestClient2_x は TestClient2、TestClient_x は TestClient
             string sourceName = null;
+
+            // **client_secret を差し替えたものは、写す元の秘密では認証できない**（#237）。
+            string overriddenSecret = null;
+
             if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3)
             {
                 sourceName = KnownClients.TestClient4;
@@ -443,6 +482,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient2_2 || clientName == KnownClients.TestClient2_3)
             {
                 sourceName = KnownClients.TestClient2;
+            }
+            else if (clientName == KnownClients.TestClient_2)
+            {
+                sourceName = KnownClients.TestClient;
+                overriddenSecret = KnownClients.SymbolSecret;
+            }
+            else if (clientName == KnownClients.TestClient_3)
+            {
+                sourceName = KnownClients.TestClient;
+                overriddenSecret = KnownClients.ColonSecret;
             }
 
             string clientId = sourceName != null
@@ -458,7 +507,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return new ClientRegistration()
             {
                 ClientId = clientId,
-                ClientSecret = source.ClientSecret,
+                ClientSecret = overriddenSecret ?? source.ClientSecret,
                 RedirectUri = source.RedirectUri,
                 RedirectUriToken = source.RedirectUriToken
             };

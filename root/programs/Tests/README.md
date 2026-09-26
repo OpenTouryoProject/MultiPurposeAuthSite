@@ -69,10 +69,15 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | `Flows.InjectedRegistration` |
 | `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | `Flows.InjectedRegistration` |
 | `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | `Flows.InjectedRegistration` |
+| `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | `Flows.InjectedRegistration` |
+| `TestClient_3` | 同じく写しで、**`client_secret` に `:` を含む**（`KnownClients.ColonSecret`）。符号化しないと資格情報として読めない値（#237） | `Flows.InjectedRegistration` |
 
 - net10.0 は `appSettings__OAuth2ClientsInformation__<client_id>__<項目>` で 1 件足し、
   net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
 - **差し込むのは `-Launch` のときだけ。** 既に動いているサイトへ向けたときは、使うテストが Skip する
+- **秘密を差し替えたものは、写す元の秘密では認証できない。**
+  `Flows.InjectedRegistration` が `KnownClients` の定数を返すので、**test.ps1 と同じ値にしておくこと**
+- 秘密は JSON の文字列に素で埋める（net48 は一覧ごと差し替える）ので、**`"` `\` `'` は使わない**
 
 **クレームの対応付け（`UserClaimsMapping`）も、同じやり方で差し込む**（#230）。
 
@@ -276,6 +281,7 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |
 | `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |
 | `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`） |
+| `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 
 **`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。

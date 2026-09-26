@@ -477,15 +477,28 @@ try {
         #     TestClient4_3 : fapi_1  … 既知でない登録値（書き間違い）なら拒否されるか（#224 の段階 2）
         #     TestClient2_2 : fapi2   … mTLS で通るか（#226）。Subject はテスト専用の値
         #     TestClient2_3 : fapi_1  … 同じ証明書でも、登録値が不正なら拒否されるか（#226 / #224 の E）
+        #     TestClient_2  : normal  … **記号を含む client_secret**（#237）。
+        #                               Basic の符号化（RFC 6749 2.3.1）を、符号化あり・無しの両方で測る
+        #     TestClient_3  : normal  … **「:」を含む client_secret**（#237）。
+        #                               符号化しないと分割位置がずれるので、符号化したときだけ通る
         #   ※ Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
+        #   ※ 秘密は JSON 文字列に素で埋めるので、「"」「\」「'」は使わないこと（net48 は一覧ごと差し替える）。
         $mtlsDn = @{ tls_client_auth_subject_dn = 'CN=mpas-e2e-mtls-client' }
+
+        # **E2E の KnownClients.SymbolSecret / ColonSecret と同じ値にすること。**
+        #   「+」は form-urlencoded の復号で空白に変わるため、**符号化したかどうかで値が変わる**。
+        #   「:」は Basic の分割位置そのものなので、符号化しないと資格情報として読めない。
+        $symbolSecret = @{ client_secret = 'e2e+ab/cd=ef' }
+        $colonSecret  = @{ client_secret = 'e2e:ab+cd' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
             @{ Name = 'TestClient4_2'; Mode = 'normal'; ClientId = 'e2e0tc42000000000000000000000000'; Source = 'TestClient4'; Override = @{} },
             @{ Name = 'TestClient4_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc43000000000000000000000000'; Source = 'TestClient4'; Override = @{} },
             @{ Name = 'TestClient2_2'; Mode = 'fapi2';  ClientId = 'e2e0tc22000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
-            @{ Name = 'TestClient2_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc23000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn })) {
+            @{ Name = 'TestClient2_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc23000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
+            @{ Name = 'TestClient_2';  Mode = 'normal'; ClientId = 'e2e0tc02000000000000000000000000'; Source = 'TestClient';  Override = $symbolSecret },
+            @{ Name = 'TestClient_3';  Mode = 'normal'; ClientId = 'e2e0tc03000000000000000000000000'; Source = 'TestClient';  Override = $colonSecret })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }
@@ -509,7 +522,7 @@ try {
         }
 
         if ($null -eq $injected) {
-            Write-Warning 'TestClient4 / TestClient2 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 は Skip）。'
+            Write-Warning 'TestClient / TestClient2 / TestClient4 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 / RT-237 は Skip）。'
         }
 
         # **有効期限のテスト（#188）は、寿命をごく短くして測る。**

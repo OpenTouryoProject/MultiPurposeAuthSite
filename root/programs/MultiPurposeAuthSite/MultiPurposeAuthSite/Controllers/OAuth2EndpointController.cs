@@ -186,7 +186,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // client_id, client_secret
 
                 // client_secret_basic
-                if (!AuthenticationHeader.GetCredentials(
+                if (!Token.CmnEndpoints.GetBasicCredentials(
                         HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
                         out string client_id, out string client_secret))
                 {
@@ -522,7 +522,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // Credentials (client_id, client_secret)
 
                     // client_secret_basic
-                    if (!AuthenticationHeader.GetCredentials(
+                    if (!Token.CmnEndpoints.GetBasicCredentials(
                             HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
                             out string client_id, out string client_secret))
                     {
@@ -618,7 +618,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // Credentials (client_id, client_secret)
 
                     // client_secret_basic
-                    if (!AuthenticationHeader.GetCredentials(
+                    if (!Token.CmnEndpoints.GetBasicCredentials(
                         HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
                         out string client_id, out string client_secret))
                     {
@@ -694,7 +694,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // client_id, client_secret
 
                 // client_secret_basic
-                if (!AuthenticationHeader.GetCredentials(
+                if (!Token.CmnEndpoints.GetBasicCredentials(
                     HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
                     out string client_id, out string client_secret))
                 {
@@ -819,7 +819,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // **クライアント認証の資格情報を取り出す（CIBA Core 7.1 : MUST。#234 の段階 3）。**
                 //   /par・/token と同じ取り出し方。
                 // client_secret_basic
-                if (!AuthenticationHeader.GetCredentials(
+                if (!Token.CmnEndpoints.GetBasicCredentials(
                     HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
                     out string client_id, out string client_secret))
                 {
@@ -1135,7 +1135,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // client_secret_basic
-            if (!AuthenticationHeader.GetCredentials(
+            if (!Token.CmnEndpoints.GetBasicCredentials(
                 HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
                 out string client_id, out string client_secret))
             {
