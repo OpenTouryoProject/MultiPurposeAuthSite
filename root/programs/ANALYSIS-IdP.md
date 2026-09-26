@@ -1502,10 +1502,28 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 アサーションのときは **`client_id` をアサーションの `iss` から得る**ので、
 認証の後で client_id を使う処理（トークンとの紐付け、失効）も、そのまま正しく動く。
 
-**残り（#239 の段階 3）** : `ClientModePolicy` が**認可コード以外を `normal` に限っている**ため、
-**`fapi1` / `fapi2` の登録は `refresh_token` を使えない。**
-これは「要否」ではなく「**方式の側の取りこぼし**」で、開く範囲は #239 で決める。
-（要否は登録がコンフィデンシャルかで決まる。RFC 6749 §3.2.1）
+**`refresh_token` を `fapi1` / `fapi2` にも開いた**（#239 の段階 3）。
+
+| 経路 × 証明 | 修正前 | 修正後 |
+|---|---|---|
+| `refresh_token` × `private_key_jwt` | normal | **＋ fapi1 / fapi2**（`RT-239.5`） |
+| `refresh_token` × mTLS | normal | **＋ fapi1 / fapi2** |
+| `refresh_token` × `client_secret` ほか | normal | normal（**変えない**） |
+
+**`client_secret` では開かない。** FAPI は秘密ベースの認証を認めないので、
+認可コードの行と同じ扱いにした。
+
+**発行の側にも効く。** `MayUse` が false だと **refresh_token を発行しない**作りなので（#224 の段階 2）、
+以前は **fapi1 / fapi2 は refresh_token を受け取れず**、
+アクセス トークンが切れるたびに認可からやり直していた。
+
+**表の並び順が意味を持つ。** `IsAllowed` は最初に当たった行を使うので、
+**`Proof.Any` の行より前に、証明を限る行を置く**（`refresh_token` は 3 行になった）。
+
+`client_credentials` / ROPC は `normal` のまま。**FAPI の対象外**で、ROPC は OAuth 2.1 で廃止（#220）。
+
+これは「要否」の話ではない（要否は登録がコンフィデンシャルかで決まる。RFC 6749 §3.2.1）。
+**方式の側の取りこぼし**を塞いだもの。
 
 ---
 

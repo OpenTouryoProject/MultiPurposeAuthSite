@@ -32,6 +32,7 @@
 //*  2026/09/22  玄人 幸道         既知でない登録値を fapi2 とみなさず、不正として扱う。MayUse を追加（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         表の注記 : mTLS の行を E2E（FA-6.1）で守るようにした（#226）
 //*  2026/09/25  玄人 幸道         認可コード × private_key_jwt に fapi2 を足した（#238）
+//*  2026/09/26  玄人 幸道         refresh_token を、非対称の証明なら fapi1 / fapi2 にも開いた（#239 の段階 3）
 //**********************************************************************************
 
 using System.Linq;
@@ -162,6 +163,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             new Rule(Flow.AuthorizationCode,     Proof.ClientSecretAndPkce, Normal),                  // FA-1.3
             new Rule(Flow.AuthorizationCode,     Proof.PkcePlain,           Normal),                  // RT-220.2
             new Rule(Flow.AuthorizationCode,     Proof.PkceS256,            Normal, Fapi1, Device),   // FA-1.1 / FA-3.1
+
             // **fapi2 を足した（#238）。** FAPI 2.0 はクライアント認証を
             //   MTLS か private_key_jwt に限っており、**fapi2 は client_secret を通さない**ので、
             //   ここを塞ぐと mTLS を使えない fapi2 のクライアントがトークンを取れない。
@@ -169,8 +171,18 @@ namespace MultiPurposeAuthSite.TokenProviders
             new Rule(Flow.AuthorizationCode,     Proof.PrivateKeyJwt,       Normal, Fapi1, Fapi2, Device),   // RT-238.4
             new Rule(Flow.AuthorizationCode,     Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.1（net10.0 のみ）
 
-            // 上記以外のグラント : 証明によらず normal だけ
+            // **refresh_token : 証明によって、通す登録種別が変わる（#239 の段階 3）。**
+            //   FAPI 1.0 Advanced / FAPI 2.0 は refresh token を禁じていない。
+            //   以前は normal だけだったので、**fapi1 / fapi2 は refresh_token を受け取れず**
+            //   （MayUse が false なので発行もされない）、期限が切れるたびに認可からやり直していた。
+            //   **client_secret では開かない**（FAPI は秘密ベースの認証を認めない。認可コードの行と同じ）。
+            //   **並び順が意味を持つ。** IsAllowed は最初に当たった行を使うので、
+            //   Proof.Any の行より前に、証明を限る行を置く。
+            new Rule(Flow.RefreshToken,          Proof.PrivateKeyJwt,       Normal, Fapi1, Fapi2),    // RT-239.5
+            new Rule(Flow.RefreshToken,          Proof.Mtls,                Normal, Fapi1, Fapi2),
             new Rule(Flow.RefreshToken,          Proof.Any,                 Normal),                  // FA-1.2
+
+            // 上記以外のグラント : 証明によらず normal だけ
             new Rule(Flow.ResourceOwnerPassword, Proof.Any,                 Normal),                  // FA-1.1 / 21-1.1
             new Rule(Flow.ClientCredentials,     Proof.Any,                 Normal),                  // FA-1.1
             new Rule(Flow.JwtBearer,             Proof.Any,                 Normal),                  // EX-7

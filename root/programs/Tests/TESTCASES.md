@@ -3456,6 +3456,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - /introspect : HTTP 401
 - /introspect : エラーは invalid_client
 
+## RT-239.5 fapi2 の登録でも、非対称の証明なら refresh_token を使える
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced も FAPI 2.0 も refresh token を禁じていない。**以前は ClientModePolicy が認可コード以外を normal に限っていたため、**fapi1 / fapi2 は refresh_token を受け取れなかった**（MayUse が false なので発行もされない）。**client_secret では開かない**（FAPI は秘密ベースの認証を認めない）。 |
+| 根拠 | FAPI 2.0 / RFC 6749 §6 / #239 の段階 3 |
+| テスト | `RT23905_fapi2もrefresh_tokenを使える` |
+
+**手順**
+
+1. FAPI2 の自己テストで code を得て、client_assertion で交換する
+1. client_assertion で refresh_token を更新する
+
+**検証（合否を判定する）**
+
+- fapi2 にも refresh_token が発行される
+- HTTP 200
+- access_token が返る
+
+**補足**
+
+- **client_secret では通らない**（fapi2 は秘密を持たず、表も開いていない）。mTLS でも通る（同じ行に Mtls を置いた）。
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -3486,27 +3509,30 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **ROPC / client_credentials は、サーバ全体では有効**（-Launch は Implicit / ROPC を有効にして起動する。#220）。**塞いでいるのは、このクライアントの登録**であることが、(1) の対照で分かる。
 
-## FA-1.2 fapi1 のクライアントには、refresh_token を発行しない
+## FA-1.2 fapi1 の refresh_token は、非対称の証明でだけ使える
 
 | | |
 |---|---|
-| 観点 | **使えない資格情報は渡さない。**表の refresh_token の行は、証明によらず normal だけを通すため、fapi1 の登録は使えない。以前は発行していて、使うと必ず拒否された（#222 で記録）。#224 の段階 2 で、**登録種別で使えない経路の refresh_token は発行しない**ようにした。 |
-| 根拠 | RFC 6749 §5.1（refresh_token は任意）/ #224 |
-| テスト | `FA0102_fapi1にはrefresh_tokenを発行しない` |
+| 観点 | **使えない資格情報は渡さない**（#224 の段階 2）という原則は変わらない。変わったのは前提で、**#239 の段階 3 で refresh_token の行を証明ごとに分けた**（`private_key_jwt` / mTLS なら fapi1 / fapi2 も通す。`client_secret` では通さない）。**FAPI は refresh token を禁じていない**ので、以前のように「fapi1 には発行しない」では、期限が切れるたびに認可からやり直しになる。 |
+| 根拠 | RFC 6749 §5.1 / §6 / FAPI 1.0 Advanced / #224 / #239 |
+| テスト | `FA0102_fapi1のrefresh_tokenは非対称の証明でだけ使える` |
 
 **手順**
 
 1. 対照 : normal 登録では、refresh_token で更新できる
 1. fapi1 で PKCE(S256) のトークンを取る
+1. client_secret で更新しようとする（fapi1 には認めない証明）
 
 **検証（合否を判定する）**
 
 - 対照（normal）は更新できる
-- refresh_token は発行されない
+- refresh_token が発行される（#239 の段階 3 で開いた）
+- client_secret では更新できない
+- エラーは unauthorized_client
 
 **補足**
 
-- **(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。発行しないのは、このクライアントの登録種別による。
+- **(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。fapi1 が更新できないのは**証明の種類**によるもので、登録種別そのものではない（`private_key_jwt` / mTLS なら通る。`RT-239.5` が fapi2 で測っている）。
 
 ## FA-1.3 fapi1 のクライアントが client_secret と PKCE(S256) を両方送ると、拒否される
 
@@ -3684,7 +3710,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - トークンが返る
 - fapi クレームは登録どおり fapi2
 - アクセス トークンに cnf が載る（証明書に紐づく）
-- refresh_token は発行されない
+- refresh_token が発行される（mTLS で更新できる証明）
 
 **補足**
 

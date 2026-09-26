@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/26  玄人 幸道         新規（#239 の段階 1・2）
+//*  2026/09/26  玄人 幸道         RT-239.5（fapi2 の refresh_token）を追加（#239 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -54,10 +55,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// （RFC 6749 §6 / RFC 7009 §2.1 / RFC 7662 §2.1）。
     /// **FAPI 2.0 は、その方式を MTLS と `private_key_jwt` に限っている。**
     ///
-    /// **測るのは `TestClient`（normal）。** 秘密と RSA 公開鍵の両方を登録しているので、
+    /// **主に測るのは `TestClient`（normal）。** 秘密と RSA 公開鍵の両方を登録しているので、
     /// 「秘密を持つクライアントが、あえて非対称で認証する」形を確かめられる。
-    /// **`fapi1` / `fapi2` の登録は、まだ `refresh_token` を使えない**
-    /// （`ClientModePolicy` が認可コード以外を normal に限っている。#239 の段階 3）。
+    ///
+    /// **段階 3 で、`refresh_token` を `fapi1` / `fapi2` にも開いた**
+    /// （証明は `private_key_jwt` / mTLS に限る。`client_secret` では開かない）。
+    /// それまでは `ClientModePolicy` が認可コード以外を normal に限っており、
+    /// **fapi2 は refresh_token を受け取れなかった**（発行もされなかった）。`RT-239.5`
     /// </remarks>
     public class AsymmetricAuthTests : TargetTestBase
     {
@@ -252,6 +256,83 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     && value.ValueKind == System.Text.Json.JsonValueKind.True;
 
                 r.Verify("active が true", active, "true", active ? "true" : "**true でない**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-239.5 fapi2 も private_key_jwt で refresh_token を使える</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23905_fapi2もrefresh_tokenを使える(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient2);
+
+                TestReport r = this.Report("RT-239.5",
+                    "fapi2 の登録でも、非対称の証明なら refresh_token を使える",
+                    "**FAPI 1.0 Advanced も FAPI 2.0 も refresh token を禁じていない。**"
+                    + "以前は ClientModePolicy が認可コード以外を normal に限っていたため、"
+                    + "**fapi1 / fapi2 は refresh_token を受け取れなかった**"
+                    + "（MayUse が false なので発行もされない）。"
+                    + "**client_secret では開かない**（FAPI は秘密ベースの認証を認めない）。",
+                    "FAPI 2.0 / RFC 6749 §6 / #239 の段階 3");
+
+                r.Target("client_name=" + KnownClients.TestClient2 + "（fapi2。JAR で認可し、private_key_jwt で交換）");
+
+                r.Step("(1) FAPI2 の自己テストで code を得て、client_assertion で交換する");
+
+                System.Net.Http.HttpResponseMessage starter = await client.StartSelfTestAsync(
+                    "AuthorizationCodeFAPI2", "fapi2");
+
+                string location = (starter.Headers.Location == null)
+                    ? null : starter.Headers.Location.OriginalString;
+
+                Skip.If(string.IsNullOrEmpty(location),
+                    "FAPI2 の自己テストが動かない（起動 URL の食い違い。RT-197.1 を見ること）。");
+
+                AuthZResponse authz = await client.AuthorizeAndGrantAsync(client.ToLocalUrl(location));
+
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: code が発行されること");
+
+                JsonResponse token = await client.TokenAsync(
+                    AsymmetricAuthTests.WithClientAssertion(client, reg.ClientId,
+                        new Dictionary<string, string>()
+                        {
+                            { "grant_type", "authorization_code" },
+                            { "code", authz.Code },
+                            { "redirect_uri", reg.RedirectUri }
+                        }));
+
+                string refreshToken = token.String("refresh_token");
+
+                r.Verify("fapi2 にも refresh_token が発行される", !string.IsNullOrEmpty(refreshToken),
+                    "refresh_token あり",
+                    string.IsNullOrEmpty(refreshToken) ? "**発行されない**（" + token.ToString() + "）" : "あり（値は伏せる）");
+
+                Assert.False(string.IsNullOrEmpty(refreshToken), "前提: refresh_token が返ること");
+
+                r.Step("(2) client_assertion で refresh_token を更新する");
+
+                JsonResponse refreshed = await client.TokenAsync(
+                    AsymmetricAuthTests.WithClientAssertion(client, reg.ClientId,
+                        new Dictionary<string, string>()
+                        {
+                            { "grant_type", "refresh_token" },
+                            { "refresh_token", refreshToken }
+                        }));
+
+                r.VerifyEqual("HTTP 200", "200", ((int)refreshed.StatusCode).ToString());
+
+                r.Verify("access_token が返る", !string.IsNullOrEmpty(refreshed.AccessToken),
+                    "access_token あり",
+                    string.IsNullOrEmpty(refreshed.AccessToken) ? refreshed.ToString() : "あり（値は伏せる）");
+
+                r.Note("**client_secret では通らない**（fapi2 は秘密を持たず、表も開いていない）。"
+                    + "mTLS でも通る（同じ行に Mtls を置いた）。");
 
                 r.Done();
             }
