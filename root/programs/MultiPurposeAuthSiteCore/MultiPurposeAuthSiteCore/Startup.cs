@@ -205,7 +205,7 @@ namespace MultiPurposeAuthSite
 
                 endpoints.MapControllerRoute(
                     name: "PushedAuthorizationRequest",
-                    pattern: Config.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除,
+                    pattern: OAuth2AndOIDCParams.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" });
 
                 endpoints.MapControllerRoute(

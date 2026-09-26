@@ -45,6 +45,7 @@
 //*  2026/09/24  玄人 幸道         認可コードと Request Object の有効期限の設定を追加（#188）
 //*  2026/09/25  玄人 幸道         設定キーの改名と、旧キーの読み替え（#236）
 //*  2026/09/25  玄人 幸道         UserClaimsMapping（profile / address のクレームの対応付け）を追加（#230）
+//*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1652,25 +1653,10 @@ namespace MultiPurposeAuthSite.Co
             }
         }
 
-        /// <summary>
-        /// PAR（RFC 9126）のエンドポイント（#229）
-        /// </summary>
-        /// <remarks>
-        /// **独自の /ros（Request Object の預け先）とは別の口。**
-        /// /ros は署名付き JWT を生の本文で受け、クライアント認証をしない（後方互換のため残す）。
-        /// こちらは RFC 9126 のとおり、**フォーム形式＋クライアント認証**で受ける。
-        ///
-        /// **キー名は `AuthRequestPushUri`**（#236 で改名。旧 `PushedAuthorizationRequestEndpoint`）。
-        /// `RequestObjectRegUri` と同じく**クライアント側も読む設定**なので、名前をそちらに寄せた。
-        /// **Open棟梁 の OAuth2AndOIDCParams に移す予定**で、それまでは、ここで読む。
-        /// </remarks>
-        public static string AuthRequestPushUri
-        {
-            get
-            {
-                return GetConfigParameter.GetConfigValue("AuthRequestPushUri");
-            }
-        }
+        // **PAR（RFC 9126）のエンドポイントは、Open棟梁 の OAuth2AndOIDCParams が持つ**（#236 の宿題）。
+        //   キー名 AuthRequestPushUri は、RequestObjectRegUri / JwkSetUri と同じく
+        //   **クライアント側も読む設定**なので、框の側に置く（OpenTouryo #592 で実装された）。
+        //   ここに自前のプロパティは置かない。
 
         /// <summary>
         /// Discovery の service_documentation（この IdP の使い方を書いた文書の URL）（#228）
