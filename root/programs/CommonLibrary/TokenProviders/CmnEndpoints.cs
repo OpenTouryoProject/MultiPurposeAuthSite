@@ -93,6 +93,7 @@
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
 //*  2026/09/25  玄人 幸道         /ros の処理を、両アプリの Controller から移した（#235）
 //*  2026/09/25  玄人 幸道         client_assertion（RFC 7523 2.2）を読む（#238）
+//*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2150,7 +2151,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantRefreshTokenCredentials(
-            string grant_type, string client_id, string client_secret, X509Certificate2 x509,
+            string grant_type, string client_id, string client_secret, string clientAssertion,
+            X509Certificate2 x509,
             string refresh_token, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -2166,9 +2168,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.RefreshTokenGrantType)
                 {
-                    // client_id & (client_secret or x509)
-                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out proof);
+                    // client_secret / mTLS / private_key_jwt（#239）
+                    authned = CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out proof);
                 }
 
                 #endregion
@@ -2275,7 +2278,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <returns>成否</returns>
         public static bool GrantResourceOwnerCredentials(
             string grant_type, string client_id,
-            string client_secret, X509Certificate2 x509,
+            string client_secret, string clientAssertion, X509Certificate2 x509,
             string username, string password, string scopes,
             out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
@@ -2292,9 +2295,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ResourceOwnerPasswordCredentialsGrantType)
                 {
-                    // client_id & client_secret
+                    // client_secret / mTLS / private_key_jwt（#239）
                     authned = CmnEndpoints.ClientAuthentication(
-                    	client_id, client_secret, ref x509, out proof);
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out proof);
                 }
 
                 #endregion
@@ -2409,7 +2413,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">Dictionary(string, string)</param>
         /// <returns>成否</returns>
         public static bool GrantClientCredentials(
-            string grant_type, string client_id, string client_secret, X509Certificate2 x509,
+            string grant_type, string client_id, string client_secret, string clientAssertion,
+            X509Certificate2 x509,
             string scopes, out Dictionary<string, string> ret, out Dictionary<string, string> err)
         {
             ret = null;
@@ -2425,9 +2430,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 ClientModePolicy.Proof proof = ClientModePolicy.Proof.None; // 何を証明したか（#224）
                 if (grant_type.ToLower() == OAuth2AndOIDCConst.ClientCredentialsGrantType)
                 {
-                    // client_id & client_secret
-                    authned = CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out proof);
+                    // client_secret / mTLS / private_key_jwt（#239）
+                    authned = CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out proof);
                 }
 
                 #endregion
@@ -3333,6 +3339,47 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region　ClientAuthentication
+
+        /// <summary>クライアント認証（送られてきた資格情報の種類を問わない）</summary>
+        /// <param name="client_id">client_id（client_secret / mTLS のとき）</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <param name="clientAssertion">client_assertion（private_key_jwt）</param>
+        /// <param name="x509">クライアント証明書（mTLS）</param>
+        /// <param name="authnedClientId">認証できたクライアントの client_id</param>
+        /// <param name="proof">何を証明したか</param>
+        /// <returns>認証できたか</returns>
+        /// <remarks>
+        /// **どの方式で来ても、ここで受ける**（#239）。
+        /// 以前は `client_secret` / mTLS の版と、アサーションの版が別々で、
+        /// **認可コード グラントだけがアサーションを受けていた。**
+        /// `refresh_token` や `/revoke` では `private_key_jwt` が通らなかった。
+        ///
+        /// **アサーションのときは `client_id` をアサーションの `iss` から得る**
+        /// （RFC 7523 §3 : `iss` はクライアントの識別子）。
+        /// 認証の後で client_id を使う処理（トークンとの紐付け、失効）は、**こちらを使うこと。**
+        ///
+        /// **要否は決めない。** コンフィデンシャルかどうかは呼び出し側が判断する
+        /// （RFC 6749 §3.2.1。パブリック クライアントは認証しない）。
+        /// この関数は「**何を証明したか**」を返すだけで、
+        /// その証明で通す登録種別は `ClientModePolicy` の表が決める（#224）。
+        /// </remarks>
+        public static bool ClientAuthentication(
+            string client_id, string client_secret, string clientAssertion,
+            ref X509Certificate2 x509, out string authnedClientId, out ClientModePolicy.Proof proof)
+        {
+            if (!string.IsNullOrEmpty(clientAssertion))
+            {
+                // private_key_jwt（client_id はアサーションから得る）
+                return CmnEndpoints.ClientAuthentication(
+                    clientAssertion, out authnedClientId, ref x509, out proof);
+            }
+
+            authnedClientId = client_id;
+
+            // client_secret（basic / post）または mTLS
+            return CmnEndpoints.ClientAuthentication(
+                client_id, client_secret, ref x509, out proof);
+        }
 
         #region client_id & (client_secret or x509)
 

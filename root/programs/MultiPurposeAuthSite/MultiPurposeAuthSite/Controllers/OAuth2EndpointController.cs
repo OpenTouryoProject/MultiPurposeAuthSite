@@ -67,6 +67,7 @@
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）の /par を追加（#229）
 //*  2026/09/24  玄人 幸道         /ciba_authz で request を直接受け取る（CIBA Core 7.1.1。#233）
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
+//*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials と /revoke・/introspect で非対称の認証を受ける（#239）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -251,7 +252,8 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.RefreshTokenGrantType:
                             string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
                             if (Token.CmnEndpoints.GrantRefreshTokenCredentials(
-                                grant_type, client_id, client_secret, x509, refresh_token, out ret, out err))
+                                grant_type, client_id, client_secret, clientAssertion,
+                                x509, refresh_token, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -262,7 +264,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string password = formData["password"];
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantResourceOwnerCredentials(
-                                grant_type, client_id, client_secret, x509,
+                                grant_type, client_id, client_secret, clientAssertion, x509,
                                 username, password, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
@@ -272,7 +274,8 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.ClientCredentialsGrantType:
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantClientCredentials(
-                                grant_type, client_id, client_secret, x509, scope, out ret, out err))
+                                grant_type, client_id, client_secret, clientAssertion,
+                                x509, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -528,9 +531,17 @@ namespace MultiPurposeAuthSite.Controllers
                         client_secret = formData[OAuth2AndOIDCConst.client_secret];
                     }
 
-                    // client_id & (client_secret or x509)
-                    if (Token.CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                            ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
+                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
+                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
+                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
+                    string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                        formData[Token.CmnEndpoints.ClientAssertion],
+                        formData[Token.CmnEndpoints.ClientAssertionType],
+                        formData[OAuth2AndOIDCConst.assertion]);
+
+                    if (Token.CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
                     {
                         // 失効（#200）
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
@@ -616,9 +627,17 @@ namespace MultiPurposeAuthSite.Controllers
                         client_secret = formData[OAuth2AndOIDCConst.client_secret];
                     }
 
-                    // client_id & (client_secret or x509)
-                    if (Token.CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
+                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
+                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
+                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
+                    string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                        formData[Token.CmnEndpoints.ClientAssertion],
+                        formData[Token.CmnEndpoints.ClientAssertionType],
+                        formData[OAuth2AndOIDCConst.assertion]);
+
+                    if (Token.CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
                     {
                         // 問い合わせ（#200）
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）

@@ -3376,6 +3376,86 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **client_secret は送っていない**（fapi2 の登録は受け付けない）。`client_id` も送っていない（アサーションの `iss` から引く）。
 
+## RT-239.1 refresh_token の更新を、private_key_jwt のクライアント認証で行える
+
+| | |
+|---|---|
+| 観点 | **RFC 6749 §6 は、コンフィデンシャル クライアントの認証を求めている**が、方式は限定していない。**FAPI 2.0 は MTLS と private_key_jwt に限る**ので、ここが通らないと、**アクセス トークンが切れるたびに認可からやり直す**ことになる。`GrantRefreshTokenCredentials` は**引数にアサーションを持っていなかった**（#239）。 |
+| 根拠 | RFC 6749 §6 / RFC 7523 §2.2 / FAPI 2.0 / #239 |
+| テスト | `RT23901_refresh_tokenをprivate_key_jwtで更新できる` |
+
+**手順**
+
+1. 認可コード フローで refresh_token を得る（client_secret で交換）
+1. client_secret を送らず、client_assertion で更新する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token が返る
+
+**補足**
+
+- **client_id も送っていない。** アサーションの `iss` から引く（RFC 7523 §3）。refresh_token と発行先の結び付け（#188）も、その client_id で確かめられる。
+
+## RT-239.2 トークンの失効（/revoke）を、private_key_jwt のクライアント認証で行える
+
+| | |
+|---|---|
+| 観点 | **RFC 7009 §2.1 は「RFC 6749 §2.3 の資格情報を含める」としている**（＝トークン エンドポイントと同じ方式）。以前は `client_assertion` を読んでおらず、**秘密を持たないクライアントは失効できなかった。**失効できないと、**漏れたトークンを止める手段が無い。** |
+| 根拠 | RFC 7009 §2.1 / RFC 7523 §2.2 / #239 |
+| テスト | `RT23902_revokeをprivate_key_jwtで呼べる` |
+
+**手順**
+
+1. トークンを得る
+1. client_assertion で POST /revoke
+1. 失効したことを確かめる（/userinfo が 401）
+
+**検証（合否を判定する）**
+
+- HTTP 200（RFC 7009 §2.2）
+- 失効後は 401
+
+## RT-239.3 トークンの問い合わせ（/introspect）を、private_key_jwt のクライアント認証で行える
+
+| | |
+|---|---|
+| 観点 | **RFC 7662 §2.1 は、この口に認証を求めている**（トークン エンドポイントと同じ方式）。以前は `client_assertion` を読んでおらず、**秘密を持たないクライアントは問い合わせできなかった。** |
+| 根拠 | RFC 7662 §2.1 / RFC 7523 §2.2 / #239 |
+| テスト | `RT23903_introspectをprivate_key_jwtで呼べる` |
+
+**手順**
+
+1. トークンを得る
+1. client_assertion で POST /introspect
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- active が true
+
+## RT-239.4 署名が壊れた client_assertion では、/revoke も /introspect も通らない
+
+| | |
+|---|---|
+| 観点 | **受け口を増やしたら、そこが緩んでいないことも確かめる。**アサーションは署名だけがクライアントの証明なので、**検証せずに通すと、誰でも他人のトークンを失効できる。** |
+| 根拠 | RFC 7009 §2.1 / RFC 7662 §2.1 / #239 |
+| テスト | `RT23904_誤ったアサーションは断る` |
+
+**手順**
+
+1. 署名を壊した client_assertion を作る
+1. POST /revoke
+1. POST /introspect
+
+**検証（合否を判定する）**
+
+- /revoke : HTTP 401
+- /revoke : エラーは invalid_client
+- /introspect : HTTP 401
+- /introspect : エラーは invalid_client
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
