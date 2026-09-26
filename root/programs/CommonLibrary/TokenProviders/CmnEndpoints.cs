@@ -335,7 +335,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   request_object_endpoint（独自の /ros）は、後方互換のため残している。
                 //   こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
                 OpenIDConfig.Add("pushed_authorization_request_endpoint",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.AuthRequestPushUri);
 
                 // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
                 OpenIDConfig.Add("require_pushed_authorization_requests", false);
