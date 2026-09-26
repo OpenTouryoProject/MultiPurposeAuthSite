@@ -74,6 +74,21 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
   net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
 - **差し込むのは `-Launch` のときだけ。** 既に動いているサイトへ向けたときは、使うテストが Skip する
 
+**クレームの対応付け（`UserClaimsMapping`）も、同じやり方で差し込む**（#230）。
+
+この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるので、
+**「どのキーをどのクレームとして返すか」だけが設定**になっている。
+テストは、画面（`/Manage/AddUnstructuredData`）から入れられる `usd1` / `usd2` を値の在り処にする。
+
+| クレーム | 値の在り処 |
+|---|---|
+| `name` | `usd1` |
+| `address.locality` | `usd2`（`address` オブジェクトの副フィールドとして組み立てられる） |
+| `preferred_username` | `user:UserName`（`ApplicationUser` の項目。白名簿） |
+
+差し込みが無いときは `RT-230` が Skip する（`claims_supported` を見て判定）。
+値を入れたテストは、**最後に空へ戻す**（既定の利用者に入るので、他のテストへ持ち越さない）。
+
 **テストの出力にトークンや秘密情報を書かないこと。**
 `JsonResponse.ToString()` はキー名とエラーだけを出す。
 
@@ -214,7 +229,7 @@ using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.Secon
 
 | ファイル | 識別子 | 対象 |
 |---|---|---|
-| `Tests/Extended/RefreshTokenTests.cs` | `EX-1` | refresh_token の更新・ローテーション・発行先との結び付け（RFC 6749 §6 / RFC 9700） |
+| `Tests/Extended/RefreshTokenTests.cs` | `EX-1` | refresh_token の更新・ローテーション・**再利用の検知と一族ごとの失効**（#188）・発行先との結び付け（RFC 6749 §6 / RFC 9700 / RFC 7009） |
 | `Tests/Extended/RevocationTests.cs` | `EX-2` | トークンの失効（RFC 7009） |
 | `Tests/Extended/IntrospectionTests.cs` | `EX-3` | トークンの問い合わせ（RFC 7662） |
 | `Tests/Extended/DeviceAuthorizationTests.cs` | `EX-4` | Device Authorization Grant（RFC 8628） |
@@ -249,10 +264,18 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/ErrorResponseTests.cs` | `RT-185` `RT-187` | エラー応答 |
 | `Tests/Issues/RedirectUriBindingTests.cs` | `RT-186` | `redirect_uri` の照合 |
 | `Tests/Issues/HttpStatusTests.cs` | `RT-196` | エラー応答の HTTP ステータス（OAuth2 / OIDC の各エンドポイントと、認証デバイスの口） |
-| `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け |
+| `Tests/Issues/RequestObjectTests.cs` | `RT-197` | `request_uri`（JAR）経路の `redirect_uri` / PKCE の紐付け。`RT-188.4`（使い切り）もここ |
 | `Tests/Issues/ScopeTests.cs` | `RT-198` | 宣言外のスコープ、登録の `scope` に無いスコープを発行しない |
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
+| `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
+| `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない |
+| `Tests/Issues/IssuerParameterTests.cs` | `RT-231` | 認可応答の `iss`（RFC 9207）。成功・失敗・JARM・Discovery の広告 |
+| `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
+| `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |
+| `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |
+| `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`） |
+| `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
 
 **`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
 
@@ -268,6 +291,15 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
 **登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
 **E2E で守られていない行がある** : 認可コードの private_key_jwt。mTLS は net10.0 版だけ（`FA-6`）。
+
+**有効期限（`RT-188`）は、`-ShortLifetimes` で起動したときだけ回る**（#188）。
+既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待てないため、
+寿命をごく短くして起動する。**既定の通しでは除外している**ので、`TESTCASES.md`（原本）にも載らない
+（[`../../TESTING.md`](../../TESTING.md) 5 節）。
+
+```powershell
+.\2_RunAllTests.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
+```
 
 **mTLS（`FA-6`）は、net10.0 版だけを測る**（#226）。
 Kestrel は既定でクライアント証明書を要求せず、要求させても自己署名の証明書はチェーンの検証で落ちる。

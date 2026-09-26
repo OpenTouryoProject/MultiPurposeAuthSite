@@ -266,7 +266,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 - Revocation ／ Introspection ／ UserInfo ／ JWK Set ／ Request Object ／ JARM
 - FAPI1 / FAPI2（クライアント個別に `oauth2_oidc_mode` で指定）
 - SAML2（IdP 側）
-- ID フェデレーション（`IdFederation*EndPoint` で別の汎用認証サイトへ委譲）
+- ID フェデレーション（`IdFederation*Endpoint` で別の汎用認証サイトへ委譲）
 
 ### 7.3 クライアント定義
 
@@ -318,12 +318,13 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 
 | メソッド | 出力先 | 制御 |
 |---|---|---|
-| `MyDebugTrace` / `MyDebugLogForEx` | `ACCESS` | `Config.IsDebug` で `Debug.WriteLine`、`Config.EnabeDebugTraceLog` で `LogIF.DebugLog` |
+| `MyDebugTrace` / `MyDebugLogForEx` | `ACCESS` | `Config.IsDebug` で `Debug.WriteLine`、`Config.EnableDebugTraceLog` で `LogIF.DebugLog` |
 | `MyDebugSQLTrace` / `MySQLLogForEx` | `SQLTRACE` | 同上 |
 
 - log4net の構成は `appSettings:FxLog4NetConfFile`
   （既定 `C:/root/files/resource/Log/SampleLogConf.xml`）。
-- **設定キー名の綴りは `EnabeDebugTraceLog`**（`Enable` ではない）。設定ファイル側もこの綴り。
+- **設定キー名は `EnableDebugTraceLog` に改名した**（以前は `Enabe` という綴りだった。#236）。
+  **旧いキー名も読む**（`Config.RenamedKeys`）ので、配備済みの設定ファイルはそのままでも動く。
   直すなら `Config.cs` と `_app.config` / `_appsettings.json` を同時に。
 
 ---
@@ -404,7 +405,7 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 7. **`OnlySts.STSOnly_M()` の呼び出しは多くがコメント アウト済み。**
    STS 専用モードの効き方を前提にした変更をする前に、実際の呼び出しを grep すること。
 8. **設定ファイルは実ファイルとテンプレートの 2 本立て**（6 節）。実ファイルは秘密情報を含む。
-9. **`EnabeDebugTraceLog` の綴り**（9 節）。
+9. ~~**`EnabeDebugTraceLog` の綴り**~~ → **改名した**（`EnableDebugTraceLog`。#236。9 節）。
 10. **`Password/CustomPasswordHasher.cs` は 1 ファイルに 2 つの型を持つ**
     （net48 用 `CustomPasswordHasher : IPasswordHasher` と
     .NET 用 `CustomPasswordHasher<TUser> : PasswordHasher<TUser>`）。

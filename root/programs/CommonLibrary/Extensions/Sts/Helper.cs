@@ -80,6 +80,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
 {
@@ -519,6 +520,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="cibaAuthZUri">Uri</param>
         /// <param name="requestObjectUri">string</param>
         /// <returns>結果のJSON文字列</returns>
+        /// <remarks>
+        /// **request_uri を渡す独自拡張の形**（CIBA Core には無い）。
+        /// **クライアント認証もしない**ので、#234 の段階 3 以降は認可サーバに断られる。
+        /// 新しい呼び出しは <see cref="CibaAuthZRequestAsync(Uri, string, string, string)"/> を使う。
+        /// </remarks>
         public async Task<string> CibaAuthZRequestAsync(Uri cibaAuthZUri, string requestObjectUri)
         {
             // コンテナ化サポート
@@ -526,6 +532,55 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.CibaAuthZRequestAsync(cibaAuthZUri, requestObjectUri);
+        }
+
+        /// <summary>
+        /// FAPI CIBA : 署名した認証要求（request）を、クライアント認証を添えて送る（WebAPI）
+        /// </summary>
+        /// <param name="cibaAuthZUri">Uri</param>
+        /// <param name="requestObject">署名付きJWT</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <returns>結果のJSON文字列</returns>
+        /// <remarks>
+        /// **CIBA Core が定めている形**（§7.1 : クライアント認証は MUST、§7.1.1 : 要求は request パラメタ）。
+        ///
+        /// **Open棟梁 の OAuth2AndOIDCClient を使わない。**
+        /// `CibaAuthZRequestAsync(Uri, string)` は request_uri を渡す前提で、
+        /// 資格情報を渡す引数が無いため（OpenTouryoProject/OpenTouryo#592）。
+        /// ここは `/chage_to_user` などと同じく、自前で組み立てる。
+        /// </remarks>
+        public async Task<string> CibaAuthZRequestAsync(
+            Uri cibaAuthZUri, string requestObject, string client_id, string client_secret)
+        {
+            // コンテナ化サポート
+            cibaAuthZUri = Helper.GetContainerizatedAuthZServerUri(cibaAuthZUri);
+
+            HttpRequestMessage httpRequestMessage = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = cibaAuthZUri,
+            };
+
+            // client_secret_basic（RFC 6749 2.3.1）
+            httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue(
+                OAuth2AndOIDCConst.Basic,
+                CustomEncode.ToBase64String(CustomEncode.StringToByte(
+                    string.Format("{0}:{1}",
+                        CustomEncode.UrlEncode(client_id),
+                        CustomEncode.UrlEncode(client_secret)), CustomEncode.us_ascii)));
+
+            // CIBA Core 7.1.1 : 認証要求のパラメタは JWT の中だけに置く。
+            httpRequestMessage.Content = new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                    { OAuth2AndOIDCConst.request, requestObject },
+                });
+            httpRequestMessage.Content.Headers.ContentType =
+                new MediaTypeHeaderValue("application/x-www-form-urlencoded");
+
+            HttpResponseMessage httpResponseMessage = await _oAuth2HttpClient.SendAsync(httpRequestMessage);
+            return await httpResponseMessage.Content.ReadAsStringAsync();
         }
 
         /// <summary>

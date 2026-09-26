@@ -83,6 +83,8 @@ CREATE TABLE RefreshTokenDictionary(
     Key varchar(256) NOT NULL,               -- PK
     Value varchar(2000) NOT NULL,            -- RefreshToken
     CreatedDate timestamp NOT NULL,
+    FamilyId varchar(64) NOT NULL,           -- 一族（同じ認可から派生したもの）の識別子（#188）
+    UsedDate timestamp,                      -- 使った時刻（NULL なら未使用）（#188）
     CONSTRAINT PK_RefreshTokenDictionary PRIMARY KEY (Key)
 );
 

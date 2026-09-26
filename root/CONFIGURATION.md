@@ -331,6 +331,16 @@ cd root
 **絶対パスで書かれている。** リポジトリの `root/files/resource/X509` を、
 そのパスへ配置するか、値を書き換える。生成用のバッチが同じフォルダにある。
 
+**同梱の証明書は、テスト用の自己署名である。** 本番では使わないこと（パスワードも雛形に書いてある）。
+
+- `SpRp_ClientCertPfxFilePath`（`SHA256RSAClientCert.pfx`）は、**アプリが外向きに呼ぶときの
+  HttpClient に必ず載る**（`Extensions/Sts/Helper.cs`）。サーバが要求すれば、これを提示する
+- **Subject は、クライアント登録の `tls_client_auth_subject_dn` と一致させること。**
+  雛形では `TestClient1` / `TestClient2` の値（`CN=MPAS Test Client`）
+- 作り直すバッチは `GenClientCertByOpenSSL.bat`（先頭に `_` の付いたファイルができる。
+  確かめてから名前を変えて置き換える）
+- **期限切れにしないこと。** 期限切れの証明書を提示すると、要求した相手との TLS がそこで失敗する
+
 ### クライアント証明書（mTLS）を受け付ける
 
 **`fapi2` の登録は、mTLS（RFC 8705 の `tls_client_auth`）でしか通らない**（`ANALYSIS-IdP.md` C-7）。
@@ -411,12 +421,21 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|---|---|
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
-| `EnabeDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**綴りは実装どおり `Enabe`**） |
+| `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
-| `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い |
+| `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
+| `ServiceDocumentation` | `""`（空） | **任意** | Discovery の `service_documentation`。**空なら出さない**（#228）。文書を公開しているなら、その URL |
+| `AuthRequestPushUri` | `/par` | 既定のまま | PAR（RFC 9126）の口（#229）。独自の `/ros`（`RequestObjectRegUri`）とは別。**改名した**（旧 `PushedAuthorizationRequestEndpoint`。下の 12 節） |
+| `OAuth2AuthorizationCodeExpireTimeSpanFromSeconds` | `600` | 既定のまま（または短く） | 認可コードの寿命（#188）。RFC 6749 §4.1.2 は 10 分以内を推奨 |
+| `RequestObjectExpireTimeSpanFromSeconds` | `300` | 既定のまま（または短く） | `/ros` に預けた Request Object の寿命（#188）。応答の `exp` にも出る |
+| `OAuth2RefreshTokenExpireTimeSpanFromDays` | `14` | 運用に合わせる | **#188 で、実際に検証するようになった**（以前は事実上の無期限）。短くすると、既存のトークンが失効する |
+
+> **#188 で `RefreshTokenDictionary` に 2 列を足した**（`FamilyId` / `UsedDate`。3 方言とも）。
+> **既存のデータベースには `ALTER` が要る**（移行用のスクリプトは用意していない）。
+> 新規に作る場合は `Create_UserStore.sql` のままでよい。詳細は `ANALYSIS-IdP.md` C-5。
 | `FcmOutboxDirectory` | `""`（空） | **空のまま** | 設定すると、プッシュ通知を FCM に送らずファイルに書く（テスト用。2 節） |
 | `OAuth2ClientsInformation` | **テスト用が 12 件** | 実運用のものだけ残す | `TestClient` `TestClient1`〜`5` `MVC_Sample` `WebForms_Sample` `SPA_Application` `Native_Application` `AuthenticationDevice_Web` `IdFederation` が**登録済みクライアントとして使える**まま |
 
@@ -441,7 +460,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `/Home/Saml2OAuth2Starters` | 自己テスト画面ではなく **Index が出る**（`IsLockedDownTestEndpoints`） |
 | 雛形のテスト利用者でサインイン | **できない**（`TestUserPWD` が空なら作られていない） |
 | `.well-known/openid-configuration` | HTTP 200 で、`issuer` が本番の URL（5 節） |
-| `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnabeDebugTraceLog`） |
+| `ACCESS` / `OPERATION` ログ | 冗長なトレースが出ていない（`EnableDebugTraceLog`） |
 
 ### キーを改名した（`IsLockedDownRedirectEndpoint` → `IsLockedDownTestEndpoints`）
 
@@ -514,3 +533,36 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 
 > **設定を変えたら、雛形（`_app.config` / `_appsettings.json`）にも反映する**（1 節）。
 > 本番の値そのものは書かない。
+
+---
+
+## 12. 改名した設定キー（#236）
+
+**改名しても、旧いキー名を読み続ける。** 配備済みの設定ファイルがあり、
+**改名だけで黙って既定値に戻ると危ない**ため（`IsLockedDownTestEndpoints` は、
+既定が「開く」なので特に）。
+
+一覧は **`Config.RenamedKeys`** が一次情報で、**起動時に `ProductionCheck` が
+「旧いキー名が使われています」と警告する**（`UserStoreType` が `mem` 以外のとき）。
+
+| 旧いキー名 | 新しいキー名 | なぜ | 旧キーも読む |
+|---|---|---|---|
+| `IsLockedDownRedirectEndpoint` | `IsLockedDownTestEndpoints` | 閉じる対象がリダイレクト先だけではなくなった（#219） | **読む** |
+| `EnabeDebugTraceLog` | `EnableDebugTraceLog` | **綴りの誤り**（`Enabe`） | **読む** |
+| `IdFederationAuthorizeEndPoint` | `IdFederationAuthorizeEndpoint` | `EndPoint` の `P` を、他のキーに揃えた | **読む** |
+| `IdFederationRedirectEndPoint` | `IdFederationRedirectEndpoint` | 同上 | **読む** |
+| `IdFederationTokenEndPoint` | `IdFederationTokenEndpoint` | 同上 | **読む** |
+| `IdFederationUserInfoEndPoint` | `IdFederationUserInfoEndpoint` | 同上 | **読む** |
+| `PushedAuthorizationRequestEndpoint` | `AuthRequestPushUri` | **クライアント側も読む設定**なので、`RequestObjectRegUri` / `JwkSetUri` と同じ形に寄せた。**Open棟梁 側へ移す予定** | **読まない**（#229 で入れたばかりで、配備実績が無い） |
+
+**`IdFederationRedirectEndpoint` の値に含まれる `Account/IDFederationRedirectEndPoint` は、
+画面の口（アクション名）なので変えていない。** 変えると、委譲先に登録した `redirect_uri` と
+食い違う。
+
+### 揃えていないもの
+
+| 接尾辞 | 例 | 理由 |
+|---|---|---|
+| `...RootURI` | `OAuth2AuthorizationServerEndpointsRootURI` | **エンドポイントではなく、その根っこ**（種別が違う） |
+| `...Uri` | `JwkSetUri` / `RequestObjectRegUri` / `AuthRequestPushUri` | **クライアント側も読む設定**で、**実装が Open棟梁 側**にある（`OAuth2AndOIDCParams`）。この実装だけでは改名できない |
+| `...Endpoint` | それ以外 | こちらに揃えた |

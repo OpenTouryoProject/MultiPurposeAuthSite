@@ -63,6 +63,11 @@
 //*  2026/09/17  玄人 幸道         /introspect・/userinfo・/device_authz・/ciba_authz にもキャッシュ制御を付ける（#218）
 //*  2026/09/22  玄人 幸道         Device AuthZ グラントでも、登録種別を判定する（#224）
 //*  2026/09/23  玄人 幸道         証明書に紐づくトークン（cnf）を、提示された証明書と照合する
+//*  2026/09/24  玄人 幸道         /ros の応答に有効期限（exp）を入れ、CIBA では使い終わった Request Object を消す（#188）
+//*  2026/09/24  玄人 幸道         PAR（RFC 9126）の /par を追加（#229）
+//*  2026/09/24  玄人 幸道         /ciba_authz で request を直接受け取る（CIBA Core 7.1.1。#233）
+//*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
+//*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials と /revoke・/introspect で非対称の認証を受ける（#239）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -190,9 +195,23 @@ namespace MultiPurposeAuthSite.Controllers
                     client_secret = formData[OAuth2AndOIDCConst.client_secret];
                 }
 
-                // JWTアサーション
-                string assertion = "";
-                assertion = formData[OAuth2AndOIDCConst.assertion];
+                // **JWT アサーションは 2 種類ある。混ぜないこと（#238）。**
+                //
+                //   client_assertion（RFC 7523 §2.2）: **クライアント認証**。client_secret の代わり。
+                //   assertion        （RFC 7523 §2.1）: **グラントそのもの**。誰の認可かを表す。
+                //
+                //   両方を同時に送れる（グラントは assertion、認証は client_assertion）。
+                //   **この実装は従来どちらも assertion で受けていた**ので、
+                //   client_assertion を優先しつつ、無ければ assertion も読む（後方互換）。
+
+                // クライアント認証のアサーション
+                string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                    formData[Token.CmnEndpoints.ClientAssertion],
+                    formData[Token.CmnEndpoints.ClientAssertionType],
+                    formData[OAuth2AndOIDCConst.assertion]);
+
+                // グラントのアサーション（grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer）
+                string assertion = formData[OAuth2AndOIDCConst.assertion];
 
                 // クライアント証明書
                 X509Certificate2 x509 = Request.GetClientCertificate();
@@ -223,7 +242,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string code_verifier = formData[OAuth2AndOIDCConst.code_verifier];
 
                             if (Token.CmnEndpoints.GrantAuthorizationCodeCredentials(
-                                grant_type, client_id, client_secret, assertion, x509,
+                                grant_type, client_id, client_secret, clientAssertion, x509,
                                 code, code_verifier, redirect_uri, out ret, out err))
                             {
                                 return this.Ok(ret);
@@ -233,7 +252,8 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.RefreshTokenGrantType:
                             string refresh_token = formData[OAuth2AndOIDCConst.RefreshToken];
                             if (Token.CmnEndpoints.GrantRefreshTokenCredentials(
-                                grant_type, client_id, client_secret, x509, refresh_token, out ret, out err))
+                                grant_type, client_id, client_secret, clientAssertion,
+                                x509, refresh_token, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -244,7 +264,7 @@ namespace MultiPurposeAuthSite.Controllers
                             string password = formData["password"];
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantResourceOwnerCredentials(
-                                grant_type, client_id, client_secret, x509,
+                                grant_type, client_id, client_secret, clientAssertion, x509,
                                 username, password, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
@@ -254,7 +274,8 @@ namespace MultiPurposeAuthSite.Controllers
                         case OAuth2AndOIDCConst.ClientCredentialsGrantType:
                             scope = formData[OAuth2AndOIDCConst.scope];
                             if (Token.CmnEndpoints.GrantClientCredentials(
-                                grant_type, client_id, client_secret, x509, scope, out ret, out err))
+                                grant_type, client_id, client_secret, clientAssertion,
+                                x509, scope, out ret, out err))
                             {
                                 return this.Ok(ret);
                             }
@@ -378,7 +399,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 #region OpenID Connect
 
                                 case OAuth2AndOIDCConst.Scope_Profile:
-                                    // ・・・
+                                    // **返す項目は設定で決まる**（#230。UserClaims）。
+                                    Sts.UserClaims.AddClaims(
+                                        userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Profile);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Email:
                                     userinfoClaimSet.Add(OAuth2AndOIDCConst.Scope_Email, user.Email);
@@ -389,7 +412,9 @@ namespace MultiPurposeAuthSite.Controllers
                                     userinfoClaimSet.Add(OAuth2AndOIDCConst.phone_number_verified, user.PhoneNumberConfirmed);
                                     break;
                                 case OAuth2AndOIDCConst.Scope_Address:
-                                    // ・・・
+                                    // **返す項目は設定で決まる**（#230。UserClaims）。
+                                    Sts.UserClaims.AddClaims(
+                                        userinfoClaimSet, user, OAuth2AndOIDCConst.Scope_Address);
                                     break;
 
                                 #endregion
@@ -506,9 +531,17 @@ namespace MultiPurposeAuthSite.Controllers
                         client_secret = formData[OAuth2AndOIDCConst.client_secret];
                     }
 
-                    // client_id & (client_secret or x509)
-                    if (Token.CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                            ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
+                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
+                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
+                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
+                    string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                        formData[Token.CmnEndpoints.ClientAssertion],
+                        formData[Token.CmnEndpoints.ClientAssertionType],
+                        formData[OAuth2AndOIDCConst.assertion]);
+
+                    if (Token.CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
                     {
                         // 失効（#200）
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7009 2.1）
@@ -594,9 +627,17 @@ namespace MultiPurposeAuthSite.Controllers
                         client_secret = formData[OAuth2AndOIDCConst.client_secret];
                     }
 
-                    // client_id & (client_secret or x509)
-                    if (Token.CmnEndpoints.ClientAuthentication(client_id, client_secret,
-                        ref x509, out OAuth2AndOIDCEnum.ClientMode permittedLevel))
+                    // **client_secret / mTLS / private_key_jwt のどれでも受ける（#239）。**
+                    //   RFC 7009 2.1 / RFC 7662 2.1 は「トークン エンドポイントと同じ
+                    //   クライアント認証」を求めている。以前はアサーションを読んでいなかった。
+                    string clientAssertion = Token.CmnEndpoints.GetClientAssertion(
+                        formData[Token.CmnEndpoints.ClientAssertion],
+                        formData[Token.CmnEndpoints.ClientAssertionType],
+                        formData[OAuth2AndOIDCConst.assertion]);
+
+                    if (Token.CmnEndpoints.ClientAuthentication(
+                        client_id, client_secret, clientAssertion,
+                        ref x509, out client_id, out Token.ClientModePolicy.Proof _))
                     {
                         // 問い合わせ（#200）
                         // ・token_type_hint は探す順番の手掛かりにすぎない（RFC 7662 2.1）
@@ -754,7 +795,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// POST: /ciba_authz
         /// </summary>
         /// <param name="formData">
-        /// request_uri
+        /// request（CIBA Core 7.1.1）または request_uri（独自拡張。後方互換）
         /// </param>
         /// <returns>成功は 200、エラーは 400 / 401（CIBA Core 7.3 / 13）（#196）</returns>
         [HttpPost]
@@ -769,19 +810,40 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (formData != null)
             {
+                // **CIBA Core 7.1.1 : 署名した認証要求を request で直接受け取る（#233）。**
+                //   request_uri（/ros に預ける形）は独自拡張で、CIBA Core には無い。
+                //   後方互換のため当面残す（両方あれば request を優先する）。
+                string request = formData[OAuth2AndOIDCConst.request];
                 string request_uri = formData[OAuth2AndOIDCConst.request_uri];
+
+                // **クライアント認証の資格情報を取り出す（CIBA Core 7.1 : MUST。#234 の段階 3）。**
+                //   /par・/token と同じ取り出し方。
+                // client_secret_basic
+                if (!AuthenticationHeader.GetCredentials(
+                    HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                    out string client_id, out string client_secret))
+                {
+                    // client_secret_post
+                    client_id = formData[OAuth2AndOIDCConst.client_id];
+                    client_secret = formData[OAuth2AndOIDCConst.client_secret];
+                }
+
+                // private_key_jwt / mTLS
+                string assertion = Token.CmnEndpoints.GetClientAssertion(
+                    formData[Token.CmnEndpoints.ClientAssertion],
+                    formData[Token.CmnEndpoints.ClientAssertionType],
+                    formData[OAuth2AndOIDCConst.assertion]);
+                X509Certificate2 x509 = Request.GetClientCertificate();
 
                 string authReqId = "";
 
-                if (!string.IsNullOrEmpty(request_uri))
+                if (!string.IsNullOrEmpty(request) || !string.IsNullOrEmpty(request_uri))
                 {
-                    string jsonStr = Sts.RequestObjectProvider.Get(
-                        request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
+                    // 受け取りと署名検証は、両アプリで同じ（CommonLibrary）。
+                    bool received = Token.CmnEndpoints.ReceiveCibaRequest(
+                        client_id, client_secret, assertion, x509,
+                        request, request_uri, out JObject jsonObj, out err, out errDescription);
 
-                    // 存在しないrequest_uriではnullになる（#185）。
-                    JObject jsonObj = (JObject)JsonConvert.DeserializeObject(jsonStr);
-
-                    string client_id = "";
                     string scope = "";
                     string client_notification_token = "";
                     string binding_message = "";
@@ -789,14 +851,12 @@ namespace MultiPurposeAuthSite.Controllers
                     string requested_expiry = "";
                     string login_hint = "";
 
-                    if (jsonObj == null)
+                    if (!received)
                     {
-                        // 不正なrequest_uri
-                        err = OAuth2AndOIDCConst.invalid_request;
-                        errDescription = "Invalid request_uri.";
+                        // 受け取れなかった（err, errDescriptionは設定済み）。
                     }
                     else if (Token.CmnEndpoints.ValidateCibaAuthZReqParam(
-                        jsonObj, out client_id, out scope,
+                        jsonObj, out string _, out scope,
                         out client_notification_token, out binding_message,
                         out user_code, out requested_expiry, out login_hint,
                         out err, out errDescription))
@@ -843,6 +903,15 @@ namespace MultiPurposeAuthSite.Controllers
                                     {OAuth2AndOIDCConst.error, err},
                                     {OAuth2AndOIDCConst.error_description, errDescription}
                                 }, null);
+                            }
+
+                            // 使い終わった Request Object を消す（ワンタイム化。#188 の段階 2）
+                            //   CIBA は認可エンドポイントを通らないので、ここで消す。
+                            //   request で直接受け取ったときは預けたものが無いので、消す対象も無い（#233）。
+                            if (!string.IsNullOrEmpty(request_uri))
+                            {
+                                Sts.RequestObjectProvider.Delete(
+                                    request_uri.Replace(OAuth2AndOIDCConst.UrnRequestUriBase, ""));
                             }
 
                             // CIBA情報をストア
@@ -928,7 +997,7 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 不正なRequest
                     err = OAuth2AndOIDCConst.invalid_request;
-                    errDescription = "request_uri is null or empty.";
+                    errDescription = "request or request_uri is required.";
                 }
             }
             else
@@ -939,12 +1008,13 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             // エラー（CIBA Core 13 : invalid_client は 401、それ以外は 400）（#196）
-            // HTTP 認証ではなく署名した要求でクライアントを識別するので、WWW-Authenticate は付けない（realm に null）。
+            // **クライアント認証を行うようになったので、401 には WWW-Authenticate を付ける**
+            //   （Authorization ヘッダで認証を試みたクライアントには必須。RFC 6749 5.2。#234 の段階 3）。
             return this.OAuth2Error(new Dictionary<string, string>()
             {
                 {OAuth2AndOIDCConst.error, err},
                 {OAuth2AndOIDCConst.error_description, errDescription}
-            }, null);
+            }, "ciba_authz");
         }
 
         /// <summary>
@@ -1036,6 +1106,67 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region /par (PAR : RFC 9126)
+
+        /// <summary>
+        /// 認可要求を先に預かり、request_uri を払い出す WebAPI（PAR。RFC 9126）（#229）
+        /// POST: /par
+        /// </summary>
+        /// <param name="formData">FormDataCollection</param>
+        /// <returns>成功は 201、エラーは 400 / 401</returns>
+        /// <remarks>
+        /// **独自の /ros とは別の口。** /ros は署名付き JWT を生の本文で受け、クライアント認証をしない
+        /// （後方互換のため残している）。こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
+        /// </remarks>
+        [HttpPost]
+        public IHttpActionResult PushedAuthorizationRequest(FormDataCollection formData)
+        {
+            // **資格情報を受け取るので、キャッシュに残さない**（#218 と同じ理由）。
+            this.SetNoStore();
+
+            Dictionary<string, string> err = new Dictionary<string, string>();
+
+            if (formData == null)
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_request);
+                err.Add(OAuth2AndOIDCConst.error_description, "Form data is null.");
+
+                return this.OAuth2Error(err, "par");
+            }
+
+            // client_secret_basic
+            if (!AuthenticationHeader.GetCredentials(
+                HttpContext.Current.Request.Headers[OAuth2AndOIDCConst.HttpHeader_Authorization],
+                out string client_id, out string client_secret))
+            {
+                // client_secret_post
+                client_id = formData[OAuth2AndOIDCConst.client_id];
+                client_secret = formData[OAuth2AndOIDCConst.client_secret];
+            }
+
+            // private_key_jwt / mTLS
+            string assertion = Token.CmnEndpoints.GetClientAssertion(
+                formData[Token.CmnEndpoints.ClientAssertion],
+                formData[Token.CmnEndpoints.ClientAssertionType],
+                formData[OAuth2AndOIDCConst.assertion]);
+            X509Certificate2 x509 = Request.GetClientCertificate();
+
+            NameValueCollection parameters = formData.ReadAsNameValueCollection();
+
+            if (Token.CmnEndpoints.PushedAuthorizationRequest(
+                client_id, client_secret, assertion, x509, parameters,
+                out Dictionary<string, string> ret, out err))
+            {
+                // RFC 9126 §2.2 : 成功は 201
+                return this.Content(HttpStatusCode.Created,
+                    ret, new System.Net.Http.Formatting.JsonMediaTypeFormatter());
+            }
+
+            return this.OAuth2Error(err, "par");
+        }
+
+        #endregion
+
         #region /ros (RequestObject)
 
         /// <summary>
@@ -1049,63 +1180,17 @@ namespace MultiPurposeAuthSite.Controllers
             // RequestObjectを取り出す。
             string body = new StreamReader(HttpContext.Current.Request.InputStream).ReadToEnd();
 
-            if (!string.IsNullOrEmpty(body))
+            // **処理は CommonLibrary（#235）。** 両アプリに同じものを書いていた。
+            //   ここは、本文を渡して応答を包むだけ。
+            if (Token.CmnEndpoints.RegisterRequestObject(body, out Dictionary<string, object> ret))
             {
-                // 公開鍵取得にissが必要。
-                // - issを取り出す。
-                string requestObjectString = CustomEncode.ByteToString(
-                    CustomEncode.FromBase64UrlString(body.Split('.')[1]), CustomEncode.us_ascii);
-                JObject requestObject = (JObject)JsonConvert.DeserializeObject(requestObjectString);
-
-                string iss = "";
-                string pubKey = "";
-                bool result = false;
-                if (requestObject.ContainsKey("client_notification_token"))
+                // 成功
+                return new HttpResponseMessage()
                 {
-                    // CIBA
-
-                    // - 公開鍵取得を取り出す。
-                    iss = (string)requestObject[OAuth2AndOIDCConst.iss];
-                    pubKey = Sts.Helper.GetInstance().GetJwkECDsaPublickey(iss);
-                    pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                    // 署名検証
-                    result = RequestObject.VerifyCiba(body, out iss, pubKey);
-                }
-                else
-                {
-                    // F-API2 CC
-
-                    // - 公開鍵取得を取り出す。
-                    iss = (string)requestObject[OAuth2AndOIDCConst.iss];
-                    pubKey = Sts.Helper.GetInstance().GetJwkRsaPublickey(iss);
-                    pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
-
-                    // 署名検証
-                    result = RequestObject.Verify(body, out iss, pubKey);
-                }
-
-                if (result)
-                {
-                    string urn = Guid.NewGuid().ToString("N");
-                    string request_uri = OAuth2AndOIDCConst.UrnRequestUriBase + urn;
-
-                    // RequestObjectの登録
-                    Sts.RequestObjectProvider.Create(urn, requestObjectString);
-
-                    // 成功
-                    return new HttpResponseMessage()
-                    {
-                        Content = new JsonContent(JsonConvert.SerializeObject(new
-                        {
-                            iss = Config.IssuerId,
-                            aud = iss,
-                            request_uri = request_uri,
-                            exp = "" // 有効期限（存続期間は短く、好ましくは一回限
-                        }, Newtonsoft.Json.Formatting.None)),
-                        StatusCode = HttpStatusCode.Created
-                    };
-                }
+                    Content = new JsonContent(JsonConvert.SerializeObject(
+                        ret, Newtonsoft.Json.Formatting.None)),
+                    StatusCode = HttpStatusCode.Created
+                };
             }
 
             // 失敗

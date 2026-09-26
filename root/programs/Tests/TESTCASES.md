@@ -576,11 +576,11 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - invalid_grant で拒否される
 - トークンを発行しない
+- 旧が再び提示された後は、新も使えない（一族ごと失効）
 
-**観測（判定しない）**
+**補足**
 
-- 旧が再び提示された後も、新は使えるか
-  - BCP は、使用済みの refresh_token が再び提示されたら、**どちらが正規か分からないので、有効な方も失効させる**ことを勧めている。
+- **使用済みが再び提示されたら、その一族（同じ認可から派生した refresh_token）をすべて失効させる**（#188 の段階 3）。漏れたトークンと正規のトークンを、サーバは見分けられないため（BCP §4.14.2）。正規の利用者は、認可からやり直すことになる。
 
 ## EX-1.3 別のクライアントに発行された refresh_token は使えない
 
@@ -605,6 +605,30 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - 他者に提示された後も、正規のクライアントが使えるか
   - 拒否する前に refresh_token を消費していると、正規の利用者が巻き添えで失う。他者はトークンを奪えないが、正規の利用を妨害できることになる。
+
+## EX-1.4 refresh_token を失効させると、そこから派生した新しい refresh_token も使えない
+
+| | |
+|---|---|
+| 観点 | **漏れたトークンを失効させたのに、そこから派生した新しいトークンが生き残っては意味がない。**RFC 7009 §2.1 は、refresh_token を失効させるとき、**同じ認可グラントに基づくトークンも無効にすべき**としている。この実装は、同じ認可から派生した refresh_token を**一族**として扱い、まとめて失効させる（#188）。 |
+| 根拠 | RFC 7009 §2.1 / #188 |
+| テスト | `EX0104_失効させると派生した新しいrefresh_tokenも使えない` |
+
+**手順**
+
+1. 認可コード フローで refresh_token（旧）を得る
+1. 旧で更新し、新しい refresh_token（新）を得る
+1. 新を失効させる（POST /revoke）
+1. 失効させた新で、更新を試みる
+
+**検証（合否を判定する）**
+
+- 失効の要求は HTTP 200
+- 使えない
+
+**補足**
+
+- **旧（使用済み）も、同じ一族なので残っていない。**失効の対象を 1 本だけにすると、漏れた側が生き残る余地ができる。
 
 ## EX-2.1 access_token を失効させると、以後そのトークンは使えない
 
@@ -1734,6 +1758,123 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 認可コードを発行しない
 - 指定された redirect_uri へリダイレクトしない
 
+## RT-188.4 一度 認可に使った request_uri は、2 回目の認可要求には使えない
+
+| | |
+|---|---|
+| 観点 | **預けた認可要求を、何度でも使い回せてはいけない。**以前は `Delete` が呼ばれず、期限内なら**同じ request_uri で何度でも認可できた**。1 回の認可の中では複数回読む（同意画面・コードの生成）ので、**認可応答を作り終えた時点**で消している（#188 の段階 2）。 |
+| 根拠 | RFC 9126 §2.2（PAR は一回限りを求める）/ RFC 9101 / #188 |
+| テスト | `RT188_04_request_uriは使い切り` |
+
+**手順**
+
+1. Request Object を預け、その request_uri で認可する
+1. まったく同じ URL（同じ request_uri）で、もう一度 認可する
+
+**検証（合否を判定する）**
+
+- 1 回目は認可コードが返る
+- 2 回目は認可コードを返さない
+
+**観測（判定しない）**
+
+- 2 回目の返り方
+  - 消した後は「存在しない request_uri」と同じ扱いになる。返し方は記録するだけで、判定しない。
+
+## RT-189.1 Discovery が device_authorization_endpoint と device_code のグラントを広告する
+
+| | |
+|---|---|
+| 観点 | **実装しているのに広告していなかった。**`/device_authz` を公開し、`device_code` のグラントも実装しているのに、Discovery は `Config.EnableDeviceAuthZGrantType` を一度も見ていなかった。RP は Discovery だけを見て設定するので、**使えるのに使えないと判断される。** |
+| 根拠 | RFC 8628 §4 / #189 の 6・7 |
+| テスト | `RT189_01_DeviceAuthorizationGrantを広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+1. 広告された口が、実際に応答することを確かめる
+
+**検証（合否を判定する）**
+
+- device_authorization_endpoint がある
+- grant_types_supported に device_code が入る
+- その URL は存在する（404 ではない）
+
+## RT-189.2 Discovery の値が、仕様どおりの型（boolean / 配列）で返る
+
+| | |
+|---|---|
+| 観点 | **素直に読む RP は、型が違うと落ちる。**boolean を文字列の "false" で返すと、多くの実装では**真**として読まれる。配列であるべき項目を文字列で返すと、解析でそのまま失敗する。 |
+| 根拠 | CIBA Core §4 / OIDC Discovery 1.0 §3 / #189 の 3・4 |
+| テスト | `RT189_02_値の型が仕様どおり` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- backchannel_user_code_parameter_supported は boolean
+- backchannel_authentication_request_signing_alg_values_supported は配列
+
+## RT-189.3 mTLS の紐づけは tls_client_certificate_bound_access_tokens（boolean）で広告する
+
+| | |
+|---|---|
+| 観点 | **以前は草案の名前（mutual_tls_sender_constrained_access_tokens）に、文字列の "true" を入れていた。**RFC 8705 §3.3 の名前で出さなければ、RP は**この IdP が紐づけに対応していない**と読む。紐づけそのものは `FA-6.4` で測っている。 |
+| 根拠 | RFC 8705 §3.3 / #189 の 2 |
+| テスト | `RT189_03_mTLSの紐づけをRFCの名前で広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- tls_client_certificate_bound_access_tokens が boolean の true
+- 草案の名前は載せない
+
+## RT-189.4 id_token の暗号化は alg と enc の対で、JARM は応答の署名アルゴリズムまで広告する
+
+| | |
+|---|---|
+| 観点 | **片方だけでは使えない。** 暗号化は alg（鍵）と enc（本文）の両方が要り、`*.jwt` の response_mode を出すなら、RP は**何で検証するか**を知る必要がある。実装は JWE が RSA-OAEP ＋ A256GCM、JARM の署名が RS256。 |
+| 根拠 | OIDC Discovery 1.0 §3 / JARM §7 / #189 の 5・8 |
+| テスト | `RT189_04_暗号化とJARMは対の項目まで広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- id_token_encryption_enc_values_supported がある（A256GCM）
+- response_modes_supported に *.jwt がある（JARM）
+- authorization_signing_alg_values_supported がある（RS256）
+
+## RT-189.5 code_challenge_methods_supported は設定どおりで、service_documentation にプレースホルダを出さない
+
+| | |
+|---|---|
+| 観点 | **広告は、実装に合わせる。**`plain` を受けるかどうかは `RequirePkceS256`（サーバ全体の設定）だけで決まるので、締めた配置では `plain` を広告しない。`service_documentation` は任意の項目なので、**値が無ければ出さない**（以前は "・・・" というプレースホルダを配っていた）。 |
+| 根拠 | OAuth 2.1 / FAPI（S256 のみ）/ OIDC Discovery 1.0 §3 / #228 の 9・12 |
+| テスト | `RT189_05_広告が実装と食い違わない` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- code_challenge_methods_supported に S256 がある
+- 既定では plain も広告する（実装が受け付けるため）
+- service_documentation にプレースホルダが出ない
+
+**観測（判定しない）**
+
+- RequirePkceS256 = true のとき
+  - その場合、plain は広告されない（Discovery は要求のたびに設定を読む）。
+
 ## RT-190.1 Implicit / Hybrid フローで nonce が無ければ拒否される
 
 | | |
@@ -2695,6 +2836,649 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **サーバ全体の RequirePkce を true にすれば、こちらも通らなくなる。**クライアント側の設定は「個別の引き上げ」であって、**床を下げることはできない**。
 
+## RT-229.1 /par に認可要求を預けると request_uri と expires_in が返り、その request_uri で認可できる
+
+| | |
+|---|---|
+| 観点 | **PAR は、認可要求をブラウザ経由ではなく、先にサーバ同士で預ける仕組み。**URL に載らないので改ざんされず、長い要求も送れる。FAPI 2.0 は PAR を必須としている。独自の `/ros` と違い、**クライアント認証**を行い、応答は **`expires_in`**（秒）を返す。 |
+| 根拠 | RFC 9126 §2 / §2.2 / #229 |
+| テスト | `RT229_01_parに預けた要求で認可できる` |
+
+**手順**
+
+1. Discovery から pushed_authorization_request_endpoint を引く
+1. client_secret_basic で認証し、認可要求を預ける
+1. その request_uri で認可する
+
+**検証（合否を判定する）**
+
+- PAR の口が広告されている
+- HTTP 201
+- request_uri が返る
+- expires_in（秒）が返る
+- 認可コードが返る
+- state がそのまま返る
+
+## RT-229.2 /par は、クライアント認証がなければ受け付けない
+
+| | |
+|---|---|
+| 観点 | **これが独自の `/ros` との一番の違い。**`/ros` は Request Object の署名だけで受け付けるので、**登録済みの鍵を持たないクライアントでも、誰の要求かを主張できてしまう。**PAR は、トークン エンドポイントと同じクライアント認証を求めている（RFC 9126 §2）。 |
+| 根拠 | RFC 9126 §2 / §2.3 / #229 |
+| テスト | `RT229_02_クライアント認証が要る` |
+
+**手順**
+
+1. 資格情報を付けずに預ける
+1. 誤った client_secret で預ける
+
+**検証（合否を判定する）**
+
+- HTTP 401
+- エラーは invalid_client
+- request_uri を返さない
+- HTTP 401
+- エラーは invalid_client
+
+## RT-229.3 /par は、フォームの request に署名付き Request Object（JAR）を入れる形でも受け付ける
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 の実運用では、PAR に JAR を入れて送る形が多い。**この実装は、`request` があればその中身を、無ければフォームの個別パラメタを預かる。**署名の検証に加えて、クライアント認証も行う**ので、`/ros`（署名だけ）より厳しい。 |
+| 根拠 | RFC 9126 §3 / RFC 9101 / #229 |
+| テスト | `RT229_03_requestのJARでも預けられる` |
+
+**手順**
+
+1. Request Object を作り、request に入れて預ける
+1. その request_uri で認可する
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- request_uri が返る
+- 認可コードが返る
+
+## RT-229.4 /par に request_uri を渡すと invalid_request になる
+
+| | |
+|---|---|
+| 観点 | **預ける口に、預けた結果を渡させない。**RFC 9126 §2.1 は、PAR の要求に `request_uri` を含めてはならないとしている（入れ子にすると、検証の前提が崩れる）。 |
+| 根拠 | RFC 9126 §2.1 / #229 |
+| テスト | `RT229_04_parにrequest_uriは渡せない` |
+
+**手順**
+
+1. request_uri を付けて預ける
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- エラーは invalid_request
+
+## RT-230.1 UserClaimsMapping で対応付けたクレームが、profile / address スコープで /userinfo に出る
+
+| | |
+|---|---|
+| 観点 | **`scopes_supported` に profile / address が載っているのに、空実装で何も返らなかった**（ANALYSIS-IdP.md の D-7）。RP から見ると「要求できるのに返ってこない」状態だった。**この実装は氏名・住所の項目を持たない**ので、入れ物（UnstructuredData）の**どのキーをどのクレームとして返すかを設定で対応付ける**。 |
+| 根拠 | OIDC Core §5.1 / §5.1.1 / §5.4 / #230 |
+| テスト | `RT23001_対応付けたクレームがuserinfoに出る` |
+
+**手順**
+
+1. 利用者 : 画面から非構造化データを入れる（POST /Manage/AddUnstructuredData）
+1. クライアント : profile と address を要求してトークンを取る
+1. /userinfo を呼ぶ
+1. address が、副フィールドを持つオブジェクトで返る
+
+**検証（合否を判定する）**
+
+- 非構造化データを保存できる
+- HTTP 200
+- name が、usd1 に入れた値で返る
+- preferred_username が、UserName で返る
+- address.locality が、usd2 に入れた値で返る
+
+**補足**
+
+- **address は JSON オブジェクト**（OIDC Core §5.1.1）。設定に `address.locality` と書くと、副フィールドとして組み立てる。
+
+## RT-230.2 profile / address を要求しなければ、対応付けたクレームは返らない
+
+| | |
+|---|---|
+| 観点 | **どのクレームがどのスコープに属するかは、仕様が決めている**（OIDC Core §5.4）。設定にはスコープを書かせず、**クレーム名から仕様の表で引く。**対応付けただけで無条件に返すと、**利用者が許可していない情報を渡す**ことになる。 |
+| 根拠 | OIDC Core §5.4 / #230 |
+| テスト | `RT23002_スコープを要求しなければ返らない` |
+
+**手順**
+
+1. 利用者 : 画面から非構造化データを入れる
+1. openid email だけを要求してトークンを取り、/userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- name は返らない
+- address も返らない
+- email は返る（要求したので）
+
+## RT-230.3 対応付けた先が空なら、そのクレームは返さない
+
+| | |
+|---|---|
+| 観点 | **空の項目を並べても RP の役に立たない**（`"name": ""` を返すより、返さない方が正しい）。入れ物の中身は導入する側が決めるので、**一部だけ埋まっている状態が普通にある。** |
+| 根拠 | OIDC Core §5.3.2 / #230 |
+| テスト | `RT23003_値が空ならクレームを返さない` |
+
+**手順**
+
+1. 利用者 : usd1 を空、usd2 だけ入れる
+1. profile と address を要求して /userinfo を呼ぶ
+
+**検証（合否を判定する）**
+
+- 空の name は返らない（キーごと出さない）
+- 入っている address.locality は返る
+
+## RT-230.4 Discovery の claims_supported に、対応付けたクレームが載る
+
+| | |
+|---|---|
+| 観点 | **固定の一覧にすると、設定と食い違う**（#228 の 13 : profile / address のクレームが`claims_supported` に無かった）。**対応付けから作れば、設定を変えても追随する。**`address.<副フィールド>` は、クレームとしては `address` ひとつにまとめる。 |
+| 根拠 | OIDC Discovery / #228 / #230 |
+| テスト | `RT23004_claims_supportedが対応付けから作られる` |
+
+**手順**
+
+1. Discovery を読む
+
+**検証（合否を判定する）**
+
+- name が載る（対応付けたので）
+- preferred_username が載る
+- address が載る（副フィールドではなく address）
+- address.locality は載らない（クレーム名ではない）
+- 元からの項目（sub / email）も残る
+
+**観測（判定しない）**
+
+- claims_supported
+  - 対応付けと固定の項目の合成。
+
+## RT-231.1 認可コードを返す応答に、iss（発行者）が付く
+
+| | |
+|---|---|
+| 観点 | **RP が複数の IdP を使うとき、応答の取り違えを誘う攻撃（Mix-Up）がある。**RP は `iss` を見て、**自分が要求した IdP からの応答か**を確かめられる。以前は付けていなかったので、対策が RP 側任せだった。 |
+| 根拠 | RFC 9207 §2 / #231 |
+| テスト | `RT231_01_成功の認可応答にissが付く` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. 認可コードを要求する
+
+**検証（合否を判定する）**
+
+- 認可コードが返る
+- 応答の iss が Discovery の issuer と一致する
+
+**補足**
+
+- issuer = https://ssoauth.opentouryo.com
+
+## RT-231.2 エラーを返す応答にも、iss が付く
+
+| | |
+|---|---|
+| 観点 | **エラーも取り違えの対象になる。** RFC 9207 §2 は、**成功・失敗のどちらの認可応答にも** `iss` を含めることを求めている。エラーだけ付けないと、RP は「どの IdP が断ったのか」を確かめられない。 |
+| 根拠 | RFC 9207 §2 / RFC 6749 §4.1.2.1 / #231 |
+| テスト | `RT231_02_失敗の認可応答にもissが付く` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. 未知の response_type で認可を要求する（RP へエラーが返る）
+
+**検証（合否を判定する）**
+
+- RP へリダイレクトで返る
+- エラーは unsupported_response_type
+- エラー応答の iss が Discovery の issuer と一致する
+
+## RT-231.3 JARM（response_mode=query.jwt）では、平文の iss を付けない（JWT の中に入っている）
+
+| | |
+|---|---|
+| 観点 | **JARM は応答を認可サーバの署名付き JWT に包む。**その JWT に `iss` が入っており、**署名で守られている分だけ強い。**平文の `iss` を重ねて付ける必要はない。 |
+| 根拠 | JARM / RFC 9207 §2 / #231 |
+| テスト | `RT231_03_JARMでは平文のissを付けない` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. response_mode=query.jwt で認可を要求する
+
+**検証（合否を判定する）**
+
+- response（JWT）が返る
+- 平文の iss は付かない
+- JWT の中の iss が Discovery の issuer と一致する
+
+## RT-231.4 Discovery が authorization_response_iss_parameter_supported: true を広告する
+
+| | |
+|---|---|
+| 観点 | **RP は Discovery を見て、`iss` を確かめる処理を有効にする。**広告していなければ、対応していても使われない。 |
+| 根拠 | RFC 9207 §3 / #231 |
+| テスト | `RT231_04_Discoveryがissの対応を広告する` |
+
+**手順**
+
+1. GET /.well-known/openid-configuration
+
+**検証（合否を判定する）**
+
+- authorization_response_iss_parameter_supported が boolean の true
+
+## RT-233.1 /ciba_authz に request（署名付き JWT）を直接送ると、CIBA が成立する
+
+| | |
+|---|---|
+| 観点 | **CIBA Core が定めている送り方**（§7.1.1 : 署名した認証要求を request パラメタで POST）。以前は /ros に預けた request_uri しか受け付けておらず、これは CIBA Core に無い独自拡張だった。**標準の CIBA クライアントが繋がるかどうか**を、ここで見る。 |
+| 根拠 | CIBA Core §7.1.1 / #233 |
+| テスト | `RT23301_requestを直接送ってCIBAが成立する` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する（POST /SetDeviceToken）
+1. クライアント : request に署名付き JWT を入れて POST /ciba_authz
+1. サーバ → 認証デバイス : プッシュ通知を受け取る（送信箱）
+1. 利用者 : 認証デバイスで「許可」を押す（POST /ciba_result、result=true）
+1. クライアント : ポーリングしてトークンを取る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- 認証リクエスト : HTTP 200
+- auth_req_id が返る
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- request に入れた binding_message が載る
+- 返答 : HTTP 200
+- access_token が返る
+
+**補足**
+
+- **/ros を一度も呼んでいない。** 認証要求は request で直接渡している。
+
+## RT-233.2 request と request_uri の両方を送ると、request が使われる
+
+| | |
+|---|---|
+| 観点 | **後方互換のため request_uri の受け口を残す**ので、両方が届き得る。そのとき**どちらが効くかを決めておく**（仕様にある request を優先）。決めていないと、実装によって結果が変わる。 |
+| 根拠 | CIBA Core §7.1.1 / #233 |
+| テスト | `RT23302_両方あればrequestを優先する` |
+
+**手順**
+
+1. 利用者 : 認証デバイスを登録する
+1. /ros に別の binding_message の要求を預けて、request_uri を得る
+1. クライアント : request と request_uri の両方を入れて POST /ciba_authz
+1. プッシュ通知の binding_message を見る
+
+**検証（合否を判定する）**
+
+- 端末の登録 : HTTP 200
+- 端末の登録 : 本文は OK
+- 認証リクエスト : HTTP 200
+- プッシュ通知が送られる（auth_req_id を載せて）
+- 宛先は、登録した端末
+- request 側の binding_message が届く（request_uri 側ではない）
+
+## RT-233.3 署名が壊れている request は、認証要求として受け付けない
+
+| | |
+|---|---|
+| 観点 | **request は署名だけがクライアントの証明**である（/ciba_authz は HTTP のクライアント認証を行わない）。署名を確かめずに中身を信じると、誰でも他人のクライアントを名乗れる。**利用者に通知を送る前に断る**こと。 |
+| 根拠 | CIBA Core §7.1.1 / §13 / #233 |
+| テスト | `RT23303_署名が壊れたrequestを断る` |
+
+**手順**
+
+1. 正しい request を作り、署名の部分だけを書き換える
+1. POST /ciba_authz
+
+**検証（合否を判定する）**
+
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは invalid_request
+
+## RT-233.4 request も request_uri も無い認証要求は、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **受け口を 2 つにしたので、「どちらも無い」が新しい入口になる。**エラーの形（400 と invalid_request）が変わっていないことを見る。 |
+| 根拠 | CIBA Core §13 / #233 |
+| テスト | `RT23304_requestもrequest_uriも無ければ断る` |
+
+**手順**
+
+1. POST /ciba_authz（scope だけを入れ、request も request_uri も入れない）
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- エラーは invalid_request
+
+## RT-234.1 aud が OP の Issuer Identifier でない認証要求は、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **CIBA Core §7.1.1 は、aud に OP の Issuer Identifier を入れることを MUST としている。**見ないと、**別の認可サーバ宛てに作られた要求**を、同じクライアントの鍵が登録されているこの IdP でも受け付けてしまう。以前は exp / nbf だけを見ており、aud は取り出してもいなかった。 |
+| 根拠 | CIBA Core §7.1.1 / §13 / #234 の段階 1 |
+| テスト | `RT23401_audがissuerでなければ断る` |
+
+**手順**
+
+1. Discovery から issuer を読む（テストに値を書かない）
+1. aud に別の認可サーバの識別子を入れた request を送る
+
+**検証（合否を判定する）**
+
+- issuer が広告されている
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは invalid_request
+
+**観測（判定しない）**
+
+- issuer
+  - **待ち受けている URL とは別の値**（設定キー IssuerId）。aud はこちらでなければならない。
+
+**補足**
+
+- **署名は正しい。** 正しい鍵で署名されていても、宛先が違えば受け付けない。
+
+## RT-234.2 aud が入っていない認証要求は、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **CIBA Core §7.1.1 の必須クレーム**（aud / iss / exp / iat / nbf / jti）の 1 つ。欠落は、Open棟梁 が返す server_error ではなく invalid_request に読み替える（#196 と同じ扱い）。 |
+| 根拠 | CIBA Core §7.1.1 / §13 / #234 の段階 1 |
+| テスト | `RT23402_audが無ければ断る` |
+
+**手順**
+
+1. aud を入れずに request を作って送る
+
+**検証（合否を判定する）**
+
+- HTTP 400
+- エラーは invalid_request
+
+## RT-234.3 同じ認証要求（同じ jti）を送り直すと、invalid_request で断る
+
+| | |
+|---|---|
+| 観点 | **CIBA Core §7.1.1 は jti を「署名した認証要求の一意な識別子」としている。**見ないと、**同じ要求 JWT を exp まで何度でも送り直せる**。`/ciba_authz` はクライアント認証をしないので（段階 3 で入れる）、要求を手に入れた者が、利用者に通知を繰り返し送れてしまう。`request_uri` の経路も同じで、`/ros` に預け直せば新しい参照を取れた。 |
+| 根拠 | CIBA Core §7.1.1 / §13 / #234 の段階 2 |
+| テスト | `RT23403_同じjtiの要求を二度は受け付けない` |
+
+**手順**
+
+1. 認証要求を 1 回送る
+1. まったく同じ要求を、もう一度送る
+
+**検証（合否を判定する）**
+
+- 1 回目 : エラーは unknown_user_id（検証は通っている）
+- 2 回目 : HTTP 400
+- 2 回目 : エラーは invalid_request（jti は使用済み）
+- 2 回目 : エラーが変わる（1 回目と同じ応答ではない）
+
+**補足**
+
+- **記録は Request Object のストアを使い回している**（接頭辞付きのキー）。#188 で入れた有効期限と掃除がそのまま効くので、新しい表を作っていない。
+
+## RT-234.4 クライアント認証の無い認証要求は、invalid_client（401）で断る
+
+| | |
+|---|---|
+| 観点 | **CIBA Core §7.1 は、この口でのクライアント認証を MUST としている**（FAPI-CIBA は private_key_jwt を求める）。以前は署名だけで識別しており、`/token` や `/device_authz` と違って`ClientAuthentication` を呼んでいなかった。**署名が正しくても、資格情報が無ければ受け付けない。** |
+| 根拠 | CIBA Core §7.1 / §13 / #234 の段階 3 |
+| テスト | `RT23404_クライアント認証が無ければ断る` |
+
+**手順**
+
+1. 資格情報を付けずに POST /ciba_authz
+1. 誤った client_secret で POST /ciba_authz
+
+**検証（合否を判定する）**
+
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 401
+- エラーは invalid_client
+- WWW-Authenticate が付く（RFC 6749 §5.2）
+- HTTP 401
+- エラーは invalid_client
+
+## RT-234.5 自分の資格情報で認証し、他人の client_id を iss にした要求は断る
+
+| | |
+|---|---|
+| 観点 | **認証を入れただけでは足りない。**CIBA Core §7.1.1 は `iss` を「クライアントの client_id」と定めている。**これを確かめないと、自分の資格情報で認証して、他人の要求を代わりに送れる**（要求の署名は、その他人の鍵で正しく検証できてしまう）。 |
+| 根拠 | CIBA Core §7.1 / §7.1.1 / #234 の段階 3 |
+| テスト | `RT23405_認証したクライアントとissが違えば断る` |
+
+**手順**
+
+1. CIBA クライアントの鍵で、正しく署名した要求を作る
+1. 別のクライアントの資格情報で認証して送る
+
+**検証（合否を判定する）**
+
+- auth_req_id を返さない（利用者へ通知しない）
+- HTTP 400
+- エラーは invalid_request
+
+**補足**
+
+- **認証そのものは通っている**（資格情報は正しい）。断っているのは、認証したクライアントと要求の iss が違うため。
+
+## RT-238.1 RFC 7523 §2.2 の client_assertion で、private_key_jwt のクライアント認証が通る
+
+| | |
+|---|---|
+| 観点 | **仕様の名前は `client_assertion`**（＋ `client_assertion_type`）。この実装は `assertion` だけを読んでいたため、**仕様に従うクライアントは private_key_jwt で認証できなかった**（#238）。Open棟梁 の PAR / CIBA のクライアント（OpenTouryo#592）は `client_assertion` を送る。 |
+| 根拠 | RFC 7523 §2.2 / RFC 9126 §2 / #238 |
+| テスト | `RT23801_client_assertionでparに預けられる` |
+
+**手順**
+
+1. client_assertion（RS256）を作り、client_assertion_type を添えて POST /par
+
+**検証（合否を判定する）**
+
+- HTTP 201（RFC 9126 §2.2）
+- request_uri が返る
+
+**補足**
+
+- **client_secret は送っていない。** 署名したアサーションだけで認証している。
+
+## RT-238.2 従来の名前（assertion）でも、private_key_jwt のクライアント認証が通る
+
+| | |
+|---|---|
+| 観点 | **Open棟梁 の既存のクライアントは `assertion` を送る**（`GetAccessTokenByCodeAsync` の private_key_jwt）。名前を仕様に合わせるだけだと、**既存のクライアントが繋がらなくなる。**`client_assertion` を優先し、**無ければ `assertion` も読む。** |
+| 根拠 | RFC 7523 §2.2 / #238 |
+| テスト | `RT23802_従来のassertionでも通る` |
+
+**手順**
+
+1. assertion（従来の名前）で POST /par
+
+**検証（合否を判定する）**
+
+- HTTP 201
+- request_uri が返る
+
+## RT-238.3 client_assertion_type が仕様の値でなければ、クライアント認証を通さない
+
+| | |
+|---|---|
+| 観点 | **RFC 7523 §2.2 は型を URN で定めている**（`urn:ietf:params:oauth:client-assertion-type:jwt-bearer`）。型が違うものを受け付けると、**別の種類のアサーションを取り違える**。**省略されていれば受ける**（この実装は従来、型を見ていなかったため）。 |
+| 根拠 | RFC 7523 §2.2 / #238 |
+| テスト | `RT23803_client_assertion_typeが違えば断る` |
+
+**手順**
+
+1. client_assertion_type に別の URN を入れて POST /par
+
+**検証（合否を判定する）**
+
+- HTTP 401
+- エラーは invalid_client
+- request_uri は返らない
+
+**補足**
+
+- **型が違うときは「アサーション無し」として扱う**ので、クライアント認証の失敗（invalid_client）になる。
+
+## RT-238.4 トークン エンドポイントでも、client_assertion で認証してトークンを得られる
+
+| | |
+|---|---|
+| 観点 | **FAPI 2.0 は、クライアント認証を private_key_jwt か mTLS に限っている。**fapi2 の登録は client_secret を通さない（`FA-2.1`）ので、**この経路が通らないと、fapi2 のクライアントはトークンを得られない。** |
+| 根拠 | RFC 7523 §2.2 / FAPI 2.0 / #238 |
+| テスト | `RT23804_tokenでもclient_assertionが通る` |
+
+**手順**
+
+1. FAPI2 の自己テストで、request_uri 経路の code を得る
+1. client_assertion を添えて、code をトークンに交換する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token が返る
+
+**観測（判定しない）**
+
+- 応答
+  - 切り分け用（値は伏せられる）。
+
+**補足**
+
+- **client_secret は送っていない**（fapi2 の登録は受け付けない）。`client_id` も送っていない（アサーションの `iss` から引く）。
+
+## RT-239.1 refresh_token の更新を、private_key_jwt のクライアント認証で行える
+
+| | |
+|---|---|
+| 観点 | **RFC 6749 §6 は、コンフィデンシャル クライアントの認証を求めている**が、方式は限定していない。**FAPI 2.0 は MTLS と private_key_jwt に限る**ので、ここが通らないと、**アクセス トークンが切れるたびに認可からやり直す**ことになる。`GrantRefreshTokenCredentials` は**引数にアサーションを持っていなかった**（#239）。 |
+| 根拠 | RFC 6749 §6 / RFC 7523 §2.2 / FAPI 2.0 / #239 |
+| テスト | `RT23901_refresh_tokenをprivate_key_jwtで更新できる` |
+
+**手順**
+
+1. 認可コード フローで refresh_token を得る（client_secret で交換）
+1. client_secret を送らず、client_assertion で更新する
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- access_token が返る
+
+**補足**
+
+- **client_id も送っていない。** アサーションの `iss` から引く（RFC 7523 §3）。refresh_token と発行先の結び付け（#188）も、その client_id で確かめられる。
+
+## RT-239.2 トークンの失効（/revoke）を、private_key_jwt のクライアント認証で行える
+
+| | |
+|---|---|
+| 観点 | **RFC 7009 §2.1 は「RFC 6749 §2.3 の資格情報を含める」としている**（＝トークン エンドポイントと同じ方式）。以前は `client_assertion` を読んでおらず、**秘密を持たないクライアントは失効できなかった。**失効できないと、**漏れたトークンを止める手段が無い。** |
+| 根拠 | RFC 7009 §2.1 / RFC 7523 §2.2 / #239 |
+| テスト | `RT23902_revokeをprivate_key_jwtで呼べる` |
+
+**手順**
+
+1. トークンを得る
+1. client_assertion で POST /revoke
+1. 失効したことを確かめる（/userinfo が 401）
+
+**検証（合否を判定する）**
+
+- HTTP 200（RFC 7009 §2.2）
+- 失効後は 401
+
+## RT-239.3 トークンの問い合わせ（/introspect）を、private_key_jwt のクライアント認証で行える
+
+| | |
+|---|---|
+| 観点 | **RFC 7662 §2.1 は、この口に認証を求めている**（トークン エンドポイントと同じ方式）。以前は `client_assertion` を読んでおらず、**秘密を持たないクライアントは問い合わせできなかった。** |
+| 根拠 | RFC 7662 §2.1 / RFC 7523 §2.2 / #239 |
+| テスト | `RT23903_introspectをprivate_key_jwtで呼べる` |
+
+**手順**
+
+1. トークンを得る
+1. client_assertion で POST /introspect
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- active が true
+
+## RT-239.4 署名が壊れた client_assertion では、/revoke も /introspect も通らない
+
+| | |
+|---|---|
+| 観点 | **受け口を増やしたら、そこが緩んでいないことも確かめる。**アサーションは署名だけがクライアントの証明なので、**検証せずに通すと、誰でも他人のトークンを失効できる。** |
+| 根拠 | RFC 7009 §2.1 / RFC 7662 §2.1 / #239 |
+| テスト | `RT23904_誤ったアサーションは断る` |
+
+**手順**
+
+1. 署名を壊した client_assertion を作る
+1. POST /revoke
+1. POST /introspect
+
+**検証（合否を判定する）**
+
+- /revoke : HTTP 401
+- /revoke : エラーは invalid_client
+- /introspect : HTTP 401
+- /introspect : エラーは invalid_client
+
+## RT-239.5 fapi2 の登録でも、非対称の証明なら refresh_token を使える
+
+| | |
+|---|---|
+| 観点 | **FAPI 1.0 Advanced も FAPI 2.0 も refresh token を禁じていない。**以前は ClientModePolicy が認可コード以外を normal に限っていたため、**fapi1 / fapi2 は refresh_token を受け取れなかった**（MayUse が false なので発行もされない）。**client_secret では開かない**（FAPI は秘密ベースの認証を認めない）。 |
+| 根拠 | FAPI 2.0 / RFC 6749 §6 / #239 の段階 3 |
+| テスト | `RT23905_fapi2もrefresh_tokenを使える` |
+
+**手順**
+
+1. FAPI2 の自己テストで code を得て、client_assertion で交換する
+1. client_assertion で refresh_token を更新する
+
+**検証（合否を判定する）**
+
+- fapi2 にも refresh_token が発行される
+- HTTP 200
+- access_token が返る
+
+**補足**
+
+- **client_secret では通らない**（fapi2 は秘密を持たず、表も開いていない）。mTLS でも通る（同じ行に Mtls を置いた）。
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -2725,27 +3509,30 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **ROPC / client_credentials は、サーバ全体では有効**（-Launch は Implicit / ROPC を有効にして起動する。#220）。**塞いでいるのは、このクライアントの登録**であることが、(1) の対照で分かる。
 
-## FA-1.2 fapi1 のクライアントには、refresh_token を発行しない
+## FA-1.2 fapi1 の refresh_token は、非対称の証明でだけ使える
 
 | | |
 |---|---|
-| 観点 | **使えない資格情報は渡さない。**表の refresh_token の行は、証明によらず normal だけを通すため、fapi1 の登録は使えない。以前は発行していて、使うと必ず拒否された（#222 で記録）。#224 の段階 2 で、**登録種別で使えない経路の refresh_token は発行しない**ようにした。 |
-| 根拠 | RFC 6749 §5.1（refresh_token は任意）/ #224 |
-| テスト | `FA0102_fapi1にはrefresh_tokenを発行しない` |
+| 観点 | **使えない資格情報は渡さない**（#224 の段階 2）という原則は変わらない。変わったのは前提で、**#239 の段階 3 で refresh_token の行を証明ごとに分けた**（`private_key_jwt` / mTLS なら fapi1 / fapi2 も通す。`client_secret` では通さない）。**FAPI は refresh token を禁じていない**ので、以前のように「fapi1 には発行しない」では、期限が切れるたびに認可からやり直しになる。 |
+| 根拠 | RFC 6749 §5.1 / §6 / FAPI 1.0 Advanced / #224 / #239 |
+| テスト | `FA0102_fapi1のrefresh_tokenは非対称の証明でだけ使える` |
 
 **手順**
 
 1. 対照 : normal 登録では、refresh_token で更新できる
 1. fapi1 で PKCE(S256) のトークンを取る
+1. client_secret で更新しようとする（fapi1 には認めない証明）
 
 **検証（合否を判定する）**
 
 - 対照（normal）は更新できる
-- refresh_token は発行されない
+- refresh_token が発行される（#239 の段階 3 で開いた）
+- client_secret では更新できない
+- エラーは unauthorized_client
 
 **補足**
 
-- **(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。発行しないのは、このクライアントの登録種別による。
+- **(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。fapi1 が更新できないのは**証明の種類**によるもので、登録種別そのものではない（`private_key_jwt` / mTLS なら通る。`RT-239.5` が fapi2 で測っている）。
 
 ## FA-1.3 fapi1 のクライアントが client_secret と PKCE(S256) を両方送ると、拒否される
 
@@ -2923,7 +3710,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - トークンが返る
 - fapi クレームは登録どおり fapi2
 - アクセス トークンに cnf が載る（証明書に紐づく）
-- refresh_token は発行されない
+- refresh_token が発行される（mTLS で更新できる証明）
 
 **補足**
 

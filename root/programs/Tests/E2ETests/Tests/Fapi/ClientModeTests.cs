@@ -35,6 +35,7 @@
 //*  2026/09/22  玄人 幸道         拒否のエラー コードを unauthorized_client に、FA-1.2 を「発行しない」に、
 //*                                FA-1.4 を認可エンドポイントでの拒否に改めた（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         FA-2.1 の注記を、mTLS の通る側（FA-6.1）に合わせた（#226）
+//*  2026/09/26  玄人 幸道         FA-1.2 を、refresh_token を「非対称の証明でだけ使える」に改めた（#239 の段階 3）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -246,17 +247,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
         /// <returns>Task</returns>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
-        public async Task FA0102_fapi1にはrefresh_tokenを発行しない(string targetKey)
+        public async Task FA0102_fapi1のrefresh_tokenは非対称の証明でだけ使える(string targetKey)
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 TestReport r = this.Report("FA-1.2",
-                    "fapi1 のクライアントには、refresh_token を発行しない",
-                    "**使えない資格情報は渡さない。**"
-                    + "表の refresh_token の行は、証明によらず normal だけを通すため、fapi1 の登録は使えない。"
-                    + "以前は発行していて、使うと必ず拒否された（#222 で記録）。"
-                    + "#224 の段階 2 で、**登録種別で使えない経路の refresh_token は発行しない**ようにした。",
-                    "RFC 6749 §5.1（refresh_token は任意）/ #224");
+                    "fapi1 の refresh_token は、非対称の証明でだけ使える",
+                    "**使えない資格情報は渡さない**（#224 の段階 2）という原則は変わらない。"
+                    + "変わったのは前提で、**#239 の段階 3 で refresh_token の行を証明ごとに分けた**"
+                    + "（`private_key_jwt` / mTLS なら fapi1 / fapi2 も通す。`client_secret` では通さない）。"
+                    + "**FAPI は refresh token を禁じていない**ので、"
+                    + "以前のように「fapi1 には発行しない」では、期限が切れるたびに認可からやり直しになる。",
+                    "RFC 6749 §5.1 / §6 / FAPI 1.0 Advanced / #224 / #239");
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient1);
                 ClientRegistration normal = Flows.Registration(client, KnownClients.MvcSample);
@@ -287,13 +289,34 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 Assert.False(token == null || string.IsNullOrEmpty(token.AccessToken),
                     "前提: fapi1 で PKCE のトークンが取得できること");
 
-                r.Verify("refresh_token は発行されない",
-                    string.IsNullOrEmpty(token.RefreshToken),
-                    "発行されない",
-                    string.IsNullOrEmpty(token.RefreshToken) ? "発行されない" : "**発行された**（値は伏せる）");
+                r.Verify("refresh_token が発行される（#239 の段階 3 で開いた）",
+                    !string.IsNullOrEmpty(token.RefreshToken),
+                    "発行される",
+                    string.IsNullOrEmpty(token.RefreshToken) ? "**発行されない**" : "発行された（値は伏せる）");
+
+                Assert.False(string.IsNullOrEmpty(token.RefreshToken),
+                    "前提: fapi1 に refresh_token が発行されること");
+
+                r.Step("(3) client_secret で更新しようとする（fapi1 には認めない証明）");
+
+                JsonResponse bySecret = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "refresh_token" },
+                    { "refresh_token", token.RefreshToken },
+                    { "client_id", reg.ClientId },
+                    { "client_secret", reg.ClientSecret }
+                });
+
+                r.Verify("client_secret では更新できない",
+                    string.IsNullOrEmpty(bySecret.AccessToken),
+                    "トークンを返さない", ClientModeTests.Outcome(bySecret));
+
+                r.VerifyEqual("エラーは unauthorized_client",
+                    "unauthorized_client", bySecret.Error ?? "（無し）");
 
                 r.Note("**(1) の対照で、サーバ全体では refresh_token が有効**であることが分かる。"
-                    + "発行しないのは、このクライアントの登録種別による。");
+                    + "fapi1 が更新できないのは**証明の種類**によるもので、登録種別そのものではない"
+                    + "（`private_key_jwt` / mTLS なら通る。`RT-239.5` が fapi2 で測っている）。");
 
                 r.Done();
             }

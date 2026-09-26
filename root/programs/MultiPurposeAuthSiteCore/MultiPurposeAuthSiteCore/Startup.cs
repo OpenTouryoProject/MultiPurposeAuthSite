@@ -204,6 +204,11 @@ namespace MultiPurposeAuthSite
                     defaults: new { controller = "OAuth2Endpoint", action = "JwksUri" });
 
                 endpoints.MapControllerRoute(
+                    name: "PushedAuthorizationRequest",
+                    pattern: Config.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除,
+                    defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" });
+
+                endpoints.MapControllerRoute(
                     name: "RequestObjectUri",
                     pattern: OAuth2AndOIDCParams.RequestObjectRegUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "RequestObjectUri" });

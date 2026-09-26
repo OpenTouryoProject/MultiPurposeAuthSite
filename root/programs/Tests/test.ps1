@@ -90,6 +90,15 @@
     **発行元（テスト用 CA）を、コンピューターの信頼されたルートに入れておく必要がある**（管理者権限）。
     付けなければ、FA-6 は net10.0 版だけを測る（net48 版のケースは作らない。Skip にもならない）。
 
+.PARAMETER ShortLifetimes
+    **有効期限のテスト（RT-188）専用。** 認可コード・Request Object・refresh_token の寿命を
+    ごく短くしてサイトを起動する（#188）。
+
+    **-Filter と併せて使うこと。** 寿命が短いので、他のテストは落ちる。
+      .\test.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
+
+    付けなければ、有効期限のテストはケースを作らない（Skip にもならない）。
+
 .PARAMETER Filter
     dotnet test の --filter に渡す式。
 
@@ -109,6 +118,7 @@
     .\test.ps1 -Launch -NoNetFx
     .\test.ps1 -Filter "FullyQualifiedName~RequestObjectTests"
     .\test.ps1 -Launch -NetFxMtls -Filter "FullyQualifiedName~MtlsTests"
+    .\test.ps1 -Launch -ShortLifetimes -Filter "FullyQualifiedName~LifetimeTests"
 
 .EXAMPLE
     # SQL Server のストアで回す（接続文字列は環境変数から）
@@ -129,6 +139,7 @@ param(
     [string] $NetFxUrl = 'https://localhost:44302',
     [switch] $NoNetFx,
     [switch] $NetFxMtls,
+    [switch] $ShortLifetimes,
     [string] $Filter,
     [ValidateSet('Debug', 'Release')]
     [string] $Configuration = 'Debug',
@@ -227,6 +238,16 @@ $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWe
 # 生の SslStream は 5.1 でも 1.2 / 1.3 の両方で成功するので、
 # **TLS そのものの問題ではない。**
 # 版差の原因を追うより、それぞれで通ることを確認した方法を使う。
+# **テストで使うクレームの対応付け（#230）。**
+#   キーはクレーム名（address.<副フィールド> と書くと address オブジェクトを組み立てる）、
+#   値は UnstructuredData の中のキー（usd1 / usd2 は /Manage/AddUnstructuredData で入れられる）
+#   または user:<項目>。**両サイトへ同じ内容を差し込む**（RT-230 が参照する）。
+$script:UserClaimsMapping = [ordered]@{
+    'name'                = 'usd1'
+    'address.locality'    = 'usd2'
+    'preferred_username'  = 'user:UserName'
+}
+
 function Wait-Site
 {
     param(
@@ -491,6 +512,16 @@ try {
             Write-Warning 'TestClient4 / TestClient2 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 は Skip）。'
         }
 
+        # **有効期限のテスト（#188）は、寿命をごく短くして測る。**
+        #   既定（認可コード 600 秒 / Request Object 300 秒 / refresh_token 14 日）を待つのは現実的でない。
+        #   **他のテストは落ちるので、-Filter と併せて使う。**
+        if ($ShortLifetimes) {
+            Write-Warning '-ShortLifetimes : 寿命をごく短くして起動します。-Filter と併せて使ってください（#188）。'
+            $env:OAuth2AuthorizationCodeExpireTimeSpanFromSeconds = '2'
+            $env:RequestObjectExpireTimeSpanFromSeconds = '2'
+            $env:OAuth2RefreshTokenExpireTimeSpanFromDays = '0'
+        }
+
         if ($PSVersionTable.PSVersion.Major -lt 6) {
             # **コールバックは、スクリプト ブロックではなくコンパイルしたデリゲートにする。**
             #   クライアント証明書のネゴシエーション（-NetFxMtls）が入ると、
@@ -551,6 +582,14 @@ public static class MpasTestTls
             foreach ($k in $injected.CoreEnv.Keys) {
                 Set-Item -Path ("Env:\" + $k) -Value $injected.CoreEnv[$k]
             }
+        }
+
+        # **profile / address のクレームの対応付け（#230）。**
+        #   この実装は氏名・住所の項目を持たず、入れ物は UnstructuredData（中身は導入する側が決める）。
+        #   テストは、画面から入れられる usd1 / usd2 を値の在り処にする。
+        #   net10.0 は「節」として読むので、appSettings__<キー>__<クレーム名> で足せる。
+        foreach ($m in $script:UserClaimsMapping.GetEnumerator()) {
+            Set-Item -Path ("Env:\appSettings__UserClaimsMapping__" + $m.Key) -Value $m.Value
         }
 
         # UserStore の切り替え（#207）。mem のときは何も渡さない（構成ファイルのまま）。
@@ -651,6 +690,11 @@ public static class MpasTestTls
                 $env:OAuth2ClientsInformation = $injected.NetFxValue
             }
 
+            # クレームの対応付け（#230）。net48 は 1 個の値（JSON 文字列）として読む。
+            $env:UserClaimsMapping = '{' + (
+                ($script:UserClaimsMapping.GetEnumerator() | ForEach-Object {
+                    '"{0}": "{1}"' -f $_.Key, $_.Value }) -join ', ') + '}'
+
             # UserStore の切り替え（#207）。npg はここに来ない（上で NoNetFx にしている）。
             if ($UserStoreType -ne 'mem') {
                 $env:UserStoreType = $UserStoreType
@@ -674,6 +718,13 @@ public static class MpasTestTls
             $env:MPAS_NETFX_BASEURL = $NetFxUrl
             $env:MPAS_NETFX_FCM_OUTBOX = $netFxOutbox
             if ($NetFxMtls) { $env:MPAS_NETFX_MTLS = 'true' }   # FA-6 を net48 版でも回す（#226）
+        }
+
+        if ($ShortLifetimes) {
+            Remove-Item Env:\OAuth2AuthorizationCodeExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+            Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+            Remove-Item Env:\OAuth2RefreshTokenExpireTimeSpanFromDays -ErrorAction SilentlyContinue
+            $env:MPAS_SHORT_LIFETIMES = 'true'   # RT-188 を回してよい（#188）
         }
 
         # テスト専用のクライアント（#224）: 差し込みの値はテスト側へ持ち込まない。
@@ -703,8 +754,19 @@ public static class MpasTestTls
 
     $testArgs = @('test', $csproj, '-c', $Configuration, '--logger', 'console;verbosity=normal')
 
-    if ($Filter) {
-        $testArgs += @('--filter', $Filter)
+    # **有効期限のテスト（RT-188）は、既定では走らせない**（#188）。
+    #   ごく短い寿命で起動したときにだけ意味があり、既定の寿命では測れない。
+    #   xUnit は「ケースが 0 件の Theory」を失敗として数えるため、
+    #   **ケースを作らないのではなく、ここで除外する。**
+    $expr = $Filter
+
+    if (-not $ShortLifetimes) {
+        $exclude = 'FullyQualifiedName!~LifetimeTests'
+        if ($expr) { $expr = "($expr)&$exclude" } else { $expr = $exclude }
+    }
+
+    if ($expr) {
+        $testArgs += @('--filter', $expr)
     }
 
     if ($TrxPath) {
@@ -760,6 +822,10 @@ finally {
         Remove-Item Env:\MPAS_TESTCLIENT2_3 -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_MTLS -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_MTLS -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_SHORT_LIFETIMES -ErrorAction SilentlyContinue
+        Remove-Item Env:\OAuth2AuthorizationCodeExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+        Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
+        Remove-Item Env:\OAuth2RefreshTokenExpireTimeSpanFromDays -ErrorAction SilentlyContinue
         Remove-Item Env:\DOTNET_STARTUP_HOOKS -ErrorAction SilentlyContinue
     }
 

@@ -34,6 +34,7 @@
 //*  2026/09/16  玄人 幸道         2FAのコード送信の失敗を、画面に戻して伝える（#214）
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         認可リクエストの code_challenge を検証に渡す（#220）
+//*  2026/09/24  玄人 幸道         クエリ文字列の request_uri / code_challenge を、デコードされた値で読む（#229）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -456,7 +457,7 @@ namespace MultiPurposeAuthSite.Controllers
                     HttpContext.Session.SetString("id_federation_signin_state", state);
 
                     // redirect_uri
-                    string redirect_uri = Config.IdFederationRedirectEndPoint;
+                    string redirect_uri = Config.IdFederationRedirectEndpoint;
 
                     // nonce // 記号は入れない。
                     string nonce = GetPassword.Generate(20, 0);
@@ -466,7 +467,7 @@ namespace MultiPurposeAuthSite.Controllers
                     string scope = Const.IdFederationScopes;
 
                     return Redirect(
-                        Config.IdFederationAuthorizeEndPoint +
+                        Config.IdFederationAuthorizeEndpoint +
                         "?client_id=" + client_id +
                         "&response_type=code" +
                         "&scope=" + scope +
@@ -2200,11 +2201,11 @@ namespace MultiPurposeAuthSite.Controllers
                     #region 仲介コードを使用してAccess Token・Refresh Tokenを取得
 
                     // 仲介コードからAccess Tokenを取得する。
-                    string redirect_uri = Config.IdFederationRedirectEndPoint;
+                    string redirect_uri = Config.IdFederationRedirectEndpoint;
 
                     // Tokenエンドポイントにアクセス
                     model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                             new Uri(Config.IdFederationTokenEndPoint),
+                             new Uri(Config.IdFederationTokenEndpoint),
                             client_id, client_secret, redirect_uri, code, "");
 
                     #endregion
@@ -2247,7 +2248,7 @@ namespace MultiPurposeAuthSite.Controllers
                     #region /userinfoエンドポイント
                     // /userinfoエンドポイントにアクセスする場合
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
-                        new Uri(Config.IdFederationUserInfoEndPoint), dic[OAuth2AndOIDCConst.AccessToken]);
+                        new Uri(Config.IdFederationUserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
 
                     #region ユーザの登録・更新
@@ -2837,10 +2838,12 @@ namespace MultiPurposeAuthSite.Controllers
 
             JObject claims = null;
             // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
-            string code_challenge = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.code_challenge, Request.GetEncodedUrl());
-            string request_uri = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
+            // **クエリ文字列は、デコードされた値で読む**（#229）。
+            //   以前は GetEncodedUrl から生のまま取り出していたため、
+            //   **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
+            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
+            string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
+            string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(
@@ -3034,10 +3037,12 @@ namespace MultiPurposeAuthSite.Controllers
             string prompt = ""; // ダミー
             JObject claims = null;
             // PKCE : Request Objectが在ればその値を使う（無ければクエリ文字列。#220）
-            string code_challenge = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.code_challenge, Request.GetEncodedUrl());
-            string request_uri = StringExtractor.GetParameterFromQueryString(
-                OAuth2AndOIDCConst.request_uri, Request.GetEncodedUrl());
+            // **クエリ文字列は、デコードされた値で読む**（#229）。
+            //   以前は GetEncodedUrl から生のまま取り出していたため、
+            //   **パーセント エンコードされた request_uri（urn:... のコロン）を取りこぼしていた。**
+            //   net48 版は Request.QueryString（デコード済み）で読んでおり、そちらに合わせる。
+            string code_challenge = Request.Query[OAuth2AndOIDCConst.code_challenge];
+            string request_uri = Request.Query[OAuth2AndOIDCConst.request_uri];
             if (!string.IsNullOrEmpty(request_uri))
             {
                 string requestObjectPayloadString = Sts.RequestObjectProvider.Get(

@@ -17,6 +17,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/17  玄人 幸道         新規（#219 の B）
 //*  2026/09/18  玄人 幸道         RequirePkce / RequirePkceS256 の確認を追加（#220）
+//*  2026/09/25  玄人 幸道         CibaProvider.DebugModeWithOutAD の確認を追加
+//*  2026/09/25  玄人 幸道         改名した設定キーの警告を、一覧（Config.RenamedKeys）から出す（#236）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -94,15 +96,34 @@ namespace MultiPurposeAuthSite.Co
                             + "プッシュ通知は FCM に送られず、ファイルに書かれます。");
                     }
 
-                    if (Config.UsesOldLockedDownKey)
+                    // **ここだけは設定ではなく、コードに埋め込んだ値を見る。**
+                    //   DebugModeWithOutAD は const なので、有効にするにはソースを書き換えて
+                    //   ビルドし直すことになる。設定で事故ることは無いが、
+                    //   **書き換えたまま出荷した場合に気付く手段が無かった。**
+                    //   有効だと、CIBA が認証デバイスの承認を経ずに成立する（自動で許可される）。
+                    //   **到達できないコードの警告は抑える。** const が false の間は、
+                    //   この中に入らないことがコンパイル時に判るため（両アプリの /ciba_authz と同じ扱い）。
+#pragma warning disable 162
+
+                    if (Extensions.Sts.CibaProvider.DebugModeWithOutAD)
                     {
-                        warnings.Add("改名前のキー名（" + Config.OldLockedDownKey
-                            + "）が使われています。" + "IsLockedDownTestEndpoints に直してください。");
+                        warnings.Add("CibaProvider.DebugModeWithOutAD が true でビルドされています。"
+                            + "CIBA が、認証デバイスの登録と承認なしに成立します。");
                     }
 
-                    if (Config.EnabeDebugTraceLog)
+#pragma warning restore 162
+
+                    // **改名したキーは、一覧から確かめる**（Config.RenamedKeys）。
+                    //   旧いキー名でも動くが、**放置すると、いつ読まれなくなるか分からない。**
+                    foreach (KeyValuePair<string, string> old in Config.OldKeysStillUsed())
                     {
-                        warnings.Add("EnabeDebugTraceLog が true です。");
+                        warnings.Add("改名前のキー名（" + old.Key + "）が使われています。"
+                            + old.Value + " に直してください。");
+                    }
+
+                    if (Config.EnableDebugTraceLog)
+                    {
+                        warnings.Add("EnableDebugTraceLog が true です。");
                     }
 
                     // **これは「開発向けの設定が残っている」ではない（#220）。**

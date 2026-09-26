@@ -41,7 +41,7 @@
 まず A・B（応答形式と異常系）を直して適合性テストが回る土台を作ること**である。
 
 **対応状況:** **フェーズ 0 は完了**（A-1 / A-3・A-4 / A-9 / B-1〜B-7 / C-14）。B-7（#199）と A-3 の残り（JARM、#201）は、後から E2E テストで見つかったもの。
-**フェーズ 1 は A-6 / A-8 / A-11 が完了**し、A-7 は #196 で対応済み（全エンドポイント）、A-10 は #189 の残りに紐づく。
+**フェーズ 1 は A-6 / A-8 / A-10 / A-11 が完了**し、A-7 は #196 で対応済み（全エンドポイント）。A-10 の残り（#189 の 9〜14）は仕様方針の判断を伴う。
 セキュリティは C-1（#193）/ C-2（#194）/ C-16（#191）と A-5（#186、`request_uri` 経路の残りは #197）が完了。C-17（#198）が完了。
 A-2 は誤検出だった。次はフェーズ 1（仕様どおりのエラー応答）。
 nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃った。
@@ -253,7 +253,8 @@ Device AuthZ / CIBA は空の `NameValueCollection` を渡すので `redirect_ur
 > 認可コード フローと Hybrid フローの両方がこの関数を通るので、1 か所で両方に効く。
 >
 > Request Object は Controller でも読んでいるが、`RequestObjectProvider.Get` は消費しない（C-11）ので読み直せる。
-> **C-11 でワンタイム化するときは、読む回数を 1 回にまとめる必要がある。**
+> **ワンタイム化（C-11。#188 の段階 2）は、読む回数を減らすのではなく、
+> 認可応答を作り終えた時点で消すことで実現した**（`CmnEndpoints.ConsumeRequestObject`）。
 >
 > E2E テスト（`root/programs/Tests/E2ETests/Tests/RequestObjectTests.cs`）:
 > `RT-197.5`（誤った `redirect_uri` → `invalid_grant`）/
@@ -398,10 +399,61 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
 | **ユーザの端末（認証デバイス）が未登録** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `access_denied` |
 | **プッシュ通知（FCM）の送信に失敗** | **500 ＋ JSON でない本文**（#210） | **400** ＋ `server_error` |
 
-- `/ciba_authz` は、クライアントを HTTP 認証ではなく、`/ros` に登録した署名付きの要求（ES256）で識別する。
-  そのため 401 にも `WWW-Authenticate` は付けない（共用のエラー応答の関数に `realm` を渡さない）
-- 未登録のクライアントや必須のクレームの欠落は、`/ros` の登録（署名と必須項目の検証）で先に断られるので、
-  `/ciba_authz` では実際には起きにくい（防御として正しいコードにした）
+- **クライアント認証を求めるようにした**（**#234 の段階 3**）。CIBA Core §7.1 は
+  **この口でのクライアント認証を MUST** としており（FAPI-CIBA は `private_key_jwt` を要求）、
+  **`ClientAuthentication` を呼んでいないのは、この口だけだった**（`/token`・`/device_authz` は呼んでいた）。
+  以前は署名付きの要求（ES256）だけでクライアントを識別していた。
+
+  受け付ける方式は `/token`・`/par` と同じ（`client_secret_basic` / `client_secret_post` /
+  `private_key_jwt` / `tls_client_auth`）。**401 には `WWW-Authenticate` を付ける**ようにした
+  （HTTP 認証を行うようになったため。RFC 6749 §5.2。以前は `realm` に `null` を渡していた）。
+
+  **認証しただけでは足りない。** CIBA Core §7.1.1 は `iss` を「クライアントの `client_id`」と定めており、
+  **認証したクライアントと要求の `iss` の一致**も確かめる（`VerifyCibaRequestIssuer`）。
+  でないと、**自分の資格情報で認証して、他人の要求を代わりに送れる**
+  （要求の署名は、その他人の鍵で正しく検証できてしまう）。`RT-234.4` / `RT-234.5`
+
+  **同梱の自己テストも、これに合わせて移した。** `/ros` に預けて `request_uri` を渡す形をやめ、
+  **`request` を直接送り、資格情報を添える**（`Helper.CibaAuthZRequestAsync` のオーバーロード）。
+  Open棟梁 の `OAuth2AndOIDCClient.CibaAuthZRequestAsync(Uri, string)` は
+  資格情報を渡す引数が無いため使わず、`/chage_to_user` などと同じく自前で組み立てている（OpenTouryo #592）
+- **`aud` を検証するようにした**（**#234 の段階 1**）。CIBA Core §7.1.1 は
+  **`aud` に OP の Issuer Identifier を入れること**を MUST としている（`Config.IssuerId` ＝
+  Discovery の `issuer`、トークンの `iss`、認可応答の `iss` と同じ値）。
+  見ないと、**別の認可サーバ宛てに作られた要求**を、同じクライアントの鍵が登録されていれば受け付けてしまう。
+
+  **直す前は、呼び出し側の 2 つとも仕様と違う値を入れていた。**
+
+  | | `aud` に入れていた値 |
+  |---|---|
+  | 同梱の自己テスト（`HomeController`） | `/ciba_authz` の**エンドポイント URL** |
+  | E2E | サイトの **base URL** |
+
+  どちらも Issuer Identifier に直した。E2E は **Discovery の `issuer` を読んで使う**
+  （`IdPClient.IssuerAsync`）ので、設定を変えても追随する（`RT-234.1` / `RT-234.2`）
+- **`jti` で使い切りにした**（**#234 の段階 2**）。以前は未検証（`//string jti = "";`）で、
+  **同じ要求 JWT を `exp` まで何度でも送り直せた**（`request_uri` の経路も、`/ros` に預け直せば同じ）。
+  `/ciba_authz` はクライアント認証をしない（段階 3 で入れる）ので、
+  要求を手に入れた者が、利用者に通知を繰り返し送れてしまう。
+
+  **記録先は Request Object のストアを使い回す**（キーに `ciba:jti:` を付ける）。
+  #188 の有効期限と掃除がそのまま効き、**表を増やさない**（DDL を 3 方言とも変えなくてよい）。
+  **保持はそのストアの有効期限まで**（既定 300 秒）なので、要求の `exp` をそれより長くすると、
+  記録が消えた後は同じ `jti` を受け付ける。厳密な排他はしていない（同時到着は防がない）。
+  検証は `jti` を確かめた時点で行うので、**利用者が見つからずに終わった要求でも `jti` は消費される**（`RT-234.3`）
+- **要求の受け取り方は 2 つある**（#233。`CmnEndpoints.ReceiveCibaRequest`）。
+
+  | | 送り方 | 位置付け |
+  |---|---|---|
+  | `request` | 署名付き JWT を、そのままフォームで POST | **CIBA Core §7.1.1。標準の送り方**（#233 で追加） |
+  | `request_uri` | `/ros` に預け、その参照を POST | **CIBA Core に無い独自拡張。** 後方互換で残す |
+
+  **両方あれば `request` を使う。** 署名の検証は同じ（登録済みの `jwk_ecdsa_publickey`）で、
+  検証を通った中身を `ValidateCibaAuthZReqParam` に渡す流れも変わらない。
+  `request` の経路では**預けたものが無いので、使用後に消す対象も無い**（`request_uri` のときだけ `Delete` する）
+- 未登録のクライアントや必須のクレームの欠落は、`request_uri`（`/ros` に登録）の経路では
+  登録の時点で先に断られるので、`/ciba_authz` では起きにくかった。
+  **`request` の経路では `/ciba_authz` が最初の関門になる**ので、ここの判定が実際に効く
 - `unknown_user_id` は Open棟梁 の定数に無いので `CmnEndpoints` で定義した。
   クレームの欠落は、Open棟梁 の `CmnJwtToken.CheckClaims` が返す `server_error` を、`invalid_request` に読み替える（`GetCibaClaim`）
 - E2E テスト : `RT-196.16`（`request_uri` なし・存在しない → 400）/
@@ -558,25 +610,42 @@ CIBA クライアントはこのキーを見つけられない。
 **前後に空白のあるキーは他に無い**ことを確かめてある。
 このキーを読んでいるコードはリポジトリ内に無い（外部の CIBA クライアントだけが読む）。
 
-> **#189 はこの 1 件だけ対応済みで、他の項目（A-10）は未対応のまま。**
+> **#189 のうち、この 1 件を先に対応した。残りは A-10。**
 
-### A-10. discovery のその他の不整合 **[Lib]**
+### A-10. discovery のその他の不整合 **[Lib]** — **✅ 誤りと未広告は修正済み（#189 の 2〜8）**
 
-| 現状 | あるべき姿 |
-|---|---|
-| `device_authorization_endpoint` が無い | RFC 8628 §4。`/device_authz` を公開しているのに広告していない |
-| `grant_types_supported` に device_code が無い | `Config.EnableDeviceAuthZGrantType` が discovery から参照されていない |
-| `mutual_tls_sender_constrained_access_tokens: "true"` | RFC 8705 §3.3 の正式名は `tls_client_certificate_bound_access_tokens`、値は boolean |
-| `backchannel_user_code_parameter_supported: "false"` | boolean |
-| `backchannel_authentication_request_signing_alg_values_supported: "ES256"` | 配列 |
-| `id_token_encryption_alg_values_supported` のみ | `..._enc_values_supported` も対で必要 |
-| `code_challenge_methods_supported` に `plain` | OAuth 2.1 / FAPI は `S256` のみ |
-| `subject_types_supported` に `uname` | 登録済みの値は `public` / `pairwise` のみ（独自拡張であることを明示するか外す） |
-| `request_object_endpoint`（独自名） | PAR にするなら `pushed_authorization_request_endpoint` |
-| `service_documentation: "・・・"` | プレースホルダのまま |
-| `end_session_endpoint` / `registration_endpoint` が無い | 5 節（未実装のため） |
-| `authorization_response_iss_parameter_supported` が無い | RFC 9207（未実装のため） |
-| JARM の `authorization_signing_alg_values_supported` が無い | JARM を広告しているのに alg を出していない |
+**Discovery は RP が最初に読む唯一の入口である。** 誤りは「読めない」「型で落ちる」に直結し、
+広告していない項目は「実装しているのに使えない」と判断される。
+
+**修正したもの（#189 の 2〜8）**
+
+| # | 修正前 | 修正後 | E2E |
+|---|---|---|---|
+| 2 | `mutual_tls_sender_constrained_access_tokens: "true"`（草案の名前・文字列） | `tls_client_certificate_bound_access_tokens: true`（RFC 8705 §3.3） | `RT-189.3` |
+| 3 | `backchannel_user_code_parameter_supported: "false"` | `false`（boolean） | `RT-189.2` |
+| 4 | `backchannel_authentication_request_signing_alg_values_supported: "ES256"` | `["ES256"]`（配列） | `RT-189.2` |
+| 5 | `id_token_encryption_alg_values_supported` のみ | `..._enc_values_supported: ["A256GCM"]` を対で追加（実装は `JWE_RsaOaepAesGcm`） | `RT-189.4` |
+| 6 | `device_authorization_endpoint` が無い | 追加（RFC 8628 §4） | `RT-189.1` |
+| 7 | `grant_types_supported` に device_code が無い | `Config.EnableDeviceAuthZGrantType` を見て追加 | `RT-189.1` |
+| 8 | JARM の alg が無い | `authorization_signing_alg_values_supported: ["RS256"]`（実装は `CmnResponseObject` の JWS(RS256)） | `RT-189.4` |
+
+> **`"false"` は危い。** 多くの実装で**真**として読まれるので、
+> 「user_code に対応していない」が「対応している」に反転する。
+
+**#228（仕様方針の判断を伴うもの。#189 の 9〜14）で決めたこと**
+
+| # | 決定 | 理由 | E2E |
+|---|---|---|---|
+| 9 | **設定に合わせて広告する**。`RequirePkceS256` が `true` なら `["S256"]`、既定（`false`）なら `["plain","S256"]` | 広告と実装を一致させる。**既定の挙動は変えない。** `RequirePkceS256` はサーバ全体の設定なので、要求者によらず 1 つに決まる（クライアント単位の `require_pkce` は「必須にするか」で別の話。Discovery にクライアント別の項目は無い） | `RT-189.5` |
+| 12 | **設定値にする**（`ServiceDocumentation`。既定は空、空なら出さない） | 任意の項目なので、嘘のプレースホルダ（`"・・・"`）を配らない | `RT-189.5` |
+| 10 | **変えない**（#151 に委ねる） | `uname` は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）。広告だけ直すと、実際の `sub` とズレる | — |
+| 11 | **変えない**（D-2＝#229 に委ねる） | `request_object_endpoint` は FAPI1 の Request Object（JAR）の置き場所を示す独自拡張。**名前だけ PAR に寄せると、中身が PAR でないのに PAR と読まれる** | — |
+| 13 | **別 Issue（#230）**（`profile` / `address` のクレームは未実装。D-7） | 広告だけ足すと嘘になる | — |
+| 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、#129 と関連） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
+
+> **`request_object_endpoint`（`/ros`）と PAR（RFC 9126）の差**（D-2）。
+> `/ros` は Request Object の署名だけで受け付け、応答の `exp` は空文字、`request_uri` は使い切りにしていない。
+> PAR は**クライアント認証**（トークン エンドポイントと同じ）、**`expires_in` 必須**、**一回限り**を求める。
 
 ### A-11. `/revoke` `/introspect` がヒントを必須にし、無効なトークンをエラーにする **[Core][Lib]** — **✅ 修正済み（#200）**
 
@@ -852,13 +921,70 @@ RFC 6749 §4.1.2 は「短命であること（推奨 10 分以内）」を求�
 Memory Provider の `ConcurrentDictionary` も未使用の code を回収しないため、
 **メモリ リークになる**（DBMS 側も行が残り続ける）。
 
-### C-5. refresh_token に有効期限も再利用検知も無い **[Lib]**
+### C-5. refresh_token に有効期限も再利用検知も無い **[Lib]** — **✅ 修正済み（#188）**
+
+**有効期限は、#188 の段階 1 で実際に検証するようにした**（`RT-188`）。
+認可コード（新しい設定キー。既定 600 秒）・Request Object（同。既定 300 秒）・
+refresh_token（既存の `OAuth2RefreshTokenExpireTimeSpanFromDays`。既定 14 日）の 3 つで、
+**期限切れは「無いもの」と同じ扱い**（存在しない code / token と同じ経路に合流する）。
+
+- メモリ ストアは作成時刻を持っていなかったので、値と作成時刻の組に変えた
+- DBMS は `CreatedDate` を書くだけで読んでいなかったので、**SELECT の条件に入れた**（3 方言とも）
+- **期限切れは、参照した時点で消す**（メモリ ストア。DBMS は使用時の DELETE で消える）
+- `/ros` の応答の `exp`（以前は空文字）に、期限を入れるようにした
+
+**再利用の検知と、一族ごとの失効（#188 の段階 3）**
+
+以前は「使ったら行を消す」方式だったので、**使用済みだったのか、元から無いのかを区別できなかった。**
+いまは消さずに印を付け、**使用済みが再び提示されたら、その一族をまとめて失効させる。**
+
+| 列（`RefreshTokenDictionary`。3 方言とも追加） | 意味 |
+|---|---|
+| `FamilyId` | **1 回の認可から派生した refresh_token のまとまり**（GUID）。最初の発行で作り、更新では引き継ぐ |
+| `UsedDate` | 使った時刻。NULL なら未使用 |
+
+**例**（`c93a…` が一族の識別子）
+
+| 時点 | 行 |
+|---|---|
+| 認可コードを交換 | `RT1`（`c93a…` / 未使用） |
+| RT1 で更新 | `RT1`（使用済み）、`RT2`（`c93a…` / 未使用） |
+| RT2 で更新 | `RT1`（済）、`RT2`（済）、`RT3`（`c93a…` / 未使用） |
+| **RT1 が再び提示された** | **`c93a…` の行をすべて削除**（RT3 も使えなくなる） |
+
+認可をやり直せば、別の `FamilyId` になる。**別の一族は影響を受けない。**
+
+**なぜ正規の側も失効させるのか。** 漏れたトークンと正規のトークンを、サーバは見分けられない。
+OAuth 2.0 Security BCP §4.14.2 は、この場合に一族の失効を挙げている。
+
+**明示的な失効（`/revoke`）も一族ごと**にした。RFC 7009 §2.1 が、refresh_token を失効させるときは
+**同じ認可グラントに基づくトークンも無効にすべき**としているため。
+漏れたトークンを失効させたのに、そこから派生した新しいトークンが生き残るのは、利用者の意図と違う。
+
+- `introspect`（`Refer`）は、**使用済み・期限切れを「無い」と同じ扱い**にする（`active: true` を返さない）
+- E2E テスト : **`EX-1.2`**（再利用すると、正規の新しい方も使えなくなる）、**`EX-1.4`**（失効も一族ごと）
+- **DDL を変えた。** 既存のデータベースには `ALTER` が要る（移行用のスクリプトは用意していない）
+
+**期限切れの行の掃除（#188 の案 4）**
+
+参照時にも期限切れは消えるが、**一度も参照されない行は残る**
+（Issue が指摘していた「未消費の code がメモリに残り続ける」がこれ）。
+そこで **書き込み（`Create`）のついでに、10 分に 1 回だけ、期限切れの行をまとめて消す。**
+3 つのストア（認可コード / refresh_token / Request Object）とも同じ作りで、
+メモリ ストアと DBMS の両方に効く。
+
+- **常駐の仕組み（バッチ・タイマ）を増やしていない。** net48 / net10.0 で同じコードにするため
+- **消す条件は「作成時刻が期限より古い」だけ。**
+  使用済みの refresh_token は、**期限までは消さない**（消すと、再利用の検知ができなくなる）
+- 間隔（10 分）は定数。設定値にはしていない
+- **E2E では測っていない**（内部の掃除で、外から観測できないため）
 
 - `Config.OAuth2RefreshTokenExpireTimeSpanFromDays`（既定 14 日）は
   **`Co/Config.cs` の定義以外どこからも参照されていない。** → 事実上の無期限。
 - ローテーション（使用時に削除）は行っているが、
   **ローテーション済みトークンを再提示されても検知・失効（family revocation）をしない。**
   OAuth 2.0 Security BCP §4.14 が求める挙動。
+- 有効期限は #188 で検証するようにした（上記）。以下は**再利用検知と、経路の制限**の話
 - `refresh_token` の経路は、**証明によらず `normal` の登録にしか許されていない**
   （`ClientModePolicy` の表。#224）。**`normal` 以外の登録には、`refresh_token` を発行しない**
   （#224 の段階 2。以前は発行していたが、使えなかった。`FA-1.2` / `FA-3.1`。C-7）。
@@ -1077,18 +1203,55 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 どの client_id でも無条件に許可」** という自己テスト用の抜け道がある。
 `Config.IsLockedDownTestEndpoints` の対象外なので、**本番で閉じられない。**
 
-### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]**
+### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]** — **✅ 修正済み（#188 / #229）**
 
-- 署名検証は行っている（`RequestObject.Verify` / `VerifyCiba`）。
-- しかし `RequestObjectProvider` は `CreatedDate` を書くだけで**読まない**。
-- `/ros` の応答が返す `exp` は **空文字列**（`exp = ""`）。
-- 認可エンドポイントで消費した後も **`Delete` が呼ばれない**（`Delete` メソッドは在るが未使用）。
+> **#229 で、RFC 9126 の口（`/par`）を別に設けた。**
+> `/ros` は**クライアント認証をしない**（署名だけ）ので、登録済みの鍵さえあれば誰でも預けられる。
+> `/par` は**トークン エンドポイントと同じクライアント認証**を求める。**新しい RP は `/par` を使う。**
+>
+> **`/ros` は残す。** 一時は廃止を見込んでいたが、**RFC 9101（JAR）§5.2.1 が、この形を認めている。**
+>
+> > The client stores the Request Object resource either locally or remotely at a URI the
+> > authorization server can access. **Such a facility may be provided by the authorization server** …
+> > For example, **the authorization server may provide a URL to which the client POSTs the
+> > Request Object and obtains the Request URI.**
+>
+> ただし **RFC 9101 は中身を何も規定していない**（認証方法も応答形式も）。
+> したがって `/ros` は**相互運用できる口ではなく、この IdP の任意機能**である。
+> FAPI 2.0 Security Profile は PAR を必須としているので、**本命は `/par`** という関係は変わらない。
+>
+> 廃止しないのであれば、**両アプリに二重に書かれたままにする理由も無い。**
+> **✅ #235 で `CmnEndpoints.RegisterRequestObject` に集約した**（`/par` と CIBA の受け取りに続いて）。
+> **振る舞いは変えていない**（署名だけを確かめ、クライアント認証はしない）。
+> Controller に残るのは、本文の読み方（net48 は同期、net10.0 は非同期）と応答の包み方だけ。
+>
+> **CIBA での `request_uri` は、これとは別の話。**
+> `/ciba_authz` が `request_uri` を受けるのは **CIBA Core に無い独自拡張**で（§7.1.1 は `request` で直接送る形。
+> **初期のドラフトには `request_uri` があったが、最終版にも FAPI-CIBA にも無い**）、
+> **#233 で `request` を直接受け取れるようにした**（`RT-233`）。
+> `request_uri` の受け口は後方互換で残しているが、**こちらは将来外す。**
+> （同梱の自己テストを `request` に移すには、Open棟梁 #592 の対応が要る）
 
-コード中のコメント「存続期間は短く、好ましくは一回限」がそのまま未実装項目になっている。
+修正前は、署名検証は行っていた（`RequestObject.Verify` / `VerifyCiba`）ものの、
 
-> **注意（#197）:** `AuthorizationCodeProvider.Create` も、`redirect_uri` / PKCE の値を得るために
-> Request Object を読むようになった（Controller と合わせて 2 回読む）。
-> ワンタイム化するときは、読む回数を 1 回にまとめること（A-5 を参照）。
+- `RequestObjectProvider` は `CreatedDate` を書くだけで**読まなかった**
+- `/ros` の応答が返す `exp` は **空文字列**（`exp = ""`）だった
+- 認可エンドポイントで消費した後も **`Delete` が呼ばれなかった**（メソッドは在るが未使用）
+
+コード中のコメント「存続期間は短く、好ましくは一回限」が、そのまま未実装項目になっていた。
+
+**対応（#188 の段階 1・2）:**
+
+| | 修正後 | E2E |
+|---|---|---|
+| 有効期限 | `Config.RequestObjectExpireTimeSpanFromSeconds`（既定 300 秒）で判定。`/ros` の応答の `exp` にも出す | `RT-188.3` |
+| ワンタイム | **認可応答を作り終えた時点で消す**（`CmnEndpoints.ConsumeRequestObject`）。CIBA は `/ciba_authz` で消す | `RT-188.4` |
+
+> **消す場所が要点だった。** 1 回の認可の中で、同じ `request_uri` を複数回読む
+> （Controller の同意画面 → `AuthorizationCodeProvider.Create`）。
+> **最初の読み取りで消すと、その認可自体が壊れる。**
+> 読む回数を 1 回にまとめるのではなく、**応答を作り終えた時点で消す**ことで、
+> 「2 回目の認可要求には使えない」を実現した。
 
 ### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]**
 
@@ -1297,19 +1460,84 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 > **`/revoke` `/introspect` は、クライアント認証として証明書を見る口**（C-2）であり、
 > ここで言う「保護されたリソース」ではない。
 
+### C-20. `private_key_jwt` が、仕様と違う名前でしか通らなかった **[Lib][Core][NetFx]** — **✅ 修正済み（#238）**
+
+**RFC 7523 §2.2 が定めるのは `client_assertion`**（＋ `client_assertion_type`）。
+`assertion` は **JWT Bearer グラント**（§2.1）のパラメタで、別物である。
+
+この実装は **3 つの口（`/token`・`/par`・`/ciba_authz`）で `assertion` を読んでいた**ため、
+**仕様に従うクライアントは `private_key_jwt` で認証できなかった。**
+
+**両方を受けるようにした**（`CmnEndpoints.GetClientAssertion`）。
+`client_assertion` を優先し、無ければ `assertion` も読む
+（Open棟梁 の既存のクライアントが `assertion` を送るため。OpenTouryo #592）。
+`client_assertion_type` が来ていれば、値が RFC 7523 の URN であることを確かめる
+（違えば「アサーション無し」として扱い、`invalid_client` になる）。
+
+**同時に、`ClientModePolicy` の穴も塞いだ。**
+
+| 経路 × 証明 | 通していた登録種別 | 修正後 |
+|---|---|---|
+| 認可コード × `private_key_jwt` | normal / fapi1 / device | **＋ fapi2** |
+
+**FAPI 2.0 はクライアント認証を MTLS か `private_key_jwt` に限っている**のに、
+`fapi2` は `client_secret` も通らないため、**mTLS を使えない fapi2 クライアントはトークンを取れなかった。**
+表の該当行には「（E2E なし）」と書いてあり、**測っていなかったから残っていた**（#224 で引き継いだもの）。
+
+**E2E に `private_key_jwt` の認証が無かったことが、両方の原因**である（`RT-238.1`〜`.4` で塞いだ）。
+
+**受ける場所も限られていた**（#239 の段階 1・2 で広げた）。
+
+| 口 / グラント | 修正前 | 修正後 |
+|---|---|---|
+| `/token` の `authorization_code` | 通る（#238） | 通る |
+| `/token` の `refresh_token` / ROPC / `client_credentials` | **引数にアサーションが無い** | **通る**（`RT-239.1`） |
+| `/revoke` / `/introspect` | **`client_assertion` を読んでいない** | **通る**（`RT-239.2` / `.3`） |
+
+仕様は「**トークン エンドポイントと同じクライアント認証**」を求めている
+（RFC 6749 §6 / RFC 7009 §2.1 / RFC 7662 §2.1）。
+**失効できないと、漏れたトークンを止める手段が無い**ので、`/revoke` は特に効く。
+
+**どの方式で来ても受ける入口**を作った（`CmnEndpoints.ClientAuthentication` の 3 つ目の版）。
+アサーションのときは **`client_id` をアサーションの `iss` から得る**ので、
+認証の後で client_id を使う処理（トークンとの紐付け、失効）も、そのまま正しく動く。
+
+**`refresh_token` を `fapi1` / `fapi2` にも開いた**（#239 の段階 3）。
+
+| 経路 × 証明 | 修正前 | 修正後 |
+|---|---|---|
+| `refresh_token` × `private_key_jwt` | normal | **＋ fapi1 / fapi2**（`RT-239.5`） |
+| `refresh_token` × mTLS | normal | **＋ fapi1 / fapi2** |
+| `refresh_token` × `client_secret` ほか | normal | normal（**変えない**） |
+
+**`client_secret` では開かない。** FAPI は秘密ベースの認証を認めないので、
+認可コードの行と同じ扱いにした。
+
+**発行の側にも効く。** `MayUse` が false だと **refresh_token を発行しない**作りなので（#224 の段階 2）、
+以前は **fapi1 / fapi2 は refresh_token を受け取れず**、
+アクセス トークンが切れるたびに認可からやり直していた。
+
+**表の並び順が意味を持つ。** `IsAllowed` は最初に当たった行を使うので、
+**`Proof.Any` の行より前に、証明を限る行を置く**（`refresh_token` は 3 行になった）。
+
+`client_credentials` / ROPC は `normal` のまま。**FAPI の対象外**で、ROPC は OAuth 2.1 で廃止（#220）。
+
+これは「要否」の話ではない（要否は登録がコンフィデンシャルかで決まる。RFC 6749 §3.2.1）。
+**方式の側の取りこぼし**を塞いだもの。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
 
 | # | 仕様 | 状況 | 影響 |
 |---|---|---|---|
-| D-1 | **RP-Initiated Logout / Front-Channel / Back-Channel Logout / Session Management** | **未実装**（`end_session` の実装も discovery も無し） | RP からのログアウト連携ができない。SSO の解除手段が無い |
-| D-2 | **PAR（RFC 9126）** | 独自の `/ros` のみ。`request_uri` の払い出しは在るが、クライアント認証・`expires_in`・ワンタイム性が無い | FAPI 2.0 Security Profile は PAR を必須としている |
+| D-1 | **RP-Initiated Logout / Front-Channel / Back-Channel Logout / Session Management** | **未実装**（`end_session` の実装も discovery も無し）。**#232** | RP からのログアウト連携ができない。SSO の解除手段が無い |
+| D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。`/ros` は **RFC 9101 §5.2.1 の任意機能**として残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
-| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | 未実装 | Mix-Up 攻撃への対策が RP 側任せ |
+| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`） | Mix-Up 攻撃への対策 |
 | D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
-| D-7 | `profile` / `address` スコープのクレーム | **空実装**（`// ・・・`）。`name` `given_name` `family_name` 等を返さない | `scopes_supported` に載っているのに何も返らない |
+| D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
@@ -1368,7 +1596,7 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 | ✅ **A-8 エラー コードの返し分け（`server_error` 一辺倒をやめる）** #187 |
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
-| A-10 discovery の項目整備 → **#189 の残り 13 項目** |
+| ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残り（仕様方針の判断を伴う 9〜14）は #228 |
 
 ### フェーズ 2 — セキュリティの底上げ
 

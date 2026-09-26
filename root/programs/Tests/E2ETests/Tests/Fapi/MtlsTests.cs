@@ -193,10 +193,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                         Jwt.Has(claims, "cnf"),
                         "cnf あり", Jwt.Has(claims, "cnf") ? "cnf あり" : "**無し**");
 
-                    r.Verify("refresh_token は発行されない",
-                        string.IsNullOrEmpty(token.RefreshToken),
-                        "発行されない",
-                        string.IsNullOrEmpty(token.RefreshToken) ? "発行されない" : "**発行された**（値は伏せる）");
+                    // **#239 の段階 3 で、mTLS / private_key_jwt なら fapi2 にも開いた。**
+                    //   以前は「証明によらず normal だけ」だったので、発行もされなかった。
+                    r.Verify("refresh_token が発行される（mTLS で更新できる証明）",
+                        !string.IsNullOrEmpty(token.RefreshToken),
+                        "発行される",
+                        string.IsNullOrEmpty(token.RefreshToken) ? "**発行されない**" : "発行された（値は伏せる）");
 
                     r.Note("**refresh_token の経路は normal の登録だけ**なので、fapi2 には発行しない（#224 の段階 2）。");
                 }

@@ -41,6 +41,8 @@
 //*  2026/09/16  玄人 幸道         /2fa_result を呼ぶ TwoFactorPushResultAsync を追加（#213）
 //*  2026/09/22  玄人 幸道         クライアント証明書を添えてトークン エンドポイントを呼ぶ TokenWithCertificateAsync を追加（#226）
 //*  2026/09/23  玄人 幸道         クライアント証明書を添えて UserInfo を呼ぶ UserInfoWithCertificateAsync を追加
+//*  2026/09/25  玄人 幸道         Discovery の issuer を引く IssuerAsync を追加（#234 の段階 1）
+//*  2026/09/25  玄人 幸道         /ciba_authz をクライアント認証つきで呼べるようにした（#234 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -113,6 +115,33 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             this._http.Dispose();
             this._handler.Dispose();
         }
+
+        #region Discovery
+
+        /// <summary>Discovery が広告する issuer（キャッシュする）</summary>
+        private string _issuer;
+
+        /// <summary>
+        /// OP の Issuer Identifier を、Discovery から引く。
+        /// </summary>
+        /// <returns>issuer</returns>
+        /// <remarks>
+        /// **テストに値を書かない。** issuer は設定キー（IssuerId）で決まり、
+        /// **待ち受けている URL とは別の値**（既定は https://ssoauth.opentouryo.com）。
+        /// CIBA の認証要求の aud は、この値でなければならない（CIBA Core 7.1.1。#234）。
+        /// </remarks>
+        public async Task<string> IssuerAsync()
+        {
+            if (string.IsNullOrEmpty(this._issuer))
+            {
+                JsonResponse res = await this.GetJsonAsync("/.well-known/openid-configuration");
+                this._issuer = res.String("issuer");
+            }
+
+            return this._issuer;
+        }
+
+        #endregion
 
         #region 素のHTTP
 
@@ -756,6 +785,54 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         #endregion
 
+        #region 非構造化データ（/Manage/AddUnstructuredData）
+
+        /// <summary>
+        /// 非構造化データ（UnstructuredData）を、画面から設定する（#230）。
+        /// </summary>
+        /// <param name="data1">usd1 に入る値</param>
+        /// <param name="data2">usd2 に入る値</param>
+        /// <returns>保存できたか</returns>
+        /// <remarks>
+        /// **`profile` / `address` のクレームの値は、ここに入る**（`UserClaimsMapping` が指す先）。
+        /// 画面は ViewModel を丸ごと JSON にして保存するので、**usd1 / usd2 しか入れられない。**
+        /// テストは、この 2 つを値の在り処として使う。
+        ///
+        /// `CanEditUnstructuredData` と `EnableEditingOfUserAttribute` が有効であること
+        /// （雛形の既定は両方 true）。サインイン済みである必要がある。
+        /// </remarks>
+        public async Task<bool> SetUnstructuredDataAsync(string data1, string data2)
+        {
+            HttpResponseMessage get = await this.GetAsync("/Manage/AddUnstructuredData");
+            string html = await get.Content.ReadAsStringAsync();
+
+            if (get.StatusCode != HttpStatusCode.OK)
+            {
+                return false;
+            }
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "UnstructuredData1", data1 ?? "" },
+                { "UnstructuredData2", data2 ?? "" }
+            };
+
+            Match m = AntiforgeryRegex.Match(html);
+
+            if (m.Success)
+            {
+                form.Add("__RequestVerificationToken", m.Groups["value"].Value);
+            }
+
+            HttpResponseMessage post = await this.PostFormAsync("/Manage/AddUnstructuredData", form);
+
+            // 成功すると、管理画面へリダイレクトする。
+            return post.StatusCode == HttpStatusCode.Found
+                || post.StatusCode == HttpStatusCode.Redirect;
+        }
+
+        #endregion
+
         #region CIBA（/ciba_authz）
 
         /// <summary>
@@ -767,6 +844,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public Task<JsonResponse> CibaAuthorizeAsync(IDictionary<string, string> form)
         {
             return this.PostJsonAsync("/ciba_authz", form);
+        }
+
+        /// <summary>
+        /// CIBA の認証リクエストを、client_secret_basic で送る（POST /ciba_authz）。
+        /// </summary>
+        /// <param name="form">フォーム（request または request_uri）</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="clientSecret">client_secret</param>
+        /// <returns>JsonResponse</returns>
+        /// <remarks>
+        /// **CIBA Core §7.1 は、この口でのクライアント認証を MUST としている**（#234 の段階 3）。
+        /// 認証を付けない <see cref="CibaAuthorizeAsync(IDictionary{string, string})"/> は、
+        /// **断られることを確かめる**ために残してある。
+        /// </remarks>
+        public Task<JsonResponse> CibaAuthorizeWithBasicAuthAsync(
+            IDictionary<string, string> form, string clientId, string clientSecret)
+        {
+            return this.PostJsonWithBasicAuthAsync("/ciba_authz", form, clientId, clientSecret);
         }
 
         #endregion

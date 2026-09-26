@@ -27,6 +27,9 @@
 //*  2026/09/08  玄人 幸道         OIDCでもredirect_uriをcodeに紐付ける（#186）
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         require_pkce のクライアントを試す口を追加（#221）
+//*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
+//*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
+//*  2026/09/25  玄人 幸道         CIBA の自己テストの結果文字列を net10.0 版に揃えた
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -544,7 +547,9 @@ namespace MultiPurposeAuthSite.Controllers
 
             string requestObject = RequestObject.CreateCiba(
                 this.ClientId, // FAPI2用か自前のクライアント
-                cibaAuthorizeEndpoint, // RequestObjectRegUriではなく。
+                // **aud は OP の Issuer Identifier（CIBA Core 7.1.1。#234 の段階 1）。**
+                //   以前は /ciba_authz のエンドポイント URL を入れていた。
+                Config.IssuerId,
                 DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds().ToString(),
                 DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
                 "hoge " + OAuth2AndOIDCConst.Scope_Openid,
@@ -560,18 +565,12 @@ namespace MultiPurposeAuthSite.Controllers
             {
                 // 検証できた。
 
-                // RequestObjectを登録する。
-                response = await Helper.GetInstance().RegisterRequestObjectAsync(
-                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
-
-                // レスポンスを確認し、request_uriを抽出。
-                string request_uri = (string)((JObject)JsonConvert
-                    .DeserializeObject(response))[OAuth2AndOIDCConst.request_uri];
-
-                // request_uriの認可リクエストを投げる（WebAPIで）。
+                // **認証要求を request で直接送る（CIBA Core 7.1.1。#234 の段階 3）。**
+                //   以前は /ros に預けて request_uri を渡していた（CIBA Core に無い独自拡張）。
+                //   /ciba_authz はクライアント認証を求めるようになったので、資格情報も添える（7.1）。
                 response = await Helper.GetInstance().CibaAuthZRequestAsync(
-                    new Uri(cibaAuthorizeEndpoint), request_uri);
+                    new Uri(cibaAuthorizeEndpoint), requestObject,
+                    this.ClientId, Helper.GetInstance().GetClientSecret(this.ClientId));
 
                 // レスポンスを確認し、auth_req_idを抽出。
                 string auth_req_id = (string)((JObject)JsonConvert
@@ -607,7 +606,7 @@ namespace MultiPurposeAuthSite.Controllers
                         string userInfo = await Helper.GetInstance().
                             GetUserInfoAsync((string)temp[OAuth2AndOIDCConst.AccessToken]);
 
-                        result = "正常終了";
+                        result = "NORMAL_END";
                     }
                     else
                     {
@@ -623,13 +622,13 @@ namespace MultiPurposeAuthSite.Controllers
                             // authorization_pending以外
                             // 終了
                             continueLoop = false;
-                            result = "異常終了";
+                            result = "ABNORMAL_END";
                         }
                     }
                 }
 
                 // 完了（SAMLのテストコードっぽくした）
-                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK: " + result;
+                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK_" + result;
             }
             else
             {
