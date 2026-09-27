@@ -475,6 +475,71 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-243.1 長い jti でも使い切りが効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT24301_長いjtiでも使い切りが効く(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-243.1",
+                    "jti が長くても、使い切りの記録ができる（HTTP 500 にならない）",
+                    "**`jti` はクライアントが決める値で、長さの上限が無い。**"
+                    + "記録先（`RequestObject.Urn`）は **38 文字**なので、"
+                    + "`jti` をそのままキーに繋いでいると **DB ストアで書き込みが失敗し、HTTP 500** になっていた"
+                    + "（#243。`mem` は辞書なので桁の制限が無く、`RT-234.3` では現れなかった）。"
+                    + "**キーを固定長の要約にして**、長さに依らず記録できるようにした。",
+                    "CIBA Core §7.1.1 / #234 の段階 2 / #243");
+
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
+
+                // **200 文字の jti。** 桁あふれを起こすのに十分な長さ（38 文字を大きく超える）。
+                string longJti = "e2e-" + new string('j', 180) + Guid.NewGuid().ToString("N");
+
+                r.Target("client_name=" + KnownClients.TestClient4
+                    + "（jti は " + longJti.Length.ToString() + " 文字）");
+
+                r.Step("(1) 長い jti の認証要求を 1 回送る");
+
+                string jws = await RequestObjectBuilder.CreateCibaAsync(
+                    client, reg.ClientId, new Dictionary<string, object>()
+                    {
+                        { "jti", longJti }
+                    });
+
+                JsonResponse first = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "request", jws }
+                }, reg.ClientId, reg.ClientSecret);
+
+                r.VerifyEqual("1 回目 : HTTP 400（500 にしない）",
+                    "400", ((int)first.StatusCode).ToString());
+
+                r.VerifyEqual("1 回目 : エラーは unknown_user_id（検証は通っている）",
+                    "unknown_user_id", first.Error ?? "（無し）");
+
+                r.Step("(2) まったく同じ要求を、もう一度送る");
+
+                JsonResponse second = await client.CibaAuthorizeWithBasicAuthAsync(new Dictionary<string, string>()
+                {
+                    { "request", jws }
+                }, reg.ClientId, reg.ClientSecret);
+
+                r.VerifyEqual("2 回目 : HTTP 400", "400", ((int)second.StatusCode).ToString());
+
+                r.VerifyEqual("2 回目 : エラーは invalid_request（jti は使用済み）",
+                    "invalid_request", second.Error ?? "（無し）");
+
+                r.Note("**このテストは `mem` でも通るが、意味があるのは DB ストア**"
+                    + "（`-UserStoreType sql` など）。`mem` は桁の制限が無いため、"
+                    + "直す前でも通ってしまう。#243 の再発は、ストアを変えた通しで捕まる。");
+
+                r.Done();
+            }
+        }
+
         /// <summary>RT-234.4 クライアント認証の無い認証要求を断る</summary>
         /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>

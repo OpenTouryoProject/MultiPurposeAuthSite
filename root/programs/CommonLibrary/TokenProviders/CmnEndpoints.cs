@@ -97,6 +97,7 @@
 //*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
+//*  2026/09/27  玄人 幸道         CIBA の jti を記録するキーを固定長にした（#243）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -118,6 +119,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Collections.Specialized;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 #if NETFX
@@ -1547,8 +1549,12 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2）</summary>
-        private const string CibaJtiKeyPrefix = "ciba:jti:";
+        /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2 / #243）</summary>
+        /// <remarks>
+        /// **短くしてある**（`ciba:jti:` から `ciba:` へ。#243）。
+        /// 記録先の `Urn` は **38 文字**（GUID 用）なので、桁を使い切らないようにする。
+        /// </remarks>
+        private const string CibaJtiKeyPrefix = "ciba:";
 
         #region VerifyCibaRequestIssuer
 
@@ -1598,10 +1604,19 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **厳密な排他はしていない。** 同じ `jti` の要求が同時に届くと、
         /// 両方が「まだ使われていない」と判定され得る。
         /// 防ぎたいのは繰り返しの再送で、同時到着はそれに当たらない。
+        ///
+        /// **キーは固定長にする**（#243）。`jti` をそのまま繋ぐと、
+        /// 記録先の `Urn`（**38 文字**。3 方言とも）に入らず、
+        /// **DB ストアでは書き込みが失敗して HTTP 500 になっていた**
+        /// （`mem` は辞書なので桁の制限が無く、気づけなかった）。
+        /// **`jti` はクライアントが決める値で長さの上限が無い**ため、桁を広げるだけでは足りない。
+        ///
+        /// **元の `jti` は値として残す**（`Value` は可変長）。
+        /// キーを見ただけでは分からなくなるが、記録を読めば再送の調査はできる。
         /// </remarks>
         private static bool ConsumeCibaJti(string jti)
         {
-            string key = CmnEndpoints.CibaJtiKeyPrefix + jti;
+            string key = CmnEndpoints.CibaJtiKey(jti);
 
             if (!string.IsNullOrEmpty(RequestObjectProvider.Get(key)))
             {
@@ -1612,9 +1627,36 @@ namespace MultiPurposeAuthSite.TokenProviders
             // **期限切れで読めなくなった行が、まだ残っていることがある**（掃除は間隔を空けて行う）。
             //   そのまま Create すると、DBMS では主キーの重複になる。先に消しておく。
             RequestObjectProvider.Delete(key);
-            RequestObjectProvider.Create(key, "used");
+
+            // **元の jti を値に入れる**（#243）。キーは要約なので、ここが手掛かりになる。
+            RequestObjectProvider.Create(key, jti);
 
             return true;
+        }
+
+        /// <summary>CIBA の jti を記録するキーを作る（固定長。#243）</summary>
+        /// <param name="jti">署名した認証要求の一意な識別子</param>
+        /// <returns>キー（`ciba:` ＋ 22 文字 ＝ 27 文字）</returns>
+        /// <remarks>
+        /// **SHA-256 の先頭 16 バイトを Base64URL にする**（22 文字）。
+        /// 接頭辞と合わせて 27 文字で、`Urn` の 38 文字に収まる。
+        ///
+        /// **衝突は考えなくてよい。** 128 ビットの要約で、
+        /// 仮に衝突しても「別の `jti` を使用済みと見なす」（**安全側**）にしかならない。
+        /// 暗号学的な強度を要する用途ではない（秘密は含まず、当てても得が無い）。
+        /// </remarks>
+        private static string CibaJtiKey(string jti)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] hash = sha256.ComputeHash(
+                    CustomEncode.StringToByte(jti ?? "", CustomEncode.UTF_8));
+
+                byte[] head = new byte[16];
+                Array.Copy(hash, head, head.Length);
+
+                return CmnEndpoints.CibaJtiKeyPrefix + CustomEncode.ToBase64UrlString(head);
+            }
         }
 
         #endregion
