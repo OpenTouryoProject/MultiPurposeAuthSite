@@ -38,6 +38,8 @@
 //*  2026/09/07  玄人 幸道         不正な入力での未処理例外を修正（#185）
 //*  2026/09/22  玄人 幸道         ProtectFromPayload の引数名を permittedLevel から clientMode に（#224）
 //*  2026/09/23  玄人 幸道         cnf を RFC 8705 の形式で書き、提示された証明書と照合する口を追加
+//*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
+//*  2026/09/27  玄人 幸道         署名検証の鍵選択を切り出し、署名だけを検証する口を追加（#232）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -461,6 +463,114 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Verify
 
+        /// <summary>JWT の署名を検証する鍵（JWS）を選ぶ（#232 で切り出し）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>JWS（決まらなければ null）</returns>
+        /// <remarks>
+        /// **VerifyAccessToken の中にあったものを、そのまま切り出した**（振る舞いは変えていない）。
+        /// **id_token_hint の検証（#232）でも同じ鍵選択が要る**ため、共通化した。
+        /// </remarks>
+        private static JWS SelectJws(string jwt)
+        {
+            JWS jws = null;
+
+            // 証明書を使用するか、Jwkを使用するか判定
+            // ヘッダの解析は、JWTでない文字列を渡されても例外にしない（#185）。
+            Dictionary<string, string> header = null;
+            try
+            {
+                string[] segments = jwt.Split('.');
+                if (segments.Length == 3)
+                {
+                    header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                        CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
+                }
+            }
+            catch
+            {
+                // Base64Url、JSONとして壊れている ＝ 検証失敗として扱う。
+                header = null;
+            }
+
+            if (header != null
+                && header.ContainsKey(JwtConst.kid)
+                && header.ContainsKey(JwtConst.alg))
+            {
+                string alg = header[JwtConst.alg];
+
+                if (string.IsNullOrEmpty(header[JwtConst.kid]))
+                {
+                    // 証明書を使用
+                    if (alg == JwtConst.ES256)
+                    {
+                        // ES256
+                        jws = new JWS_ES256_X509(CmnClientParams.EcdsaCerFilePath, "");
+                    }
+                    else
+                    {
+                        // RS256
+                        jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
+                    }
+                }
+                else
+                {
+                    JObject jwkObject = null;
+
+                    if (ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))
+                    {
+                        JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
+                        jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
+                    }
+
+                    if (jwkObject == null)
+                    {
+                        // 証明書を使用
+                        jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
+                    }
+                    else
+                    {
+                        // Jwkを使用
+                        if ((string)jwkObject[JwtConst.alg] == JwtConst.ES256)
+                        {
+                            // ES256
+                            EccPublicKeyConverter epkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
+                            jws = new JWS_ES256_Param(epkc.JwkToParam(jwkObject), false);
+                        }
+                        else
+                        {
+                            // RS256
+                            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+                            jws = new JWS_RS256_Param(
+                                rpkc.JwkToProvider(jwkObject).ExportParameters(false));
+                        }
+                    }
+                }
+            }
+
+            return jws;
+        }
+
+        /// <summary>JWT の署名だけを検証する（#232）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>この認可サーバの鍵で署名されていれば true</returns>
+        /// <remarks>
+        /// **id_token_hint の検証に使う**（RP-Initiated Logout 1.0 §2）。
+        /// そちらは **exp が切れていても受ける**（SHOULD）ため、
+        /// 期限・失効まで見る VerifyAccessToken は使えない。
+        /// **iss や aud の確認は、呼び出し側が行う。**
+        /// </remarks>
+        public static bool VerifySignature(string jwt)
+        {
+            if (string.IsNullOrEmpty(jwt))
+            {
+                return false;
+            }
+
+            JWS jws = CmnAccessToken.SelectJws(jwt);
+
+            return jws != null && jws.Verify(jwt);
+        }
+
         /// <summary>Verify</summary>
         /// <param name="jwt">string</param>
         /// <param name="identity">ClaimsIdentity</param>
@@ -548,81 +658,8 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             if (!string.IsNullOrEmpty(jwt))
             {
-                // 検証
-                JWS jws = null;
-                
-                // 証明書を使用するか、Jwkを使用するか判定
-                // ヘッダの解析は、JWTでない文字列を渡されても例外にしない（#185）。
-                Dictionary<string, string> header = null;
-                try
-                {
-                    string[] segments = jwt.Split('.');
-                    if (segments.Length == 3)
-                    {
-                        header = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                            CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
-                    }
-                }
-                catch
-                {
-                    // Base64Url、JSONとして壊れている ＝ 検証失敗として扱う。
-                    header = null;
-                }
-
-                if (header != null
-                    && header.ContainsKey(JwtConst.kid)
-                    && header.ContainsKey(JwtConst.alg))
-                {
-                    string alg = header[JwtConst.alg];
-
-                    if (string.IsNullOrEmpty(header[JwtConst.kid]))
-                    {
-                        // 証明書を使用
-                        if (alg == JwtConst.ES256)
-                        {
-                            // ES256
-                            jws = new JWS_ES256_X509(CmnClientParams.EcdsaCerFilePath, "");
-                        }
-                        else
-                        {
-                            // RS256
-                            jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
-                        }
-                    }
-                    else
-                    {
-                        JObject jwkObject = null;
-
-                        if (ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))
-                        {
-                            JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
-                            jwkObject = JwkSet.GetJwkObject(jwkSetObject, header[JwtConst.kid]);
-                        }
-
-                        if (jwkObject == null)
-                        {
-                            // 証明書を使用
-                            jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
-                        }
-                        else
-                        {
-                            // Jwkを使用
-                            if ((string)jwkObject[JwtConst.alg] == JwtConst.ES256)
-                            {
-                                // ES256
-                                EccPublicKeyConverter epkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
-                                jws = new JWS_ES256_Param(epkc.JwkToParam(jwkObject), false);
-                            }
-                            else
-                            {
-                                // RS256
-                                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-                                jws = new JWS_RS256_Param(
-                                    rpkc.JwkToProvider(jwkObject).ExportParameters(false));
-                            }
-                        }
-                    }
-                }
+                // 検証（鍵の選択は SelectJws に切り出した。#232）
+                JWS jws = CmnAccessToken.SelectJws(jwt);
 
                 // jwsが決まらなかった場合（kid無し、ヘッダ破損など）は検証失敗（#185）。
                 if (jws != null && jws.Verify(jwt))

@@ -152,7 +152,7 @@ CREATE TABLE "IssuedToken"(
 );
 
 CREATE TABLE "RequestObject"(
-    "Urn" NVARCHAR2(38) NOT NULL,                -- PK, guid
+    "Urn" NVARCHAR2(38) NOT NULL,                -- PK, guid（接頭辞付きのキーも入る。38文字に収まるものだけ。#243）
     "Value" NVARCHAR2(2000) NOT NULL,
     "CreatedDate" DATE NOT NULL,
     CONSTRAINT "PK.RequestObject" PRIMARY KEY ("Urn")

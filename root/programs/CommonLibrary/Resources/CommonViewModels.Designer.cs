@@ -268,6 +268,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   post_logout_redirect_uri に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string PostLogoutRedirectUri {
+            get {
+                return ResourceManager.GetString("PostLogoutRedirectUri", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   redirect_uri_code に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string RedirectUriCode {

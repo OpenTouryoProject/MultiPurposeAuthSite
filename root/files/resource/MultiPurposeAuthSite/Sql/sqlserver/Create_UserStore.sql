@@ -177,7 +177,7 @@ CREATE TABLE [IssuedToken](
 ) ON [PRIMARY]
 
 CREATE TABLE [RequestObject](
-    [Urn] [nvarchar](38) NOT NULL,            -- PK, guid
+    [Urn] [nvarchar](38) NOT NULL,            -- PK, guid（接頭辞付きのキーも入る。38文字に収まるものだけ。#243）
     [Value] [nvarchar](max) NULL,             -- RequestObject
     [CreatedDate] [smalldatetime] NOT NULL,
     CONSTRAINT [PK.RequestObject] PRIMARY KEY NONCLUSTERED ([Urn] ASC)

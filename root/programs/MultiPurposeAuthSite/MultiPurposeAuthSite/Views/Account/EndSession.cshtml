@@ -1,0 +1,78 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Account.EndSession
+    //* クラス日本語名  ：Account.EndSession（RP-Initiated Logout の確認画面）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/09/27  玄人 幸道         新規（#232）
+    //**********************************************************************************
+
+    RP-Initiated Logout 1.0 §2 は、id_token_hint が無い場合・現在のセッションと一致しない場合に、
+    利用者へ確認することを MUST としている（§6 : 確認なしに応じると、勝手なログアウトの手段になる）。
+    要求に誤りがある場合も、RP へは戻さずに、ここで知らせる（§4）。
+*@
+
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+
+@using System.Web
+@using System.Web.Mvc
+
+@using Touryo.Infrastructure.Framework.Authentication
+
+@{
+    ViewBag.Title = "Sign out";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+
+@if (!string.IsNullOrEmpty((string)ViewBag.Error))
+{
+    <div class="alert alert-warning">
+        @ViewBag.Error
+    </div>
+}
+
+<div class="col-md-8">
+    <p>Do you want to sign out of this site ?</p>
+
+    @using (Html.BeginForm("EndSessionConfirm", "Account", FormMethod.Post, new { @class = "form-horizontal", role = "form" }))
+    {
+        @Html.AntiForgeryToken()
+
+        @* 要求のパラメタは、確認の後にもう一度検証する（画面に状態を持たせない） *@
+        <input type="hidden" name="@OAuth2AndOIDCConst.id_token_hint" value="@ViewBag.IdTokenHint" />
+        <input type="hidden" name="@OAuth2AndOIDCConst.client_id" value="@ViewBag.ClientId" />
+        <input type="hidden" name="post_logout_redirect_uri" value="@ViewBag.PostLogoutRedirectUri" />
+        <input type="hidden" name="@OAuth2AndOIDCConst.state" value="@ViewBag.State" />
+
+        <div class="form-group">
+            <div class="col-md-offset-2 col-md-10">
+                <input type="submit" class="btn btn-primary" name="allow" value="Yes" />
+                <input type="submit" class="btn btn-primary" name="deny" value="No" />
+            </div>
+        </div>
+    }
+</div>
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

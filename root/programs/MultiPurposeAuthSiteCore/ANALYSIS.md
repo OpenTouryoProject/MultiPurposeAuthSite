@@ -311,6 +311,14 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 - `Saml2OAuth2Starters.cshtml` … SAML2 / Authorization Code / Implicit / Hybrid / PKCE /
   FAPI1 / FAPI2 / その他を、クライアントと response_mode を選んで開始する画面
 - `DeviceAuthZResponse.cshtml` … Device Authorization Grant の user_code 表示（QR は `qrcode.js`）
+- **ログアウト（RP-Initiated Logout。#232）の口も 2 つある**
+  - `Saml2OAuth2Starters.cshtml` の `submit.EndSession` … `id_token_hint` **無し**で `/end_session` へ。
+    確認画面の経路を試す
+  - `OAuth2AuthorizationCodeGrantClient.cshtml` の `Sign out` … 取得した `id_token` を
+    `id_token_hint` に載せて `/end_session` へ POST。**確認なしで戻る経路**を試す
+    （`TestClient` に `post_logout_redirect_uri` の登録が要る。雛形は `test_self_logout`）。
+    **`openid` が無いフロー（id_token が発行されない）では、戻り先を送らず確認画面の経路になる**
+    （画面にその理由を出す）
 - `OAuth2ClientAuthenticationFlow.cshtml` / `PostBinding.cshtml` / `Scroll.cshtml`
 - 対応する Redirect 先は `Account` / `Manage` 側
   （`OAuth2AuthorizationCodeGrantClient` / `OAuth2ImplicitGrantClient`）
@@ -357,14 +365,16 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 > リポジトリに直接格納する方式に変わっている。**
 > エージェントは bat を経由せず `dotnet build` を直接使うのが確実。
 
-### 9.1 現状のビルド結果（実測 2026-09-08）
+### 9.1 現状のビルド結果（実測 2026-09-27）
 
-`dotnet build MultiPurposeAuthSiteCore.sln` … **0 エラー / 6 警告**
+`1_BuildAll.ps1` の net10.0 ステップ … **0 エラー / 0 警告**（#242）。
 
-| 警告 | 件数 | 内容 |
+落とした 2 つ。**再発したら同じ手を使う。**
+
+| 警告 | もとの行数 | 対処 |
 |---|---:|---|
-| `MSB3277` | 64 | `Microsoft.Data.SqlClient` 6.1.4 と 7.0.0 の版競合。Open棟梁アセンブリが期待する版と本プロジェクトの `PackageReference` のズレ |
-| `NU1901`（低） | 8 | `NuGet.Packaging` / `NuGet.Protocol` 6.12.1（`GHSA-g4vj-cjjj-v7hg`）。`Microsoft.VisualStudio.Web.CodeGeneration.Design` からの推移的依存 |
+| `MSB3277` | 33 | `Microsoft.Data.SqlClient` を **7.0.2** にした。**Open棟梁 の `Public` / `Public.Security` が 7.0.0.0 を参照**しており、`6.1.4`（6.0.0.0）との競合だった。**Open棟梁 のアセンブリを差し替えたら、この版も見直す** |
+| `NU1901` | 6 | `Microsoft.VisualStudio.Web.CodeGeneration.Design` の参照を外した（スキャフォールディング専用の開発時ツールで、ビルド・実行には不要）。**再び入れると、推移的依存で戻ってくる** |
 
 > **`log4net` は 3.2.0 → 3.3.0 に上げた（Dependabot PR #181 と同じ内容）。**
 > **上げるまでは、ビルドは通るのに実行時に落ちていた。**

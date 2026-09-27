@@ -30,6 +30,7 @@
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
 //*  2026/09/25  玄人 幸道         CIBA の自己テストの結果文字列を net10.0 版に揃えた
+//*  2026/09/27  玄人 幸道         自己テストに RP-Initiated Logout の口を追加（#232）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -765,6 +766,13 @@ namespace MultiPurposeAuthSite.Controllers
                     #endregion
 
                     #region Starterの実行
+
+                    // **ログアウトは、クライアントの選択に依らない**（#232）。
+                    if (!string.IsNullOrEmpty(Request.Form.Get("submit.EndSession")))
+                    {
+                        return this.EndSession();
+                    }
+
                     if (!string.IsNullOrEmpty(this.ClientName))
                     {
                         #region SAML2
@@ -1443,6 +1451,28 @@ namespace MultiPurposeAuthSite.Controllers
         }
 
         #endregion
+
+        #region RP-Initiated Logout（#232）
+
+        /// <summary>Test RP-Initiated Logout</summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **この画面は id_token を持っていない**ので、`id_token_hint` を付けずに要求する。
+        /// つまり **RP-Initiated Logout 1.0 §2 の「確認しなければならない」経路**を手で試すもの。
+        ///
+        /// **`id_token_hint` 付きの本筋**（確認なしでログアウトし、`post_logout_redirect_uri` へ戻る）は、
+        /// 認可コード フローの結果画面（`Account/OAuth2AuthorizationCodeGrantClient`）のボタンで試す。
+        /// 合否の自動判定は E2E（`RT-232`）が持つ。ここはブラウザの Cookie が絡むため、
+        /// **サーバ側の自己テストでは「消えたか」を確かめられない。**
+        /// </remarks>
+        private ActionResult EndSession()
+        {
+            return Redirect(Config.OAuth2AuthorizationServerEndpointsRootURI
+                + Config.OAuth2EndSessionEndpoint);
+        }
+
+        #endregion
+
 
         #endregion
 

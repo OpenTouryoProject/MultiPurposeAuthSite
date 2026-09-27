@@ -16,6 +16,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/09/27  玄人 幸道         未使用の変数（jqueryVersion）を削除（#242）
 //**********************************************************************************
 
 using System.Web.Optimization;
@@ -40,7 +41,10 @@ namespace MultiPurposeAuthSite
         {
             // see : https://www.asp.net/ajax/cdn
 
-            string jqueryVersion = "3.7.1";
+            // **jQuery の版は、ここでは持たない**（#242）。
+            //   バンドルは "~/Scripts/jquery-{version}.js" の {version} で解決するので、
+            //   変数に持っても使い道が無く、CS0219（未使用）になっていた。
+            //   版を上げるときは Scripts のファイルと packages.config を直す。
 
             BundleTable.EnableOptimizations = !Config.IsDebug;
             BundleTable.Bundles.UseCdn = true; // same as: bundles.UseCdn = true;

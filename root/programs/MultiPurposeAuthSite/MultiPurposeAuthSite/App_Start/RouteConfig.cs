@@ -18,6 +18,7 @@
 //*  2017/04/24  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
+//*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）のルートを追加（#232）
 //**********************************************************************************
 
 using System.Web.Mvc;
@@ -64,6 +65,13 @@ namespace MultiPurposeAuthSite
                 name: "OAuth2Authorize",
                 url: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "Account", action = "OAuth2Authorize" }
+            );
+
+            // RP-Initiated Logout（#232）
+            routes.MapRoute(
+                name: "EndSession",
+                url: Config.OAuth2EndSessionEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "Account", action = "EndSession" }
             );
 
             // Device AuthZ

@@ -67,6 +67,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | | PPID（`subject_types`: `public` / `pairwise` / `uname`） | ✓ | `Util/PPIDExtension` |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
+| | `/end_session`（RP-Initiated Logout） | ✓ | #232。Front-Channel / Back-Channel は未実装（5 節 D-1） |
 | | `.well-known/openid-configuration` | ✓ | 不足あり（3 節） |
 | | `/ros`（Request Object 登録） | ✓ | **PAR ではない独自仕様** |
 | | `samlmetadata` / SAML2 IdP | ✓ | |
@@ -436,8 +437,15 @@ OIDC Core §5.3.3 の UserInfo は **401 ＋ `WWW-Authenticate`** を求める�
   `/ciba_authz` はクライアント認証をしない（段階 3 で入れる）ので、
   要求を手に入れた者が、利用者に通知を繰り返し送れてしまう。
 
-  **記録先は Request Object のストアを使い回す**（キーに `ciba:jti:` を付ける）。
+  **記録先は Request Object のストアを使い回す**（キーに `ciba:` を付ける）。
   #188 の有効期限と掃除がそのまま効き、**表を増やさない**（DDL を 3 方言とも変えなくてよい）。
+
+  **キーは固定長にしてある**（`ciba:` ＋ `jti` の SHA-256 の先頭 16 バイトを Base64URL ＝ 27 文字。**#243**）。
+  当初は `ciba:jti:` ＋ `jti` をそのまま繋いでおり、**記録先の `Urn`（38 文字）に入らず、
+  DB ストアでは書き込みが失敗して HTTP 500 になっていた**
+  （`mem` は辞書なので桁の制限が無く、`RT-234.3` では現れなかった）。
+  **`jti` はクライアントが決める値で長さの上限が無い**ため、桁を広げるだけでは足りない。
+  **元の `jti` は値として残す**ので、再送の調査はできる（`RT-243.1`）。
   **保持はそのストアの有効期限まで**（既定 300 秒）なので、要求の `exp` をそれより長くすると、
   記録が消えた後は同じ `jti` を受け付ける。厳密な排他はしていない（同時到着は防がない）。
   検証は `jti` を確かめた時点で行うので、**利用者が見つからずに終わった要求でも `jti` は消費される**（`RT-234.3`）
@@ -808,6 +816,38 @@ temp = DeviceAuthZProvider.DeviceAuthZData[deviceCode];
 - `device_code` を送らない要求は `invalid_request`
 
 E2E テスト: `EX-4.5`（使用済み）/ `EX-4.7`（発行していない・送らない）。
+
+---
+
+### B-8. JWT でない値で HTTP 500 になっていた **[Lib]** — **✅ 修正済み（#241）**
+
+**公開鍵は payload の `iss` で引く**ので、**署名検証の前に payload を読む**ことになる。
+そこに外から来た壊れた値を渡されると、処理されない例外で **HTTP 500**（JSON でない本文）になっていた。
+
+| 場所 | 壊れ方 |
+|---|---|
+| `/ros`（`RegisterRequestObject`） | `Split('.')[1]` が IndexOutOfRange / Base64URL の復号で FormatException / `JObject` が null |
+| `client_assertion` の検証（`ClientAuthentication`） | 同上 ＋ **`iss` が無いと辞書の参照で例外** |
+| 公開鍵の復号（両方） | **空かどうかを確かめる前に復号**していたため、**未登録のクライアント**で NullReferenceException |
+
+**`client_assertion` は #238 / #239 で受け口が増えていた**ので
+（`/token` の各グラント・`/par`・`/ciba_authz`・`/revoke`・`/introspect`）、
+**どの口からでも 500 に落とせる**状態だった。**実測で 5 パターンすべて 500**（両アプリ）。
+
+**対応 :** 解析を 1 か所にまとめた。
+
+| | 内容 |
+|---|---|
+| `CmnEndpoints.TryReadJwtPayload` | JWT でなければ **null**（例外にしない）。**`JObject` で読む**（`Dictionary<string, string>` だと入れ子のクレームで失敗する） |
+| `CmnEndpoints.DecodeRegisteredJwk` | 登録値が空・壊れていれば **空文字**（復号は空でないと確かめた後） |
+
+`/ros` は **400**、`client_assertion` は**アサーション無しとして扱い 401（`invalid_client`）**。
+後者は、`client_assertion_type` が誤りのときと同じ扱い（#238）。
+
+**先に書いた 2 箇所は、もともと落としていた**（`ReceiveCibaRequest` は `try`/`catch` で 400、
+`PushedAuthorizationRequest` は payload を自分で読まない）。**未対処だったのは古い 2 箇所**である。
+
+E2E : `RT-241.1`（`/ros`）/ `RT-241.2`（`client_assertion`）/ `RT-241.3`（`iss` 無し・未登録）
 
 ---
 
@@ -1525,13 +1565,52 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 これは「要否」の話ではない（要否は登録がコンフィデンシャルかで決まる。RFC 6749 §3.2.1）。
 **方式の側の取りこぼし**を塞いだもの。
 
+### C-21. Basic の資格情報を復号せずに照合していた **[Lib][Core][NetFx]** — **✅ 修正済み（#237）**
+
+**RFC 6749 §2.3.1 は、`client_id` と `client_secret` を
+`application/x-www-form-urlencoded` で符号化してから `:` で繋ぎ、Base64 にする**ことを求めている
+（Appendix B に例がある）。受け側は、**復号してから照合する**必要がある。
+
+この実装は復号していなかったため、**仕様に従うクライアントは、記号を含む秘密では認証できなかった。**
+
+| 秘密に含まれる文字 | 符号化すると | 復号しないと |
+|---|---|---|
+| `+` | `%2B` | 一致しない（素朴に復号すると**空白**になる文字でもある） |
+| `/` `=` `%` | `%2F` `%3D` `%25` | 一致しない |
+| `:` | `%3A` | **資格情報として読めない**（ヘッダが 3 つに割れる） |
+
+**秘密は base64 で生成されるのが普通**なので、`+` `/` `=` は現実に現れる。
+つまり**仕様どおりに送る相手ほど繋がらない**状態だった。
+
+**復号後と復号前の両方と照合する**ようにした（`CmnEndpoints.GetBasicCredentials`）。
+復号後で認証できなければ、復号前の値で扱う。
+**符号化しないクライアントは配備済み**（Open棟梁 の従来のクライアントを含む）なので、
+復号だけを入れると、そちらが繋がらなくなる。
+
+**英数字だけの秘密では、符号化しても同じ文字列になる**。
+このため**既存の E2E では現れず**（雛形の秘密は base64url の英数字）、
+**記号を含む秘密のクライアントを差し込んで測る**ようにした
+（`RT-237.1`〜`.3`。差し込みの仕組みは #224）。
+
+送り側（Open棟梁 の `CreateBasicAuthenticationHeaderValue`）は OpenTouryo #592 で符号化するようになった。
+**送り側だけを直すと、受け側が復号しない認可サーバに繋がらなくなる**ため、
+受け側の対応（この項）と対になっている。
+
+`:` を含む秘密が符号化しないと通らないのは、**仕様上やむを得ない**
+（区切り文字そのものなので、符号化しないクライアントには送る手段が無い）。
+
+これも C-20 と同じく**相互接続性の話**で、弱点を塞いだものではない。
+Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz`・`/par`）が、
+**両アプリとも同じ入口を通る**ようにしたので、口ごとに直し忘れる形にはしていない。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
 
 | # | 仕様 | 状況 | 影響 |
 |---|---|---|---|
-| D-1 | **RP-Initiated Logout / Front-Channel / Back-Channel Logout / Session Management** | **未実装**（`end_session` の実装も discovery も無し）。**#232** | RP からのログアウト連携ができない。SSO の解除手段が無い |
+| D-1 | **RP-Initiated Logout** | **✅ 実装済み**（#232）。`/end_session` を新設（GET / POST の両方・`id_token_hint` の検証・`post_logout_redirect_uri` の完全一致・確認画面）。Discovery に `end_session_endpoint`（`RT-232`） | RP から SSO を解除できる |
+| D-1-2 | Front-Channel / Back-Channel Logout / Session Management | 未実装。**#232 の範囲外**（別の仕様。`sid` クレームと RP 側の口の登録が要る） | **OP が他の RP へログアウトを伝えられない。** RP-Initiated Logout で消えるのは OP のセッションだけ |
 | D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。`/ros` は **RFC 9101 §5.2.1 の任意機能**として残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |

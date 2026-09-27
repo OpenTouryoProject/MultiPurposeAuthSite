@@ -35,6 +35,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
+    //*  2026/09/27  玄人 幸道         RP-Initiated Logout を試すボタンを追加（#232）
     //**********************************************************************************
 *@
 
@@ -90,6 +91,43 @@
     <br />
     <a href="https://jwt.io/">JSON Web Tokens - jwt.io</a><br />
     <a href="https://syncer.jp/json-prettyprint">JSON Pretty Linter  - JSONの整形と構文チェック</a><br />
+}
+
+
+@*
+    **RP からのログアウト**（RP-Initiated Logout 1.0。#232）。
+    上のフォームとは別の form にする（入れ子にできないため）。
+    /end_session は RP からの要求を受ける口なので、**AntiForgeryToken は付けない**
+    （RP は持てない。確認画面からの応答だけが検証される）。
+*@
+<hr />
+<form action="@(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2EndSessionEndpoint)" method="post">
+    <input type="hidden" name="id_token_hint" value="@Model.IdToken" />
+    @if (!string.IsNullOrEmpty(Model.IdToken))
+    {
+        @* **戻り先は、id_token_hint を送れるときだけ付ける。**
+           id_token_hint が無いと、OP は戻り先の正当性を確かめられず、仕様上戻せない（§3）。 *@
+        <input type="hidden" name="post_logout_redirect_uri" value="@(Config.OAuth2ClientEndpointsRootURI + "/Home/Index")" />
+    }
+    <input type="hidden" name="state" value="@Model.State" />
+    <input class="btn btn-secondary btn-block" type="submit" value="Sign out (RP-Initiated Logout)" />
+</form>
+@if (!string.IsNullOrEmpty(Model.IdToken))
+{
+    <text>
+        ※ id_token_hint を検証できるので、確認画面を挟まずにログアウトして post_logout_redirect_uri へ戻る。<br />
+        ※ クライアントの登録に post_logout_redirect_uri（test_self_logout）が無い場合は、
+        戻らずに確認画面へ進み、その理由が表示される（CONFIGURATION.md 4 節）。
+    </text>
+}
+else
+{
+    <text>
+        ※ scope に openid が無いフローでは id_token が発行されないため、id_token_hint を送れない。
+        このため確認画面の経路になる（RP-Initiated Logout 1.0 §2）。<br />
+        ※ 戻り先（post_logout_redirect_uri）も送らない。id_token_hint が無いと、
+        OP は戻り先の正当性を確かめられないため、仕様上戻せない（§3）。
+    </text>
 }
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@

@@ -70,24 +70,20 @@ namespace MultiPurposeAuthSite.ViewModels
                         Text = "Saml2 / OAuth2.0 / OIDC用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.normal.ToStringByEmit() },
                     new SelectListItem() {
+                        Text = "PKCE 必須 (require_pkce) の Client (OAuth2.1)",
+                        Value = HomeSaml2OAuth2StartersViewModel.RequirePkceClientType },                    
+                    new SelectListItem() {
+                        Text = "Device Authorization Grant用 Client",
+                        Value = OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit() },
+                    new SelectListItem() {
                         Text = "Financial-grade API - Part1用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi1.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "Financial-grade API - Part2用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() },
                     new SelectListItem() {
-                        Text = "Device Authorization Grant用 Client",
-                        Value = OAuth2AndOIDCEnum.ClientMode.device.ToStringByEmit() },
-                    new SelectListItem() {
                         Text = "Financial-grade API - CIBA用 Client",
                         Value = OAuth2AndOIDCEnum.ClientMode.fapi_ciba.ToStringByEmit() },
-                    // **クライアント単位で PKCE を必須にした Client（#221）。**
-                    //   ClientMode（列挙型）ではないので、値は文字列で持つ（"login User" と同じ扱い）。
-                    //   これを選ぶと、**下のボタンはどれも TestClient6 で動く。**
-                    //   PKCE を付けないフローは invalid_request になる（それが正しい）。
-                    new SelectListItem() {
-                        Text = "クライアント単位で PKCE 必須の Client (require_pkce)",
-                        Value = HomeSaml2OAuth2StartersViewModel.RequirePkceClientType },
                     new SelectListItem() {
                         Text = "ログイン・ユーザの Client",
                         Value = "login User" }

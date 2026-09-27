@@ -20,6 +20,8 @@
 //*  2020/12/18  西野 大介         Device AuthZ対応実施
 //*  2026/09/16  玄人 幸道         2FAのプッシュ承認（/2fa_result）のルートを追加（#216）
 //*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
+//*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
+//*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -109,7 +111,7 @@ namespace MultiPurposeAuthSite
 
             config.Routes.MapHttpRoute(
                 name: "PushedAuthorizationRequest",
-                routeTemplate: Config.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除
+                routeTemplate: OAuth2AndOIDCParams.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除
                 defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" }
             );
 

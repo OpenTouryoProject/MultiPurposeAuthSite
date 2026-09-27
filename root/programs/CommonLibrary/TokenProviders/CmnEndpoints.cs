@@ -93,7 +93,13 @@
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
 //*  2026/09/25  玄人 幸道         /ros の処理を、両アプリの Controller から移した（#235）
 //*  2026/09/25  玄人 幸道         client_assertion（RFC 7523 2.2）を読む（#238）
+//*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
+//*  2026/09/25  玄人 幸道         claims_supported を、クレームの対応付けから作る（#230）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials でも非対称の認証を受ける（#239）
+//*  2026/09/26  玄人 幸道         JWT でない値・未登録の鍵で 500 にしない（#241）
+//*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
+//*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
+//*  2026/09/27  玄人 幸道         CIBA の jti を記録するキーを固定長にした（#243）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -115,6 +121,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Collections.Specialized;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 #if NETFX
@@ -334,7 +341,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 //   request_object_endpoint（独自の /ros）は、後方互換のため残している。
                 //   こちらは RFC のとおり、フォーム形式＋クライアント認証で受ける。
                 OpenIDConfig.Add("pushed_authorization_request_endpoint",
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.AuthRequestPushUri);
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.AuthRequestPushUri);
 
                 // **PAR を必須にはしていない**（RFC 9126 §5。既定は false）。
                 OpenIDConfig.Add("require_pushed_authorization_requests", false);
@@ -345,6 +352,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                 response_modes_supported.Add("query.jwt");
                 response_modes_supported.Add("fragment.jwt");
                 response_modes_supported.Add("form_post.jwt");
+
+                #region RP-Initiated Logout（#232）
+
+                // **RP からのログアウトの口**（RP-Initiated Logout 1.0 §2.1）。
+                //   **実装しているなら、Discovery に出すことが REQUIRED。**
+                //   Front-Channel / Back-Channel Logout と Session Management は未実装なので、
+                //   frontchannel_logout_supported などは出さない（出すと「できる」と読まれる）。
+                OpenIDConfig.Add("end_session_endpoint",
+                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2EndSessionEndpoint);
+
+                #endregion
 
                 // **応答の署名アルゴリズムを広告していなかった**（JARM §7。#189 の 8）。
                 //   *.jwt の response_mode を出しているのに、RP は何で検証すればよいか分からなかった。
@@ -729,6 +747,336 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region Basic の資格情報（#237）
+
+        /// <summary>
+        /// Authorization ヘッダ（Basic）から資格情報を取り出す（#237）
+        /// </summary>
+        /// <param name="authHeader">Authorization ヘッダの値</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="client_secret">client_secret</param>
+        /// <returns>Basic の資格情報があったか</returns>
+        /// <remarks>
+        /// **RFC 6749 §2.3.1 は、`client_id` と `client_secret` を
+        /// `application/x-www-form-urlencoded` で符号化してから Base64 にする**ことを求めている。
+        /// 以前は復号しておらず、**仕様に従うクライアントは、記号を含む秘密だと認証できなかった**
+        /// （`+` `/` `=` `%` `:` など。特に `:` は分割位置がずれる）。
+        ///
+        /// **復号後と復号前の両方を受ける。**
+        /// 復号後で認証できなければ、復号前の値を返す（**符号化しないクライアントを壊さない**）。
+        /// Open棟梁 の既存のクライアントは符号化しない（OpenTouryo #592 で送り側も符号化するようになったが、
+        /// 配備済みのものは残る）。
+        ///
+        /// **英数字だけの値では、どちらも同じ文字列になる**ので、この分岐は効かない。
+        ///
+        /// ここで照合を試すのは**読むだけ**（設定・ストアの参照）なので、副作用は無い。
+        /// **フォーム（`client_secret_post`）の値は復号しない。**
+        /// そちらは枠組みが既に復号しており、二重に復号すると壊れる。
+        /// </remarks>
+        public static bool GetBasicCredentials(
+            string authHeader, out string client_id, out string client_secret)
+        {
+            client_id = "";
+            client_secret = "";
+
+            if (!AuthenticationHeader.GetCredentials(authHeader,
+                out string decodedId, out string decodedSecret,
+                out string rawId, out string rawSecret))
+            {
+                return false;
+            }
+
+            client_id = decodedId;
+            client_secret = decodedSecret;
+
+            if (decodedId != rawId || decodedSecret != rawSecret)
+            {
+                // 符号化されていた（または、符号化しないクライアントが記号を含む値を送った）。
+                //   **復号後で認証できなければ、復号前で扱う。**
+                X509Certificate2 none = null;
+
+                if (!CmnEndpoints.ClientAuthentication(
+                    decodedId, decodedSecret, ref none, out ClientModePolicy.Proof _))
+                {
+                    client_id = rawId;
+                    client_secret = rawSecret;
+                }
+            }
+
+            return true;
+        }
+
+        #endregion
+
+        #region RP-Initiated Logout（#232）
+
+        /// <summary>post_logout_redirect_uri（RP-Initiated Logout 1.0 §2）</summary>
+        /// <remarks>Open棟梁 の定数に無いので、ここで定義する（#238 の client_assertion と同じ）。</remarks>
+        public const string PostLogoutRedirectUri = "post_logout_redirect_uri";
+
+        /// <summary>
+        /// RP からのログアウト要求（/end_session）を受ける（#232）
+        /// </summary>
+        /// <param name="idTokenHint">id_token_hint（この RP に発行した id_token）</param>
+        /// <param name="clientId">client_id（任意）</param>
+        /// <param name="postLogoutRedirectUri">post_logout_redirect_uri（任意）</param>
+        /// <param name="state">state（任意）</param>
+        /// <param name="currentUserName">いまサインインしている利用者（していなければ空）</param>
+        /// <param name="verified">
+        /// **id_token_hint が検証でき、いまサインインしている利用者のものだった**
+        /// （false なら、利用者に確認しなければならない）
+        /// </param>
+        /// <param name="redirectUri">ログアウト後に戻してよい URL（state 付き。無ければ空）</param>
+        /// <param name="err">error（RP へは返さない。画面で知らせる）</param>
+        /// <param name="errDescription">error_description</param>
+        /// <remarks>
+        /// **RP-Initiated Logout 1.0 の MUST を、ここで判定する。**
+        ///
+        /// | 判定 | 根拠 |
+        /// |---|---|
+        /// | `id_token_hint` は**自分が発行したもの**か（署名と `iss`） | §2 |
+        /// | **`exp` が切れていても受ける** | §2（SHOULD） |
+        /// | `client_id` も来ていれば、`id_token` の `aud` と一致すること | §2 |
+        /// | `post_logout_redirect_uri` は**登録値と完全一致** | §3 |
+        /// | **`id_token_hint` が無ければ、RP へ戻さない** | §3 |
+        /// | 検証できなければ**利用者に確認する**（`verified` が false） | §2 / §6 |
+        ///
+        /// **サインアウトそのものは、ここでは行わない**（枠組みが違うので各アプリで行う）。
+        /// **エラーでも RP へは戻さない**（§4）。`err` は画面で知らせるためのもので、
+        /// **リダイレクトの URL には載せない。**
+        ///
+        /// **トークンは失効させない。** 仕様は求めておらず、RP には `/revoke` がある。
+        /// </remarks>
+        public static void ReceiveEndSessionRequest(
+            string idTokenHint, string clientId, string postLogoutRedirectUri, string state,
+            string currentUserName,
+            out bool verified, out string redirectUri,
+            out string err, out string errDescription)
+        {
+            verified = false;
+            redirectUri = "";
+            err = "";
+            errDescription = "";
+
+            idTokenHint = idTokenHint ?? "";
+            clientId = clientId ?? "";
+            postLogoutRedirectUri = postLogoutRedirectUri ?? "";
+            state = state ?? "";
+            currentUserName = currentUserName ?? "";
+
+            // この要求が、どのクライアントのものか
+            string aud = clientId;
+
+            if (!string.IsNullOrEmpty(idTokenHint))
+            {
+                if (!CmnEndpoints.VerifyIdTokenHint(idTokenHint, out aud, out string userName))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "id_token_hint is invalid.";
+                    return;
+                }
+
+                // **両方来ていれば、一致すること**（§2 の MUST）。
+                if (!string.IsNullOrEmpty(clientId)
+                    && !string.Equals(clientId, aud, StringComparison.Ordinal))
+                {
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "client_id does not match the id_token_hint.";
+                    return;
+                }
+
+                // **いまサインインしている利用者のものか。**
+                //   pairwise（PPID）の登録では利用者を引けないので、確認を求めることになる。
+                verified = !string.IsNullOrEmpty(userName)
+                    && string.Equals(userName, currentUserName, StringComparison.Ordinal);
+            }
+
+            if (string.IsNullOrEmpty(postLogoutRedirectUri))
+            {
+                // 戻り先の指定が無い（ログアウトするだけ）。
+                return;
+            }
+
+            if (string.IsNullOrEmpty(idTokenHint))
+            {
+                // **id_token_hint が無ければ、戻り先の正しさを確かめる手段が無い**（§3 の MUST）。
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "post_logout_redirect_uri requires id_token_hint.";
+                return;
+            }
+
+            // **登録値と完全一致**（§3）。
+            //   redirect_uri の照合（CheckRedirectUri）は大文字小文字を無視するが（C-10）、
+            //   **こちらは仕様が exactly match と書いているので、そのまま比較する。**
+            string registered = CmnEndpoints.GetRedirectUriFromConstr(
+                Helper.GetInstance().GetClientsPostLogoutRedirectUri(aud) ?? "");
+
+            if (string.IsNullOrEmpty(registered)
+                || !string.Equals(postLogoutRedirectUri, registered, StringComparison.Ordinal))
+            {
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "post_logout_redirect_uri is not registered.";
+                return;
+            }
+
+            redirectUri = postLogoutRedirectUri;
+
+            if (!string.IsNullOrEmpty(state))
+            {
+                // **state は、要求に含まれた場合だけ返す**（§2）。値は必ず符号化する（#187 と同じ理由）。
+                redirectUri += (redirectUri.Contains("?") ? "&" : "?")
+                    + OAuth2AndOIDCConst.state + "=" + Uri.EscapeDataString(state);
+            }
+        }
+
+        /// <summary>id_token_hint を検証する（#232）</summary>
+        /// <param name="idTokenHint">id_token_hint</param>
+        /// <param name="aud">この id_token を発行した先（client_id）</param>
+        /// <param name="userName">この id_token の主体（引けなければ空）</param>
+        /// <returns>自分が発行した id_token であれば true</returns>
+        /// <remarks>
+        /// **`exp` は見ない。** RP-Initiated Logout 1.0 §2 は
+        /// 「**`exp` を過ぎていても受けるべき**」としている（ログアウトは期限切れの後こそ要る）。
+        /// このため、期限と失効まで見る `CmnAccessToken.VerifyAccessToken` は使えず、
+        /// **署名だけを検証する口**（`VerifySignature`）を使う。
+        ///
+        /// **payload を先に読む**ので、JWT でない値でも例外にしない（#241 の `TryReadJwtPayload`）。
+        /// </remarks>
+        private static bool VerifyIdTokenHint(string idTokenHint, out string aud, out string userName)
+        {
+            aud = "";
+            userName = "";
+
+            try
+            {
+                JObject payload = CmnEndpoints.TryReadJwtPayload(idTokenHint);
+
+                if (payload == null)
+                {
+                    return false;
+                }
+
+                // **自分が発行したものか**（§2 の MUST）。
+                if (!string.Equals(
+                    (string)payload[OAuth2AndOIDCConst.iss], Config.IssuerId, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                if (!CmnAccessToken.VerifySignature(idTokenHint))
+                {
+                    return false;
+                }
+
+                // aud は文字列だが、配列で来ても壊れないようにする。
+                JToken audToken = payload[OAuth2AndOIDCConst.aud];
+
+                if (audToken is JArray)
+                {
+                    aud = (audToken.First == null) ? "" : ((string)audToken.First ?? "");
+                }
+                else
+                {
+                    aud = (string)audToken ?? "";
+                }
+
+                string sub = (string)payload[OAuth2AndOIDCConst.sub] ?? "";
+
+                if (string.IsNullOrEmpty(aud) || string.IsNullOrEmpty(sub))
+                {
+                    return false;
+                }
+
+                // **sub から利用者を引く**（登録の subject_types に従う。pairwise は引けない）。
+                userName = PPIDExtension.GetUserNameFromSub(aud, sub);
+
+                return true;
+            }
+            catch
+            {
+                // 外から来た値なので、例外にしない（#241 と同じ扱い）。
+                aud = "";
+                userName = "";
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region JWT の読み取り（#241）
+
+        /// <summary>JWT の payload を読む（JWT でなければ null）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>payload（読めなければ null）</returns>
+        /// <remarks>
+        /// **外から来た文字列を、例外にせず読む**（#241）。
+        /// 公開鍵を引くには payload の `iss` が要るので、**署名検証の前に読む**ことになる。
+        /// そこで壊れた値を渡されると、以前は処理されない例外で **HTTP 500** になっていた。
+        ///
+        /// | 渡された値 | 以前 |
+        /// |---|---|
+        /// | `.` が無い | `Split('.')[1]` が IndexOutOfRangeException |
+        /// | Base64URL でない | FormatException |
+        /// | JSON がオブジェクトでない | null が返り、呼び先で NullReferenceException |
+        ///
+        /// **`JObject` で読む**（`Dictionary&lt;string, string&gt;` だと、
+        /// 入れ子のクレーム（`cnf` など）で変換に失敗する）。
+        /// </remarks>
+        public static JObject TryReadJwtPayload(string jwt)
+        {
+            if (string.IsNullOrEmpty(jwt))
+            {
+                return null;
+            }
+
+            string[] parts = jwt.Split('.');
+
+            if (parts.Length < 2)
+            {
+                return null;
+            }
+
+            try
+            {
+                return JsonConvert.DeserializeObject(CustomEncode.ByteToString(
+                    CustomEncode.FromBase64UrlString(parts[1]), CustomEncode.us_ascii)) as JObject;
+            }
+            catch
+            {
+                // Base64URL でない、JSON でない（外から来た値なので、例外にしない）。
+                return null;
+            }
+        }
+
+        /// <summary>登録された公開鍵（Base64URL の JWK）を復号する（無ければ空）</summary>
+        /// <param name="base64UrlJwk">登録された値</param>
+        /// <returns>JWK の JSON（無ければ空）</returns>
+        /// <remarks>
+        /// **未登録のクライアントでは空が返る**（#241）。
+        /// 以前は空かどうかを確かめる前に復号しており、
+        /// `FromBase64UrlString(null)` が NullReferenceException になって **HTTP 500** だった。
+        /// </remarks>
+        public static string DecodeRegisteredJwk(string base64UrlJwk)
+        {
+            if (string.IsNullOrEmpty(base64UrlJwk))
+            {
+                return "";
+            }
+
+            try
+            {
+                return CustomEncode.ByteToString(
+                    CustomEncode.FromBase64UrlString(base64UrlJwk), CustomEncode.us_ascii);
+            }
+            catch
+            {
+                // 登録の値が壊れている（運用の誤り）。**要求の側の誤りと区別せず、認証失敗にする。**
+                return "";
+            }
+        }
+
+        #endregion
+
         #region GetClientAssertion
 
         /// <summary>client_assertion（RFC 7523 §2.2）</summary>
@@ -817,37 +1165,48 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             // 公開鍵取得にissが必要。
             // - issを取り出す。
-            string requestObjectString = CustomEncode.ByteToString(
-                CustomEncode.FromBase64UrlString(requestObject.Split('.')[1]), CustomEncode.us_ascii);
-            JObject payload = (JObject)JsonConvert.DeserializeObject(requestObjectString);
+            //   **JWT でない値を渡されても、例外にしない**（#241）。
+            JObject payload = CmnEndpoints.TryReadJwtPayload(requestObject);
 
-            string iss = "";
+            if (payload == null)
+            {
+                return false;
+            }
+
+            string requestObjectString = payload.ToString(Formatting.None);
+            string iss = (string)payload[OAuth2AndOIDCConst.iss];
             string pubKey = "";
             bool result = false;
+
+            if (string.IsNullOrEmpty(iss))
+            {
+                // iss が無ければ、公開鍵を引けない（#241）。
+                return false;
+            }
 
             if (payload.ContainsKey(OAuth2AndOIDCConst.client_notification_token))
             {
                 // CIBA
 
                 // - 公開鍵取得を取り出す。
-                iss = (string)payload[OAuth2AndOIDCConst.iss];
-                pubKey = Helper.GetInstance().GetJwkECDsaPublickey(iss);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+                pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                    Helper.GetInstance().GetJwkECDsaPublickey(iss));
 
                 // 署名検証
-                result = RequestObject.VerifyCiba(requestObject, out iss, pubKey);
+                result = !string.IsNullOrEmpty(pubKey)
+                    && RequestObject.VerifyCiba(requestObject, out iss, pubKey);
             }
             else
             {
                 // F-API2 CC
 
                 // - 公開鍵取得を取り出す。
-                iss = (string)payload[OAuth2AndOIDCConst.iss];
-                pubKey = Helper.GetInstance().GetJwkRsaPublickey(iss);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+                pubKey = CmnEndpoints.DecodeRegisteredJwk(
+                    Helper.GetInstance().GetJwkRsaPublickey(iss));
 
                 // 署名検証
-                result = RequestObject.Verify(requestObject, out iss, pubKey);
+                result = !string.IsNullOrEmpty(pubKey)
+                    && RequestObject.Verify(requestObject, out iss, pubKey);
             }
 
             if (!result)
@@ -1192,8 +1551,12 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
-        /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2）</summary>
-        private const string CibaJtiKeyPrefix = "ciba:jti:";
+        /// <summary>使い切りにした CIBA の jti を記録するキーの接頭辞（#234 の段階 2 / #243）</summary>
+        /// <remarks>
+        /// **短くしてある**（`ciba:jti:` から `ciba:` へ。#243）。
+        /// 記録先の `Urn` は **38 文字**（GUID 用）なので、桁を使い切らないようにする。
+        /// </remarks>
+        private const string CibaJtiKeyPrefix = "ciba:";
 
         #region VerifyCibaRequestIssuer
 
@@ -1243,10 +1606,19 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **厳密な排他はしていない。** 同じ `jti` の要求が同時に届くと、
         /// 両方が「まだ使われていない」と判定され得る。
         /// 防ぎたいのは繰り返しの再送で、同時到着はそれに当たらない。
+        ///
+        /// **キーは固定長にする**（#243）。`jti` をそのまま繋ぐと、
+        /// 記録先の `Urn`（**38 文字**。3 方言とも）に入らず、
+        /// **DB ストアでは書き込みが失敗して HTTP 500 になっていた**
+        /// （`mem` は辞書なので桁の制限が無く、気づけなかった）。
+        /// **`jti` はクライアントが決める値で長さの上限が無い**ため、桁を広げるだけでは足りない。
+        ///
+        /// **元の `jti` は値として残す**（`Value` は可変長）。
+        /// キーを見ただけでは分からなくなるが、記録を読めば再送の調査はできる。
         /// </remarks>
         private static bool ConsumeCibaJti(string jti)
         {
-            string key = CmnEndpoints.CibaJtiKeyPrefix + jti;
+            string key = CmnEndpoints.CibaJtiKey(jti);
 
             if (!string.IsNullOrEmpty(RequestObjectProvider.Get(key)))
             {
@@ -1257,9 +1629,36 @@ namespace MultiPurposeAuthSite.TokenProviders
             // **期限切れで読めなくなった行が、まだ残っていることがある**（掃除は間隔を空けて行う）。
             //   そのまま Create すると、DBMS では主キーの重複になる。先に消しておく。
             RequestObjectProvider.Delete(key);
-            RequestObjectProvider.Create(key, "used");
+
+            // **元の jti を値に入れる**（#243）。キーは要約なので、ここが手掛かりになる。
+            RequestObjectProvider.Create(key, jti);
 
             return true;
+        }
+
+        /// <summary>CIBA の jti を記録するキーを作る（固定長。#243）</summary>
+        /// <param name="jti">署名した認証要求の一意な識別子</param>
+        /// <returns>キー（`ciba:` ＋ 22 文字 ＝ 27 文字）</returns>
+        /// <remarks>
+        /// **SHA-256 の先頭 16 バイトを Base64URL にする**（22 文字）。
+        /// 接頭辞と合わせて 27 文字で、`Urn` の 38 文字に収まる。
+        ///
+        /// **衝突は考えなくてよい。** 128 ビットの要約で、
+        /// 仮に衝突しても「別の `jti` を使用済みと見なす」（**安全側**）にしかならない。
+        /// 暗号学的な強度を要する用途ではない（秘密は含まず、当てても得が無い）。
+        /// </remarks>
+        private static string CibaJtiKey(string jti)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] hash = sha256.ComputeHash(
+                    CustomEncode.StringToByte(jti ?? "", CustomEncode.UTF_8));
+
+                byte[] head = new byte[16];
+                Array.Copy(hash, head, head.Length);
+
+                return CmnEndpoints.CibaJtiKeyPrefix + CustomEncode.ToBase64UrlString(head);
+            }
         }
 
         #endregion
@@ -3211,6 +3610,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                 ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
             }
+            else if (constr.ToLower() == Const.TestSelfLogout)
+            {
+                // **ログアウト後の戻り先のテスト用**（#232）。
+                //   サイトごとに URL が違う（net48 / net10.0）ので、定数で登録して、ここで解決する。
+                ret = Config.OAuth2ClientEndpointsRootURI + "/Home/Index";
+            }
             else
             {
                 // そのまま使用する。
@@ -3531,13 +3936,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // assertionがあった場合、x509を無効化
                 x509 = null;
 
-                // pubKey
-                Dictionary<string, string> dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
-                        assertion.Split('.')[1]), CustomEncode.us_ascii));
+                // **JWT でない値・iss の無い JWT・未登録のクライアントで、例外にしない**（#241）。
+                //   ここは /token・/par・/ciba_authz・/revoke・/introspect の全てから通る（#238 / #239）。
+                JObject payload = CmnEndpoints.TryReadJwtPayload(assertion);
+                string assertionIss = (payload == null)
+                    ? "" : (string)payload[OAuth2AndOIDCConst.iss];
 
-                string pubKey = Helper.GetInstance().GetJwkRsaPublickey(dic[OAuth2AndOIDCConst.iss]);
-                pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+                // pubKey
+                string pubKey = string.IsNullOrEmpty(assertionIss)
+                    ? "" : CmnEndpoints.DecodeRegisteredJwk(
+                        Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
 
                 if (!string.IsNullOrEmpty(pubKey))
                 {

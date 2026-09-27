@@ -227,6 +227,9 @@
     // 認可エンドポイント
     "OAuth2AuthorizeEndpoint": "/authorize",
     "Saml2RequestEndpoint": "/saml2request",
+    // RP からのログアウト（RP-Initiated Logout 1.0。#232）
+    //   **既に配備された設定ファイルに無くても動く**（無ければ /end_session を使う）
+    "OAuth2EndSessionEndpoint": "/end_session",
     // Device AuthZ
     "DeviceAuthZAuthorizeEndpoint": "/device_authz",
     "DeviceAuthZVerifyEndpoint": "/device_verify",
@@ -278,6 +281,9 @@
         "redirect_uri_saml": "test_self_saml",
         "redirect_uri_code": "test_self_code",
         "redirect_uri_token": "test_self_token",
+        // ログアウト後の戻り先（RP-Initiated Logout。#232）。test_self_logout は
+        //   OAuth2ClientEndpointsRootURI + /Home/Index に解決される
+        "post_logout_redirect_uri": "test_self_logout",
         "client_name": "TestClient",
         "subject_types": "uname", // public, pairwise, uname
         "jwk_rsa_publickey": "eyJrdHkiOiJSU0EiLCJhbGciOiJSUzI1NiIsIm4iOiJybUxucTNjaHNudThrMTFWX2FjSjlFQXhjSFU4dzZCNzRMbU5tMFdGVkVRV1htOXQ4bTZRU2ZkQlR6ZWotMXpFYmV6WllOWVNzSkZDZ283WW4tTjFXY0FEU01neTZYaFliVDhuYmJwUTc5VG1rSV91aVNVdktycnhSaVNtMklUOVJ3WjdWN2Z0VWVibUI5YmJDME9PRFpfVGJMMFpVaE1sV05xMG5BbjBwYnFlYloySmwxWHRMRFRxOVVyeWxBdWVSZ3V2ekU3Mno1Qlh3VTE4S08yeWp5dTRBSkpIOU9aLVNmUktHeVlwU3J3OEdqRFhMNm5ObnA1TU9mTk1veTF4VWVIa0xWXzJaVUgtMktYV3hCVnJQbVhFWDNWbXlwN2VWSWFrV2ZrazNpeG41c2ZDZkxyekZIRmpfMjFlX3RlT1ZRVGVYUUlRcUpxN0FaQ0d1NmlxUVEiLCJlIjoiQVFBQiIsImtpZCI6IkVzSF9xS281eWNLeVU2c2xuaEVZRkN2a2RhWXRWUXhjSmxvX1pac3VJQncifQ",

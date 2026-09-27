@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/09/27  玄人 幸道         旧形式（GetPasswordHashV1）の呼び出しの警告を抑止（#242）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -101,6 +102,12 @@ namespace MultiPurposeAuthSite.Password
             // $1$ バージョンの実装
             // - ver 01-20以前のPasswordHashを使用する場合は、GetPasswordHashV1を使用して下さい。
             // - 以降、新規でPasswordHashを生成する場合は、GetPasswordHashV2を使用して下さい。
+
+            // **旧形式（CS0618）を承知の上で呼ぶ**（#242）。
+            //   GetPasswordHashV1 は Open棟梁 側で Obsolete になっているが、
+            //   **ここを V2 に変えると、ver 01-20 以前に作られたハッシュを照合できなくなる。**
+            //   互換のために残している経路なので、警告だけを抑止する。
+#pragma warning disable 618
             return "$1$" + "." +
                 GetPasswordHashV1.GetSaltedPassword(
                     password,                            // password
@@ -109,6 +116,7 @@ namespace MultiPurposeAuthSite.Password
                     10,                                  // salt length
                     Config.StretchCount    // stretch count
                 );
+#pragma warning restore 618
         }
 #endif
 
@@ -204,10 +212,14 @@ namespace MultiPurposeAuthSite.Password
         private PasswordVerificationResult V1VerifyHashAlgorithm(
             string hashedPassword, string providedPassword)
         {
+            // **旧形式（CS0618）を承知の上で呼ぶ**（#242。V1HashAlgorithm と同じ理由）。
+            //   ver 01-20 以前に作られたハッシュの照合に要る経路なので、警告だけを抑止する。
+#pragma warning disable 618
             if (GetPasswordHashV1.EqualSaltedPassword(
                 providedPassword,
                 hashedPassword.Substring(4),
                 (EnumHashAlgorithm)EnumKeyedHashAlgorithm.MACTripleDES))
+#pragma warning restore 618
             {
                 return PasswordVerificationResult.Success;
             }

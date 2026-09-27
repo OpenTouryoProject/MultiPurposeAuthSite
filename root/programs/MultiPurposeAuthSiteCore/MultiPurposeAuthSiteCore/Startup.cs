@@ -23,6 +23,9 @@
 //*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
 //*  2026/09/17  玄人 幸道         テスト用の口（/TestHybridFlow）を閉じられるようにする（#219）
 //*  2026/09/19  玄人 幸道         認証クッキーの設定を、実際に使うスキームへ移す（#223）
+//*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
+//*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
+//*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）のルートを追加（#232）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -174,6 +177,12 @@ namespace MultiPurposeAuthSite
                    name: "OAuth2Authorize",
                    pattern: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
+
+                // **RP からのログアウト**（RP-Initiated Logout 1.0。#232）
+                endpoints.MapControllerRoute(
+                   name: "EndSession",
+                   pattern: Config.OAuth2EndSessionEndpoint.Substring(1), // 先頭の[/]を削除,
+                   defaults: new { controller = "Account", action = "EndSession" });
                 #endregion
 
                 #region WebAPI Endpoint
@@ -205,7 +214,7 @@ namespace MultiPurposeAuthSite
 
                 endpoints.MapControllerRoute(
                     name: "PushedAuthorizationRequest",
-                    pattern: Config.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除,
+                    pattern: OAuth2AndOIDCParams.AuthRequestPushUri.Substring(1), // 先頭の[/]を削除,
                     defaults: new { controller = "OAuth2Endpoint", action = "PushedAuthorizationRequest" });
 
                 endpoints.MapControllerRoute(
