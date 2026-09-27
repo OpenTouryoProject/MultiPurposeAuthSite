@@ -19,7 +19,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="10.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Twitter" Version="10.0.2" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
-    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" PrivateAssets="All" />
+    <!-- **スキャフォールディング（dotnet aspnet-codegenerator）の参照は外した**（#242）。
+         ビルド・実行には不要な開発時ツールで、推移的に入る NuGet.Packaging / NuGet.Protocol 6.12.1 が
+         NU1901（低重大度の脆弱性）を出していた。必要になったら、そのときに入れる。 -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="log4net" Version="3.3.0" />
   </ItemGroup>

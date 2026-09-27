@@ -205,16 +205,24 @@ net10.0 を建てた直後に net48 を建てると、`project.assets.json` が 
 
 | ターゲット | 警告の行数（重複除去後） |
 |---|---|
-| net48 | 45 前後 |
-| net10.0 | 39 前後 |
+| net48 | **42**（#242 の段階 1 で 45 から） |
+| net10.0 | **33**（同 39 から） |
 
-主なもの。
+残っているもの。**これで全部**（#242 で実測した）。
 
-| コード | 内容 |
+| コード | 行数 | 内容 |
+|---|---:|---|
+| `MSB3277` | 40 / 33 | アセンブリの版の競合。**net48 は `Microsoft.Extensions.Logging.Abstractions` / `...DependencyInjection.Abstractions`、net10.0 は `Microsoft.Data.SqlClient` 6.0 ↔ 7.0**。OpenTouryo アセンブリと NuGet パッケージの食い違い（#242 の段階 2 で扱う） |
+| `CS1685` | 1（net48） | `System.ObsoleteAttribute` が複数アセンブリで定義されている（ASPNETCOMPILER） |
+| `CS1702` | 1（net48） | `System.Memory` の版の想定一致（同上） |
+
+**落としたもの**（#242 の段階 1）。
+
+| コード | 対処 |
 |---|---|
-| `MSB3277` | アセンブリの版の競合（`Microsoft.Data.SqlClient` 6.0 / 7.0 など）。OpenTouryo アセンブリと NuGet パッケージの食い違い |
-| `CS1685` | `System.ObsoleteAttribute` が複数アセンブリで定義されている（net48 の ASPNETCOMPILER） |
-| `CS1702` | `System.Memory` の版の想定一致 |
+| `CS0219`（1） | `BundleConfig` の未使用の変数を削った |
+| `CS0618`（2） | `CustomPasswordHasher` の V1 経路を `#pragma warning disable 618` で囲んだ（**旧いハッシュの照合に要るので、呼び出しは変えていない**） |
+| `NU1901`（6） | `Microsoft.VisualStudio.Web.CodeGeneration.Design` の参照を外した（スキャフォールディング専用の開発時ツール） |
 
 `-WarnDetail` で種類ごとの件数と代表例が出る。
 **同じ種類は、たいてい 1 か所の対処でまとめて消える。**
