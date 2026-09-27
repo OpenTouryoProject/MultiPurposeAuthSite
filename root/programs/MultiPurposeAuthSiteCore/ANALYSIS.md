@@ -316,7 +316,9 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
     確認画面の経路を試す
   - `OAuth2AuthorizationCodeGrantClient.cshtml` の `Sign out` … 取得した `id_token` を
     `id_token_hint` に載せて `/end_session` へ POST。**確認なしで戻る経路**を試す
-    （`TestClient` に `post_logout_redirect_uri` の登録が要る。雛形は `test_self_logout`）
+    （`TestClient` に `post_logout_redirect_uri` の登録が要る。雛形は `test_self_logout`）。
+    **`openid` が無いフロー（id_token が発行されない）では、戻り先を送らず確認画面の経路になる**
+    （画面にその理由を出す）
 - `OAuth2ClientAuthenticationFlow.cshtml` / `PostBinding.cshtml` / `Scroll.cshtml`
 - 対応する Redirect 先は `Account` / `Manage` 側
   （`OAuth2AuthorizationCodeGrantClient` / `OAuth2ImplicitGrantClient`）

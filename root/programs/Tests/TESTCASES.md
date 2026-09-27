@@ -3299,6 +3299,34 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 戻り先
   - **この配置の TestClient には post_logout_redirect_uri の登録が無い**ため、RP へは戻さず確認画面になる（§3 の MUST）。雛形（`_appsettings.json` / `_app.config`）には `test_self_logout` を足したので、当て直せば戻るようになる。
 
+## RT-232.10 openid が無いフローの結果画面は、戻り先を送らず、理由を表示する
+
+| | |
+|---|---|
+| 観点 | **`scope` に `openid` が無ければ `id_token` は発行されない**（自己テストの `Test Authorization Code Flow` は `openid` を付けない）。`id_token_hint` を送れないので、**戻り先を送っても仕様上戻せない**（§3）。画面が戻り先を送ってしまうと、押すたびに`post_logout_redirect_uri requires id_token_hint.` になる。**送らずに、理由を画面に出す。** |
+| 根拠 | RP-Initiated Logout 1.0 §2 / §3 ／ #232 |
+| テスト | `RT23210_openidが無いフローでは戻り先を送らず理由を出す` |
+
+**手順**
+
+1. 自己テストを通し、結果画面まで進む
+1. 画面が出しているものを確かめる
+1. それでもログアウトはできる（確認画面の経路）
+
+**検証（合否を判定する）**
+
+- 結果画面が開く（HTTP 200）
+- id_token_hint に id_token が載らない
+- 戻り先（post_logout_redirect_uri）を送らない
+- 理由を画面に出す
+- HTTP 200（確認画面）
+- 確認すればログアウトする（HTTP 302）
+- サインアウトされた
+
+**補足**
+
+- **Razor の分岐は実行時にコンパイルされる**ので、この経路（id_token が無い側）も叩いておく。ビルドでは確かめられない。
+
 ## RT-233.1 /ciba_authz に request（署名付き JWT）を直接送ると、CIBA が成立する
 
 | | |

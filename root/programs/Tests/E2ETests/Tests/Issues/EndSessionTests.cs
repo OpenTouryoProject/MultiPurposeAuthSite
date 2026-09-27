@@ -636,5 +636,92 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Done();
             }
         }
+
+        /// <summary>RT-232.10 openid が無いフローの結果画面</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23210_openidが無いフローでは戻り先を送らず理由を出す(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-232.10",
+                    "openid が無いフローの結果画面は、戻り先を送らず、理由を表示する",
+                    "**`scope` に `openid` が無ければ `id_token` は発行されない**"
+                    + "（自己テストの `Test Authorization Code Flow` は `openid` を付けない）。"
+                    + "`id_token_hint` を送れないので、**戻り先を送っても仕様上戻せない**（§3）。"
+                    + "画面が戻り先を送ってしまうと、押すたびに"
+                    + "`post_logout_redirect_uri requires id_token_hint.` になる。"
+                    + "**送らずに、理由を画面に出す。**",
+                    "RP-Initiated Logout 1.0 §2 / §3 ／ #232");
+
+                await client.SignInAsync();
+
+                r.Target("自己テスト : Authorization Code Flow（openid 無し）→ 結果画面");
+
+                r.Step("(1) 自己テストを通し、結果画面まで進む");
+
+                HttpResponseMessage starter = await client.StartSelfTestAsync(
+                    "AuthorizationCode", "normal");
+
+                string authorizeUrl = EndSessionTests.LocationOf(starter);
+
+                Assert.False(string.IsNullOrEmpty(authorizeUrl),
+                    "前提: 自己テストが認可リクエストへ飛ぶこと（HTTP "
+                    + (int)starter.StatusCode + "）");
+
+                AuthZResponse authz = await client.AuthorizeAndGrantAsync(authorizeUrl);
+
+                Assert.False(string.IsNullOrEmpty(authz.Code),
+                    "前提: 認可コードが返ること（" + authz.ToString() + "）");
+
+                HttpResponseMessage screen = await client.GetAsync(authz.Location);
+                string html = await screen.Content.ReadAsStringAsync();
+
+                r.VerifyEqual("結果画面が開く（HTTP 200）", "200", ((int)screen.StatusCode).ToString());
+
+                r.Step("(2) 画面が出しているものを確かめる");
+
+                // **Razor は値が null の属性を出力しない**ので、value 属性そのものが消える。
+                //   「空文字列で出る」ことを前提にせず、**JWT が載っていないこと**で見る。
+                bool noIdToken = !System.Text.RegularExpressions.Regex.IsMatch(
+                    html, "name=\"id_token_hint\"[^>]*value=\"ey");
+
+                r.Verify("id_token_hint に id_token が載らない", noIdToken,
+                    "JWT が無い", noIdToken ? "JWT が無い" : "**JWT が載っている**");
+
+                bool noRedirectUri = !html.Contains("name=\"post_logout_redirect_uri\"");
+
+                r.Verify("戻り先（post_logout_redirect_uri）を送らない", noRedirectUri,
+                    "hidden が無い", noRedirectUri ? "hidden が無い" : "**hidden が有る**");
+
+                bool hasReason = html.Contains("openid が無いフロー");
+
+                r.Verify("理由を画面に出す", hasReason,
+                    "「openid が無いフロー…」を表示",
+                    hasReason ? "表示している" : "**表示していない**");
+
+                r.Step("(3) それでもログアウトはできる（確認画面の経路）");
+
+                HttpResponseMessage posted = await client.SubmitSelfTestLogoutAsync(html);
+
+                r.VerifyEqual("HTTP 200（確認画面）", "200", ((int)posted.StatusCode).ToString());
+
+                HttpResponseMessage confirmed = await client.ConfirmEndSessionAsync(
+                    await posted.Content.ReadAsStringAsync(), true);
+
+                r.VerifyEqual("確認すればログアウトする（HTTP 302）",
+                    "302", ((int)confirmed.StatusCode).ToString());
+
+                r.Verify("サインアウトされた", !await client.IsSessionAliveAsync(),
+                    "セッション無し", "セッション無し");
+
+                r.Note("**Razor の分岐は実行時にコンパイルされる**ので、"
+                    + "この経路（id_token が無い側）も叩いておく。ビルドでは確かめられない。");
+
+                r.Done();
+            }
+        }
     }
 }
