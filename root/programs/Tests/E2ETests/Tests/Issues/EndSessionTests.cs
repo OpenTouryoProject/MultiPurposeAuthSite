@@ -468,5 +468,173 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Done();
             }
         }
+
+        /// <summary>RT-232.8 自己テストのボタン（Starters）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23208_自己テストのボタンから確認画面まで進める(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-232.8",
+                    "アプリ同梱の自己テスト（Starters）のボタンから、ログアウトを試せる",
+                    "**手で試せる口を、他のフローと同じ場所に置く。**"
+                    + "この画面は id_token を持たないので、**確認画面の経路**（§2 の MUST）を通る。"
+                    + "`id_token_hint` 付きの経路は `RT-232.9` で見る。",
+                    "RP-Initiated Logout 1.0 §2 ／ #232");
+
+                await client.SignInAsync();
+
+                JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
+                string endSession = discovery.String("end_session_endpoint");
+
+                r.Target("POST /Home/Saml2OAuth2Starters に submit.EndSession を送る");
+
+                r.Step("(1) ボタンを押す");
+
+                HttpResponseMessage starter = await client.StartSelfTestAsync("EndSession");
+
+                r.VerifyEqual("HTTP 302", "302", ((int)starter.StatusCode).ToString());
+
+                string location = EndSessionTests.LocationOf(starter);
+
+                r.VerifyEqual("Discovery が広告する end_session_endpoint へ飛ばす",
+                    endSession, location);
+
+                r.Step("(2) 飛び先（/end_session）を開く");
+
+                HttpResponseMessage page = await client.GetAsync(location);
+
+                r.VerifyEqual("HTTP 200（確認画面）", "200", ((int)page.StatusCode).ToString());
+
+                r.Verify("まだサインアウトしていない", await client.IsSessionAliveAsync(),
+                    "セッション有り", "セッション有り");
+
+                r.Step("(3) 確認画面で「はい」を押す");
+
+                HttpResponseMessage confirmed = await client.ConfirmEndSessionAsync(
+                    await page.Content.ReadAsStringAsync(), true);
+
+                r.VerifyEqual("HTTP 302", "302", ((int)confirmed.StatusCode).ToString());
+
+                r.Verify("サインアウトされた", !await client.IsSessionAliveAsync(),
+                    "セッション無し", "セッション無し");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-232.9 自己テストの結果画面のボタン</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT23209_認可コードの結果画面からid_token_hintつきでログアウトできる(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-232.9",
+                    "認可コード フローの結果画面から、id_token_hint 付きでログアウトできる",
+                    "**取得した id_token をそのまま `id_token_hint` に使える**ことを、画面の側から確かめる。"
+                    + "`RT-232.2` は要求の組み立てをテストが行うが、ここは**画面が出しているフォーム**を"
+                    + "そのまま送る（自己テストの口が壊れていないこと）。",
+                    "RP-Initiated Logout 1.0 §2 / §3 ／ #232");
+
+                await client.SignInAsync();
+
+                JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
+                string endSession = discovery.String("end_session_endpoint");
+
+                r.Target("自己テスト : Authorization Code Flow (OIDC) → 結果画面の Sign out");
+
+                r.Step("(1) 自己テストで認可コード フローを通し、結果画面まで進む");
+
+                HttpResponseMessage starter = await client.StartSelfTestAsync(
+                    "AuthorizationCode_OIDC", "normal");
+
+                string authorizeUrl = EndSessionTests.LocationOf(starter);
+
+                Assert.False(string.IsNullOrEmpty(authorizeUrl),
+                    "前提: 自己テストが認可リクエストへ飛ぶこと（HTTP "
+                    + (int)starter.StatusCode + "）");
+
+                AuthZResponse authz = await client.AuthorizeAndGrantAsync(authorizeUrl);
+
+                Assert.False(string.IsNullOrEmpty(authz.Code),
+                    "前提: 認可コードが返ること（" + authz.ToString() + "）");
+
+                // 結果画面（この画面が、コードをトークンに交換して表示する）。
+                HttpResponseMessage screen = await client.GetAsync(authz.Location);
+                string html = await screen.Content.ReadAsStringAsync();
+
+                r.VerifyEqual("結果画面が開く（HTTP 200）", "200", ((int)screen.StatusCode).ToString());
+
+                r.Step("(2) 画面が出しているログアウトのフォームを確かめる");
+
+                r.Verify("フォームの宛先が end_session_endpoint である",
+                    html.Contains(endSession),
+                    "end_session の URL を含む",
+                    html.Contains(endSession) ? "含む" : "**含まない**");
+
+                bool hasIdTokenHint = System.Text.RegularExpressions.Regex.IsMatch(
+                    html, "name=\"id_token_hint\"[^>]*value=\"ey[^\"]+\"");
+
+                r.Verify("id_token_hint に id_token が入っている", hasIdTokenHint,
+                    "JWT が入っている（値は伏せる）",
+                    hasIdTokenHint ? "入っている" : "**空、または JWT でない**");
+
+                // **画面が送る戻り先が、登録の定数（test_self_logout）の解決先と一致すること。**
+                //   ここが合っていれば、雛形どおりに登録した配置では RP へ戻る
+                //   （この配置の登録の有無に依らず確かめられる）。
+                bool matchesRegistered = System.Text.RegularExpressions.Regex.IsMatch(
+                    html, "name=\"post_logout_redirect_uri\"[^>]*value=\""
+                        + System.Text.RegularExpressions.Regex.Escape(
+                            KnownClients.PostLogoutRedirectUri(client)) + "\"");
+
+                r.Verify("戻り先が test_self_logout の解決先と一致する", matchesRegistered,
+                    KnownClients.PostLogoutRedirectUri(client),
+                    matchesRegistered ? KnownClients.PostLogoutRedirectUri(client)
+                                      : "**一致しない**");
+
+                r.Step("(3) そのフォームを送る");
+
+                HttpResponseMessage posted = await client.SubmitSelfTestLogoutAsync(html);
+
+                if (posted.StatusCode == HttpStatusCode.Found
+                    || posted.StatusCode == HttpStatusCode.Redirect)
+                {
+                    Dictionary<string, string> query = new Dictionary<string, string>();
+                    string to = EndSessionTests.SplitLocation(
+                        EndSessionTests.LocationOf(posted), query);
+
+                    r.Observe("戻り先", to,
+                        "**登録（post_logout_redirect_uri）が有る**ので、確認なしで RP へ戻った。");
+
+                    r.Verify("state を返す", query.ContainsKey("state"),
+                        "state あり", query.ContainsKey("state") ? "あり" : "**なし**");
+                }
+                else
+                {
+                    r.Observe("戻り先", "戻らない（HTTP " + (int)posted.StatusCode + " : 確認画面）",
+                        "**この配置の TestClient には post_logout_redirect_uri の登録が無い**ため、"
+                        + "RP へは戻さず確認画面になる（§3 の MUST）。"
+                        + "雛形（`_appsettings.json` / `_app.config`）には `test_self_logout` を"
+                        + "足したので、当て直せば戻るようになる。");
+
+                    posted = await client.ConfirmEndSessionAsync(
+                        await posted.Content.ReadAsStringAsync(), true);
+
+                    r.VerifyEqual("確認すればログアウトする（HTTP 302）",
+                        "302", ((int)posted.StatusCode).ToString());
+                }
+
+                r.Verify("サインアウトされた", !await client.IsSessionAliveAsync(),
+                    "セッション無し", "セッション無し");
+
+                r.Done();
+            }
+        }
     }
 }

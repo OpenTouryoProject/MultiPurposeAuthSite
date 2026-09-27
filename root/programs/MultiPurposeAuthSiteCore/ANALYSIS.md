@@ -311,6 +311,12 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 - `Saml2OAuth2Starters.cshtml` … SAML2 / Authorization Code / Implicit / Hybrid / PKCE /
   FAPI1 / FAPI2 / その他を、クライアントと response_mode を選んで開始する画面
 - `DeviceAuthZResponse.cshtml` … Device Authorization Grant の user_code 表示（QR は `qrcode.js`）
+- **ログアウト（RP-Initiated Logout。#232）の口も 2 つある**
+  - `Saml2OAuth2Starters.cshtml` の `submit.EndSession` … `id_token_hint` **無し**で `/end_session` へ。
+    確認画面の経路を試す
+  - `OAuth2AuthorizationCodeGrantClient.cshtml` の `Sign out` … 取得した `id_token` を
+    `id_token_hint` に載せて `/end_session` へ POST。**確認なしで戻る経路**を試す
+    （`TestClient` に `post_logout_redirect_uri` の登録が要る。雛形は `test_self_logout`）
 - `OAuth2ClientAuthenticationFlow.cshtml` / `PostBinding.cshtml` / `Scroll.cshtml`
 - 対応する Redirect 先は `Account` / `Manage` 側
   （`OAuth2AuthorizationCodeGrantClient` / `OAuth2ImplicitGrantClient`）

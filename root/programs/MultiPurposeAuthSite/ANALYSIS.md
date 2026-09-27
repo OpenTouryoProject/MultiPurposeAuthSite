@@ -190,7 +190,7 @@ net10.0 版は `Startup.UseEndpoints` の 1 箇所だが、**net48 は MVC と W
 
 | ファイル | 登録するもの |
 |---|---|
-| `App_Start/RouteConfig.cs` | `Saml2Request` / `OAuth2Authorize` / `DeviceAuthZVerify` ＋ Default |
+| `App_Start/RouteConfig.cs` | `Saml2Request` / `OAuth2Authorize` / `EndSession`（#232）/ `DeviceAuthZVerify` ＋ Default |
 | `App_Start/WebApiConfig.cs` | `OAuth2Token` `GetUserClaims` `RevokeToken` `IntrospectToken` `JwksUri` `RequestObjectUri` `DeviceAuthZAuthorize` `CibaAuthorize` `CibaPushResult` `SetDeviceToken` `TwoFactorPushResult` `TestHybridFlow` `ChageToUser` ＋ `api/{controller}/{action}/{id}` |
 
 いずれもパスは `Config.*`（＝ `app.config`）から取り、`.Substring(1)` で先頭 `/` を落とす。

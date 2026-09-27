@@ -45,6 +45,7 @@
 //*  2026/09/25  玄人 幸道         /ciba_authz をクライアント認証つきで呼べるようにした（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         Basic を符号化せずに送る口（urlEncode）を追加（#237）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）の口を追加（#232）
+//*  2026/09/27  玄人 幸道         自己テストの画面が出すログアウトのフォームを送る口を追加（#232）
 //**********************************************************************************
 
 using System;
@@ -989,25 +990,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         }
 
         /// <summary>
-        /// 確認画面（EndSession）に「はい」または「いいえ」を返す（#232）。
+        /// 画面に埋まっているログアウト要求の hidden を取り出す（#232）。
         /// </summary>
-        /// <param name="html">確認画面の HTML</param>
-        /// <param name="allow">true : はい / false : いいえ</param>
-        /// <returns>応答</returns>
-        /// <remarks>
-        /// **画面が出している hidden の値を、そのまま送り返す**（要求のパラメタは、確認の後に再検証される）。
-        /// 画面は AntiForgeryToken を埋めており、**こちらは検証される**ので必ず送る。
-        /// </remarks>
-        public async Task<HttpResponseMessage> ConfirmEndSessionAsync(string html, bool allow)
+        /// <param name="html">画面の HTML</param>
+        /// <returns>フォームの項目</returns>
+        private static Dictionary<string, string> LogoutHiddenValues(string html)
         {
             Dictionary<string, string> form = new Dictionary<string, string>();
-
-            Match token = AntiforgeryRegex.Match(html);
-
-            if (token.Success)
-            {
-                form.Add("__RequestVerificationToken", token.Groups["value"].Value);
-            }
 
             foreach (string name in new string[] {
                 "id_token_hint", "client_id", "post_logout_redirect_uri", "state" })
@@ -1020,6 +1009,49 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 {
                     form.Add(name, hidden.Groups["value"].Value);
                 }
+            }
+
+            return form;
+        }
+
+        /// <summary>
+        /// 自己テストの画面が出している「Sign out」のフォームを、そのまま送る（#232）。
+        /// </summary>
+        /// <param name="html">認可コード フローの結果画面（OAuth2AuthorizationCodeGrantClient）の HTML</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **画面と同じものを送る**（`id_token_hint` ＋ `post_logout_redirect_uri` ＋ `state`）。
+        /// RP からの要求なので、**AntiForgeryToken は送らない**（/end_session は検証しない）。
+        /// </remarks>
+        public async Task<HttpResponseMessage> SubmitSelfTestLogoutAsync(string html)
+        {
+            HttpResponseMessage res = await this.PostFormAsync(
+                "/end_session", LogoutHiddenValues(html));
+
+            this.NoteSignedOut(res);
+
+            return res;
+        }
+
+        /// <summary>
+        /// 確認画面（EndSession）に「はい」または「いいえ」を返す（#232）。
+        /// </summary>
+        /// <param name="html">確認画面の HTML</param>
+        /// <param name="allow">true : はい / false : いいえ</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **画面が出している hidden の値を、そのまま送り返す**（要求のパラメタは、確認の後に再検証される）。
+        /// 画面は AntiForgeryToken を埋めており、**こちらは検証される**ので必ず送る。
+        /// </remarks>
+        public async Task<HttpResponseMessage> ConfirmEndSessionAsync(string html, bool allow)
+        {
+            Dictionary<string, string> form = LogoutHiddenValues(html);
+
+            Match token = AntiforgeryRegex.Match(html);
+
+            if (token.Success)
+            {
+                form.Add("__RequestVerificationToken", token.Groups["value"].Value);
             }
 
             // どちらのボタンを押したかは、ボタンの name が送られるかで判別される。
