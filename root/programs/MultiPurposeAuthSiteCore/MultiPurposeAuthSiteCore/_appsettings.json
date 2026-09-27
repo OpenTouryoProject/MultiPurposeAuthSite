@@ -227,6 +227,9 @@
     // 認可エンドポイント
     "OAuth2AuthorizeEndpoint": "/authorize",
     "Saml2RequestEndpoint": "/saml2request",
+    // RP からのログアウト（RP-Initiated Logout 1.0。#232）
+    //   **既に配備された設定ファイルに無くても動く**（無ければ /end_session を使う）
+    "OAuth2EndSessionEndpoint": "/end_session",
     // Device AuthZ
     "DeviceAuthZAuthorizeEndpoint": "/device_authz",
     "DeviceAuthZVerifyEndpoint": "/device_verify",

@@ -193,14 +193,40 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 
 > `CreateClientsIdentity` はこの項目を出力しない。必要なクライアントにだけ、手で足す。
 
+### `post_logout_redirect_uri` — ログアウト後の戻り先（任意。#232）
+
+**RP からのログアウト（`/end_session`）の後に、RP へ戻してよい URL。**
+OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に当たる
+（仕様は配列だが、既存の `redirect_uri_*` と同じく**1 本**で持つ）。
+
+```json
+"post_logout_redirect_uri": "https://rp.example.com/logged_out"
+```
+
+| 登録 | 扱い |
+|---|---|
+| **項目が無い** | **ログアウトはできるが、RP へは戻さない**（自サイトの画面に戻る） |
+| 有る | **完全一致**したときだけ戻す（**大文字小文字も区別する**。§3 は exactly match） |
+
+**口（エンドポイント）の URL は、設定キー `OAuth2EndSessionEndpoint`**（既定 `/end_session`）。
+**既に配備された設定ファイルに無くても動く**（無ければ既定値を使う）。Discovery の
+`end_session_endpoint` にも、この値が出る。
+
+**`id_token_hint` が無い要求では、登録が有っても戻さない**（§3 の MUST）。
+戻り先の正しさを確かめる手段が無いため。
+
+> `CreateClientsIdentity` はこの項目を出力しない。必要なクライアントにだけ、手で足す。
+> 画面（`/Manage/AddSaml2OAuth2Data`）から登録したクライアントでも設定できる。
+
 ### `redirect_uri` の記号
 
 `test_self_code` / `test_self_token` は URL ではなく**記号**である。
 サーバが `CmnEndpoints.GetRedirectUriFromConstr` で実 URL に解決する。
 
 ```
-test_self_code  → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Account
-test_self_token → OAuth2ClientEndpointsRootURI + OAuth2ImplicitGrantClient_Account
+test_self_code   → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Account
+test_self_token  → OAuth2ClientEndpointsRootURI + OAuth2ImplicitGrantClient_Account
+test_self_logout → OAuth2ClientEndpointsRootURI + /Home/Index（post_logout_redirect_uri 用。#232）
 ```
 
 **`OAuth2AuthorizationServerEndpointsRootURI` ではなく `OAuth2ClientEndpointsRootURI` を使う。**

@@ -31,6 +31,7 @@
 //*  2017/04/24  西野 大介         新規
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
+//*  2026/09/27  玄人 幸道         ログアウト後の戻り先のテスト用の定数を追加（#232）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -113,6 +114,13 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>tokenのテスト用のRedirectUri</summary>
         public const string TestSelfToken = "test_self_token";
+
+        /// <summary>ログアウト後の戻り先（post_logout_redirect_uri）のテスト用の値（#232）</summary>
+        /// <remarks>
+        /// **サイトごとに URL が違う**（net48 と net10.0 で待ち受けが別）ので、
+        /// 定数で登録し、サーバ側で解決する（test_self_code / test_self_token と同じ考え）。
+        /// </remarks>
+        public const string TestSelfLogout = "test_self_logout";
 
         #endregion
 

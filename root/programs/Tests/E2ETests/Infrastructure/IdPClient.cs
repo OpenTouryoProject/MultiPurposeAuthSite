@@ -44,6 +44,7 @@
 //*  2026/09/25  玄人 幸道         Discovery の issuer を引く IssuerAsync を追加（#234 の段階 1）
 //*  2026/09/25  玄人 幸道         /ciba_authz をクライアント認証つきで呼べるようにした（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         Basic を符号化せずに送る口（urlEncode）を追加（#237）
+//*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）の口を追加（#232）
 //**********************************************************************************
 
 using System;
@@ -920,6 +921,145 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return this.PostJsonWithAuthorizationAsync("/2fa_result",
                 new Dictionary<string, string>() { { "code", code } },
                 accessToken == null ? null : "Bearer " + accessToken);
+        }
+
+        #endregion
+
+        #region RP-Initiated Logout（/end_session。#232）
+
+        /// <summary>ログアウト要求のパラメタを組み立てる（値が null の項目は送らない）</summary>
+        /// <param name="idTokenHint">id_token_hint</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="postLogoutRedirectUri">post_logout_redirect_uri</param>
+        /// <param name="state">state</param>
+        /// <returns>パラメタ</returns>
+        private static Dictionary<string, string> EndSessionParams(
+            string idTokenHint, string clientId, string postLogoutRedirectUri, string state)
+        {
+            return new Dictionary<string, string>()
+            {
+                { "id_token_hint", idTokenHint },
+                { "client_id", clientId },
+                { "post_logout_redirect_uri", postLogoutRedirectUri },
+                { "state", state }
+            };
+        }
+
+        /// <summary>
+        /// ログアウト エンドポイント（/end_session）を GET で呼ぶ（#232）。
+        /// </summary>
+        /// <param name="idTokenHint">id_token_hint（null なら送らない）</param>
+        /// <param name="clientId">client_id（null なら送らない）</param>
+        /// <param name="postLogoutRedirectUri">post_logout_redirect_uri（null なら送らない）</param>
+        /// <param name="state">state（null なら送らない）</param>
+        /// <returns>応答（リダイレクトは自動追跡しないので、Location を観測できる）</returns>
+        public async Task<HttpResponseMessage> EndSessionAsync(
+            string idTokenHint = null, string clientId = null,
+            string postLogoutRedirectUri = null, string state = null)
+        {
+            string query = BuildQuery(
+                EndSessionParams(idTokenHint, clientId, postLogoutRedirectUri, state));
+
+            HttpResponseMessage res = await this.GetAsync("/end_session?" + query);
+
+            this.NoteSignedOut(res);
+
+            return res;
+        }
+
+        /// <summary>
+        /// ログアウト エンドポイント（/end_session）を POST で呼ぶ（#232）。
+        /// </summary>
+        /// <param name="idTokenHint">id_token_hint（null なら送らない）</param>
+        /// <param name="clientId">client_id（null なら送らない）</param>
+        /// <param name="postLogoutRedirectUri">post_logout_redirect_uri（null なら送らない）</param>
+        /// <param name="state">state（null なら送らない）</param>
+        /// <returns>応答</returns>
+        /// <remarks>**GET と POST の両方を受けることが MUST**（RP-Initiated Logout 1.0 §2）。</remarks>
+        public async Task<HttpResponseMessage> EndSessionPostAsync(
+            string idTokenHint = null, string clientId = null,
+            string postLogoutRedirectUri = null, string state = null)
+        {
+            HttpResponseMessage res = await this.PostFormAsync("/end_session",
+                EndSessionParams(idTokenHint, clientId, postLogoutRedirectUri, state));
+
+            this.NoteSignedOut(res);
+
+            return res;
+        }
+
+        /// <summary>
+        /// 確認画面（EndSession）に「はい」または「いいえ」を返す（#232）。
+        /// </summary>
+        /// <param name="html">確認画面の HTML</param>
+        /// <param name="allow">true : はい / false : いいえ</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **画面が出している hidden の値を、そのまま送り返す**（要求のパラメタは、確認の後に再検証される）。
+        /// 画面は AntiForgeryToken を埋めており、**こちらは検証される**ので必ず送る。
+        /// </remarks>
+        public async Task<HttpResponseMessage> ConfirmEndSessionAsync(string html, bool allow)
+        {
+            Dictionary<string, string> form = new Dictionary<string, string>();
+
+            Match token = AntiforgeryRegex.Match(html);
+
+            if (token.Success)
+            {
+                form.Add("__RequestVerificationToken", token.Groups["value"].Value);
+            }
+
+            foreach (string name in new string[] {
+                "id_token_hint", "client_id", "post_logout_redirect_uri", "state" })
+            {
+                Match hidden = new Regex(
+                    "name=\"" + name + "\"[^>]*value=\"(?<value>[^\"]*)\"",
+                    RegexOptions.IgnoreCase).Match(html);
+
+                if (hidden.Success)
+                {
+                    form.Add(name, hidden.Groups["value"].Value);
+                }
+            }
+
+            // どちらのボタンを押したかは、ボタンの name が送られるかで判別される。
+            form.Add(allow ? "allow" : "deny", allow ? "Yes" : "No");
+
+            HttpResponseMessage res = await this.PostFormAsync("/Account/EndSessionConfirm", form);
+
+            this.NoteSignedOut(res);
+
+            return res;
+        }
+
+        /// <summary>
+        /// サーバ側のセッションが残っているか（#232）。
+        /// </summary>
+        /// <returns>残っていれば true</returns>
+        /// <remarks>
+        /// **サインインが要る画面**（/Manage/Index）が開けるかで見る。
+        /// サインアウトしていれば、サインイン画面へのリダイレクト（302）になる。
+        /// </remarks>
+        public async Task<bool> IsSessionAliveAsync()
+        {
+            HttpResponseMessage res = await this.GetAsync("/Manage/Index");
+
+            return res.StatusCode == HttpStatusCode.OK;
+        }
+
+        /// <summary>ログアウトが行われた（リダイレクトで返った）ら、サインイン済みの印を降ろす</summary>
+        /// <param name="res">/end_session の応答</param>
+        /// <remarks>
+        /// **確認画面（200）のときは降ろさない。** その場合、セッションはまだ生きている。
+        /// </remarks>
+        private void NoteSignedOut(HttpResponseMessage res)
+        {
+            if (res.StatusCode == HttpStatusCode.Found
+                || res.StatusCode == HttpStatusCode.Redirect
+                || res.StatusCode == HttpStatusCode.SeeOther)
+            {
+                this.IsSignedIn = false;
+            }
         }
 
         #endregion

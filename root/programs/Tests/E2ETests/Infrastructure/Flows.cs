@@ -38,6 +38,7 @@
 //*  2026/09/22  玄人 幸道         登録値が不正な TestClient4_3 を追加（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
 //*  2026/09/27  玄人 幸道         記号を含む client_secret の TestClient_2 / TestClient_3 を追加（#237）
+//*  2026/09/27  玄人 幸道         post_logout_redirect_uri を登録した TestClient_4 を追加（#232）
 //**********************************************************************************
 
 using System;
@@ -117,6 +118,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public const string TestClient_3 = "TestClient_3";
 
         /// <summary>
+        /// TestClient（normal）を写し、**post_logout_redirect_uri を登録**したクライアント（#232）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// 登録値は定数（test_self_logout）で、**サーバ側で URL に解決される**
+        /// （サイトごとに URL が違うため。CmnEndpoints.GetRedirectUriFromConstr）。
+        /// 解決後の URL は PostLogoutRedirectUri で引く。
+        /// </remarks>
+        public const string TestClient_4 = "TestClient_4";
+
+        /// <summary>
         /// TestClient_2 の client_secret（#237）。
         /// **test.ps1 の差し込みと同じ値にすること。**
         /// </summary>
@@ -143,6 +155,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **test.ps1 の差し込みと同じ値にすること。** 雛形の TestClient1 / TestClient2 は同じ Subject を共有しているので使わない。
         /// </summary>
         public const string MtlsSubjectDn = "CN=mpas-e2e-mtls-client";
+
+        /// <summary>
+        /// TestClient_4 に登録された post_logout_redirect_uri の**解決後の値**（#232）。
+        /// </summary>
+        /// <param name="client">IdPClient（対象ごとに URL が違う）</param>
+        /// <returns>ログアウト後に戻ってよい URL</returns>
+        /// <remarks>
+        /// **サーバ側の解決（test_self_logout → クライアント側の口 ＋ /Home/Index）と同じ値**を作る。
+        /// ここを実装側のコードから引かないのは、テストをブラックボックスに保つため。
+        ///
+        /// **待ち受けている URL に合わせる**（構成ファイルの値は net48 / net10.0 で共通だが、
+        /// test.ps1 が対象ごとに環境変数で上書きする）。Flows.ResolveRedirectUri に任せる。
+        /// </remarks>
+        public static string PostLogoutRedirectUri(IdPClient client)
+        {
+            return Flows.ResolveRedirectUri(client, "test_self_logout");
+        }
     }
 
     /// <summary>クライアントの登録内容（テストから参照する分だけ）</summary>
@@ -234,6 +263,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 return client.ToLocalUrl(
                     root + client.Config.Get("OAuth2ImplicitGrantClient_Account"));
+            }
+
+            // ログアウト後の戻り先（#232）。サーバ側は「クライアント側の口 ＋ /Home/Index」。
+            if (value == "test_self_logout")
+            {
+                return client.ToLocalUrl(root + "/Home/Index");
             }
 
             // test_self_saml やカスタム スキーム（myapp:/oauthredirect）は、そのまま。
@@ -460,7 +495,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// test.ps1 が環境変数で差し込んだクライアントの登録内容を引く（#224）。差し込まれていなければ Skip する
         /// </summary>
         /// <param name="client">IdPClient</param>
-        /// <param name="clientName">client_name（TestClient4_2 / TestClient4_3 / TestClient2_2 / TestClient2_3 / TestClient_2 / TestClient_3）</param>
+        /// <param name="clientName">client_name（TestClient4_2 / TestClient4_3 / TestClient2_2 / TestClient2_3 / TestClient_2 / TestClient_3 / TestClient_4）</param>
         /// <returns>ClientRegistration（client_id と client_secret だけ）</returns>
         /// <remarks>
         /// **構成ファイルには無いクライアント**なので、Registration では引けない。
@@ -492,6 +527,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 sourceName = KnownClients.TestClient;
                 overriddenSecret = KnownClients.ColonSecret;
+            }
+            else if (clientName == KnownClients.TestClient_4)
+            {
+                // client_secret は写す元のまま（登録に足したのは post_logout_redirect_uri だけ）。
+                sourceName = KnownClients.TestClient;
             }
 
             string clientId = sourceName != null

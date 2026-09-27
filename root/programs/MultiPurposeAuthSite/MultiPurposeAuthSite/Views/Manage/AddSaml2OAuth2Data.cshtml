@@ -89,6 +89,13 @@
             @Html.TextBoxFor(m => m.RedirectUriToken, new { @class = "form-control" })
         </div>
     </div>
+    @* ログアウト後に戻ってよい URL（#232） *@
+    <div class="form-group">
+        @Html.LabelFor(m => m.PostLogoutRedirectUri, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.TextBoxFor(m => m.PostLogoutRedirectUri, new { @class = "form-control" })
+        </div>
+    </div>
     <div class="form-group">
         @Html.LabelFor(m => m.JwkRsaPublickey, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">

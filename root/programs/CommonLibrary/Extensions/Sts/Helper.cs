@@ -787,6 +787,44 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #endregion
 
+        #region GetClientsPostLogoutRedirectUri
+
+        /// <summary>client_idからpost_logout_redirect_uriを取得する（#232）。</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>post_logout_redirect_uri（登録が無ければ空）</returns>
+        /// <remarks>
+        /// **RP-Initiated Logout 1.0 §3 は、登録値と完全一致しなければ戻してはならない**としている。
+        /// 登録は 1 本（既存の redirect_uri_code / redirect_uri_token と同じ形）。
+        /// 定数値（test_self_logout）の解決は、呼び出し側（CmnEndpoints）で行う。
+        /// </remarks>
+        public string GetClientsPostLogoutRedirectUri(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                if (this.Oauth2ClientsInfo[client_id].ContainsKey("post_logout_redirect_uri"))
+                {
+                    return this.Oauth2ClientsInfo[client_id]["post_logout_redirect_uri"];
+                }
+            }
+
+            // Saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                ManageAddSaml2OAuth2DataViewModel model =
+                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+                return model.PostLogoutRedirectUri ?? "";
+            }
+
+            return "";
+        }
+
+        #endregion
+
         #region GetAssertionConsumerServiceURL
 
         /// <summary>client_idからAssertionConsumerServiceURLを取得する。</summary>

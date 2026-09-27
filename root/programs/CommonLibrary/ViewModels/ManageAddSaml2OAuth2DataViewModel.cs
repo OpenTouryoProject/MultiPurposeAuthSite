@@ -20,6 +20,7 @@
 //*  2019/12/25  西野 大介         PPID、PKCE 4 SPA対応による見直し
 //*  2020/03/04  西野 大介         CIBA対応実施
 //*  2026/09/18  玄人 幸道         クライアント単位の PKCE 必須化（require_pkce）を追加（#221）
+//*  2026/09/27  玄人 幸道         post_logout_redirect_uri（RP-Initiated Logout）を追加（#232）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -85,6 +86,21 @@ namespace MultiPurposeAuthSite.ViewModels
             ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
         [JsonProperty(PropertyName = "redirect_uri_token")]
         public string RedirectUriToken { get; set; }
+
+        /// <summary>PostLogoutRedirectUri（#232）</summary>
+        /// <remarks>
+        /// **ログアウト後に戻ってよい URL**（RP-Initiated Logout 1.0 §3.1 の post_logout_redirect_uris）。
+        /// 仕様は配列だが、既存の redirect_uri_* と同じく **1 本**で持つ。
+        /// **登録が無ければ、ログアウト後に RP へは戻さない。**
+        /// </remarks>
+        [Display(Name = "PostLogoutRedirectUri", ResourceType = typeof(Resources.CommonViewModels))]
+        //[Url] localhost や IPアドレスが入力できない。
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "post_logout_redirect_uri")]
+        public string PostLogoutRedirectUri { get; set; }
 
         /// <summary>JwkRsaPublickey</summary>
         [Display(Name = "JwkRsaPublickey", ResourceType = typeof(Resources.CommonViewModels))]

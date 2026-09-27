@@ -174,6 +174,12 @@ namespace MultiPurposeAuthSite
                    name: "OAuth2Authorize",
                    pattern: Config.OAuth2AuthorizeEndpoint.Substring(1), // 先頭の[/]を削除,
                    defaults: new { controller = "Account", action = "OAuth2Authorize" });
+
+                // **RP からのログアウト**（RP-Initiated Logout 1.0。#232）
+                endpoints.MapControllerRoute(
+                   name: "EndSession",
+                   pattern: Config.OAuth2EndSessionEndpoint.Substring(1), // 先頭の[/]を削除,
+                   defaults: new { controller = "Account", action = "EndSession" });
                 #endregion
 
                 #region WebAPI Endpoint

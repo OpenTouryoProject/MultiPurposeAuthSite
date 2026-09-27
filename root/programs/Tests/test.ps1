@@ -481,6 +481,8 @@ try {
         #                               Basic の符号化（RFC 6749 2.3.1）を、符号化あり・無しの両方で測る
         #     TestClient_3  : normal  … **「:」を含む client_secret**（#237）。
         #                               符号化しないと分割位置がずれるので、符号化したときだけ通る
+        #     TestClient_4  : normal  … **post_logout_redirect_uri を登録**（#232）。
+        #                               ログアウト後に RP へ戻せるか（登録が無いクライアントとの対照）
         #   ※ Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
         #   ※ 秘密は JSON 文字列に素で埋めるので、「"」「\」「'」は使わないこと（net48 は一覧ごと差し替える）。
         $mtlsDn = @{ tls_client_auth_subject_dn = 'CN=mpas-e2e-mtls-client' }
@@ -490,6 +492,10 @@ try {
         #   「:」は Basic の分割位置そのものなので、符号化しないと資格情報として読めない。
         $symbolSecret = @{ client_secret = 'e2e+ab/cd=ef' }
         $colonSecret  = @{ client_secret = 'e2e:ab+cd' }
+
+        # **ログアウト後の戻り先**（#232）。サイトごとに URL が違うので、定数で登録して
+        #   サーバ側（CmnEndpoints.GetRedirectUriFromConstr）で解決させる。
+        $postLogout = @{ post_logout_redirect_uri = 'test_self_logout' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
@@ -498,7 +504,8 @@ try {
             @{ Name = 'TestClient2_2'; Mode = 'fapi2';  ClientId = 'e2e0tc22000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
             @{ Name = 'TestClient2_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc23000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
             @{ Name = 'TestClient_2';  Mode = 'normal'; ClientId = 'e2e0tc02000000000000000000000000'; Source = 'TestClient';  Override = $symbolSecret },
-            @{ Name = 'TestClient_3';  Mode = 'normal'; ClientId = 'e2e0tc03000000000000000000000000'; Source = 'TestClient';  Override = $colonSecret })) {
+            @{ Name = 'TestClient_3';  Mode = 'normal'; ClientId = 'e2e0tc03000000000000000000000000'; Source = 'TestClient';  Override = $colonSecret },
+            @{ Name = 'TestClient_4';  Mode = 'normal'; ClientId = 'e2e0tc04000000000000000000000000'; Source = 'TestClient';  Override = $postLogout })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }
@@ -522,7 +529,7 @@ try {
         }
 
         if ($null -eq $injected) {
-            Write-Warning 'TestClient / TestClient2 / TestClient4 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 / RT-237 は Skip）。'
+            Write-Warning 'TestClient / TestClient2 / TestClient4 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 / RT-237 / RT-232 は Skip）。'
         }
 
         # **有効期限のテスト（#188）は、寿命をごく短くして測る。**

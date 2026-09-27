@@ -66,6 +66,13 @@ namespace MultiPurposeAuthSite
                 defaults: new { controller = "Account", action = "OAuth2Authorize" }
             );
 
+            // RP-Initiated Logout（#232）
+            routes.MapRoute(
+                name: "EndSession",
+                url: Config.OAuth2EndSessionEndpoint.Substring(1), // 先頭の[/]を削除
+                defaults: new { controller = "Account", action = "EndSession" }
+            );
+
             // Device AuthZ
             routes.MapRoute(
                 name: "DeviceAuthZVerify",

@@ -46,6 +46,7 @@
 //*  2026/09/25  玄人 幸道         設定キーの改名と、旧キーの読み替え（#236）
 //*  2026/09/25  玄人 幸道         UserClaimsMapping（profile / address のクレームの対応付け）を追加（#230）
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
+//*  2026/09/27  玄人 幸道         OAuth2EndSessionEndpoint（RP-Initiated Logout）を追加（#232）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -1350,6 +1351,23 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("OAuth2TokenEndpoint");
+            }
+        }
+
+        /// <summary>
+        /// RP-Initiated Logout のエンドポイント（#232）
+        /// </summary>
+        /// <remarks>
+        /// **新しいキーなので、既に配備された設定ファイルには無い。**
+        /// 無ければ既定値（/end_session）を使う。**設定ファイルを直さなくても動く。**
+        /// ルートの組み立て（.Substring(1)）で空文字列を渡さないためでもある。
+        /// </remarks>
+        public static string OAuth2EndSessionEndpoint
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue("OAuth2EndSessionEndpoint");
+                return string.IsNullOrEmpty(value) ? "/end_session" : value;
             }
         }
 

@@ -615,6 +615,134 @@ namespace MultiPurposeAuthSite.Controllers
 
         #endregion
 
+        #region RP-Initiated Logout（#232）
+
+        /// <summary>
+        /// RP からのログアウト要求（初期表示・GET）
+        /// GET: /end_session
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>**GET と POST の両方を受けることが MUST**（RP-Initiated Logout 1.0 §2）。</remarks>
+        [HttpGet]
+        [AllowAnonymous] // 空振りできるように（§4 : サインインしていなくてもエラーではない）。
+        public async Task<ActionResult> EndSession()
+        {
+            return await this.EndSessionCore(
+                Request.QueryString[OAuth2AndOIDCConst.id_token_hint],
+                Request.QueryString[OAuth2AndOIDCConst.client_id],
+                Request.QueryString[Token.CmnEndpoints.PostLogoutRedirectUri],
+                Request.QueryString[OAuth2AndOIDCConst.state],
+                false);
+        }
+
+        /// <summary>
+        /// RP からのログアウト要求（POST）
+        /// POST: /end_session
+        /// </summary>
+        /// <param name="dummy">FormDataCollectionは、WebAPI専用らしい（DeviceAuthZVerify と同じ）。</param>
+        /// <returns>ActionResult</returns>
+        [HttpPost]
+        [AllowAnonymous]
+        public async Task<ActionResult> EndSession(string dummy)
+        {
+            return await this.EndSessionCore(
+                Request.Form[OAuth2AndOIDCConst.id_token_hint],
+                Request.Form[OAuth2AndOIDCConst.client_id],
+                Request.Form[Token.CmnEndpoints.PostLogoutRedirectUri],
+                Request.Form[OAuth2AndOIDCConst.state],
+                false);
+        }
+
+        /// <summary>
+        /// 確認画面（EndSession）からの応答
+        /// POST: /Account/EndSessionConfirm
+        /// </summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **こちらは画面からの応答なので、CSRF のトークンを検証する。**
+        /// RP からの /end_session はトークンを持てないので、そちらでは検証しない
+        /// （**確認を求めること自体が、勝手なログアウトへの対策**。§6）。
+        /// </remarks>
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> EndSessionConfirm()
+        {
+            if (string.IsNullOrEmpty(Request.Form["allow"]))
+            {
+                // 「いいえ」。ログアウトしない（RP へも戻さない）。
+                return RedirectToAction("Index", "Home");
+            }
+
+            return await this.EndSessionCore(
+                Request.Form[OAuth2AndOIDCConst.id_token_hint],
+                Request.Form[OAuth2AndOIDCConst.client_id],
+                Request.Form[Token.CmnEndpoints.PostLogoutRedirectUri],
+                Request.Form[OAuth2AndOIDCConst.state],
+                true);
+        }
+
+        /// <summary>ログアウト要求の本体（GET / POST / 確認の応答で共通）</summary>
+        /// <param name="idTokenHint">id_token_hint</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="postLogoutRedirectUri">post_logout_redirect_uri</param>
+        /// <param name="state">state</param>
+        /// <param name="confirmed">利用者が確認画面で「はい」を押したか</param>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **判定は CmnEndpoints.ReceiveEndSessionRequest（両アプリ共通）。**
+        /// ここは「確認画面を出すか」「サインアウト」「リダイレクト」だけを行う。
+        /// </remarks>
+        private async Task<ActionResult> EndSessionCore(
+            string idTokenHint, string clientId,
+            string postLogoutRedirectUri, string state, bool confirmed)
+        {
+            bool signedIn = User.Identity.IsAuthenticated;
+
+            Token.CmnEndpoints.ReceiveEndSessionRequest(
+                idTokenHint, clientId, postLogoutRedirectUri, state,
+                signedIn ? User.Identity.Name : "",
+                out bool verified, out string redirectUri,
+                out string err, out string errDescription);
+
+            // **利用者に確認しなければならない場合**（§2 の MUST / §6）。
+            //   - id_token_hint が無い、または現在のセッションの利用者と一致しない
+            //   - 要求に誤りがある（RP へは戻さないので、画面で知らせる。§4）
+            //   **サインインしていなければ、消すものが無いので確認しない**（§4 : エラーではない）。
+            if (!confirmed && signedIn && (!verified || !string.IsNullOrEmpty(err)))
+            {
+                ViewBag.IdTokenHint = idTokenHint;
+                ViewBag.ClientId = clientId;
+                ViewBag.PostLogoutRedirectUri = postLogoutRedirectUri;
+                ViewBag.State = state;
+                ViewBag.Error = errDescription;
+
+                return View("EndSession");
+            }
+
+            if (signedIn)
+            {
+                // サインアウト（Cookieの削除）
+                AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+
+                // オペレーション・トレース・ログ出力
+                ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
+                if (user != null)
+                    Logging.MyOperationTrace(string.Format(
+                        "{0}({1}) has signed out by RP-Initiated Logout.", user.Id, user.UserName));
+            }
+
+            if (!string.IsNullOrEmpty(redirectUri))
+            {
+                // **戻してよいと判定できた場合だけ**（§3）。
+                return Redirect(redirectUri);
+            }
+
+            return RedirectToAction("Index", "Home");
+        }
+
+        #endregion
+
         #region サインアップ プロセス
 
         #region サインアップ

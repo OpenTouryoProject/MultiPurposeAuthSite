@@ -189,6 +189,9 @@
   <data name="PhoneNumber" xml:space="preserve">
     <value>Phone number</value>
   </data>
+  <data name="PostLogoutRedirectUri" xml:space="preserve">
+    <value>post_logout_redirect_uri</value>
+  </data>
   <data name="RedirectUriCode" xml:space="preserve">
     <value>redirect_uri_code</value>
   </data>

@@ -67,6 +67,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | | PPID（`subject_types`: `public` / `pairwise` / `uname`） | ✓ | `Util/PPIDExtension` |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
+| | `/end_session`（RP-Initiated Logout） | ✓ | #232。Front-Channel / Back-Channel は未実装（5 節 D-1） |
 | | `.well-known/openid-configuration` | ✓ | 不足あり（3 節） |
 | | `/ros`（Request Object 登録） | ✓ | **PAR ではない独自仕様** |
 | | `samlmetadata` / SAML2 IdP | ✓ | |
@@ -1601,7 +1602,8 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 
 | # | 仕様 | 状況 | 影響 |
 |---|---|---|---|
-| D-1 | **RP-Initiated Logout / Front-Channel / Back-Channel Logout / Session Management** | **未実装**（`end_session` の実装も discovery も無し）。**#232** | RP からのログアウト連携ができない。SSO の解除手段が無い |
+| D-1 | **RP-Initiated Logout** | **✅ 実装済み**（#232）。`/end_session` を新設（GET / POST の両方・`id_token_hint` の検証・`post_logout_redirect_uri` の完全一致・確認画面）。Discovery に `end_session_endpoint`（`RT-232`） | RP から SSO を解除できる |
+| D-1-2 | Front-Channel / Back-Channel Logout / Session Management | 未実装。**#232 の範囲外**（別の仕様。`sid` クレームと RP 側の口の登録が要る） | **OP が他の RP へログアウトを伝えられない。** RP-Initiated Logout で消えるのは OP のセッションだけ |
 | D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。`/ros` は **RFC 9101 §5.2.1 の任意機能**として残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
