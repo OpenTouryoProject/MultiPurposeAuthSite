@@ -367,16 +367,14 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 
 ### 9.1 現状のビルド結果（実測 2026-09-27）
 
-`1_BuildAll.ps1` の net10.0 ステップ … **0 エラー / 33 警告（行数）**
+`1_BuildAll.ps1` の net10.0 ステップ … **0 エラー / 0 警告**（#242）。
 
-| 警告 | 行数 | 内容 |
+落とした 2 つ。**再発したら同じ手を使う。**
+
+| 警告 | もとの行数 | 対処 |
 |---|---:|---|
-| `MSB3277` | 33 | `Microsoft.Data.SqlClient` **6.0.0.0 ↔ 7.0.0.0** の版競合（競合そのものは 1 件）。**Open棟梁 の `Public` / `Public.Security` が 7.0.0 を参照**し、本プロジェクトは `6.1.4` を参照している。#242 の段階 2 で揃える |
-
-**`NU1901`（`NuGet.Packaging` / `NuGet.Protocol` 6.12.1）は消えた**（#242 の段階 1）。
-`Microsoft.VisualStudio.Web.CodeGeneration.Design` の参照を外したため
-（スキャフォールディング専用の開発時ツールで、ビルド・実行には不要）。
-**再び入れると、推移的依存で戻ってくる。**
+| `MSB3277` | 33 | `Microsoft.Data.SqlClient` を **7.0.2** にした。**Open棟梁 の `Public` / `Public.Security` が 7.0.0.0 を参照**しており、`6.1.4`（6.0.0.0）との競合だった。**Open棟梁 のアセンブリを差し替えたら、この版も見直す** |
+| `NU1901` | 6 | `Microsoft.VisualStudio.Web.CodeGeneration.Design` の参照を外した（スキャフォールディング専用の開発時ツールで、ビルド・実行には不要）。**再び入れると、推移的依存で戻ってくる** |
 
 > **`log4net` は 3.2.0 → 3.3.0 に上げた（Dependabot PR #181 と同じ内容）。**
 > **上げるまでは、ビルドは通るのに実行時に落ちていた。**

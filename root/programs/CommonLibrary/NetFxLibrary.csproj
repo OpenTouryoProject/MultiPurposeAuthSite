@@ -283,6 +283,16 @@
     <PackageReference Include="Microsoft.CodeDom.Providers.DotNetCompilerPlatform">
       <Version>4.1.0</Version>
     </PackageReference>
+    <!-- **上位の版を明示して、解決を 1 つに寄せる**（#242）。
+         明示しないと低い版（2.1.0 / 6.0.0）が primary に選ばれ、
+         Microsoft.IdentityModel.Tokens 8.15.0 などが要求する 8.0.0.2 と食い違って MSB3277 が出る。
+         **版は MultiPurposeAuthSite（packages.config）と同じ 10.0.1 に合わせる。** -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
+      <Version>10.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions">
+      <Version>10.0.1</Version>
+    </PackageReference>
     <PackageReference Include="Microsoft.Net.Compilers">
       <Version>4.2.0</Version>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

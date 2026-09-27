@@ -16,6 +16,13 @@
     <AssemblyName>MultiPurposeAuthSite</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <MvcBuildViews>true</MvcBuildViews>
+    <!-- **ビューのプリコンパイル（ASPNETCOMPILER）が出す 2 件を、メッセージに落とす**（#242 の段階 3）。
+         CS1685 : System.ObsoleteAttribute が複数のアセンブリで定義されている
+         CS1702 : System.Memory の版が想定一致（4.0.1.2 ↔ 4.0.5.0）
+         どちらも **netstandard のファサードと参照アセンブリの重複**によるもので、
+         aspnet_compiler.exe 側の都合。こちらの参照を直しても消えず、実行にも影響しない。
+         **参照の重複そのものが解消されたら、この行を外して確かめること。** -->
+    <MSBuildWarningsAsMessages>CS1685;CS1702</MSBuildWarningsAsMessages>
     <UseIISExpress>true</UseIISExpress>
     <Use64BitIISExpress />
     <IISExpressSSLPort>44300</IISExpressSSLPort>

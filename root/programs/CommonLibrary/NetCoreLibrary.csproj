@@ -49,7 +49,9 @@
 
   <ItemGroup>
     <PackageReference Include="FirebaseAdmin" Version="3.4.0" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+    <!-- **Open棟梁 のアセンブリが 7.0.0.0 を参照している**ので、版を揃える（#242）。
+         揃えないと MSB3277（解決できない版の競合）が出る。Public_netcore100.csproj が 7.0.0。 -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
     <PackageReference Include="Npgsql" Version="10.0.1" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.0" />

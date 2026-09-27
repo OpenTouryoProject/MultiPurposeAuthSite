@@ -203,26 +203,25 @@ net10.0 を建てた直後に net48 を建てると、`project.assets.json` が 
 
 **エラーは 0 でなければならないが、警告は残っている。**
 
-| ターゲット | 警告の行数（重複除去後） |
+| ターゲット | 警告の行数 |
 |---|---|
-| net48 | **42**（#242 の段階 1 で 45 から） |
-| net10.0 | **33**（同 39 から） |
+| net48 | **0** |
+| net10.0 | **0** |
 
-残っているもの。**これで全部**（#242 で実測した）。
+**警告は 0 である。** #242 で 45 / 39 から落とした。**増えたら、それは今回の変更が出したものである。**
 
-| コード | 行数 | 内容 |
+落とし方（#242）。**同じことが再発したら、ここを見て同じ手を使う。**
+
+| コード | もとの件数 | 対処 |
 |---|---:|---|
-| `MSB3277` | 40 / 33 | アセンブリの版の競合。**net48 は `Microsoft.Extensions.Logging.Abstractions` / `...DependencyInjection.Abstractions`、net10.0 は `Microsoft.Data.SqlClient` 6.0 ↔ 7.0**。OpenTouryo アセンブリと NuGet パッケージの食い違い（#242 の段階 2 で扱う） |
-| `CS1685` | 1（net48） | `System.ObsoleteAttribute` が複数アセンブリで定義されている（ASPNETCOMPILER） |
-| `CS1702` | 1（net48） | `System.Memory` の版の想定一致（同上） |
+| `MSB3277` | 40 / 33 | **版を揃えた。** net10.0 は `Microsoft.Data.SqlClient` を **7.0.2**（Open棟梁 のアセンブリが 7.0.0.0 を参照）。net48 は `Microsoft.Extensions.Logging.Abstractions` / `...DependencyInjection.Abstractions` を **10.0.1 で明示参照**（低い版が primary に選ばれ、`Microsoft.IdentityModel.Tokens` が要求する版と食い違っていた） |
+| `NU1901` | 6 | `Microsoft.VisualStudio.Web.CodeGeneration.Design` の参照を外した（スキャフォールディング専用の開発時ツールで、推移的に `NuGet.Packaging` / `NuGet.Protocol` 6.12.1 を引いていた） |
+| `CS0618` | 2 | `CustomPasswordHasher` の V1 経路を `#pragma warning disable 618` で囲んだ（**旧いハッシュの照合に要るので、呼び出しは変えていない**） |
+| `CS0219` | 1 | `BundleConfig` の未使用の変数を削った |
+| `CS1685` / `CS1702` | 1 / 1 | **メッセージに落とした**（`MultiPurposeAuthSite.csproj` の `MSBuildWarningsAsMessages`）。ビューのプリコンパイル（ASPNETCOMPILER）が出すもので、**netstandard のファサードと参照アセンブリの重複**によるため、こちらの参照では消せない。**プリコンパイル自体は従来どおり動いている**（ログには `ASPNETCOMPILER : message CS1685` として出る） |
 
-**落としたもの**（#242 の段階 1）。
-
-| コード | 対処 |
-|---|---|
-| `CS0219`（1） | `BundleConfig` の未使用の変数を削った |
-| `CS0618`（2） | `CustomPasswordHasher` の V1 経路を `#pragma warning disable 618` で囲んだ（**旧いハッシュの照合に要るので、呼び出しは変えていない**） |
-| `NU1901`（6） | `Microsoft.VisualStudio.Web.CodeGeneration.Design` の参照を外した（スキャフォールディング専用の開発時ツール） |
+> **`MSBuildWarningsAsMessages` を増やすときは、理由を書くこと。**
+> 「うるさいから消した」と「消してよいと確かめた」を、後から読む人が区別できるように。
 
 `-WarnDetail` で種類ごとの件数と代表例が出る。
 **同じ種類は、たいてい 1 か所の対処でまとめて消える。**
