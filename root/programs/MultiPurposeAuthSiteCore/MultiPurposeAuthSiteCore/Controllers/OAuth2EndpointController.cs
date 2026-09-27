@@ -68,7 +68,11 @@
 //*  2026/09/24  玄人 幸道         PAR（RFC 9126）の /par を追加（#229）
 //*  2026/09/24  玄人 幸道         /ciba_authz で request を直接受け取る（CIBA Core 7.1.1。#233）
 //*  2026/09/25  玄人 幸道         /ciba_authz にクライアント認証を入れる（CIBA Core 7.1。#234 の段階 3）
+//*  2026/09/25  玄人 幸道         /ros の処理を CommonLibrary へ移した（#235）
+//*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
+//*  2026/09/25  玄人 幸道         client_assertion を読む（グラント用の assertion とは別に持つ）（#238）
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials と /revoke・/introspect で非対称の認証を受ける（#239）
+//*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（#237）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;

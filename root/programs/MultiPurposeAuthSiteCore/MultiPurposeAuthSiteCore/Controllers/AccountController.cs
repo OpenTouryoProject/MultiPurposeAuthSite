@@ -35,6 +35,8 @@
 //*  2026/09/17  玄人 幸道         IsLockedDownRedirectEndpoint を IsLockedDownTestEndpoints に改名（#219）
 //*  2026/09/18  玄人 幸道         認可リクエストの code_challenge を検証に渡す（#220）
 //*  2026/09/24  玄人 幸道         クエリ文字列の request_uri / code_challenge を、デコードされた値で読む（#229）
+//*  2026/09/25  玄人 幸道         設定キーの改名（IdFederation*Endpoint）に追随（#236）
+//*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
