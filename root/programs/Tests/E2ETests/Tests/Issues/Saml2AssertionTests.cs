@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/28  玄人 幸道         新規（#246 の項目 3）
+//*  2026/09/28  玄人 幸道         4 つ目のバインディングの組み合わせ（RT-246.7）を追加（#246 の項目 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -135,6 +136,38 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             }
         }
 
+        /// <summary>RT-246.7 Post & Redirect Binding（4 つ目の組み合わせ）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT24607_SAMLの4つ目の組み合わせが通る(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-246.7",
+                    "自己テストが、要求を POST・応答を Redirect で受ける組み合わせも試せる",
+                    "**バインディングの組み合わせは 4 通りあるが、ボタンは 3 つだけだった**"
+                    + "（Redirect-Redirect / Redirect-Post / Post-Post）。"
+                    + "**要求を POST で送り、応答を Redirect で受ける**組み合わせが抜けていた（#246 の項目 2）。"
+                    + "`ProtocolBinding` が応答の受け取り方を決めるので、指定を変えるだけで足りる。",
+                    "SAML 2.0 Bindings（HTTP-POST / HTTP-Redirect）/ #246 の項目 2");
+
+                r.Target("POST /Home/Saml2OAuth2Starters に submit.Saml2PostRedirectBinding");
+
+                string html = await Saml2AssertionTests.RunSelfTestAsync(
+                    r, client, "Saml2PostRedirectBinding",
+                    redirectToAcs: true, requestViaPost: true);
+
+                Saml2AssertionTests.VerifyScreen(r, html, "Redirect（GET", expectXmlSignature: false);
+
+                r.Note("**要求は POST、応答は Redirect。** 応答の署名はクエリ文字列に付くので、"
+                    + "XML には署名の要素が無い（`RT-246.4` と同じ）。");
+
+                r.Done();
+            }
+        }
+
         #region 補助
 
         /// <summary>自己テストの SAML ボタンを押し、SP の結果画面の HTML を返す</summary>
@@ -142,29 +175,60 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <param name="client">IdPClient</param>
         /// <param name="submitButton">submit. を除いたボタン名</param>
         /// <param name="redirectToAcs">IdP が ACS へリダイレクトで返すか（Redirect Binding）</param>
+        /// <param name="requestViaPost">要求を POST（自動送信フォーム）で送るか</param>
         /// <returns>結果画面の HTML（実体参照は戻したもの）</returns>
         /// <remarks>
         /// **絶対 URL は必ず `ToLocalUrl` を通す。**
         /// 構成ファイルのルート URI（44300）のままだと、net48 版（44302）の測定で別のサイトを叩く。
         /// </remarks>
         private static async Task<string> RunSelfTestAsync(
-            TestReport r, IdPClient client, string submitButton, bool redirectToAcs)
+            TestReport r, IdPClient client, string submitButton, bool redirectToAcs,
+            bool requestViaPost = false)
         {
             r.Step("(1) 自己テストの SAML ボタンを押す（要求を組み立てて IdP へ）");
 
             HttpResponseMessage started = await client.StartSelfTestAsync(submitButton, "normal");
 
-            bool redirected = (started.Headers.Location != null);
+            HttpResponseMessage idp;
 
-            r.Verify("IdP のエンドポイントへ送られる", redirected,
-                "リダイレクトする", redirected ? "リダイレクトした" : "**しなかった**");
+            if (requestViaPost)
+            {
+                // **要求を POST で送る経路。** 画面が自動送信フォームを返す。
+                r.VerifyEqual("要求の自動送信フォームが返る（HTTP 200）",
+                    "200", ((int)started.StatusCode).ToString());
 
-            Assert.True(redirected, "前提: SAML の要求が組み立てられること");
+                string requestForm = await started.Content.ReadAsStringAsync();
+                string requestAction = Html.FormAttribute(requestForm, "action");
 
-            r.Step("(2) IdP が応答（アサーション）を返す");
+                r.Verify("フォームの action が IdP のエンドポイントである",
+                    !string.IsNullOrEmpty(requestAction),
+                    "action あり", string.IsNullOrEmpty(requestAction) ? "**無い**" : requestAction);
 
-            HttpResponseMessage idp = await client.GetAsync(
-                client.ToLocalUrl(started.Headers.Location.ToString()));
+                Assert.False(string.IsNullOrEmpty(requestAction), "前提: 要求のフォームが返ること");
+
+                Dictionary<string, string> requestHidden = Html.HiddenInputs(requestForm);
+
+                r.Verify("フォームに SAMLRequest がある", requestHidden.ContainsKey("SAMLRequest"),
+                    "ある", requestHidden.ContainsKey("SAMLRequest") ? "ある（値は伏せる）" : "**無い**");
+
+                r.Step("(2) IdP が応答（アサーション）を返す");
+
+                idp = await client.PostFormAsync(client.ToLocalUrl(requestAction), requestHidden);
+            }
+            else
+            {
+                bool redirected = (started.Headers.Location != null);
+
+                r.Verify("IdP のエンドポイントへ送られる", redirected,
+                    "リダイレクトする", redirected ? "リダイレクトした" : "**しなかった**");
+
+                Assert.True(redirected, "前提: SAML の要求が組み立てられること");
+
+                r.Step("(2) IdP が応答（アサーション）を返す");
+
+                idp = await client.GetAsync(
+                    client.ToLocalUrl(started.Headers.Location.ToString()));
+            }
 
             HttpResponseMessage acs;
 

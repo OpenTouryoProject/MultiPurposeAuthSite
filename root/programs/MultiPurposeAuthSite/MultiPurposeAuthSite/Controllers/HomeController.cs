@@ -36,6 +36,7 @@
 //*  2026/09/28  玄人 幸道         CIBA の結果を画面に出し、interval に従わせた（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         Device AuthZ の結果も画面に出し、interval に従わせた（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         Device AuthZ の verification_uri のリンクが二重になっていたのを修正（#246）
+//*  2026/09/28  玄人 幸道         SAML2 の Post & Redirect Binding を追加（#246 の項目 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -197,6 +198,12 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>ResponseMode</summary>
         private string ResponseMode = ""; 
 
+        /// <summary>prompt（画面で選ぶ。#246 の項目 3）</summary>
+        private string Prompt = "";
+
+        /// <summary>max_age（画面で選ぶ。#246 の項目 3）</summary>
+        private string MaxAge = "";
+
         /// <summary>ClientName</summary>
         private string ClientName = "";
 
@@ -346,6 +353,19 @@ namespace MultiPurposeAuthSite.Controllers
                 redirect += "&" + OAuth2AndOIDCConst.response_mode + "=" + this.ResponseMode;
             }
 
+            // **prompt と max_age の指定**（#246 の項目 3）。
+            //   認可画面（同意）の出方を、画面から試せるようにするためにある。
+            //   **ここは認可エンドポイントへ行く全てのスターターが通る**ので、1 か所で足りる。
+            if (!string.IsNullOrEmpty(this.Prompt))
+            {
+                redirect += "&" + OAuth2AndOIDCConst.prompt + "=" + this.Prompt;
+            }
+
+            if (!string.IsNullOrEmpty(this.MaxAge))
+            {
+                redirect += "&" + OAuth2AndOIDCConst.max_age + "=" + this.MaxAge;
+            }
+
             return redirect;
         }
 
@@ -377,7 +397,10 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes, this.State)
-                    + "&nonce=" + this.Nonce + "&max_age=600";
+                    + "&nonce=" + this.Nonce
+                    // **画面で max_age を選んでいれば、そちらを使う**（#246 の項目 3）。
+                    //   選んでいなければ、従来どおり 600 秒を付ける。
+                    + (string.IsNullOrEmpty(this.MaxAge) ? "&max_age=600" : "");
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
@@ -716,6 +739,11 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     #endregion
 
+                    // **prompt と max_age は、そのまま渡す**（#246 の項目 3）。
+                    //   値の妥当性はサーバ側が判断する（未対応の値を選んだときの振る舞いも見たいため）。
+                    this.Prompt = model.Prompt ?? "";
+                    this.MaxAge = model.MaxAge ?? "";
+
                     #region Starterの実行
 
                     // **ログアウトは、クライアントの選択に依らない**（#232）。
@@ -738,6 +766,11 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2PostPostBinding")))
                         {
                             return this.Saml2PostPostBinding();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Saml2PostRedirectBinding")))
+                        {
+                            // **4 つ目の組み合わせ**（#246 の項目 2）
+                            return this.Saml2PostRedirectBinding();
                         }
                         #endregion
 
@@ -965,6 +998,33 @@ namespace MultiPurposeAuthSite.Controllers
             string id = "";
             string samlRequest = SAML2Client.CreatePostRequest(
                 SAML2Enum.ProtocolBinding.HttpPost,
+                SAML2Enum.NameIDFormat.Unspecified,
+                this.Issuer, this.RedirectUri, this.State, out id);
+
+            this.SaveSaml2Params();
+
+            // Post
+            ViewData["RelayState"] = this.State;
+            ViewData["SAMLRequest"] = samlRequest;
+            ViewData["Action"] = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
+
+            return View("PostBinding");
+        }
+
+        /// <summary>Test Saml2 Post & Redirect Binding</summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **4 つ目の組み合わせ**（#246 の項目 2）。
+        /// 要求を POST で送り、**応答は Redirect（GET）で受ける**。
+        /// `ProtocolBinding` が応答の受け取り方を決めるので、`HttpRedirect` を渡す。
+        /// </remarks>
+        private ActionResult Saml2PostRedirectBinding()
+        {
+            this.InitSaml2Params();
+
+            string id = "";
+            string samlRequest = SAML2Client.CreatePostRequest(
+                SAML2Enum.ProtocolBinding.HttpRedirect,
                 SAML2Enum.NameIDFormat.Unspecified,
                 this.Issuer, this.RedirectUri, this.State, out id);
 

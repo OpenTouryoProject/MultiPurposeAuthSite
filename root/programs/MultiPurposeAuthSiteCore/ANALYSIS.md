@@ -340,7 +340,8 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
     `RelayState`（送った `state` との照合）、そして**アサーションの XML**（字下げのみ整形）を出す
   - **署名の付き方はバインディングで違う。** Redirect（GET）は**クエリ文字列**に付き（`SigAlg`）、
     POST は **XML の中**に付く（`SignatureValue`）。画面はどちらで受けたかを出す
-  - E2E は `RT-246.4`（Redirect）/ `RT-246.5`（POST）で、**両方の経路の画面**を測る
+  - E2E は `RT-246.4`（Redirect）/ `RT-246.5`（POST）/ `RT-246.7`（要求は POST・応答は Redirect）で、
+    **各経路の画面**を測る
 - `DeviceAuthZResponse.cshtml` … Device Authorization Grant の user_code 表示（QR は `qrcode.js`）。
   **`interval` と `expires_in` も出し、`interval` を hidden で次の POST へ持ち回す**（#246 の 3-b）
 - **Device Authorization Grant のポーリングも、判定と理由を画面に出す**（#246 の 3-a。CIBA と同じ）
@@ -388,6 +389,79 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 `_appsettings.json` の `OAuth2ClientsInformation` には
 `test_self_code` / `test_self_token` という**予約 redirect_uri** を持つテスト用クライアントが
 定義されている。**本番では `IsLockedDownTestEndpoints` を true にして塞ぐ。**
+
+### パターンとボタンの対応（#246 の項目 2）
+
+**Discovery が広告しているもの**（`grant_types_supported` / `response_types_supported` /
+`response_modes_supported` / `token_endpoint_auth_methods_supported`）と、SAML2・拡張仕様を並べ、
+**1 つずつボタンを当てた一覧**である。**「無い」ものは理由と、誰が測るかを書く。**
+
+| パターン | 自己テストのボタン（`Saml2OAuth2Starters` / 結果画面） | 備考 |
+|---|---|---|
+| `authorization_code` | Test Authorization Code Flow / (OIDC) | |
+| `implicit`（`token` / `id_token` / `id_token token`） | Test Implicit Flow ×3 | **雛形の既定で無効**（#220）。無効なときは押せない表示にしている |
+| Hybrid（`code id_token` / `code token` / `code id_token token`） | Test Hybrid Flow ×3 | |
+| PKCE（`plain` / `S256`） | PKCE plain / S256（＋ SPA 用の 2 つ） | |
+| `password`（ROPC） | Test ResourceOwner Password Credentials Flow | **雛形の既定で無効**（#220） |
+| `client_credentials` | Test Client Credentials Flow | |
+| `refresh_token` | 結果画面の [Refresh] | |
+| `urn:ietf:params:oauth:grant-type:jwt-bearer` | Test JWT Bearer Token Flow | |
+| CIBA（`…:openid:params:grant-type:ciba`） | Test FAPI CIBA Profile (FAPI2) | **認証デバイスの登録と承認が要る**（判定と理由は画面に出る。#246 の 3-a） |
+| Device（`…:oauth:grant-type:device_code`） | Test Device Authorization Grant → [Start polling.] | 承認は `/device_verify`（画面のリンク） |
+| `/revoke` / `/introspect` | 結果画面の [RevokeAccess] [IntrospectAccess] [RevokeRefresh] [IntrospectRefresh] | |
+| `/userinfo` | 結果画面の [Get user claims]／`OAuth2ClientAuthenticationFlow.cshtml` | |
+| FAPI1（CC / CC+OIDC / PC+PKCE） | Test Authorization Code Flow (FAPI1 …) ×3 | |
+| FAPI2（`/ros` 経由） | Test Authorization Code Flow (FAPI2 CC) | `/ros` は独自（RFC 9101 §5.2.1 の任意機能） |
+| **PAR（RFC 9126）** | Test Authorization Code Flow (FAPI2 CC, PAR) | **#246 で追加。** Open棟梁 のクライアントで `/par` に預ける |
+| **SAML2 の 4 バインディング** | Saml2 Redirect Redirect / Redirect Post / Post Post / **Post Redirect** | **4 つ目は #246 で追加**（要求は POST、応答は Redirect） |
+| SAML2 のメタデータ | 画面下の `samlmetadata` リンク | |
+| RP-Initiated Logout | Test RP-Initiated Logout（**確認画面の経路**）／結果画面の [Sign out]（**`id_token_hint` の経路**） | #232 |
+| `response_mode`（`query` / `fragment` / `form_post` ＋ JARM の 3 種） | ドロップダウン | |
+| `prompt` / `max_age` | ドロップダウン | **#246 で追加。** `prompt=none` 以外は未対応（C-3）、`max_age` の超過は #247 |
+| `client_secret_basic` | 通常の認可コードの交換（**画面に方式が出る**） | #246 |
+| `client_secret_post` | **PKCE の交換**（Open棟梁 クライアントの既定がこちら） | **方式としては選べない。** フローに紐付く。E2E が測る（`RT-238` / `RT-239`） |
+| `private_key_jwt` | FAPI1 / FAPI2 / PAR の交換 | 同上（`RT-238`） |
+| `tls_client_auth`（mTLS） | **無い** | **ブラウザからは試せない**（クライアント証明書の提示が要る）。E2E の `FA-6` が測る |
+| Hybrid-IdP（ID フェデレーション） | **無い** | **外部 IdP の登録が要る。** サインイン画面の外部ログインから入る |
+| WebAuthn / MS Passport | net48 版に `WebAuthnStarters.cshtml` が**残っているが動かない** | ライブラリごと無効（`../CommonLibrary/ANALYSIS.md` 12 節） |
+| 2FA のプッシュ承認 | ボタンではなく**サインインの経路**（`MobileApp` を選ぶ） | 認証デバイスが要る（#213 / #216） |
+
+**方針。** **「選べない」ものを無理にボタンにしない。**
+クライアント認証の方式のように**フローに紐付いているもの**は、
+**画面には「何を送ったか」を出し**（#246 の項目 3）、**組み合わせの網羅は E2E に任せる**
+（次の「自己テストと E2E の役割」のとおり）。
+
+### 自己テストと E2E の役割（#246 の項目 4）
+
+**自己テストは「人でなければ確かめられないもの」を置く場であり、合否の判定は E2E が持つ。**
+
+| | 自己テスト（この画面） | E2E（`Tests/E2ETests`） |
+|---|---|---|
+| 何のためにあるか | **人が目で確かめる**（実値・画面・遷移） | **合否を自動で判定する**（回帰と異常系） |
+| 得意なもの | 認証デバイスとプッシュ通知／ブラウザの遷移と同意画面／アサーションと JWT の**実値の目視**／**Open棟梁 のクライアント ライブラリとの相互接続** | パラメタの異常系、境界値、エラー コード、応答の形（JSON の型・HTTP ステータス）、両系統の差 |
+| 使うクライアント実装 | **Open棟梁 のクライアント**（`OAuth2AndOIDCClient` など） | **使わない。** 自前に再実装して**ブラックボックス**に保つ |
+| 判定 | **人の目**（画面に判定と理由を出す） | `TestReport` の検証（`OK` / `NG`） |
+| 秘密情報 | 画面に出す（自己テストの目的そのもの） | **出さない**（`TESTING.md` 9 節） |
+
+**この線引きから出てくる決まり。**
+
+- **E2E から自己テストを駆動してよい**（`IdPClient.StartSelfTestAsync`）。
+  Open棟梁 のクライアントを通る経路は**そこしか無い**ので、
+  **相互接続性の回帰だけは E2E が押さえる**（`RT-197` / `RT-246`）
+- **自己テストに「合否の自動判定」を足さない。** 判定を増やすなら E2E に足す
+- **人手が要る経路は、E2E では Skip にして理由を書く**（例 : CIBA の承認は実機が要る。`RT-246.2`）
+- **画面（Razor）は実行時コンパイル**なので、**自己テストの画面を足したら E2E で一度は開く**
+  （ビルドでは誤りが出ない）
+
+**本番に出してよい範囲。**
+
+- **自己テストの画面と口は、`IsLockedDownTestEndpoints` を `true` にすれば塞がる**
+  （`/Home/Saml2OAuth2Starters`、テスト用のリダイレクト先、`/TestHybridFlow`、
+  `api/Values`。詳細は [`CONFIGURATION.md`](../CONFIGURATION.md) 11 節「本番へ切り替えるときに見るもの」）
+- **認可画面（同意）のように、利用者にも見せる画面へ自己テスト用の表示を足すときは、
+  同じ設定で隠す**（`OAuth2Authorize.cshtml` の「この画面で確かめること」。#246 の項目 3）
+- **`IsDebug` / `TestUserPWD` / `FcmOutboxDirectory` を本番で有効にしない**
+  （`ProductionCheck` が警告する）
 
 ---
 

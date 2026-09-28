@@ -30,6 +30,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/09/28  玄人 幸道         何を確かめる画面なのかを出す（#246 の項目 3。自己テストが開いている配置だけ）
     //**********************************************************************************
 *@
 
@@ -63,6 +64,76 @@
                 <input class="btn btn-primary" type="submit" name="submit.Login" value="@AccountViews.OAuth2AuthorizeSIDUButton" />
             </p>
         </form>
+        @*
+            **ここから下は、自己テストのための表示である**（#246 の項目 3）。
+            **`IsLockedDownTestEndpoints`（自己テストを閉じる設定）が true の配置では出さない**
+            （項目 4 の線引き。利用者に見せるものではない）。
+        *@
+        @if (!Config.IsLockedDownTestEndpoints)
+        {
+            <hr />
+            <h4>この画面で確かめること（自己テスト）</h4>
+            <table class="table table-bordered">
+                <tr>
+                    <th style="width:30%;">なぜこの画面が出たか</th>
+                    <td>
+                        <b>prompt が none ではなく、認証用の scope でもないため</b>、同意を求めている。<br />
+                        <b>この実装は同意を記録しない</b>ので、同じ要求でも毎回この画面になる
+                        （<code>ANALYSIS-IdP.md</code> の D-6）。
+                    </td>
+                </tr>
+                <tr>
+                    <th>client_id / response_type</th>
+                    <td>@ViewBag.ClientId / @ViewBag.ResponseType</td>
+                </tr>
+                <tr>
+                    <th>redirect_uri（照合済み）</th>
+                    <td>@ViewBag.ValidRedirectUri</td>
+                </tr>
+                <tr>
+                    <th>response_mode</th>
+                    <td>@(string.IsNullOrEmpty((string)ViewBag.ResponseMode) ? "（既定）" : ViewBag.ResponseMode)</td>
+                </tr>
+                <tr>
+                    <th>prompt</th>
+                    <td>
+                        @(string.IsNullOrEmpty((string)ViewBag.Prompt) ? "（指定なし）" : ViewBag.Prompt)<br />
+                        <b>none を指定すると、この画面は出ずに code が返る。</b>
+                        本来は UI が要るなら <code>login_required</code> 等を返す指定なので、
+                        <b>無音で認可が通ることを確かめられる</b>（C-3）。<br />
+                        <b>login / consent / select_account は未対応で、無視される。</b>
+                    </td>
+                </tr>
+                <tr>
+                    <th>max_age</th>
+                    <td>
+                        @(string.IsNullOrEmpty((string)ViewBag.MaxAge) ? "（指定なし）" : ViewBag.MaxAge)<br />
+                        <b>前回の認証からの経過時間の上限。</b>超えていれば、OP は再認証を求めるべきもの。
+                    </td>
+                </tr>
+                <tr>
+                    <th>request_uri（PAR / ros 経由か）</th>
+                    <td>@(string.IsNullOrEmpty((string)ViewBag.RequestUri) ? "（クエリ文字列の要求）" : ViewBag.RequestUri)</td>
+                </tr>
+                <tr>
+                    <th>state / nonce / claims</th>
+                    <td>
+                        state=@((bool)ViewBag.HasState ? "あり" : "なし")
+                        / nonce=@((bool)ViewBag.HasNonce ? "あり" : "なし")
+                        / claims=@((bool)ViewBag.HasClaims ? "あり" : "なし")
+                        <br />（<b>値は出さない</b>。有無だけで足りるため）
+                    </td>
+                </tr>
+                <tr>
+                    <th>次に見るところ</th>
+                    <td>
+                        [Grant] を押すと、要求した <code>response_mode</code> で戻る。<br />
+                        戻り先の画面に <b>code / id_token / access_token の実値と、
+                        トークン要求に使ったクライアント認証の方式</b>が出る（#246）。
+                    </td>
+                </tr>
+            </table>
+        }
     </div>
 </div>
 

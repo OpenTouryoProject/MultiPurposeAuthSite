@@ -37,6 +37,7 @@
 //*  2026/09/28  玄人 幸道         FAPI2 の自己テストのトークン交換を private_key_jwt にした（#246）
 //*  2026/09/28  玄人 幸道         アサーションの組み立てを SelfTestClient へ寄せた（#246）
 //*  2026/09/28  玄人 幸道         SAML2 の応答（アサーション）を画面に出す（#246 の項目 3）
+//*  2026/09/28  玄人 幸道         認可画面に、確かめる内容（prompt / max_age など）を出す（#246 の項目 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2739,6 +2740,19 @@ namespace MultiPurposeAuthSite.Controllers
                         ViewBag.Name = identity.Name;
                         ViewBag.Scopes = scopes;
 
+                        // **認可画面で「何を確かめるのか」を出すための値**（#246 の項目 3）。
+                        //   画面側は、自己テストを閉じている配置では出さない（項目 4 の線引き）。
+                        ViewBag.ClientId = client_id;
+                        ViewBag.ResponseType = response_type;
+                        ViewBag.ResponseMode = response_mode;
+                        ViewBag.ValidRedirectUri = valid_redirect_uri;
+                        ViewBag.Prompt = prompt;
+                        ViewBag.MaxAge = max_age;
+                        ViewBag.RequestUri = request_uri;
+                        ViewBag.HasState = !string.IsNullOrEmpty(state);
+                        ViewBag.HasNonce = !string.IsNullOrEmpty(nonce);
+                        ViewBag.HasClaims = (claims != null);
+
                         // 認証の場合、余計なscopeをfilterする。
                         bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
 
@@ -3672,6 +3686,8 @@ namespace MultiPurposeAuthSite.Controllers
                             // FAPI1
 
                             // **アサーションの組み立ては SelfTestClient**（#246）。
+                            model.AuthMethod = "private_key_jwt（client_assertion。FAPI1 は非対称の認証）";
+
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
                                 Sts.SelfTestClient.CreateClientAssertion(
@@ -3692,6 +3708,8 @@ namespace MultiPurposeAuthSite.Controllers
                             //   mTLS の経路は E2E（FA-6）が測る。
 
                             // **アサーションの組み立ては SelfTestClient**（#246）。
+                            model.AuthMethod = "private_key_jwt（client_assertion。FAPI 2.0 は MTLS か これ）";
+
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
                                 tokenEndpointUri, redirect_uri, code,
                                 Sts.SelfTestClient.CreateClientAssertion(
@@ -3708,6 +3726,10 @@ namespace MultiPurposeAuthSite.Controllers
                             if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                             {
                                 // 通常
+                                //   **Open棟梁 のクライアントは、この経路を Basic で送る**
+                                //   （既定が client_secret_basic。#246 の項目 3）。
+                                model.AuthMethod = "client_secret_basic（Authorization ヘッダ）";
+
                                 model.Response = await Sts.Helper.GetInstance()
                                     .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                     client_id, client_secret, redirect_uri, code);
@@ -3715,6 +3737,10 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // PKCE
+                                //   **PKCE の経路は既定が client_secret_post**（Basic ではない。#246 の項目 3）。
+                                //   PKCE 自体はクライアント認証ではないので、code_verifier は別に送る。
+                                model.AuthMethod = "client_secret_post（フォーム）＋ PKCE の code_verifier";
+
                                 model.Response = await Sts.Helper.GetInstance()
                                    .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                    client_id, client_secret, redirect_uri,

@@ -24,6 +24,8 @@
     //*  2026/09/18  玄人 幸道         無効な Implicit / ROPC は、リンクにせず文字だけにする（#220）
     //*  2026/09/27  玄人 幸道         RP-Initiated Logout を試すボタンを追加（#232）
     //*  2026/09/28  玄人 幸道         PAR（/par）経路のボタンを追加（#246）
+    //*  2026/09/28  玄人 幸道         prompt / max_age を選べるようにした（#246 の項目 3）
+    //*  2026/09/28  玄人 幸道         SAML2 の 4 つ目の組み合わせを追加し、Hybrid-IdP の記述を直した（#246 の項目 2）
     //**********************************************************************************
 *@
 
@@ -63,7 +65,25 @@
             <div class="col-md-5">
                 @Html.DropDownListFor(model => model.ResponseMode, Model.DdlResponseModeItems, new { @class = "form-control" })
             </div>
+            @* **認可画面（同意）の出方を試すための指定**（#246 の項目 3） *@
+            @Html.LabelFor(m => m.Prompt, new { @class = "col-md-3 control-label" })
+            <div class="col-md-5">
+                @Html.DropDownListFor(model => model.Prompt, Model.DdlPromptItems, new { @class = "form-control" })
+            </div>
+            @Html.LabelFor(m => m.MaxAge, new { @class = "col-md-3 control-label" })
+            <div class="col-md-5">
+                @Html.DropDownListFor(model => model.MaxAge, Model.DdlMaxAgeItems, new { @class = "form-control" })
+            </div>
         </div>
+        <text>
+            ※ <b>prompt / max_age は、認可エンドポイントへ行くボタンすべてに効く</b>（#246 の項目 3）。<br />
+            　　<b>prompt=none</b> … 認可画面を出さずに code が返る。<b>本来は UI が要るなら
+            <code>login_required</code> 等を返す指定</b>なので、**無音で認可が通ることを観測できる**
+            （`ANALYSIS-IdP.md` C-3）。<br />
+            　　<b>prompt=login / consent / select_account</b> … <b>この実装は未対応。無視される</b>ことを観測できる。<br />
+            　　<b>max_age</b> … 前回の認証からの経過時間の上限。<b>超えていれば再認証を求めるべき</b>もの。<br />
+            　　OIDC のボタンは、指定しなければ従来どおり <code>max_age=600</code> を付ける。
+        </text>
         <ul>
             <li>
                 SAML2
@@ -73,6 +93,11 @@
                     <li>
                         <input type="submit" name="submit.Saml2PostPostBinding" value="Saml2 Post Post Binding" class="btn btn-link" />
                         <br />※ Saml2 Post Post Binding will not pass if you are not logged in. It is provided for library testing purposes.
+                    </li>
+                    @* **4 つ目の組み合わせ**（要求は POST、応答は Redirect）。#246 の項目 2 *@
+                    <li>
+                        <input type="submit" name="submit.Saml2PostRedirectBinding" value="Saml2 Post Redirect Binding" class="btn btn-link" />
+                        <br />※ 要求を POST で送り、<b>応答は Redirect（GET）で受ける</b>。サインインが要る点は上と同じ。
                     </li>
                 </ul>
             </li>
@@ -170,9 +195,13 @@
                 </ul>
             </li>
             <li>
-                Hybrid-IdP
+                Hybrid-IdP（ID フェデレーション）
                 <ul>
-                    <li>...</li>
+                    @* **ボタンにできない**（外部 IdP と、その登録が要る）。#246 の項目 2 *@
+                    <li class="text-muted">
+                        ボタンは無い。<b>外部 IdP（Google / Microsoft / 他の OIDC 準拠 IdP）の登録が要る</b>ため。
+                        <br />試すときは、サインイン画面の外部ログインから入る（`AccountController` の ExternalLogin）。
+                    </li>
                 </ul>
             </li>
         </ul>

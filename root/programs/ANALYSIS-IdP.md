@@ -704,6 +704,47 @@ RFC 7662 §2.2 の `token_type` は **RFC 6749 §5.1 の型**（`bearer` など�
 > エラー応答の HTTP ステータス（400 / 401）は #196 で対応した（`/revoke`・`/introspect` とも）。
 > メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
 
+### A-12. `max_age` を超えたときに、再認証もエラー応答もせず、空のエラー画面になる **[Core][netfx]**
+
+```csharp
+// AccountController.OAuth2Authorize（両アプリに同文）
+if (this.CheckAuthTime(max_age)) {
+    if (Token.CmnEndpoints.ValidateAuthZReqParam(...)) { ... }
+    else { /* 不正なRequest */ }
+}
+else
+{
+    // 不正なRequest        ← ここに何も無い
+}
+
+// ここまで来たらエラー。
+if (!string.IsNullOrEmpty(valid_redirect_uri)) { /* redirect_uri へ error を返す */ }
+else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
+```
+
+`CheckAuthTime` は、次のいずれでも `false` を返す。
+
+- `auth_time` の Cookie が無い
+- 前回の認証からの経過が `max_age` を超えている
+- **`max_age` が数値でない**
+
+`false` になると `ValidateAuthZReqParam` を通らないため **`valid_redirect_uri` が空**で、
+**`err` も空のまま**「ここまで来たらエラー」に落ちる。
+結果は **文面の無いエラー画面**である（#246 の自己テストで `max_age=60` を選んで実測）。
+
+**仕様が求めているもの。**
+
+| 状況 | あるべき応答 | 根拠 |
+|---|---|---|
+| `max_age` を超えている | **利用者を再認証する**（サインインさせ、`auth_time` を更新して続ける） | OIDC Core §3.1.2.1（`max_age`）／§2（`auth_time`） |
+| 再認証が必要だが `prompt=none` | `redirect_uri` へ **`login_required`** | OIDC Core §3.1.2.6 |
+| `max_age` が数値でない | `redirect_uri` へ **`invalid_request`** | RFC 6749 §4.1.2.1 |
+
+いずれも**エラー画面ではなく、`redirect_uri` へ返す**のが仕様である（A-6 と同じ筋）。
+
+**同族の項目:** `prompt` の処理そのものは C-3、同意の永続化は D-6。
+`auth_time` は `AddAuthTimeClaim` で ID トークンに入れており、**読み書きの土台はある。**
+
 ---
 
 ## 3. B. 異常系で落ちる（HTTP 500 になる）
@@ -1676,6 +1717,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
 | ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残り（仕様方針の判断を伴う 9〜14）は #228 |
+| **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）。C-3 / D-6 と同族 |
 
 ### フェーズ 2 — セキュリティの底上げ
 

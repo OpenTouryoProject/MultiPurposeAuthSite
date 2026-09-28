@@ -281,7 +281,8 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
 | `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |
 | `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |
-| `Tests/Issues/Saml2AssertionTests.cs` | `RT-246` | **自己テストが SAML2 のアサーションを画面に出す**（Redirect / POST の両バインディング。判定・署名の検証・Issuer の一致・XML・属性。`RT-246.4` / `RT-246.5`） |
+| `Tests/Issues/ConsentScreenTests.cs` | `RT-246` | **認可画面（同意）が「何を確かめる画面か」を出す**（`prompt` / `max_age` の効き方）／**結果画面がクライアント認証の方式を出す**（`RT-246.6`） |
+| `Tests/Issues/Saml2AssertionTests.cs` | `RT-246` | **自己テストが SAML2 のアサーションを画面に出す**（Redirect / POST / 要求 POST ＋ 応答 Redirect の 3 経路。判定・署名の検証・Issuer の一致・XML・属性。`RT-246.4` 〜 `RT-246.7`） |
 | `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` / `RT-243` / `RT-246` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`）。**自己テストの CIBA ボタン**（判定と理由が画面に出る。`RT-246.2`） |
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |

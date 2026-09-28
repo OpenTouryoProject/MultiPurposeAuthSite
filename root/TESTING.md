@@ -120,6 +120,14 @@ JWT のデコードも Request Object の署名も、テスト側で独立に実
 
 このため、**サイトが動いていることが前提**になる。
 
+**同梱の自己テスト（`/Home/Saml2OAuth2Starters`）とは役割が違う。**
+自己テストは **Open棟梁 のクライアント ライブラリ**を使い、**人が目で確かめる**ための場で、
+E2E は**自前の実装で外から叩き、合否を判定する。**
+**E2E から自己テストを駆動してよい**（`IdPClient.StartSelfTestAsync`）。
+Open棟梁 のクライアントを通る経路はそこしか無いので、**相互接続性の回帰だけは E2E が押さえる**
+（`RT-197` / `RT-246`）。線引きの全文は
+[`programs/MultiPurposeAuthSiteCore/ANALYSIS.md`](programs/MultiPurposeAuthSiteCore/ANALYSIS.md) 7 節。
+
 ## 4. 起動する URL を合わせる（重要）
 
 **サイトは、構成ファイルに書かれた URL で待ち受けている必要がある。**

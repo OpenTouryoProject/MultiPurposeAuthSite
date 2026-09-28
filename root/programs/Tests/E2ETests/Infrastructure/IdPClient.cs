@@ -48,6 +48,7 @@
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）の口を追加（#232）
 //*  2026/09/27  玄人 幸道         自己テストの画面が出すログアウトのフォームを送る口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
+//*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
 //**********************************************************************************
 
 using System;
@@ -1145,10 +1146,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="clientType">normal / fapi1 / fapi2 / device / fapi_ciba（空はログイン ユーザ）</param>
         /// <param name="clarifyRedirectUri">認可リクエストに redirect_uri を明示するか</param>
         /// <param name="responseMode">response_mode（既定は空）</param>
+        /// <param name="prompt">prompt（null なら送らない。#246 の項目 3）</param>
+        /// <param name="maxAge">max_age（null なら送らない。#246 の項目 3）</param>
         /// <returns>応答（リダイレクトは追跡しない）</returns>
         public async Task<HttpResponseMessage> StartSelfTestAsync(
             string submitButton, string clientType = "normal",
-            bool clarifyRedirectUri = true, string responseMode = "")
+            bool clarifyRedirectUri = true, string responseMode = "",
+            string prompt = null, string maxAge = null)
         {
             HttpResponseMessage get = await this.GetAsync("/Home/Saml2OAuth2Starters");
             string html = await get.Content.ReadAsStringAsync();
@@ -1162,6 +1166,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { "ResponseMode", responseMode },
                 { "submit." + submitButton, submitButton }
             };
+
+            // **画面の選択（prompt / max_age）を、そのまま送る**（#246 の項目 3）。
+            //   null なら送らない（「送らない」と「空で送る」を区別するため）。
+            if (prompt != null)
+            {
+                form.Add("Prompt", prompt);
+            }
+
+            if (maxAge != null)
+            {
+                form.Add("MaxAge", maxAge);
+            }
 
             if (m.Success)
             {
