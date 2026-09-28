@@ -306,7 +306,22 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 ## 7. テスト用クライアント（`HomeController` / `Views/Home`）
 
 **この認証サイトは、自分自身のクライアントも兼ねている。**
-`HomeController`（1442 行）はほぼ全部が「各フローを画面から叩くためのテスト用クライアント」。
+`HomeController` はほぼ全部が「各フローを画面から叩くためのテスト用クライアント」。
+
+**クライアント側の組み立ては `CommonLibrary/Extensions/Sts/SelfTestClient.cs` に寄せてある**（#246）。
+
+| | 受け持ち |
+|---|---|
+| `SelfTestClient` | **鍵を読み、JWT を作る**（Request Object・CIBA の要求・`client_assertion`）。`/ros` と `/par` は「組み立て → 預ける → 応答を解く」までを 1 つにしている |
+| `Helper` | **WebAPI 呼び出し ＋ コンテナ化の URL 変換**（全メソッドが `GetContainerizatedAuthZServerUri` を通る） |
+| `HomeController` | **どのパターンを試すかだけ**を決める |
+
+**寄せた理由は、両アプリ（net48 / net10.0）に同文で二重に在ったこと。**
+自己テストのパターンを増やすたびに二重が増える状態だった。
+
+> **ID フェデレーションの `/userinfo` だけは `Helper` を通さない**（`AccountController`）。
+> Helper はホストをコンテナの認可サーバへ書き換えるので、**他の IdP を叩く呼び出しは壊れる。**
+> 呼び出し側にその理由を書いてある。
 
 - `Saml2OAuth2Starters.cshtml` … SAML2 / Authorization Code / Implicit / Hybrid / PKCE /
   FAPI1 / FAPI2 / その他を、クライアントと response_mode を選んで開始する画面

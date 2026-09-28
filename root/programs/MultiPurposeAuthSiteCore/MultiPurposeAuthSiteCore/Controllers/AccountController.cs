@@ -38,6 +38,7 @@
 //*  2026/09/25  玄人 幸道         設定キーの改名（IdFederation*Endpoint）に追随（#236）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
 //*  2026/09/28  玄人 幸道         FAPI2 の自己テストのトークン交換を private_key_jwt にした（#246）
+//*  2026/09/28  玄人 幸道         アサーションの組み立てを SelfTestClient へ寄せた（#246）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2379,6 +2380,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #region /userinfoエンドポイント
                     // /userinfoエンドポイントにアクセスする場合
+
+                    // **ここは Helper を通さない**（#246 で確かめた）。
+                    //   Helper の WebAPI 呼び出しは、すべて GetContainerizatedAuthZServerUri を通し、
+                    //   **宛先のホストをコンテナの認可サーバへ書き換える。**
+                    //   ID フェデレーションの相手は**他の IdP** なので、通すと宛先が変わって壊れる。
+                    //   （Helper.GetUserInfoAsync は URI を引数に取らず、常に自分の /userinfo を向く）
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
                         new Uri(Config.IdFederationUserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
@@ -3967,22 +3974,11 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // FAPI1
 
-                            // Tokenエンドポイントにアクセス
-                            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
-                            // client_id(iss)
-                            string iss = clientId_InSessionOrCookie;
-
-                            // 秘密鍵
-                            DigitalSignX509 dsX509 = new DigitalSignX509(
-                                CmnClientParams.RsaPfxFilePath,
-                                CmnClientParams.RsaPfxPassword,
-                                HashAlgorithmName.SHA256);
-
+                            // **アサーションの組み立ては SelfTestClient**（#246）。
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateByRsa(
-                                    iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
-                                    ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
+                                tokenEndpointUri, redirect_uri, code,
+                                Sts.SelfTestClient.CreateClientAssertion(
+                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.StandardScopes));
                         }
                         else if (state.StartsWith(fapi2Prefix))
                         {
@@ -3998,22 +3994,11 @@ namespace MultiPurposeAuthSite.Controllers
                             //   **証明書の配置を前提にしない private_key_jwt に寄せる。**
                             //   mTLS の経路は E2E（FA-6）が測る。
 
-                            // Tokenエンドポイントにアクセス
-                            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
-                            // client_id(iss)
-                            string iss = clientId_InSessionOrCookie;
-
-                            // 秘密鍵
-                            DigitalSignX509 dsX509 = new DigitalSignX509(
-                                CmnClientParams.RsaPfxFilePath,
-                                CmnClientParams.RsaPfxPassword,
-                                HashAlgorithmName.SHA256);
-
+                            // **アサーションの組み立ては SelfTestClient**（#246）。
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateByRsa(
-                                    iss, aud, new TimeSpan(0, 0, 30), Const.OidcScopes,
-                                    ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
+                                tokenEndpointUri, redirect_uri, code,
+                                Sts.SelfTestClient.CreateClientAssertion(
+                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.OidcScopes));
                         }
                         else
                         {

@@ -32,6 +32,7 @@
 //*  2026/09/25  玄人 幸道         CIBA の自己テストの結果文字列を net10.0 版に揃えた
 //*  2026/09/27  玄人 幸道         自己テストに RP-Initiated Logout の口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストに PAR（/par）経路を追加（#246）
+//*  2026/09/28  玄人 幸道         組み立てを SelfTestClient へ寄せた（#246）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -424,86 +425,37 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>FAPI2CCスターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたFAPI2CCスターター</returns>
+        /// <remarks>
+        /// **組み立ては SelfTestClient に寄せた**（#246。両アプリに同文で二重に在ったため）。
+        /// ここは「どのパターンを試すか」だけを決める。
+        ///
+        /// 預け先は **`/ros`**（独自。RFC 9101 §5.2.1 の任意機能として維持）。
+        /// **クライアント認証は無い**（Request Object の署名だけを見る口）。
+        /// PAR（RFC 9126）に預ける形は AssembleFAPI2ParStarterAsync。
+        /// </remarks>
         private async Task<string> AssembleFAPI2CCStarterAsync(string response_type)
         {
-            // 秘密鍵
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                CmnClientParams.RsaPfxFilePath,
-                CmnClientParams.RsaPfxPassword,
-                HashAlgorithmName.SHA256);
-
             if (this.ClarifyRedirectUri)
             {
-                //this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
                 string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
                 this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
             }
 
             // テストコードで、clientを識別するために、Stateに細工する。
             // TestCase（max_age, auth_time）: 無し, 不要、有り, 不要、無し, 必要
-            string requestObject = RequestObject.Create(this.ClientId,
-                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri,
-                response_type, this.ResponseMode, this.RedirectUri, Const.OidcScopes,
+            SelfTestClient.PushResult ret = await SelfTestClient.RegisterRequestObjectAsync(
+                this.ClientId, response_type, this.ResponseMode, this.RedirectUri,
                 OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
-                "600", "", "",
-                new ClaimsInRO(
-                    // userinfo > claims
-                    new Dictionary<string, object>()
-                    {
-                        {
-                            "picture",
-                            new
-                            {
-                                essential = true
-                            }
-                        }
-                    },
-                    // id_token > claims
-                    new Dictionary<string, object>()
-                    {
-                        {
-                            "hoge",
-                            new
-                            {
-                                essential = true
-                            }
-                        }
-                    },
-                    // id_token > arc
-                    new
-                    {
-                        essential = true,
-                        values = new string[]
-                        {
-                            OAuth2AndOIDCConst.UrnLoA1,
-                            OAuth2AndOIDCConst.UrnLoA2
-                        }
-                    }),
-                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+                SelfTestClient.SampleClaims());
 
-            // 検証テスト
-            if (RequestObject.Verify(requestObject, out string iss,
-                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(false)))
+            if (string.IsNullOrEmpty(ret.RequestUri))
             {
-                // 検証できた。
-
-                // RequestObjectを登録する。
-                string response = await Helper.GetInstance().RegisterRequestObjectAsync(
-                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
-
-                // レスポンスを確認し、request_uriを抽出。
-                string request_uri = (string)((JObject)JsonConvert
-                    .DeserializeObject(response))[OAuth2AndOIDCConst.request_uri];
-
-                // request_uriの認可リクエストを投げる。
-                return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", request_uri);
-            }
-            else
-            {
-                // 検証できなかった。
+                // 署名の検証ができなかった、または預けられなかった。
                 return null;
             }
+
+            // request_uriの認可リクエストを投げる。
+            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", ret.RequestUri);
         }
 
         /// <summary>FAPI2CC ＋ PAR のスターターを組み立てて返す（#246）</summary>
@@ -519,74 +471,44 @@ namespace MultiPurposeAuthSite.Controllers
         /// | 本文 | 署名付き JWT を生で | フォーム（request に JAR を入れる） |
         /// | 応答 | iss / aud / request_uri / exp | **request_uri / expires_in** |
         ///
-        /// **Open棟梁 のクライアント実装（OAuth2AndOIDCClient.PushAuthorizationRequestAsync）で呼ぶ。**
+        /// **組み立てと預けは SelfTestClient**（Open棟梁 の
+        /// `OAuth2AndOIDCClient.PushAuthorizationRequestAsync` を通る）。
         /// E2E は実装側のライブラリを使わないので、**相互接続性の確認はここにしか無い。**
         ///
         /// **預けた結果は画面に出す**（request_uri / expires_in）。目視で確かめるため。
         /// </remarks>
         private async Task<string> AssembleFAPI2ParStarterAsync(string response_type)
         {
-            // 秘密鍵
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                CmnClientParams.RsaPfxFilePath,
-                CmnClientParams.RsaPfxPassword,
-                HashAlgorithmName.SHA256);
-
             if (this.ClarifyRedirectUri)
             {
                 string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
                 this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
             }
 
-            string authRequestPushUri = Config.OAuth2AuthorizationServerEndpointsRootURI
-                + OAuth2AndOIDCParams.AuthRequestPushUri;
-
             // テストコードで、clientを識別するために、Stateに細工する。
-            string requestObject = RequestObject.Create(this.ClientId, authRequestPushUri,
-                response_type, this.ResponseMode, this.RedirectUri, Const.OidcScopes,
+            SelfTestClient.PushResult ret = await SelfTestClient.PushAuthorizationRequestAsync(
+                this.ClientId, response_type, this.ResponseMode, this.RedirectUri,
                 OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
-                "600", "", "",
-                // **claims は空で渡す。** RequestObject.Create は null チェックをしないため
-                //   （ClaimsInRO 側は各引数の null を受ける）。ここは PAR の経路を見るのが目的。
-                new ClaimsInRO(null, null, null),
-                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
-
-            // **クライアント認証は private_key_jwt**（FAPI 2.0 は MTLS か private_key_jwt に限る）。
-            //   client_assertion の aud は**トークン エンドポイント**（RFC 7523 3。サーバ側もそこを見る）。
-            string clientAssertion = JwtAssertion.CreateByRsa(
-                this.ClientId,
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
-                new TimeSpan(0, 0, 30), Const.OidcScopes,
-                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+                SelfTestClient.SampleClaims());
 
             // 画面に出す（目視で確かめるもの）
-            ViewBag.AuthRequestPushUri = authRequestPushUri;
+            ViewBag.AuthRequestPushUri = ret.Endpoint;
             ViewBag.ClientId = this.ClientId;
             ViewBag.AuthMethod = OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit();
-            ViewBag.RequestObject = requestObject;
-            ViewBag.RequestObjectJson = CustomEncode.ByteToString(
-                CustomEncode.FromBase64UrlString(requestObject.Split('.')[1]), CustomEncode.us_ascii);
+            ViewBag.RequestObject = ret.RequestObject;
+            ViewBag.RequestObjectJson = ret.RequestObjectJson;
+            ViewBag.Response = ret.Response;
+            ViewBag.RequestUri = ret.RequestUri;
+            ViewBag.ExpiresIn = ret.ExpiresIn;
 
-            // PAR に預ける（Open棟梁 のクライアント実装）
-            string response = await Helper.GetInstance().PushAuthorizationRequestAsync(
-                new Uri(authRequestPushUri), requestObject, this.ClientId, clientAssertion);
-
-            ViewBag.Response = response;
-
-            JObject json = (JObject)JsonConvert.DeserializeObject(response ?? "");
-            string request_uri = (json == null) ? null : (string)json[OAuth2AndOIDCConst.request_uri];
-
-            ViewBag.RequestUri = request_uri;
-            ViewBag.ExpiresIn = (json == null) ? null : (string)json["expires_in"];
-
-            if (string.IsNullOrEmpty(request_uri))
+            if (string.IsNullOrEmpty(ret.RequestUri))
             {
                 // 預けられなかった（応答をそのまま画面で見せる）。
                 return null;
             }
 
             // request_uri の認可リクエスト
-            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", request_uri);
+            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", ret.RequestUri);
         }
         #endregion
 
@@ -621,34 +543,20 @@ namespace MultiPurposeAuthSite.Controllers
         {
             string response = "";
 
-            // 秘密鍵
-            DigitalSignECDsaX509 dsX509 = new DigitalSignECDsaX509(
-                CmnClientParams.EcdsaPfxFilePath,
-                CmnClientParams.EcdsaPfxPassword,
-                HashAlgorithmName.SHA256);
-
             string cibaAuthorizeEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint;
-            string client_notification_token = CustomEncode.ToBase64UrlString(GetPassword.RandomByte(160));
 
-            string requestObject = RequestObject.CreateCiba(
+            // **組み立て（鍵の読み出し・署名・自己検証）は SelfTestClient**（#246）。
+            //   aud は OP の Issuer Identifier（CIBA Core 7.1.1。#234 の段階 1）。
+            string requestObject = SelfTestClient.CreateCibaRequestObject(
                 this.ClientId, // FAPI2用か自前のクライアント
-                // **aud は OP の Issuer Identifier（CIBA Core 7.1.1。#234 の段階 1）。**
-                //   以前は /ciba_authz のエンドポイント URL を入れていた。
-                Config.IssuerId,
-                DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds().ToString(),
-                DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
                 "hoge " + OAuth2AndOIDCConst.Scope_Openid,
-                client_notification_token, GetPassword.Generate(4, 0), "", "",
                 "tanaka@gmail.com", // プッシュ通知の対象となるアカウント
-                null, // request_contextやintentなどを格納したDictionary (null)
-                CmnClientParams.EcdsaPfxFilePath, CmnClientParams.EcdsaPfxPassword);
-            //((ECDsa)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+                SelfTestClient.CreateClientNotificationToken(),
+                GetPassword.Generate(4, 0));
 
-            // 検証テスト
-            if (RequestObject.VerifyCiba(requestObject, out string iss,
-                ((ECDsa)dsX509.AsymmetricAlgorithm).ExportParameters(false)))
+            if (!string.IsNullOrEmpty(requestObject))
             {
-                // 検証できた。
+                // 署名を検証できた。
 
                 // **認証要求を request で直接送る（CIBA Core 7.1.1。#234 の段階 3）。**
                 //   以前は /ros に預けて request_uri を渡していた（CIBA Core に無い独自拡張）。
@@ -1525,22 +1433,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private async Task<ActionResult> JWTBearerTokenFlow()
         {
-            // Tokenエンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
             // ClientNameから、client_id(iss)を取得。
             string iss = Helper.GetInstance().GetClientIdByName(this.ClientName);
 
-            // 秘密鍵
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                CmnClientParams.RsaPfxFilePath,
-                CmnClientParams.RsaPfxPassword,
-                HashAlgorithmName.SHA256);
-
+            // **アサーションの組み立ては SelfTestClient**（#246。aud はトークン エンドポイント）。
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                JwtAssertion.CreateByRsa(iss, aud, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes,
-                    Const.StandardScopes, ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
+                SelfTestClient.CreateClientAssertion(
+                    iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];
