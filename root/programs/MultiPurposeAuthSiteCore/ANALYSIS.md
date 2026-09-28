@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 主要部（MultiPurposeAuthSiteCore / net10.0）コード分析
 
 対象: `root/programs/MultiPurposeAuthSiteCore`（**ASP.NET Core MVC / net10.0**） / ブランチ: `develop`
-最終更新: 2026-09-07
+最終更新: 2026-09-28
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
@@ -307,6 +307,10 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 **この認証サイトは、自分自身のクライアントも兼ねている。**
 `HomeController` はほぼ全部が「各フローを画面から叩くためのテスト用クライアント」。
+
+**この節は net48 版にも当てはまる**（自己テストは両アプリに同文で置いている）。
+**net48 側にしか無い話**（新しい View を csproj の `<Content Include>` に足す など）は
+[`../MultiPurposeAuthSite/ANALYSIS.md`](../MultiPurposeAuthSite/ANALYSIS.md) の 3 節にある。
 
 **クライアント側の組み立ては `CommonLibrary/Extensions/Sts/SelfTestClient.cs` に寄せてある**（#246）。
 

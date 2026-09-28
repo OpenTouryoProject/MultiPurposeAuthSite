@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 下位互換版（MultiPurposeAuthSite / net48）コード分析
 
 対象: `root/programs/MultiPurposeAuthSite`（**ASP.NET MVC5 + Web API2 + OWIN / net48**） / ブランチ: `develop`
-最終更新: 2026-09-07
+最終更新: 2026-09-28
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
@@ -118,7 +118,7 @@ MultiPurposeAuthSite/
    ├─ Controllers/
    │   ├─ AccountController.cs        4330 行
    │   ├─ ManageController.cs         2981 行
-   │   ├─ HomeController.cs           1448 行  ★テスト用クライアント（Starters）
+   │   ├─ HomeController.cs           1429 行  ★テスト用クライアント（Starters）
    │   ├─ OAuth2EndpointController.cs 1332 行
    │   ├─ UsersAdminController.cs      597 行  ★net48 のみ
    │   ├─ RolesAdminController.cs      432 行  ★net48 のみ
@@ -139,6 +139,21 @@ MultiPurposeAuthSite/
 - `OAuth2EndpointController` / `OAuth2ResourceServerController` / `Fido2ServerController` は
   `ApiController`（Web API2）。
 - **`ErrorController` は素の `Controller`**（net10.0 版は `MyBaseMVControllerCore` 継承。非対称）。
+
+### テスト用クライアント（Starters）は、net10.0 版と同文である
+
+**`HomeController` と `Views/Home` の自己テストは、両アプリに同じ内容で置いている。**
+**説明は [`../MultiPurposeAuthSiteCore/ANALYSIS.md`](../MultiPurposeAuthSiteCore/ANALYSIS.md) の 7 節に 1 つだけ置く**
+（二重に書くとズレるため）。**net48 側にしか無い話だけを、ここに書く。**
+
+| net48 側で追加に要ること | 理由 |
+|---|---|
+| **新しい `.cshtml` は `MultiPurposeAuthSite.csproj` の `<Content Include>` に足す** | 列挙されていない View は**発行に含まれない**（`Views/Home/CibaProfileResponse.cshtml` / `DeviceAuthZPollingResult.cshtml` は登録済み。#246） |
+| **新しい `.cs` を `CommonLibrary` に足したら `NetFxLibrary.csproj` の `<Compile Include>` にも足す** | net48 側は**明示列挙**（`CommonLibrary/ANALYSIS.md` 2 節） |
+| `FormCollection`（net48）と `IFormCollection`（net10.0）の違い | 同じ処理でも、フォームの受け取り方だけ違う（`DeviceAuthZResponse`） |
+
+**画面（Razor）は実行時コンパイルなので、ビルドでは誤りが出ない。**
+自己テストの画面を足したら、**E2E で一度は開くこと**（`RT-246.1` 〜 `RT-246.3`）。
 
 ---
 

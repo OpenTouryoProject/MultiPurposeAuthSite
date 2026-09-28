@@ -2,7 +2,7 @@
 
 対象: `root/programs` の IdP / STS 実装
 （`CommonLibrary` ＋ `MultiPurposeAuthSiteCore`（net10.0）＋ `MultiPurposeAuthSite`（net48）） / ブランチ: `develop`
-最終更新: 2026-09-07
+最終更新: 2026-09-28
 
 本書は各 `ANALYSIS.md` の続編で、**「IdP / STS としてのプロトコル実装がどこまで出来ていて、
 最新の仕様・慣行に対して何が足りないか」** だけを扱う。

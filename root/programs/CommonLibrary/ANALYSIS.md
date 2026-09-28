@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト ライブラリ部（CommonLibrary）コード分析
 
 対象: `root/programs/CommonLibrary`（**net10.0 / net48 の 2 系統**） / ブランチ: `develop`
-最終更新: 2026-09-07
+最終更新: 2026-09-28
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 「どこに何があるか」「どの規約に従うべきか」「何を壊しやすいか」を記す。
@@ -110,7 +110,7 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
 | `Co/` | 設定と定数 | `Config`(1740 行) `Const` |
 | `Data/` | ASP.NET Identity のストア実装とデータ アクセス | `CmnUserStore`(3089) `CmnRoleStore` `CmnStore` `UserStore`(net48) `UserStoreCore`/`RoleStoreCore`(.NET) `DataAccess` `EnumUserStoreType` `TraceDbProfiler` `CompositeDbProfiler` `StopUserStoreException` |
 | `Entity/` | エンティティ | `ApplicationUser` `ApplicationRole` |
-| `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1249) `DeviceAuthZProvider`(646) `CibaProvider`(505) `DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
+| `Extensions/Sts/` | OAuth2 拡張フローの実装 | `Helper`(1553) `SelfTestClient`(800) `DeviceAuthZProvider`(646) `CibaProvider`(505) `DataProvider` `RevocationProvider` `RequestObjectProvider` `IssuedTokenProvider` |
 | `Extensions/FIDO/` | WebAuthn / MS Passport | **現在ビルド対象外**（12 節） |
 | `Log/` | ロギングの façade | `Logging`（`ACCESS` / `SQLTRACE` ロガー） |
 | `Manager/` | ASP.NET Identity の Manager（**net48 のみ**） | `ApplicationUserManager` `ApplicationRoleManager` `ApplicationSignInManager` |
@@ -248,6 +248,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `TokenProviders/CmnResponseObject.cs` | JARM（Response Object） |
 | `TokenProviders/AuthorizationCodeProvider.cs` / `RefreshTokenProvider.cs` | code / refresh_token の保管（Memory or DBMS） |
 | `Extensions/Sts/Helper.cs`（1380 行） | **クライアント情報のレジストリ**。`OAuth2ClientsInformation` から client_secret / redirect_uri / JWK 公開鍵 / `tls_client_auth_subject_dn` / subject_types / client mode を引く。加えて各フローの WebAPI 呼び出しヘルパ（シングルトン、`GetInstance`） |
+| `Extensions/Sts/SelfTestClient.cs`（800 行） | **自己テスト（この実装が兼ねているクライアント）側の組み立て**（#246）。鍵を読み、JWT（Request Object / CIBA の要求 / `client_assertion`）を作る。`/ros`・`/par` は「組み立て → 預ける → 応答を解く」まで、CIBA と Device Authorization Grant は**ポーリングの通し**まで受け持つ。**IdP の処理からは呼ばない**（役割は `../MultiPurposeAuthSiteCore/ANALYSIS.md` 7 節） |
 | `Extensions/Sts/DeviceAuthZProvider.cs` | Device Authorization Grant |
 | `Extensions/Sts/CibaProvider.cs` | CIBA（FAPI）。FCM プッシュと連携 |
 | `Extensions/Sts/RevocationProvider.cs` / `IssuedTokenProvider.cs` | revoke / introspect の裏付けデータ |
