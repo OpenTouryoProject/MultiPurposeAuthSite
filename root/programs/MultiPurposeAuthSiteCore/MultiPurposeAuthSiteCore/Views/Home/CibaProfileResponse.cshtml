@@ -1,0 +1,118 @@
+@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Home.CibaProfileResponse
+    //* クラス日本語名  ：Home.CibaProfileResponse（CIBA を通した結果）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/09/28  玄人 幸道         新規（#246 の 3-a）
+    //**********************************************************************************
+
+    **目視で確かめるための画面である。**
+    以前は `?ret=OK_NORMAL_END` / `?ret=OK_ABNORMAL_END` という URL に移るだけで、
+    **`OK_` が接頭辞だと読めず、可否が分からなかった**（#246 の 3-a）。
+    判定と、その理由と、途中の実値（auth_req_id・interval・応答）を出す。
+*@
+
+@{
+    ViewBag.Title = "FAPI CIBA Profile";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<hr />
+
+<text>
+    ※ CIBA（CIBA Core ＋ FAPI-CIBA Profile）を、認証要求から /token のポーリング、
+    /userinfo まで通した結果である。<br />
+    ※ <b>CIBA は認証デバイス（スマートフォン アプリ）の登録と、そこでの承認が要る。</b>
+    登録した端末が無ければ /ciba_authz が認証要求を受け付けないので、
+    <b>そこで終わるのが正しい振る舞い</b>である（手順は authentication_device/CHEATSHEET.md）。
+</text>
+<br /><br />
+
+@if ((string)ViewBag.Verdict == "NORMAL_END")
+{
+    <div class="alert alert-success">
+        <b>NORMAL_END</b> : @ViewBag.Reason
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+        <b>ABNORMAL_END</b> : @ViewBag.Reason
+    </div>
+}
+
+<table class="table table-bordered">
+    <tr>
+        <th style="width:25%;">client_id</th>
+        <td>@ViewBag.ClientId</td>
+    </tr>
+    <tr>
+        <th>認証要求の宛先（CIBA エンドポイント）</th>
+        <td>@ViewBag.CibaAuthorizeEndpoint</td>
+    </tr>
+    <tr>
+        <th>auth_req_id</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.AuthReqId) ? "（返らなかった）" : ViewBag.AuthReqId)</td>
+    </tr>
+    <tr>
+        <th>interval / expires_in（サーバの応答）</th>
+        <td>
+            @(string.IsNullOrEmpty((string)ViewBag.Interval) ? "（無し）" : ViewBag.Interval) /
+            @(string.IsNullOrEmpty((string)ViewBag.ExpiresIn) ? "（無し）" : ViewBag.ExpiresIn)
+        </td>
+    </tr>
+    <tr>
+        <th>ポーリング（間隔 × 回数 / 上限）</th>
+        <td>
+            @ViewBag.PollIntervalSeconds 秒 × @ViewBag.PollCount 回
+            / 上限 @ViewBag.WaitLimitSeconds 秒
+        </td>
+    </tr>
+</table>
+
+<text>送った認証要求（署名付き JWT。ES256）:</text><br />
+@Html.TextArea("RequestObject", (string)ViewBag.RequestObject ?? "",
+    new { style = "resize: both; width:100%; height:80px;", @readonly = "readonly" })<br />
+
+<text>認証要求 (Json):</text><br />
+@Html.TextArea("RequestObjectJson", (string)ViewBag.RequestObjectJson ?? "",
+    new { style = "resize: both; width:100%; height:120px;", @readonly = "readonly" })<br />
+
+<text>CIBA エンドポイントの応答:</text><br />
+@Html.TextArea("AuthZResponse", (string)ViewBag.AuthZResponse ?? "",
+    new { style = "resize: both; width:100%; height:80px;", @readonly = "readonly" })<br />
+
+<text>トークン エンドポイントの応答（最後の 1 回）:</text><br />
+@Html.TextArea("TokenResponse", (string)ViewBag.TokenResponse ?? "",
+    new { style = "resize: both; width:100%; height:100px;", @readonly = "readonly" })<br />
+
+@if (!string.IsNullOrEmpty((string)ViewBag.UserInfoResponse))
+{
+    <text>UserInfo エンドポイントの応答:</text><br />
+    @Html.TextArea("UserInfoResponse", (string)ViewBag.UserInfoResponse ?? "",
+        new { style = "resize: both; width:100%; height:100px;", @readonly = "readonly" })<br />
+}
+
+<a class="btn btn-default" href="@Url.Action("Saml2OAuth2Starters", "Home")">自己テストの一覧に戻る</a>
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

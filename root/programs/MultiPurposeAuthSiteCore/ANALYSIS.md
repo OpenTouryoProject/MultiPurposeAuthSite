@@ -312,7 +312,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 | | 受け持ち |
 |---|---|
-| `SelfTestClient` | **鍵を読み、JWT を作る**（Request Object・CIBA の要求・`client_assertion`）。`/ros` と `/par` は「組み立て → 預ける → 応答を解く」までを 1 つにしている |
+| `SelfTestClient` | **鍵を読み、JWT を作る**（Request Object・CIBA の要求・`client_assertion`）。`/ros` と `/par` は「組み立て → 預ける → 応答を解く」までを 1 つにしている。**CIBA は認証要求からポーリング・`/userinfo` までの通し**（#246 の 3-b） |
 | `Helper` | **WebAPI 呼び出し ＋ コンテナ化の URL 変換**（全メソッドが `GetContainerizatedAuthZServerUri` を通る） |
 | `HomeController` | **どのパターンを試すかだけ**を決める |
 
@@ -325,13 +325,33 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 - `Saml2OAuth2Starters.cshtml` … SAML2 / Authorization Code / Implicit / Hybrid / PKCE /
   FAPI1 / FAPI2 / その他を、クライアントと response_mode を選んで開始する画面
-- `DeviceAuthZResponse.cshtml` … Device Authorization Grant の user_code 表示（QR は `qrcode.js`）
+- `DeviceAuthZResponse.cshtml` … Device Authorization Grant の user_code 表示（QR は `qrcode.js`）。
+  **`interval` と `expires_in` も出し、`interval` を hidden で次の POST へ持ち回す**（#246 の 3-b）
+- **Device Authorization Grant のポーリングも、判定と理由を画面に出す**（#246 の 3-a。CIBA と同じ）
+  - [Start polling.] → `DeviceAuthZPollingResult.cshtml` に、判定（NORMAL_END / ABNORMAL_END）と理由、
+    ポーリングの間隔 × 回数 / 上限、トークンと `/userinfo` の応答を出す
+  - **間隔は `/device_authz` が返した `interval` に従う**（RFC 8628 §3.5）。
+    以前は `ExponentialBackoff(10, 5)` で、**サーバが返した値と無関係**だった
+  - **ポーリングの実体は CIBA と同じ**（`SelfTestClient.PollForTokenAsync` 1 つに寄せた）
+  - E2E は**承認まで通す経路**を測れる（`RT-246.3`。CIBA は実機が要るので測れない）
 - **PAR（RFC 9126）の口も自己テストにある**（#246）
   - `Saml2OAuth2Starters.cshtml` の `submit.AuthorizationCodeFAPI2_PAR` … **Open棟梁 のクライアント実装**
     （`OAuth2AndOIDCClient.PushAuthorizationRequestAsync`）で `/par` に預け、
     **`request_uri` と `expires_in` を画面（`PushedAuthorizationResponse.cshtml`）で見せてから**認可へ進む
   - 既存の FAPI2 のボタンは `/ros`（独自。RFC 9101 §5.2.1 の任意機能）。**両方を押し比べられる**
   - **E2E は実装側のライブラリを使わない**ので、**Open棟梁 クライアントとの相互接続性はここでしか見ていない**（`RT-246.1`）
+- **CIBA（FAPI-CIBA Profile）は、判定と理由を画面に出す**（#246 の 3-a / 3-b）
+  - `Saml2OAuth2Starters.cshtml` の `submit.FAPI_CIBA_Profile` … 認証要求（ES256）→ `/ciba_authz` →
+    `/token` のポーリング → `/userinfo` までを通し、**判定（NORMAL_END / ABNORMAL_END）とその理由を
+    `CibaProfileResponse.cshtml` に出す**（`auth_req_id`・`interval`・ポーリング回数・各応答も）
+  - **以前は `?ret=OK_` ＋ 判定 という URL に移るだけ**で、`OK_` が接頭辞だと読めず、
+    **`?ret=OK_ABNORMAL_END` の可否が分からなかった**（失敗した理由も出ていなかった）
+  - **ポーリングは `/ciba_authz` が返す `interval`（既定 5 秒）に従い、60 秒で打ち切る。**
+    以前は 30 ミリ秒間隔で上限が無く、**承認されなければ要求の期限（600 秒）まで `/token` を叩き続けていた**
+    （画面のタブを閉じても止まらなかった）
+  - **承認まで通す経路（NORMAL_END）は、実機の認証デバイスが要る**
+    （`authentication_device/CHEATSHEET.md` 10 節）。E2E は、**端末を登録していない利用者**で
+    ABNORMAL_END と理由が画面に出ることを測る（`RT-246.2`）
 - **FAPI2 のトークン交換は `private_key_jwt`**（#246）。
   以前は `client_secret` を空で送り、**クライアント証明書（TB）が付くことを前提**にしていたが、
   `ClientCertPfxFilePath` が設定されていない配置では **`/token` が 401 になり、結果画面まで通らなかった**

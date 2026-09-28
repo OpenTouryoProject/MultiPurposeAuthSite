@@ -18,7 +18,8 @@
 | `firebase_web.json` | Firebase の web 構成 ＋ VAPID キー | **`.gitignore` 済み。コミットしない** |
 | `firebase_web.sample.json` | 上の項目名だけ（値は空） | コミットする |
 | `mpas.core.json` | 接続先 `https://localhost:44300`（net10.0 版） | コミットする |
-| `mpas.netfx.json` | 接続先 `https://localhost:44302`（net48 版） | コミットする |
+| `mpas.netfx.json` | 接続先 `https://localhost:44302`（net48 版。5 節の手順で起動したもの） | コミットする |
+| `mpas.vs.json` | 接続先 `https://localhost:44300/MultiPurposeAuthSite`（**Visual Studio から起動した場合**。仮想ディレクトリ付き） | コミットする |
 | `android/app/google-services.json` | Android 用の Firebase 構成（**web 版では使わない**） | **追跡中のプレースホルダ。実物で上書きしない** |
 
 サーバ側（参考）:
@@ -75,7 +76,7 @@ Copy-Item firebase_web.sample.json firebase_web.json
 |---|---|---|
 | `test.ps1 -Launch` / Kestrel（ルート URI を環境変数で揃える） | `https://localhost:44300` | `mpas.core.json` |
 | IIS Express で起動した net48 版（5 節の手順） | `https://localhost:44302` | `mpas.netfx.json` |
-| Visual Studio（IIS Express） | `https://localhost:44300/MultiPurposeAuthSite`（`../../CHEATSHEET.md` 4 節の既定値。**実測していない**） | 自分用のファイルを作る |
+| **Visual Studio（どちらのアプリも）** | `https://localhost:44300/MultiPurposeAuthSite`（**仮想ディレクトリ付き**。構成ファイルの既定値） | `mpas.vs.json` |
 | ファイルを渡さない | `https://localhost:44300` | — |
 
 実測（Kestrel、ルート URI を `https://localhost:44300` に揃えた場合）:
@@ -85,11 +86,27 @@ GET https://localhost:44300/.well-known/openid-configuration                    
 GET https://localhost:44300/MultiPurposeAuthSite/.well-known/openid-configuration   → 404
 ```
 
-自分用のファイル（例）:
+**Visual Studio から起動したときは、ポートだけでなく仮想ディレクトリも合わせる。**
+`launchSettings.json` / IIS Express の設定は **net10.0 版も net48 版も `https://localhost:44300/MultiPurposeAuthSite`**
+なので（構成ファイルの `OAuth2AuthorizationServerEndpointsRootURI` の既定値と同じ）、
+**どちらを起動しても `mpas.vs.json` で足りる**（同じポートなので、同時には起動できない）。
+
+```powershell
+flutter run -d web-server --web-port 5610 --dart-define-from-file=firebase_web.json --dart-define-from-file=mpas.vs.json
+```
+
+**アプリのエンドポイントは、すべて `MPAS_BASE_URL` から組み立てている**ので
+（`lib/configs/app_auth.dart`。`/authorize`・`/token`・`/userinfo`・`/SetDeviceToken`・`/ciba_result`・
+`/2fa_result`・`/.well-known/openid-configuration`）、**この 1 行だけで仮想ディレクトリに追従する。**
+
+**`--web-port 5610` は変えない。** `redirect_uri`（`http://localhost:5610/`）はサイト側の登録値と
+完全一致で照合され、**サイトの URL とは無関係**である（変えるなら `MPAS_WEB_REDIRECT_URI` と登録の両方）。
+
+自分用の接続先（Android の実機など）は、同じ形のファイルを作って渡す:
 
 ```json
 {
-  "MPAS_BASE_URL": "https://localhost:44300/MultiPurposeAuthSite"
+  "MPAS_BASE_URL": "https://192.168.0.2:44300/MultiPurposeAuthSite"
 }
 ```
 
@@ -173,7 +190,30 @@ $env:OAuth2ClientEndpointsRootURI = 'https://localhost:44302'
 
 ### 認証デバイス
 
-**接続先は 2 つある。** net10.0 版なら `mpas.core.json`、net48 版なら `mpas.netfx.json` に差し替える（6 節）。
+**`setup_spa_device.ps1` にまとめてある。** 先頭の 3 つのブロックで、使う行のコメント（`#`）を外す。
+
+```powershell
+cd root\programs\authentication_device
+.\setup_spa_device.ps1            # そのまま起動する
+.\setup_spa_device.ps1 -ShowOnly  # 組み立てたコマンドだけを見る
+```
+
+| ブロック | 選ぶもの |
+|---|---|
+| 接続先 | `mpas.core.json`（net10.0 版）／`mpas.netfx.json`（net48 版）／`mpas.vs.json`（**Visual Studio**）。3 節 |
+| 起動の仕方 | `chrome`（画面を作るとき）／**`web-server`（既定）**／`pwa`（インストールして確かめる） |
+| プッシュ | `firebase_web.json` を渡すか（使わないなら `$UseFirebase = $false`） |
+
+**起動の仕方は「デバイス アプリをどう配信するか」だけを決める。**
+**CIBA も 2FA も、どのモードでも確かめられる**（`chrome` の OS 通知のクリックだけが例外）。
+**何を試すかはサイト側で選ぶ**（8 節・9 節）。`pwa` を選べば、**インストールした状態の CIBA** を確かめられる。
+既定を `web-server` にしているのは、毎回ビルドしなくて済むため。
+
+**`--web-port 5610` は固定**で、スクリプトからも変えない（`redirect_uri` の登録値と完全一致で照合される）。
+
+以下は、そのスクリプトが組み立てているコマンドである（手で叩くときの参考）。
+**接続先は 3 つある。** net10.0 版なら `mpas.core.json`、net48 版なら `mpas.netfx.json`、
+Visual Studio から起動したものなら `mpas.vs.json` に差し替える（3 節・6 節）。
 
 ```powershell
 cd root\programs\authentication_device
@@ -206,6 +246,9 @@ flutter build apk --debug --dart-define-from-file=<実機から届く接続先>.
 | 画面だけ動かす（プッシュ無し） | `mpas.core.json` |
 | web でサインイン ＋ プッシュ（net10.0 版） | `firebase_web.json` ＋ `mpas.core.json` |
 | web でサインイン ＋ プッシュ（net48 版） | `firebase_web.json` ＋ `mpas.netfx.json` |
+| **Visual Studio から起動したサイト**（仮想ディレクトリ付き） | `firebase_web.json` ＋ `mpas.vs.json` |
+
+**`setup_spa_device.ps1` では、`$MpasFile` の行と `$Mode` の行のコメントを外して選ぶ**（5 節）。
 
 ## 7. よく踏む落とし穴
 
@@ -263,19 +306,32 @@ python -c "import io; b = io.open(r'build\web\main.dart.js','rb').read(); print(
 
 1. 認証デバイスを起動し（5 節）、`tanaka@gmail.com` でサインインする →「Flutter My Page」
 2. Flutter のウィンドウと、認証サイトのウィンドウを**重ならないように並べる**（Flutter のタブが見えている状態にする）
-3. 認証サイト側で `https://localhost:44300/Home/Saml2OAuth2Starters` を開く（net48 版は `https://localhost:44302/…`。認証デバイスには `mpas.netfx.json` を渡す）
+3. 認証サイト側で `https://localhost:44300/Home/Saml2OAuth2Starters` を開く
+   （net48 版は `https://localhost:44302/…` で `mpas.netfx.json`。
+   **Visual Studio から起動したときは `https://localhost:44300/MultiPurposeAuthSite/Home/Saml2OAuth2Starters` で `mpas.vs.json`**。3 節）
 4. ClientType で **`fapi_ciba`** を選び、「**Test FAPI CIBA Profile (FAPI2)**」を押す（応答があるまで、読み込み中のまま待つ）
 5. Flutter 側の Message Stream に「CIBA」が届いたらタップし、**Allow** または **Deny** を押す
-6. 認証サイト側の画面が移る
+6. 認証サイト側に**結果の画面**（`CibaProfileResponse`）が出る（#246 の 3-a。両系統で同じ）
 
-| 押したもの | 移る先（net10.0 版） | 移る先（net48 版） |
+| 押したもの | 判定 | 画面に出る理由 |
 |---|---|---|
-| Allow | `…?ret=OK_NORMAL_END` | `…?ret=OK: 正常終了` |
-| Deny | `…?ret=OK_ABNORMAL_END` | `…?ret=OK: 異常終了` |
+| Allow | **NORMAL_END** | トークンを取得し、`/userinfo` まで通った（応答も画面に出る） |
+| Deny | **ABNORMAL_END** | ポーリングが終了した : `access_denied` |
+| 何もしない | **ABNORMAL_END** | 承認を待つ上限（60 秒）に達した |
+| 端末を登録していない | **ABNORMAL_END** | 認証要求が受け付けられなかった（`/ciba_authz` の応答も画面に出る） |
 
-- net48 版で実測したのは Allow（フォアグラウンド / バックグラウンド）。Deny の表記は、net48 版の `HomeController.cs` から
+**判定のほかに、`auth_req_id`・`interval`・ポーリングの回数・各エンドポイントの応答が出る。**
 
-- 要求の期限は 600 秒（`CibaExpireTimeSpanFromSeconds`）。自己テストは期限まで `/token` を問い合わせ続け、**タブを閉じても止まらない**
+- net48 版で実測したのは Allow（フォアグラウンド / バックグラウンド）
+
+- **#246 より前は、判定を URL で返していた**（`?ret=OK_NORMAL_END` / `?ret=OK_ABNORMAL_END`）。
+  `OK_` は接頭辞で、その後ろが判定という形だったため、**可否が読めなかった**（理由も出なかった）。
+  なお、この表の「net48 版は `OK: 正常終了`」は **2026/09/25 に net10.0 版へ揃えられた後の記述漏れ**で、
+  **#246 の直前は両系統とも `OK_…` だった**（net48 版 `HomeController.cs` の更新履歴）
+
+- 要求の期限は 600 秒（`CibaExpireTimeSpanFromSeconds`）だが、**自己テストは 60 秒で打ち切る**（#246 の 3-b）。
+  問い合わせの間隔は `/ciba_authz` が返す `interval`（既定 5 秒。`CibaPollingIntervalSeconds`）に従う。
+  **以前は 30 ミリ秒間隔で上限が無く、期限まで問い合わせ続けていた**（タブを閉じても止まらなかった）
 - ログは Flutter のタブで F12 → Console（「ログを保持」にチェック）。フォアグラウンドで届くと「ローカル通知で擬似的に通知メッセージを表示」が出る
 
 ### バックグラウンドで確かめる（OS の通知のクリック）

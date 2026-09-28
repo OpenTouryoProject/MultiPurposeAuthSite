@@ -1,0 +1,108 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Home.DeviceAuthZPollingResult
+    //* クラス日本語名  ：Home.DeviceAuthZPollingResult（Device AuthZ のポーリングの結果）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/09/28  玄人 幸道         新規（#246 の 3-a）
+    //**********************************************************************************
+
+    **目視で確かめるための画面である。**
+    以前は `?ret=OK_NORMAL_END` / `?ret=OK_ABNORMAL_END` という URL に移るだけで、
+    **`OK_` が接頭辞だと読めず、可否が分からなかった**（#246 の 3-a。CIBA と同じ）。
+    判定と、その理由と、ポーリングの実値を出す。
+*@
+
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+
+@using System.Web
+@using System.Web.Mvc
+
+@using Touryo.Infrastructure.Framework.Authentication
+
+@{
+    ViewBag.Title = "Device Authorization Grant (polling)";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<hr />
+
+<text>
+    ※ 機器（このクライアント）が、grant_type=device_code でトークン エンドポイントを
+    問い合わせた結果である（RFC 8628 3.4）。<br />
+    ※ <b>利用者が別の端末で user_code を入力し、許可する</b>まではトークンが出ない
+    （その間は authorization_pending）。<br />
+    ※ <b>問い合わせの間隔は /device_authz が返した interval に従い、上限で打ち切る</b>（#246 の 3-b）。
+</text>
+<br /><br />
+
+@if ((string)ViewBag.Verdict == "NORMAL_END")
+{
+    <div class="alert alert-success">
+        <b>NORMAL_END</b> : @ViewBag.Reason
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+        <b>ABNORMAL_END</b> : @ViewBag.Reason
+    </div>
+}
+
+<table class="table table-bordered">
+    <tr>
+        <th style="width:25%;">client_id</th>
+        <td>@ViewBag.ClientId</td>
+    </tr>
+    <tr>
+        <th>問い合わせ先（トークン エンドポイント）</th>
+        <td>@ViewBag.TokenEndpoint</td>
+    </tr>
+    <tr>
+        <th>interval（サーバの応答）</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.Interval) ? "（無し）" : ViewBag.Interval)</td>
+    </tr>
+    <tr>
+        <th>ポーリング（間隔 × 回数 / 上限）</th>
+        <td>
+            @ViewBag.PollIntervalSeconds 秒 × @ViewBag.PollCount 回
+            / 上限 @ViewBag.WaitLimitSeconds 秒
+        </td>
+    </tr>
+</table>
+
+<text>トークン エンドポイントの応答（最後の 1 回）:</text><br />
+@Html.TextArea("TokenResponse", (string)ViewBag.TokenResponse ?? "",
+    new { style = "resize: both; width:100%; height:100px;", @readonly = "readonly" })<br />
+
+@if (!string.IsNullOrEmpty((string)ViewBag.UserInfoResponse))
+{
+    <text>UserInfo エンドポイントの応答:</text><br />
+    @Html.TextArea("UserInfoResponse", (string)ViewBag.UserInfoResponse ?? "",
+        new { style = "resize: both; width:100%; height:100px;", @readonly = "readonly" })<br />
+}
+
+<a class="btn btn-default" href="@Url.Action("Saml2OAuth2Starters", "Home")">自己テストの一覧に戻る</a>
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

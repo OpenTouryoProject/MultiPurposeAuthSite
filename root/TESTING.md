@@ -459,6 +459,14 @@ E2ETests OK    220    0    1 146.7
 | `FxContainerization` | `ON`。**待ち受け URL の上書きに要る**（4 節）。雛形には入っている |
 | IIS Express | net48 版を測るときだけ。無ければその分が Skip される |
 
+**`-Launch` は、mTLS のテスト（`FA-6`）のために net10.0 版にクライアント証明書を要求させる**
+（`Tests\MtlsTestHook`。#226。net48 版は `-NetFxMtls` のときだけ）。
+**その状態では、アプリ自身の内部呼び出し（自己テスト）も証明書を提示する**
+（`Helper` の `HttpClient` が `SpRp_ClientCertPfxFilePath` を添える）。
+サーバは**証明書を提示したクライアントをコンフィデンシャル扱いにする**ので、
+**公開クライアントで始める自己テストが `invalid_client` になる**（`/device_authz` の `TestClient3`）。
+**製品の欠陥ではなく、測り方の都合である。** そのため `RT-246.3` は、要求している側を Skip する。
+
 **構成ファイルの既定では、net10.0 版と net48 版は同じ URL を指している。**
 `-Launch` は環境変数で別のポートへ寄せるので、**同時に測れる。**
 手で立てるときは、片方を別の URL にすること。
@@ -487,3 +495,8 @@ HTTP 200 / keys=[access_token, expires_in, id_token, refresh_token, token_type] 
 3. `client_id` は `Flows.Registration(client, KnownClients.XXX)` で引く
 4. **未修正の挙動を見つけたら、期待する動作を書いて `Skip`。** Issue を起こして番号を書く
 5. `ANALYSIS-IdP.md` にも反映する（あちらが適合上の穴の一覧）
+
+**画面（HTML）の中身を日本語で判定するときは、実体参照を戻してから比べる。**
+**net10.0 版の Razor は非 ASCII を数値文字参照（`&#x8A8D;` など）で出す**が、net48 版はそのまま出す。
+そのため `html.Contains("認証要求が…")` は **net48 版だけ通る**（`RT-246.2` で踏んだ）。
+`System.Net.WebUtility.HtmlDecode` を通してから判定する。

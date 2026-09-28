@@ -47,6 +47,7 @@
 //*  2026/09/27  玄人 幸道         Basic を符号化せずに送る口（urlEncode）を追加（#237）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）の口を追加（#232）
 //*  2026/09/27  玄人 幸道         自己テストの画面が出すログアウトのフォームを送る口を追加（#232）
+//*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
 //**********************************************************************************
 
 using System;
@@ -1098,6 +1099,41 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         #endregion
 
         #region 自己テスト（/Home/Saml2OAuth2Starters）
+
+        /// <summary>
+        /// 自己テストの Device AuthZ 画面から「Start polling.」を押す（#246）。
+        /// </summary>
+        /// <param name="html">DeviceAuthZResponse 画面の HTML</param>
+        /// <returns>応答（ポーリングの結果の画面）</returns>
+        /// <remarks>
+        /// **画面が出している hidden（client_id・device_code・interval）を、そのまま送り返す。**
+        /// 画面は AntiForgeryToken を埋めているので、それも送る。
+        /// </remarks>
+        public async Task<HttpResponseMessage> SubmitDeviceAuthZPollingAsync(string html)
+        {
+            Dictionary<string, string> form = new Dictionary<string, string>();
+
+            foreach (string name in new string[] { "client_id", "device_code", "interval" })
+            {
+                Match hidden = new Regex(
+                    "name=\"" + name + "\"[^>]*value=\"(?<value>[^\"]*)\"",
+                    RegexOptions.IgnoreCase).Match(html);
+
+                if (hidden.Success)
+                {
+                    form.Add(name, hidden.Groups["value"].Value);
+                }
+            }
+
+            Match token = AntiforgeryRegex.Match(html);
+
+            if (token.Success)
+            {
+                form.Add("__RequestVerificationToken", token.Groups["value"].Value);
+            }
+
+            return await this.PostFormAsync("/Home/DeviceAuthZResponse", form);
+        }
 
         /// <summary>
         /// アプリに同梱の自己テスト（OAuth2Starters）を起動する。

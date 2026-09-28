@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/28  玄人 幸道         新規（#246 : 両アプリに二重だった組み立てを寄せた）
+//*  2026/09/28  玄人 幸道         CIBA の通しを寄せ、判定とポーリングを直した（#246 の 3-a / 3-b）
+//*  2026/09/28  玄人 幸道         Device Authorization Grant のポーリングも寄せた（#246 の 3-a / 3-b）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -42,6 +44,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
+using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Security;
 using Touryo.Infrastructure.Public.Security.Pwd;
 using Touryo.Infrastructure.Public.Str;
@@ -231,6 +234,420 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                         OAuth2AndOIDCConst.UrnLoA2
                     }
                 });
+        }
+
+        #endregion
+
+        #region CIBA を通す
+
+        /// <summary>CIBA の自己テストの結果</summary>
+        /// <remarks>**画面で目視するためのもの。** 判定と、その理由と、途中の実値を持つ。</remarks>
+        public class CibaResult
+        {
+            /// <summary>判定（NORMAL_END / ABNORMAL_END）</summary>
+            public string Verdict { get; set; }
+
+            /// <summary>その判定になった理由</summary>
+            public string Reason { get; set; }
+
+            /// <summary>認証要求の宛先（/ciba_authz）</summary>
+            public string Endpoint { get; set; }
+
+            /// <summary>送った認証要求（署名付き JWT）</summary>
+            public string RequestObject { get; set; }
+
+            /// <summary>認証要求の payload（JSON）</summary>
+            public string RequestObjectJson { get; set; }
+
+            /// <summary>/ciba_authz の応答（そのまま）</summary>
+            public string AuthZResponse { get; set; }
+
+            /// <summary>auth_req_id（取れなければ空）</summary>
+            public string AuthReqId { get; set; }
+
+            /// <summary>interval（秒。サーバが返した値）</summary>
+            public string Interval { get; set; }
+
+            /// <summary>expires_in（秒。サーバが返した値）</summary>
+            public string ExpiresIn { get; set; }
+
+            /// <summary>ポーリングの間隔（秒。最後に待った値。slow_down で増える）</summary>
+            public int PollIntervalSeconds { get; set; }
+
+            /// <summary>ポーリングした回数</summary>
+            public int PollCount { get; set; }
+
+            /// <summary>承認を待つ上限（秒）</summary>
+            public int WaitLimitSeconds { get; set; }
+
+            /// <summary>/token の最後の応答</summary>
+            public string TokenResponse { get; set; }
+
+            /// <summary>/userinfo の応答（トークンを取れたときだけ）</summary>
+            public string UserInfoResponse { get; set; }
+        }
+
+        /// <summary>CIBA（FAPI-CIBA Profile）を最後まで通す</summary>
+        /// <param name="clientId">client_id</param>
+        /// <param name="loginHint">login_hint（プッシュ通知の宛先になる利用者）</param>
+        /// <param name="maxWaitSeconds">承認を待つ上限（秒）</param>
+        /// <returns>結果（画面で見せる）</returns>
+        /// <remarks>
+        /// **両アプリの HomeController に同文で在ったもの**を寄せた（#246）。
+        ///
+        /// **判定と、その理由を返す**（#246 の 3-a）。
+        /// 以前は `?ret=OK_` ＋ 判定 という URL に移るだけで、
+        /// **`OK_` が接頭辞だと読めず、`?ret=OK_ABNORMAL_END` の可否が分からなかった。**
+        /// 失敗した理由（`/ciba_authz` の応答、ポーリングのエラー）も出ていなかった。
+        ///
+        /// **ポーリングは、サーバが返した `interval` に従い、上限で打ち切る**（同 3-b）。
+        /// 以前は `Thread.Sleep(30)`（30 ミリ秒）で上限が無く、
+        /// **承認されなければ要求の期限（既定 600 秒）まで `/token` を叩き続けていた**
+        /// （画面のタブを閉じても止まらない。`authentication_device/CHEATSHEET.md` に記録があった）。
+        ///
+        /// **CIBA は認証デバイスの登録と承認が要る。**
+        /// 端末が登録されていなければ `/ciba_authz` が受け付けないので、
+        /// **そこで終わるのが正しい振る舞いである**（手順は `authentication_device/CHEATSHEET.md`）。
+        /// </remarks>
+        public static async Task<CibaResult> RunCibaProfileAsync(
+            string clientId, string loginHint, int maxWaitSeconds)
+        {
+            CibaResult ret = new CibaResult()
+            {
+                Verdict = "ABNORMAL_END",
+                Reason = "",
+                Endpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint,
+                RequestObject = "",
+                RequestObjectJson = "",
+                AuthZResponse = "",
+                AuthReqId = "",
+                Interval = "",
+                ExpiresIn = "",
+                PollIntervalSeconds = 0,
+                PollCount = 0,
+                WaitLimitSeconds = maxWaitSeconds,
+                TokenResponse = "",
+                UserInfoResponse = ""
+            };
+
+            #region 認証要求を組み立てる（ES256。aud は Issuer Identifier）
+
+            ret.RequestObject = SelfTestClient.CreateCibaRequestObject(
+                clientId, "hoge " + OAuth2AndOIDCConst.Scope_Openid, loginHint,
+                SelfTestClient.CreateClientNotificationToken(), GetPassword.Generate(4, 0));
+
+            if (string.IsNullOrEmpty(ret.RequestObject))
+            {
+                ret.Reason = "認証要求（署名付き JWT）の自己検証に失敗した。送っていない。";
+                return ret;
+            }
+
+            ret.RequestObjectJson = CustomEncode.ByteToString(
+                CustomEncode.FromBase64UrlString(ret.RequestObject.Split('.')[1]), CustomEncode.us_ascii);
+
+            #endregion
+
+            #region 認証要求を送る（CIBA Core 7.1.1 : request で直接。7.1 : クライアント認証つき）
+
+            ret.AuthZResponse = await Helper.GetInstance().CibaAuthZRequestAsync(
+                new Uri(ret.Endpoint), ret.RequestObject,
+                clientId, Helper.GetInstance().GetClientSecret(clientId));
+
+            JObject authZ = SelfTestClient.TryReadJson(ret.AuthZResponse);
+
+            if (authZ != null)
+            {
+                ret.AuthReqId = (string)authZ[OAuth2AndOIDCConst.auth_req_id] ?? "";
+                ret.Interval = (string)authZ[OAuth2AndOIDCConst.PollingInterval] ?? "";
+                ret.ExpiresIn = (string)authZ[OAuth2AndOIDCConst.expires_in] ?? "";
+            }
+
+            if (string.IsNullOrEmpty(ret.AuthReqId))
+            {
+                // **端末が登録されていなければ、ここで終わる。**
+                ret.Reason = "認証要求が受け付けられなかった（auth_req_id が返らない） : "
+                    + SelfTestClient.ErrorOf(authZ, "応答が JSON ではない");
+                return ret;
+            }
+
+            #endregion
+
+            #region ポーリングする（interval に従い、上限で打ち切る）
+
+            // **間隔はサーバが返した interval に従う**（CIBA Core 11。返らなければ設定値）。
+            int interval = Config.CibaPollingIntervalSeconds;
+
+            int fromServer = 0;
+            if (int.TryParse(ret.Interval, out fromServer) && 0 < fromServer)
+            {
+                interval = fromServer;
+            }
+
+            // **要求の期限より長くは待たない**（期限が切れた後を叩いても変わらない）。
+            int expiresIn = 0;
+            if (int.TryParse(ret.ExpiresIn, out expiresIn) && 0 < expiresIn && expiresIn < ret.WaitLimitSeconds)
+            {
+                ret.WaitLimitSeconds = expiresIn;
+            }
+
+            Uri tokenEndpointUri = new Uri(
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
+
+            string clientSecret = Helper.GetInstance().GetClientSecret(clientId);
+            string authReqId = ret.AuthReqId;
+
+            PollOutcome poll = await SelfTestClient.PollForTokenAsync(
+                () => Helper.GetInstance().GetAccessTokenByCibaAsync(
+                    tokenEndpointUri, clientId, clientSecret, authReqId),
+                interval, ret.WaitLimitSeconds);
+
+            #endregion
+
+            ret.Verdict = poll.Verdict;
+            ret.Reason = poll.Reason;
+            ret.PollIntervalSeconds = poll.IntervalSeconds;
+            ret.PollCount = poll.Count;
+            ret.TokenResponse = poll.TokenResponse;
+            ret.UserInfoResponse = poll.UserInfoResponse;
+
+            return ret;
+        }
+
+        #endregion
+
+        #region Device Authorization Grant の承認を待つ
+
+        /// <summary>Device Authorization Grant のポーリングの結果</summary>
+        /// <remarks>**画面で目視するためのもの。**</remarks>
+        public class DeviceAuthZResult
+        {
+            /// <summary>判定（NORMAL_END / ABNORMAL_END）</summary>
+            public string Verdict { get; set; }
+
+            /// <summary>その判定になった理由</summary>
+            public string Reason { get; set; }
+
+            /// <summary>ポーリング先（トークン エンドポイント）</summary>
+            public string TokenEndpoint { get; set; }
+
+            /// <summary>interval（秒。/device_authz が返した値）</summary>
+            public string Interval { get; set; }
+
+            /// <summary>ポーリングの間隔（秒。最後に待った値。slow_down で増える）</summary>
+            public int PollIntervalSeconds { get; set; }
+
+            /// <summary>ポーリングした回数</summary>
+            public int PollCount { get; set; }
+
+            /// <summary>承認を待つ上限（秒）</summary>
+            public int WaitLimitSeconds { get; set; }
+
+            /// <summary>/token の最後の応答</summary>
+            public string TokenResponse { get; set; }
+
+            /// <summary>/userinfo の応答（トークンを取れたときだけ）</summary>
+            public string UserInfoResponse { get; set; }
+        }
+
+        /// <summary>Device Authorization Grant の承認を待つ（RFC 8628 3.4）</summary>
+        /// <param name="clientId">client_id</param>
+        /// <param name="deviceCode">device_code</param>
+        /// <param name="interval">/device_authz が返した interval（空なら設定値）</param>
+        /// <param name="maxWaitSeconds">承認を待つ上限（秒）</param>
+        /// <returns>結果（画面で見せる）</returns>
+        /// <remarks>
+        /// **両アプリの HomeController に同文で在ったもの**を寄せた（#246）。
+        ///
+        /// **CIBA と同じ理由で、判定と理由を返す**（#246 の 3-a）。
+        /// 以前は `?ret=OK_` ＋ 判定 という URL に移るだけだった。
+        ///
+        /// **間隔は `/device_authz` が返した `interval` に従う**（RFC 8628 3.5。#246 の 3-b）。
+        /// 以前は `ExponentialBackoff(10, 5)` で、**上限は回数だけ**だった。
+        /// </remarks>
+        public static async Task<DeviceAuthZResult> RunDeviceAuthZPollingAsync(
+            string clientId, string deviceCode, string interval, int maxWaitSeconds)
+        {
+            DeviceAuthZResult ret = new DeviceAuthZResult()
+            {
+                Verdict = "ABNORMAL_END",
+                Reason = "",
+                TokenEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
+                Interval = interval ?? "",
+                PollIntervalSeconds = 0,
+                PollCount = 0,
+                WaitLimitSeconds = maxWaitSeconds,
+                TokenResponse = "",
+                UserInfoResponse = ""
+            };
+
+            if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(deviceCode))
+            {
+                ret.Reason = "client_id か device_code が渡されていない。問い合わせていない。";
+                return ret;
+            }
+
+            // **間隔はサーバが返した interval に従う**（返らなければ設定値）。
+            int seconds = Config.DeviceAuthZPollingIntervalSeconds;
+
+            int fromServer = 0;
+            if (int.TryParse(ret.Interval, out fromServer) && 0 < fromServer)
+            {
+                seconds = fromServer;
+            }
+
+            Uri tokenEndpointUri = new Uri(ret.TokenEndpoint);
+
+            PollOutcome poll = await SelfTestClient.PollForTokenAsync(
+                () => Helper.GetInstance().GetAccessTokenByDeviceAuthZAsync(
+                    tokenEndpointUri, clientId, deviceCode),
+                seconds, ret.WaitLimitSeconds);
+
+            ret.Verdict = poll.Verdict;
+            ret.Reason = poll.Reason;
+            ret.PollIntervalSeconds = poll.IntervalSeconds;
+            ret.PollCount = poll.Count;
+            ret.TokenResponse = poll.TokenResponse;
+            ret.UserInfoResponse = poll.UserInfoResponse;
+
+            return ret;
+        }
+
+        #endregion
+
+        #region ポーリング（CIBA と Device Authorization Grant で共通）
+
+        /// <summary>ポーリングの結果</summary>
+        private class PollOutcome
+        {
+            /// <summary>判定（NORMAL_END / ABNORMAL_END）</summary>
+            public string Verdict { get; set; }
+
+            /// <summary>その判定になった理由</summary>
+            public string Reason { get; set; }
+
+            /// <summary>最後に待った間隔（秒）</summary>
+            public int IntervalSeconds { get; set; }
+
+            /// <summary>問い合わせた回数</summary>
+            public int Count { get; set; }
+
+            /// <summary>/token の最後の応答</summary>
+            public string TokenResponse { get; set; }
+
+            /// <summary>/userinfo の応答（トークンを取れたときだけ）</summary>
+            public string UserInfoResponse { get; set; }
+        }
+
+        /// <summary>承認されるまでトークン エンドポイントに問い合わせる</summary>
+        /// <param name="requestToken">トークン要求（1 回分）</param>
+        /// <param name="intervalSeconds">間隔（秒）</param>
+        /// <param name="waitLimitSeconds">承認を待つ上限（秒）</param>
+        /// <returns>結果</returns>
+        /// <remarks>
+        /// **CIBA（CIBA Core 11）と Device Authorization Grant（RFC 8628 3.4 / 3.5）は、
+        /// 同じ形のポーリングである**（`authorization_pending` なら続け、`slow_down` なら
+        /// 間隔を 5 秒増やし、それ以外なら終わる。エラー コードの文字列も同じ）。
+        /// **二重に書かないよう、ここに 1 つだけ置く**（#246 の 3-b）。
+        ///
+        /// **上限で打ち切る。** 承認されないと画面が返らないままになるため。
+        /// </remarks>
+        private static async Task<PollOutcome> PollForTokenAsync(
+            Func<Task<string>> requestToken, int intervalSeconds, int waitLimitSeconds)
+        {
+            PollOutcome ret = new PollOutcome()
+            {
+                Verdict = "ABNORMAL_END",
+                Reason = "",
+                IntervalSeconds = intervalSeconds,
+                Count = 0,
+                TokenResponse = "",
+                UserInfoResponse = ""
+            };
+
+            DateTime deadline = DateTime.Now.AddSeconds(waitLimitSeconds);
+
+            while (true)
+            {
+                ret.Count++;
+
+                ret.TokenResponse = await requestToken();
+
+                JObject token = SelfTestClient.TryReadJson(ret.TokenResponse);
+                string error = (token == null) ? "" : ((string)token[OAuth2AndOIDCConst.error] ?? "");
+
+                if (token != null && string.IsNullOrEmpty(error))
+                {
+                    // 正常系（トークンを取れた）
+                    ret.UserInfoResponse = await Helper.GetInstance().GetUserInfoAsync(
+                        (string)token[OAuth2AndOIDCConst.AccessToken]);
+
+                    ret.Verdict = "NORMAL_END";
+                    ret.Reason = "トークンを取得し、/userinfo まで通った。";
+                    return ret;
+                }
+
+                if (error == OAuth2AndOIDCEnum.CibaState.slow_down.ToStringByEmit())
+                {
+                    // **slow_down は「続けてよいが、間隔を 5 秒増やせ」。**
+                    //   このサーバは返さない（返す経路が保留になっている）が、
+                    //   **クライアントとしては従うのが正しい**ので、ここで足す。
+                    ret.IntervalSeconds += 5;
+                }
+                else if (error != OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
+                {
+                    // **authorization_pending 以外は、待っても変わらない**（拒否・期限切れなど）。
+                    ret.Reason = "ポーリングが終了した : "
+                        + SelfTestClient.ErrorOf(token, "応答が JSON ではない");
+                    return ret;
+                }
+
+                if (deadline <= DateTime.Now)
+                {
+                    ret.Reason = "承認を待つ上限（" + waitLimitSeconds.ToString()
+                        + " 秒）に達した。承認されなかった（authorization_pending のまま）。";
+                    return ret;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(ret.IntervalSeconds));
+            }
+        }
+
+        #endregion
+
+        #region 応答を読む
+
+        /// <summary>JSON として読む</summary>
+        /// <param name="text">応答</param>
+        /// <returns>JObject（読めなければ null）</returns>
+        /// <remarks>**応答が JSON でなくても例外にしない**（#241 と同じ方針）。</remarks>
+        private static JObject TryReadJson(string text)
+        {
+            try
+            {
+                return (JObject)JsonConvert.DeserializeObject(text ?? "");
+            }
+            catch
+            {
+                // エラー画面の HTML などが返っている。呼び出し側が生の応答を見せる。
+                return null;
+            }
+        }
+
+        /// <summary>応答から error / error_description を読む（画面に出す文字列）</summary>
+        /// <param name="json">応答（null 可）</param>
+        /// <param name="whenNull">JSON でなかったときの文字列</param>
+        /// <returns>表示する文字列</returns>
+        private static string ErrorOf(JObject json, string whenNull)
+        {
+            if (json == null)
+            {
+                return whenNull;
+            }
+
+            string error = (string)json[OAuth2AndOIDCConst.error] ?? "（error なし）";
+            string description = (string)json[OAuth2AndOIDCConst.error_description] ?? "";
+
+            return string.IsNullOrEmpty(description) ? error : (error + " : " + description);
         }
 
         #endregion

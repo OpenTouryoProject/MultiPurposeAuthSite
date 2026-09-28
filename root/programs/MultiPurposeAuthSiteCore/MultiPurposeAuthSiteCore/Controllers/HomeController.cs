@@ -33,6 +33,9 @@
 //*  2026/09/27  玄人 幸道         自己テストに RP-Initiated Logout の口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストに PAR（/par）経路を追加（#246）
 //*  2026/09/28  玄人 幸道         組み立てを SelfTestClient へ寄せた（#246）
+//*  2026/09/28  玄人 幸道         CIBA の結果を画面に出し、interval に従わせた（#246 の 3-a / 3-b）
+//*  2026/09/28  玄人 幸道         Device AuthZ の結果も画面に出し、interval に従わせた（#246 の 3-a / 3-b）
+//*  2026/09/28  玄人 幸道         Device AuthZ の verification_uri のリンクが二重になっていたのを修正（#246）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -518,106 +521,62 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.ClientId = this.ClientId;
             ViewBag.DeviceCode = (string)responseJObject[OAuth2AndOIDCConst.device_code];
             ViewBag.UserCode = (string)responseJObject[OAuth2AndOIDCConst.user_code];
-            string rootURI = Config.OAuth2AuthorizationServerEndpointsRootURI;
-            ViewBag.VerificationUri = rootURI + (string)responseJObject[OAuth2AndOIDCConst.verification_uri];
-            ViewBag.VerificationUriComplete = rootURI + (string)responseJObject[OAuth2AndOIDCConst.verification_uri_complete];
+            // **応答の verification_uri は絶対 URI である**（RFC 8628 3.2 : ユーザが別の端末で開く URL）。
+            //   ここで RootURI を足していたため、URL が二重になり、
+            //   **画面のリンクが 404 になっていた**（承認の画面に行けない）（#246）。
+            ViewBag.VerificationUri = (string)responseJObject[OAuth2AndOIDCConst.verification_uri];
+            ViewBag.VerificationUriComplete = (string)responseJObject[OAuth2AndOIDCConst.verification_uri_complete];
+
+            // **interval と expires_in を画面に渡す**（#246 の 3-b）。
+            //   RFC 8628 3.5 は、機器がこの間隔を空けて問い合わせることを求めている。
+            //   ポーリングは次の POST で行うので、画面（hidden）で持ち回す。
+            ViewBag.Interval = (string)responseJObject[OAuth2AndOIDCConst.PollingInterval];
+            ViewBag.ExpiresIn = (string)responseJObject[OAuth2AndOIDCConst.expires_in];
             
             return View("DeviceAuthZResponse");
         }
         #endregion
 
         #region FAPI CIBA
-        /// <summary>FAPI CIBA Profileスターターを組み立てて返す</summary>
-        /// <returns>組み立てたFAPI2 CIBA Profileスターター</returns>
-        private async Task<string> AssembleFAPICibaProfileStarterAsync()
+        /// <summary>FAPI CIBA Profile を通し、結果の画面を返す</summary>
+        /// <returns>ActionResult（CibaProfileResponse 画面）</returns>
+        /// <remarks>
+        /// **通しの本体は `SelfTestClient.RunCibaProfileAsync`**（#246 で両アプリから寄せた）。
+        /// ここは client_id と login_hint を選び、結果を画面に渡すだけ。
+        ///
+        /// **以前は結果を URL（`?ret=OK_…`）で返していた**（#246 の 3-a）。
+        /// `OK_` が接頭辞で、その後ろが判定という形だったため、
+        /// **`?ret=OK_ABNORMAL_END` が成功なのか失敗なのか読めなかった。**
+        /// </remarks>
+        private async Task<ActionResult> AssembleFAPICibaProfileStarterAsync()
         {
-            string response = "";
+            // **承認を待つ上限（秒）。**
+            //   認証デバイスでの承認を待つが、待ち続けはしない（#246 の 3-b）。
+            //   net48 の ASP.NET は要求を 110 秒（executionTimeout の既定）で打ち切るので、それより短くする。
+            const int MaxWaitSeconds = 60;
 
-            string cibaAuthorizeEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint;
-
-            // **組み立て（鍵の読み出し・署名・自己検証）は SelfTestClient**（#246）。
-            //   aud は OP の Issuer Identifier（CIBA Core 7.1.1。#234 の段階 1）。
-            string requestObject = SelfTestClient.CreateCibaRequestObject(
-                this.ClientId, // FAPI2用か自前のクライアント
-                "hoge " + OAuth2AndOIDCConst.Scope_Openid,
+            SelfTestClient.CibaResult result = await SelfTestClient.RunCibaProfileAsync(
+                this.ClientId,      // FAPI2用か自前のクライアント
                 "tanaka@gmail.com", // プッシュ通知の対象となるアカウント
-                SelfTestClient.CreateClientNotificationToken(),
-                GetPassword.Generate(4, 0));
+                MaxWaitSeconds);
 
-            if (!string.IsNullOrEmpty(requestObject))
-            {
-                // 署名を検証できた。
+            ViewBag.ClientId = this.ClientId;
+            ViewBag.Verdict = result.Verdict;
+            ViewBag.Reason = result.Reason;
+            ViewBag.CibaAuthorizeEndpoint = result.Endpoint;
+            ViewBag.RequestObject = result.RequestObject;
+            ViewBag.RequestObjectJson = result.RequestObjectJson;
+            ViewBag.AuthZResponse = result.AuthZResponse;
+            ViewBag.AuthReqId = result.AuthReqId;
+            ViewBag.Interval = result.Interval;
+            ViewBag.ExpiresIn = result.ExpiresIn;
+            ViewBag.PollIntervalSeconds = result.PollIntervalSeconds;
+            ViewBag.PollCount = result.PollCount;
+            ViewBag.WaitLimitSeconds = result.WaitLimitSeconds;
+            ViewBag.TokenResponse = result.TokenResponse;
+            ViewBag.UserInfoResponse = result.UserInfoResponse;
 
-                // **認証要求を request で直接送る（CIBA Core 7.1.1。#234 の段階 3）。**
-                //   以前は /ros に預けて request_uri を渡していた（CIBA Core に無い独自拡張）。
-                //   /ciba_authz はクライアント認証を求めるようになったので、資格情報も添える（7.1）。
-                response = await Helper.GetInstance().CibaAuthZRequestAsync(
-                    new Uri(cibaAuthorizeEndpoint), requestObject,
-                    this.ClientId, Helper.GetInstance().GetClientSecret(this.ClientId));
-
-                // レスポンスを確認し、auth_req_idを抽出。
-                string auth_req_id = (string)((JObject)JsonConvert
-                    .DeserializeObject(response))[OAuth2AndOIDCConst.auth_req_id];
-
-                // Tokenエンドポイントに対してポーリングを行う。
-
-                // Tokenエンドポイントにアクセス
-
-                // URL
-                Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-                // Credential 
-                string client_id = this.ClientId;
-                string client_secret = Helper.GetInstance().GetClientSecret(client_id);
-
-                // Tokenリクエスト
-                bool continueLoop = true;
-                string result = "";
-
-                while (continueLoop)
-                {
-                    response = await Helper.GetInstance().GetAccessTokenByCibaAsync(
-                        tokenEndpointUri, client_id, client_secret, auth_req_id);
-                    JObject temp = (JObject)JsonConvert.DeserializeObject(response);
-
-                    if (!temp.ContainsKey(OAuth2AndOIDCConst.error))
-                    {
-                        // 正常系
-                        continueLoop = false;
-
-                        // UserInfoエンドポイントにアクセス
-                        string userInfo = await Helper.GetInstance().
-                            GetUserInfoAsync((string)temp[OAuth2AndOIDCConst.AccessToken]);
-
-                        result = "NORMAL_END";
-                    }
-                    else
-                    {
-                        // 異常系
-                        if ((string)temp[OAuth2AndOIDCConst.error] 
-                            == OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
-                        {
-                            // authorization_pending
-                            System.Threading.Thread.Sleep(30);
-                        }
-                        else
-                        {
-                            // authorization_pending以外
-                            // 終了
-                            continueLoop = false;
-                            result = "ABNORMAL_END";
-                        }
-                    }
-                }
-
-                // 完了（SAMLのテストコードっぽくした）
-                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK_" + result;
-            }
-            else
-            {
-                // 検証できなかった。
-                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=NG";
-            }
+            return View("CibaProfileResponse");
         }
         #endregion
 
@@ -895,69 +854,46 @@ namespace MultiPurposeAuthSite.Controllers
         #region Device AuthZ
 
         /// <summary>
-        /// DeviceAuthZResponse画面
+        /// DeviceAuthZResponse画面（ポーリングして、結果の画面を返す）
         /// POST: /Home/DeviceAuthZResponse
         /// </summary>
         /// <param name="formData">IFormCollection</param>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResult（DeviceAuthZPollingResult 画面）</returns>
+        /// <remarks>
+        /// **ポーリングの本体は `SelfTestClient.RunDeviceAuthZPollingAsync`**（#246 で両アプリから寄せた）。
+        ///
+        /// **以前は結果を URL（`?ret=OK_…`）で返していた**（#246 の 3-a。CIBA と同じ）。
+        /// `OK_` が接頭辞で、その後ろが判定という形だったため、
+        /// **`?ret=OK_ABNORMAL_END` が成功なのか失敗なのか読めなかった。**
+        /// </remarks>
         [HttpPost]
         [AllowAnonymous]
         public async Task<ActionResult> DeviceAuthZResponse(IFormCollection formData)
         {
-            // Tokenエンドポイントに対してポーリングを行う。
+            // **承認を待つ上限（秒）。**
+            //   利用者が user_code を入れて許可するまで待つが、待ち続けはしない（#246 の 3-b）。
+            //   net48 の ASP.NET は要求を 110 秒（executionTimeout の既定）で打ち切るので、それより短くする。
+            const int MaxWaitSeconds = 60;
 
-            // Tokenエンドポイントにアクセス
-
-            // URL
-            Uri tokenEndpointUri = new Uri(
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-            // else. 
             string client_id = formData[OAuth2AndOIDCConst.client_id];
             string device_code = formData[OAuth2AndOIDCConst.device_code];
+            string interval = formData[OAuth2AndOIDCConst.PollingInterval];
 
-            // Tokenリクエスト
-            bool continueLoop = true;
-            string result = "";
-            ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 5); // config化必要？
+            SelfTestClient.DeviceAuthZResult result = await SelfTestClient.RunDeviceAuthZPollingAsync(
+                client_id, device_code, interval, MaxWaitSeconds);
 
-            while (continueLoop)
-            {
-                string response = await Helper.GetInstance().GetAccessTokenByDeviceAuthZAsync(
-                    tokenEndpointUri, client_id, device_code);
+            ViewBag.ClientId = client_id;
+            ViewBag.Verdict = result.Verdict;
+            ViewBag.Reason = result.Reason;
+            ViewBag.TokenEndpoint = result.TokenEndpoint;
+            ViewBag.Interval = result.Interval;
+            ViewBag.PollIntervalSeconds = result.PollIntervalSeconds;
+            ViewBag.PollCount = result.PollCount;
+            ViewBag.WaitLimitSeconds = result.WaitLimitSeconds;
+            ViewBag.TokenResponse = result.TokenResponse;
+            ViewBag.UserInfoResponse = result.UserInfoResponse;
 
-                JObject temp = (JObject)JsonConvert.DeserializeObject(response);
-
-                if (!temp.ContainsKey(OAuth2AndOIDCConst.error))
-                {
-                    // 正常系
-                    continueLoop = false;
-
-                    // UserInfoエンドポイントにアクセス
-                    string userInfo = await Helper.GetInstance().
-                        GetUserInfoAsync((string)temp[OAuth2AndOIDCConst.AccessToken]);
-
-                    result = "NORMAL_END";
-                }
-                else
-                {
-                    // 異常系
-                    if ((string)temp[OAuth2AndOIDCConst.error] == OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
-                    {
-                        // authorization_pending
-                        continueLoop = exponentialBackoff.Sleep();
-                    }
-                    else
-                    {
-                        // authorization_pending以外
-                        // 終了
-                        continueLoop = false;
-                        result = "ABNORMAL_END";
-                    }
-                }
-            }
-
-            // 完了（SAMLのテストコードっぽくした）
-            return Redirect(Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK_" + result);
+            return View("DeviceAuthZPollingResult");
         }
 
         #endregion
@@ -1351,12 +1287,8 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.InitOAuth2Params();
 
-            // Assemble
-            string redirect = await this.AssembleFAPICibaProfileStarterAsync();
-
-            //this.SaveOAuth2Params();
-
-            return Redirect(redirect);
+            // Assemble（結果の画面まで組み立てる。#246 の 3-a）
+            return await this.AssembleFAPICibaProfileStarterAsync();
         }
 
         #endregion

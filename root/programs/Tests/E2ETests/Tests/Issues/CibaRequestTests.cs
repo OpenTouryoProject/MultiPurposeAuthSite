@@ -32,10 +32,13 @@
 //*  2026/09/25  玄人 幸道         aud の検証（RT-234.1 / .2）と jti の使い切り（RT-234.3）を追加（#234）
 //*  2026/09/25  玄人 幸道         クライアント認証（RT-234.4 / .5）を追加し、各要求に資格情報を添えた（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         長い jti でも使い切りが効くことを追加（#243）
+//*  2026/09/28  玄人 幸道         自己テストの CIBA ボタン（RT-246.2）を追加（#246 の 3-a）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -654,6 +657,90 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**認証そのものは通っている**（資格情報は正しい）。"
                     + "断っているのは、認証したクライアントと要求の iss が違うため。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-246.2 自己テストの CIBA ボタンが、判定とその理由を画面に出す</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT24602_自己テストのCIBAボタンが判定と理由を画面に出す(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-246.2",
+                    "自己テストの CIBA ボタンが、判定とその理由を画面に出す",
+                    "**以前は `?ret=OK_ABNORMAL_END` という URL に移るだけだった。**"
+                    + "`OK_` が接頭辞で、その後ろが判定という形なので、"
+                    + "**可否が読めず、失敗した理由も出ていなかった**（#246 の 3-a）。"
+                    + "**画面（Razor）は実行時コンパイル**なので、ビルドでは分からない。"
+                    + "ここでは login_hint が **端末（device_token）を登録していない 2 人目の利用者**"
+                    + "（" + TestEnv.SecondUserName + "）なので、"
+                    + "**認証要求が受け付けられず ABNORMAL_END で終わるのが正しい。**",
+                    "#246 の 3-a / 3-b");
+
+                r.Target("POST /Home/Saml2OAuth2Starters に submit.FAPI_CIBA_Profile（fapi_ciba）");
+
+                r.Step("(1) ボタンを押す（CIBA を通す）");
+
+                HttpResponseMessage posted = await client.StartSelfTestAsync(
+                    "FAPI_CIBA_Profile", "fapi_ciba");
+
+                r.VerifyEqual("HTTP 200（結果の画面）", "200", ((int)posted.StatusCode).ToString());
+
+                // **net10.0 版の Razor は、非 ASCII を数値文字参照（`&#x8A8D;` など）で出す。**
+                //   net48 版はそのまま出すので、**日本語で判定するなら実体参照を戻してから**にする。
+                string html = System.Net.WebUtility.HtmlDecode(
+                    await posted.Content.ReadAsStringAsync());
+
+                // **アプリ自身の Error ビューになっていないこと**（画面の書き間違いは、ここで出る）。
+                bool notError = !html.Contains("エラーが発生しました");
+
+                r.Verify("エラー画面ではない", notError,
+                    "結果の画面", notError ? "結果の画面" : "**エラー画面**");
+
+                Assert.True(notError, "前提: 結果の画面が開くこと（Razor は実行時コンパイル）");
+
+                r.Step("(2) 判定が画面に出ていることを確かめる");
+
+                bool abnormal = html.Contains("ABNORMAL_END");
+
+                r.Verify("判定が出る（端末が無いので ABNORMAL_END）", abnormal,
+                    "ABNORMAL_END", abnormal ? "ABNORMAL_END" : "**出ていない**");
+
+                r.Verify("`OK_` の接頭辞は付かない", !html.Contains("OK_ABNORMAL_END"),
+                    "付かない", html.Contains("OK_ABNORMAL_END") ? "**付いている**" : "付いていない");
+
+                r.Step("(3) 失敗した理由が画面に出ていることを確かめる");
+
+                // **判定を出している箇所を、そのまま実測値として報告する**（読み手が理由を見られるように）。
+                Match alert = Regex.Match(html,
+                    "<div class=\"alert[^\"]*\">(?<body>.*?)</div>", RegexOptions.Singleline);
+
+                string shown = alert.Success
+                    ? Regex.Replace(alert.Groups["body"].Value, "<[^>]+>", "").Trim()
+                    : "（判定の表示が見つからない）";
+
+                bool reason = html.Contains("認証要求が受け付けられなかった");
+
+                r.Verify("理由（/ciba_authz が受け付けなかった）が出る", reason,
+                    "理由が出る", shown);
+
+                bool device = html.Contains("認証デバイス");
+
+                r.Verify("認証デバイスの登録と承認が要ることが書かれている", device,
+                    "書かれている", device ? "書かれている" : "**書かれていない**");
+
+                r.Note("**net10.0 版の Razor は非 ASCII を数値文字参照で出す**ので、"
+                    + "この確認は HTML の実体参照を戻してから行っている（net48 版はそのまま出す）。");
+
+                r.Note("**承認まで通す経路（NORMAL_END）は、実機の認証デバイスが要るので目視で確かめる**"
+                    + "（authentication_device/CHEATSHEET.md）。"
+                    + "ここで測るのは、**判定と理由が画面に出ること**と、"
+                    + "**端末が無い場合に待ち続けずに終わること**（#246 の 3-b）。");
 
                 r.Done();
             }

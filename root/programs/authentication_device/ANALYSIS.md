@@ -214,10 +214,12 @@ authentication_device/
   - `/SetDeviceToken` での端末の登録と、`/mypage` への遷移
   - **CIBA : 本物の FCM からの通知の受信と、`/ciba_result` での応答。** 認証サイトの自己テスト（`/Home/Saml2OAuth2Starters`）で、
     Allow → `?ret=OK_NORMAL_END`、Deny → `?ret=OK_ABNORMAL_END` になった（アプリのタブが見えている＝フォアグラウンドで受けた場合）
+    **※ #246 の 3-a で、自己テストは URL ではなく結果の画面（判定 ＋ 理由）を出すようになった**（`CHEATSHEET.md` 10 節）
   - **CIBA（バックグラウンド）: OS の通知のクリック → アプリが前面に出て詳細画面 → Allow → `?ret=OK_NORMAL_END`。**
     普段の Chrome（`flutter run -d web-server` で配信）で確認した。`flutter run -d chrome` の Chrome では、クリックが届かなかった（8 節 16）
   - **net48 版（`https://localhost:44302`、`mpas.netfx.json`）でも、サインイン・端末の登録・CIBA（フォアグラウンド / バックグラウンドの Allow）を確認した。**
     自己テストの移る先の表記は net48 版だけ違い、`?ret=OK: 正常終了`（それ以外は `OK: 異常終了`）。net10.0 版は `OK_NORMAL_END` / `OK_ABNORMAL_END`
+    **※ この差は 2026/09/25 に net48 版を net10.0 版へ揃えて解消し、#246 の 3-a で両系統とも結果の画面になった**
   - **PWA としてインストールした状態でも、サインイン・CIBA（フォアグラウンド / バックグラウンド）が動いた**（`build/web` を配信して確認）。
     サインインは同じウィンドウ内で認証サイトの画面が開き、戻ってきた。通知のクリックでは、ブラウザのタブではなく**アプリのウィンドウ**が開いた
   - **2FA のプッシュ承認（#213。2026-09-16）: `MobileApp` を選ぶ → コードの入力画面が待ち受ける → 認証デバイスの [Approve] で、手で入力せずにサインインが完了した。**
