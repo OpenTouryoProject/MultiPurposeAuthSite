@@ -36,6 +36,7 @@
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
 //*  2026/09/28  玄人 幸道         FAPI2 の自己テストのトークン交換を private_key_jwt にした（#246）
 //*  2026/09/28  玄人 幸道         アサーションの組み立てを SelfTestClient へ寄せた（#246）
+//*  2026/09/28  玄人 幸道         SAML2 の応答（アサーション）を画面に出す（#246 の項目 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2508,93 +2509,70 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="samlResponse">string</param>
         /// <param name="relayState">string</param>
         /// <param name="sigAlg">string</param>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResult（Saml2Response 画面）</returns>
+        /// <remarks>
+        /// **検証の本体は `Sts.SelfTestClient.VerifySaml2Response`**（#246 で両アプリから寄せた）。
+        ///
+        /// **アサーションを画面に出す**（#246 の項目 3）。
+        /// 以前は `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に移るだけで、
+        /// **どこで落ちたのかが分からず、読み取った属性も XML も捨てていた。**
+        /// </remarks>
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
-            if (!Config.IsLockedDownTestEndpoints)
+            if (Config.IsLockedDownTestEndpoints)
             {
-                bool verified = false;
-
-                string nameId = "";
-                string iss = "";
-                string aud = "";
-                string inResponseTo = "";
-                string recipient = "";
-                DateTime? notOnOrAfter = null;
-
-                SAML2Enum.StatusCode? statusCode = null;
-                SAML2Enum.NameIDFormat? nameIDFormat = null;
-                SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
-
-                XmlDocument samlResponse2 = null;
-
-                if (Request.HttpMethod.ToLower() == "get")
-                {
-                    string rawUrl = Request.RawUrl;
-                    string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
-
-                    if (SAML2Const.RSAwithSHA1 == sigAlg)
-                        if (SAML2Client.VerifyResponse(
-                            queryString, samlResponse, out nameId, out iss, out aud,
-                            out inResponseTo, out recipient, out notOnOrAfter,
-                            out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
-                        {
-                            if (iss == Config.IssuerId) verified = true;
-                        }
-                }
-                else if (Request.HttpMethod.ToLower() == "post")
-                {
-                    if (SAML2Client.VerifyResponse(
-                        "", samlResponse, out nameId, out iss, out aud,
-                        out inResponseTo, out recipient, out notOnOrAfter,
-                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
-                    {
-                        if (iss == Config.IssuerId) verified = true;
-                    }
-                }
-
-                // LoadRequestParameters
-                string clientId_InSessionOrCookie = "";
-                string state_InSessionOrCookie = "";
-                string redirect_uri_InSessionOrCookie = "";
-                string nonce_InSessionOrCookie = "";
-                string code_verifier_InSessionOrCookie = "";
-                this.LoadRequestParameters(
-                    out clientId_InSessionOrCookie,
-                    out state_InSessionOrCookie,
-                    out redirect_uri_InSessionOrCookie,
-                    out nonce_InSessionOrCookie,
-                    out code_verifier_InSessionOrCookie);
-
-                // レスポンス生成
-                if (verified)
-                {
-                    // 認証完了。
-
-                    // 必要に応じてチェックしてもイイ
-                    // relayStateをstateに利用したケース
-                    if (relayState == state_InSessionOrCookie) { }
-
-                    // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
-                    return Redirect(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + "?ret=" + CustomEncode.UrlEncode(string.Format("認証完了（nameId={0}）", nameId)));
-                }
-                else
-                {
-                    // 認証失敗。
-                    return Redirect(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=認証失敗");
-                }
-            }
-            else
-            {
-                // IsLockedDownTestEndpoints == true;
+                // テスト用のエンドポイントを閉じている。
+                return View("Error");
             }
 
-            // エラー
-            return View("Error");
+            bool isGet = (Request.HttpMethod.ToLower() == "get");
+            string queryString = "";
+
+            if (isGet)
+            {
+                // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。
+                string rawUrl = Request.RawUrl;
+                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+            }
+
+            // LoadRequestParameters（state と RelayState を照合するため）
+            string clientId_InSessionOrCookie = "";
+            string state_InSessionOrCookie = "";
+            string redirect_uri_InSessionOrCookie = "";
+            string nonce_InSessionOrCookie = "";
+            string code_verifier_InSessionOrCookie = "";
+            this.LoadRequestParameters(
+                out clientId_InSessionOrCookie,
+                out state_InSessionOrCookie,
+                out redirect_uri_InSessionOrCookie,
+                out nonce_InSessionOrCookie,
+                out code_verifier_InSessionOrCookie);
+
+            Sts.SelfTestClient.Saml2Result result = Sts.SelfTestClient.VerifySaml2Response(
+                samlResponse, queryString, sigAlg,
+                relayState, state_InSessionOrCookie, isGet);
+
+            ViewBag.Verdict = result.Verdict;
+            ViewBag.Reason = result.Reason;
+            ViewBag.Binding = result.Binding;
+            ViewBag.SigAlg = result.SigAlg;
+            ViewBag.RelayState = result.RelayState;
+            ViewBag.RelayStateMatched = result.RelayStateMatched;
+            ViewBag.SignatureVerified = result.SignatureVerified;
+            ViewBag.IssuerMatched = result.IssuerMatched;
+            ViewBag.NameId = result.NameId;
+            ViewBag.Issuer = result.Issuer;
+            ViewBag.Audience = result.Audience;
+            ViewBag.InResponseTo = result.InResponseTo;
+            ViewBag.Recipient = result.Recipient;
+            ViewBag.NotOnOrAfter = result.NotOnOrAfter;
+            ViewBag.StatusCode = result.StatusCode;
+            ViewBag.NameIdFormat = result.NameIdFormat;
+            ViewBag.AuthnContextClassRef = result.AuthnContextClassRef;
+            ViewBag.ResponseXml = result.ResponseXml;
+
+            return View("Saml2Response");
         }
 
         #endregion

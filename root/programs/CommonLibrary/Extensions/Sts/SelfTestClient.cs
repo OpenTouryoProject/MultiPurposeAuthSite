@@ -31,6 +31,7 @@
 //*  2026/09/28  玄人 幸道         新規（#246 : 両アプリに二重だった組み立てを寄せた）
 //*  2026/09/28  玄人 幸道         CIBA の通しを寄せ、判定とポーリングを直した（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         Device Authorization Grant のポーリングも寄せた（#246 の 3-a / 3-b）
+//*  2026/09/28  玄人 幸道         SAML2 の応答（Assertion）を読む処理を寄せた（#246 の項目 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -38,7 +39,9 @@ using MultiPurposeAuthSite.Co;
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -609,6 +612,231 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(ret.IntervalSeconds));
+            }
+        }
+
+        #endregion
+
+        #region SAML2 の応答（Assertion）を読む
+
+        /// <summary>SAML2 の応答を検証した結果</summary>
+        /// <remarks>
+        /// **画面で目視するためのもの**（#246 の項目 3）。
+        /// **アサーションの XML と、検証の結果と、読み取った属性**を持つ。
+        /// </remarks>
+        public class Saml2Result
+        {
+            /// <summary>判定（NORMAL_END / ABNORMAL_END）</summary>
+            public string Verdict { get; set; }
+
+            /// <summary>その判定になった理由</summary>
+            public string Reason { get; set; }
+
+            /// <summary>バインディング（どう受け取ったか）</summary>
+            public string Binding { get; set; }
+
+            /// <summary>SigAlg（Redirect Binding のときだけ付く）</summary>
+            public string SigAlg { get; set; }
+
+            /// <summary>RelayState</summary>
+            public string RelayState { get; set; }
+
+            /// <summary>RelayState が、送った state と一致したか（送っていなければ null）</summary>
+            public bool? RelayStateMatched { get; set; }
+
+            /// <summary>署名を検証できたか</summary>
+            public bool SignatureVerified { get; set; }
+
+            /// <summary>Issuer が、この IdP（設定の IssuerId）と一致したか</summary>
+            public bool IssuerMatched { get; set; }
+
+            /// <summary>NameID（誰として認証されたか）</summary>
+            public string NameId { get; set; }
+
+            /// <summary>Issuer</summary>
+            public string Issuer { get; set; }
+
+            /// <summary>Audience</summary>
+            public string Audience { get; set; }
+
+            /// <summary>InResponseTo（要求の ID）</summary>
+            public string InResponseTo { get; set; }
+
+            /// <summary>Recipient（SubjectConfirmationData）</summary>
+            public string Recipient { get; set; }
+
+            /// <summary>NotOnOrAfter（これを過ぎたら使えない）</summary>
+            public string NotOnOrAfter { get; set; }
+
+            /// <summary>StatusCode</summary>
+            public string StatusCode { get; set; }
+
+            /// <summary>NameIDFormat</summary>
+            public string NameIdFormat { get; set; }
+
+            /// <summary>AuthnContextClassRef（どう認証したか）</summary>
+            public string AuthnContextClassRef { get; set; }
+
+            /// <summary>応答の XML（字下げして出す。空なら読めなかった）</summary>
+            public string ResponseXml { get; set; }
+        }
+
+        /// <summary>SAML2 の応答（SAMLResponse）を検証し、目視できる形にする</summary>
+        /// <param name="samlResponse">SAMLResponse（受け取ったまま）</param>
+        /// <param name="queryString">クエリ文字列（Redirect Binding のときだけ。署名の対象）</param>
+        /// <param name="sigAlg">SigAlg（同上）</param>
+        /// <param name="relayState">RelayState</param>
+        /// <param name="expectedRelayState">送った state（照合する。無ければ空）</param>
+        /// <param name="isGet">GET（Redirect Binding）で受け取ったか</param>
+        /// <returns>結果（画面で見せる）</returns>
+        /// <remarks>
+        /// **両アプリの `AccountController.AssertionConsumerService` に同文で在ったもの**を寄せた（#246）。
+        ///
+        /// **アサーションを画面に出すためにある。**
+        /// 以前は検証の結果を `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に載せるだけで、
+        /// **署名を検証できたのか、Issuer が違ったのか、そもそも応答が読めなかったのかが分からなかった。**
+        /// 読み取った属性（`Audience`・`NotOnOrAfter`・`AuthnContextClassRef` など）も、
+        /// **XML そのもの**（`samlResponse2`）も捨てていた（「必要に応じて読んで拡張可能」というコメントだけが在った）。
+        ///
+        /// **判定は「署名の検証」と「Issuer の一致」の両方**である（従来と同じ条件）。
+        /// **どちらで落ちたかを `Reason` に出す。**
+        /// </remarks>
+        public static Saml2Result VerifySaml2Response(
+            string samlResponse, string queryString, string sigAlg,
+            string relayState, string expectedRelayState, bool isGet)
+        {
+            Saml2Result ret = new Saml2Result()
+            {
+                Verdict = "ABNORMAL_END",
+                Reason = "",
+                Binding = isGet ? "Redirect（GET。署名はクエリ文字列に付く）" : "POST（署名は XML の中）",
+                SigAlg = sigAlg ?? "",
+                RelayState = relayState ?? "",
+                RelayStateMatched = string.IsNullOrEmpty(expectedRelayState)
+                    ? (bool?)null : (relayState == expectedRelayState),
+                SignatureVerified = false,
+                IssuerMatched = false,
+                NameId = "",
+                Issuer = "",
+                Audience = "",
+                InResponseTo = "",
+                Recipient = "",
+                NotOnOrAfter = "",
+                StatusCode = "",
+                NameIdFormat = "",
+                AuthnContextClassRef = "",
+                ResponseXml = ""
+            };
+
+            if (string.IsNullOrEmpty(samlResponse))
+            {
+                ret.Reason = "SAMLResponse が無い。";
+                return ret;
+            }
+
+            // **Redirect Binding は RSAwithSHA1 だけを受ける**（従来どおり）。
+            if (isGet && SAML2Const.RSAwithSHA1 != sigAlg)
+            {
+                ret.Reason = "SigAlg が RSAwithSHA1 ではないため、検証していない : "
+                    + (string.IsNullOrEmpty(sigAlg) ? "（無し）" : sigAlg);
+                return ret;
+            }
+
+            string nameId = "";
+            string iss = "";
+            string aud = "";
+            string inResponseTo = "";
+            string recipient = "";
+            DateTime? notOnOrAfter = null;
+
+            SAML2Enum.StatusCode? statusCode = null;
+            SAML2Enum.NameIDFormat? nameIDFormat = null;
+            SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
+
+            XmlDocument samlResponse2 = null;
+
+            try
+            {
+                ret.SignatureVerified = SAML2Client.VerifyResponse(
+                    isGet ? queryString : "", samlResponse,
+                    out nameId, out iss, out aud,
+                    out inResponseTo, out recipient, out notOnOrAfter,
+                    out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2);
+            }
+            catch (Exception ex)
+            {
+                // **応答が XML でない・署名の要素が無いなどで例外になっても、画面は出す。**
+                ret.Reason = "応答を読めなかった : " + ex.GetType().Name;
+                return ret;
+            }
+
+            // 読み取れたものは、検証の成否に関わらず見せる（どこで落ちたかを見るため）。
+            ret.NameId = nameId ?? "";
+            ret.Issuer = iss ?? "";
+            ret.Audience = aud ?? "";
+            ret.InResponseTo = inResponseTo ?? "";
+            ret.Recipient = recipient ?? "";
+            ret.NotOnOrAfter = (notOnOrAfter == null)
+                ? "" : ((DateTime)notOnOrAfter).ToString("yyyy-MM-dd HH:mm:ss");
+            ret.StatusCode = (statusCode == null) ? "" : statusCode.ToString();
+            ret.NameIdFormat = (nameIDFormat == null) ? "" : nameIDFormat.ToString();
+            ret.AuthnContextClassRef = (authnContextClassRef == null) ? "" : authnContextClassRef.ToString();
+            ret.ResponseXml = SelfTestClient.FormatXml(samlResponse2);
+
+            ret.IssuerMatched = (ret.Issuer == Config.IssuerId);
+
+            if (!ret.SignatureVerified)
+            {
+                ret.Reason = "署名を検証できなかった"
+                    + (string.IsNullOrEmpty(ret.StatusCode) ? "。" : "（StatusCode=" + ret.StatusCode + "）。");
+            }
+            else if (!ret.IssuerMatched)
+            {
+                ret.Reason = "Issuer が設定と違う : "
+                    + (string.IsNullOrEmpty(ret.Issuer) ? "（無し）" : ret.Issuer)
+                    + "（期待 : " + Config.IssuerId + "）";
+            }
+            else
+            {
+                ret.Verdict = "NORMAL_END";
+                ret.Reason = "署名を検証し、Issuer も一致した。";
+            }
+
+            return ret;
+        }
+
+        /// <summary>XML を字下げして文字列にする（目視のため）</summary>
+        /// <param name="xml">XmlDocument（null 可）</param>
+        /// <returns>字下げした XML（読めなければ元のまま、それも無ければ空）</returns>
+        private static string FormatXml(XmlDocument xml)
+        {
+            if (xml == null)
+            {
+                return "";
+            }
+
+            try
+            {
+                StringBuilder sb = new StringBuilder();
+
+                XmlWriterSettings settings = new XmlWriterSettings()
+                {
+                    Indent = true,
+                    IndentChars = "  ",
+                    OmitXmlDeclaration = true
+                };
+
+                using (XmlWriter writer = XmlWriter.Create(sb, settings))
+                {
+                    xml.WriteTo(writer);
+                }
+
+                return sb.ToString();
+            }
+            catch
+            {
+                // 字下げできなければ、そのまま出す（目視の妨げにはならない）。
+                return xml.OuterXml;
             }
         }
 

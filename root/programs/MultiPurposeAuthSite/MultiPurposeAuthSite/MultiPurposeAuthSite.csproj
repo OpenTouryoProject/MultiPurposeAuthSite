@@ -518,6 +518,7 @@
     <Content Include="Views\Home\PostBinding.cshtml" />
     <Content Include="Views\Account\DeviceAuthZVerify.cshtml" />
     <Content Include="Views\Account\EndSession.cshtml" />
+    <Content Include="Views\Account\Saml2Response.cshtml" />
     <Content Include="Views\Home\DeviceAuthZResponse.cshtml" />
     <Content Include="Views\Home\CibaProfileResponse.cshtml" />
     <Content Include="Views\Home\DeviceAuthZPollingResult.cshtml" />

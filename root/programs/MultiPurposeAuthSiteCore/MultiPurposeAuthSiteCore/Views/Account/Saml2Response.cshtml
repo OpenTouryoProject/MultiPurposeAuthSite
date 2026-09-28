@@ -1,0 +1,147 @@
+@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Account.Saml2Response
+    //* クラス日本語名  ：Account.Saml2Response（SAML2 の応答とアサーション）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/09/28  玄人 幸道         新規（#246 の項目 3）
+    //**********************************************************************************
+
+    **目視で確かめるための画面である。**
+    以前は `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に移るだけで、
+    **署名を検証できたのか、Issuer が違ったのかが分からず、
+    読み取った属性も、アサーションの XML も捨てていた**（#246 の項目 3）。
+*@
+
+@{
+    ViewBag.Title = "SAML2 Response (Assertion)";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<hr />
+
+<text>
+    ※ SP（このサイトが兼ねているテスト用クライアント）が受け取った SAML2 の応答である。<br />
+    ※ <b>判定は「署名を検証できたこと」と「Issuer がこの IdP と一致すること」の両方</b>で決まる。<br />
+    ※ アサーションの XML は、下の欄にそのまま出している（<b>字下げのみ整形</b>）。
+</text>
+<br /><br />
+
+@if ((string)ViewBag.Verdict == "NORMAL_END")
+{
+    <div class="alert alert-success">
+        <b>NORMAL_END</b> : @ViewBag.Reason
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+        <b>ABNORMAL_END</b> : @ViewBag.Reason
+    </div>
+}
+
+<table class="table table-bordered">
+    <tr>
+        <th style="width:25%;">バインディング</th>
+        <td>@ViewBag.Binding</td>
+    </tr>
+    <tr>
+        <th>SigAlg</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.SigAlg) ? "（無し。POST は XML の中の署名）" : ViewBag.SigAlg)</td>
+    </tr>
+    <tr>
+        <th>署名の検証</th>
+        <td><b>@((bool)ViewBag.SignatureVerified ? "✓ 検証できた" : "✗ 検証できなかった")</b></td>
+    </tr>
+    <tr>
+        <th>Issuer の一致</th>
+        <td><b>@((bool)ViewBag.IssuerMatched ? "✓ 一致" : "✗ 不一致")</b></td>
+    </tr>
+    <tr>
+        <th>NameID / NameIDFormat</th>
+        <td>
+            <b>@(string.IsNullOrEmpty((string)ViewBag.NameId) ? "（無し）" : ViewBag.NameId)</b>
+            / @(string.IsNullOrEmpty((string)ViewBag.NameIdFormat) ? "（無し）" : ViewBag.NameIdFormat)
+        </td>
+    </tr>
+    <tr>
+        <th>Issuer</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.Issuer) ? "（無し）" : ViewBag.Issuer)</td>
+    </tr>
+    <tr>
+        <th>Audience</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.Audience) ? "（無し）" : ViewBag.Audience)</td>
+    </tr>
+    <tr>
+        <th>StatusCode</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.StatusCode) ? "（無し）" : ViewBag.StatusCode)</td>
+    </tr>
+    <tr>
+        <th>AuthnContextClassRef</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.AuthnContextClassRef) ? "（無し）" : ViewBag.AuthnContextClassRef)</td>
+    </tr>
+    <tr>
+        <th>InResponseTo / Recipient</th>
+        <td>
+            @(string.IsNullOrEmpty((string)ViewBag.InResponseTo) ? "（無し）" : ViewBag.InResponseTo)
+            / @(string.IsNullOrEmpty((string)ViewBag.Recipient) ? "（無し）" : ViewBag.Recipient)
+        </td>
+    </tr>
+    <tr>
+        <th>NotOnOrAfter</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.NotOnOrAfter) ? "（無し）" : ViewBag.NotOnOrAfter)</td>
+    </tr>
+    <tr>
+        <th>RelayState</th>
+        <td>
+            @(string.IsNullOrEmpty((string)ViewBag.RelayState) ? "（無し）" : ViewBag.RelayState)
+            @{ bool? matched = (bool?)ViewBag.RelayStateMatched; }
+            @if (matched == true)
+            {
+                <b>（✓ 送った state と一致）</b>
+            }
+            else if (matched == false)
+            {
+                <b>（✗ 送った state と不一致）</b>
+            }
+            else
+            {
+                <text>（照合していない。state を保存していない経路）</text>
+            }
+        </td>
+    </tr>
+</table>
+
+<text>応答の XML（アサーションを含む。署名の要素もそのまま）:</text><br />
+@Html.TextArea("ResponseXml", (string)ViewBag.ResponseXml ?? "",
+    new { style = "resize: both; width:100%; height:400px; font-family: monospace;", @readonly = "readonly" })<br />
+
+@if (string.IsNullOrEmpty((string)ViewBag.ResponseXml))
+{
+    <div class="alert alert-warning">
+        XML を読めなかった（応答が無い、または XML として解釈できなかった）。上の理由を確認すること。
+    </div>
+}
+
+<a class="btn btn-default" href="@Url.Action("Saml2OAuth2Starters", "Home")">自己テストの一覧に戻る</a>
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

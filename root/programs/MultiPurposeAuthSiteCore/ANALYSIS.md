@@ -316,7 +316,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 | | 受け持ち |
 |---|---|
-| `SelfTestClient` | **鍵を読み、JWT を作る**（Request Object・CIBA の要求・`client_assertion`）。`/ros` と `/par` は「組み立て → 預ける → 応答を解く」までを 1 つにしている。**CIBA は認証要求からポーリング・`/userinfo` までの通し**（#246 の 3-b） |
+| `SelfTestClient` | **鍵を読み、JWT を作る**（Request Object・CIBA の要求・`client_assertion`）。`/ros` と `/par` は「組み立て → 預ける → 応答を解く」までを 1 つにしている。**CIBA と Device AuthZ はポーリングの通し**（#246 の 3-b）、**SAML2 は応答（アサーション）の検証**（同 項目 3） |
 | `Helper` | **WebAPI 呼び出し ＋ コンテナ化の URL 変換**（全メソッドが `GetContainerizatedAuthZServerUri` を通る） |
 | `HomeController` | **どのパターンを試すかだけ**を決める |
 
@@ -329,6 +329,18 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 - `Saml2OAuth2Starters.cshtml` … SAML2 / Authorization Code / Implicit / Hybrid / PKCE /
   FAPI1 / FAPI2 / その他を、クライアントと response_mode を選んで開始する画面
+- **SAML2 のアサーションを画面に出す**（#246 の項目 3。**それまでは「最も手薄」だった**）
+  - SP 側（`AccountController.AssertionConsumerService`）は、応答を検証した結果を
+    `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に載せるだけで、
+    **どこで落ちたのかが分からず、読み取った属性も XML も捨てていた**
+    （「必要に応じて `samlResponse2` を読んで拡張可能」というコメントだけが在った）
+  - いまは `Views/Account/Saml2Response.cshtml` に、**判定（NORMAL_END / ABNORMAL_END）と理由**、
+    **署名の検証と Issuer の一致を別々に**、`NameID` / `NameIDFormat` / `Audience` /
+    `StatusCode` / `AuthnContextClassRef` / `InResponseTo` / `Recipient` / `NotOnOrAfter` /
+    `RelayState`（送った `state` との照合）、そして**アサーションの XML**（字下げのみ整形）を出す
+  - **署名の付き方はバインディングで違う。** Redirect（GET）は**クエリ文字列**に付き（`SigAlg`）、
+    POST は **XML の中**に付く（`SignatureValue`）。画面はどちらで受けたかを出す
+  - E2E は `RT-246.4`（Redirect）/ `RT-246.5`（POST）で、**両方の経路の画面**を測る
 - `DeviceAuthZResponse.cshtml` … Device Authorization Grant の user_code 表示（QR は `qrcode.js`）。
   **`interval` と `expires_in` も出し、`interval` を hidden で次の POST へ持ち回す**（#246 の 3-b）
 - **Device Authorization Grant のポーリングも、判定と理由を画面に出す**（#246 の 3-a。CIBA と同じ）
