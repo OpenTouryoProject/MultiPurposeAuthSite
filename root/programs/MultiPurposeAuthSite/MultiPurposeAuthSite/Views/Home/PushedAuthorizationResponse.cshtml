@@ -1,0 +1,105 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：Home.PushedAuthorizationResponse
+    //* クラス日本語名  ：Home.PushedAuthorizationResponse（PAR に預けた結果）
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/09/28  玄人 幸道         新規（#246）
+    //**********************************************************************************
+
+    **目視で確かめるための画面である。**
+    PAR（RFC 9126）に預けた結果（request_uri / expires_in）と、預けた Request Object を出す。
+    他のスターターは認可エンドポイントへ直接リダイレクトするが、
+    ここは「預ける」という 1 往復が入るので、その結果を見せてから続ける。
+*@
+
+@using MultiPurposeAuthSite.Co
+@using MultiPurposeAuthSite.Entity
+@using MultiPurposeAuthSite.Resources
+
+@using System.Web
+@using System.Web.Mvc
+
+@using Touryo.Infrastructure.Framework.Authentication
+
+@{
+    ViewBag.Title = "Pushed Authorization Request (PAR)";
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+<hr />
+
+<text>
+    ※ FAPI 2.0 は PAR を必須としている（#229 で実装）。この画面は
+    <b>Open棟梁 のクライアント実装</b>（OAuth2AndOIDCClient.PushAuthorizationRequestAsync）で
+    /par に預けた結果である。<br />
+    ※ /ros（独自。RFC 9101 5.2.1 の任意機能）との違いは、<b>クライアント認証があること</b>。
+</text>
+<br /><br />
+
+<table class="table table-bordered">
+    <tr>
+        <th style="width:25%;">預け先（PAR エンドポイント）</th>
+        <td>@ViewBag.AuthRequestPushUri</td>
+    </tr>
+    <tr>
+        <th>client_id</th>
+        <td>@ViewBag.ClientId</td>
+    </tr>
+    <tr>
+        <th>クライアント認証</th>
+        <td>@ViewBag.AuthMethod</td>
+    </tr>
+    <tr>
+        <th>request_uri</th>
+        <td><b>@(string.IsNullOrEmpty((string)ViewBag.RequestUri) ? "（返らなかった）" : ViewBag.RequestUri)</b></td>
+    </tr>
+    <tr>
+        <th>expires_in</th>
+        <td>@(string.IsNullOrEmpty((string)ViewBag.ExpiresIn) ? "（返らなかった）" : ViewBag.ExpiresIn)</td>
+    </tr>
+</table>
+
+<text>預けた Request Object（署名付き JWT）:</text><br />
+@Html.TextArea("RequestObject", (string)ViewBag.RequestObject ?? "",
+    new { style = "resize: both; width:100%; height:80px;", @readonly = "readonly" })<br />
+
+<text>Request Object (Json):</text><br />
+@Html.TextArea("RequestObjectJson", (string)ViewBag.RequestObjectJson ?? "",
+    new { style = "resize: both; width:100%; height:120px;", @readonly = "readonly" })<br />
+
+<text>PAR の応答:</text><br />
+@Html.TextArea("Response", (string)ViewBag.Response ?? "",
+    new { style = "resize: both; width:100%; height:80px;", @readonly = "readonly" })<br />
+
+@if (!string.IsNullOrEmpty((string)ViewBag.AuthorizeUrl))
+{
+    <a class="btn btn-primary" href="@ViewBag.AuthorizeUrl">この request_uri で認可エンドポイントへ進む</a>
+}
+else
+{
+    <div class="alert alert-warning">
+        預けられなかった。上の「PAR の応答」を確認すること（クライアント認証・登録した公開鍵・登録種別）。
+    </div>
+}
+
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}

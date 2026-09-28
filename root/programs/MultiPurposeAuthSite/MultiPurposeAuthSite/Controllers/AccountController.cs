@@ -34,6 +34,7 @@
 //*  2026/09/18  玄人 幸道         認可リクエストの code_challenge を検証に渡す（#220）
 //*  2026/09/25  玄人 幸道         設定キーの改名（IdFederation*Endpoint）に追随（#236）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
+//*  2026/09/28  玄人 幸道         FAPI2 の自己テストのトークン交換を private_key_jwt にした（#246）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3706,12 +3707,32 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // FAPI2
 
-                            //  client_Idと、クライアント証明書（TB）
-                            string client_id = clientId_InSessionOrCookie;
+                            // **private_key_jwt で交換する**（#246）。
+                            //   FAPI 2.0 が認めるのは MTLS と private_key_jwt の 2 つ。
+                            //   以前は client_secret を空で送り、**クライアント証明書（TB）が付くことを前提**に
+                            //   していたが、自己テストのクライアントは
+                            //   ClientCertPfxFilePath が設定されていなければ証明書を添えない。
+                            //   **設定が無い配置では /token が 401（invalid_client）になり、
+                            //   自己テストが結果画面まで通らなかった**（/ros でも /par でも同じ）。
+                            //   **証明書の配置を前提にしない private_key_jwt に寄せる。**
+                            //   mTLS の経路は E2E（FA-6）が測る。
 
-                            model.Response = await Sts.Helper.GetInstance()
-                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
-                                client_id, "", redirect_uri, code);
+                            // Tokenエンドポイントにアクセス
+                            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
+
+                            // client_id(iss)
+                            string iss = clientId_InSessionOrCookie;
+
+                            // 秘密鍵
+                            DigitalSignX509 dsX509 = new DigitalSignX509(
+                                CmnClientParams.RsaPfxFilePath,
+                                CmnClientParams.RsaPfxPassword,
+                                HashAlgorithmName.SHA256);
+
+                            model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                                tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateByRsa(
+                                    iss, aud, new TimeSpan(0, 0, 30), Const.OidcScopes,
+                                    ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
                         }
                         else
                         {

@@ -29,10 +29,14 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/24  玄人 幸道         新規（#229 : PAR のエンドポイントを追加）
+//*  2026/09/28  玄人 幸道         自己テストの PAR ボタンを駆動する RT-246.1 を追加（#246）
+//*  2026/09/28  玄人 幸道         RT-246.1 を結果画面（トークン交換）まで延長（#246）
 //**********************************************************************************
 
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -312,6 +316,94 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.VerifyEqual("HTTP 400", "400", ((int)par.StatusCode).ToString());
                 r.VerifyEqual("エラーは invalid_request", "invalid_request", par.Error ?? "（無し）");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-246.1 自己テストの PAR ボタン</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT24601_自己テストのPARボタンで預けて認可できる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-246.1",
+                    "自己テストの PAR ボタンが、Open棟梁 のクライアントで /par に預け、その request_uri で認可できる",
+                    "**#229 で実装した PAR を、この実装自身のクライアントが呼んでいなかった**"
+                    + "（自己テストの FAPI2 は `/ros` を使っていた）。"
+                    + "**自己テストは Open棟梁 のクライアント ライブラリを使う唯一の場**なので、"
+                    + "ここを通すことが、クライアントとサーバの相互接続性の確認になる（#246）。"
+                    + "**画面（Razor）は実行時コンパイル**なので、ビルドでは分からない。",
+                    "RFC 9126 / FAPI 2.0 / #229 / #246");
+
+                r.Target("POST /Home/Saml2OAuth2Starters に submit.AuthorizationCodeFAPI2_PAR（fapi2）");
+
+                r.Step("(1) ボタンを押す（Open棟梁 のクライアントが /par に預ける）");
+
+                HttpResponseMessage posted = await client.StartSelfTestAsync(
+                    "AuthorizationCodeFAPI2_PAR", "fapi2");
+
+                r.VerifyEqual("HTTP 200（預けた結果の画面）",
+                    "200", ((int)posted.StatusCode).ToString());
+
+                string html = await posted.Content.ReadAsStringAsync();
+
+                r.Step("(2) 画面に、預けた結果が出ていることを確かめる");
+
+                Match requestUri = Regex.Match(html, "(urn:[A-Za-z0-9:._-]+)");
+
+                r.Verify("request_uri が画面に出る", requestUri.Success,
+                    "urn:… が出る", requestUri.Success ? "出ている" : "**出ていない**");
+
+                r.Verify("クライアント認証が private_key_jwt である",
+                    html.Contains("private_key_jwt"),
+                    "private_key_jwt", html.Contains("private_key_jwt") ? "private_key_jwt" : "**違う**");
+
+                Match link = Regex.Match(html, "href=\"(?<url>[^\"]*request_uri=[^\"]*)\"");
+
+                r.Verify("その request_uri で認可へ進むリンクが出る", link.Success,
+                    "リンクあり", link.Success ? "あり" : "**無し**（預けられていない）");
+
+                Assert.True(link.Success, "前提: 認可へ進むリンクが出ること（PAR に預けられていること）");
+
+                r.Step("(3) リンクを辿って、認可できることを確かめる");
+
+                AuthZResponse authz = await client.AuthorizeAndGrantAsync(
+                    System.Net.WebUtility.HtmlDecode(link.Groups["url"].Value));
+
+                r.Verify("認可コードが返る", !string.IsNullOrEmpty(authz.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(authz.Code) ? "**無し**（" + authz.ToString() + "）" : "あり");
+
+                Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが返ること");
+
+                r.Step("(4) 結果画面が、トークンを取れていることを確かめる");
+
+                HttpResponseMessage callback = await client.GetAsync(authz.Location);
+                string result = await callback.Content.ReadAsStringAsync();
+
+                r.VerifyEqual("結果画面が開く（HTTP 200）", "200", ((int)callback.StatusCode).ToString());
+
+                // **アプリ自身の Error ビューになっていないこと。**
+                //   以前は fapi2 のコールバックが client_secret を空で送り、
+                //   **クライアント証明書が無い配置では /token が 401 になって Error 画面**だった（#246）。
+                bool notError = !result.Contains("エラーが発生しました");
+
+                r.Verify("エラー画面ではない", notError,
+                    "結果画面", notError ? "結果画面" : "**エラー画面**（/token のクライアント認証に失敗）");
+
+                bool hasToken = System.Text.RegularExpressions.Regex.IsMatch(
+                    result, "name=\"AccessToken\"[^>]*value=\"ey");
+
+                r.Verify("access_token が画面に出る", hasToken,
+                    "JWT が出る（値は伏せる）", hasToken ? "出ている" : "**出ていない**");
+
+                r.Note("**トークン交換は private_key_jwt で行う**（#246）。"
+                    + "FAPI 2.0 は MTLS と private_key_jwt の 2 つを認めており、"
+                    + "**証明書の配置を前提にしない方**に寄せた。mTLS の経路は `FA-6` が測る。");
 
                 r.Done();
             }

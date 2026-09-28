@@ -23,6 +23,7 @@
     //*  2020/12/18  西野 大介         Device AuthZ対応実施
     //*  2026/09/18  玄人 幸道         無効な Implicit / ROPC は、リンクにせず文字だけにする（#220）
     //*  2026/09/27  玄人 幸道         RP-Initiated Logout を試すボタンを追加（#232）
+    //*  2026/09/28  玄人 幸道         PAR（/par）経路のボタンを追加（#246）
     //**********************************************************************************
 *@
 
@@ -129,6 +130,8 @@
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1_OIDC" value="Test Authorization Code Flow (FAPI1 CC, OIDC)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI1_PKCE" value="Test Authorization Code Flow (FAPI1 PC, PKCE)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.AuthorizationCodeFAPI2" value="Test Authorization Code Flow (FAPI2 CC)" class="btn btn-link" /></li>
+                    @* PAR（RFC 9126）に預けてから認可する。FAPI 2.0 の正規の形（#246） *@
+                    <li><input type="submit" name="submit.AuthorizationCodeFAPI2_PAR" value="Test Authorization Code Flow (FAPI2 CC, PAR)" class="btn btn-link" /></li>
                     <li><input type="submit" name="submit.FAPI_CIBA_Profile" value="Test FAPI CIBA Profile (FAPI2)" class="btn btn-link" /></li>
                 </ul>
             </li>

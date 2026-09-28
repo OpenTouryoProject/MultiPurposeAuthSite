@@ -311,6 +311,17 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 - `Saml2OAuth2Starters.cshtml` … SAML2 / Authorization Code / Implicit / Hybrid / PKCE /
   FAPI1 / FAPI2 / その他を、クライアントと response_mode を選んで開始する画面
 - `DeviceAuthZResponse.cshtml` … Device Authorization Grant の user_code 表示（QR は `qrcode.js`）
+- **PAR（RFC 9126）の口も自己テストにある**（#246）
+  - `Saml2OAuth2Starters.cshtml` の `submit.AuthorizationCodeFAPI2_PAR` … **Open棟梁 のクライアント実装**
+    （`OAuth2AndOIDCClient.PushAuthorizationRequestAsync`）で `/par` に預け、
+    **`request_uri` と `expires_in` を画面（`PushedAuthorizationResponse.cshtml`）で見せてから**認可へ進む
+  - 既存の FAPI2 のボタンは `/ros`（独自。RFC 9101 §5.2.1 の任意機能）。**両方を押し比べられる**
+  - **E2E は実装側のライブラリを使わない**ので、**Open棟梁 クライアントとの相互接続性はここでしか見ていない**（`RT-246.1`）
+- **FAPI2 のトークン交換は `private_key_jwt`**（#246）。
+  以前は `client_secret` を空で送り、**クライアント証明書（TB）が付くことを前提**にしていたが、
+  `ClientCertPfxFilePath` が設定されていない配置では **`/token` が 401 になり、結果画面まで通らなかった**
+  （`/ros` の既存ボタンも同じ）。**FAPI 2.0 は MTLS と private_key_jwt の両方を認める**ので、
+  **証明書の配置を前提にしない方**に寄せた。mTLS の経路は E2E（`FA-6`）が測る
 - **ログアウト（RP-Initiated Logout。#232）の口も 2 つある**
   - `Saml2OAuth2Starters.cshtml` の `submit.EndSession` … `id_token_hint` **無し**で `/end_session` へ。
     確認画面の経路を試す

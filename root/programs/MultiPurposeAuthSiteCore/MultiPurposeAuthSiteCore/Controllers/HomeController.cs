@@ -31,6 +31,7 @@
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         自己テストに RP-Initiated Logout の口を追加（#232）
+//*  2026/09/28  玄人 幸道         自己テストに PAR（/par）経路を追加（#246）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -494,6 +495,89 @@ namespace MultiPurposeAuthSite.Controllers
             }
         }
 
+        /// <summary>FAPI2CC ＋ PAR のスターターを組み立てて返す（#246）</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>認可エンドポイントの URL（預けられなければ null）</returns>
+        /// <remarks>
+        /// **FAPI 2.0 の正規の形。** 認可リクエストを **PAR（RFC 9126）に預けてから**認可する。
+        /// AssembleFAPI2CCStarterAsync との違いは、預け先と認証だけ。
+        ///
+        /// | | /ros（独自。RFC 9101 5.2.1 の任意機能として維持） | /par（RFC 9126） |
+        /// |---|---|---|
+        /// | 認証 | **無し**（Request Object の署名だけ） | **クライアント認証**（ここでは private_key_jwt） |
+        /// | 本文 | 署名付き JWT を生で | フォーム（request に JAR を入れる） |
+        /// | 応答 | iss / aud / request_uri / exp | **request_uri / expires_in** |
+        ///
+        /// **Open棟梁 のクライアント実装（OAuth2AndOIDCClient.PushAuthorizationRequestAsync）で呼ぶ。**
+        /// E2E は実装側のライブラリを使わないので、**相互接続性の確認はここにしか無い。**
+        ///
+        /// **預けた結果は画面に出す**（request_uri / expires_in）。目視で確かめるため。
+        /// </remarks>
+        private async Task<string> AssembleFAPI2ParStarterAsync(string response_type)
+        {
+            // 秘密鍵
+            DigitalSignX509 dsX509 = new DigitalSignX509(
+                CmnClientParams.RsaPfxFilePath,
+                CmnClientParams.RsaPfxPassword,
+                HashAlgorithmName.SHA256);
+
+            if (this.ClarifyRedirectUri)
+            {
+                string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
+            }
+
+            string authRequestPushUri = Config.OAuth2AuthorizationServerEndpointsRootURI
+                + OAuth2AndOIDCParams.AuthRequestPushUri;
+
+            // テストコードで、clientを識別するために、Stateに細工する。
+            string requestObject = RequestObject.Create(this.ClientId, authRequestPushUri,
+                response_type, this.ResponseMode, this.RedirectUri, Const.OidcScopes,
+                OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
+                "600", "", "",
+                // **claims は空で渡す。** RequestObject.Create は null チェックをしないため
+                //   （ClaimsInRO 側は各引数の null を受ける）。ここは PAR の経路を見るのが目的。
+                new ClaimsInRO(null, null, null),
+                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+
+            // **クライアント認証は private_key_jwt**（FAPI 2.0 は MTLS か private_key_jwt に限る）。
+            //   client_assertion の aud は**トークン エンドポイント**（RFC 7523 3。サーバ側もそこを見る）。
+            string clientAssertion = JwtAssertion.CreateByRsa(
+                this.ClientId,
+                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint,
+                new TimeSpan(0, 0, 30), Const.OidcScopes,
+                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+
+            // 画面に出す（目視で確かめるもの）
+            ViewBag.AuthRequestPushUri = authRequestPushUri;
+            ViewBag.ClientId = this.ClientId;
+            ViewBag.AuthMethod = OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit();
+            ViewBag.RequestObject = requestObject;
+            ViewBag.RequestObjectJson = CustomEncode.ByteToString(
+                CustomEncode.FromBase64UrlString(requestObject.Split('.')[1]), CustomEncode.us_ascii);
+
+            // PAR に預ける（Open棟梁 のクライアント実装）
+            string response = await Helper.GetInstance().PushAuthorizationRequestAsync(
+                new Uri(authRequestPushUri), requestObject, this.ClientId, clientAssertion);
+
+            ViewBag.Response = response;
+
+            JObject json = (JObject)JsonConvert.DeserializeObject(response ?? "");
+            string request_uri = (json == null) ? null : (string)json[OAuth2AndOIDCConst.request_uri];
+
+            ViewBag.RequestUri = request_uri;
+            ViewBag.ExpiresIn = (json == null) ? null : (string)json["expires_in"];
+
+            if (string.IsNullOrEmpty(request_uri))
+            {
+                // 預けられなかった（応答をそのまま画面で見せる）。
+                return null;
+            }
+
+            // request_uri の認可リクエスト
+            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", request_uri);
+        }
+
         #endregion
 
         #region Back Channel
@@ -858,6 +942,10 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2"]))
                         {
                             return await this.AuthorizationCodeFAPI2Async();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2_PAR"]))
+                        {
+                            return await this.AuthorizationCodeFAPI2ParAsync();
                         }
                         else if (!string.IsNullOrEmpty(Request.Form["submit.FAPI_CIBA_Profile"]))
                         {
@@ -1321,6 +1409,29 @@ namespace MultiPurposeAuthSite.Controllers
 
             return Redirect(redirect);
         }
+
+        /// <summary>Test Authorization Code Flow (FAPI2 CC, PAR)（#246）</summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **預けた結果を画面で見せてから、続けて認可へ進む。**
+        /// 他のスターターのように直接リダイレクトしないのは、
+        /// **request_uri と expires_in を目視で確かめる**ため（#246）。
+        /// </remarks>
+        private async Task<ActionResult> AuthorizationCodeFAPI2ParAsync()
+        {
+            this.InitOAuth2Params();
+
+            // Assemble
+            string redirect = await this.AssembleFAPI2ParStarterAsync(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+
+            this.SaveOAuth2Params();
+
+            ViewBag.AuthorizeUrl = redirect;
+
+            return View("PushedAuthorizationResponse");
+        }
+
 
         #endregion
 
