@@ -164,6 +164,9 @@
 
     // 外部ログイン
 
+    // **外部 ID を既存アカウントに結び付けるとき、検証済みのメアドを要求する**（#140 の段階 1）。
+    //   未設定でも true（安全側）。false にすると従来どおり（上流の言い値のメアドで結び付ける）。
+    "RequireVerifiedEmailForAccountLinking": "true",
     // 外部ログイン（MicrosoftAccountAuthentication）
     "MicrosoftAccountAuthentication": "false",
     "MicrosoftAccountAuthenticationClientId": "[If necessary, please fill in ClientId of Microsoft Account]",

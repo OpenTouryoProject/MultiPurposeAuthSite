@@ -18,16 +18,20 @@
 //*  2017/04/24  西野 大介         新規
 //*  2026/09/11  玄人 幸道         OAuth2 / OIDC の API の 401 を、ログイン画面への 302 に変えない（#196）
 //*  2026/09/11  玄人 幸道         401 を 302 に変えない対象を、Web API に登録済みのルートから判定する（一覧を二重に持たない）
+//*  2026/09/30  玄人 幸道         Google の email_verified をクレームに写す（#140 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.TokenProviders;
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -44,6 +48,7 @@ using Microsoft.Owin.Security.Cookies;
 using Microsoft.Owin.Security.OAuth;
 using Microsoft.Owin.Security.MicrosoftAccount;
 using Microsoft.Owin.Security.Google;
+using Newtonsoft.Json.Linq;
 using Microsoft.Owin.Security.Facebook;
 using Microsoft.Owin.Security.Twitter;
 
@@ -303,7 +308,81 @@ namespace MultiPurposeAuthSite
                         UseProxy = Config.UseInternetProxy
                     },
                     ClientId = Config.GoogleAuthenticationClientId,
-                    ClientSecret = Config.GoogleAuthenticationClientSecret
+                    ClientSecret = Config.GoogleAuthenticationClientSecret,
+
+                    // **email_verified をクレームに写す**（#140 の段階 1）。
+                    //   Google は userinfo で email_verified を返すが、
+                    //   **Owin の Google プロバイダはクレームにしない**ので、ここで足す。
+                    //   これが無いと、**Google はメアドを検証しているのに**
+                    //   「言っていない」扱いになり、既存アカウントへのリンクが拒否される
+                    //   （判定は Extensions.Sts.AccountLink）。
+                    //
+                    //   **他の 3 つ（Microsoft / Facebook / Twitter）には足さない。**
+                    //     Microsoft : Graph の /me に相当するクレームが無い
+                    //     Facebook  : verified はアカウントの検証で、メアドの検証ではない
+                    //     Twitter   : メアド自体が返らないのが普通
+                    Provider = new GoogleOAuth2AuthenticationProvider
+                    {
+                        OnAuthenticated = (context) =>
+                        {
+                            // **ここで落ちてもサインインを止めない**（#140 の段階 1）。
+                            //   このクレームは**付加情報**であり、**無ければ「検証済みでない」として
+                            //   扱われるだけ**（判定は Extensions.Sts.AccountLink）。
+                            //   **安全側に倒れる**ので、例外でサインイン全体を壊す理由が無い。
+                            //   **握り潰さず、必ずログに残す。**
+                            try
+                            {
+                                // **綴りが 2 つある。**
+                                //   OIDC の userinfo（oauth2/v3）は `email_verified`、
+                                //   Google 独自の userinfo（oauth2/v2）は **`verified_email`** を返す。
+                                //   **Owin の実装がどちらを叩くかに依存させない**ため、両方を見る
+                                //   （net10.0 の ClaimActions は `email_verified` で足りている）。
+                                //
+                                //   **JToken を string にキャストしない。**
+                                //   値は JSON の真偽値で来るため、キャストは型によって例外になりうる。
+                                //   ToString() で文字列にする
+                                //   （"True" / "true" のどちらでも、判定側の bool.TryParse が読む）。
+                                JToken emailVerifiedToken = null;
+
+                                if (context.User != null)
+                                {
+                                    emailVerifiedToken =
+                                        context.User[OAuth2AndOIDCConst.email_verified]
+                                        ?? context.User["verified_email"];
+                                }
+
+                                if (emailVerifiedToken != null)
+                                {
+                                    string emailVerified = emailVerifiedToken.ToString();
+
+                                    if (!string.IsNullOrEmpty(emailVerified))
+                                    {
+                                        context.Identity.AddClaim(new Claim(
+                                            OAuth2AndOIDCConst.email_verified, emailVerified));
+                                    }
+                                }
+                                else
+                                {
+                                    // **何が返っているかが分からないと、次の一手が決められない。**
+                                    //   **キー名だけ**を出す（値は出さない。個人情報を書かないため）。
+                                    Logging.MyOperationTrace(
+                                        "Google returned neither email_verified nor verified_email. "
+                                        + "Keys = ["
+                                        + ((context.User == null) ? "(User is null)"
+                                            : string.Join(", ", context.User.Properties()
+                                                .Select(x => x.Name)))
+                                        + "]. The account will not be linked by e-mail address.");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Logging.MyOperationTrace(
+                                    "Failed to copy email_verified from Google: " + ex.ToString());
+                            }
+
+                            return Task.FromResult(0);
+                        }
+                    }
                 };
                 // スコープを追加する。
                 options.Scope.Add(OAuth2AndOIDCConst.Scope_Openid);

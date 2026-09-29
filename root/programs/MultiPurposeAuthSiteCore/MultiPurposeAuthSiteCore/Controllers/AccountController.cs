@@ -2087,7 +2087,13 @@ namespace MultiPurposeAuthSite.Controllers
                 string id = idClaim.Value;
                 string name = nameClaim.Value;
                 string email = emailClaim.Value;
-                
+
+                // **上流が「検証済み」と言っているか**（#140 の段階 1）。
+                //   **既定のプロバイダ構成では、このクレームは来ない。**
+                //   その場合は「言っていない」として扱う（無い ＝ false）。
+                //   Google なら ClaimActions.MapJsonKey で拾えるようにできる（Startup）。
+                string emailVerified = identity.FindFirst(OAuth2AndOIDCConst.email_verified)?.Value;
+
                 string uid = "";
                 if (Config.RequireUniqueEmail)
                 {
@@ -2149,6 +2155,24 @@ namespace MultiPurposeAuthSite.Controllers
                         if (user != null)
                         {
                             // サインアップ済み → 外部ログイン追加だけで済む
+
+                            // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
+                            //   RequireUniqueEmail が true のとき、uid ＝ メアドなので**メアドが鍵**である。
+                            //   false のときの鍵は上流の識別子で、メアドは一致の確認にしか使っていない。
+                            if (Sts.AccountLink.CheckLinkToExistingUser(
+                                Config.RequireUniqueEmail, emailVerified)
+                                    == Sts.AccountLinkCheck.NeedsVerifiedEmail)
+                            {
+                                // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
+                                Logging.MyOperationTrace(string.Format(
+                                    "Rejected linking an external login to {0}({1}) "
+                                    + "because the upstream did not assert email_verified.",
+                                    user.Id, user.UserName));
+
+                                ViewBag.Reason = Resources.AccountViews.ExternalLoginNeedsVerifiedEmail;
+
+                                return View("ExternalLoginFailure");
+                            }
 
                             // 外部ログイン（ = UserLoginInfo ）の追加
                             if (Config.RequireUniqueEmail)
@@ -2221,7 +2245,10 @@ namespace MultiPurposeAuthSite.Controllers
                             // サインアップ時のみ、メアドも追加
                             //（RequireUniqueEmail = false時を想定）
                             user.Email = email;
-                            user.EmailConfirmed = true;
+
+                            // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
+                            //   以前は言い値に関わらず true を入れていた。
+                            user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
 
                             // ユーザの新規作成（パスワードは不要）
                             idResult = await UserManager.CreateAsync(user);
@@ -2405,6 +2432,12 @@ namespace MultiPurposeAuthSite.Controllers
                     string name = (string)jobj[OAuth2AndOIDCConst.sub];
                     string email = (string)jobj[OAuth2AndOIDCConst.Scope_Email];
 
+                    // **上流が「検証済み」と言っているか**（#140 の段階 1）。
+                    //   相手が汎用認証サイトなら、/userinfo が email_verified を返す
+                    //   （user.EmailConfirmed。#184 で真偽値に直してある）。
+                    //   **JSON の真偽値なので、文字列にしてから渡す**（無ければ null）。
+                    string emailVerified = (string)jobj[OAuth2AndOIDCConst.email_verified];
+
                     Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
                     Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
 
@@ -2470,6 +2503,22 @@ namespace MultiPurposeAuthSite.Controllers
 
                                 UserLoginInfo externalLoginInfo = new UserLoginInfo(
                                     "MultiPurposeAuthSite", id, "MultiPurposeAuthSite");
+
+                                // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
+                                if (Sts.AccountLink.CheckLinkToExistingUser(
+                                    Config.RequireUniqueEmail, emailVerified)
+                                        == Sts.AccountLinkCheck.NeedsVerifiedEmail)
+                                {
+                                    // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
+                                    Logging.MyOperationTrace(string.Format(
+                                        "Rejected linking an ID federation login to {0}({1}) "
+                                        + "because the upstream did not assert email_verified.",
+                                        user.Id, user.UserName));
+
+                                    ViewBag.Reason = Resources.AccountViews.ExternalLoginNeedsVerifiedEmail;
+
+                                    return View("ExternalLoginFailure");
+                                }
 
                                 // 外部ログイン（ = UserLoginInfo ）の追加
                                 if (Config.RequireUniqueEmail)
@@ -2542,7 +2591,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 // サインアップ時のみ、メアドも追加
                                 //（RequireUniqueEmail = false時を想定）
                                 user.Email = email;
-                                user.EmailConfirmed = true;
+
+                                // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
+                                user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
 
                                 // ユーザの新規作成（パスワードは不要）
                                 idResult = await UserManager.CreateAsync(user);

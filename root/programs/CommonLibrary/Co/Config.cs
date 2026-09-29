@@ -47,6 +47,7 @@
 //*  2026/09/25  玄人 幸道         UserClaimsMapping（profile / address のクレームの対応付け）を追加（#230）
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         OAuth2EndSessionEndpoint（RP-Initiated Logout）を追加（#232）
+//*  2026/09/29  玄人 幸道         RequireVerifiedEmailForAccountLinking を追加（#140 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -685,6 +686,37 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("SaltParameter");
             }
         }
+
+        #region RequireVerifiedEmailForAccountLinking
+
+        /// <summary>
+        /// 外部 ID を既存アカウントに結び付けるとき、検証済みのメアドを要求するかどうか（#140 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **既定は true（要求する）。**
+        /// 他の Require* と違い、**未設定を false（従来どおり）にしない。**
+        /// 未検証のメアドで既存アカウントに結び付けられるのは弱点であり、
+        /// **下位互換のために穴を開けたままにする既定にはしない**（#140 の段階 1）。
+        ///
+        /// false にすると従来どおりになる。**上流が `email_verified` を返さない場合に、
+        /// それでもメアドで結び付けたいとき**の逃げ道である
+        /// （その場合の代替は、ローカルでサインインしてから `/Manage/ManageLogins` で追加すること）。
+        ///
+        /// 判定は `Extensions.Sts.AccountLink` にある。
+        /// </remarks>
+        public static bool RequireVerifiedEmailForAccountLinking
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue(
+                    "RequireVerifiedEmailForAccountLinking");
+
+                // **未設定は true（安全側）。** 他のキーと既定の向きが違うので、明示的に書く。
+                return string.IsNullOrEmpty(value) ? true : Convert.ToBoolean(value);
+            }
+        }
+
+        #endregion
 
         #region MicrosoftAccountAuthentication
 

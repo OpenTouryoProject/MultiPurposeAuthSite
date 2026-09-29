@@ -26,6 +26,7 @@
 //*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）のルートを追加（#232）
+//*  2026/09/30  玄人 幸道         Google の email_verified をクレームに写す（#140 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -476,6 +477,20 @@ namespace MultiPurposeAuthSite
                 {
                     options.ClientId = Config.GoogleAuthenticationClientId;
                     options.ClientSecret = Config.GoogleAuthenticationClientSecret;
+
+                    // **email_verified をクレームに写す**（#140 の段階 1）。
+                    //   Google は userinfo で email_verified を返すが、
+                    //   **既定の ClaimActions には含まれない**ので、明示的に写す。
+                    //   これが無いと、**Google はメアドを検証しているのに**
+                    //   「言っていない」扱いになり、既存アカウントへのリンクが拒否される
+                    //   （判定は Extensions.Sts.AccountLink）。
+                    //
+                    //   **他の 3 つ（Microsoft / Facebook / Twitter）には足さない。**
+                    //     Microsoft : Graph の /me に相当するクレームが無い
+                    //     Facebook  : verified はアカウントの検証で、メアドの検証ではない
+                    //     Twitter   : メアド自体が返らないのが普通
+                    options.ClaimActions.MapJsonKey(
+                        OAuth2AndOIDCConst.email_verified, OAuth2AndOIDCConst.email_verified);
                 });
             }
             if (Config.FacebookAuthentication)

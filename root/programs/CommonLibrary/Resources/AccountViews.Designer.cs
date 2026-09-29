@@ -124,6 +124,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   This service did not confirm that your e-mail address is verified, so it was not linked to the existing account. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ExternalLoginNeedsVerifiedEmail {
+            get {
+                return ResourceManager.GetString("ExternalLoginNeedsVerifiedEmail", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Unsuccessful login with service. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string ExternalLoginFailureH3 {
