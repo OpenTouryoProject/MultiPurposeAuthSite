@@ -38,6 +38,7 @@
 //*  2026/09/28  玄人 幸道         Device AuthZ の verification_uri のリンクが二重になっていたのを修正（#246）
 //*  2026/09/28  玄人 幸道         SAML2 の Post & Redirect Binding を追加（#246 の項目 2）
 //*  2026/09/29  玄人 幸道         OIDC ボタンの prompt=none を、画面の選択で上書きできるようにした（#247）
+//*  2026/09/29  玄人 幸道         FAPI1 PKCE のボタンが S256 の値を plain と宣言していた（#245）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1290,10 +1291,13 @@ namespace MultiPurposeAuthSite.Controllers
             this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
 
             // Assemble
+            // **S256 で計算した値なので、宣言も S256 にする**（#245 の段階 2）。
+            //   plain と宣言していたため、トークン要求で challenge == verifier の比較になり、
+            //   **このボタンは必ず失敗していた**（FAPI 1.0 Advanced も S256 を求める）。
             string redirect = this.AssembleFAPI1_OIDCStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain;
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256;
 
             this.SaveOAuth2Params();
 

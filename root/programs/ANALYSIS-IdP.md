@@ -2,7 +2,7 @@
 
 対象: `root/programs` の IdP / STS 実装
 （`CommonLibrary` ＋ `MultiPurposeAuthSiteCore`（net10.0）＋ `MultiPurposeAuthSite`（net48）） / ブランチ: `develop`
-最終更新: 2026-09-28
+最終更新: 2026-09-29
 
 本書は各 `ANALYSIS.md` の続編で、**「IdP / STS としてのプロトコル実装がどこまで出来ていて、
 最新の仕様・慣行に対して何が足りないか」** だけを扱う。
@@ -1170,6 +1170,11 @@ else if (code_verifier 有り && client_secret 有り) → 【空実装】
 さらに、**認可エンドポイント側で `code_challenge` を必須化していない**ため、
 PKCE 無しの認可コード フローがそのまま通る。
 
+> **もう 1 つ、逆向きの穴が残っていた。** `code_challenge` を送った認可から出たコードでも、
+> **`code_verifier` を省けば PKCE の検証を通らずに交換できた**（**C-22**。#245 の段階 2 で修正）。
+> **ここで直した 3 点は、いずれも「クライアントが送ってきたもの」の扱いで、
+> 「認可要求の側から必須性を決める」向きは見ていなかった。**
+
 **対応（#220 の 1 つ目）: 上の 1 と 2。**
 
 - **1（同時送信）: 直した。** 空実装だった分岐を実装し、
@@ -1707,6 +1712,57 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz`・`/par`）が、
 **両アプリとも同じ入口を通る**ようにしたので、口ごとに直し忘れる形にはしていない。
 
+### C-22. `code_challenge` を送った認可コードが、`code_verifier` 無しで交換できた **[Lib]** — **✅ 修正済み（#245）**
+
+**RFC 7636 §4.6 は、認可要求に `code_challenge` が在ったなら、
+トークン要求の `code_verifier` を検証することを求めている。**
+無ければ発行してはならない（`invalid_grant`）。
+
+**判定が、要求の側から見て行われていた。**
+`CmnEndpoints.GrantAuthorizationCodeCredentials` の認証の分岐は
+**「クライアントが何を送ってきたか」**で選ばれる。
+
+| クライアントが送ったもの | 選ばれる分岐 | PKCE の検証 |
+|---|---|---|
+| `client_secret`（`code_verifier` 無し） | クライアント認証 | **呼ばれない** |
+| `code_verifier` のみ | パブリック クライアント | `VerifyPkce` |
+| `client_secret` ＋ `code_verifier` | 併用（#220） | `VerifyPkce` |
+| `client_assertion`（`code_verifier` 無し） | クライアント認証 | **呼ばれない** |
+
+**`code_verifier` を送らなければ、`VerifyPkce` を通らずに済む。**
+`code` に紐づく `code_challenge` を見ていないため、**PKCE を付けた要求から出たコードでも、
+クライアント認証だけで交換できた**（両アプリ。`CommonLibrary` なので実装は 1 つ）。
+
+**C-7（#220 / #221 / #224）は、これとは別の 3 点**（同時送信・`plain`・権限判定との分離）を直したもので、
+**「認可要求の側から必須性を決める」向きは含まれていなかった。**
+
+**影響の範囲は、秘密・鍵・証明書を持つクライアントに限られる。**
+**パブリック クライアント（`client_secret` 未登録）では成立しない。**
+`ClientAuthentication` は `client_secret` も証明書も無ければ通らないので、
+**`code_verifier` を省くと、認証そのものが失敗する**
+（実測 2026/09/29、両系統 : **HTTP 401 / `invalid_client`**。`RT-245.3` の手順 4）。
+**PKCE 以外に交換の手段が無い**ためである。
+
+したがって、失われていたのは**多層防御の 1 枚**である。
+**コードが漏れ、かつクライアントの資格情報も知られている**ときに、
+**PKCE が最後の砦にならなかった**（コード横取り・注入に対して、OAuth 2.1 が PKCE に期待する役割）。
+`require_pkce`（#221）で認可要求に `code_challenge` を必須化していた場合も、
+**交換の側が緩かったため、その必須化は貫徹していなかった。**
+
+**対応（#245 の段階 2）。** 認証の分岐の**後ろ**で、**コードに紐づく `code_challenge` の有無**を見て、
+在れば `code_verifier` を必須にする（`CmnEndpoints.UsedPkce`）。
+**`ReceiveChallenge` はコードを消さない**ので、交換の前に引いても後続の `Receive` に影響しない。
+
+- **逆向き**（`code_challenge` 無しで `code_verifier` だけ送る）は、**従来から `VerifyPkce` が拒否する**
+- **エラーは `invalid_grant`**（RFC 7636 §4.6）。クライアント認証自体は通っているため、`invalid_client` では意味がずれる
+- **正当な経路は 1 つも塞がらない。** `code_challenge` を付ける自己テストの起点は
+  **PKCE の 4 つと FAPI1 PKCE だけ**で、いずれも交換時に `code_verifier` を送る（実測で確認）
+- E2E テスト : **`RT-245.3`**（欠落は `invalid_grant`。**正しい `code_verifier` なら通る**対照つき）
+
+**`require_pkce`（#221）と合わせて初めて意味を持つ。**
+`require_pkce` は**認可要求に `code_challenge` を必須化**し、この項は**そのコードの交換に
+`code_verifier` を必須化**する。**片方だけでは、PKCE は素通りできた。**
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -1794,6 +1850,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | C-10 `redirect_uri` の厳密比較、テスト用抜け道のロックダウン対象化 |
 | C-12 / C-13 Cookie 有効期限の設定反映、DataProtection の永続化 |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
+| ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 

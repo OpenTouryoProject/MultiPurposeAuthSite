@@ -103,6 +103,7 @@
 //*  2026/09/28  玄人 幸道         max_age の判定を結果で場合分けできる形にした（#247）
 //*  2026/09/29  玄人 幸道         経過を秒単位で比べる（再認証の直後を超過としない）（#247）
 //*  2026/09/29  玄人 幸道         refresh で登録種別のクレーム（fapi）が消えていたのを修正（#245）
+//*  2026/09/29  玄人 幸道         code_challenge を送った code は code_verifier を必須にした（#245）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2011,6 +2012,29 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region UsedPkce
+
+        /// <summary>認可要求で PKCE を使ったか（その code に code_challenge が紐づいているか）</summary>
+        /// <param name="code">認可コード</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <returns>使っていれば true</returns>
+        /// <remarks>
+        /// **`ReceiveChallenge` は code を消さない**（`remove: false` / `DELETE` はコメント アウト）ので、
+        /// 交換の前に引いても、後続の `Receive` に影響しない。
+        /// </remarks>
+        private static bool UsedPkce(string code, string client_id, string redirect_uri)
+        {
+            AuthorizationCodeProvider.ReceiveChallenge(
+                code, client_id, redirect_uri,
+                out string code_challenge_method, out string code_challenge);
+
+            return !string.IsNullOrEmpty(code_challenge_method)
+                && !string.IsNullOrEmpty(code_challenge);
+        }
+
+        #endregion
+
         #region VerifyPkce
 
         /// <summary>PKCE（RFC 7636）の検証（#220）</summary>
@@ -2559,6 +2583,20 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 #endregion
+
+                // **認可要求で code_challenge を送っていたなら、code_verifier は必須**（RFC 7636 §4.6）。
+                //   上の分岐は「**クライアントが何を送ってきたか**」で選ばれるため、
+                //   **code_verifier を省くと VerifyPkce を通らずに済んでしまう。**
+                //   認可要求の側（code に紐づく code_challenge）から見て、必須性を決める。
+                //
+                //   **逆向き（code_challenge 無しで code_verifier だけ送る）は VerifyPkce が拒否する。**
+                if (authned && string.IsNullOrEmpty(code_verifier)
+                    && CmnEndpoints.UsedPkce(code, client_id, redirect_uri))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                    err.Add(OAuth2AndOIDCConst.error_description, "code_verifier is required.");
+                    return false;
+                }
 
                 if (authned)
                 {

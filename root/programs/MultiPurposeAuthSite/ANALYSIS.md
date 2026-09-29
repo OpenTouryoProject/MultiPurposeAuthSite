@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 下位互換版（MultiPurposeAuthSite / net48）コード分析
 
 対象: `root/programs/MultiPurposeAuthSite`（**ASP.NET MVC5 + Web API2 + OWIN / net48**） / ブランチ: `develop`
-最終更新: 2026-09-28
+最終更新: 2026-09-29
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
