@@ -453,7 +453,8 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
-| `RequireVerifiedEmailForAccountLinking` | **`true`**（#140 の段階 1 で追加） | `true` のまま | **外部 ID を既存アカウントに結び付けるとき、上流が `email_verified: true` と言ったメアドだけを鍵にする。** **未設定でも `true`**（他の `Require*` と既定の向きが違う）。`false` にすると従来どおり（上流の言い値で結び付ける）。**既定のプロバイダ構成では 4 つとも `email_verified` を返さない**ので、**メアドでの自動リンクは起きず、`/Manage/ManageLogins` での明示的な追加に一本化される** |
+| `RequireVerifiedEmailForAccountLinking` | **`true`**（#140 の段階 1 で追加） | `true` のまま | **外部 ID を既存アカウントに結び付けるとき、上流が `email_verified: true` と言ったメアドだけを鍵にする。** **未設定でも `true`**（他の `Require*` と既定の向きが違う）。`false` にすると従来どおり（上流の言い値で結び付ける）。**Google は `email_verified` を写すようにしたので自動リンクできる。Microsoft Account は示せないので、`/Manage/ManageLogins` での明示的な追加になる** |
+| `FacebookAuthentication` / `TwitterAuthentication` | `false` | **触らない** | **サポートを取り下げた**（#249）。**`true` にしても有効にならない**（アプリ側の登録をコメント アウトしてある）。**動かないからではなく、維持コストが便益に見合わないため。** キーを残してあるのは戻せるようにするため（`CommonLibrary/ANALYSIS.md` 12 節） |
 | `ServiceDocumentation` | `""`（空） | **任意** | Discovery の `service_documentation`。**空なら出さない**（#228）。文書を公開しているなら、その URL |
 | `AuthRequestPushUri` | `/par` | 既定のまま | PAR（RFC 9126）の口（#229）。独自の `/ros`（`RequestObjectRegUri`）とは別。**改名した**（旧 `PushedAuthorizationRequestEndpoint`。下の 12 節） |
 | `OAuth2AuthorizationCodeExpireTimeSpanFromSeconds` | `600` | 既定のまま（または短く） | 認可コードの寿命（#188）。RFC 6749 §4.1.2 は 10 分以内を推奨 |

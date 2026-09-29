@@ -397,6 +397,23 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 
    **FIDO/WebAuthn は「設定は在るが動かない」状態である。** 復活させるなら
    csproj への追加・`Config` のコメント解除・Controller のコメント解除がセットで要る。
+
+3-2. **外部ログインの Facebook / Twitter も、同じ「設定は在るが動かない」状態にした**（#249）。
+   **動かないからではなく、維持コストが便益に見合わないため取り下げた。**
+   - `../MultiPurposeAuthSiteCore` の `Startup.cs`、`../MultiPurposeAuthSite` の
+     `App_Start/StartupAuth.cs` の**登録ブロックをコメント アウト**（＝スキームが登録されない）
+   - net48 の `AccountController` / `ManageController` にあった
+     **メアド取得の専用処理もコメント アウト**（Facebook は Graph の `/me`、
+     Twitter は `api.twitter.com/1.1`）
+   - `Network/WebAPIHelper.cs` の **`GetTwitterAccountInfo` もコメント アウト**
+     （この 1 本のために OAuth 1.0a の署名を自前で組んでいた）
+   - **設定キーとパッケージ参照は残してある**（戻せるように）。
+     `true` にしても**登録がコメント アウトなので有効にならない**
+   - **ログイン画面のボタンは自動的に消える**
+     （`_ExternalLoginsListPartial.cshtml` が**登録済みスキームから生成**しているため）
+
+   **残るのは Google と Microsoft Account。** この 2 つは
+   **ClientId / ClientSecret を渡すだけで済み、専用処理を持たない。**
 4. **`Data/UserStore.cs` と `Data/UserStoreCore.cs` は薄いアダプタ。**
    実装を足すなら `CmnUserStore`。片方だけ直すと系統間で挙動がズレる。
 5. **TOTP（Authenticator アプリによる 2FA）は .NET 側にしか無い。**

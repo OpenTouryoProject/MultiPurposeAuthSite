@@ -493,23 +493,32 @@ namespace MultiPurposeAuthSite
                         OAuth2AndOIDCConst.email_verified, OAuth2AndOIDCConst.email_verified);
                 });
             }
-            if (Config.FacebookAuthentication)
-            {
-                authenticationBuilder.AddFacebook(options =>
-                {
-                    options.AppId = Config.FacebookAuthenticationClientId;
-                    options.AppSecret = Config.FacebookAuthenticationClientSecret;
-                });
-            }
-            if (Config.TwitterAuthentication)
-            {
-                authenticationBuilder.AddTwitter(options =>
-                {
-                    options.ConsumerKey = Config.TwitterAuthenticationClientId;
-                    options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
-                    options.RetrieveUserDetails = true;
-                });
-            }
+            // **Facebook / Twitter は取り下げた**（#249）。
+            //   **動かないからではなく、維持コストが便益に見合わないため。**
+            //   ・この 2 つだけ、メアドを取るための専用コードを抱えていた（net48 側）
+            //   ・両アプリに二重にあり、外部 API の変更に追随する必要があった
+            //   ・#140 の段階 1（C-23）以降、**検証済みのメアドを示せないので、
+            //     既存アカウントへの自動リンクができない側に固定される**
+            //
+            //   **削除せずコメントアウトにしてある**（WebAuthn / MS Passport と同じ扱い）。
+            //   判断が変われば戻せるように、パッケージ参照と設定キーも残してある。
+            //if (Config.FacebookAuthentication)
+            //{
+            //    authenticationBuilder.AddFacebook(options =>
+            //    {
+            //        options.AppId = Config.FacebookAuthenticationClientId;
+            //        options.AppSecret = Config.FacebookAuthenticationClientSecret;
+            //    });
+            //}
+            //if (Config.TwitterAuthentication)
+            //{
+            //    authenticationBuilder.AddTwitter(options =>
+            //    {
+            //        options.ConsumerKey = Config.TwitterAuthenticationClientId;
+            //        options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
+            //        options.RetrieveUserDetails = true;
+            //    });
+            //}
             #endregion
 
             #region OAuth2 / OIDC

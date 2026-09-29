@@ -175,6 +175,10 @@
     "GoogleAuthentication": "false",
     "GoogleAuthenticationClientId": "[If necessary, please fill in ClientId of Google Authentication]",
     "GoogleAuthenticationClientSecret": "[If necessary, please fill in ClientSecret of Google Authentication]",
+    // **Facebook / Twitter のサポートは取り下げた**（#249）。
+    //   **動かないからではなく、維持コストが便益に見合わないため。**
+    //   **アプリ側の登録はコメントアウトしてあるので、true にしても有効にならない。**
+    //   キーだけ残してあるのは、判断が変わったときに戻せるようにするため。
     // 外部ログイン（FacebookAuthentication）
     "FacebookAuthentication": "false",
     "FacebookAuthenticationClientId": "[If necessary, please fill in ClientId of Facebook Authentication]",

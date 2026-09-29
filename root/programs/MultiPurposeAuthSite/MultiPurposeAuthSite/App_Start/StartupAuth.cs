@@ -397,76 +397,88 @@ namespace MultiPurposeAuthSite
 
             #region FacebookAuthentication
 
-            if (Config.FacebookAuthentication)
-            {
-                FacebookAuthenticationOptions options = new FacebookAuthenticationOptions
-                {
-                    BackchannelHttpHandler = new WebRequestHandler()
-                    {
-                        Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = Config.UseInternetProxy
-                    },
-                    AppId = Config.FacebookAuthenticationClientId,
-                    AppSecret = Config.FacebookAuthenticationClientSecret,
-                    Provider = new FacebookAuthenticationProvider
-                    {
-                        OnAuthenticated = context =>
-                        {
-                            context.Identity.AddClaim(new System.Security.Claims.Claim("FacebookAccessToken", context.AccessToken));
-                            return Task.FromResult(true);
-                        }
-                    }
-                };
-                // スコープを追加する。
-                options.Scope.Add(OAuth2AndOIDCConst.Scope_Email);
+            // **Facebook / Twitter は取り下げた**（#249）。
+            //   **動かないからではなく、維持コストが便益に見合わないため。**
+            //   ・**この 2 つだけ、メアドを取るための専用コードを抱えていた**
+            //     （Facebook は Graph の /me、Twitter は api.twitter.com/1.1）。
+            //     Google / Microsoft Account は ClientId / ClientSecret を渡すだけで済む
+            //   ・両アプリに二重にあり、**外部 API が変わるたびに追随の判断が要る**
+            //   ・#140 の段階 1（C-23）以降、**検証済みのメアドを示せないので、
+            //     既存アカウントへの自動リンクができない側に固定される**
+            //
+            //   **削除せずコメントアウトにしてある**（WebAuthn / MS Passport と同じ扱い）。
+            //   判断が変われば戻せるように、**パッケージ参照と設定キーも残してある。**
+            //if (Config.FacebookAuthentication)
+            //{
+            //    FacebookAuthenticationOptions options = new FacebookAuthenticationOptions
+            //    {
+            //        BackchannelHttpHandler = new WebRequestHandler()
+            //        {
+            //            Proxy = CreateProxy.GetInternetProxy(),
+            //            UseProxy = Config.UseInternetProxy
+            //        },
+            //        AppId = Config.FacebookAuthenticationClientId,
+            //        AppSecret = Config.FacebookAuthenticationClientSecret,
+            //        Provider = new FacebookAuthenticationProvider
+            //        {
+            //            OnAuthenticated = context =>
+            //            {
+            //                context.Identity.AddClaim(new System.Security.Claims.Claim("FacebookAccessToken", context.AccessToken));
+            //                return Task.FromResult(true);
+            //            }
+            //        }
+            //    };
+            //    // スコープを追加する。
+            //    options.Scope.Add(OAuth2AndOIDCConst.Scope_Email);
 
-                // FacebookAuthenticationの有効化
-                app.UseFacebookAuthentication(options);
-            }
+            //    // FacebookAuthenticationの有効化
+            //    app.UseFacebookAuthentication(options);
+            //}
 
             #endregion
 
             #region TwitterAuthentication
 
-            if (Config.TwitterAuthentication)
-            {
-                TwitterAuthenticationOptions options = new TwitterAuthenticationOptions
-                {
-                    BackchannelHttpHandler = new WebRequestHandler()
-                    {
-                        Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = Config.UseInternetProxy
-                    },
-                    ConsumerKey = Config.TwitterAuthenticationClientId,
-                    ConsumerSecret = Config.TwitterAuthenticationClientSecret,
+            // **取り下げた**（#249。理由は上の FacebookAuthentication の節）。
+            //if (Config.TwitterAuthentication)
+            //{
+            //    TwitterAuthenticationOptions options = new TwitterAuthenticationOptions
+            //    {
+            //        BackchannelHttpHandler = new WebRequestHandler()
+            //        {
+            //            Proxy = CreateProxy.GetInternetProxy(),
+            //            UseProxy = Config.UseInternetProxy
+            //        },
+            //        ConsumerKey = Config.TwitterAuthenticationClientId,
+            //        ConsumerSecret = Config.TwitterAuthenticationClientSecret,
 
-                    Provider = new TwitterAuthenticationProvider
-                    {
-                        OnAuthenticated = (context) =>
-                        {
-                            context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_token", context.AccessToken));
-                            context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_secret", context.AccessTokenSecret));
-                            return Task.FromResult(0);
-                        }
-                    },
+            //        Provider = new TwitterAuthenticationProvider
+            //        {
+            //            OnAuthenticated = (context) =>
+            //            {
+            //                context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_token", context.AccessToken));
+            //                context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_secret", context.AccessTokenSecret));
+            //                return Task.FromResult(0);
+            //            }
+            //        },
 
-                    BackchannelCertificateValidator = new CertificateSubjectKeyIdentifierValidator(
-                        new string[] {
-                            "A5EF0B11CEC04103A34A659048B21CE0572D7D47",  // VeriSign Class 3 Secure Server CA - G2
-                            "0D445C165344C1827E1D20AB25F40163D8BE79A5",  // VeriSign Class 3 Secure Server CA - G3
-                            "7FD365A7C2DDECBBF03009F34339FA02AF333133",  // VeriSign Class 3 Public Primary Certification Authority - G5
-                            "39A55D933676616E73A761DFA16A7E59CDE66FAD",  // Symantec Class 3 Secure Server CA - G4
-                            "5168FF90AF0207753CCCD9656462A212B859723B",  // DigiCert SHA2 High Assurance Server C‎A 
-                            "B13EC36903F8BF4701D498261A0802EF63642BC3" } // DigiCert High Assurance EV Root CA
-                            ),
-                };
+            //        BackchannelCertificateValidator = new CertificateSubjectKeyIdentifierValidator(
+            //            new string[] {
+            //                "A5EF0B11CEC04103A34A659048B21CE0572D7D47",  // VeriSign Class 3 Secure Server CA - G2
+            //                "0D445C165344C1827E1D20AB25F40163D8BE79A5",  // VeriSign Class 3 Secure Server CA - G3
+            //                "7FD365A7C2DDECBBF03009F34339FA02AF333133",  // VeriSign Class 3 Public Primary Certification Authority - G5
+            //                "39A55D933676616E73A761DFA16A7E59CDE66FAD",  // Symantec Class 3 Secure Server CA - G4
+            //                "5168FF90AF0207753CCCD9656462A212B859723B",  // DigiCert SHA2 High Assurance Server C‎A
+            //                "B13EC36903F8BF4701D498261A0802EF63642BC3" } // DigiCert High Assurance EV Root CA
+            //                ),
+            //    };
 
-                // スコープを追加する。
-                // ・・・
+            //    // スコープを追加する。
+            //    // ・・・
 
-                // TwitterAuthenticationの有効化
-                app.UseTwitterAuthentication(options);
-            }
+            //    // TwitterAuthenticationの有効化
+            //    app.UseTwitterAuthentication(options);
+            //}
 
             #endregion
 

@@ -1767,40 +1767,50 @@ namespace MultiPurposeAuthSite.Controllers
                     #endregion
 
                     #region emailClaim対策 (Facebook & Twitter)
-                    if (emailClaim == null)
-                    {
-                        // emailClaimが取得できなかった場合、
-                        if (externalLoginInfo.Login.LoginProvider == "Facebook")
-                        {
-                            ClaimsIdentity excIdentity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
-                            string access_token = excIdentity.FindFirstValue("FacebookAccessToken");
-                            FacebookClient facebookClient = new FacebookClient(access_token);
 
-                            // e.g. :
-                            // "/me?fields=id,email,gender,link,locale,name,timezone,updated_time,verified,last_name,first_name,middle_name"
-                            dynamic myInfo = facebookClient.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
+                    // **Facebook / Twitter は取り下げた**（#249。`StartupAuth` で登録していない）。
+                    //   **この 2 つだけ、メアドを取るための専用コードを抱えていた。**
+                    //   Facebook は Graph の /me、Twitter は api.twitter.com/1.1 を直接叩いており、
+                    //   **外部 API が変わるたびに追随の判断が要る**のが維持コストの中身だった。
+                    //   **削除せずコメントアウトにしてある**（戻せるように）。
+                    //
+                    //   **emailClaim が無ければ email は空のまま**になり、
+                    //   この後の「クレーム情報を取得できた」の判定で外れる（サインインは成立しない）。
+                    //if (emailClaim == null)
+                    //{
+                    //    // emailClaimが取得できなかった場合、
+                    //    if (externalLoginInfo.Login.LoginProvider == "Facebook")
+                    //    {
+                    //        ClaimsIdentity excIdentity = AuthenticationManager.GetExternalIdentity(DefaultAuthenticationTypes.ExternalCookie);
+                    //        string access_token = excIdentity.FindFirstValue("FacebookAccessToken");
+                    //        FacebookClient facebookClient = new FacebookClient(access_token);
 
-                            email = myInfo.email; // Microsoft.Owin.Security.Facebookでは、emailClaimとして取得できない。
-                            emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
-                        }
-                        else if (externalLoginInfo.Login.LoginProvider == "Twitter")
-                        {
-                            string access_token = externalLoginInfo.ExternalIdentity.Claims.Where(
-                                x => x.Type == "urn:twitter:access_token").Select(x => x.Value).FirstOrDefault();
-                            string access_secret = externalLoginInfo.ExternalIdentity.Claims.Where(
-                                x => x.Type == "urn:twitter:access_secret").Select(x => x.Value).FirstOrDefault();
+                    //        // e.g. :
+                    //        // "/me?fields=id,email,gender,link,locale,name,timezone,updated_time,verified,last_name,first_name,middle_name"
+                    //        dynamic myInfo = facebookClient.Get("/me?fields=email,name,last_name,first_name,middle_name,gender");
 
-                            JObject myInfo = await WebAPIHelper.GetInstance().GetTwitterAccountInfo(
-                                "include_email=true",
-                                access_token, access_secret,
-                                Config.TwitterAuthenticationClientId,
-                                Config.TwitterAuthenticationClientSecret);
+                    //        email = myInfo.email; // Microsoft.Owin.Security.Facebookでは、emailClaimとして取得できない。
+                    //        emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
+                    //    }
+                    //    else if (externalLoginInfo.Login.LoginProvider == "Twitter")
+                    //    {
+                    //        string access_token = externalLoginInfo.ExternalIdentity.Claims.Where(
+                    //            x => x.Type == "urn:twitter:access_token").Select(x => x.Value).FirstOrDefault();
+                    //        string access_secret = externalLoginInfo.ExternalIdentity.Claims.Where(
+                    //            x => x.Type == "urn:twitter:access_secret").Select(x => x.Value).FirstOrDefault();
 
-                            email = (string)myInfo[OAuth2AndOIDCConst.Scope_Email]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
-                            emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
-                        }
-                    }
-                    else
+                    //        JObject myInfo = await WebAPIHelper.GetInstance().GetTwitterAccountInfo(
+                    //            "include_email=true",
+                    //            access_token, access_secret,
+                    //            Config.TwitterAuthenticationClientId,
+                    //            Config.TwitterAuthenticationClientSecret);
+
+                    //        email = (string)myInfo[OAuth2AndOIDCConst.Scope_Email]; // Microsoft.Owin.Security.Twitterでは、emailClaimとして取得できない。
+                    //        emailClaim = new Claim(ClaimTypes.Email, email); // emailClaimとして生成
+                    //    }
+                    //}
+                    //else
+                    if (emailClaim != null)
                     {
                         // emailClaimが取得できた場合、
                         email = emailClaim.Value;
