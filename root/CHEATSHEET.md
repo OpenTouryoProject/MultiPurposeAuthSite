@@ -43,6 +43,19 @@ cd root
 ```
 
 **`-Filter` と併せて使う**（寿命が短いので他のテストは落ちる）。**`-UpdateTestCases` は付けない**（原本が壊れる）。
+
+### mTLS（`FA-6`）を net48 版でも回す
+
+```powershell
+cd root
+.\SetupNetFxMtls.ps1 -Action Prepare   # 通常の PowerShell
+.\SetupNetFxMtls.ps1 -Action Trust     # **管理者**
+.\2_RunAllTests.ps1 -Launch -NetFxMtls # 通常の PowerShell
+.\SetupNetFxMtls.ps1 -Action Cleanup   # **管理者**。必ず行う
+```
+
+**`Prepare` は管理者で実行しない**（証明書が別の利用者のストアに入り、テストから見えない）。
+詳細 → [`TESTING.md`](TESTING.md) 5 節「mTLS（`FA-6`）と、net48 版の `-NetFxMtls`」
 背景 → [`TESTING.md`](TESTING.md) 5 節
 
 ### net48 版の mTLS（`FA-6`）だけ、準備が要る

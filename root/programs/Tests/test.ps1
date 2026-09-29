@@ -450,19 +450,27 @@ function Get-InjectedTestClient
 $core  = $null
 $netFx = $null
 
-# **子プロセス（dotnet）の出力は UTF-8。5.1 は既定（ANSI）で読むため化ける。**
+# **子プロセス（dotnet）の出力は UTF-8。読む側が UTF-8 でなければ化ける。**
 #   例 : 「復元対象のプロジェクト...」が「蠕ｩ蜈・ｯｾ雎｡...」になり、テスト名の日本語も読めなくなる。
-#   7 は既定が UTF-8 なので影響しない。**この実行の間だけ変え、最後に戻す**（コンソールの設定が残らないように）。
+#
+#   **版ではなく、コンソールのコード ページで決まる。**
+#   PowerShell が native コマンドの出力を解釈するのに使うのは [Console]::OutputEncoding で、
+#   **これはコンソール（chcp）に従う。7 でも日本語 Windows の既定は 932 である。**
+#   （7 が UTF-8 にするのは $OutputEncoding ＝ **送る**側。**受ける**側は別物。）
+#
+#   **以前は 5.1 のときだけ直していた**（「7 は既定が UTF-8」という誤った前提）。
+#   **7 の実コンソールで E2ETests.log が化けて分かった**（#245 の段階 3）。
+#   開発機の 5.1 / 7 がどちらも 65001 だったため、それまで表面化しなかった。
+#
+#   **この実行の間だけ変え、最後に戻す**（コンソールの設定が残らないように）。
 $prevConsoleEncoding = $null
-if ($PSVersionTable.PSVersion.Major -lt 6) {
-    try {
-        $prevConsoleEncoding = [Console]::OutputEncoding
-        [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
-    }
-    catch {
-        # コンソールが無い（完全にリダイレクトされた）場合など。読めるかは環境任せになる。
-        $prevConsoleEncoding = $null
-    }
+try {
+    $prevConsoleEncoding = [Console]::OutputEncoding
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+}
+catch {
+    # コンソールが無い（完全にリダイレクトされた）場合など。読めるかは環境任せになる。
+    $prevConsoleEncoding = $null
 }
 
 try {

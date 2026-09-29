@@ -93,6 +93,61 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > （この値を書くのは `UserClaimsTests` だけで、同じクラスのケースは並列に走らない。
 > 利用者の行が重複しているわけでもない）。**落ちたら、まず 1 クラスだけで回して切り分ける。**
 
+### 4 つのストアの実測（#245 の段階 3）
+
+**実測 2026/09/29。** ビルドは net48 / net10.0 とも エラー 0 / 警告 0。
+
+| ストア | 成功 | 失敗 | Skip | 備考 |
+|---|---|---|---|---|
+| `mem`（既定） | 410 | **0** | 3 | `RT-245.4` ×2（C-10 未修正）＋ `RT-246.3` core（mTLS フックの副作用） |
+| `sql` | 410 | **0** | 3 | 同上 |
+| `ora` | 410 | **0** | 3 | 同上 |
+| `npg` | 207 | **0** | 206 | **net48 版を起動しないぶんが Skip**（`Npgsql` が `#if NETCORE`） |
+
+**`RT-230.1` は、この 3 方言の通しでは再現しなかった**（下の #242 の記録は残す。**間欠なので「直った」とは言えない**）。
+
+### 古いデータベースを使い回すと、列が足りない（#245 の段階 3 で踏んだ）
+
+**DDL は更新されるが、既に作ってあるデータベースは更新されない。**
+移行スクリプトは持っていないため、**使い回すなら DDL と突き合わせること。**
+
+**実際に起きたこと。** `npg` と `ora` の `RefreshTokenDictionary` に、
+**#188 で足した 2 列（`FamilyId` / `UsedDate`）が無かった。**
+`sql` は作り直してあったので揃っていた。
+
+- 症状は **HTTP 500 が 67 件**（`42703: column "familyid" ... does not exist`）。
+  **トークンが出ないので、関係の無いケースまで巻き添えで落ちる**（85 件 失敗）
+- **エラーはサイトのログに出る**（`programs\Tests\E2ETests\Result\MpasSite.out.log`）。
+  E2E の失敗メッセージは「`前提: access_token が返ること`」までしか言わない
+
+**突き合わせ方**（列の一覧を出して、DDL と比べる）。
+
+```powershell
+# PostgreSQL
+docker exec -e PGPASSWORD=<pw> <container> psql -U postgres -d UserStore -tAc `
+  "SELECT table_name || '.' || column_name FROM information_schema.columns WHERE table_schema='public'"
+
+# Oracle（"..." で囲った大文字小文字混在の名前で作ってある）
+select lower(table_name)||'.'||lower(column_name) from user_tab_columns;
+```
+
+**足りないだけなら、作り直さずに足せる。**
+
+```sql
+-- PostgreSQL（行が無ければ NOT NULL をそのまま足せる）
+ALTER TABLE RefreshTokenDictionary
+    ADD COLUMN FamilyId varchar(64) NOT NULL, ADD COLUMN UsedDate timestamp;
+
+-- Oracle（行が在ると ORA-01758 になる。NULL 可で足す → 埋める → NOT NULL にする）
+ALTER TABLE "RefreshTokenDictionary" ADD ("FamilyId" NVARCHAR2(64), "UsedDate" DATE);
+UPDATE "RefreshTokenDictionary" SET "FamilyId" = SUBSTR("Key", 1, 64) WHERE "FamilyId" IS NULL;
+COMMIT;
+ALTER TABLE "RefreshTokenDictionary" MODIFY ("FamilyId" NOT NULL);
+```
+
+> **`Create_UserStore.sql` を流し直すのが正道である。** 上は**行を消さずに済ませる**手順で、
+> **古い行が残ることを承知で使うもの**である（テスト用のストアなので、それで困らない）。
+
 > **`mem` と違い、状態が残る。** 同じデータベースを使い回すと、前回のテスト ユーザや
 > クライアント登録がそのまま残る。作り直したいときは、データベースを作り直す。
 
@@ -273,6 +328,14 @@ IIS は信頼できない証明書を、アプリより前で **HTTP 403.16** �
 
 > **実施済み（2026/09/23。Windows 11 / IIS Express 10）。**
 > net48 版でも `FA-6` の 4 件が通った（`-NetFxMtls` 付きで 276 件 / 失敗 0 / Skip 0）。
+>
+> **測り直した（2026/09/29。#245 の段階 3）** : **414 成功 / 失敗 0 / Skip 4**
+> （Skip は `RT-245.4` ×2 ＝ C-10 未修正、`RT-246.3` ×2 ＝ mTLS フックの副作用。core 2 / netfx 2）。
+> **既定の通し（410 / 0 / 3）と比べて、`FA-6` の netfx が 5 件増え、`RT-246.3` の netfx が Skip に回った。**
+> 手順は [`SetupNetFxMtls.ps1`](SetupNetFxMtls.ps1)（下記）。
+>
+> **管理者権限と後片付けが要るため、通しの一部にはしていない。**
+> **`-NetFxMtls` を付けない限り、`FA-6` の net48 版は測られない**（net10.0 版は毎回測っている）。
 > **失効の情報（CRL）を持たない証明書でも、IIS は通した。**
 >
 > **クライアント証明書を要求させるのは `/token` と `/userinfo` だけ**
@@ -286,42 +349,37 @@ IIS は信頼できない証明書を、アプリより前で **HTTP 403.16** �
 > `ServerCertificateValidationCallback` が**スクリプト ブロックでは実行できない**。
 > `test.ps1` は、コンパイルしたデリゲートを使う（`CODING.md` 5 節）。
 
-**準備**（管理者の PowerShell。5.1 / 7 のどちらでもよい）
+**手順は [`SetupNetFxMtls.ps1`](SetupNetFxMtls.ps1) にある**（#245 の段階 3 でファイルにした）。
+**シークレットは含まない。** 私有鍵は証明書ストアの中で生成され、スクリプトには現れない
+（`Trust` が読む `.cer` は**公開部分だけ**）。
 
 ```powershell
-# テスト用 CA（有効期間は短くしておく）
-$ca = New-SelfSignedCertificate -Subject 'CN=MPAS E2E Test CA' `
-    -KeyUsage CertSign, CRLSign, DigitalSignature `
-    -TextExtension @('2.5.29.19={critical}{text}ca=true') `
-    -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(7)
+cd root
+.\SetupNetFxMtls.ps1 -Action Prepare   # 通常の PowerShell。CA ＋ クライアント証明書 2 枚を作る
+.\SetupNetFxMtls.ps1 -Action Trust     # **管理者**。CA を信頼されたルートに入れる
+.\2_RunAllTests.ps1 -Launch -NetFxMtls # 通常の PowerShell（証明書を作った利用者）
+.\SetupNetFxMtls.ps1 -Action Cleanup   # **管理者**。必ず行う（信頼されたルートに残さない）
 
-# クライアント証明書 2 枚（Subject は KnownClients.MtlsSubjectDn / MtlsTests.OtherSubjectDn と同じ）
-foreach ($cn in 'mpas-e2e-mtls-client', 'mpas-e2e-mtls-other') {
-    New-SelfSignedCertificate -Subject "CN=$cn" -Signer $ca `
-        -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.2') `
-        -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(7) | Out-Null
-}
-
-# CA の公開部分だけを、コンピューターの信頼されたルートへ
-$cer = Join-Path $env:TEMP 'mpas-e2e-ca.cer'
-Export-Certificate -Cert $ca -FilePath $cer | Out-Null
-Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
-Remove-Item $cer
+.\SetupNetFxMtls.ps1 -Action Check     # いま何が在るかを見る
 ```
 
-**実行**（通常の PowerShell でよい。テストは `CurrentUser\My` の証明書を使う）
+**`Prepare` と `Trust` を分けてあるのは、証明書の入る先が違うからである。**
+`TestCertificate.ForTarget` は、netfx のとき **`CurrentUser\My` を Subject で引く**。
+**管理者の PowerShell が別アカウントなら、証明書は別の利用者のストアに入り、テストから見えない**
+（症状は「証明書がありません」）。同じアカウントで昇格するなら、まとめて実行しても同じ結果になる。
 
-```powershell
-.\2_RunAllTests.ps1 -Launch -NetFxMtls
-```
+- **`-UpdateTestCases` は付けない。** 原本に netfx の mTLS ケースが混ざる
+- `Prepare` / `Check` は、**Subject が E2E の定数（`Flows.cs` / `MtlsTests.cs`）と一致することを確かめる。**
+  綴りが違えば、その場で止まる
+- 別アカウントで `Prepare` / `Trust` をするなら、**両方に同じ `-CerPath` を渡す**（`%TEMP%` が違う）
 
-**後片付け**（管理者の PowerShell。**必ず行うこと**。信頼されたルートに、テスト用の CA を残さない）
+**期待する結果**（既定の通しは 410 成功 / 失敗 0 / Skip 3）。
 
-```powershell
-$subjects = 'CN=MPAS E2E Test CA', 'CN=mpas-e2e-mtls-client', 'CN=mpas-e2e-mtls-other'
-Get-ChildItem Cert:\LocalMachine\Root, Cert:\CurrentUser\My |
-    Where-Object { $subjects -contains $_.Subject } | Remove-Item
-```
+| 変わるところ | 期待 |
+|---|---|
+| `FA-6.1`〜`FA-6.5` の **netfx** | **5 件増えて成功**（付けないと対象すら作られない） |
+| `RT-246.3` の **netfx** | **成功 → Skip**（netfx もクライアント証明書を要求するため。既知の副作用） |
+| 失敗 | **0 のまま** |
 
 ### 有効期限（`RT-188`）と `-ShortLifetimes`
 
@@ -338,6 +396,9 @@ Get-ChildItem Cert:\LocalMachine\Root, Cert:\CurrentUser\My |
 - そのため **`RT-188` は `TESTCASES.md`（原本）に載らない。**
   原本は通しの結果から作るので、`-ShortLifetimes` の実行で `-UpdateTestCases` を付けないこと
   （付けると、その 6 件だけの原本に置き換わる）
+
+> **実測 2026/09/29（#245 の段階 3）** : **6 成功 / 失敗 0 / Skip 0**（`mem`）。
+> **net48 版も 44302 で起動した。** 以前に見られた起動待ちの時間切れは、**再現しなかった**。
 
 ### 取り違えは検出する
 
