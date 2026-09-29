@@ -32,6 +32,7 @@
 //*  2020/07/24  西野 大介         OIDCではredirect_uriは必須。
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //*  2026/09/27  玄人 幸道         ログアウト後の戻り先のテスト用の定数を追加（#232）
+//*  2026/09/28  玄人 幸道         再認証の印（max_age）の Cookie キーを追加（#247）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -140,6 +141,19 @@ namespace MultiPurposeAuthSite.Co
 
         /// <summary>テスト用CodeVerifierを保存するSession, CookieのKey</summary>
         public const string TestCodeVerifier = "test_code_verifier";
+
+        #endregion
+
+        #region 再認証（max_age。#247）
+
+        /// <summary>再認証を求めた時刻を保存するCookieのKey（#247）</summary>
+        /// <remarks>
+        /// **`max_age` の超過で再認証へ送ったことの印。**
+        /// これが無いと、`max_age=0` のときに
+        /// 「送る → 認証する → また超過している → 送る」で**繰り返しになる。**
+        /// 印より後に認証されていれば、**一度は再認証した**と判断して先へ進む。
+        /// </remarks>
+        public const string ReAuthenticatedAt = "re_auth_at";
         
         #endregion
     }

@@ -38,6 +38,7 @@
 //*  2026/09/28  玄人 幸道         アサーションの組み立てを SelfTestClient へ寄せた（#246）
 //*  2026/09/28  玄人 幸道         SAML2 の応答（アサーション）を画面に出す（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         認可画面に、確かめる内容（prompt / max_age など）を出す（#246 の項目 3）
+//*  2026/09/28  玄人 幸道         max_age の超過で再認証し、prompt=none なら login_required を返す（#247）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2585,53 +2586,8 @@ namespace MultiPurposeAuthSite.Controllers
         #region Authorize（認可エンドポイント）
 
         #region max_age & auth_time
-        /// <summary>CheckAuthTime</summary>
-        /// <param name="max_age">string</param>
-        /// <returns>bool</returns>
-        private bool CheckAuthTime(string max_age)
-        {
-            if (string.IsNullOrEmpty(max_age))
-            {
-                // max_ageの指定ナシ
-                return true;
-            }
-            else
-            {
-                // max_ageの指定アリ
-                if (int.TryParse(max_age, out int maxAge))
-                {
-                    // max_ageが数値
-                    string auth_time = Request.Cookies[OAuth2AndOIDCConst.auth_time].Value;
-                    if (string.IsNullOrEmpty(auth_time))
-                    {
-                        // auth_timeナシ
-                        return false;
-                    }
-                    else
-                    {
-                        // auth_timeアリ
-                        DateTime now = DateTime.UtcNow;
-                        TimeSpan ts = now - FormatConverter.FromW3cTimestamp(auth_time);
-
-                        if (ts.TotalSeconds <= maxAge)
-                        {
-                            // max_age内
-                            return true;
-                        }
-                        else
-                        {
-                            // max_age外
-                            return false;
-                        }
-                    }
-                }
-                else
-                {
-                    // max_ageが数値以外
-                    return false;
-                }
-            }
-        }
+        // **max_age の判定は CommonLibrary へ移した**（#247。`CmnEndpoints.CheckAuthTime`）。
+        //   bool では「再認証」「login_required」「invalid_request」を区別できなかった。
 
         /// <summary>auth_timeを追加</summary>
         /// <param name="max_age">string</param>
@@ -2713,10 +2669,45 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
-            if (this.CheckAuthTime(max_age)) {
-                if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                    client_id, redirect_uri, response_type, scope, nonce,
-                    out valid_redirect_uri, out err, out errDescription, code_challenge))
+            // **要求の検証を先に行う**（#247）。
+            //   `redirect_uri` を照合できていないと、エラーを RP へ返せない。
+            //   以前は `max_age` の判定が先で、超過すると
+            //   **valid_redirect_uri も err も空のまま、文面の無いエラー画面**になっていた
+            //   （`ANALYSIS-IdP.md` の A-12）。
+            if (Token.CmnEndpoints.ValidateAuthZReqParam(
+                client_id, redirect_uri, response_type, scope, nonce,
+                out valid_redirect_uri, out err, out errDescription, code_challenge))
+            {
+                // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
+                Token.CmnEndpoints.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
+                    max_age,
+                    Request.Cookies[OAuth2AndOIDCConst.auth_time]?.Value,
+                    Request.Cookies[Const.ReAuthenticatedAt]?.Value);
+
+                if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.InvalidMaxAge)
+                {
+                    // **0 以上の整数でない**（RFC 6749 4.1.2.1 : invalid_request）。
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "max_age must be a non-negative integer.";
+                }
+                else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication
+                    && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))
+                {
+                    // **prompt=none では UI を出せない**（OIDC Core 3.1.2.6 : login_required）。
+                    err = OAuth2AndOIDCConst.login_required;
+                    errDescription = "Re-authentication is required, but prompt=none was specified.";
+                }
+                else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication)
+                {
+                    // **再認証する**（OIDC Core 3.1.2.1）。
+                    //   印を残してサインアウトし、同じ URL に戻す（この後は認証が要るのでサインイン画面になる）。
+                    //   **印は繰り返しを防ぐため**（max_age=0 でも、再認証の直後なら続ける）。
+                    Response.Cookies.Add(new HttpCookie(Const.ReAuthenticatedAt,
+                        FormatConverter.ToW3cTimestamp(DateTime.UtcNow)));
+                    this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+                    return new RedirectResult(Request.RawUrl);
+                }
+                else
                 {
                     // Cookie認証チケットからClaimsIdentityを取得しておく。
                     AuthenticateResult ticket = this.AuthenticationManager
@@ -2727,6 +2718,13 @@ namespace MultiPurposeAuthSite.Controllers
                     identity = new ClaimsIdentity(
                         identity.Claims, OAuth2AndOIDCConst.Bearer,
                         identity.NameClaimType, identity.RoleClaimType);
+
+                    // **再認証の印を消す**（#247）。
+                    //   一度きりの印なので、ここまで来たら落とす。
+                    Response.Cookies.Add(new HttpCookie(Const.ReAuthenticatedAt, "")
+                    {
+                        Expires = DateTime.UtcNow.AddDays(-1)
+                    });
 
                     // auth_timeを追加
                     this.AddAuthTimeClaim(max_age, claims, identity);
@@ -2824,10 +2822,6 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 不正なresponse_type
                     }
-                }
-                else
-                {
-                    // 不正なRequest
                 }
             }
             else

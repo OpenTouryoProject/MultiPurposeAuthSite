@@ -37,6 +37,7 @@
 //*  2026/09/28  玄人 幸道         Device AuthZ の結果も画面に出し、interval に従わせた（#246 の 3-a / 3-b）
 //*  2026/09/28  玄人 幸道         Device AuthZ の verification_uri のリンクが二重になっていたのを修正（#246）
 //*  2026/09/28  玄人 幸道         SAML2 の Post & Redirect Binding を追加（#246 の項目 2）
+//*  2026/09/29  玄人 幸道         OIDC ボタンの prompt=none を、画面の選択で上書きできるようにした（#247）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1074,7 +1075,11 @@ namespace MultiPurposeAuthSite.Controllers
             // Assemble
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                + "&prompt=none";
+                // **画面で prompt を選んでいれば、そちらを使う**（#247 で気付いた）。
+                //   選んでいなければ、従来どおり prompt=none（同意画面を飛ばすため）。
+                //   固定で付けていたため、**画面の選択と実際が食い違っていた**
+                //   （max_age=0 を選んでも、prompt=none なので login_required が返っていた）。
+                + (string.IsNullOrEmpty(this.Prompt) ? "&prompt=none" : "");
 
             this.SaveOAuth2Params();
 

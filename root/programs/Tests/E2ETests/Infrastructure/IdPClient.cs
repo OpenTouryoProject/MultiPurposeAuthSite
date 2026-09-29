@@ -49,6 +49,7 @@
 //*  2026/09/27  玄人 幸道         自己テストの画面が出すログアウトのフォームを送る口を追加（#232）
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
 //*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
+//*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
 //**********************************************************************************
 
 using System;
@@ -386,10 +387,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// （AccountController の CreateData）。EX-8.4 は、その 2 人目を使う。
         /// </summary>
         /// <param name="userName">サインインする利用者（null ならテスト ユーザ）</param>
+        /// <param name="force">
+        /// **サインイン済みでも、もう一度サインインする**（#247）。
+        /// サーバ側がサインアウトさせた後（`max_age` の再認証）は、
+        /// こちらの `IsSignedIn` だけが残るため、これで押し切る。
+        /// </param>
         /// <returns>Task</returns>
-        public async Task SignInAsync(string userName = null)
+        public async Task SignInAsync(string userName = null, bool force = false)
         {
-            if (this.IsSignedIn)
+            if (this.IsSignedIn && !force)
             {
                 return;
             }

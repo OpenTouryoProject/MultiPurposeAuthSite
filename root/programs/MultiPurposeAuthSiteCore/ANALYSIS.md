@@ -417,7 +417,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 | SAML2 のメタデータ | 画面下の `samlmetadata` リンク | |
 | RP-Initiated Logout | Test RP-Initiated Logout（**確認画面の経路**）／結果画面の [Sign out]（**`id_token_hint` の経路**） | #232 |
 | `response_mode`（`query` / `fragment` / `form_post` ＋ JARM の 3 種） | ドロップダウン | |
-| `prompt` / `max_age` | ドロップダウン | **#246 で追加。** `prompt=none` 以外は未対応（C-3）、`max_age` の超過は #247 |
+| `prompt` / `max_age` | ドロップダウン | **#246 で追加。** `prompt=none` 以外は未対応（C-3）。**`max_age` の超過は #247 で対応**（再認証 / `login_required` / `invalid_request`） |
 | `client_secret_basic` | 通常の認可コードの交換（**画面に方式が出る**） | #246 |
 | `client_secret_post` | **PKCE の交換**（Open棟梁 クライアントの既定がこちら） | **方式としては選べない。** フローに紐付く。E2E が測る（`RT-238` / `RT-239`） |
 | `private_key_jwt` | FAPI1 / FAPI2 / PAR の交換 | 同上（`RT-238`） |

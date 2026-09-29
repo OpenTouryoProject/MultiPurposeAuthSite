@@ -704,7 +704,7 @@ RFC 7662 §2.2 の `token_type` は **RFC 6749 §5.1 の型**（`bearer` など�
 > エラー応答の HTTP ステータス（400 / 401）は #196 で対応した（`/revoke`・`/introspect` とも）。
 > メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
 
-### A-12. `max_age` を超えたときに、再認証もエラー応答もせず、空のエラー画面になる **[Core][netfx]**
+### A-12. `max_age` を超えたときに、再認証もエラー応答もせず、空のエラー画面になる **[Core][netfx]** — **✅ 修正済み（#247）**
 
 ```csharp
 // AccountController.OAuth2Authorize（両アプリに同文）
@@ -744,6 +744,37 @@ else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
 
 **同族の項目:** `prompt` の処理そのものは C-3、同意の永続化は D-6。
 `auth_time` は `AddAuthTimeClaim` で ID トークンに入れており、**読み書きの土台はある。**
+
+**対応（#247）。**
+
+- **検証の順序を入れ替えた。** 先に `ValidateAuthZReqParam` を通し、`redirect_uri` を確定させてから
+  `max_age` を見る。**これでエラーを RP へ返せる**
+- 判定を `CommonLibrary`（`CmnEndpoints.CheckAuthTime`）へ移し、**bool から 3 値**にした
+  （`Ok` / `InvalidMaxAge` / `NeedsReAuthentication`）。**bool では区別できなかった**のが原因
+- `NeedsReAuthentication` のとき : `prompt=none` なら **`login_required`**、
+  そうでなければ**サインアウトして同じ URL に戻す**（＝再認証）
+- `InvalidMaxAge`（数値でない・負）は **`invalid_request`**
+- **経過は「秒」で比べる（切り捨て）。これが要だった。**
+  `auth_time` も `max_age` も秒単位なので、**秒未満の差を超過とみなさない。**
+  小数のまま比べると、**再認証した直後でも「0.3 秒 > 0 秒」で超過**となり、
+  `max_age=0` では何度でも再認証を求めることになる
+- **繰り返しを防ぐ印**（`re_auth_at` の Cookie。10 分）は、**収束しない場合の保険**として残す。
+  通ったら消す
+- E2E : `RT-247.1`（再認証へ送る・**繰り返さない**・自己テストの 2 つのボタン）/
+  `RT-247.2`（`login_required`）/ `RT-247.3`（`invalid_request`）。
+  **テストはサインインから 1 秒以上ずらして測る**（速すぎると同じ秒に入り、超過にならない）
+
+> **ここに 3 回作り直した跡がある。** 記録として残す。
+> **(1) 印の新しさ（300 秒）だけを見る** → 手の操作が 5 分を超えると古い印と見なし、**二度サインイン**。
+> **(2) 「数秒前の認証なら通す」猶予** → `max_age=0` の意味が消える（仕様に反する）ので取り消し。
+> **(3) 印 ＋ 印より後に認証** → ブラウザではまだ二度。
+> **(4) 経過を秒単位で比較** → 印に依存せず成立（採用）。
+> **秒単位の値（`auth_time`）を小数で比べたことが、症状の根**だった。
+
+> **副産物。** net10.0 版の「別のアカウントでログイン」（同意画面の `submit.Login`）は、
+> `HttpContext.SignOutAsync()`（スキーム指定なし）で**サインアウトできていなかった**。
+> このサイトが使うのは `Identity.Application` で、既定のスキームでは消えない。
+> **`SignInManager.SignOutAsync()` に直した**（net48 版はスキームを指定していたため無症状）。
 
 ---
 
@@ -1717,7 +1748,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
 | ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残り（仕様方針の判断を伴う 9〜14）は #228 |
-| **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）。C-3 / D-6 と同族 |
+| ✅ **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）**#247**。`prompt` の残り（`login` / `consent` / `select_account`）は C-3 |
 
 ### フェーズ 2 — セキュリティの底上げ
 
