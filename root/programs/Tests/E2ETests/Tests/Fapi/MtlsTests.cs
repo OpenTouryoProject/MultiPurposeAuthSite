@@ -31,6 +31,7 @@
 //*  2026/09/22  玄人 幸道         新規（#226 : mTLS の経路を E2E で確かめる）
 //*  2026/09/23  玄人 幸道         -NetFxMtls のとき、net48 版でも回す（#226）
 //*  2026/09/23  玄人 幸道         FA-6.4（cnf の形式と、/userinfo での照合）を追加
+//*  2026/09/29  玄人 幸道         FA-6.5（mTLS で refresh_token を使える）を追加（#245 の段階 1）
 //*  2026/09/26  玄人 幸道         fapi2 でも refresh_token が発行される期待に改めた（#239 の段階 3）
 //**********************************************************************************
 
@@ -201,7 +202,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                         "発行される",
                         string.IsNullOrEmpty(token.RefreshToken) ? "**発行されない**" : "発行された（値は伏せる）");
 
-                    r.Note("**refresh_token の経路は normal の登録だけ**なので、fapi2 には発行しない（#224 の段階 2）。");
+                    r.Note("**#239 の段階 3 で、mTLS / private_key_jwt なら fapi1 / fapi2 にも開いた。**"
+                        + "以前は「証明によらず normal だけ」だったので、発行もされなかった。"
+                        + "**実際に更新できることは `FA-6.5` が測る**（#245 の段階 1）。");
                 }
 
                 r.Done();
@@ -379,6 +382,96 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
 
                     r.VerifyEqual("HTTP 401", "401", ((int)mismatch.StatusCode).ToString());
                     r.VerifyEqual("エラーは invalid_token", "invalid_token", mismatch.Error ?? "（無し）");
+                }
+
+                r.Done();
+            }
+        }
+
+        /// <summary>FA-6.5 mTLS で refresh_token を使える（表の「refresh_token × mTLS」の行）</summary>
+        /// <param name="targetKey">core（-NetFxMtls のときは netfx も）</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(MtlsTargets))]
+        public async Task FA0605_mTLSでrefresh_tokenを使える(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                MtlsTests.SkipIfNoMtls(client.Target);
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient2_2);
+
+                TestReport r = this.Report("FA-6.5",
+                    "oauth2_oidc_mode=fapi2 のクライアントは、mTLS で refresh_token を使える",
+                    "**`ClientModePolicy` の表で、E2E が無かった唯一の行**（`refresh_token × mTLS`。#245 の段階 1）。"
+                    + "#239 の段階 3 で **fapi1 / fapi2 にも refresh_token を開いた**が、"
+                    + "**開いたのは `private_key_jwt`（`RT-239.5`）と mTLS の 2 つ**で、"
+                    + "**mTLS の側は「発行される」ことだけを `FA-6.1` が見ており、"
+                    + "実際に更新できるかは測っていなかった。**"
+                    + "**client_secret では開かない**ことも、ここで対照として見る（FAPI は秘密ベースの認証を認めない）。",
+                    "RFC 8705 §2.1 / FAPI 2.0 / #239 の段階 3 / #245 の段階 1");
+
+                r.Target("client_name=" + KnownClients.TestClient2_2 + "（fapi2。Subject 一致の証明書）");
+
+                using (X509Certificate2 cert = TestCertificate.ForTarget(client.Target, KnownClients.MtlsSubjectDn))
+                {
+                    r.Step("(1) mTLS の認可コードで、refresh_token を得る");
+
+                    JsonResponse token = await MtlsTests.CodeWithCertificateAsync(client, reg, cert);
+
+                    r.Verify("refresh_token が返る", !string.IsNullOrEmpty(token.RefreshToken),
+                        "返る",
+                        string.IsNullOrEmpty(token.RefreshToken)
+                            ? "**返らない**（" + MtlsTests.Outcome(token) + "）" : "返った（値は伏せる）");
+
+                    Assert.False(string.IsNullOrEmpty(token.RefreshToken), "前提: refresh_token が返ること");
+
+                    r.Step("(2) 同じ証明書を提示して更新する");
+
+                    JsonResponse refreshed = await client.TokenWithCertificateAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "grant_type", "refresh_token" },
+                            { "refresh_token", token.RefreshToken },
+                            { "client_id", reg.ClientId }
+                        }, cert);
+
+                    r.Verify("新しいアクセス トークンが返る",
+                        !string.IsNullOrEmpty(refreshed.AccessToken),
+                        "返る", MtlsTests.Outcome(refreshed));
+
+                    Assert.False(string.IsNullOrEmpty(refreshed.AccessToken), "前提: 更新できること");
+
+                    JsonElement claims = Jwt.Payload(refreshed.AccessToken);
+
+                    r.Verify("更新後のトークンにも cnf が載る（証明書に紐づく）",
+                        Jwt.Has(claims, "cnf"),
+                        "cnf あり", Jwt.Has(claims, "cnf") ? "cnf あり" : "**無し**");
+
+                    // **更新の前後で、トークンの名乗りが変わらないこと**（#245 で直した）。
+                    //   以前は `GrantRefreshTokenCredentials` が `ProtectFromPayload` に
+                    //   **`ClientMode.normal` を固定で渡していた**ため、
+                    //   **更新すると fapi クレームが消えていた**（このテストで実測して直した）。
+                    r.VerifyEqual("更新後も fapi クレームは登録どおり fapi2",
+                        "fapi2", Jwt.String(claims, "fapi") ?? "（無し）");
+
+                    r.Step("(3)（対照）証明書を提示せずに更新すると通らない");
+
+                    JsonResponse withoutCert = await client.TokenWithCertificateAsync(
+                        new Dictionary<string, string>()
+                        {
+                            { "grant_type", "refresh_token" },
+                            { "refresh_token", token.RefreshToken },
+                            { "client_id", reg.ClientId }
+                        }, null);
+
+                    r.Verify("トークンを返さない", string.IsNullOrEmpty(withoutCert.AccessToken),
+                        "返さない", MtlsTests.Outcome(withoutCert));
+
+                    r.VerifyEqual("エラーは invalid_client",
+                        "invalid_client", withoutCert.Error ?? "（無し）");
+
+                    r.Note("**fapi2 は client_secret を通さない**ので、"
+                        + "証明書が無ければ更新できない（表の `refresh_token × Any → normal` の行には当たらない）。");
                 }
 
                 r.Done();

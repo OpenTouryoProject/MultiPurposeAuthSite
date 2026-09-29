@@ -778,6 +778,38 @@ else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
 
 ---
 
+### A-13. `refresh_token` で更新すると、登録種別のクレーム（`fapi`）が消える **[Lib]** — **✅ 修正済み（#245）**
+
+```csharp
+// CmnEndpoints.GrantRefreshTokenCredentials
+if (CmnEndpoints.CheckClientMode(client_id, Flow.RefreshToken, proof,
+        out OAuth2AndOIDCEnum.ClientMode _,      // ← 登録種別を捨てていた
+        out jwkString, out err))
+...
+string access_token = CmnAccessToken.ProtectFromPayload(
+    client_id, tokenPayload, …, x509,
+    OAuth2AndOIDCEnum.ClientMode.normal,          // ← 固定
+    out string aud, out string sub);
+```
+
+**認可コードで得たトークンには `fapi` クレームが載るのに、更新すると消えていた。**
+`fapi` で判断するリソース サーバは、**更新の前後で違うトークンを受け取る**
+（`cnf` は残るので、証明書との紐づけは保たれる）。
+
+**#239 の段階 3 で `refresh_token` を fapi1 / fapi2 に開くまでは、normal しか通らなかったので無害だった。**
+開いたときの取り残しである。
+
+**対応（#245 の段階 1）。** `CheckClientMode` が既に返している登録種別を受け取り、
+`ProtectFromPayload` に渡す（隣の認可コードの経路と同じ形）。
+**E2E : `FA-6.5`（mTLS）/ `RT-239.5`（private_key_jwt）** が、更新後も `fapi` が載ることを検証する。
+
+> **見つけ方に意味がある。** #245 の段階 1 で
+> **`ClientModePolicy` の表の 16 行に E2E を突き合わせ、空いていた 1 行
+> （`refresh_token × mTLS`）を埋めた**ところで出た。
+> **網羅の穴と実装の穴が同じ場所にあった。**
+
+---
+
 ## 3. B. 異常系で落ちる（HTTP 500 になる）
 
 > いずれも**外部から容易に到達できる**。適合性テストは異常系を大量に投げるため、

@@ -302,7 +302,12 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
 **登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
-**E2E で守られていない行がある** : 認可コードの private_key_jwt。mTLS は net10.0 版だけ（`FA-6`）。
+**全 16 行に、通ることを測るケースを当てた**（#245 の段階 1。下の「経路 × 証明の網羅」）。
+**mTLS の 2 行は net10.0 版だけ**で、net48 版は `-NetFxMtls` のときだけ測る（`FA-6`）。
+
+> 以前ここには「**E2E で守られていない行がある** : 認可コードの private_key_jwt」と書いてあった。
+> **`RT-238.4`（#238）と `RT-239.5`（#239）で埋まっており、記述が古かった。**
+> 残っていた空きは `refresh_token × mTLS` の 1 行だけで、#245 で `FA-6.5` を足した。
 
 **有効期限（`RT-188`）は、`-ShortLifetimes` で起動したときだけ回る**（#188）。
 既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待てないため、
@@ -374,6 +379,40 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 cd root
 .\2_RunAllTests.ps1 -Launch -UpdateTestCases
 ```
+
+## 経路 × 証明の網羅（`ClientModePolicy` の表。#245 の段階 1）
+
+**`CommonLibrary/TokenProviders/ClientModePolicy.cs` の表がそのまま仕様である**
+（経路 × 何を証明したか → 通す登録種別。表に無い組み合わせは拒否）。
+**その 16 行すべてに、通ることを測るケースを当てた。**
+
+| 経路 | 証明 | 通す登録種別 | 測っているケース |
+|---|---|---|---|
+| Implicit | 問わない | normal | `21-1.1` |
+| Hybrid | 問わない | normal | `FA-1.4` |
+| 認可コード | `client_secret` | normal | `FA-1.1` |
+| 認可コード | `client_secret` ＋ PKCE | normal | `FA-1.3` |
+| 認可コード | PKCE plain | normal | `RT-220.2` |
+| 認可コード | PKCE S256 | normal / fapi1 / device | `FA-1.1` / `FA-3.1` |
+| 認可コード | `private_key_jwt` | normal / fapi1 / fapi2 / device | `RT-238.4` |
+| 認可コード | mTLS | normal / fapi1 / fapi2 | `FA-6.1`（net10.0。net48 は `-NetFxMtls`） |
+| `refresh_token` | `private_key_jwt` | normal / fapi1 / fapi2 | `RT-239.5` |
+| `refresh_token` | mTLS | normal / fapi1 / fapi2 | **`FA-6.5`**（#245 で追加） |
+| `refresh_token` | 問わない | normal | `FA-1.2` |
+| ROPC | 問わない | normal | `FA-1.1` / `21-1.1` |
+| `client_credentials` | 問わない | normal | `FA-1.1` |
+| JWT Bearer | 問わない | normal | `EX-7` |
+| CIBA | 問わない | fapi_ciba | `EX-8` / `FA-5.1` |
+| Device AuthZ | 問わない | normal / device | `FA-4.1` |
+
+**拒否される側**（表に無い組み合わせ）は `FA-2.1`（fapi2 × client_secret / PKCE）、
+`FA-1.4`（fapi1 × Hybrid）、`FA-4.1` / `FA-5.1`（登録種別の違い）、
+`FA-6.2` / `FA-6.3`（証明書の不一致・既知でない登録値）が守っている。
+
+> **`refresh_token` の行は #239 の段階 3 で fapi1 / fapi2 に開いた。**
+> その際、**更新後のトークンから登録種別のクレーム（`fapi`）が消えていた**
+> （`ProtectFromPayload` に `normal` を固定で渡していた）。
+> **#245 の段階 1 で `FA-6.5` を書いたときに実測して直した**（`FA-6.5` / `RT-239.5` が検証する）。
 
 ## 既定で無効な機能のテスト（`Tests/Obsolete/`）
 

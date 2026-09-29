@@ -102,6 +102,7 @@
 //*  2026/09/27  玄人 幸道         CIBA の jti を記録するキーを固定長にした（#243）
 //*  2026/09/28  玄人 幸道         max_age の判定を結果で場合分けできる形にした（#247）
 //*  2026/09/29  玄人 幸道         経過を秒単位で比べる（再認証の直後を超過としない）（#247）
+//*  2026/09/29  玄人 幸道         refresh で登録種別のクレーム（fapi）が消えていたのを修正（#245）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2698,9 +2699,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
+                    //   **登録種別を受け取る**（#245）。トークンのクレームに書くため。
                     if (CmnEndpoints.CheckClientMode(client_id,
                         ClientModePolicy.Flow.RefreshToken, proof,
-                        out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
+                        out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -2722,10 +2724,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
                         // access_token
+                        // **クレームは、登録された種別（clientMode）で書く**（#245）。
+                        //   以前は `ClientMode.normal` を固定で渡しており、
+                        //   **更新すると fapi クレームが消えていた**（認可コードで得たトークンには載る）。
+                        //   **#239 の段階 3 で fapi1 / fapi2 に refresh を開くまでは、
+                        //   normal しか通らなかったので無害だった。** 開いたときの取り残し。
+                        //   E2E : FA-6.5（mTLS）/ RT-239.5（private_key_jwt）。
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            x509, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
+                            x509, clientMode, out string aud, out string sub);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)

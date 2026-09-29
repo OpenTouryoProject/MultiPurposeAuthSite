@@ -3792,6 +3792,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - fapi2 にも refresh_token が発行される
 - HTTP 200
 - access_token が返る
+- 更新後も fapi クレームは登録どおり fapi2
 
 **補足**
 
@@ -4435,7 +4436,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 **補足**
 
-- **refresh_token の経路は normal の登録だけ**なので、fapi2 には発行しない（#224 の段階 2）。
+- **#239 の段階 3 で、mTLS / private_key_jwt なら fapi1 / fapi2 にも開いた。**以前は「証明によらず normal だけ」だったので、発行もされなかった。**実際に更新できることは `FA-6.5` が測る**（#245 の段階 1）。
 
 ## FA-6.2 mTLS のクライアントは、証明書が無い・Subject が一致しないと invalid_client（401）になる
 
@@ -4505,6 +4506,33 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 利用者の属性を返さない
 - HTTP 401
 - エラーは invalid_token
+
+## FA-6.5 oauth2_oidc_mode=fapi2 のクライアントは、mTLS で refresh_token を使える
+
+| | |
+|---|---|
+| 観点 | **`ClientModePolicy` の表で、E2E が無かった唯一の行**（`refresh_token × mTLS`。#245 の段階 1）。#239 の段階 3 で **fapi1 / fapi2 にも refresh_token を開いた**が、**開いたのは `private_key_jwt`（`RT-239.5`）と mTLS の 2 つ**で、**mTLS の側は「発行される」ことだけを `FA-6.1` が見ており、実際に更新できるかは測っていなかった。****client_secret では開かない**ことも、ここで対照として見る（FAPI は秘密ベースの認証を認めない）。 |
+| 根拠 | RFC 8705 §2.1 / FAPI 2.0 / #239 の段階 3 / #245 の段階 1 |
+| テスト | `FA0605_mTLSでrefresh_tokenを使える` |
+
+**手順**
+
+1. mTLS の認可コードで、refresh_token を得る
+1. 同じ証明書を提示して更新する
+1. （対照）証明書を提示せずに更新すると通らない
+
+**検証（合否を判定する）**
+
+- refresh_token が返る
+- 新しいアクセス トークンが返る
+- 更新後のトークンにも cnf が載る（証明書に紐づく）
+- 更新後も fapi クレームは登録どおり fapi2
+- トークンを返さない
+- エラーは invalid_client
+
+**補足**
+
+- **fapi2 は client_secret を通さない**ので、証明書が無ければ更新できない（表の `refresh_token × Any → normal` の行には当たらない）。
 
 # 21
 
