@@ -228,9 +228,31 @@ cmd.exe はバッチを**バイト オフセットで読み進める**ため、�
 |---|---|---|
 | 構文エラー・文字化け（`繧ｵ繧､繝`） | 5.1 は BOM 無しの `.ps1` を **ANSI（Shift_JIS）**として読む | **UTF-8 BOM ＋ CRLF** で保存する |
 | `Get-Content` の結果が違う | 既定エンコードが 5.1 は ANSI、7 は UTF-8 | **`-Encoding UTF8`** を明示する |
+| **子プロセスの日本語が化ける**（`蠕ｩ蜈・ｯｾ雎｡`） | PowerShell が native コマンドの出力を解釈するのは **`[Console]::OutputEncoding`** で、**これはコンソール（`chcp`）に従う。版では決まらない** | 実行の間だけ **`[Console]::OutputEncoding` を UTF-8 にし、最後に戻す**（`test.ps1`） |
 | 自己署名証明書の HTTPS が叩けない | **API ごとに、動く版が違う**（下の表） | 版で分岐する |
 | `-File` で単体起動したときだけ `Join-Path` が落ちる | **`[CmdletBinding()]` があると、5.1 は `param()` の既定値を評価する時点で `$PSScriptRoot` が空** | パスの既定値は `param()` に書かず、本体で決める |
 | 表の見出し・罫線・データがずれる | 5.1 の `Format-Table` は**桁数ではなく文字数**で幅を決める（全角は 1 文字で 2 桁） | `SummaryTable.ps1` の `Write-SummaryTable` を使う |
+
+### `[Console]::OutputEncoding` は、版ではなくコンソールで決まる
+
+**`$OutputEncoding` と `[Console]::OutputEncoding` は別物である。**
+
+| | 向き | 既定 |
+|---|---|---|
+| `$OutputEncoding` | PowerShell → native コマンド（**送る**） | 7 は UTF-8 |
+| **`[Console]::OutputEncoding`** | native コマンド → PowerShell（**受ける**） | **コンソールのコード ページ（日本語 Windows は 932）** |
+
+**`dotnet` は UTF-8 で書くので、受け側が 932 なら化ける。**
+**7 でも化ける。** 「7 は既定が UTF-8」は `$OutputEncoding` の話で、**受け側には当てはまらない。**
+
+> **実際に踏んだ（#245 の段階 3）。** `test.ps1` は
+> **`if ($PSVersionTable.PSVersion.Major -lt 6)` のときだけ**直していた。
+> **7 の実コンソール（932）で `E2ETests.log` が全面的に化けた。**
+> 開発機の 5.1 / 7 がどちらも 65001 だったため、**それまで表面化しなかった。**
+>
+> **版で分岐せず、常に UTF-8 にして最後に戻す**のが正しい。
+> 再現は `[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)` を先に実行すればよい。
+> **65001 の環境で試しても再現しない。**
 
 > **1 行目は実際に踏んだ。** `test.ps1` だけ BOM 無しで作ってしまい、
 > 5.1 から `0_RunAll.ps1` を実行すると日本語コメントが化けて

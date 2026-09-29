@@ -43,6 +43,7 @@
 //*  2026/09/18  玄人 幸道         クライアント単位の PKCE 必須化（require_pkce）を追加（#221）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求をクライアント認証つきで送る口を追加（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を引く口を追加（#232）
+//*  2026/09/28  玄人 幸道         PAR（/par）に認可リクエストを預ける口を追加（#246）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -513,6 +514,35 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // WebAPI呼び出し。
             return await OAuth2AndOIDCClient.RegisterRequestObjectAsync(requestObjectRegUri, requestObject);
+        }
+
+        /// <summary>
+        /// 認可リクエストを PAR（RFC 9126）に預ける（WebAPI）（#246）
+        /// </summary>
+        /// <param name="authRequestPushUri">PAR エンドポイント</param>
+        /// <param name="requestObject">Request Object（署名付き JWT）</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="clientAssertion">client_assertion（private_key_jwt）</param>
+        /// <returns>結果の JSON 文字列（request_uri と expires_in）</returns>
+        /// <remarks>
+        /// **`/ros`（独自）との違いは、クライアント認証があること**（RFC 9126 §2）。
+        /// **FAPI 2.0 はこの認証を private_key_jwt か MTLS に限っている**ので、
+        /// ここは private_key_jwt で呼ぶ（`client_assertion` の `aud` は**トークン エンドポイント**）。
+        ///
+        /// 送るのは `request`（JAR）1 つ。**認可エンドポイントのパラメタを、
+        /// フォームで直接預ける形も RFC 9126 は許している**（Open棟梁 の別のオーバーロード）。
+        /// </remarks>
+        public async Task<string> PushAuthorizationRequestAsync(
+            Uri authRequestPushUri, string requestObject, string client_id, string clientAssertion)
+        {
+            // コンテナ化サポート
+            authRequestPushUri = Helper.GetContainerizatedAuthZServerUri(authRequestPushUri);
+
+            // WebAPI呼び出し。
+            return await OAuth2AndOIDCClient.PushAuthorizationRequestAsync(
+                authRequestPushUri, requestObject,
+                client_id, null, clientAssertion,
+                OAuth2AndOIDCEnum.AuthMethods.private_key_jwt);
         }
 
         #region CIBA

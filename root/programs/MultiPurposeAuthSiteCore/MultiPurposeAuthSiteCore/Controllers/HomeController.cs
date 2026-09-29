@@ -31,6 +31,14 @@
 //*  2026/09/25  玄人 幸道         CIBA の認証要求の aud を Issuer Identifier にした（#234 の段階 1）
 //*  2026/09/25  玄人 幸道         CIBA の認証要求を request で直接送り、クライアント認証を添える（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         自己テストに RP-Initiated Logout の口を追加（#232）
+//*  2026/09/28  玄人 幸道         自己テストに PAR（/par）経路を追加（#246）
+//*  2026/09/28  玄人 幸道         組み立てを SelfTestClient へ寄せた（#246）
+//*  2026/09/28  玄人 幸道         CIBA の結果を画面に出し、interval に従わせた（#246 の 3-a / 3-b）
+//*  2026/09/28  玄人 幸道         Device AuthZ の結果も画面に出し、interval に従わせた（#246 の 3-a / 3-b）
+//*  2026/09/28  玄人 幸道         Device AuthZ の verification_uri のリンクが二重になっていたのを修正（#246）
+//*  2026/09/28  玄人 幸道         SAML2 の Post & Redirect Binding を追加（#246 の項目 2）
+//*  2026/09/29  玄人 幸道         OIDC ボタンの prompt=none を、画面の選択で上書きできるようにした（#247）
+//*  2026/09/29  玄人 幸道         FAPI1 PKCE のボタンが S256 の値を plain と宣言していた（#245）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -177,6 +185,12 @@ namespace MultiPurposeAuthSite.Controllers
 
         /// <summary>ResponseMode</summary>
         private string ResponseMode = ""; 
+
+        /// <summary>prompt（画面で選ぶ。#246 の項目 3）</summary>
+        private string Prompt = "";
+
+        /// <summary>max_age（画面で選ぶ。#246 の項目 3）</summary>
+        private string MaxAge = "";
 
         /// <summary>ClientName</summary>
         private string ClientName = "";
@@ -330,6 +344,19 @@ namespace MultiPurposeAuthSite.Controllers
                 redirect += "&" + OAuth2AndOIDCConst.response_mode + "=" + this.ResponseMode;
             }
 
+            // **prompt と max_age の指定**（#246 の項目 3）。
+            //   認可画面（同意）の出方を、画面から試せるようにするためにある。
+            //   **ここは認可エンドポイントへ行く全てのスターターが通る**ので、1 か所で足りる。
+            if (!string.IsNullOrEmpty(this.Prompt))
+            {
+                redirect += "&" + OAuth2AndOIDCConst.prompt + "=" + this.Prompt;
+            }
+
+            if (!string.IsNullOrEmpty(this.MaxAge))
+            {
+                redirect += "&" + OAuth2AndOIDCConst.max_age + "=" + this.MaxAge;
+            }
+
             return redirect;
         }
 
@@ -361,7 +388,10 @@ namespace MultiPurposeAuthSite.Controllers
                 string.Format(
                     "?client_id={0}&response_type={1}&scope={2}&state={3}",
                     this.ClientId, response_type, Const.OidcScopes, this.State)
-                    + "&nonce=" + this.Nonce + "&max_age=600";
+                    + "&nonce=" + this.Nonce
+                    // **画面で max_age を選んでいれば、そちらを使う**（#246 の項目 3）。
+                    //   選んでいなければ、従来どおり 600 秒を付ける。
+                    + (string.IsNullOrEmpty(this.MaxAge) ? "&max_age=600" : "");
 
             temp = AndAddAdditionalParamToOAuth2Starter(temp, response_type);
 
@@ -412,86 +442,90 @@ namespace MultiPurposeAuthSite.Controllers
         /// <summary>FAPI2CCスターターを組み立てて返す</summary>
         /// <param name="response_type">string</param>
         /// <returns>組み立てたFAPI2CCスターター</returns>
+        /// <remarks>
+        /// **組み立ては SelfTestClient に寄せた**（#246。両アプリに同文で二重に在ったため）。
+        /// ここは「どのパターンを試すか」だけを決める。
+        ///
+        /// 預け先は **`/ros`**（独自。RFC 9101 §5.2.1 の任意機能として維持）。
+        /// **クライアント認証は無い**（Request Object の署名だけを見る口）。
+        /// PAR（RFC 9126）に預ける形は AssembleFAPI2ParStarterAsync。
+        /// </remarks>
         private async Task<string> AssembleFAPI2CCStarterAsync(string response_type)
         {
-            // 秘密鍵
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                CmnClientParams.RsaPfxFilePath,
-                CmnClientParams.RsaPfxPassword,
-                HashAlgorithmName.SHA256);
-
             if (this.ClarifyRedirectUri)
             {
-                //this.RedirectUri = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
                 string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
                 this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
             }
 
             // テストコードで、clientを識別するために、Stateに細工する。
             // TestCase（max_age, auth_time）: 無し, 不要、有り, 不要、無し, 必要
-            string requestObject = RequestObject.Create(this.ClientId,
-                Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.RequestObjectRegUri,
-                response_type, this.ResponseMode, this.RedirectUri, Const.OidcScopes,
+            SelfTestClient.PushResult ret = await SelfTestClient.RegisterRequestObjectAsync(
+                this.ClientId, response_type, this.ResponseMode, this.RedirectUri,
                 OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
-                "600", "", "",
-                new ClaimsInRO(
-                    // userinfo > claims
-                    new Dictionary<string, object>()
-                    {
-                        {
-                            "picture",
-                            new
-                            {
-                                essential = true
-                            }
-                        }
-                    },
-                    // id_token > claims
-                    new Dictionary<string, object>()
-                    {
-                        {
-                            "hoge",
-                            new
-                            {
-                                essential = true
-                            }
-                        }
-                    },
-                    // id_token > arc
-                    new
-                    {
-                        essential = true,
-                        values = new string[]
-                        {
-                            OAuth2AndOIDCConst.UrnLoA1,
-                            OAuth2AndOIDCConst.UrnLoA2
-                        }
-                    }),
-                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+                SelfTestClient.SampleClaims());
 
-            // 検証テスト
-            if (RequestObject.Verify(requestObject, out string iss,
-                ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(false)))
+            if (string.IsNullOrEmpty(ret.RequestUri))
             {
-                // 検証できた。
-
-                // RequestObjectを登録する。
-                string response = await Helper.GetInstance().RegisterRequestObjectAsync(
-                    new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI
-                    + OAuth2AndOIDCParams.RequestObjectRegUri), requestObject);
-
-                // レスポンスを確認し、request_uriを抽出。
-                string request_uri = (string)((JObject)JsonConvert
-                    .DeserializeObject(response))[OAuth2AndOIDCConst.request_uri];
-
-                // request_uriの認可リクエストを投げる。
-                return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", request_uri);
-            }
-            else
-            {
-                // 検証できなかった。
+                // 署名の検証ができなかった、または預けられなかった。
                 return null;
             }
+
+            // request_uriの認可リクエストを投げる。
+            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", ret.RequestUri);
+        }
+
+        /// <summary>FAPI2CC ＋ PAR のスターターを組み立てて返す（#246）</summary>
+        /// <param name="response_type">string</param>
+        /// <returns>認可エンドポイントの URL（預けられなければ null）</returns>
+        /// <remarks>
+        /// **FAPI 2.0 の正規の形。** 認可リクエストを **PAR（RFC 9126）に預けてから**認可する。
+        /// AssembleFAPI2CCStarterAsync との違いは、預け先と認証だけ。
+        ///
+        /// | | /ros（独自。RFC 9101 5.2.1 の任意機能として維持） | /par（RFC 9126） |
+        /// |---|---|---|
+        /// | 認証 | **無し**（Request Object の署名だけ） | **クライアント認証**（ここでは private_key_jwt） |
+        /// | 本文 | 署名付き JWT を生で | フォーム（request に JAR を入れる） |
+        /// | 応答 | iss / aud / request_uri / exp | **request_uri / expires_in** |
+        ///
+        /// **組み立てと預けは SelfTestClient**（Open棟梁 の
+        /// `OAuth2AndOIDCClient.PushAuthorizationRequestAsync` を通る）。
+        /// E2E は実装側のライブラリを使わないので、**相互接続性の確認はここにしか無い。**
+        ///
+        /// **預けた結果は画面に出す**（request_uri / expires_in）。目視で確かめるため。
+        /// </remarks>
+        private async Task<string> AssembleFAPI2ParStarterAsync(string response_type)
+        {
+            if (this.ClarifyRedirectUri)
+            {
+                string temp = Helper.GetInstance().GetClientsRedirectUri(this.ClientId, response_type);
+                this.RedirectUri = CmnEndpoints.GetRedirectUriFromConstr(temp);
+            }
+
+            // テストコードで、clientを識別するために、Stateに細工する。
+            SelfTestClient.PushResult ret = await SelfTestClient.PushAuthorizationRequestAsync(
+                this.ClientId, response_type, this.ResponseMode, this.RedirectUri,
+                OAuth2AndOIDCEnum.ClientMode.fapi2.ToStringByEmit() + ":" + this.State, this.Nonce,
+                SelfTestClient.SampleClaims());
+
+            // 画面に出す（目視で確かめるもの）
+            ViewBag.AuthRequestPushUri = ret.Endpoint;
+            ViewBag.ClientId = this.ClientId;
+            ViewBag.AuthMethod = OAuth2AndOIDCEnum.AuthMethods.private_key_jwt.ToStringByEmit();
+            ViewBag.RequestObject = ret.RequestObject;
+            ViewBag.RequestObjectJson = ret.RequestObjectJson;
+            ViewBag.Response = ret.Response;
+            ViewBag.RequestUri = ret.RequestUri;
+            ViewBag.ExpiresIn = ret.ExpiresIn;
+
+            if (string.IsNullOrEmpty(ret.RequestUri))
+            {
+                // 預けられなかった（応答をそのまま画面で見せる）。
+                return null;
+            }
+
+            // request_uri の認可リクエスト
+            return this.OAuth2AuthorizeEndpoint + string.Format("?request_uri={0}", ret.RequestUri);
         }
 
         #endregion
@@ -512,120 +546,62 @@ namespace MultiPurposeAuthSite.Controllers
             ViewBag.ClientId = this.ClientId;
             ViewBag.DeviceCode = (string)responseJObject[OAuth2AndOIDCConst.device_code];
             ViewBag.UserCode = (string)responseJObject[OAuth2AndOIDCConst.user_code];
-            string rootURI = Config.OAuth2AuthorizationServerEndpointsRootURI;
-            ViewBag.VerificationUri = rootURI + (string)responseJObject[OAuth2AndOIDCConst.verification_uri];
-            ViewBag.VerificationUriComplete = rootURI + (string)responseJObject[OAuth2AndOIDCConst.verification_uri_complete];
+            // **応答の verification_uri は絶対 URI である**（RFC 8628 3.2 : ユーザが別の端末で開く URL）。
+            //   ここで RootURI を足していたため、URL が二重になり、
+            //   **画面のリンクが 404 になっていた**（承認の画面に行けない）（#246）。
+            ViewBag.VerificationUri = (string)responseJObject[OAuth2AndOIDCConst.verification_uri];
+            ViewBag.VerificationUriComplete = (string)responseJObject[OAuth2AndOIDCConst.verification_uri_complete];
+
+            // **interval と expires_in を画面に渡す**（#246 の 3-b）。
+            //   RFC 8628 3.5 は、機器がこの間隔を空けて問い合わせることを求めている。
+            //   ポーリングは次の POST で行うので、画面（hidden）で持ち回す。
+            ViewBag.Interval = (string)responseJObject[OAuth2AndOIDCConst.PollingInterval];
+            ViewBag.ExpiresIn = (string)responseJObject[OAuth2AndOIDCConst.expires_in];
             
             return View("DeviceAuthZResponse");
         }
         #endregion
 
         #region FAPI CIBA
-        /// <summary>FAPI CIBA Profileスターターを組み立てて返す</summary>
-        /// <returns>組み立てたFAPI2 CIBA Profileスターター</returns>
-        private async Task<string> AssembleFAPICibaProfileStarterAsync()
+        /// <summary>FAPI CIBA Profile を通し、結果の画面を返す</summary>
+        /// <returns>ActionResult（CibaProfileResponse 画面）</returns>
+        /// <remarks>
+        /// **通しの本体は `SelfTestClient.RunCibaProfileAsync`**（#246 で両アプリから寄せた）。
+        /// ここは client_id と login_hint を選び、結果を画面に渡すだけ。
+        ///
+        /// **以前は結果を URL（`?ret=OK_…`）で返していた**（#246 の 3-a）。
+        /// `OK_` が接頭辞で、その後ろが判定という形だったため、
+        /// **`?ret=OK_ABNORMAL_END` が成功なのか失敗なのか読めなかった。**
+        /// </remarks>
+        private async Task<ActionResult> AssembleFAPICibaProfileStarterAsync()
         {
-            string response = "";
+            // **承認を待つ上限（秒）。**
+            //   認証デバイスでの承認を待つが、待ち続けはしない（#246 の 3-b）。
+            //   net48 の ASP.NET は要求を 110 秒（executionTimeout の既定）で打ち切るので、それより短くする。
+            const int MaxWaitSeconds = 60;
 
-            // 秘密鍵
-            DigitalSignECDsaX509 dsX509 = new DigitalSignECDsaX509(
-                CmnClientParams.EcdsaPfxFilePath,
-                CmnClientParams.EcdsaPfxPassword,
-                HashAlgorithmName.SHA256);
-
-            string cibaAuthorizeEndpoint = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.CibaAuthorizeEndpoint;
-            string client_notification_token = CustomEncode.ToBase64UrlString(GetPassword.RandomByte(160));
-
-            string requestObject = RequestObject.CreateCiba(
-                this.ClientId, // FAPI2用か自前のクライアント
-                // **aud は OP の Issuer Identifier（CIBA Core 7.1.1。#234 の段階 1）。**
-                //   以前は /ciba_authz のエンドポイント URL を入れていた。
-                Config.IssuerId,
-                DateTimeOffset.Now.AddMinutes(10).ToUnixTimeSeconds().ToString(),
-                DateTimeOffset.Now.ToUnixTimeSeconds().ToString(),
-                "hoge " + OAuth2AndOIDCConst.Scope_Openid,
-                client_notification_token, GetPassword.Generate(4, 0), "", "",
+            SelfTestClient.CibaResult result = await SelfTestClient.RunCibaProfileAsync(
+                this.ClientId,      // FAPI2用か自前のクライアント
                 "tanaka@gmail.com", // プッシュ通知の対象となるアカウント
-                null, // request_contextやintentなどを格納したDictionary (null)
-                CmnClientParams.EcdsaPfxFilePath, CmnClientParams.EcdsaPfxPassword);
-            //((ECDsa)dsX509.AsymmetricAlgorithm).ExportParameters(true));
+                MaxWaitSeconds);
 
-            // 検証テスト
-            if (RequestObject.VerifyCiba(requestObject, out string iss,
-                ((ECDsa)dsX509.AsymmetricAlgorithm).ExportParameters(false)))
-            {
-                // 検証できた。
+            ViewBag.ClientId = this.ClientId;
+            ViewBag.Verdict = result.Verdict;
+            ViewBag.Reason = result.Reason;
+            ViewBag.CibaAuthorizeEndpoint = result.Endpoint;
+            ViewBag.RequestObject = result.RequestObject;
+            ViewBag.RequestObjectJson = result.RequestObjectJson;
+            ViewBag.AuthZResponse = result.AuthZResponse;
+            ViewBag.AuthReqId = result.AuthReqId;
+            ViewBag.Interval = result.Interval;
+            ViewBag.ExpiresIn = result.ExpiresIn;
+            ViewBag.PollIntervalSeconds = result.PollIntervalSeconds;
+            ViewBag.PollCount = result.PollCount;
+            ViewBag.WaitLimitSeconds = result.WaitLimitSeconds;
+            ViewBag.TokenResponse = result.TokenResponse;
+            ViewBag.UserInfoResponse = result.UserInfoResponse;
 
-                // **認証要求を request で直接送る（CIBA Core 7.1.1。#234 の段階 3）。**
-                //   以前は /ros に預けて request_uri を渡していた（CIBA Core に無い独自拡張）。
-                //   /ciba_authz はクライアント認証を求めるようになったので、資格情報も添える（7.1）。
-                response = await Helper.GetInstance().CibaAuthZRequestAsync(
-                    new Uri(cibaAuthorizeEndpoint), requestObject,
-                    this.ClientId, Helper.GetInstance().GetClientSecret(this.ClientId));
-
-                // レスポンスを確認し、auth_req_idを抽出。
-                string auth_req_id = (string)((JObject)JsonConvert
-                    .DeserializeObject(response))[OAuth2AndOIDCConst.auth_req_id];
-
-                // Tokenエンドポイントに対してポーリングを行う。
-
-                // Tokenエンドポイントにアクセス
-
-                // URL
-                Uri tokenEndpointUri = new Uri(
-                    Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-                // Credential 
-                string client_id = this.ClientId;
-                string client_secret = Helper.GetInstance().GetClientSecret(client_id);
-
-                // Tokenリクエスト
-                bool continueLoop = true;
-                string result = "";
-
-                while (continueLoop)
-                {
-                    response = await Helper.GetInstance().GetAccessTokenByCibaAsync(
-                        tokenEndpointUri, client_id, client_secret, auth_req_id);
-                    JObject temp = (JObject)JsonConvert.DeserializeObject(response);
-
-                    if (!temp.ContainsKey(OAuth2AndOIDCConst.error))
-                    {
-                        // 正常系
-                        continueLoop = false;
-
-                        // UserInfoエンドポイントにアクセス
-                        string userInfo = await Helper.GetInstance().
-                            GetUserInfoAsync((string)temp[OAuth2AndOIDCConst.AccessToken]);
-
-                        result = "NORMAL_END";
-                    }
-                    else
-                    {
-                        // 異常系
-                        if ((string)temp[OAuth2AndOIDCConst.error] 
-                            == OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
-                        {
-                            // authorization_pending
-                            System.Threading.Thread.Sleep(30);
-                        }
-                        else
-                        {
-                            // authorization_pending以外
-                            // 終了
-                            continueLoop = false;
-                            result = "ABNORMAL_END";
-                        }
-                    }
-                }
-
-                // 完了（SAMLのテストコードっぽくした）
-                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK_" + result;
-            }
-            else
-            {
-                // 検証できなかった。
-                return Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=NG";
-            }
+            return View("CibaProfileResponse");
         }
         #endregion
 
@@ -755,6 +731,11 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                     #endregion
 
+                    // **prompt と max_age は、そのまま渡す**（#246 の項目 3）。
+                    //   値の妥当性はサーバ側が判断する（未対応の値を選んだときの振る舞いも見たいため）。
+                    this.Prompt = model.Prompt ?? "";
+                    this.MaxAge = model.MaxAge ?? "";
+
                     #region Starterの実行
 
                     // **ログアウトは、クライアントの選択に依らない**（#232）。
@@ -777,6 +758,11 @@ namespace MultiPurposeAuthSite.Controllers
                         else if (!string.IsNullOrEmpty(Request.Form["submit.Saml2PostPostBinding"]))
                         {
                             return this.Saml2PostPostBinding();
+                        }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.Saml2PostRedirectBinding"]))
+                        {
+                            // **4 つ目の組み合わせ**（#246 の項目 2）
+                            return this.Saml2PostRedirectBinding();
                         }
                         #endregion
 
@@ -859,6 +845,10 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             return await this.AuthorizationCodeFAPI2Async();
                         }
+                        else if (!string.IsNullOrEmpty(Request.Form["submit.AuthorizationCodeFAPI2_PAR"]))
+                        {
+                            return await this.AuthorizationCodeFAPI2ParAsync();
+                        }
                         else if (!string.IsNullOrEmpty(Request.Form["submit.FAPI_CIBA_Profile"]))
                         {
                             return await this.FAPICibaProfileAsync();
@@ -899,69 +889,46 @@ namespace MultiPurposeAuthSite.Controllers
         #region Device AuthZ
 
         /// <summary>
-        /// DeviceAuthZResponse画面
+        /// DeviceAuthZResponse画面（ポーリングして、結果の画面を返す）
         /// POST: /Home/DeviceAuthZResponse
         /// </summary>
         /// <param name="formData">IFormCollection</param>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResult（DeviceAuthZPollingResult 画面）</returns>
+        /// <remarks>
+        /// **ポーリングの本体は `SelfTestClient.RunDeviceAuthZPollingAsync`**（#246 で両アプリから寄せた）。
+        ///
+        /// **以前は結果を URL（`?ret=OK_…`）で返していた**（#246 の 3-a。CIBA と同じ）。
+        /// `OK_` が接頭辞で、その後ろが判定という形だったため、
+        /// **`?ret=OK_ABNORMAL_END` が成功なのか失敗なのか読めなかった。**
+        /// </remarks>
         [HttpPost]
         [AllowAnonymous]
         public async Task<ActionResult> DeviceAuthZResponse(IFormCollection formData)
         {
-            // Tokenエンドポイントに対してポーリングを行う。
+            // **承認を待つ上限（秒）。**
+            //   利用者が user_code を入れて許可するまで待つが、待ち続けはしない（#246 の 3-b）。
+            //   net48 の ASP.NET は要求を 110 秒（executionTimeout の既定）で打ち切るので、それより短くする。
+            const int MaxWaitSeconds = 60;
 
-            // Tokenエンドポイントにアクセス
-
-            // URL
-            Uri tokenEndpointUri = new Uri(
-                Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint);
-            // else. 
             string client_id = formData[OAuth2AndOIDCConst.client_id];
             string device_code = formData[OAuth2AndOIDCConst.device_code];
+            string interval = formData[OAuth2AndOIDCConst.PollingInterval];
 
-            // Tokenリクエスト
-            bool continueLoop = true;
-            string result = "";
-            ExponentialBackoff exponentialBackoff = new ExponentialBackoff(10, 5); // config化必要？
+            SelfTestClient.DeviceAuthZResult result = await SelfTestClient.RunDeviceAuthZPollingAsync(
+                client_id, device_code, interval, MaxWaitSeconds);
 
-            while (continueLoop)
-            {
-                string response = await Helper.GetInstance().GetAccessTokenByDeviceAuthZAsync(
-                    tokenEndpointUri, client_id, device_code);
+            ViewBag.ClientId = client_id;
+            ViewBag.Verdict = result.Verdict;
+            ViewBag.Reason = result.Reason;
+            ViewBag.TokenEndpoint = result.TokenEndpoint;
+            ViewBag.Interval = result.Interval;
+            ViewBag.PollIntervalSeconds = result.PollIntervalSeconds;
+            ViewBag.PollCount = result.PollCount;
+            ViewBag.WaitLimitSeconds = result.WaitLimitSeconds;
+            ViewBag.TokenResponse = result.TokenResponse;
+            ViewBag.UserInfoResponse = result.UserInfoResponse;
 
-                JObject temp = (JObject)JsonConvert.DeserializeObject(response);
-
-                if (!temp.ContainsKey(OAuth2AndOIDCConst.error))
-                {
-                    // 正常系
-                    continueLoop = false;
-
-                    // UserInfoエンドポイントにアクセス
-                    string userInfo = await Helper.GetInstance().
-                        GetUserInfoAsync((string)temp[OAuth2AndOIDCConst.AccessToken]);
-
-                    result = "NORMAL_END";
-                }
-                else
-                {
-                    // 異常系
-                    if ((string)temp[OAuth2AndOIDCConst.error] == OAuth2AndOIDCEnum.CibaState.authorization_pending.ToStringByEmit())
-                    {
-                        // authorization_pending
-                        continueLoop = exponentialBackoff.Sleep();
-                    }
-                    else
-                    {
-                        // authorization_pending以外
-                        // 終了
-                        continueLoop = false;
-                        result = "ABNORMAL_END";
-                    }
-                }
-            }
-
-            // 完了（SAMLのテストコードっぽくした）
-            return Redirect(Config.OAuth2AuthorizationServerEndpointsRootURI + "?ret=OK_" + result);
+            return View("DeviceAuthZPollingResult");
         }
 
         #endregion
@@ -1036,6 +1003,33 @@ namespace MultiPurposeAuthSite.Controllers
             return View("PostBinding");
         }
 
+        /// <summary>Test Saml2 Post & Redirect Binding</summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **4 つ目の組み合わせ**（#246 の項目 2）。
+        /// 要求を POST で送り、**応答は Redirect（GET）で受ける**。
+        /// `ProtocolBinding` が応答の受け取り方を決めるので、`HttpRedirect` を渡す。
+        /// </remarks>
+        private ActionResult Saml2PostRedirectBinding()
+        {
+            this.InitSaml2Params();
+
+            string id = "";
+            string samlRequest = SAML2Client.CreatePostRequest(
+                SAML2Enum.ProtocolBinding.HttpRedirect,
+                SAML2Enum.NameIDFormat.Unspecified,
+                this.Issuer, this.RedirectUri, this.State, out id);
+
+            this.SaveSaml2Params();
+
+            // Post
+            ViewData["RelayState"] = this.State;
+            ViewData["SAMLRequest"] = samlRequest;
+            ViewData["Action"] = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.Saml2RequestEndpoint;
+
+            return View("PostBinding");
+        }
+
         #endregion
 
         #region OAuth2
@@ -1072,7 +1066,11 @@ namespace MultiPurposeAuthSite.Controllers
             // Assemble
             string redirect = this.AssembleOidcStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
-                + "&prompt=none";
+                // **画面で prompt を選んでいれば、そちらを使う**（#247 で気付いた）。
+                //   選んでいなければ、従来どおり prompt=none（同意画面を飛ばすため）。
+                //   固定で付けていたため、**画面の選択と実際が食い違っていた**
+                //   （max_age=0 を選んでも、prompt=none なので login_required が返っていた）。
+                + (string.IsNullOrEmpty(this.Prompt) ? "&prompt=none" : "");
 
             this.SaveOAuth2Params();
 
@@ -1293,10 +1291,13 @@ namespace MultiPurposeAuthSite.Controllers
             this.CodeChallenge = OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(this.CodeVerifier);
 
             // Assemble
+            // **S256 で計算した値なので、宣言も S256 にする**（#245 の段階 2）。
+            //   plain と宣言していたため、トークン要求で challenge == verifier の比較になり、
+            //   **このボタンは必ず失敗していた**（FAPI 1.0 Advanced も S256 を求める）。
             string redirect = this.AssembleFAPI1_OIDCStarter(
                 OAuth2AndOIDCConst.AuthorizationCodeResponseType)
                 + "&code_challenge=" + this.CodeChallenge
-                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_plain;
+                + "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256;
 
             this.SaveOAuth2Params();
 
@@ -1322,6 +1323,29 @@ namespace MultiPurposeAuthSite.Controllers
             return Redirect(redirect);
         }
 
+        /// <summary>Test Authorization Code Flow (FAPI2 CC, PAR)（#246）</summary>
+        /// <returns>ActionResult</returns>
+        /// <remarks>
+        /// **預けた結果を画面で見せてから、続けて認可へ進む。**
+        /// 他のスターターのように直接リダイレクトしないのは、
+        /// **request_uri と expires_in を目視で確かめる**ため（#246）。
+        /// </remarks>
+        private async Task<ActionResult> AuthorizationCodeFAPI2ParAsync()
+        {
+            this.InitOAuth2Params();
+
+            // Assemble
+            string redirect = await this.AssembleFAPI2ParStarterAsync(
+                OAuth2AndOIDCConst.AuthorizationCodeResponseType);
+
+            this.SaveOAuth2Params();
+
+            ViewBag.AuthorizeUrl = redirect;
+
+            return View("PushedAuthorizationResponse");
+        }
+
+
         #endregion
 
         #region CIBA
@@ -1332,12 +1356,8 @@ namespace MultiPurposeAuthSite.Controllers
         {
             this.InitOAuth2Params();
 
-            // Assemble
-            string redirect = await this.AssembleFAPICibaProfileStarterAsync();
-
-            //this.SaveOAuth2Params();
-
-            return Redirect(redirect);
+            // Assemble（結果の画面まで組み立てる。#246 の 3-a）
+            return await this.AssembleFAPICibaProfileStarterAsync();
         }
 
         #endregion
@@ -1404,23 +1424,14 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ActionResult</returns>
         private async Task<ActionResult> JWTBearerTokenFlow()
         {
-            // Tokenエンドポイントにアクセス
-            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
             // ClientNameから、client_id(iss)を取得。
             string iss = Helper.GetInstance().GetClientIdByName(this.ClientName);
 
-            // 秘密鍵
-            DigitalSignX509 dsX509 = new DigitalSignX509(
-                CmnClientParams.RsaPfxFilePath,
-                CmnClientParams.RsaPfxPassword,
-                HashAlgorithmName.SHA256);
-
+            // **アサーションの組み立ては SelfTestClient**（#246。aud はトークン エンドポイント）。
             string response = await Helper.GetInstance().JwtBearerTokenFlowAsync(
                 new Uri(Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint),
-                JwtAssertion.CreateByRsa(iss, aud,
-                    Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes,
-                    ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
+                SelfTestClient.CreateClientAssertion(
+                    iss, Config.OAuth2AccessTokenExpireTimeSpanFromMinutes, Const.StandardScopes));
 
             ViewBag.Response = response;
             ViewBag.AccessToken = ((JObject)JsonConvert.DeserializeObject(response))[OAuth2AndOIDCConst.AccessToken];

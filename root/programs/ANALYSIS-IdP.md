@@ -2,7 +2,7 @@
 
 対象: `root/programs` の IdP / STS 実装
 （`CommonLibrary` ＋ `MultiPurposeAuthSiteCore`（net10.0）＋ `MultiPurposeAuthSite`（net48）） / ブランチ: `develop`
-最終更新: 2026-09-07
+最終更新: 2026-09-29
 
 本書は各 `ANALYSIS.md` の続編で、**「IdP / STS としてのプロトコル実装がどこまで出来ていて、
 最新の仕様・慣行に対して何が足りないか」** だけを扱う。
@@ -704,6 +704,110 @@ RFC 7662 §2.2 の `token_type` は **RFC 6749 §5.1 の型**（`bearer` など�
 > エラー応答の HTTP ステータス（400 / 401）は #196 で対応した（`/revoke`・`/introspect` とも）。
 > メタデータは Claim の値をそのまま入れているため、`exp` / `iat` なども文字列で返る。
 
+### A-12. `max_age` を超えたときに、再認証もエラー応答もせず、空のエラー画面になる **[Core][netfx]** — **✅ 修正済み（#247）**
+
+```csharp
+// AccountController.OAuth2Authorize（両アプリに同文）
+if (this.CheckAuthTime(max_age)) {
+    if (Token.CmnEndpoints.ValidateAuthZReqParam(...)) { ... }
+    else { /* 不正なRequest */ }
+}
+else
+{
+    // 不正なRequest        ← ここに何も無い
+}
+
+// ここまで来たらエラー。
+if (!string.IsNullOrEmpty(valid_redirect_uri)) { /* redirect_uri へ error を返す */ }
+else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
+```
+
+`CheckAuthTime` は、次のいずれでも `false` を返す。
+
+- `auth_time` の Cookie が無い
+- 前回の認証からの経過が `max_age` を超えている
+- **`max_age` が数値でない**
+
+`false` になると `ValidateAuthZReqParam` を通らないため **`valid_redirect_uri` が空**で、
+**`err` も空のまま**「ここまで来たらエラー」に落ちる。
+結果は **文面の無いエラー画面**である（#246 の自己テストで `max_age=60` を選んで実測）。
+
+**仕様が求めているもの。**
+
+| 状況 | あるべき応答 | 根拠 |
+|---|---|---|
+| `max_age` を超えている | **利用者を再認証する**（サインインさせ、`auth_time` を更新して続ける） | OIDC Core §3.1.2.1（`max_age`）／§2（`auth_time`） |
+| 再認証が必要だが `prompt=none` | `redirect_uri` へ **`login_required`** | OIDC Core §3.1.2.6 |
+| `max_age` が数値でない | `redirect_uri` へ **`invalid_request`** | RFC 6749 §4.1.2.1 |
+
+いずれも**エラー画面ではなく、`redirect_uri` へ返す**のが仕様である（A-6 と同じ筋）。
+
+**同族の項目:** `prompt` の処理そのものは C-3、同意の永続化は D-6。
+`auth_time` は `AddAuthTimeClaim` で ID トークンに入れており、**読み書きの土台はある。**
+
+**対応（#247）。**
+
+- **検証の順序を入れ替えた。** 先に `ValidateAuthZReqParam` を通し、`redirect_uri` を確定させてから
+  `max_age` を見る。**これでエラーを RP へ返せる**
+- 判定を `CommonLibrary`（`CmnEndpoints.CheckAuthTime`）へ移し、**bool から 3 値**にした
+  （`Ok` / `InvalidMaxAge` / `NeedsReAuthentication`）。**bool では区別できなかった**のが原因
+- `NeedsReAuthentication` のとき : `prompt=none` なら **`login_required`**、
+  そうでなければ**サインアウトして同じ URL に戻す**（＝再認証）
+- `InvalidMaxAge`（数値でない・負）は **`invalid_request`**
+- **経過は「秒」で比べる（切り捨て）。これが要だった。**
+  `auth_time` も `max_age` も秒単位なので、**秒未満の差を超過とみなさない。**
+  小数のまま比べると、**再認証した直後でも「0.3 秒 > 0 秒」で超過**となり、
+  `max_age=0` では何度でも再認証を求めることになる
+- **繰り返しを防ぐ印**（`re_auth_at` の Cookie。10 分）は、**収束しない場合の保険**として残す。
+  通ったら消す
+- E2E : `RT-247.1`（再認証へ送る・**繰り返さない**・自己テストの 2 つのボタン）/
+  `RT-247.2`（`login_required`）/ `RT-247.3`（`invalid_request`）。
+  **テストはサインインから 1 秒以上ずらして測る**（速すぎると同じ秒に入り、超過にならない）
+
+> **ここに 3 回作り直した跡がある。** 記録として残す。
+> **(1) 印の新しさ（300 秒）だけを見る** → 手の操作が 5 分を超えると古い印と見なし、**二度サインイン**。
+> **(2) 「数秒前の認証なら通す」猶予** → `max_age=0` の意味が消える（仕様に反する）ので取り消し。
+> **(3) 印 ＋ 印より後に認証** → ブラウザではまだ二度。
+> **(4) 経過を秒単位で比較** → 印に依存せず成立（採用）。
+> **秒単位の値（`auth_time`）を小数で比べたことが、症状の根**だった。
+
+> **副産物。** net10.0 版の「別のアカウントでログイン」（同意画面の `submit.Login`）は、
+> `HttpContext.SignOutAsync()`（スキーム指定なし）で**サインアウトできていなかった**。
+> このサイトが使うのは `Identity.Application` で、既定のスキームでは消えない。
+> **`SignInManager.SignOutAsync()` に直した**（net48 版はスキームを指定していたため無症状）。
+
+---
+
+### A-13. `refresh_token` で更新すると、登録種別のクレーム（`fapi`）が消える **[Lib]** — **✅ 修正済み（#245）**
+
+```csharp
+// CmnEndpoints.GrantRefreshTokenCredentials
+if (CmnEndpoints.CheckClientMode(client_id, Flow.RefreshToken, proof,
+        out OAuth2AndOIDCEnum.ClientMode _,      // ← 登録種別を捨てていた
+        out jwkString, out err))
+...
+string access_token = CmnAccessToken.ProtectFromPayload(
+    client_id, tokenPayload, …, x509,
+    OAuth2AndOIDCEnum.ClientMode.normal,          // ← 固定
+    out string aud, out string sub);
+```
+
+**認可コードで得たトークンには `fapi` クレームが載るのに、更新すると消えていた。**
+`fapi` で判断するリソース サーバは、**更新の前後で違うトークンを受け取る**
+（`cnf` は残るので、証明書との紐づけは保たれる）。
+
+**#239 の段階 3 で `refresh_token` を fapi1 / fapi2 に開くまでは、normal しか通らなかったので無害だった。**
+開いたときの取り残しである。
+
+**対応（#245 の段階 1）。** `CheckClientMode` が既に返している登録種別を受け取り、
+`ProtectFromPayload` に渡す（隣の認可コードの経路と同じ形）。
+**E2E : `FA-6.5`（mTLS）/ `RT-239.5`（private_key_jwt）** が、更新後も `fapi` が載ることを検証する。
+
+> **見つけ方に意味がある。** #245 の段階 1 で
+> **`ClientModePolicy` の表の 16 行に E2E を突き合わせ、空いていた 1 行
+> （`refresh_token × mTLS`）を埋めた**ところで出た。
+> **網羅の穴と実装の穴が同じ場所にあった。**
+
 ---
 
 ## 3. B. 異常系で落ちる（HTTP 500 になる）
@@ -1065,6 +1169,11 @@ else if (code_verifier 有り && client_secret 有り) → 【空実装】
 
 さらに、**認可エンドポイント側で `code_challenge` を必須化していない**ため、
 PKCE 無しの認可コード フローがそのまま通る。
+
+> **もう 1 つ、逆向きの穴が残っていた。** `code_challenge` を送った認可から出たコードでも、
+> **`code_verifier` を省けば PKCE の検証を通らずに交換できた**（**C-22**。#245 の段階 2 で修正）。
+> **ここで直した 3 点は、いずれも「クライアントが送ってきたもの」の扱いで、
+> 「認可要求の側から必須性を決める」向きは見ていなかった。**
 
 **対応（#220 の 1 つ目）: 上の 1 と 2。**
 
@@ -1603,6 +1712,57 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/device_authz`・`/ciba_authz`・`/par`）が、
 **両アプリとも同じ入口を通る**ようにしたので、口ごとに直し忘れる形にはしていない。
 
+### C-22. `code_challenge` を送った認可コードが、`code_verifier` 無しで交換できた **[Lib]** — **✅ 修正済み（#245）**
+
+**RFC 7636 §4.6 は、認可要求に `code_challenge` が在ったなら、
+トークン要求の `code_verifier` を検証することを求めている。**
+無ければ発行してはならない（`invalid_grant`）。
+
+**判定が、要求の側から見て行われていた。**
+`CmnEndpoints.GrantAuthorizationCodeCredentials` の認証の分岐は
+**「クライアントが何を送ってきたか」**で選ばれる。
+
+| クライアントが送ったもの | 選ばれる分岐 | PKCE の検証 |
+|---|---|---|
+| `client_secret`（`code_verifier` 無し） | クライアント認証 | **呼ばれない** |
+| `code_verifier` のみ | パブリック クライアント | `VerifyPkce` |
+| `client_secret` ＋ `code_verifier` | 併用（#220） | `VerifyPkce` |
+| `client_assertion`（`code_verifier` 無し） | クライアント認証 | **呼ばれない** |
+
+**`code_verifier` を送らなければ、`VerifyPkce` を通らずに済む。**
+`code` に紐づく `code_challenge` を見ていないため、**PKCE を付けた要求から出たコードでも、
+クライアント認証だけで交換できた**（両アプリ。`CommonLibrary` なので実装は 1 つ）。
+
+**C-7（#220 / #221 / #224）は、これとは別の 3 点**（同時送信・`plain`・権限判定との分離）を直したもので、
+**「認可要求の側から必須性を決める」向きは含まれていなかった。**
+
+**影響の範囲は、秘密・鍵・証明書を持つクライアントに限られる。**
+**パブリック クライアント（`client_secret` 未登録）では成立しない。**
+`ClientAuthentication` は `client_secret` も証明書も無ければ通らないので、
+**`code_verifier` を省くと、認証そのものが失敗する**
+（実測 2026/09/29、両系統 : **HTTP 401 / `invalid_client`**。`RT-245.3` の手順 4）。
+**PKCE 以外に交換の手段が無い**ためである。
+
+したがって、失われていたのは**多層防御の 1 枚**である。
+**コードが漏れ、かつクライアントの資格情報も知られている**ときに、
+**PKCE が最後の砦にならなかった**（コード横取り・注入に対して、OAuth 2.1 が PKCE に期待する役割）。
+`require_pkce`（#221）で認可要求に `code_challenge` を必須化していた場合も、
+**交換の側が緩かったため、その必須化は貫徹していなかった。**
+
+**対応（#245 の段階 2）。** 認証の分岐の**後ろ**で、**コードに紐づく `code_challenge` の有無**を見て、
+在れば `code_verifier` を必須にする（`CmnEndpoints.UsedPkce`）。
+**`ReceiveChallenge` はコードを消さない**ので、交換の前に引いても後続の `Receive` に影響しない。
+
+- **逆向き**（`code_challenge` 無しで `code_verifier` だけ送る）は、**従来から `VerifyPkce` が拒否する**
+- **エラーは `invalid_grant`**（RFC 7636 §4.6）。クライアント認証自体は通っているため、`invalid_client` では意味がずれる
+- **正当な経路は 1 つも塞がらない。** `code_challenge` を付ける自己テストの起点は
+  **PKCE の 4 つと FAPI1 PKCE だけ**で、いずれも交換時に `code_verifier` を送る（実測で確認）
+- E2E テスト : **`RT-245.3`**（欠落は `invalid_grant`。**正しい `code_verifier` なら通る**対照つき）
+
+**`require_pkce`（#221）と合わせて初めて意味を持つ。**
+`require_pkce` は**認可要求に `code_challenge` を必須化**し、この項は**そのコードの交換に
+`code_verifier` を必須化**する。**片方だけでは、PKCE は素通りできた。**
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -1676,6 +1836,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
 | ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残り（仕様方針の判断を伴う 9〜14）は #228 |
+| ✅ **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）**#247**。`prompt` の残り（`login` / `consent` / `select_account`）は C-3 |
 
 ### フェーズ 2 — セキュリティの底上げ
 
@@ -1689,6 +1850,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | C-10 `redirect_uri` の厳密比較、テスト用抜け道のロックダウン対象化 |
 | C-12 / C-13 Cookie 有効期限の設定反映、DataProtection の永続化 |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
+| ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 
 ### フェーズ 3 — OAuth 2.1 / FAPI 2.0 への整合
 

@@ -47,6 +47,9 @@
 //*  2026/09/27  玄人 幸道         Basic を符号化せずに送る口（urlEncode）を追加（#237）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）の口を追加（#232）
 //*  2026/09/27  玄人 幸道         自己テストの画面が出すログアウトのフォームを送る口を追加（#232）
+//*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
+//*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
+//*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
 //**********************************************************************************
 
 using System;
@@ -384,10 +387,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// （AccountController の CreateData）。EX-8.4 は、その 2 人目を使う。
         /// </summary>
         /// <param name="userName">サインインする利用者（null ならテスト ユーザ）</param>
+        /// <param name="force">
+        /// **サインイン済みでも、もう一度サインインする**（#247）。
+        /// サーバ側がサインアウトさせた後（`max_age` の再認証）は、
+        /// こちらの `IsSignedIn` だけが残るため、これで押し切る。
+        /// </param>
         /// <returns>Task</returns>
-        public async Task SignInAsync(string userName = null)
+        public async Task SignInAsync(string userName = null, bool force = false)
         {
-            if (this.IsSignedIn)
+            if (this.IsSignedIn && !force)
             {
                 return;
             }
@@ -1100,6 +1108,41 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         #region 自己テスト（/Home/Saml2OAuth2Starters）
 
         /// <summary>
+        /// 自己テストの Device AuthZ 画面から「Start polling.」を押す（#246）。
+        /// </summary>
+        /// <param name="html">DeviceAuthZResponse 画面の HTML</param>
+        /// <returns>応答（ポーリングの結果の画面）</returns>
+        /// <remarks>
+        /// **画面が出している hidden（client_id・device_code・interval）を、そのまま送り返す。**
+        /// 画面は AntiForgeryToken を埋めているので、それも送る。
+        /// </remarks>
+        public async Task<HttpResponseMessage> SubmitDeviceAuthZPollingAsync(string html)
+        {
+            Dictionary<string, string> form = new Dictionary<string, string>();
+
+            foreach (string name in new string[] { "client_id", "device_code", "interval" })
+            {
+                Match hidden = new Regex(
+                    "name=\"" + name + "\"[^>]*value=\"(?<value>[^\"]*)\"",
+                    RegexOptions.IgnoreCase).Match(html);
+
+                if (hidden.Success)
+                {
+                    form.Add(name, hidden.Groups["value"].Value);
+                }
+            }
+
+            Match token = AntiforgeryRegex.Match(html);
+
+            if (token.Success)
+            {
+                form.Add("__RequestVerificationToken", token.Groups["value"].Value);
+            }
+
+            return await this.PostFormAsync("/Home/DeviceAuthZResponse", form);
+        }
+
+        /// <summary>
         /// アプリに同梱の自己テスト（OAuth2Starters）を起動する。
         ///
         /// 24 通りのフローが submit.&lt;名前&gt; 1 つで起動できるので、
@@ -1109,10 +1152,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <param name="clientType">normal / fapi1 / fapi2 / device / fapi_ciba（空はログイン ユーザ）</param>
         /// <param name="clarifyRedirectUri">認可リクエストに redirect_uri を明示するか</param>
         /// <param name="responseMode">response_mode（既定は空）</param>
+        /// <param name="prompt">prompt（null なら送らない。#246 の項目 3）</param>
+        /// <param name="maxAge">max_age（null なら送らない。#246 の項目 3）</param>
         /// <returns>応答（リダイレクトは追跡しない）</returns>
         public async Task<HttpResponseMessage> StartSelfTestAsync(
             string submitButton, string clientType = "normal",
-            bool clarifyRedirectUri = true, string responseMode = "")
+            bool clarifyRedirectUri = true, string responseMode = "",
+            string prompt = null, string maxAge = null)
         {
             HttpResponseMessage get = await this.GetAsync("/Home/Saml2OAuth2Starters");
             string html = await get.Content.ReadAsStringAsync();
@@ -1126,6 +1172,18 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { "ResponseMode", responseMode },
                 { "submit." + submitButton, submitButton }
             };
+
+            // **画面の選択（prompt / max_age）を、そのまま送る**（#246 の項目 3）。
+            //   null なら送らない（「送らない」と「空で送る」を区別するため）。
+            if (prompt != null)
+            {
+                form.Add("Prompt", prompt);
+            }
+
+            if (maxAge != null)
+            {
+                form.Add("MaxAge", maxAge);
+            }
 
             if (m.Success)
             {

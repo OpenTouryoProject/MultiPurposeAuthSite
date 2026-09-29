@@ -31,6 +31,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/04/24  西野 大介         新規
+//*  2026/09/28  玄人 幸道         クライアント認証の方式を持たせた（#246 の項目 3）
 //**********************************************************************************
 
 using System;
@@ -69,6 +70,15 @@ namespace MultiPurposeAuthSite.ViewModels
 
         /// <summary>RefreshToken</summary>
         public string RefreshToken { get; set; }
+
+        /// <summary>
+        /// トークン要求に使ったクライアント認証の方式（#246 の項目 3）
+        /// </summary>
+        /// <remarks>
+        /// **画面からは何を送ったのかが分からなかった**ので、出すことにした。
+        /// 値は自己テストが自分で入れる（サーバの応答に入っているものではない）。
+        /// </remarks>
+        public string AuthMethod { get; set; }
 
         /// <summary>Response</summary>
         public string Response { get; set; }

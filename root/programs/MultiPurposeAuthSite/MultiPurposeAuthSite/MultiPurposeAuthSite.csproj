@@ -506,6 +506,7 @@
     <Content Include="Views\Account\Agreement.cshtml" />
     <Content Include="Views\Manage\AddMsPassData.cshtml" />
     <Content Include="Views\Home\Saml2OAuth2Starters.cshtml" />
+    <Content Include="Views\Home\PushedAuthorizationResponse.cshtml" />
     <Content Include="Views\Home\OAuth2ClientAuthenticationFlow.cshtml" />
     <Content Include="Views\Manage\ManageGDPRData.cshtml" />
     <Content Include="Views\Home\Scroll.cshtml" />
@@ -517,7 +518,10 @@
     <Content Include="Views\Home\PostBinding.cshtml" />
     <Content Include="Views\Account\DeviceAuthZVerify.cshtml" />
     <Content Include="Views\Account\EndSession.cshtml" />
+    <Content Include="Views\Account\Saml2Response.cshtml" />
     <Content Include="Views\Home\DeviceAuthZResponse.cshtml" />
+    <Content Include="Views\Home\CibaProfileResponse.cshtml" />
+    <Content Include="Views\Home\DeviceAuthZPollingResult.cshtml" />
     <Content Include="Scripts\umd\popper.min.js.map" />
     <Content Include="Scripts\umd\popper.js.map" />
     <Content Include="Scripts\umd\popper.js.flow" />

@@ -33,6 +33,7 @@
 //*  2026/09/22  玄人 幸道         表の注記 : mTLS の行を E2E（FA-6.1）で守るようにした（#226）
 //*  2026/09/25  玄人 幸道         認可コード × private_key_jwt に fapi2 を足した（#238）
 //*  2026/09/26  玄人 幸道         refresh_token を、非対称の証明なら fapi1 / fapi2 にも開いた（#239 の段階 3）
+//*  2026/09/29  玄人 幸道         行ごとの E2E を突き合わせ、注記を更新（#245 の段階 1）
 //**********************************************************************************
 
 using System.Linq;
@@ -148,9 +149,11 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **経路 × 証明 → 通す登録種別。** 表に無い組み合わせは、すべて拒否。
         /// </summary>
         /// <remarks>
-        /// E2E で守られている行には、そのテストの識別子を書いた。
-        /// **private_key_jwt の行は、E2E で守られていない。**
-        /// mTLS の行は net10.0 版だけ E2E で守られている（net48 版は手動。#226）。
+        /// **E2E で守られている行には、そのテストの識別子を書いた。**
+        /// **#245 の段階 1 で全 16 行を突き合わせ、空いていた 1 行（refresh_token × mTLS）を埋めた。**
+        /// 一覧は `Tests/README.md` の「経路 × 証明の網羅」にある。
+        ///
+        /// mTLS の行は **net10.0 版だけ E2E で守られている**（net48 版は `-NetFxMtls` のときだけ。#226）。
         /// </remarks>
         private static readonly Rule[] Rules = new Rule[]
         {
@@ -179,7 +182,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   **並び順が意味を持つ。** IsAllowed は最初に当たった行を使うので、
             //   Proof.Any の行より前に、証明を限る行を置く。
             new Rule(Flow.RefreshToken,          Proof.PrivateKeyJwt,       Normal, Fapi1, Fapi2),    // RT-239.5
-            new Rule(Flow.RefreshToken,          Proof.Mtls,                Normal, Fapi1, Fapi2),
+            new Rule(Flow.RefreshToken,          Proof.Mtls,                Normal, Fapi1, Fapi2),    // FA-6.5
             new Rule(Flow.RefreshToken,          Proof.Any,                 Normal),                  // FA-1.2
 
             // 上記以外のグラント : 証明によらず normal だけ

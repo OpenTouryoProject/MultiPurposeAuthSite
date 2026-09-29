@@ -36,6 +36,7 @@
     //*  2017/04/24  西野 大介         新規
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
     //*  2026/09/27  玄人 幸道         RP-Initiated Logout を試すボタンを追加（#232）
+    //*  2026/09/28  玄人 幸道         クライアント認証の方式を出す（#246 の項目 3）
     //**********************************************************************************
 *@
 
@@ -63,6 +64,11 @@
     
     <text>State:</text> @Html.TextBoxFor(model => model.State, new { @readonly = "readonly" })<br />
     <text>Code:</text> @Html.TextBoxFor(model => model.Code, new { @readonly = "readonly" })<br />
+
+    @* **トークン要求に使ったクライアント認証の方式**（#246 の項目 3）。
+       画面からは何を送ったのかが分からなかったので、出すことにした。 *@
+    <text>クライアント認証（トークン要求）:</text>
+    <b>@(string.IsNullOrEmpty(Model.AuthMethod) ? "（この経路では未設定）" : Model.AuthMethod)</b><br />
 
     <text>Access Token</text>
     <text>(JWT)</text>

@@ -238,7 +238,7 @@ using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.Secon
 | `Tests/Extended/RefreshTokenTests.cs` | `EX-1` | refresh_token の更新・ローテーション・**再利用の検知と一族ごとの失効**（#188）・発行先との結び付け（RFC 6749 §6 / RFC 9700 / RFC 7009） |
 | `Tests/Extended/RevocationTests.cs` | `EX-2` | トークンの失効（RFC 7009） |
 | `Tests/Extended/IntrospectionTests.cs` | `EX-3` | トークンの問い合わせ（RFC 7662） |
-| `Tests/Extended/DeviceAuthorizationTests.cs` | `EX-4` | Device Authorization Grant（RFC 8628） |
+| `Tests/Extended/DeviceAuthorizationTests.cs` | `EX-4` / `RT-246` | Device Authorization Grant（RFC 8628）。**自己テストのボタンから、承認して判定が画面に出るまで**（`RT-246.3`） |
 | `Tests/Extended/HybridFlowTests.cs` | `EX-5` | OIDC Hybrid フロー（c_hash / at_hash） |
 | `Tests/Extended/ResponseModeTests.cs` | `EX-6` | response_mode（fragment / form_post / JARM） |
 | `Tests/Extended/JwtBearerTests.cs` | `EX-7` | JWT Bearer グラント（RFC 7523） |
@@ -275,13 +275,16 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 | `Tests/Issues/CacheControlTests.cs` | `RT-218` | トークンを返す口の `Cache-Control: no-store` / `Pragma: no-cache` |
 | `Tests/Issues/PkceTests.cs` | `RT-220` | PKCE : `client_secret` との併用、`plain`、`code_challenge` の要否 |
 | `Tests/Issues/DiscoveryTests.cs` | `RT-189` | Discovery の項目と型（Device AuthZ の広告、boolean / 配列、mTLS の名前、暗号化と JARM の対） |
-| `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない |
+| `Tests/Issues/PushedAuthorizationTests.cs` | `RT-229` / `RT-246` | PAR（`/par`）: フォームと JAR の両方で預けられる／クライアント認証が要る／`request_uri` は渡せない。**自己テストの PAR ボタン**（Open棟梁 のクライアントで預けて認可する。`RT-246.1`） |
 | `Tests/Issues/IssuerParameterTests.cs` | `RT-231` | 認可応答の `iss`（RFC 9207）。成功・失敗・JARM・Discovery の広告 |
 | `Tests/Issues/MalformedJwtTests.cs` | `RT-241` | JWT でない値・`iss` の無い JWT・未登録のクライアントで **500 にしない**（`/ros` と `client_assertion`） |
 | `Tests/Issues/AsymmetricAuthTests.cs` | `RT-239` | 認可コード以外でも `private_key_jwt` で認証する（`refresh_token` / `/revoke` / `/introspect`）。壊れたアサーションを断ること。**fapi2 が `refresh_token` を使えること**（`RT-239.5`） |
 | `Tests/Issues/ClientAssertionTests.cs` | `RT-238` | `private_key_jwt` のクライアント認証（RFC 7523 §2.2 の `client_assertion`）。従来の `assertion` も通ること、`client_assertion_type` の検証、fapi2 がトークンを取れること |
 | `Tests/Issues/UserClaimsTests.cs` | `RT-230` | `profile` / `address` のクレームを設定で対応付ける。スコープで括られること、空は返さないこと、`claims_supported` が対応付けから作られること |
-| `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` / `RT-243` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`） |
+| `Tests/Issues/MaxAgeTests.cs` | `RT-247` | **`max_age` を超えたときの応答**（再認証へ送る／`prompt=none` なら `login_required`／数値でなければ `invalid_request`）。**繰り返しにならないこと**も見る |
+| `Tests/Issues/ConsentScreenTests.cs` | `RT-246` | **認可画面（同意）が「何を確かめる画面か」を出す**（`prompt` / `max_age` の効き方）／**結果画面がクライアント認証の方式を出す**（`RT-246.6`） |
+| `Tests/Issues/Saml2AssertionTests.cs` | `RT-246` | **自己テストが SAML2 のアサーションを画面に出す**（Redirect / POST / 要求 POST ＋ 応答 Redirect の 3 経路。判定・署名の検証・Issuer の一致・XML・属性。`RT-246.4` 〜 `RT-246.7`） |
+| `Tests/Issues/CibaRequestTests.cs` | `RT-233` / `RT-234` / `RT-243` / `RT-246` | CIBA の認証要求を `request`（署名付き JWT）で直接受け取る（CIBA Core §7.1.1）。`request_uri` との優先順位、署名の検証。**`aud` の検証・`jti` の使い切り・クライアント認証**（`RT-234`）。**自己テストの CIBA ボタン**（判定と理由が画面に出る。`RT-246.2`） |
 | `Tests/Issues/EndSessionTests.cs` | `RT-232` | **RP からのログアウト**（`/end_session`）。Discovery の広告、GET と POST の両方、`post_logout_redirect_uri` の完全一致、`id_token_hint` が無いときの確認画面、`client_id` の食い違い、サインインしていないときもエラーにしないこと。**自己テストの口**（Starters のボタン ＝ `RT-232.8`、認可コードの結果画面のボタン ＝ `RT-232.9`） |
 | `Tests/Issues/BasicCredentialsTests.cs` | `RT-237` | `client_secret_basic` の資格情報を **RFC 6749 §2.3.1 のとおり復号して照合する**。符号化した Basic で通ること、**符号化しない Basic でも通ること**（互換）、`:` を含む秘密は符号化したときだけ通ること |
 | `Tests/Issues/LifetimeTests.cs` | `RT-188` | 認可コード / refresh_token / `request_uri` の**有効期限**。**`-ShortLifetimes` のときだけ回る**（下記） |
@@ -299,7 +302,12 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 
 判定は `ClientModePolicy` の表（経路 × 何を証明したか → 通す登録種別）による（#224）。
 **登録種別で断るときのエラーは `unauthorized_client`**（RFC 6749 §5.2。#224 の段階 2 で揃えた）。
-**E2E で守られていない行がある** : 認可コードの private_key_jwt。mTLS は net10.0 版だけ（`FA-6`）。
+**全 16 行に、通ることを測るケースを当てた**（#245 の段階 1。下の「経路 × 証明の網羅」）。
+**mTLS の 2 行は net10.0 版だけ**で、net48 版は `-NetFxMtls` のときだけ測る（`FA-6`）。
+
+> 以前ここには「**E2E で守られていない行がある** : 認可コードの private_key_jwt」と書いてあった。
+> **`RT-238.4`（#238）と `RT-239.5`（#239）で埋まっており、記述が古かった。**
+> 残っていた空きは `refresh_token × mTLS` の 1 行だけで、#245 で `FA-6.5` を足した。
 
 **有効期限（`RT-188`）は、`-ShortLifetimes` で起動したときだけ回る**（#188）。
 既定の寿命（認可コード 600 秒・Request Object 300 秒・refresh_token 14 日）を待てないため、
@@ -371,6 +379,74 @@ RT が混ざっている。**対照は近くに置いたほうが読めるので
 cd root
 .\2_RunAllTests.ps1 -Launch -UpdateTestCases
 ```
+
+## 壊したときに通らないことの網羅（#245 の段階 2）
+
+**「パラメタを 1 つ壊したら、認証・認可されない」を経路ごとに揃えた。**
+異常系は Issue ごとに足してきたため、**同じ形の確認が、あるものと無いものに分かれていた。**
+**既にあるものは数え、無いものだけを足した。**
+
+| 壊すもの | 既にあったもの | 足したもの |
+|---|---|---|
+| `client_id` / `client_secret` | `TC-2.3`（誤り・存在しない）／`FA-6.2`（証明書）／`EX-4.6` | — |
+| `redirect_uri` | `TC-1.3`（未登録）／`RT-186.2` `.3`（認可時と違う・省略） | `RT-245.4`（**パスの大文字小文字違い。C-10 が未修正なので Skip**） |
+| `code` | `TC-2.2` `RT-186.4`（使用済み）／`RT-188.1`（期限切れ） | **`RT-245.2`**（改竄・他クライアントでの交換） |
+| `refresh_token` | `EX-1.2` `.3` `.4`／`RT-188.2` | — |
+| `device_code` | `EX-4.5` `.7` | — |
+| `code_verifier` | `TC-2.4`（不一致）／`RT-197.6` | **`RT-245.3`**（**欠落。C-22 として修正した**） |
+| `client_assertion` | `RT-239.4`（署名）／`RT-241.2` `.3`（JWT でない・`iss`） | **`RT-245.5`**（`aud` 違い・`exp` 切れ） |
+| Request Object / CIBA の `request` | `RT-233` `RT-234`（`aud`・`jti`）／`RT-241.1` | — |
+| `scope` | `RT-198.1`〜`.4`／`TC-1.4` | — |
+| `request_uri` を口をまたいで渡す | **無かった** | **`RT-245.1`**（`/par` ⇄ `/ciba_authz`） |
+
+**この作業で、製品側の弱点が 2 件出た。**
+
+| 出たもの | 扱い |
+|---|---|
+| **`code_challenge` を送ったコードが `code_verifier` 無しで交換できた** | **C-22 として修正**（#245。`RT-245.3` が守る） |
+| `redirect_uri` の比較が大文字小文字を無視 | **既知（C-10）。フェーズ 2 で直す。** `RT-245.4` は**その挙動のときだけ Skip** する形で置いた（直れば自動で緑になる） |
+
+**自己テスト側の取り違えも 1 件出た**（`RT-245.6`）。
+「FAPI1 PC, PKCE」のボタンが、**S256 で計算した `code_challenge` を `plain` と宣言**していたため、
+**このボタンは必ず失敗していた。** E2E が押していなかったので、押して固定した。
+
+> **「壊したら通らない」だけでは足りない。**
+> どのケースにも**対照（正しい値なら通る）**を入れている。
+> **壊し方に関係なく全部落ちている**状態と区別できないため。
+
+## 経路 × 証明の網羅（`ClientModePolicy` の表。#245 の段階 1）
+
+**`CommonLibrary/TokenProviders/ClientModePolicy.cs` の表がそのまま仕様である**
+（経路 × 何を証明したか → 通す登録種別。表に無い組み合わせは拒否）。
+**その 16 行すべてに、通ることを測るケースを当てた。**
+
+| 経路 | 証明 | 通す登録種別 | 測っているケース |
+|---|---|---|---|
+| Implicit | 問わない | normal | `21-1.1` |
+| Hybrid | 問わない | normal | `FA-1.4` |
+| 認可コード | `client_secret` | normal | `FA-1.1` |
+| 認可コード | `client_secret` ＋ PKCE | normal | `FA-1.3` |
+| 認可コード | PKCE plain | normal | `RT-220.2` |
+| 認可コード | PKCE S256 | normal / fapi1 / device | `FA-1.1` / `FA-3.1` |
+| 認可コード | `private_key_jwt` | normal / fapi1 / fapi2 / device | `RT-238.4` |
+| 認可コード | mTLS | normal / fapi1 / fapi2 | `FA-6.1`（net10.0。net48 は `-NetFxMtls`） |
+| `refresh_token` | `private_key_jwt` | normal / fapi1 / fapi2 | `RT-239.5` |
+| `refresh_token` | mTLS | normal / fapi1 / fapi2 | **`FA-6.5`**（#245 で追加） |
+| `refresh_token` | 問わない | normal | `FA-1.2` |
+| ROPC | 問わない | normal | `FA-1.1` / `21-1.1` |
+| `client_credentials` | 問わない | normal | `FA-1.1` |
+| JWT Bearer | 問わない | normal | `EX-7` |
+| CIBA | 問わない | fapi_ciba | `EX-8` / `FA-5.1` |
+| Device AuthZ | 問わない | normal / device | `FA-4.1` |
+
+**拒否される側**（表に無い組み合わせ）は `FA-2.1`（fapi2 × client_secret / PKCE）、
+`FA-1.4`（fapi1 × Hybrid）、`FA-4.1` / `FA-5.1`（登録種別の違い）、
+`FA-6.2` / `FA-6.3`（証明書の不一致・既知でない登録値）が守っている。
+
+> **`refresh_token` の行は #239 の段階 3 で fapi1 / fapi2 に開いた。**
+> その際、**更新後のトークンから登録種別のクレーム（`fapi`）が消えていた**
+> （`ProtectFromPayload` に `normal` を固定で渡していた）。
+> **#245 の段階 1 で `FA-6.5` を書いたときに実測して直した**（`FA-6.5` / `RT-239.5` が検証する）。
 
 ## 既定で無効な機能のテスト（`Tests/Obsolete/`）
 

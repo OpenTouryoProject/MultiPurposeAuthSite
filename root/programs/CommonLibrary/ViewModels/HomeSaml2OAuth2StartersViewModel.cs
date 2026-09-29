@@ -18,6 +18,7 @@
 //*  2019/02/16  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
 //*  2020/12/21  西野 大介         Enum追加対応実施
+//*  2026/09/28  玄人 幸道         prompt / max_age を画面から選べるようにした（#246 の項目 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -91,6 +92,56 @@ namespace MultiPurposeAuthSite.ViewModels
             }
         }
 
+
+        /// <summary>prompt（OIDC Core 3.1.2.1。#246 の項目 3）</summary>
+        /// <remarks>
+        /// **認可画面（同意）の出方を、画面から試せるようにするためにある。**
+        /// `none` は「UI を出すな」、`login` は再認証、`consent` は再同意、
+        /// `select_account` はアカウントの選択を求める指定。
+        /// **この実装が扱えるのは `none` だけ**（`ANALYSIS-IdP.md` C-3）なので、
+        /// 他の値を選ぶと**無視される**ことが観測できる。
+        /// </remarks>
+        [Display(Name = "prompt")]
+        public string Prompt { get; set; }
+
+        /// <summary>promptアイテムリスト</summary>
+        public List<SelectListItem> DdlPromptItems
+        {
+            get
+            {
+                return new List<SelectListItem>()
+                {
+                    new SelectListItem() { Text = "指定しない", Value = "" },
+                    new SelectListItem() { Text = "none（UI を出さない）", Value = "none" },
+                    new SelectListItem() { Text = "login（再認証。未対応）", Value = "login" },
+                    new SelectListItem() { Text = "consent（再同意。未対応）", Value = "consent" },
+                    new SelectListItem() { Text = "select_account（選択。未対応）", Value = "select_account" }
+                };
+            }
+        }
+
+        /// <summary>max_age（OIDC Core 3.1.2.1。秒。#246 の項目 3）</summary>
+        /// <remarks>
+        /// **前回の認証からの経過時間の上限。** 超えていれば、OP は再認証を求めるべきもの。
+        /// 画面から試せるようにして、**効き方を観測できる**ようにした。
+        /// </remarks>
+        [Display(Name = "max_age")]
+        public string MaxAge { get; set; }
+
+        /// <summary>max_ageアイテムリスト</summary>
+        public List<SelectListItem> DdlMaxAgeItems
+        {
+            get
+            {
+                return new List<SelectListItem>()
+                {
+                    new SelectListItem() { Text = "指定しない", Value = "" },
+                    new SelectListItem() { Text = "0（毎回、再認証）", Value = "0" },
+                    new SelectListItem() { Text = "60（1 分）", Value = "60" },
+                    new SelectListItem() { Text = "600（10 分。OIDC のボタンの既定）", Value = "600" }
+                };
+            }
+        }
         /// <summary>ResponseMode</summary>
         [Display(Name = "ResponseMode", ResourceType = typeof(Resources.CommonViewModels))]
         public string ResponseMode { get; set; }

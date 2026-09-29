@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/26  玄人 幸道         新規（#239 の段階 1・2）
 //*  2026/09/26  玄人 幸道         RT-239.5（fapi2 の refresh_token）を追加（#239 の段階 3）
+//*  2026/09/29  玄人 幸道         更新後も fapi クレームが載ることを確認（#245）
 //**********************************************************************************
 
 using System;
@@ -330,6 +331,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("access_token が返る", !string.IsNullOrEmpty(refreshed.AccessToken),
                     "access_token あり",
                     string.IsNullOrEmpty(refreshed.AccessToken) ? refreshed.ToString() : "あり（値は伏せる）");
+
+                Assert.False(string.IsNullOrEmpty(refreshed.AccessToken), "前提: 更新できること");
+
+                // **更新の前後で、トークンの名乗りが変わらないこと**（#245 で直した）。
+                //   以前は `ProtectFromPayload` に `ClientMode.normal` を固定で渡しており、
+                //   **更新すると fapi クレームが消えていた**（`FA-6.5` で実測して直した）。
+                r.VerifyEqual("更新後も fapi クレームは登録どおり fapi2",
+                    "fapi2", Jwt.String(Jwt.Payload(refreshed.AccessToken), "fapi") ?? "（無し）");
 
                 r.Note("**client_secret では通らない**（fapi2 は秘密を持たず、表も開いていない）。"
                     + "mTLS でも通る（同じ行に Mtls を置いた）。");

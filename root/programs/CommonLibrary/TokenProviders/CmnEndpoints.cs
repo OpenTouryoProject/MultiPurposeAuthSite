@@ -100,6 +100,10 @@
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（RFC 6749 2.3.1。#237）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
 //*  2026/09/27  玄人 幸道         CIBA の jti を記録するキーを固定長にした（#243）
+//*  2026/09/28  玄人 幸道         max_age の判定を結果で場合分けできる形にした（#247）
+//*  2026/09/29  玄人 幸道         経過を秒単位で比べる（再認証の直後を超過としない）（#247）
+//*  2026/09/29  玄人 幸道         refresh で登録種別のクレーム（fapi）が消えていたのを修正（#245）
+//*  2026/09/29  玄人 幸道         code_challenge を送った code は code_verifier を必須にした（#245）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -477,6 +481,122 @@ namespace MultiPurposeAuthSite.TokenProviders
         #endregion
 
         #region AuthZ(N)Endpoint
+
+        #region auth_time（max_age。#247）
+
+        /// <summary>再認証の印（Cookie）を有効とみなす長さ（秒）</summary>
+        /// <remarks>
+        /// **繰り返しを防ぐ最後の砦。** 主たる判定は秒単位の比較（`CheckAuthTime` の末尾）で、
+        /// **印はそれでも収束しない場合のための保険**である。
+        /// **人がサインインを終えるまでの時間**を見込んで 10 分。
+        /// </remarks>
+        private const int ReAuthenticationMarkerLifetimeSeconds = 600;
+
+        /// <summary>max_age の判定の結果</summary>
+        public enum AuthTimeCheck
+        {
+            /// <summary>そのまま続けてよい</summary>
+            Ok,
+
+            /// <summary>max_age が数値（0 以上の整数）でない</summary>
+            InvalidMaxAge,
+
+            /// <summary>再認証が必要（prompt=none なら login_required）</summary>
+            NeedsReAuthentication
+        }
+
+        /// <summary>max_age と auth_time を照合する（#247）</summary>
+        /// <param name="max_age">要求の max_age（空なら判定しない）</param>
+        /// <param name="authTime">前回の認証時刻（Cookie の auth_time。W3C 形式）</param>
+        /// <param name="reAuthenticatedAt">再認証を求めた時刻（Cookie。W3C 形式。無ければ空）</param>
+        /// <returns>判定</returns>
+        /// <remarks>
+        /// **判定だけを行う。** Cookie の読み書きとリダイレクトは呼び出し側（Controller）に残す。
+        /// **両アプリに同文で在った `CheckAuthTime` を、結果で場合分けできる形にして寄せた。**
+        ///
+        /// **なぜ bool ではないか。** 以前は bool で、false のときに
+        /// **再認証もエラー応答もせず、文面の無いエラー画面**になっていた（`ANALYSIS-IdP.md` の A-12）。
+        /// 仕様は次の 3 つを求めており、**bool では区別できない。**
+        ///
+        /// | 状況 | あるべき応答 | 根拠 |
+        /// |---|---|---|
+        /// | max_age を超えている | **再認証する** | OIDC Core 3.1.2.1 |
+        /// | 同上 かつ prompt=none | `login_required` | OIDC Core 3.1.2.6 |
+        /// | max_age が数値でない | `invalid_request` | RFC 6749 4.1.2.1 |
+        ///
+        /// **`reAuthenticatedAt` は繰り返しを防ぐための印。**
+        /// `max_age=0` は「毎回再認証」を意味するが、再認証の直後でも
+        /// 経過時間は 0 より大きくなるため、印が無いと延々と送り返すことになる。
+        /// **印より後に認証されていれば、一度は再認証したと見て続ける。**
+        /// </remarks>
+        public static AuthTimeCheck CheckAuthTime(string max_age, string authTime, string reAuthenticatedAt)
+        {
+            if (string.IsNullOrEmpty(max_age))
+            {
+                // max_age の指定なし
+                return AuthTimeCheck.Ok;
+            }
+
+            // **0 以上の整数であること**（OIDC Core 3.1.2.1）。
+            if (!int.TryParse(max_age, out int maxAge) || maxAge < 0)
+            {
+                return AuthTimeCheck.InvalidMaxAge;
+            }
+
+            DateTime? authenticatedAt = CmnEndpoints.FromW3c(authTime);
+
+            // **印（一度求めた証）が在って、それが古すぎなければ通す**（繰り返しの最後の砦）。
+            //   **この印だけに頼らない。** 下の「秒単位の比較」で、たいていの場合はここまで来ない。
+            //   印は**サインインの往復で失われることがある**ため（実測）、
+            //   **主たる判定は下の秒単位の比較**に置く。
+            DateTime? askedAt = CmnEndpoints.FromW3c(reAuthenticatedAt);
+
+            if (askedAt != null
+                && (DateTime.UtcNow - (DateTime)askedAt).TotalSeconds
+                    <= CmnEndpoints.ReAuthenticationMarkerLifetimeSeconds)
+            {
+                return AuthTimeCheck.Ok;
+            }
+
+            if (authenticatedAt == null)
+            {
+                // 認証時刻が分からない（Cookie が無い・読めない）
+                return AuthTimeCheck.NeedsReAuthentication;
+            }
+
+            // **経過は「秒」で比べる**（切り捨て。#247）。
+            //   `auth_time` も `max_age` も秒単位なので、**秒未満の差を超過とみなさない。**
+            //   これが要である。小数のまま比べると、**再認証した直後でも
+            //   「0.3 秒 > 0 秒」で超過**となり、`max_age=0` では何度でも求めることになる
+            //   （印が失われる環境では、それが二度のサインインとして現れた。実測）。
+            long elapsedSeconds = (long)(DateTime.UtcNow - (DateTime)authenticatedAt).TotalSeconds;
+
+            return (elapsedSeconds <= maxAge)
+                ? AuthTimeCheck.Ok : AuthTimeCheck.NeedsReAuthentication;
+        }
+
+        /// <summary>W3C 形式の時刻を読む（読めなければ null）</summary>
+        /// <param name="value">W3C 形式の時刻</param>
+        /// <returns>DateTime（読めなければ null）</returns>
+        private static DateTime? FromW3c(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            try
+            {
+                return FormatConverter.FromW3cTimestamp(value);
+            }
+            catch
+            {
+                // Cookie が壊れている・形式が違う。**例外にしない**（#241 と同じ方針）。
+                return null;
+            }
+        }
+
+        #endregion
 
         #region ValidateAuthZReqParam
 
@@ -1892,6 +2012,29 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region UsedPkce
+
+        /// <summary>認可要求で PKCE を使ったか（その code に code_challenge が紐づいているか）</summary>
+        /// <param name="code">認可コード</param>
+        /// <param name="client_id">client_id</param>
+        /// <param name="redirect_uri">redirect_uri</param>
+        /// <returns>使っていれば true</returns>
+        /// <remarks>
+        /// **`ReceiveChallenge` は code を消さない**（`remove: false` / `DELETE` はコメント アウト）ので、
+        /// 交換の前に引いても、後続の `Receive` に影響しない。
+        /// </remarks>
+        private static bool UsedPkce(string code, string client_id, string redirect_uri)
+        {
+            AuthorizationCodeProvider.ReceiveChallenge(
+                code, client_id, redirect_uri,
+                out string code_challenge_method, out string code_challenge);
+
+            return !string.IsNullOrEmpty(code_challenge_method)
+                && !string.IsNullOrEmpty(code_challenge);
+        }
+
+        #endregion
+
         #region VerifyPkce
 
         /// <summary>PKCE（RFC 7636）の検証（#220）</summary>
@@ -2441,6 +2584,20 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                 #endregion
 
+                // **認可要求で code_challenge を送っていたなら、code_verifier は必須**（RFC 7636 §4.6）。
+                //   上の分岐は「**クライアントが何を送ってきたか**」で選ばれるため、
+                //   **code_verifier を省くと VerifyPkce を通らずに済んでしまう。**
+                //   認可要求の側（code に紐づく code_challenge）から見て、必須性を決める。
+                //
+                //   **逆向き（code_challenge 無しで code_verifier だけ送る）は VerifyPkce が拒否する。**
+                if (authned && string.IsNullOrEmpty(code_verifier)
+                    && CmnEndpoints.UsedPkce(code, client_id, redirect_uri))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_grant);
+                    err.Add(OAuth2AndOIDCConst.error_description, "code_verifier is required.");
+                    return false;
+                }
+
                 if (authned)
                 {
                     string tokenPayload = AuthorizationCodeProvider.Receive(code, client_id, redirect_uri);
@@ -2580,9 +2737,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                     #region CheckClientMode
 
                     // このフローが認められるか？
+                    //   **登録種別を受け取る**（#245）。トークンのクレームに書くため。
                     if (CmnEndpoints.CheckClientMode(client_id,
                         ClientModePolicy.Flow.RefreshToken, proof,
-                        out OAuth2AndOIDCEnum.ClientMode _, out jwkString, out err))
+                        out OAuth2AndOIDCEnum.ClientMode clientMode, out jwkString, out err))
                     {
                         // 継続可
                     }
@@ -2604,10 +2762,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (!string.IsNullOrEmpty(tokenPayload))
                     {
                         // access_token
+                        // **クレームは、登録された種別（clientMode）で書く**（#245）。
+                        //   以前は `ClientMode.normal` を固定で渡しており、
+                        //   **更新すると fapi クレームが消えていた**（認可コードで得たトークンには載る）。
+                        //   **#239 の段階 3 で fapi1 / fapi2 に refresh を開くまでは、
+                        //   normal しか通らなかったので無害だった。** 開いたときの取り残し。
+                        //   E2E : FA-6.5（mTLS）/ RT-239.5（private_key_jwt）。
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            x509, OAuth2AndOIDCEnum.ClientMode.normal, out string aud, out string sub);
+                            x509, clientMode, out string aud, out string sub);
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)

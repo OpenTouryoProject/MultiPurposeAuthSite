@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2020/12/21  西野 大介         新規
+    //*  2026/09/28  玄人 幸道         interval を表示し、hidden で持ち回す（#246 の 3-b）
     //**********************************************************************************
 *@
 
@@ -43,6 +44,7 @@
     <li>ClientId : @ViewBag.ClientId</li>
     <li>DeviceCode : @ViewBag.DeviceCode</li>
     <li>UserCode : @ViewBag.UserCode</li>
+    <li>interval / expires_in : @ViewBag.Interval / @ViewBag.ExpiresIn 秒（#246 の 3-b）</li>
     <li><a href="@ViewBag.VerificationUri" target="_blank">VerificationUri</a></li>
     <li><a href="@ViewBag.VerificationUriComplete" target="_blank">VerificationUriComplete</a></li>
 </ul>
@@ -51,6 +53,8 @@
     @Html.AntiForgeryToken()
     <input type="hidden" id="@OAuth2AndOIDCConst.client_id" name="@OAuth2AndOIDCConst.client_id" value="@ViewBag.ClientId" />
     <input type="hidden" id="@OAuth2AndOIDCConst.device_code" name="@OAuth2AndOIDCConst.device_code" value="@ViewBag.DeviceCode" />
+    @* **interval を持ち回す**（RFC 8628 3.5。ポーリングはこの POST で行う。#246 の 3-b） *@
+    <input type="hidden" id="@OAuth2AndOIDCConst.PollingInterval" name="@OAuth2AndOIDCConst.PollingInterval" value="@ViewBag.Interval" />
     <input type="submit" class="btn btn-primary" value="Start polling." />
 }
 @section FooterScriptsSection{

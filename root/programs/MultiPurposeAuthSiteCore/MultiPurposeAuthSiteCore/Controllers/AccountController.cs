@@ -37,6 +37,12 @@
 //*  2026/09/24  玄人 幸道         クエリ文字列の request_uri / code_challenge を、デコードされた値で読む（#229）
 //*  2026/09/25  玄人 幸道         設定キーの改名（IdFederation*Endpoint）に追随（#236）
 //*  2026/09/27  玄人 幸道         RP-Initiated Logout（/end_session）を追加（#232）
+//*  2026/09/28  玄人 幸道         FAPI2 の自己テストのトークン交換を private_key_jwt にした（#246）
+//*  2026/09/28  玄人 幸道         アサーションの組み立てを SelfTestClient へ寄せた（#246）
+//*  2026/09/28  玄人 幸道         SAML2 の応答（アサーション）を画面に出す（#246 の項目 3）
+//*  2026/09/28  玄人 幸道         認可画面に、確かめる内容（prompt / max_age など）を出す（#246 の項目 3）
+//*  2026/09/28  玄人 幸道         max_age の超過で再認証し、prompt=none なら login_required を返す（#247）
+//*  2026/09/28  玄人 幸道         「別のアカウントでログイン」がサインアウトしていなかったのを修正（#247 で気付いた）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2378,6 +2384,12 @@ namespace MultiPurposeAuthSite.Controllers
 
                     #region /userinfoエンドポイント
                     // /userinfoエンドポイントにアクセスする場合
+
+                    // **ここは Helper を通さない**（#246 で確かめた）。
+                    //   Helper の WebAPI 呼び出しは、すべて GetContainerizatedAuthZServerUri を通し、
+                    //   **宛先のホストをコンテナの認可サーバへ書き換える。**
+                    //   ID フェデレーションの相手は**他の IdP** なので、通すと宛先が変わって壊れる。
+                    //   （Helper.GetUserInfoAsync は URI を引数に取らず、常に自分の /userinfo を向く）
                     string response = await OAuth2AndOIDCClient.GetUserInfoAsync(
                         new Uri(Config.IdFederationUserInfoEndpoint), dic[OAuth2AndOIDCConst.AccessToken]);
                     #endregion
@@ -2765,95 +2777,70 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="samlResponse">string</param>
         /// <param name="relayState">string</param>
         /// <param name="sigAlg">string</param>
-        /// <returns>ActionResult</returns>
+        /// <returns>ActionResult（Saml2Response 画面）</returns>
+        /// <remarks>
+        /// **検証の本体は `Sts.SelfTestClient.VerifySaml2Response`**（#246 で両アプリから寄せた）。
+        ///
+        /// **アサーションを画面に出す**（#246 の項目 3）。
+        /// 以前は `?ret=認証完了（nameId=…）` / `?ret=認証失敗` という URL に移るだけで、
+        /// **どこで落ちたのかが分からず、読み取った属性も XML も捨てていた。**
+        /// </remarks>
         [AllowAnonymous]
         public ActionResult AssertionConsumerService(string samlResponse, string relayState, string sigAlg)
         {
-            if (!Config.IsLockedDownTestEndpoints)
+            if (Config.IsLockedDownTestEndpoints)
             {
-                bool verified = false;
-
-                string nameId = "";
-                string iss = "";
-                string aud = "";
-                string inResponseTo = "";
-                string recipient = "";
-                DateTime? notOnOrAfter = null;
-
-                SAML2Enum.StatusCode? statusCode = null;
-                SAML2Enum.NameIDFormat? nameIDFormat = null;
-                SAML2Enum.AuthnContextClassRef? authnContextClassRef = null;
-
-                XmlDocument samlResponse2 = null;
-
-                if (Request.Method.ToLower() == "get")
-                {
-                    string rawUrl = Request.GetEncodedUrl();
-                    string queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
-
-                    if (SAML2Const.RSAwithSHA1 == sigAlg)
-                        if (SAML2Client.VerifyResponse(
-                            queryString, samlResponse, out nameId, out iss, out aud,
-                            out inResponseTo, out recipient, out notOnOrAfter,
-                            out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
-                        {
-                            if (iss == Config.IssuerId) verified = true;
-                        }
-                }
-                else if (Request.Method.ToLower() == "post")
-                {
-                    if (SAML2Client.VerifyResponse(
-                        "", samlResponse, out nameId, out iss, out aud,
-                        out inResponseTo, out recipient, out notOnOrAfter,
-                        out statusCode, out nameIDFormat, out authnContextClassRef, out samlResponse2))
-                    {
-                        if (iss == Config.IssuerId) verified = true;
-                    }
-                }
-
-                // LoadRequestParameters
-                string clientId_InSessionOrCookie = "";
-                string state_InSessionOrCookie = "";
-                string redirect_uri_InSessionOrCookie = "";
-                string nonce_InSessionOrCookie = "";
-                string code_verifier_InSessionOrCookie = "";
-                this.LoadRequestParameters(
-                    out clientId_InSessionOrCookie,
-                    out state_InSessionOrCookie,
-                    out redirect_uri_InSessionOrCookie,
-                    out nonce_InSessionOrCookie,
-                    out code_verifier_InSessionOrCookie);
-
-                // レスポンス生成
-                if (verified)
-                {
-                    // 認証完了。
-
-                    // 必要に応じてチェックしてもイイ
-                    // relayStateをstateに利用したケース
-                    if (relayState == state_InSessionOrCookie) { }
-
-                    // 必要に応じてsamlResponse2を読んで拡張処理を実装可能。
-                    return Redirect(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + "?ret=" + CustomEncode.UrlEncode(string.Format("認証完了（nameId={0}）", nameId)));
-                }
-                else
-                {
-                    // 認証失敗。
-                    return Redirect(
-                        Config.OAuth2AuthorizationServerEndpointsRootURI
-                        + "?ret=" + CustomEncode.UrlEncode("認証失敗"));
-                }
-                // ※ ASP.NET Coreだと、手動でUrlEncodeしないとダメっぽい。
-            }
-            else
-            {
-                // IsLockedDownTestEndpoints == true;
+                // テスト用のエンドポイントを閉じている。
+                return View("Error");
             }
 
-            // エラー
-            return View("Error");
+            bool isGet = (Request.Method.ToLower() == "get");
+            string queryString = "";
+
+            if (isGet)
+            {
+                // **Redirect Binding は、クエリ文字列そのものが署名の対象**である。
+                string rawUrl = Request.GetEncodedUrl();
+                queryString = rawUrl.Substring(rawUrl.IndexOf('?') + 1);
+            }
+
+            // LoadRequestParameters（state と RelayState を照合するため）
+            string clientId_InSessionOrCookie = "";
+            string state_InSessionOrCookie = "";
+            string redirect_uri_InSessionOrCookie = "";
+            string nonce_InSessionOrCookie = "";
+            string code_verifier_InSessionOrCookie = "";
+            this.LoadRequestParameters(
+                out clientId_InSessionOrCookie,
+                out state_InSessionOrCookie,
+                out redirect_uri_InSessionOrCookie,
+                out nonce_InSessionOrCookie,
+                out code_verifier_InSessionOrCookie);
+
+            Sts.SelfTestClient.Saml2Result result = Sts.SelfTestClient.VerifySaml2Response(
+                samlResponse, queryString, sigAlg,
+                relayState, state_InSessionOrCookie, isGet);
+
+            ViewBag.Verdict = result.Verdict;
+            ViewBag.Reason = result.Reason;
+            ViewBag.Binding = result.Binding;
+            ViewBag.SigAlg = result.SigAlg;
+            ViewBag.RelayState = result.RelayState;
+            ViewBag.RelayStateMatched = result.RelayStateMatched;
+            ViewBag.SignatureVerified = result.SignatureVerified;
+            ViewBag.IssuerMatched = result.IssuerMatched;
+            ViewBag.NameId = result.NameId;
+            ViewBag.Issuer = result.Issuer;
+            ViewBag.Audience = result.Audience;
+            ViewBag.InResponseTo = result.InResponseTo;
+            ViewBag.Recipient = result.Recipient;
+            ViewBag.NotOnOrAfter = result.NotOnOrAfter;
+            ViewBag.StatusCode = result.StatusCode;
+            ViewBag.NameIdFormat = result.NameIdFormat;
+            ViewBag.AuthnContextClassRef = result.AuthnContextClassRef;
+            ViewBag.ResponseXml = result.ResponseXml;
+
+            return View("Saml2Response");
         }
 
         #endregion
@@ -2865,54 +2852,8 @@ namespace MultiPurposeAuthSite.Controllers
         #region Authorize（認可エンドポイント）
 
         #region max_age & auth_time
-        /// <summary>CheckAuthTime</summary>
-        /// <param name="max_age">string</param>
-        /// <returns>bool</returns>
-        private bool CheckAuthTime(string max_age)
-        {
-            if (string.IsNullOrEmpty(max_age))
-            {
-                // max_ageの指定ナシ
-                return true;
-            }
-            else
-            {
-                // max_ageの指定アリ
-                if (int.TryParse(max_age, out int maxAge))
-                {
-                    // max_ageが数値
-                    IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
-                    string auth_time = requestCookies.Get(OAuth2AndOIDCConst.auth_time);
-                    if (string.IsNullOrEmpty(auth_time))
-                    {
-                        // auth_timeナシ
-                        return false;
-                    }
-                    else
-                    {
-                        // auth_timeアリ
-                        DateTime now = DateTime.UtcNow;
-                        TimeSpan ts = now - FormatConverter.FromW3cTimestamp(auth_time);
-
-                        if (ts.TotalSeconds <= maxAge)
-                        {
-                            // max_age内
-                            return true;
-                        }
-                        else
-                        {
-                            // max_age外
-                            return false;
-                        }
-                    }
-                }
-                else
-                {
-                    // max_ageが数値以外
-                    return false;
-                }
-            }
-        }
+        // **max_age の判定は CommonLibrary へ移した**（#247。`CmnEndpoints.CheckAuthTime`）。
+        //   bool では「再認証」「login_required」「invalid_request」を区別できなかった。
 
         /// <summary>auth_timeを追加</summary>
         /// <param name="max_age">string</param>
@@ -2999,10 +2940,52 @@ namespace MultiPurposeAuthSite.Controllers
                 }
             }
 
-            if (this.CheckAuthTime(max_age)) {
-                if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                    client_id, redirect_uri, response_type, scope, nonce,
-                    out valid_redirect_uri, out err, out errDescription, code_challenge))
+            // **要求の検証を先に行う**（#247）。
+            //   `redirect_uri` を照合できていないと、エラーを RP へ返せない。
+            //   以前は `max_age` の判定が先で、超過すると
+            //   **valid_redirect_uri も err も空のまま、文面の無いエラー画面**になっていた
+            //   （`ANALYSIS-IdP.md` の A-12）。
+            if (Token.CmnEndpoints.ValidateAuthZReqParam(
+                client_id, redirect_uri, response_type, scope, nonce,
+                out valid_redirect_uri, out err, out errDescription, code_challenge))
+            {
+                // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
+                Token.CmnEndpoints.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
+                    max_age,
+                    MyHttpContext.Current.Request.Cookies.Get(OAuth2AndOIDCConst.auth_time),
+                    MyHttpContext.Current.Request.Cookies.Get(Const.ReAuthenticatedAt));
+
+                if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.InvalidMaxAge)
+                {
+                    // **0 以上の整数でない**（RFC 6749 4.1.2.1 : invalid_request）。
+                    err = OAuth2AndOIDCConst.invalid_request;
+                    errDescription = "max_age must be a non-negative integer.";
+                }
+                else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication
+                    && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))
+                {
+                    // **prompt=none では UI を出せない**（OIDC Core 3.1.2.6 : login_required）。
+                    err = OAuth2AndOIDCConst.login_required;
+                    errDescription = "Re-authentication is required, but prompt=none was specified.";
+                }
+                else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication)
+                {
+                    // **再認証する**（OIDC Core 3.1.2.1）。
+                    //   印を残してサインアウトし、同じ URL に戻す（この後は認証が要るのでサインイン画面になる）。
+                    //   **印は繰り返しを防ぐため**（max_age=0 でも、再認証の直後なら続ける）。
+                    MyHttpContext.Current.Response.Cookies.Set(Const.ReAuthenticatedAt,
+                        FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
+
+                    // **SignInManager でサインアウトする。**
+                    //   `HttpContext.SignOutAsync()`（スキーム指定なし）では、
+                    //   **このサイトが実際に使っているクッキー（Identity.Application）が消えず、
+                    //   次の要求でも認証済みのままだった**（実測した。#247）。
+                    //   既存の LogOff も SignInManager を使っている。
+                    await this.SignInManager.SignOutAsync();
+
+                    return new RedirectResult(UriHelper.GetEncodedUrl(Request));
+                }
+                else
                 {
                     // Cookie認証チケットからClaimsPrincipalを取得しておく。
                     AuthenticateResult ticket = await HttpContext.AuthenticateAsync();
@@ -3012,6 +2995,10 @@ namespace MultiPurposeAuthSite.Controllers
                     ClaimsIdentity identity = new ClaimsIdentity(
                         principal.Claims, OAuth2AndOIDCConst.Bearer,
                         ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
+
+                    // **再認証の印を消す**（#247）。
+                    //   一度きりの印なので、ここまで来たら落とす。
+                    MyHttpContext.Current.Response.Cookies.Delete(Const.ReAuthenticatedAt);
 
                     // auth_timeを追加
                     this.AddAuthTimeClaim(max_age, claims, identity);
@@ -3024,6 +3011,19 @@ namespace MultiPurposeAuthSite.Controllers
                         // OAuth2/OIDC Authorization Code
                         ViewBag.Name = principal.Identity.Name;
                         ViewBag.Scopes = scopes;
+
+                        // **認可画面で「何を確かめるのか」を出すための値**（#246 の項目 3）。
+                        //   画面側は、自己テストを閉じている配置では出さない（項目 4 の線引き）。
+                        ViewBag.ClientId = client_id;
+                        ViewBag.ResponseType = response_type;
+                        ViewBag.ResponseMode = response_mode;
+                        ViewBag.ValidRedirectUri = valid_redirect_uri;
+                        ViewBag.Prompt = prompt;
+                        ViewBag.MaxAge = max_age;
+                        ViewBag.RequestUri = request_uri;
+                        ViewBag.HasState = !string.IsNullOrEmpty(state);
+                        ViewBag.HasNonce = !string.IsNullOrEmpty(nonce);
+                        ViewBag.HasClaims = (claims != null);
 
                         // 認証の場合、余計なscopeをfilterする。
                         bool isAuth = scopes.Any(x => x.ToLower() == OAuth2AndOIDCConst.Scope_Auth);
@@ -3098,10 +3098,6 @@ namespace MultiPurposeAuthSite.Controllers
                     {
                         // 不正なresponse_type
                     }
-                }
-                else
-                {
-                    // 不正なRequest
                 }
             }
             else
@@ -3223,7 +3219,15 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // 別のアカウントでログイン
                     //（サインアウトしてリダイレクト）
-                    await this.HttpContext.SignOutAsync();
+
+                    // **SignInManager でサインアウトする（#247 で気付いた）。**
+                    //   `HttpContext.SignOutAsync()`（スキーム指定なし）では、
+                    //   **このサイトが使っているクッキー（Identity.Application）が消えず、
+                    //   サインアウトしていなかった**（同じ利用者のまま戻っていた）。
+                    //   net48 版は `SignOut(DefaultAuthenticationTypes.ApplicationCookie)` と
+                    //   スキームを指定しているため、こちらだけの症状だった。
+                    await this.SignInManager.SignOutAsync();
+
                     return new RedirectResult(UriHelper.GetEncodedUrl(Request));
                 }
                 else if (!string.IsNullOrEmpty(MyHttpContext.Current.Request.Form["submit.Grant"]))
@@ -3966,33 +3970,35 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // FAPI1
 
-                            // Tokenエンドポイントにアクセス
-                            string aud = Config.OAuth2AuthorizationServerEndpointsRootURI + Config.OAuth2TokenEndpoint;
-
-                            // client_id(iss)
-                            string iss = clientId_InSessionOrCookie;
-
-                            // 秘密鍵
-                            DigitalSignX509 dsX509 = new DigitalSignX509(
-                                CmnClientParams.RsaPfxFilePath,
-                                CmnClientParams.RsaPfxPassword,
-                                HashAlgorithmName.SHA256);
+                            // **アサーションの組み立ては SelfTestClient**（#246）。
+                            model.AuthMethod = "private_key_jwt（client_assertion。FAPI1 は非対称の認証）";
 
                             model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                                tokenEndpointUri, redirect_uri, code, JwtAssertion.CreateByRsa(
-                                    iss, aud, new TimeSpan(0, 0, 30), Const.StandardScopes,
-                                    ((RSA)dsX509.AsymmetricAlgorithm).ExportParameters(true)));
+                                tokenEndpointUri, redirect_uri, code,
+                                Sts.SelfTestClient.CreateClientAssertion(
+                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.StandardScopes));
                         }
                         else if (state.StartsWith(fapi2Prefix))
                         {
                             // FAPI2
 
-                            //  client_Idと、クライアント証明書（TB）
-                            string client_id = clientId_InSessionOrCookie;
+                            // **private_key_jwt で交換する**（#246）。
+                            //   FAPI 2.0 が認めるのは MTLS と private_key_jwt の 2 つ。
+                            //   以前は client_secret を空で送り、**クライアント証明書（TB）が付くことを前提**に
+                            //   していたが、自己テストのクライアントは
+                            //   ClientCertPfxFilePath が設定されていなければ証明書を添えない。
+                            //   **設定が無い配置では /token が 401（invalid_client）になり、
+                            //   自己テストが結果画面まで通らなかった**（/ros でも /par でも同じ）。
+                            //   **証明書の配置を前提にしない private_key_jwt に寄せる。**
+                            //   mTLS の経路は E2E（FA-6）が測る。
 
-                            model.Response = await Sts.Helper.GetInstance()
-                                .GetAccessTokenByCodeAsync(tokenEndpointUri,
-                                client_id, "", redirect_uri, code);
+                            // **アサーションの組み立ては SelfTestClient**（#246）。
+                            model.AuthMethod = "private_key_jwt（client_assertion。FAPI 2.0 は MTLS か これ）";
+
+                            model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
+                                tokenEndpointUri, redirect_uri, code,
+                                Sts.SelfTestClient.CreateClientAssertion(
+                                    clientId_InSessionOrCookie, new TimeSpan(0, 0, 30), Const.OidcScopes));
                         }
                         else
                         {
@@ -4005,6 +4011,10 @@ namespace MultiPurposeAuthSite.Controllers
                             if (string.IsNullOrEmpty(code_verifier_InSessionOrCookie))
                             {
                                 // 通常
+                                //   **Open棟梁 のクライアントは、この経路を Basic で送る**
+                                //   （既定が client_secret_basic。#246 の項目 3）。
+                                model.AuthMethod = "client_secret_basic（Authorization ヘッダ）";
+
                                 model.Response = await Sts.Helper.GetInstance()
                                     .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                     client_id, client_secret, redirect_uri, code);
@@ -4012,6 +4022,10 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // PKCE
+                                //   **PKCE の経路は既定が client_secret_post**（Basic ではない。#246 の項目 3）。
+                                //   PKCE 自体はクライアント認証ではないので、code_verifier は別に送る。
+                                model.AuthMethod = "client_secret_post（フォーム）＋ PKCE の code_verifier";
+
                                 model.Response = await Sts.Helper.GetInstance()
                                    .GetAccessTokenByCodeAsync(tokenEndpointUri,
                                    client_id, client_secret, redirect_uri,

@@ -31,10 +31,14 @@
 //*  2026/09/10  玄人 幸道         新規（拡張仕様のテストケースの追加）
 //*  2026/09/11  玄人 幸道         EX-4.5 の Skip を解除し、EX-4.7 を追加（#199）
 //*  2026/09/11  玄人 幸道         /device_authz の要求を IdPClient.DeviceAuthorizationAsync へ移す
+//*  2026/09/28  玄人 幸道         自己テストの Device AuthZ ボタン（RT-246.3）を追加（#246 の 3-a）
 //**********************************************************************************
 
+using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -123,7 +127,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     r.Verify(name + " がある", has, "あり", has ? "あり" : "なし（" + res.ToString() + "）");
                 }
 
-                r.Observe("verification_uri", res.String("verification_uri") ?? "なし",
+                // **絶対 URI であること**（RFC 8628 3.2）。相対だと、機器は開く URL を組み立てられない。
+                //   自己テストの画面は、これをそのままリンクにする（足すと二重になり 404。#246）。
+                string verificationUri = res.String("verification_uri") ?? "";
+
+                bool absolute = verificationUri.StartsWith("https://")
+                    || verificationUri.StartsWith("http://");
+
+                r.Verify("verification_uri は絶対 URI である", absolute,
+                    "http(s):// で始まる", absolute ? verificationUri : "**" + verificationUri + "**");
+
+                r.Observe("verification_uri", string.IsNullOrEmpty(verificationUri) ? "なし" : verificationUri,
                     "ユーザが別の端末で開く URL。");
 
                 r.Observe("任意の項目",
@@ -444,6 +458,131 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     "error を含む JSON", missing.ToString());
 
                 r.VerifyEqual("値が無い : invalid_request で拒否される", "invalid_request", missing.Error);
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-246.3 自己テストの Device AuthZ ボタン</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT24603_自己テストのDeviceAuthZボタンが判定を画面に出す(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-246.3",
+                    "自己テストの Device AuthZ ボタンが、ポーリングの判定を画面に出す",
+                    "**以前は `?ret=OK_NORMAL_END` という URL に移るだけだった**（CIBA と同じ形。#246 の 3-a）。"
+                    + "`OK_` が接頭辞なので可否が読めず、ポーリングの実値も出ていなかった。"
+                    + "**画面（Razor）は実行時コンパイル**なので、ビルドでは分からない。"
+                    + "**承認まで通す経路を測れるのは、この流れだけである**"
+                    + "（CIBA は実機の認証デバイスが要るため、`RT-246.2` は異常系しか測れない）。",
+                    "RFC 8628 §3.4 / §3.5 / #246 の 3-a / 3-b");
+
+                r.Target("POST /Home/Saml2OAuth2Starters に submit.DeviceAuthZGrant（device）");
+
+                // **サイトがクライアント証明書を要求している間は、この通しを始められない。**
+                //   その状態では、**アプリ自身の内部呼び出し（Helper の HttpClient）も証明書を提示する**
+                //   （SpRp_ClientCertPfxFilePath）。/device_authz は証明書を提示されたクライアントを
+                //   コンフィデンシャル扱いにするので、**公開クライアント（TestClient3）が 401 になる。**
+                //   **E2E が mTLS（FA-6）のために要求させているだけで、製品の欠陥ではない**（#226）。
+                Skip.If(Environment.GetEnvironmentVariable(
+                    client.Target.Key == TestEnv.NetFxKey ? "MPAS_NETFX_MTLS" : "MPAS_CORE_MTLS") == "true",
+                    client.Target.DisplayName + " はクライアント証明書を要求している（#226）。"
+                    + "その状態ではアプリ自身の内部呼び出しも証明書を提示するため、"
+                    + "公開クライアントの /device_authz が 401（invalid_client）になる。");
+
+                r.Step("(1) 機器 : ボタンを押して device_code と user_code を得る");
+
+                HttpResponseMessage started = await client.StartSelfTestAsync(
+                    "DeviceAuthZGrant", "device");
+
+                r.VerifyEqual("HTTP 200（DeviceAuthZResponse 画面）",
+                    "200", ((int)started.StatusCode).ToString());
+
+                string screen = System.Net.WebUtility.HtmlDecode(
+                    await started.Content.ReadAsStringAsync());
+
+                Match userCode = Regex.Match(screen, "UserCode : (?<code>[^< ]+)");
+
+                r.Verify("user_code が画面に出る", userCode.Success,
+                    "出る", userCode.Success ? "出ている（値は伏せる）" : "**出ていない**");
+
+                Assert.True(userCode.Success, "前提: user_code が画面に出ること");
+
+                bool hasInterval = Regex.IsMatch(screen,
+                    "name=\"interval\"[^>]*value=\"[0-9]+\"");
+
+                r.Verify("interval を hidden で持ち回す（RFC 8628 §3.5）", hasInterval,
+                    "hidden にある", hasInterval ? "ある" : "**無い**");
+
+                // **承認の画面（/device_verify）へのリンクが開けること。**
+                //   応答の verification_uri は絶対 URI なので、画面が RootURI を足すと二重になり
+                //   **404 になって、承認の画面に行けなかった**（#246）。
+                Match link = Regex.Match(screen, "href=\"(?<url>[^\"]*device_verify[^\"]*)\"");
+
+                r.Verify("承認の画面へのリンクがある", link.Success,
+                    "ある", link.Success ? link.Groups["url"].Value : "**無い**");
+
+                if (link.Success)
+                {
+                    HttpResponseMessage opened = await client.GetAsync(link.Groups["url"].Value);
+
+                    r.VerifyEqual("そのリンクが開く（HTTP 200）",
+                        "200", ((int)opened.StatusCode).ToString());
+                }
+
+                r.Step("(2) 利用者 : 別の端末で user_code を入力して許可する");
+
+                bool accepted = await client.SubmitDeviceUserCodeAsync(
+                    userCode.Groups["code"].Value, true);
+
+                r.Verify("検証画面が承認を受け付ける", accepted,
+                    "受け付ける", accepted ? "受け付けた" : "**受け付けなかった**");
+
+                r.Step("(3) 機器 : [Start polling.] を押して、結果の画面を確かめる");
+
+                HttpResponseMessage polled = await client.SubmitDeviceAuthZPollingAsync(screen);
+
+                r.VerifyEqual("HTTP 200（結果の画面）", "200", ((int)polled.StatusCode).ToString());
+
+                // **net10.0 版の Razor は非 ASCII を数値文字参照で出す**ので、戻してから判定する。
+                string html = System.Net.WebUtility.HtmlDecode(
+                    await polled.Content.ReadAsStringAsync());
+
+                bool notError = !html.Contains("エラーが発生しました");
+
+                r.Verify("エラー画面ではない", notError,
+                    "結果の画面", notError ? "結果の画面" : "**エラー画面**");
+
+                Assert.True(notError, "前提: 結果の画面が開くこと（Razor は実行時コンパイル）");
+
+                bool normal = html.Contains("NORMAL_END") && !html.Contains("ABNORMAL_END");
+
+                r.Verify("判定は NORMAL_END（承認済みなので通る）", normal,
+                    "NORMAL_END",
+                    normal ? "NORMAL_END"
+                           : (html.Contains("ABNORMAL_END") ? "**ABNORMAL_END**" : "**判定が出ていない**"));
+
+                r.Verify("`OK_` の接頭辞は付かない", !html.Contains("OK_NORMAL_END"),
+                    "付かない", html.Contains("OK_NORMAL_END") ? "**付いている**" : "付いていない");
+
+                bool hasToken = Regex.IsMatch(html, "\"access_token\"");
+
+                r.Verify("トークンの応答が画面に出る", hasToken,
+                    "access_token を含む応答が出る（値は伏せる）",
+                    hasToken ? "出ている" : "**出ていない**");
+
+                Match count = Regex.Match(html, "秒 × (?<n>[0-9]+) 回");
+
+                r.Verify("ポーリングの回数が画面に出る", count.Success,
+                    "回数が出る", count.Success ? count.Groups["n"].Value + " 回" : "**出ていない**");
+
+                r.Note("**承認済みなので 1 回で終わる。** 承認しなければ interval（既定 5 秒）ごとに"
+                    + "問い合わせ、上限（60 秒）で打ち切って ABNORMAL_END になる（#246 の 3-b）。"
+                    + "以前は `ExponentialBackoff(10, 5)` で、**間隔がサーバの interval と無関係**だった。");
 
                 r.Done();
             }
