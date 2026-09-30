@@ -49,6 +49,7 @@
 //*  2026/09/27  玄人 幸道         OAuth2EndSessionEndpoint（RP-Initiated Logout）を追加（#232）
 //*  2026/09/29  玄人 幸道         RequireVerifiedEmailForAccountLinking を追加（#140 の段階 1）
 //*  2026/09/30  玄人 幸道         DataProtectionKeyPath を追加（#251）
+//*  2026/09/30  玄人 幸道         AuthCookieName を追加（#250 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -626,6 +627,34 @@ namespace MultiPurposeAuthSite.Co
         #endregion
 
         #region Cookie認証チケット
+
+        /// <summary>
+        /// Cookie認証チケットの名前（#250 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **空なら、そのプラットフォームの既定のまま**（従来どおり）。
+        ///   net10.0 版 : `.AspNetCore.Identity.Application`
+        ///   net48 版   : `.AspNet.ApplicationCookie`
+        ///
+        /// **同じホストに 2 つ立てるときだけ指定する。**
+        /// **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+        /// `localhost:44300` と `localhost:44301` は **Cookie を共有する。**
+        /// 名前が同じだと、**後にサインインした側が相手の Cookie を上書きし、
+        /// 相手は復号できずサインアウトする。**
+        ///
+        /// **パスが違っても解決しない。** 仮想ディレクトリ配下（`/MultiPurposeAuthSite`）と
+        /// root で **同名・別パスの Cookie が 2 つ並び**、どちらが読まれるかは決まらない。
+        ///
+        /// **ID フェデレーションは「上流にサインイン → 下流がサインイン」**なので、
+        /// **この経路を通るたびに、どちらかが必ず切れる**（#250 の段階 4 で実測）。
+        /// </remarks>
+        public static string AuthCookieName
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("AuthCookieName");
+            }
+        }
 
         /// <summary>
         /// Cookie認証チケットの有効期限

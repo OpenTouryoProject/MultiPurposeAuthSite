@@ -173,7 +173,7 @@ namespace MultiPurposeAuthSite
             System.Action<CookieApplyRedirectContext> defaultApplyRedirect =
                 new CookieAuthenticationProvider().OnApplyRedirect;
 
-            app.UseCookieAuthentication(new CookieAuthenticationOptions
+            CookieAuthenticationOptions cookieOptions = new CookieAuthenticationOptions
             {
                 AuthenticationType = DefaultAuthenticationTypes.ApplicationCookie,  // 認証タイプを設定する。
                 LoginPath = new PathString("/Account/Login"),                       // ログイン画面のパスを設定する。
@@ -225,7 +225,19 @@ namespace MultiPurposeAuthSite
                 // Cookie認証チケットの有効期限を半分過ぎた祭の要求で再発行(Sliding)される。
                 SlidingExpiration = Config.AuthCookieSlidingExpiration,
 
-            });
+            };
+
+            // **Cookie の名前を設定で変えられるようにする**（#250 の段階 4）。
+            //   **空なら既定のまま**（Owin の `.AspNet.ApplicationCookie`）。
+            //   **同じホストに 2 つ立てるときだけ指定する**
+            //   （Cookie のスコープにポートは入らないため、
+            //     上流と下流を同じホストで動かすと、同名の Cookie が奪い合いになる）。
+            if (!string.IsNullOrEmpty(Config.AuthCookieName))
+            {
+                cookieOptions.CookieName = Config.AuthCookieName;
+            }
+
+            app.UseCookieAuthentication(cookieOptions);
 
             #endregion
 

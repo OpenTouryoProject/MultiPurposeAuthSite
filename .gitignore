@@ -319,3 +319,4 @@ __pycache__/
 /store/app/publish/
 /store/keys/
 /store/logs/
+/store/app/artifacts/

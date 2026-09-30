@@ -20,16 +20,19 @@
 //*  2012/04/05  西野 大介         Application_OnPreRequestHandlerExecute
 //*                                OnPostRequestHandlerExecuteにACCESSログを追加
 //*  2026/09/17  玄人 幸道         開発向けの設定が残っていないかを起動時に確かめる（#219）
+//*  2026/09/30  玄人 幸道         OAuth2AndOIDCClient の HttpClient を初期化（#250 の段階 4）
 //**********************************************************************************
 
 // System
 using System;
+using System.Net.Http;
 using System.Web;
 using System.Web.SessionState;
 
 using MultiPurposeAuthSite.Co;
 
 // OpenTouryo
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.Log;
 using Touryo.Infrastructure.Public.Util;
 
@@ -71,6 +74,18 @@ namespace MultiPurposeAuthSite
         void Application_Start(object sender, EventArgs e)
         {
             // アプリケーションのスタートアップで実行するコード
+
+            // **OAuth2AndOIDCClient の HttpClient を初期化する**（#250 の段階 4）。
+            //   **net10.0 版は Program.Main で同じことをしている。** net48 版には無かった。
+            //
+            //   **これまでは Helper のコンストラクタ（Singleton）が設定していた**ので、
+            //   Helper を一度でも通れば入っていた。
+            //   **#140 の段階 3 で、ID フェデレーションが Helper を通さなくなった**ため
+            //   （Helper は宛先を GetContainerizatedAuthZServerUri で書き換えてしまう）、
+            //   **Helper に一度も触れていない状態で /token を叩くと、null 参照で落ちる。**
+            //
+            //   **Helper が後から自分のクライアントで上書きするのは、net10.0 版と同じ。**
+            OAuth2AndOIDCClient.HttpClient = new HttpClient();
 
             // **開発向けの設定が残っていないかを確かめる**（#219。CONFIGURATION.md 11 節）。
             //   起動は止めない。警告を OPERATION ログに出すだけ。

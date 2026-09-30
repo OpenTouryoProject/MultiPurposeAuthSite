@@ -112,6 +112,20 @@ services:
       # **自己テストの口は開けておく**（上流でサインインを確かめるため）
       - appSettings__IsLockedDownTestEndpoints=false
 
+      # **セッション Cookie の名前を下流と分ける**（#250 の段階 4）。
+      #   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）。
+      #   そのため localhost:44300（下流）と localhost:44301（上流）は **Cookie を共有する。**
+      #   名前が同じだと、**上流でサインインしたときに下流のセッションが消え**、
+      #   **下流が state / nonce を読めなくなって ID 連携が「エラー」になる**（実測）。
+      - sessionState__SessionCookieName=MultiPurposeAuthSiteUpstreamSession
+
+      # **認証 Cookie の名前も分ける**（#250 の段階 4）。
+      #   既定名（.AspNetCore.Identity.Application）が同じだと、
+      #   **上流でサインインした瞬間に下流が蹴り出される**（実測）。
+      #   **ID フェデレーションは「上流にサインイン → 下流がサインイン」なので、
+      #   この経路を通るたびに必ずどちらかが切れる。**
+      - appSettings__AuthCookieName=.MultiPurposeAuthSiteUpstream
+
       # ---------------------------------------------------------------- リソースのパス
       #   **雛形は 15 箇所すべてが C:/root/files/resource/... である**（Windows 前提）。
       #   Linux では**ドライブ文字が効かない**ので、**マウント先（/resource）に振り替える**。

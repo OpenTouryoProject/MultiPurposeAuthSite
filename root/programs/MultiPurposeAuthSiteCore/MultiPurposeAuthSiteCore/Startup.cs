@@ -483,7 +483,17 @@ namespace MultiPurposeAuthSite
                     options.SlidingExpiration = Config.AuthCookieSlidingExpiration;
 
                     //options.AccessDeniedPath = "/Identity/Account/AccessDenied";
-                    //options.Cookie.Name = "YourAppCookieName";
+
+                    // **Cookie の名前を設定で変えられるようにする**（#250 の段階 4）。
+                    //   **空なら既定のまま**（`.AspNetCore.Identity.Application`）。
+                    //   **同じホストに 2 つ立てるときだけ指定する**
+                    //   （Cookie のスコープにポートは入らないため、
+                    //     上流と下流を同じホストで動かすと、同名の Cookie が奪い合いになる）。
+                    if (!string.IsNullOrEmpty(Config.AuthCookieName))
+                    {
+                        options.Cookie.Name = Config.AuthCookieName;
+                    }
+
                     options.Cookie.HttpOnly = true;
 
                     // ※ SecurityStamp の検証（OnValidatePrincipal）は書かない。

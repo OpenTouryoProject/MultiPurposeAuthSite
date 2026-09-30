@@ -47,6 +47,7 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSCommandPath
 $proj = Join-Path $here '..\root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore.csproj'
 $pub = Join-Path $here 'app\publish'
+$art = Join-Path $here 'app\artifacts'
 $certDir = Join-Path $here 'cert'
 $pfx = Join-Path $certDir 'aspnetapp.pfx'
 $envFile = Join-Path $here '.env'
@@ -89,7 +90,16 @@ Write-Output "  publish しています ..."
 
 Remove-Item -Recurse -Force $pub -ErrorAction SilentlyContinue
 
-dotnet publish $proj -c Debug -o $pub --nologo -v quiet
+# **中間出力を Visual Studio と共用しない**（--artifacts-path）。
+#   **既定では、プロジェクトの `obj\Debug\net10.0` を VS と取り合う。**
+#   `dotnet publish` は そこに publish 用の成果物
+#   （`staticwebassets.publish.json` / `swae.publish.ex.cache` など）を書くため、
+#   **VS のデバッグ実行が壊れる**（Web ツールが不整合な状態を読む）。
+#
+#   **実際に踏んだ**（#250 の段階 4）。VS が次のエラーで起動しなくなった。
+#     An element with the same key but a different value already exists.
+#     Key: 'Microsoft.WebTools.ProjectSystem.WebServer.IISExpressWebServer'
+dotnet publish $proj -c Debug -o $pub --artifacts-path $art --nologo -v quiet
 
 if ($LASTEXITCODE -ne 0)
 {
