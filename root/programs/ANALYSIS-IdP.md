@@ -1362,7 +1362,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
-| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256"]` | **RS256 だけ** | `CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡さない** |
+| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる** |
 | `id_token` | `id_token_signing_alg_values_supported: ["RS256","ES256"]` | RS256 / ES256 | **クライアントは選べない。** `oauth2_oidc_mode=fapi_ciba` のときだけ ES256、他は RS256 |
 | access_token | （広告しない） | RS256 / ES256 | 同上（`id_token` と同じ alg になる） |
 | Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
@@ -1384,9 +1384,12 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 - **Open棟梁 には `RS256/384/512` と `ES256/384/512` が既に在る**（`_Param` / `_X509` の両方）。
   **待ちの状態は解消している**
-- **`client_assertion` は、鍵の種類で分岐できる。** `JwtAssertion.Verify` は
-  **JWK の `kty` を見て RSA / EC を選ぶ**ので、**`jwk_ecdsa_publickey` を渡せば ES256 も通る。**
-  **MPAS が RSA 鍵しか渡していないだけ**である
+- **`client_assertion` の ES256 は、✅ 対応した**（#129 の段階 2）。
+  `JwtAssertion.Verify` が **JWK の `kty` を見て RSA / EC を選ぶ**ので、
+  **MPAS が RSA 鍵しか渡していないだけ**だった。
+  **登録された RSA → ECDSA の公開鍵を順に試す**ようにし、広告も `["RS256","ES256"]` にした。
+  **アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。
+  E2E テスト : **`RT-129.1`**（ES256 で通る／RS256 の対照／Discovery の広告）
 - **ES384 / ES512 は鍵の差し替えを伴う**（JWA で `ES256`→P-256、`ES384`→P-384、`ES512`→P-521。
   曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**
 - **登録（クライアント）側に alg の項目が無い**。OIDC Registration 1.0 の

@@ -190,8 +190,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
             });
 
+            // **ES256 も通る**（#129 の段階 2）。
+            //   `client_assertion` の検証で、**登録された RSA / ECDSA の公開鍵を順に試す**
+            //   ようにしたため（`CmnEndpoints.ClientAuthentication`）。
+            //   **クライアントが ECDSA の公開鍵（jwk_ecdsa_publickey）を登録していれば ES256 が通る。**
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
-                "RS256"
+                "RS256", "ES256"
             });
             #endregion
 
@@ -4114,12 +4118,34 @@ namespace MultiPurposeAuthSite.TokenProviders
                     ? "" : (string)payload[OAuth2AndOIDCConst.iss];
 
                 // pubKey
-                string pubKey = string.IsNullOrEmpty(assertionIss)
-                    ? "" : CmnEndpoints.DecodeRegisteredJwk(
-                        Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
+                //
+                // **登録された公開鍵を、RSA → ECDSA の順に試す**（#129 の段階 2）。
+                //   **以前は jwk_rsa_publickey しか渡しておらず、RS256 しか通らなかった。**
+                //   `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、
+                //   **ECDSA の公開鍵を渡せば ES256 が通る**（框は両方に対応していた）。
+                //
+                // **アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。
+                //   **登録済みの鍵で順に検証する**だけなので、外から alg を選ばせていない。
+                //   **どちらの鍵でも通る**が、どちらも配備者が登録した鍵である。
+                //   （片方だけ登録すれば、その方式だけになる。）
+                string[] pubKeys = string.IsNullOrEmpty(assertionIss)
+                    ? new string[0]
+                    : new string[]
+                    {
+                        CmnEndpoints.DecodeRegisteredJwk(
+                            Helper.GetInstance().GetJwkRsaPublickey(assertionIss)),
+                        CmnEndpoints.DecodeRegisteredJwk(
+                            Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
+                    };
 
-                if (!string.IsNullOrEmpty(pubKey))
+                foreach (string pubKey in pubKeys)
                 {
+                    if (string.IsNullOrEmpty(pubKey))
+                    {
+                        // その方式の公開鍵が登録されていない
+                        continue;
+                    }
+
                     // 署名検証 ≒ クライアント認証
                     if (JwtAssertion.Verify(
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))

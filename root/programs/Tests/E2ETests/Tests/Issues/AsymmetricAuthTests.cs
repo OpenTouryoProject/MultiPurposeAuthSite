@@ -31,10 +31,12 @@
 //*  2026/09/26  玄人 幸道         新規（#239 の段階 1・2）
 //*  2026/09/26  玄人 幸道         RT-239.5（fapi2 の refresh_token）を追加（#239 の段階 3）
 //*  2026/09/29  玄人 幸道         更新後も fapi クレームが載ることを確認（#245）
+//*  2026/09/30  玄人 幸道         RT-129.1（ES256 の client_assertion）を追加（#129 の段階 2）
 //**********************************************************************************
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -79,9 +81,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <remarks>`aud` は、この実装が求めるトークン エンドポイントの URL。</remarks>
         private static string CreateClientAssertion(IdPClient client, string clientId)
         {
+            return AsymmetricAuthTests.CreateClientAssertion(client, clientId, false);
+        }
+
+        /// <summary>client_assertion を作る（#129 の段階 2 で ES256 を足した）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="clientId">client_id</param>
+        /// <param name="es256">true なら ES256、false なら RS256</param>
+        /// <returns>JWS</returns>
+        /// <remarks>
+        /// **署名鍵は、クライアント登録の公開鍵と対になる構成ファイルの鍵。**
+        /// RS256 は `jwk_rsa_publickey` ↔ `SpRp_RsaPfxFilePath`、
+        /// ES256 は `jwk_ecdsa_publickey` ↔ `SpRp_EcdsaPfxFilePath`。
+        /// </remarks>
+        private static string CreateClientAssertion(IdPClient client, string clientId, bool es256)
+        {
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            return JwsSigner.SignRS256(client, new Dictionary<string, object>()
+            Dictionary<string, object> payload = new Dictionary<string, object>()
             {
                 { "iss", clientId },
                 { "sub", clientId },
@@ -89,7 +106,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 { "jti", Guid.NewGuid().ToString("N") },
                 { "iat", now },
                 { "exp", now + 300 }
-            });
+            };
+
+            return es256
+                ? JwsSigner.SignES256(client, payload) : JwsSigner.SignRS256(client, payload);
         }
 
         /// <summary>client_assertion だけを添えたフォームを作る</summary>
@@ -403,5 +423,85 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Done();
             }
         }
+        /// <summary>RT-129.1 ES256 の client_assertion でもクライアント認証が通る</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT12901_ES256のclient_assertionでも認証できる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                // **normal の登録を使う**（`client_credentials` は normal だけが使える。
+                //   ClientModePolicy の表）。**TestClient は RSA と ECDSA の両方の公開鍵を登録済み。**
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-129.1",
+                    "ES256 で署名した client_assertion でも、クライアント認証が通る",
+                    "**以前は RS256 しか通らなかった。**"
+                    + "`CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡していなかった**ため"
+                    + "（框の `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、"
+                    + "**ECDSA の公開鍵を渡せば ES256 が通る**）。"
+                    + "**登録された RSA / ECDSA の鍵を順に試す**ようにした（#129 の段階 2）。"
+                    + "**アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。",
+                    "RFC 7523 §2.2 / OIDC Core §9（private_key_jwt）/ #129 の段階 2");
+
+                r.Target("client_name=" + KnownClients.TestClient
+                    + "（normal。RSA と ECDSA の両方の公開鍵を登録済み）");
+
+                r.Step("(1) ES256 の client_assertion で client_credentials を要求する");
+
+                JsonResponse es256 = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "client_credentials" },
+                    { "scope", "profile" },
+                    { "client_assertion", AsymmetricAuthTests.CreateClientAssertion(client, reg.ClientId, true) },
+                    { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" }
+                });
+
+                r.Verify("トークンが返る", !string.IsNullOrEmpty(es256.AccessToken),
+                    "返る",
+                    string.IsNullOrEmpty(es256.AccessToken)
+                        ? "**返らない**（" + es256.ToString() + "）" : "返った");
+
+                r.Step("(2)（対照）RS256 でも従来どおり通る");
+
+                JsonResponse rs256 = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "client_credentials" },
+                    { "scope", "profile" },
+                    { "client_assertion", AsymmetricAuthTests.CreateClientAssertion(client, reg.ClientId, false) },
+                    { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" }
+                });
+
+                r.Verify("トークンが返る", !string.IsNullOrEmpty(rs256.AccessToken),
+                    "返る",
+                    string.IsNullOrEmpty(rs256.AccessToken)
+                        ? "**返らない**（" + rs256.ToString() + "）" : "返った");
+
+                r.Step("(3) Discovery が ES256 を広告している");
+
+                JsonResponse discovery = await client.GetJsonAsync("/.well-known/openid-configuration");
+
+                // **ToString() はキーだけの要約なので使えない**（値が入らない）。
+                //   JsonElement.ToString() は整形された JSON になるので、**要素を並べて比べる**。
+                List<string> algList = new List<string>();
+
+                foreach (JsonElement one in discovery.Json
+                    .GetProperty("token_endpoint_auth_signing_alg_values_supported").EnumerateArray())
+                {
+                    algList.Add(one.GetString());
+                }
+
+                r.VerifyEqual("token_endpoint_auth_signing_alg_values_supported",
+                    "RS256, ES256", string.Join(", ", algList));
+
+                r.Note("**広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。"
+                    + "**`PS256` は通らない**（Open棟梁 に `JWS_PS*` が無い）。");
+
+                r.Done();
+            }
+        }
+
     }
 }

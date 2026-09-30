@@ -1465,6 +1465,30 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 # RT. 個別 Issue の回帰
 
+## RT-129.1 ES256 で署名した client_assertion でも、クライアント認証が通る
+
+| | |
+|---|---|
+| 観点 | **以前は RS256 しか通らなかった。**`CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡していなかった**ため（框の `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、**ECDSA の公開鍵を渡せば ES256 が通る**）。**登録された RSA / ECDSA の鍵を順に試す**ようにした（#129 の段階 2）。**アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。 |
+| 根拠 | RFC 7523 §2.2 / OIDC Core §9（private_key_jwt）/ #129 の段階 2 |
+| テスト | `RT12901_ES256のclient_assertionでも認証できる` |
+
+**手順**
+
+1. ES256 の client_assertion で client_credentials を要求する
+1. （対照）RS256 でも従来どおり通る
+1. Discovery が ES256 を広告している
+
+**検証（合否を判定する）**
+
+- トークンが返る
+- トークンが返る
+- token_endpoint_auth_signing_alg_values_supported
+
+**補足**
+
+- **広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。**`PS256` は通らない**（Open棟梁 に `JWS_PS*` が無い）。
+
 ## RT-140.2 subject_types=pairwise のクライアントでも、/userinfo が sub 以外のクレームを返す
 
 | | |
@@ -4853,5 +4877,5 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
-| `RT24504_redirect_uriは大文字小文字まで一致しなければ通らない` | 未修正: ANALYSIS-IdP.md の C-10（`redirect_uri` の比較が大文字小文字を無視）。`CheckRedirectUri` が `ToLower()` 同士で比べているため、パスの大文字小文字だけが違う値でも照合が通る。実測 2026/09/29（net48版 (MultiPurposeAuthSite)）: **認可コードが発行された。**期待する動作 = 単純文字列比較（RFC 6749 §3.1.2）で照合し、認可コードを発行しない。ロードマップのフェーズ 2（C-10）で直す。 |
+| `RT24504_redirect_uriは大文字小文字まで一致しなければ通らない` | 未修正: ANALYSIS-IdP.md の C-10（`redirect_uri` の比較が大文字小文字を無視）。`CheckRedirectUri` が `ToLower()` 同士で比べているため、パスの大文字小文字だけが違う値でも照合が通る。実測 2026/09/29（net10.0版 (MultiPurposeAuthSiteCore)）: **認可コードが発行された。**期待する動作 = 単純文字列比較（RFC 6749 §3.1.2）で照合し、認可コードを発行しない。ロードマップのフェーズ 2（C-10）で直す。 |
 
