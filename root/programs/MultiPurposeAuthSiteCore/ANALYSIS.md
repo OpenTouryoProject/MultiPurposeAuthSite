@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト 主要部（MultiPurposeAuthSiteCore / net10.0）コード分析
 
 対象: `root/programs/MultiPurposeAuthSiteCore`（**ASP.NET Core MVC / net10.0**） / ブランチ: `develop`
-最終更新: 2026-09-29
+最終更新: 2026-09-30
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 
@@ -323,7 +323,12 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 **寄せた理由は、両アプリ（net48 / net10.0）に同文で二重に在ったこと。**
 自己テストのパターンを増やすたびに二重が増える状態だった。
 
-> **ID フェデレーションの `/userinfo` だけは `Helper` を通さない**（`AccountController`）。
+> **ID フェデレーションは `/userinfo` と `/token` のどちらも `Helper` を通さない**（`AccountController`）。
+> **`/token` は #140 の段階 3 まで通っていた**（＝宛先が書き換わっていた）。
+>
+> **この経路は、#140 の段階 3 で直したが、まだ動かしていない。**
+> **E2E で駆動できず**（上流の IdP が要る）、**目視は上流をコンテナで建ててから行う予定**（別 Issue）。
+> 詳細は [`TESTING.md`](../../TESTING.md) 5 節「ID フェデレーション」。
 > Helper はホストをコンテナの認可サーバへ書き換えるので、**他の IdP を叩く呼び出しは壊れる。**
 > 呼び出し側にその理由を書いてある。
 

@@ -74,7 +74,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | 拡張 | PKCE (RFC 7636) | ✓ | `plain` / `S256` |
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
-| | ID フェデレーション（他 IdP への委譲） | ✓ | |
+| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合。**上流は 1 つだけ**（D-15）。**E2E で駆動しておらず、目視も未実施**（上流をコンテナで建ててから。`TESTING.md` 5 節） |
 | | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は #213（net10.0）/ #216（net48） |
 
 **未実装**は 5 節にまとめた。
@@ -1910,6 +1910,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
+| D-15 | **ID フェデレーションの上流が 1 つだけ** | `Config.IdFederation{Authorize,Token,UserInfo,Redirect}Endpoint` の 1 組しか持てない。**#140 の段階 3 で連携キーを `(iss, sub)` にしたので、複数を持てる下地はできた**（`UserLogins` は issuer ごとに行を持てる）。残るのは**設定の形と、どの上流へ飛ばすかの画面**。**`SpRp_Isser`（期待する issuer）も 1 つしか持てない**ので、そこも合わせて要る | 複数の IdP と連携できない |
 | D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **不可。** PPID は秘密から導出するので、替えると**発行済みの値が全部変わる**（A-14）。**対応表を持てば解ける** | **漏洩時に替えられない。** 替えると、RP 側で全利用者が別人になる |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
@@ -1931,6 +1932,10 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | E-6 | 認可画面（`Views/Account/OAuth2Authorize.cshtml`）に **Deny ボタンが無い**。ユーザは拒否できず、`access_denied` を返す経路も無い。scope も生の識別子をそのまま表示している |
 | E-7 | `/jwkcerts` は毎回ファイルを読む（キャッシュ・`Cache-Control` なし） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
+| E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
+| E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |
+| E-11 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションが **認可応答の `iss`（RFC 9207）を見ていなかった。** `id_token` の `iss` は照合していたが、**OAuth 2.1 が Mix-Up 対策として挙げているのは応答パラメタの方。** いまは `SpRp_Isser` と照合する（**来なければ通す** — 実装していない OP があるため） |
+| E-12 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの要求スコープに**独自の `userid` / `roles`** が入っていた。**厳格な OP では `invalid_scope` になりうる**（この IdP 自身も #198 でスコープを絞る）。**標準だけにした。** `userid` は連携キーでなくなったので不要（`(iss, sub)` へ移行済み）。`state` も 10 → 32 文字にした |
 
 ---
 

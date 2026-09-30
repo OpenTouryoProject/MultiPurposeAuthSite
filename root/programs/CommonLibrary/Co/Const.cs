@@ -33,6 +33,7 @@
 //*  2020/07/24  西野 大介         ID連携（Hybrid-IdP）実装の見直し
 //*  2026/09/27  玄人 幸道         ログアウト後の戻り先のテスト用の定数を追加（#232）
 //*  2026/09/28  玄人 幸道         再認証の印（max_age）の Cookie キーを追加（#247）
+//*  2026/09/30  玄人 幸道         ID 連携の要求スコープを標準だけにした（#140 の段階 3）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -101,8 +102,29 @@ namespace MultiPurposeAuthSite.Co
             OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
         
         /// <summary>ID連携 scope</summary>
+        /// <remarks>
+        /// **標準のスコープだけを要求する**（#140 の段階 3）。
+        ///
+        /// **以前は `StandardScopes`（独自の `userid` / `roles` を含む）を要求していた。**
+        /// **独自のスコープは、厳格な OP では `invalid_scope` になりうる**
+        /// （この IdP 自身も #198 で、宣言外のスコープを発行しないようにした）。
+        /// **汎用の OP と連携するには、標準だけを要求するのが筋。**
+        ///
+        /// **`userid` はもう連携キーではない**（#140 の段階 3 で `(iss, sub)` に移した）。
+        /// 旧い鍵（`"MultiPurposeAuthSite"` × `userid`）を持つ利用者は、
+        /// **`userid` が返らなくなっても、検証済みメアドの突き合わせで拾われて新しい鍵へ移行する**
+        /// （C-23 の判定を通る。上流が `email_verified` を返すため）。
+        ///
+        /// > **`RequireUniqueEmail` が false の配備だけは注意が要る。**
+        /// > その場合の突き合わせは利用者名（＝上流の `sub`）なので、
+        /// > **旧い鍵の利用者は拾われず、新しいアカウントが作られる。**
+        /// </remarks>
         public static readonly string IdFederationScopes =
-            OAuth2AndOIDCConst.Scope_Openid + " " + StandardScopes;
+            OAuth2AndOIDCConst.Scope_Openid + " "
+            + OAuth2AndOIDCConst.Scope_Profile + " "
+            + OAuth2AndOIDCConst.Scope_Email + " "
+            + OAuth2AndOIDCConst.Scope_Phone + " "
+            + OAuth2AndOIDCConst.Scope_Address;
 
         #endregion
 

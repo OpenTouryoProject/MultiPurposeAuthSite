@@ -461,7 +461,9 @@ namespace MultiPurposeAuthSite.Controllers
                     //OAuth2Helper.GetInstance().GetClientIdByName("IdFederation");
 
                     // state // 記号は入れない。
-                    string state = GetPassword.Generate(10, 0);
+                    //   **32 文字にした**（#140 の段階 3）。10 文字では短い。
+                    //   PKCE があるので CSRF は守られるが、**推測しにくい方がよい。**
+                    string state = GetPassword.Generate(32, 0);
                     HttpContext.Session.SetString("id_federation_signin_state", state);
 
                     // redirect_uri
@@ -474,6 +476,13 @@ namespace MultiPurposeAuthSite.Controllers
                     // ID連携に必要なscope
                     string scope = Const.IdFederationScopes;
 
+                    // **PKCE を付ける**（#140 の段階 3）。
+                    //   これまで client_secret だけだった。**OAuth 2.1 は、秘密を持つ
+                    //   クライアントでも PKCE を付けることを求める**（コードの横取りに備える）。
+                    //   相手が PKCE を見ない OP でも、**余分なパラメタとして無視されるだけ**なので壊れない。
+                    string codeVerifier = GetPassword.Base64UrlSecret(50);
+                    HttpContext.Session.SetString("id_federation_signin_verifier", codeVerifier);
+
                     return Redirect(
                         Config.IdFederationAuthorizeEndpoint +
                         "?client_id=" + client_id +
@@ -483,6 +492,9 @@ namespace MultiPurposeAuthSite.Controllers
                         "&nonce=" + nonce +
                         "&redirect_uri=" + CustomEncode.UrlEncode(redirect_uri) +
                         "&response_mode=form_post" +
+                        "&code_challenge="
+                            + OAuth2AndOIDCClient.PKCE_S256_CodeChallengeMethod(codeVerifier) +
+                        "&code_challenge_method=" + OAuth2AndOIDCConst.PKCE_S256 +
                         "&login_hint=" + uid + "&prompt=none");
                 }
                 /*
@@ -2338,10 +2350,26 @@ namespace MultiPurposeAuthSite.Controllers
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-resp"/>
         /// <seealso cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#token-req"/>
         [AllowAnonymous]
-        public async Task<ActionResult> IDFederationRedirectEndPoint(string code, string state)
+        public async Task<ActionResult> IDFederationRedirectEndPoint(string code, string state, string iss)
         {
             if (!Config.IsLockedDownTestEndpoints)
             {
+                // **認可応答の `iss` を検証する**（RFC 9207。#140 の段階 3）。
+                //   **Mix-Up 攻撃への対策**で、OAuth 2.1 が挙げているのはこの応答パラメタである。
+                //   `id_token` の `iss` も照合しているが（IdToken.Verify → SpRp_Isser）、
+                //   **応答そのものを見ていなかった。**
+                //
+                //   **来なければ通す。** RFC 9207 を実装していない OP があるため
+                //   （この IdP 自身は #231 で出すようになった）。
+                if (!string.IsNullOrEmpty(iss)
+                    && !string.Equals(iss, CmnClientParams.Isser, StringComparison.Ordinal))
+                {
+                    Logging.MyOperationTrace(
+                        "The iss of the authorization response did not match the expected issuer.");
+
+                    return View("Error");
+                }
+
                 // 結果を格納する変数。
                 Dictionary<string, string> dic = null;
                 OAuth2AuthorizationCodeGrantClientViewModel model = new OAuth2AuthorizationCodeGrantClientViewModel
@@ -2368,9 +2396,22 @@ namespace MultiPurposeAuthSite.Controllers
                     string redirect_uri = Config.IdFederationRedirectEndpoint;
 
                     // Tokenエンドポイントにアクセス
-                    model.Response = await Sts.Helper.GetInstance().GetAccessTokenByCodeAsync(
-                             new Uri(Config.IdFederationTokenEndpoint),
-                            client_id, client_secret, redirect_uri, code, "");
+                    //
+                    // **ここも Helper を通さない**（#140 の段階 3）。
+                    //   **Helper は宛先のホストをコンテナの認可サーバへ書き換える**
+                    //   （GetContainerizatedAuthZServerUri）。**ID フェデレーションの相手は他の IdP** なので、
+                    //   通すと宛先が変わって壊れる。/userinfo は #246 で外していたが、
+                    //   **こちらは残っていた。**
+                    //
+                    // **code_verifier を渡す**（#140 の段階 3）。
+                    //   以前は "" を渡しており、**PKCE を使っていないのに PKCE の
+                    //   オーバーロード（client_secret_post）を選んでいた。**
+                    string codeVerifier = HttpContext.Session.GetString("id_federation_signin_verifier");
+                    HttpContext.Session.SetString("id_federation_signin_verifier", ""); // 誤動作防止
+
+                    model.Response = await OAuth2AndOIDCClient.GetAccessTokenByCodeAsync(
+                            new Uri(Config.IdFederationTokenEndpoint),
+                            client_id, client_secret, redirect_uri, code, codeVerifier);
 
                     #endregion
 
@@ -2382,6 +2423,11 @@ namespace MultiPurposeAuthSite.Controllers
                     string nonce = "";
                     JObject jobj = null;
 
+                    // **id_token の payload を取っておく**（#140 の段階 3）。
+                    //   jobj は、この後 /userinfo の応答で上書きされる。
+                    //   **連携キー（iss / sub）は、署名を検証した id_token 側から取る。**
+                    JObject idTokenPayload = null;
+
                     if (dic.ContainsKey(OAuth2AndOIDCConst.IDToken))
                     {
                         // id_tokenがある。
@@ -2392,6 +2438,7 @@ namespace MultiPurposeAuthSite.Controllers
                             && nonce == (string)HttpContext.Session.GetString("id_federation_signin_nonce"))
                         {
                             // id_token検証OK。
+                            idTokenPayload = jobj;
                         }
                         else
                         {
@@ -2428,7 +2475,20 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // クレーム情報（ID情報とe-mail, name情報）を抽出
                     jobj = (JObject)JsonConvert.DeserializeObject(response);
-                    string id = (string)jobj[OAuth2AndOIDCConst.Scope_UserID];
+
+                    // **連携キーは (issuer, sub)**（#140 の段階 3）。
+                    //   **以前は独自の `userid` クレームを鍵にしていた**ため、
+                    //   **相手が汎用認証サイトに限られていた**（`userid` は独自スコープ）。
+                    //   `sub` は OIDC の標準なので、**どの OP とも連携できる形になる。**
+                    //
+                    //   **`iss` と `sub` は、署名を検証した id_token から取る**
+                    //   （/userinfo の値は、この後で一致を確かめるだけに使う）。
+                    string idpIssuer = (string)idTokenPayload[OAuth2AndOIDCConst.iss];
+                    string federationKey = sub;
+
+                    // **旧い鍵**（下位互換。移行のために読む）。
+                    string legacyKey = (string)jobj[OAuth2AndOIDCConst.Scope_UserID];
+
                     string name = (string)jobj[OAuth2AndOIDCConst.sub];
                     string email = (string)jobj[OAuth2AndOIDCConst.Scope_Email];
 
@@ -2440,6 +2500,24 @@ namespace MultiPurposeAuthSite.Controllers
 
                     Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
                     Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
+
+                    // **/userinfo の sub は、id_token の sub と一致しなければならない**
+                    //   （OIDC Core §5.3.2。一致しなければトークンの取り違えを疑う）。
+                    if (!string.Equals(name, sub, StringComparison.Ordinal))
+                    {
+                        Logging.MyOperationTrace(
+                            "The sub of /userinfo did not match the sub of the id_token.");
+
+                        return View("Error");
+                    }
+
+                    if (string.IsNullOrEmpty(idpIssuer))
+                    {
+                        // **iss が無い id_token は受けない**（連携キーが決まらない）。
+                        Logging.MyOperationTrace("The id_token had no iss claim.");
+
+                        return View("Error");
+                    }
 
                     string uid = "";
                     if (Config.RequireUniqueEmail)
@@ -2457,7 +2535,26 @@ namespace MultiPurposeAuthSite.Controllers
                         // クレーム情報（e-mail, name情報）を取得できた。
 
                         // 既存の外部ログインを確認する。
-                        ApplicationUser user = await UserManager.FindByLoginAsync("MultiPurposeAuthSite", id);
+                        //   **新しい鍵（iss, sub）で引く**（#140 の段階 3）。
+                        ApplicationUser user = await UserManager.FindByLoginAsync(idpIssuer, federationKey);
+
+                        if (user == null && !string.IsNullOrEmpty(legacyKey))
+                        {
+                            // **旧い鍵（"MultiPurposeAuthSite", userid）で引き直す**（下位互換）。
+                            //   見つかったら**新しい鍵を足して移行する**（旧い鍵は消さない。
+                            //   切り戻しできるようにするため）。
+                            user = await UserManager.FindByLoginAsync("MultiPurposeAuthSite", legacyKey);
+
+                            if (user != null)
+                            {
+                                idResult = await UserManager.AddLoginAsync(user,
+                                    new UserLoginInfo(idpIssuer, federationKey, idpIssuer));
+
+                                Logging.MyOperationTrace(string.Format(
+                                    "Migrated the ID federation key of {0}({1}) to (iss, sub).",
+                                    user.Id, user.UserName));
+                            }
+                        }
 
                         if (user != null)
                         {
@@ -2475,8 +2572,10 @@ namespace MultiPurposeAuthSite.Controllers
                             //await SignInManager.SignInAsync(
 
                             // 既存の外部ログイン・プロバイダでサインイン
+                            //   **新しい鍵（iss, sub）で**（#140 の段階 3）。
+                            //   旧い鍵しか無かった場合は、上で新しい鍵を足してある。
                             siResult = await SignInManager.ExternalLoginSignInAsync(
-                                "MultiPurposeAuthSite", id,
+                                idpIssuer, federationKey,
                                 isPersistent: false, bypassTwoFactor: true); // 外部ログインの Cookie 永続化は常に false.
 
                             // セッションの初期化
@@ -2501,8 +2600,9 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // サインアップ済み → 外部ログイン追加だけで済む
 
+                                // **新しい鍵（iss, sub）で登録する**（#140 の段階 3）。
                                 UserLoginInfo externalLoginInfo = new UserLoginInfo(
-                                    "MultiPurposeAuthSite", id, "MultiPurposeAuthSite");
+                                    idpIssuer, federationKey, idpIssuer);
 
                                 // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
                                 if (Sts.AccountLink.CheckLinkToExistingUser(
@@ -2598,8 +2698,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 // ユーザの新規作成（パスワードは不要）
                                 idResult = await UserManager.CreateAsync(user);
 
+                                // **新しい鍵（iss, sub）で登録する**（#140 の段階 3）。
                                 UserLoginInfo externalLoginInfo = new UserLoginInfo(
-                                    "MultiPurposeAuthSite", id, "MultiPurposeAuthSite");
+                                    idpIssuer, federationKey, idpIssuer);
 
                                 // 結果の確認
                                 if (idResult.Succeeded)
