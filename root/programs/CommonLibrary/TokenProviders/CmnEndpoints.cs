@@ -448,9 +448,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                //OAuth2AndOIDCEnum.CibaMode.push.ToStringByEmit()
             });
 
-            // FAPI-CIBA プロファイルの
-            // RequestObjectの署名は、ES256 と PS256のみ許可
-            // ちなみに、Tokenの署名は、FAPI2に準拠する。
+            // **FAPI-CIBA が求める Request Object の署名は ES256 または PS256 だが、
+            //   この実装は ES256 だけを受け付ける**（#129 の段階 0 で、記述を実装に合わせた）。
+            //
+            //   **以前は「ES256 と PS256のみ許可」と書いてあったが、PS256 は通らない。**
+            //   `RequestObject.VerifyCiba` は ES256 に固定されており、
+            //   **Open棟梁 に `JWS_PS*` が無い**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
+            //   PS256 を通すには上流の対応が要る（#129）。
+            //
+            //   ちなみに、Tokenの署名は、FAPI2に準拠する。
+            //
             // **配列と boolean で広告する**（CIBA Core §4。#189 の 3・4）。
             //   以前は文字列だったため、素直に読む RP は型で落ちる。
             OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", new List<string> {

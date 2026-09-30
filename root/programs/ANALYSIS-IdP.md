@@ -1355,6 +1355,44 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   - `fapi1` / `device` の登録のクライアントには、`refresh_token` が返らなくなる（もともと使えなかった）
   - `oauth2_oidc_mode` に既知でない値を書いた登録は、全経路で拒否される（以前も、mTLS 以外はほぼ拒否されていた）
 
+### 署名アルゴリズムの対照表（#129 の段階 0）
+
+**どの口で、どの `alg` が実際に通るか。** 広告（Discovery）と実装を突き合わせたもの。
+**#129（384 / 512 への拡張）を検討するときの出発点**として置く。
+
+| 口 | Discovery の広告 | **実際に通る** | 決めているもの |
+|---|---|---|---|
+| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256"]` | **RS256 だけ** | `CmnEndpoints.ClientAuthentication` が **`jwk_rsa_publickey` しか渡さない** |
+| `id_token` | `id_token_signing_alg_values_supported: ["RS256","ES256"]` | RS256 / ES256 | **クライアントは選べない。** `oauth2_oidc_mode=fapi_ciba` のときだけ ES256、他は RS256 |
+| access_token | （広告しない） | RS256 / ES256 | 同上（`id_token` と同じ alg になる） |
+| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
+| CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
+| 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
+
+**広告と実装は一致している**（#189 / A-10 で整えた）。
+
+**`PS256` はどこにも無い。**
+**Open棟梁 に `JWS_PS*` が存在しない**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
+**FAPI 1.0 Advanced / FAPI-CIBA は `PS256` または `ES256` を求める**ので、
+**`PS256` を通すには上流の対応が要る。**
+
+> **コード中の記述が実装と食い違っていた。**
+> CIBA の広告のあたりに **「RequestObjectの署名は、ES256 と PS256のみ許可」** と書かれていたが、
+> **`PS256` は通らない。** #129 の段階 0 で、記述を実装に合わせた。
+
+**拡張するときに効く事実**（#129 の段階 0 で調べたもの）。
+
+- **Open棟梁 には `RS256/384/512` と `ES256/384/512` が既に在る**（`_Param` / `_X509` の両方）。
+  **待ちの状態は解消している**
+- **`client_assertion` は、鍵の種類で分岐できる。** `JwtAssertion.Verify` は
+  **JWK の `kty` を見て RSA / EC を選ぶ**ので、**`jwk_ecdsa_publickey` を渡せば ES256 も通る。**
+  **MPAS が RSA 鍵しか渡していないだけ**である
+- **ES384 / ES512 は鍵の差し替えを伴う**（JWA で `ES256`→P-256、`ES384`→P-384、`ES512`→P-521。
+  曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**
+- **登録（クライアント）側に alg の項目が無い**。OIDC Registration 1.0 の
+  `id_token_signed_response_alg` / `request_object_signing_alg` /
+  `token_endpoint_auth_signing_alg` に相当するものが無い
+
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
 
 `VerifyAccessToken` は `header[JwtConst.alg]` を読んで `JWS_ES256_X509` / `JWS_RS256_X509` を選ぶ。
