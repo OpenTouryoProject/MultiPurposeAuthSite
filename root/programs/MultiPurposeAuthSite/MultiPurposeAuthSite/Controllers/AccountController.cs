@@ -39,6 +39,7 @@
 //*  2026/09/28  玄人 幸道         SAML2 の応答（アサーション）を画面に出す（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         認可画面に、確かめる内容（prompt / max_age など）を出す（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         max_age の超過で再認証し、prompt=none なら login_required を返す（#247）
+//*  2026/09/30  玄人 幸道         ID 連携の Error に理由のトレースを足す（#253）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2120,6 +2121,18 @@ namespace MultiPurposeAuthSite.Controllers
                 string client_secret = OAuth2AndOIDCParams.ClientSecret;
                 //OAuth2Helper.GetInstance().GetClientSecret(client_id);
 
+                // **合わないときに理由を残す**（#253）。
+                //   **この分岐には else が無く、末尾の View("Error") に落ちるだけだった**ので、
+                //   **「なぜ Error になったか」がログから分からなかった。**
+                //   **値そのものは出さない**（有無と長さだけ）。
+                if (state != (string)Session["id_federation_signin_state"])
+                {
+                    Logging.MyOperationTrace(string.Format(
+                        "The state of the authorization response did not match the session. (response: {0}, session: {1})",
+                        AccountController.DescribeForTrace(state),
+                        AccountController.DescribeForTrace((string)Session["id_federation_signin_state"])));
+                }
+
                 // stateの検証
                 if (state == (string)Session["id_federation_signin_state"])
                 {
@@ -2169,8 +2182,13 @@ namespace MultiPurposeAuthSite.Controllers
                         string id_token = dic[OAuth2AndOIDCConst.IDToken];
                         string access_token = dic[OAuth2AndOIDCConst.AccessToken];
 
-                        if (IdToken.Verify(id_token, access_token, code, state, out sub, out nonce, out jobj)
-                            && nonce == (string)Session["id_federation_signin_nonce"])
+                        // **結果を控えておく**（#253）。**失敗したときに、どちらで落ちたかを残すため。**
+                        bool idTokenVerified =
+                            IdToken.Verify(id_token, access_token, code, state, out sub, out nonce, out jobj);
+                        bool nonceMatched =
+                            (nonce == (string)Session["id_federation_signin_nonce"]);
+
+                        if (idTokenVerified && nonceMatched)
                         {
                             // id_token検証OK。
                             idTokenPayload = jobj;
@@ -2178,14 +2196,23 @@ namespace MultiPurposeAuthSite.Controllers
                         else
                         {
                             // id_token検証NG。
+                            // **理由を残す**（#253）。署名・クレームの検証と nonce の照合を分けて出す。
+                            Logging.MyOperationTrace(string.Format(
+                                "The id_token of the ID federation was not accepted. (verified: {0}, nonce matched: {1})",
+                                idTokenVerified, nonceMatched));
+
                             return View("Error");
                         }
 
-                        Session["id_federation_signin_nonce"] = ""; // 誤動作防止                            
+                        Session["id_federation_signin_nonce"] = ""; // 誤動作防止
                     }
                     else
                     {
                         // id_tokenがない。
+                        // **理由を残す**（#253）
+                        Logging.MyOperationTrace(
+                            "The token response of the ID federation had no id_token.");
+
                         return View("Error");
                     }
 
@@ -2509,8 +2536,31 @@ namespace MultiPurposeAuthSite.Controllers
                     #endregion
                 }
             }
-            
+            else
+            {
+                // **塞いである**（#253）。**理由が残らないと、設定ミスと区別が付かない。**
+                Logging.MyOperationTrace(
+                    "The ID federation redirect endpoint is locked down. (IsLockedDownTestEndpoints)");
+            }
+
+            // **ここに来た理由を残す**（#253）。
+            //   **上で個別のトレースを出していれば、その次の行として出る**（経路の終わりを示す）。
+            //   **出ていなければ、利用者の作成や外部ログインの追加に失敗している。**
+            Logging.MyOperationTrace("The ID federation did not complete. (the error view was returned)");
+
             return View("Error");
+        }
+
+        /// <summary>値そのものを出さずに、有無と長さだけを表す（#253）</summary>
+        /// <param name="value">値</param>
+        /// <returns>"(empty)" または "len=&lt;長さ&gt;"</returns>
+        /// <remarks>
+        /// **state や nonce をログに出さないため。**
+        /// **切り分けに要るのは「空か／長さが違うか」までで、値そのものではない。**
+        /// </remarks>
+        private static string DescribeForTrace(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "(empty)" : ("len=" + value.Length);
         }
 
         #endregion

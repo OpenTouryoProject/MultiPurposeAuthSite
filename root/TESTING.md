@@ -586,6 +586,27 @@ cd root
 
 **残っているのは「下流がこれを受け取って、利用者を作る／結び付ける」ところだけである。**
 
+#### 失敗したら、下流の OPERATION ログを見る（#253）
+
+**`Error` 画面が出たときの理由は、すべて OPERATION ログに出る**（`C:\root\files\resource\Log\OPERATION.<日付>.log`）。
+
+```
+The state of the authorization response did not match the session. (response: len=32, session: (empty))
+The id_token of the ID federation was not accepted. (verified: True, nonce matched: False)
+The token response of the ID federation had no id_token.
+The iss of the authorization response did not match the expected issuer.
+The sub of /userinfo did not match the sub of the id_token.
+The id_token had no iss claim.
+The ID federation redirect endpoint is locked down. (IsLockedDownTestEndpoints)
+The ID federation did not complete. (the error view was returned)
+```
+
+**最後の 1 行は、経路の終わりを示す受け皿である。**
+**それだけが出ていたら、利用者の作成か外部ログインの追加に失敗している**（そこは `AddErrors` するだけで画面に出ない）。
+
+> **`state` / `nonce` の値そのものは出さない**（`(empty)` か `len=<長さ>` だけ）。
+> **切り分けに要るのはそこまでである。**
+
 > **目視で 2 つ見つけた**（#250 の段階 4）。**どちらも E2E では出なかった。**
 >
 > | 見つけたもの | 出る側 |
