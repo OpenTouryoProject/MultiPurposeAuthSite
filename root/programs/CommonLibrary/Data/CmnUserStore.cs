@@ -43,6 +43,7 @@ using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Data;
@@ -968,6 +969,10 @@ namespace MultiPurposeAuthSite.Data
                         CmnStore._users.Remove(CmnStore._users.First(x => x.Id == user.Id));
                         // ユーザの関連情報を削除
                         CmnStore._userRoleMap.RemoveAll(x => x.Item1 == user.Id);
+
+                        // **sub の対応表も消す**（#151 の段階 2）。
+                        //   **DB では外部キー（ON DELETE CASCADE）が消す**ので、mem だけ。
+                        SubjectIdProvider.DeleteByUserId(user.Id);
 
                         break;
 

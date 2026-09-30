@@ -168,6 +168,12 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 **#188 で足した 2 列（`FamilyId` / `UsedDate`）が無かった。**
 `sql` は作り直してあったので揃っていた。
 
+> **列だけでなく、表が増えることもある。**
+> **#151 の段階 2 で `SubjectIdentifier` を足した**（16 表 → **17 表**）。
+> **`store/`（E2E）は `2_DockerComposeDown.bat` → `1_DockerComposeUp.bat` で作り直せば済む。**
+> **手動確認の DB（LocalServicesOnDocker）は、自分で `Create_UserStore.sql` を流し直すこと。**
+> 表が無いと、**サインイン（`sub` の記録）で落ちる。**
+
 - 症状は **HTTP 500 が 67 件**（`42703: column "familyid" ... does not exist`）。
   **トークンが出ないので、関係の無いケースまで巻き添えで落ちる**（85 件 失敗）
 - **エラーはサイトのログに出る**（`programs\Tests\E2ETests\Result\MpasSite.out.log`）。

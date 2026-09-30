@@ -129,6 +129,14 @@ namespace MultiPurposeAuthSite.Util
                         // 汎用認証サイトのデフォルト値（仕様）
                         sub = userName;
                     }
+
+                    // **発行した sub を記録し、2 回目以降はそこから返す**（#151 の段階 2）。
+                    //   **計算し直さない**ので、`subject_types` の既定や PPID の作り方を変えても、
+                    //   **発行済みの sub は動かない**（RP は sub を主キーとして保存している）。
+                    //   `pairwise` だけでなく `uname` / `public` も入れる。
+                    //   そうしないと、既定値の変更を無害にできない。
+                    sub = SubjectIdProvider.GetOrAdd(
+                        PPIDExtension.GetSector(clientId), user.Id, sub);
                 }
             }
             return sub;
@@ -158,9 +166,27 @@ namespace MultiPurposeAuthSite.Util
         public static ApplicationUser GetUserFromSub(string clientId, string sub, out string subjectTypes)
         {
             ApplicationUser user = null;
-            
+
             subjectTypes = Helper.GetInstance().GetSubjectTypes(clientId);
-            
+
+            // **まず対応表を引く**（#151 の段階 2）。
+            //   **発行したときに記録してある**ので、**いまの subject_types の設定に関わらず引ける。**
+            //   設定を変えた後でも、**以前の sub を持つ RP が壊れない**のはここが効くため。
+            string recordedUserId = SubjectIdProvider.GetUserId(
+                PPIDExtension.GetSector(clientId), sub);
+
+            if (!string.IsNullOrEmpty(recordedUserId))
+            {
+                user = CmnUserStore.FindById(recordedUserId);
+
+                if (user != null)
+                {
+                    return user;
+                }
+            }
+
+            // **表に無い場合は、従来どおり subject_types で引く。**
+            //   表を入れる前に発行した sub、または利用者が削除された場合。
             if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit())
             {
                 user = CmnUserStore.FindById(sub);
@@ -221,6 +247,27 @@ namespace MultiPurposeAuthSite.Util
         #endregion
 
         #region private
+
+        /// <summary>client_id から Sector Identifier を決める（#151 の段階 2）</summary>
+        /// <param name="clientId">client_id</param>
+        /// <returns>Sector Identifier</returns>
+        /// <remarks>
+        /// **いまは `client_id` をそのまま返す。**
+        ///
+        /// **本来の Sector Identifier は、クライアントではなく RP の単位**である
+        /// （OIDC Core §8.1。`sector_identifier_uri` が在ればそのホスト、
+        /// 無ければ `redirect_uri` のホスト）。
+        /// **`sector_identifier_uri` は未対応**なので、いまは `client_id` が Sector である。
+        /// **同じ RP の複数クライアントで `sub` が変わる**のは、そのためである。
+        ///
+        /// **対応するときは、ここだけを直せばよい。**
+        /// 対応表（`SubjectIdentifier`）の列は **`Sector`**（意味）で持っているので、
+        /// **既存行はそのまま有効**である（発行済みの `sub` は動かない）。
+        /// </remarks>
+        private static string GetSector(string clientId)
+        {
+            return clientId ?? "";
+        }
 
         /// <summary>
         /// UserIDからclientIdを使用して、PPID（Pairwise Pseudonymous Identifier）を生成する。

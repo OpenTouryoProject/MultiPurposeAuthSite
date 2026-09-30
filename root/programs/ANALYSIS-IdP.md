@@ -848,9 +848,42 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 > **これは以前の salted hash でも同じ**で、この変更で悪化してはいない。
 > **効くのは漏洩時である。** 秘密を替えなければならないのに、替えると RP が壊れる。
 >
-> **解くには対応表が要る**（`client_id` × `user_id` → PPID を保存する）。
-> **導出が決定的なので、鍵を替える前に全組み合わせを計算して表に入れれば、
-> 発行済みの値を保ったまま移行できる。** D-9（署名鍵のローテーション）と同じ性質の宿題。
+> **✅ この宿題は #151 の段階 2 で片付いた。**
+> **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、
+> **秘密を替えても、発行済みの値は動かない**（表から引くため）。詳細は下記。
+
+### `sub` の対応表（`SubjectIdentifier`）**[Lib]** — **✅ 実装（#151 の段階 2）**
+
+**`sub` が「導出」から「データ」になった。**
+
+```
+以前 : sub = f(subject_types, client_id, user_id, salt)   ← 式を変えると値が変わる
+いま : sub = 表から引く。無ければ作って入れる              ← 式を変えても既存の値は動かない
+```
+
+**RP は `sub` を利用者の主キーとして保存する。**
+値が変わると **RP 側では全員が別人になる**ので、そこを切り離した。
+
+| 表 | `SubjectIdentifier` |
+|---|---|
+| 主キー | **`(Sector, UserId)`** |
+| 逆引き | **`(Sector, Sub)` に一意索引**（同じ Sector で 2 人が同じ `sub` を持ってはいけない） |
+| 後始末 | **外部キー（`ON DELETE CASCADE`）**。`mem` は `SubjectIdProvider.DeleteByUserId` |
+
+- **`pairwise` 専用ではない。** `uname` / `public` の `sub` も入れる
+  （そうしないと、`subject_types` の既定値の変更を無害にできない）
+- **`Sector` は、いまは `client_id`。** `sector_identifier_uri`（OIDC Core §8.1）に対応したら
+  その解決結果が入る。**列の意味は「Sector Identifier」**なので、**対応しても既存行は有効**である。
+  変えるのは `PPIDExtension.GetSector` の 1 箇所だけ
+- **引く順** … **まず表**（設定に関わらず引ける）→ 無ければ `subject_types` で引く
+  （表を入れる前に発行した `sub` のため）
+
+**これで解ける問題。**
+
+| | |
+|---|---|
+| **#151** | **`subject_types` の既定を変えても、既存の RP が壊れない** |
+| **D-9-2** | **PPID の秘密を、漏洩時に替えられる** |
 
 ---
 
@@ -1952,7 +1985,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
 | D-15 | **ID フェデレーションの上流が 1 つだけ** | `Config.IdFederation{Authorize,Token,UserInfo,Redirect}Endpoint` の 1 組しか持てない。**#140 の段階 3 で連携キーを `(iss, sub)` にしたので、複数を持てる下地はできた**（`UserLogins` は issuer ごとに行を持てる）。残るのは**設定の形と、どの上流へ飛ばすかの画面**。**`SpRp_Isser`（期待する issuer）も 1 つしか持てない**ので、そこも合わせて要る | 複数の IdP と連携できない |
-| D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **不可。** PPID は秘密から導出するので、替えると**発行済みの値が全部変わる**（A-14）。**対応表を持てば解ける** | **漏洩時に替えられない。** 替えると、RP 側で全利用者が別人になる |
+| D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **✅ 解けた（#151 の段階 2）。** **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、**秘密を替えても発行済みの値は動かない**（表から引くため）。以前は導出していたので替えられなかった（A-14） | **漏洩時に替えられるようになった** |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |

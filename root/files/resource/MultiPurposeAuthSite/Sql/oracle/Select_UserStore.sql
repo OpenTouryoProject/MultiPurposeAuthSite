@@ -6,6 +6,7 @@ SELECT * FROM "UserClaims";
 SELECT * FROM "TotpTokens";
 SELECT * FROM "AuthenticationCodeDictionary";
 SELECT * FROM "RefreshTokenDictionary";
+SELECT * FROM "SubjectIdentifier";
 SELECT * FROM "CustomizedConfirmation";
 SELECT * FROM "Saml2OAuth2Data";
 SELECT * FROM "FIDO2Data";
