@@ -59,6 +59,47 @@ $env:MPAS_CONNSTR_SQL = '...'
 .\2_RunAllTests.ps1 -Launch -UserStoreType sql
 ```
 
+#### E2E 用の DBMS は `store/` で立てる（#250 の段階 1）
+
+**このリポジトリの `store/` が、3 方言をまとめて立てる**（SQL Server / Oracle / PostgreSQL）。
+
+```powershell
+cd store
+.\1_DockerComposeUp.bat      # DDL を流し込んでから起動する
+.\2_DockerComposeDown.bat    # -v 付き。作り直せるように残さない
+```
+
+**ポートは +1 にしてある。**
+
+| | `store/`（E2E） | 既定のポート |
+|---|---|---|
+| SQL Server | **1434** | 1433 |
+| Oracle | **1522** | 1521 |
+| PostgreSQL | **5433** | 5432 |
+
+> **なぜ +1 か。** **手動確認は
+> [LocalServicesOnDocker](https://github.com/NetDevInfraWGinOSSConsortium/LocalServicesOnDocker)
+> を使い続ける**（RP アプリなどもそちらに繋ぐ）。
+> **既定ポートを空けておくことで、E2E 用と同時に起動できる。**
+>
+> **コミット済みの `ConnectionString_*` はポートを書いていない**ので、
+> **既定ポート ＝ LocalServicesOnDocker** を指す。**手動確認はそのまま。**
+
+**E2E に渡す接続文字列。**
+
+```powershell
+$env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;Initial Catalog=UserStore;User ID=sa;Password=<pw>;Encrypt=false;'
+$env:MPAS_CONNSTR_ODP = 'User Id=SCOTT;Password=<pw>;Data Source=localhost:1522/FREEPDB1;'
+$env:MPAS_CONNSTR_NPS = 'HOST=localhost;PORT=5433;DATABASE=UserStore;USER ID=postgres;PASSWORD=<pw>;'
+```
+
+- **DDL は `0_CopyInitSql.ps1` が repo から流し込む**（`1_DockerComposeUp.bat` が先に呼ぶ）。
+  コピー先は**生成物**で `.gitignore` 済み。**原本は `root/files/resource/.../Sql/` だけ**
+- **`store/` の DB は使い捨てにできる。** そのため、下の
+  「古いデータベースを使い回すと、列が足りない」は **E2E 側では起きない**
+  （手動側＝LocalServicesOnDocker では引き続き起こりうる）
+- **Oracle の初回起動は数分かかる**（`docker compose ps` が healthy になるまで待つ）
+
 | ストア | 接続文字列の環境変数 | 上書きされる設定キー |
 |---|---|---|
 | `sql` | `MPAS_CONNSTR_SQL` | `ConnectionString_SQL` |
@@ -92,6 +133,18 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > **原因は未特定。** 「両ターゲットの取り合い」は確かめたが**説明になっていない**
 > （この値を書くのは `UserClaimsTests` だけで、同じクラスのケースは並列に走らない。
 > 利用者の行が重複しているわけでもない）。**落ちたら、まず 1 クラスだけで回して切り分ける。**
+>
+> **実測（#250 の段階 1。`store/` の 3 方言）** : 同じ型が**別のテストでも出た。**
+>
+> | ストア | 落ちたもの | 1 クラスだけで回すと |
+> |---|---|---|
+> | `sql` | `RT-233.2`（core） | **22/22 通る** |
+> | `ora` | `RT-230.3`（core） | **8/8 通る** |
+> | `npg` | 無し（210 成功 / 失敗 0） | － |
+>
+> **分かっていること。** **core だけ／DB ストアのときだけ／通しのときだけ／毎回 1 件だけ。**
+> **落ちるテストは毎回違う**（`RT-230.1` / `RT-230.3` / `RT-233.2`）。
+> **`mem` では出ない**（各サイトが別の入れ物のため）。**原因は依然として未特定。**
 
 ### 4 つのストアの実測（#245 の段階 3）
 

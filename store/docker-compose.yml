@@ -1,6 +1,26 @@
-version: '3.4'
+# ##################################################################################################
+# E2E テスト用の UserStore（SQL Server / Oracle / PostgreSQL）
+#
+#   **これは E2E 専用である。** 手動確認は LocalServicesOnDocker を使う。
+#   そのため **ポートを +1 にしてある**（同時に起動できるように）。
+#
+#     SQL Server : 1434 → 1433    （LocalServicesOnDocker は 1433）
+#     Oracle     : 1522 → 1521    （同 1521）
+#     PostgreSQL : 5433 → 5432    （同 5432）
+#
+#   **接続文字列は、設定ファイルではなく環境変数で E2E に渡す**（#250 の段階 1）。
+#   コミット済みの ConnectionString_* はポートを書いていないので**既定ポート**を指し、
+#   そのまま LocalServicesOnDocker（手動確認）を向く。
+#
+#   使い方は root/TESTING.md 1 節「ストアを切り替える」を見ること。
+#
+#   **DDL は 0_CopyInitSql.ps1 が repo から流し込む。** 起動時に各コンテナが実行する。
+#   （1_DockerComposeUp.bat が、先に 0_CopyInitSql.ps1 を呼ぶ）
+# ##################################################################################################
 
 services:
+
+  # ------------------------------------------------------------------ PostgreSQL
   postgres:
     image: postgres
     restart: always
@@ -9,15 +29,16 @@ services:
       - POSTGRES_PASSWORD=seigi@123
       - POSTGRES_DB=UserStore
     ports:
-      - 5432:5432
+      - 5433:5432
     volumes:
+      # **データは持たせない。** E2E 用なので、作り直せる方がよい。
       #- ./postgres/data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
-    networks:
-      - common_link
 
+  # ------------------------------------------------------------------ SQL Server
   sqlserver:
-    image: microsoft/mssql-server-linux:latest
+    # **イメージ名を直した**（microsoft/mssql-server-linux は廃止。#250 の段階 1）
+    image: mcr.microsoft.com/mssql/server:2022-latest
     restart: always
     command: "sh -c '/init/0_start-up.sh & /opt/mssql/bin/sqlservr;'"
     environment:
@@ -27,13 +48,31 @@ services:
       - MSSQL_LCID=1041
       - MSSQL_COLLATION=Japanese_CI_AS
     ports:
-      - 1433:1433
+      - 1434:1433
     volumes:
       #- ./sqlserver/mssql-db:/var/opt/mssql
       - ./sqlserver/init:/init
-    networks:
-      - common_link
 
-networks:
-  common_link:
-    external: true
+  # ------------------------------------------------------------------ Oracle
+  #   **#250 の段階 1 で追加した。** これが無かったため、3 方言の通し（#245 の段階 3）は
+  #   LocalServicesOnDocker（別リポジトリ）で測っていた。
+  #
+  #   **初回起動は数分かかる**（データベースの作成）。健全性を見てから使うこと。
+  #   PDB は FREEPDB1（XEPDB1 ではない）。
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    restart: always
+    environment:
+      - ORACLE_PASSWORD=seigi@123
+      # **APP_USER で SCOTT を作らせる**（DDL は SCOTT のスキーマに作る）
+      - APP_USER=SCOTT
+      - APP_USER_PASSWORD=tiger
+    ports:
+      - 1522:1521
+    volumes:
+      - ./oracle/init:/container-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 60

@@ -306,3 +306,8 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
+
+# E2E 用 UserStore の初期化 SQL（0_CopyInitSql.ps1 が repo の DDL からコピーする生成物。#250）
+/store/postgres/init/*.sql
+/store/sqlserver/init/*.sql
+/store/oracle/init/*.sql
