@@ -515,9 +515,64 @@ cd root
 **ビルドと通し（414 件）で「他を壊していないこと」までは確かめたが、
 経路そのものは動かしていない。**
 
-**目視は、上流をコンテナで建ててから行う予定**（#250）。
 **上流のコンテナは #250 の段階 2〜3 で建った**（1 節「上流の IdP も `store/` で立てる」）。
-それでも **この経路は、まだ「直したが、動かしていない」状態である。**
+**段階 4 で、下流の設定をそこへ向けた。** 目視はできる状態である。
+**ただし、下流を通した目視はまだ行っていない。**
+
+#### 目視の手順（#250 の段階 4）
+
+1. **上流を建てる。**
+
+   ```powershell
+   cd store
+   .\3_PublishUpstream.ps1
+   docker compose up -d upstream
+   ```
+
+2. **上流でサインインしておく。** `https://localhost:44301/Account/Login`
+   **`prompt=none` で連携するので、先に上流のセッションが要る**（無いと `login_required`）。
+
+3. **下流を VS から動かす**（net48 版 / net10.0 版のどちらでも）。
+   **どちらも `https://localhost:44300/MultiPurposeAuthSite` で待ち受ける**ので、
+   **上流に登録済みの `IdFederation` クライアントの `redirect_uri_code` と一致する。**
+
+4. **下流の `/Account/Login` で「ID連携でサインイン」を押す。**
+
+**向け先は雛形に入れてある**（`_appsettings.json` / `_app.config`）。**書き換えは要らない。**
+
+| 設定 | 値 |
+|---|---|
+| `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` |
+| `IdFederationTokenEndpoint` | `https://localhost:44301/token` |
+| `IdFederationUserInfoEndpoint` | `https://localhost:44301/userinfo` |
+| `IdFederationRedirectEndpoint` | `https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint` |
+
+> **`/MultiPurposeAuthSite` を外した**（#250 の段階 4）。**コンテナは root で配信する。**
+> 付いていたのは IIS Express の仮想ディレクトリの形で、**上流の実体が無かった。**
+
+#### 上流側は、下流を通さずに測ってある（#250 の段階 4）
+
+**下流がすることを、そのまま上流に対して行って確かめた。**
+
+| 手順 | 結果 |
+|---|---|
+| 上流でサインイン | OK |
+| `/authorize`（`prompt=none` / PKCE S256 / `response_mode=form_post`） | **200。`code` と `state` が自動送信フォームで返る** |
+| `/token`（`code` ＋ `code_verifier` ＋ Basic 認証） | **`access_token` / `id_token` / `refresh_token`** |
+| `id_token` の `iss` / `aud` / `nonce` | `https://ssoauth.opentouryo.com` / `06d2…`（一致）/ 一致 |
+| `/userinfo` の `sub` | **`id_token` の `sub` と一致**（OIDC Core §5.3.2） |
+| `/userinfo` の `email_verified` | **`true`**（C-23 の判定を通る） |
+| `code_verifier` を外した `/token` | **400 で拒否**（C-22 の守り） |
+
+**残っているのは「下流がこれを受け取って、利用者を作る／結び付ける」ところだけである。**
+
+> **`sub` は利用者名（メアド）である。** 上流の `IdFederation` クライアントに
+> `subject_types` の登録が無く、**既定の `uname` になるため**（#151）。
+> **連携キー `(iss, sub)` はこの値で作られる。** #151 の段階 3〜5 で既定を変えると、
+> **既存の連携は張り直しになる**（移行の考慮は不要と決めてある）。
+
+> **`id_token` には `email` / `email_verified` が入らない。**
+> 下流は **`/userinfo` から読む**ので、C-23 の判定はそちらで通る。
 
 > **E2E に入れる目算はある。** `-Launch` は 2 サイト立てるので、
 > **片方をもう片方の上流に向ければ駆動できる**

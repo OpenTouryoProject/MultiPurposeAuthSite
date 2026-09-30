@@ -396,14 +396,25 @@
     // ユーザ・ロール管理
     "EnableAdministrationOfUsersAndRoles": "true",
     // IDフェデレーション
+    //   **上流は store/ のコンテナである**（#250 の段階 2〜4）。
+    //   `store\3_PublishUpstream.ps1` → `docker compose up -d upstream` で建つ。
+    //
+    //   **パスに /MultiPurposeAuthSite は付かない。** コンテナは Kestrel で
+    //   **root で配信する**（`UsePathBase` を呼んでいないため）。
+    //   付いていたのは IIS Express の仮想ディレクトリの形で、**上流の実体が無かった。**
+    //
+    //   **Redirect エンドポイントは「自分（下流）」の URL である。**
+    //   VS から動かすと net48 版・net10.0 版とも 44300/MultiPurposeAuthSite なので、
+    //   **上流に登録済みの IdFederation クライアントとそのまま一致する。**
+    //   E2E（44300 の root / 44302）は、環境変数で上書きする。
     // 認可エンドポイント
-    "IdFederationAuthorizeEndpoint": "https://localhost:44301/MultiPurposeAuthSite/authorize",
+    "IdFederationAuthorizeEndpoint": "https://localhost:44301/authorize",
     // Redirectエンドポイント
     "IdFederationRedirectEndpoint": "https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint",
     // Tokenエンドポイント
-    "IdFederationTokenEndpoint": "https://localhost:44301/MultiPurposeAuthSite/token",
+    "IdFederationTokenEndpoint": "https://localhost:44301/token",
     // UserInfoエンドポイント
-    "IdFederationUserInfoEndpoint": "https://localhost:44301/MultiPurposeAuthSite/userinfo",
+    "IdFederationUserInfoEndpoint": "https://localhost:44301/userinfo",
 
     // OAuth2, OIDC認証
 
