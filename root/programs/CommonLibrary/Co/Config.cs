@@ -48,6 +48,7 @@
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         OAuth2EndSessionEndpoint（RP-Initiated Logout）を追加（#232）
 //*  2026/09/29  玄人 幸道         RequireVerifiedEmailForAccountLinking を追加（#140 の段階 1）
+//*  2026/09/30  玄人 幸道         DataProtectionKeyPath を追加（#251）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -686,6 +687,37 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("SaltParameter");
             }
         }
+
+        #region DataProtectionKeyPath
+
+        /// <summary>
+        /// DataProtection の鍵の置き場（#251。C-13）
+        /// </summary>
+        /// <remarks>
+        /// **net10.0 版だけで使う。** net48 版は machineKey の話で、別。
+        ///
+        /// **指定しなければ、従来どおり `%LOCALAPPDATA%` 配下**（コンテナでは揮発）。
+        /// **指定すると、そこに鍵リングを置く**ので、
+        /// **再起動やコンテナの作り直しでもサインインが切れない。**
+        ///
+        /// **鍵そのものは書かない**（net48 の `machineKey` との違い）。
+        /// **鍵は自動生成・自動ローテーションされる。共有するのは置き場である。**
+        ///
+        /// **効くのは「画面のセッション」**（認証 Cookie / AntiForgery /
+        /// メール確認・パスワード リセットのリンク）。
+        /// **access_token / id_token・PPID・認可コード・refresh_token には影響しない。**
+        ///
+        /// **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
+        /// </remarks>
+        public static string DataProtectionKeyPath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("DataProtectionKeyPath");
+            }
+        }
+
+        #endregion
 
         #region RequireVerifiedEmailForAccountLinking
 

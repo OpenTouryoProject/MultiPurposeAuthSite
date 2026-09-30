@@ -465,6 +465,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|---|---|
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
+| `DataProtectionKeyPath` | `""`（空） | **コンテナでは必須**（#251） | **DataProtection の鍵の置き場。** 空なら `%LOCALAPPDATA%` 配下（**コンテナでは揮発 → 再起動で全員サインアウト**）。**net48 の `machineKey` と同じ役割**だが、**鍵そのものは書かない**（置き場を共有する。鍵は自動生成・自動ローテーション）。**効くのは画面のセッション**（認証 Cookie / AntiForgery / メール確認のリンク）で、**access_token・PPID・refresh_token には影響しない**。**鍵リングは平文の XML**。**net10.0 版だけ** |
 | `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`subject_types=uname` で `sub` に載せる必要はない** |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |

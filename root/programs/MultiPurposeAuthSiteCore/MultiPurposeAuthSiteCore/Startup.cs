@@ -308,6 +308,37 @@ namespace MultiPurposeAuthSite
             // HttpContextのマイグレーション用
             services._AddHttpContextAccessor();
 
+            #region DataProtection の鍵の永続化（#251。C-13）
+
+            // **鍵の置き場を指定しないと、%LOCALAPPDATA% 配下に置かれる**（コンテナでは揮発）。
+            //   そうすると —
+            //     ・**再起動で認証 Cookie と AntiForgery トークンが全て無効**になる
+            //     ・**複数インスタンスでインスタンス間の Cookie が通らない**
+            //     ・**メール確認 / パスワード リセットのリンクが切れる**
+            //       （DataProtectorTokenProvider が使う）
+            //
+            //   **net48 の <machineKey> と同じ役割**だが、**鍵そのものは設定に書かない。**
+            //   **鍵は自動生成・自動ローテーションされ、その「置き場」を共有する。**
+            //
+            //   **access_token / id_token には影響しない**（JWS。自前の署名鍵）。
+            //   **PPID にも影響しない**（SaltParameter から導出）。
+            //   **認可コード / refresh_token にも影響しない**（サーバ側のストアに保存）。
+            //   つまり「発行済みのトークンが無効になる」話ではなく、
+            //   **「画面のセッションが切れる」**話である。
+            //
+            // **未設定なら、従来どおり何もしない**（下位互換）。
+            if (!string.IsNullOrEmpty(Config.DataProtectionKeyPath))
+            {
+                services.AddDataProtection()
+                    .PersistKeysToFileSystem(
+                        new DirectoryInfo(Config.DataProtectionKeyPath));
+
+                // **鍵リングは平文の XML である。** マウント先の保護は運用側の責任。
+                //   証明書で包む（ProtectKeysWithCertificate）かどうかは、ここでは決めない。
+            }
+
+            #endregion
+
             services.Configure<CookiePolicyOptions>(options =>
             {
                 // This lambda determines whether user consent

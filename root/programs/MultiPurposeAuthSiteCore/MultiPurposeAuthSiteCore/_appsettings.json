@@ -270,6 +270,13 @@
     "OAuth2ClientEndpointsRootURI": "https://localhost:44300/MultiPurposeAuthSite",
     // Redirectエンドポイント
     // Redirectエンドポイント（テスト用）のロックダウン
+    // **DataProtection の鍵の置き場**（#251。net10.0 版だけで使う）。
+    //   **空なら従来どおり**（%LOCALAPPDATA% 配下。**コンテナでは揮発する**）。
+    //   指定すると、そこに鍵リングを置くので、**再起動でもサインインが切れない。**
+    //   net48 の machineKey と同じ役割だが、**鍵そのものは書かない**（置き場を共有する）。
+    //   **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
+    //   例 : /keys（コンテナ）
+    "DataProtectionKeyPath": "",
     "IsLockedDownTestEndpoints": "false",
     // - test_self_saml : AssertionConsumerService
     "Saml2ResponseEndpoint": "/Account/AssertionConsumerService",

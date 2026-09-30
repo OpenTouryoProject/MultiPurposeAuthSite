@@ -1533,7 +1533,26 @@ options.SlidingExpiration = true;
 Core 側は設定を無視して 2 分固定。SlidingExpiration があるので操作中は延びるが、
 **2 分放置するとサインアウトする**。設定の意味が失われている。
 
-### C-13. DataProtection の鍵が永続化されていない **[Core]**
+### C-13. DataProtection の鍵が永続化されていない **[Core]** — **✅ 修正済み（#251）**
+
+> **対応（#251）。** **設定キー `DataProtectionKeyPath` を足し、
+> 指定されていれば `PersistKeysToFileSystem` で鍵リングをそこに置く**ようにした
+> （`Startup.ConfigureServices`）。**未設定なら従来どおり**（下位互換）。
+>
+> - **net48 の `machineKey` と同じ役割**だが、**鍵そのものは設定に書かない。**
+>   **鍵は自動生成・自動ローテーションされ、共有するのは「置き場」**である
+> - **効くのは「画面のセッション」** … 認証 Cookie / AntiForgery /
+>   メール確認・パスワード リセットのリンク（`DataProtectorTokenProvider`）。
+>   **access_token・id_token（JWS）／ PPID（`SaltParameter` から導出）／
+>   認可コード・refresh_token（サーバ側のストア）には影響しない**
+> - **鍵リングは平文の XML。** 置き場の保護は運用側の責任
+>   （`ProtectKeysWithCertificate` は任意とした）
+> - **実測** : キーを指定して起動すると、**その場所に `key-….xml` が書かれる**ことを確認した
+> - **有効にした配備では、有効にした時点で 1 度だけ全員がサインアウトする**（鍵の置き場が変わるため）。
+>   **以降は再起動に耐える**
+>
+> **`AddDistributedMemoryCache`（E-2）は、まだそのまま。**
+> **スケールアウトするには、そちらも要る。**
 
 `services.AddDataProtection().PersistKeysTo***()` を呼んでいない。
 既定では鍵はローカル プロファイル（コンテナでは揮発）に置かれるため、
