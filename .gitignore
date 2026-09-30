@@ -311,3 +311,11 @@ __pycache__/
 /store/postgres/init/*.sql
 /store/sqlserver/init/*.sql
 /store/oracle/init/*.sql
+
+# 上流 IdP コンテナの生成物（3_PublishUpstream.ps1 が作る。#250）
+#   cert/ はホストの開発用証明書の秘密鍵、.env はそのパスワード
+/store/cert/
+/store/.env
+/store/app/publish/
+/store/keys/
+/store/logs/

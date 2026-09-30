@@ -76,3 +76,76 @@ services:
       interval: 10s
       timeout: 5s
       retries: 60
+
+  # ------------------------------------------------------------------ 上流の IdP（#250 の段階 2〜3）
+  #   **ハイブリッド IdP の上流側**だけを動かす。
+  #   **下流（連携する側）はホストで動かす**（Visual Studio / test.ps1 -Launch）。
+  #
+  #   **PathBase は無い**ので root で配信する（https://localhost:44301/authorize など）。
+  #   Visual Studio の仮想ディレクトリ（/MultiPurposeAuthSite）とは形が違う。
+  #
+  #   **UserStoreType は mem。** 上流は「サインインできる IdP が 1 つあればよい」ので、
+  #   **雛形のテスト利用者が自動で作られる mem** が一番手間が無い
+  #   （DB を使う上流は別途検討）。
+  #
+  #   **44301 は、雛形がもともと上流として書いている番号**である
+  #   （IdFederation{Authorize,Token,UserInfo}Endpoint が https://localhost:44301/... を指す）。
+  upstream:
+    build: ./app
+    restart: always
+    ports:
+      - 44301:8081
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTPS_PORTS=8081
+      # **ホストの開発用証明書を書き出したもの**（3_PublishUpstream.ps1 が用意する）。
+      #   既に信頼されているので、**自己テストでブラウザが警告を出さない。**
+      - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+      - Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
+
+      # ここから汎用認証サイト側（設定は __ 区切りで IConfiguration に載る）
+      - appSettings__UserStoreType=mem
+      # **自分自身の URL。** 発行する絶対 URL（issuer 以外）はここから作られる
+      - appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:44301
+      # **DataProtection の鍵をマウントに置く**（#251）。作り直しでサインインが切れないように
+      - appSettings__DataProtectionKeyPath=/keys
+      # **自己テストの口は開けておく**（上流でサインインを確かめるため）
+      - appSettings__IsLockedDownTestEndpoints=false
+
+      # ---------------------------------------------------------------- リソースのパス
+      #   **雛形は 15 箇所すべてが C:/root/files/resource/... である**（Windows 前提）。
+      #   Linux では**ドライブ文字が効かない**ので、**マウント先（/resource）に振り替える**。
+      #
+      #   **数が多いので、1 つでも漏らすと、使った瞬間に落ちる。**
+      #   appsettings.json を `"C:/root/files` で grep した 15 個と、ここが一致していること。
+      #
+      #   log4net だけは**中身（出力先）も Windows のパス**なので、
+      #   **イメージに入れた差し替え版**（/app/LogConf.xml）を指す。
+      - appSettings__FxLog4NetConfFile=/app/LogConf.xml
+      - appSettings__FxXMLSPDefinition=/resource/XML/SPDefinition.xml
+      - appSettings__FxXMLMSGDefinition=/resource/XML/MSGDefinition.xml
+      - appSettings__FxXMLTCDefinition=/resource/XML/TCDefinition.xml
+      - appSettings__FxXMLTMInProcessDefinition=/resource/XML/TMInProcessDefinition.xml
+      - appSettings__FirebaseServiceAccountKey=/resource/MultiPurposeAuthSite/FirebaseServiceAccountKey.json
+      - appSettings__ContentOfLetterFilePath=/resource/MultiPurposeAuthSite/Txt
+      - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet.json
+      - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Server.pfx
+      - appSettings__EcdsaPfxFilePath=/resource/X509/SHA256ECDSA_Server.pfx
+      - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Server.cer
+      - appSettings__SpRp_EcdsaCerFilePath=/resource/X509/SHA256ECDSA_Server.cer
+      - appSettings__SpRp_RsaPfxFilePath=/resource/X509/SHA256RSA_Client.pfx
+      - appSettings__SpRp_EcdsaPfxFilePath=/resource/X509/SHA256ECDSA_Client.pfx
+      - appSettings__SpRp_ClientCertPfxFilePath=/resource/X509/SHA256RSAClientCert.pfx
+    volumes:
+      - ./cert:/https:ro
+      - ./keys:/keys
+      # **ホストのリソースを、そのまま読ませる**（署名鍵を含むのでイメージには入れない）。
+      #   このパスは Readme.ja.md の手順で用意されるもので、**プロジェクトの決め打ちである。**
+      - C:/root/files/resource:/resource:ro
+      # **ログをホストから読めるようにする**（#140 の目視で要る）
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "dotnet", "--info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

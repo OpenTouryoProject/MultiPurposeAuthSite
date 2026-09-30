@@ -146,6 +146,71 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > **落ちるテストは毎回違う**（`RT-230.1` / `RT-230.3` / `RT-233.2`）。
 > **`mem` では出ない**（各サイトが別の入れ物のため）。**原因は依然として未特定。**
 
+#### 上流の IdP も `store/` で立てる（#250 の段階 2〜3）
+
+**ハイブリッド ID フェデレーションの「上流側」を、コンテナで 1 つ建てる。**
+**下流（連携する側）はホストで動かす**（Visual Studio / `test.ps1 -Launch`）。
+
+```powershell
+cd store
+.\3_PublishUpstream.ps1      # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
+docker compose up -d upstream
+```
+
+| | 値 | なぜ |
+|---|---|---|
+| URL | **`https://localhost:44301`** | 雛形が上流として書いている番号 |
+| パス | **root**（`/authorize`） | `UsePathBase` を呼んでいない |
+| ストア | **`mem`** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない |
+| 証明書 | **ホストの `dotnet dev-certs`** を書き出したもの | 既に信頼済み。**ブラウザが警告を出さない** |
+| ログ | `store/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
+
+**net48 版はコンテナ化しない。** 上流は 1 つあればよく、**net10.0 版で足りる**。
+
+> **パスの形が VS と違う。** 雛形の `IdFederation{Authorize,Token,UserInfo}Endpoint` は
+> **`https://localhost:44301/MultiPurposeAuthSite/...`** を指している。これは
+> **IIS Express の仮想ディレクトリ**の形で、**Kestrel（コンテナ）は root で配信する。**
+> **下流はこの 3 つを `/MultiPurposeAuthSite` 抜きに向ける必要がある**
+> （E2E は `appSettings__...` の環境変数で渡せる。4 節と同じ形）。
+>
+> **`UsePathBase` を足して VS に合わせることはしなかった。**
+> E2E の net10.0 版（`https://localhost:44300`）も**既に root で配信している**ので、
+> **root がこのアプリの Kestrel での通常の形である。**
+
+**リソースはイメージに入れず、ホストの `C:\root\files\resource` をマウントする**（読み取り専用）。
+**署名鍵（`X509` の pfx、`JwkSet.json`）を含む**ため、イメージに焼くべきではない。
+中身は [`Readme.ja.md`](Readme.ja.md) の手順で用意されているものを、そのまま使う。
+
+> **雛形の設定は 15 箇所が `C:/root/files/resource/...` である**（Windows 前提）。
+> **Linux ではドライブ文字が効かない**ので、`docker-compose.yml` が
+> **15 個すべてをマウント先（`/resource`）に振り替えている。**
+> **1 つでも漏らすと、その設定を使った瞬間に落ちる**ので、
+> `appsettings.json` を `"C:/root/files` で grep した数と突き合わせること。
+>
+> **`log4net` だけは中身（出力先）も Windows のパス**なので、
+> **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
+
+**起動できたかは、ディスカバリで確かめる。**
+
+```powershell
+Invoke-RestMethod https://localhost:44301/.well-known/openid-configuration
+Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つが出る
+```
+
+**`jwkcerts` が返れば、マウントした署名鍵まで読めている。**
+
+> **DataProtection の鍵の置き場（#251）も、ここで効いている。**
+> `appSettings__DataProtectionKeyPath=/keys` を `store/keys` にマウントしてあるので、
+> **コンテナを作り直してもサインインが切れない。**
+>
+> **実測** : サインインしてから `docker restart` / `docker compose rm -sf` + `up` を
+> それぞれ 2 回。**4 回とも `/Manage/Index` は 200**（サインインは維持された）。
+>
+> **起動を待たずに叩くと、サインイン画面に飛ばされる。** 判定の前に
+> `jwkcerts` が返るまで待つこと（決め打ちの `sleep` では足りないことがある）。
+
+**ID フェデレーションの目視・E2E は、まだこれから**（5 節「ID フェデレーション」）。
+
 ### 4 つのストアの実測（#245 の段階 3）
 
 **実測 2026/09/29。** ビルドは net48 / net10.0 とも エラー 0 / 警告 0。
@@ -450,8 +515,9 @@ cd root
 **ビルドと通し（414 件）で「他を壊していないこと」までは確かめたが、
 経路そのものは動かしていない。**
 
-**目視は、上流をコンテナで建ててから行う予定**（別 Issue）。
-それまで **この経路は「直したが、動かしていない」状態である。**
+**目視は、上流をコンテナで建ててから行う予定**（#250）。
+**上流のコンテナは #250 の段階 2〜3 で建った**（1 節「上流の IdP も `store/` で立てる」）。
+それでも **この経路は、まだ「直したが、動かしていない」状態である。**
 
 > **E2E に入れる目算はある。** `-Launch` は 2 サイト立てるので、
 > **片方をもう片方の上流に向ければ駆動できる**

@@ -3,6 +3,10 @@ rem **DDL を先に流し込む**（コピー忘れで古いスキーマのま�
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp00_CopyInitSql.ps1"
 if errorlevel 1 goto :error
 
+rem **上流 IdP の publish と証明書**（#250 の段階 2）
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp03_PublishUpstream.ps1"
+if errorlevel 1 goto :error
+
 rem **docker compose（v2）**。docker-compose（v1）は廃止
 docker compose up -d
 if errorlevel 1 goto :error
@@ -10,6 +14,7 @@ if errorlevel 1 goto :error
 echo.
 echo  E2E 用の UserStore を起動しました（ポートは +1）。
 echo    SQL Server : 1434 / Oracle : 1522 / PostgreSQL : 5433
+echo  上流 IdP    : https://localhost:44301  （UserStoreType=mem）
 echo.
 echo  **Oracle の初回起動は数分かかります。**
 echo    docker compose ps  で healthy になるのを待ってください。
