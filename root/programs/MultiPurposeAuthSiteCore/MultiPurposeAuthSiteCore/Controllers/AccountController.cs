@@ -44,6 +44,7 @@
 //*  2026/09/28  玄人 幸道         max_age の超過で再認証し、prompt=none なら login_required を返す（#247）
 //*  2026/09/28  玄人 幸道         「別のアカウントでログイン」がサインアウトしていなかったのを修正（#247 で気付いた）
 //*  2026/09/30  玄人 幸道         ID 連携の Error に理由のトレースを足す（#253）
+//*  2026/09/30  玄人 幸道         未サインイン＋prompt=none で login_required を返す（#254）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3096,7 +3097,20 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="prompt">string（OIDC 任意）</param>
         /// <returns>ActionResultを非同期に返す</returns>
         /// <see cref="http://openid-foundation-japan.github.io/rfc6749.ja.html#code-authz-req"/>
+        /// <remarks>
+        /// **[AllowAnonymous] にしてある**（#254）。
+        /// **`prompt=none` のときは UI を出さず、`login_required` を RP へ返す**必要があり
+        /// （OIDC Core 3.1.2.1 / 3.1.2.6）、**[Authorize] のままでは、
+        /// Cookie 認証がこのコードに入る前にサインイン画面へ飛ばしてしまう。**
+        ///
+        /// **未認証のときの扱いは、このメソッドの中で決める。**
+        /// `prompt=none` でなければ `ChallengeResult` を返す（[Authorize] と同じ動き）。
+        ///
+        /// **判定は `redirect_uri` の照合（ValidateAuthZReqParam）より後で行う。**
+        /// **照合前に RP へ返すと、オープン リダイレクトになる。**
+        /// </remarks>
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult> OAuth2Authorize(
             string client_id, string redirect_uri,
             string response_type, string response_mode,
@@ -3162,6 +3176,24 @@ namespace MultiPurposeAuthSite.Controllers
                     // **0 以上の整数でない**（RFC 6749 4.1.2.1 : invalid_request）。
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "max_age must be a non-negative integer.";
+                }
+                else if (!this.User.Identity.IsAuthenticated
+                    && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))
+                {
+                    // **そもそもサインインしていない**（OIDC Core 3.1.2.6 : login_required）。
+                    //   **#247 で足したのは「セッションは在るが古い」場合だけ**だった。
+                    //   **「セッションが無い」場合は、[Authorize] が
+                    //   このコードに入る前にサインイン画面へ飛ばしていた**（#254）。
+                    err = OAuth2AndOIDCConst.login_required;
+                    errDescription = "The end-user is not authenticated, but prompt=none was specified.";
+                }
+                else if (!this.User.Identity.IsAuthenticated)
+                {
+                    // **サインイン画面へ送る**（#254）。
+                    //   **[Authorize] を外した**ので、未認証のときの扱いを自分で決める。
+                    //   ChallengeResult は 401 を返し、Cookie 認証が LoginPath へのリダイレクトに変える。
+                    //   **[Authorize] が行っていたことと同じ**（ReturnUrl も付く）。
+                    return new ChallengeResult();
                 }
                 else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication
                     && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))

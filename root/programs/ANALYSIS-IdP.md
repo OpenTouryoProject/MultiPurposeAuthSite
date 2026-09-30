@@ -738,6 +738,7 @@ else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
 |---|---|---|
 | `max_age` を超えている | **利用者を再認証する**（サインインさせ、`auth_time` を更新して続ける） | OIDC Core §3.1.2.1（`max_age`）／§2（`auth_time`） |
 | 再認証が必要だが `prompt=none` | `redirect_uri` へ **`login_required`** | OIDC Core §3.1.2.6 |
+| **そもそも未サインイン**だが `prompt=none` | `redirect_uri` へ **`login_required`**（**UI を出さない**） | OIDC Core §3.1.2.1 / §3.1.2.6 |
 | `max_age` が数値でない | `redirect_uri` へ **`invalid_request`** | RFC 6749 §4.1.2.1 |
 
 いずれも**エラー画面ではなく、`redirect_uri` へ返す**のが仕様である（A-6 と同じ筋）。
@@ -763,6 +764,19 @@ else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
 - E2E : `RT-247.1`（再認証へ送る・**繰り返さない**・自己テストの 2 つのボタン）/
   `RT-247.2`（`login_required`）/ `RT-247.3`（`invalid_request`）。
   **テストはサインインから 1 秒以上ずらして測る**（速すぎると同じ秒に入り、超過にならない）
+
+**対応（#254）— 未サインインの場合。**
+
+**#247 が扱ったのは「セッションは在るが古い」場合だけだった。**
+**「セッションが無い」場合は、`[Authorize]` が認可エンドポイントのコードに入る前に
+サインイン画面へ飛ばしており、`prompt` を見る機会が無かった。**
+
+- **認可エンドポイント（GET）を `[AllowAnonymous]` にし、未認証のときの扱いを自分で決める。**
+  `prompt=none` なら **`login_required`**、そうでなければ
+  **`ChallengeResult`（net48 は `HttpUnauthorizedResult`）**＝ `[Authorize]` と同じ動き
+- **判定は `ValidateAuthZReqParam` より後に置く。**
+  **`redirect_uri` を照合する前に RP へ返すと、オープン リダイレクトになる**
+- E2E : `RT-247.4`（未サインイン ＋ `prompt=none` → `redirect_uri` へ `login_required`）
 
 > **ここに 3 回作り直した跡がある。** 記録として残す。
 > **(1) 印の新しさ（300 秒）だけを見る** → 手の操作が 5 分を超えると古い印と見なし、**二度サインイン**。
@@ -2066,7 +2080,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
 | ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残り（仕様方針の判断を伴う 9〜14）は #228 |
-| ✅ **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）**#247**。`prompt` の残り（`login` / `consent` / `select_account`）は C-3 |
+| ✅ **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）**#247**／**未サインイン ＋ `prompt=none` も `login_required`（#254）**。`prompt` の残り（`login` / `consent` / `select_account`）は C-3 |
 
 ### フェーズ 2 — セキュリティの底上げ
 

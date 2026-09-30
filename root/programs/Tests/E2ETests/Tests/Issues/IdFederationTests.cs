@@ -437,9 +437,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         /// <remarks>
         /// **下流は `prompt=none` で委譲する**ので、**上流が「黙って」認証できるときだけ通る。**
         ///
-        /// **いまの上流は、セッションが無いとログイン画面を出す**（#254。OIDC Core §3.1.2.1 違反）。
-        /// **#254 を直すと `login_required` が `redirect_uri` へ返る**が、
-        /// **どちらでも「下流はサインインしない」**ので、この判定は変わらない。
+        /// **上流は `login_required` を `redirect_uri` へ返す**（#254 で直した。OIDC Core §3.1.2.6）。
+        /// **直す前はログイン画面を出していた**が、**どちらでも「下流はサインインしない」**ので、
+        /// **この判定は修正の前後で変わらない**（実際、両方で通ることを確かめた）。
         /// </remarks>
         [SkippableTheory]
         [MemberData(nameof(AllTargets))]
