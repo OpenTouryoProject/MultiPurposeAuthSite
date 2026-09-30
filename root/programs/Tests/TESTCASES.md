@@ -3156,6 +3156,48 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - authorization_response_iss_parameter_supported が boolean の true
 
+## RT-231.5 response_mode=form_post の応答にも、iss が hidden で付く
+
+| | |
+|---|---|
+| 観点 | **返し方を変えても、Mix-Up への守りは同じだけ要る。**`iss` を付けているのは URL を組む経路だけで、**自動送信フォームで返すときは抜けていた**（Discovery は対応を広告しているのに）。 |
+| 根拠 | RFC 9207 §2 / OAuth 2.0 Form Post Response Mode §2 / #252 |
+| テスト | `RT231_05_form_postの認可応答にもissが付く` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. response_mode=form_post で認可を要求する
+
+**検証（合否を判定する）**
+
+- リダイレクトしない（自動送信フォームを返す）
+- code を hidden で送る
+- iss を hidden で送る（Discovery の issuer と一致）
+
+**補足**
+
+- issuer = https://ssoauth.opentouryo.com
+
+## RT-231.6 JARM（response_mode=form_post.jwt）では、平文の iss を付けない
+
+| | |
+|---|---|
+| 観点 | **JARM は応答を署名付き JWT に包む。** その JWT に `iss` が入っており、**署名で守られている分だけ強い。** 平文の `iss` を重ねて付ける必要はない。**query.jwt（RT-231.3）と同じ規則が、form_post.jwt にも掛かること**を確かめる。 |
+| 根拠 | JARM / RFC 9207 §2 / #252 |
+| テスト | `RT231_06_form_post_jwtでは平文のissを付けない` |
+
+**手順**
+
+1. Discovery の issuer を読む
+1. response_mode=form_post.jwt で認可を要求する
+
+**検証（合否を判定する）**
+
+- response（JWT）を hidden で送る
+- 平文の iss は付かない
+- JWT の中の iss が Discovery の issuer と一致する
+
 ## RT-232.1 Discovery が end_session_endpoint を広告する
 
 | | |
@@ -4877,5 +4919,5 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
-| `RT24504_redirect_uriは大文字小文字まで一致しなければ通らない` | 未修正: ANALYSIS-IdP.md の C-10（`redirect_uri` の比較が大文字小文字を無視）。`CheckRedirectUri` が `ToLower()` 同士で比べているため、パスの大文字小文字だけが違う値でも照合が通る。実測 2026/09/29（net10.0版 (MultiPurposeAuthSiteCore)）: **認可コードが発行された。**期待する動作 = 単純文字列比較（RFC 6749 §3.1.2）で照合し、認可コードを発行しない。ロードマップのフェーズ 2（C-10）で直す。 |
+| `RT24504_redirect_uriは大文字小文字まで一致しなければ通らない` | 未修正: ANALYSIS-IdP.md の C-10（`redirect_uri` の比較が大文字小文字を無視）。`CheckRedirectUri` が `ToLower()` 同士で比べているため、パスの大文字小文字だけが違う値でも照合が通る。実測 2026/09/29（net48版 (MultiPurposeAuthSite)）: **認可コードが発行された。**期待する動作 = 単純文字列比較（RFC 6749 §3.1.2）で照合し、認可コードを発行しない。ロードマップのフェーズ 2（C-10）で直す。 |
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/24  玄人 幸道         新規（#231 : 認可応答に iss を返す）
+//*  2026/09/30  玄人 幸道         form_post の場合を追加（#252）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -238,6 +239,124 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     supported, "true（boolean）",
                     res.Json.TryGetProperty("authorization_response_iss_parameter_supported", out JsonElement v)
                         ? v.ToString() : "**無し**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-231.5 form_post の認可応答にも iss が付く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **#231 で対応したとき、form_post だけ抜けていた**（#252）。
+        /// `iss` は `CmnEndpoints.BuildRedirectUrl`（URL を組む経路）で付けており、
+        /// **form_post はそこを通らない**（`ViewData` を組んで `FormPost` を返す）。
+        ///
+        /// **エラー応答の form_post は、ここでは測っていない。**
+        /// その経路（`CreateErrorResponseForToken`）は**同意画面で拒否したとき**に通るもので、
+        /// E2E で駆動しにくい。**View は同じ**なので、`iss` は同じ規則で付く。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT231_05_form_postの認可応答にもissが付く(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                TestReport r = this.Report("RT-231.5",
+                    "response_mode=form_post の応答にも、iss が hidden で付く",
+                    "**返し方を変えても、Mix-Up への守りは同じだけ要る。**"
+                    + "`iss` を付けているのは URL を組む経路だけで、"
+                    + "**自動送信フォームで返すときは抜けていた**（Discovery は対応を広告しているのに）。",
+                    "RFC 9207 §2 / OAuth 2.0 Form Post Response Mode §2 / #252");
+
+                r.Target(client.Target.DisplayName + " / client_name=" + KnownClients.MvcSample
+                    + " / response_mode=form_post");
+
+                r.Step("(1) Discovery の issuer を読む");
+
+                string issuer = await IssuerParameterTests.IssuerAsync(client);
+                r.Note("issuer = " + (issuer ?? "（無し）"));
+
+                r.Step("(2) response_mode=form_post で認可を要求する");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, state: "state-rt2315", redirectUri: reg.RedirectUri,
+                    extra: new Dictionary<string, string>() { { "response_mode", "form_post" } });
+
+                r.Verify("リダイレクトしない（自動送信フォームを返す）",
+                    !authz.Redirected && (int)authz.StatusCode == 200,
+                    "HTTP 200 の HTML", authz.ToString());
+
+                Dictionary<string, string> hidden = Html.HiddenInputs(authz.Body);
+
+                string code;
+                hidden.TryGetValue("code", out code);
+
+                r.Verify("code を hidden で送る", !string.IsNullOrEmpty(code),
+                    "code あり", string.IsNullOrEmpty(code) ? "**無し**" : "あり（値は伏せる）");
+
+                string iss;
+                hidden.TryGetValue("iss", out iss);
+
+                r.VerifyEqual("iss を hidden で送る（Discovery の issuer と一致）",
+                    issuer ?? "（無し）", iss ?? "**無し**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-231.6 form_post.jwt では平文の iss を付けない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT231_06_form_post_jwtでは平文のissを付けない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
+
+                TestReport r = this.Report("RT-231.6",
+                    "JARM（response_mode=form_post.jwt）では、平文の iss を付けない",
+                    "**JARM は応答を署名付き JWT に包む。** その JWT に `iss` が入っており、"
+                    + "**署名で守られている分だけ強い。** 平文の `iss` を重ねて付ける必要はない。"
+                    + "**query.jwt（RT-231.3）と同じ規則が、form_post.jwt にも掛かること**を確かめる。",
+                    "JARM / RFC 9207 §2 / #252");
+
+                r.Target(client.Target.DisplayName + " / client_name=" + KnownClients.MvcSample
+                    + " / response_mode=form_post.jwt");
+
+                r.Step("(1) Discovery の issuer を読む");
+
+                string issuer = await IssuerParameterTests.IssuerAsync(client);
+
+                r.Step("(2) response_mode=form_post.jwt で認可を要求する");
+
+                AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                    client, reg, state: "state-rt2316", redirectUri: reg.RedirectUri,
+                    extra: new Dictionary<string, string>() { { "response_mode", "form_post.jwt" } });
+
+                Dictionary<string, string> hidden = Html.HiddenInputs(authz.Body);
+
+                string response;
+                hidden.TryGetValue("response", out response);
+
+                r.Verify("response（JWT）を hidden で送る", !string.IsNullOrEmpty(response),
+                    "response あり", string.IsNullOrEmpty(response) ? "**無し**" : "あり（値は伏せる）");
+
+                Assert.False(string.IsNullOrEmpty(response), "前提: JARM の応答が返ること");
+
+                bool plainIss = hidden.ContainsKey("iss");
+
+                r.Verify("平文の iss は付かない", !plainIss,
+                    "付かない", plainIss ? "**付いている**" : "付かなかった");
+
+                JsonElement payload = Jwt.Payload(response);
+
+                r.VerifyEqual("JWT の中の iss が Discovery の issuer と一致する",
+                    issuer ?? "（無し）", Jwt.String(payload, "iss") ?? "（無し）");
 
                 r.Done();
             }

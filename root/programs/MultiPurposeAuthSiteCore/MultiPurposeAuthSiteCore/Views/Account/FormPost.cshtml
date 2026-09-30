@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/09/30  玄人 幸道         認可応答の iss を出す（RFC 9207。#252）
     //**********************************************************************************
 *@
 @{
@@ -47,6 +48,24 @@
 @if (!string.IsNullOrEmpty((string)ViewData["Error"]))
 {
         <input type="hidden" name="error" value="@ViewData["Error"]" />
+}
+@*
+    **どの認可サーバからの応答かを示す**（RFC 9207。#252）。
+
+    **query / fragment は CmnEndpoints.BuildRedirectUrl が付けている。**
+    **form_post はそこを通らない**（ViewData を組んで、この View を返す）ため、
+    **#231 で対応したつもりが、form_post だけ抜けていた。**
+
+    **成功にも失敗にも付ける**（同 §2）。
+    **JARM（response=...）のときは付けない。** 署名された JWT の中に iss が入っており、
+    そちらが同じ役目を果たすため（BuildRedirectUrl と同じ規則）。
+
+    **Config を完全修飾しているのは、net48 版の Views/Web.config に
+    MultiPurposeAuthSite.Co の名前空間が入っていないため**（2 つの View を同じ内容に保つ）。
+*@
+@if (string.IsNullOrEmpty((string)ViewData["Response"]))
+{
+        <input type="hidden" name="iss" value="@MultiPurposeAuthSite.Co.Config.IssuerId" />
 }
         <input type="hidden" name="state" value="@ViewData["State"]" />
     </form>
