@@ -808,6 +808,50 @@ string access_token = CmnAccessToken.ProtectFromPayload(
 > （`refresh_token × mTLS`）を埋めた**ところで出た。
 > **網羅の穴と実装の穴が同じ場所にあった。**
 
+### A-14. `subject_types=pairwise` のクライアントに、`sub` 以外を返せていなかった **[Lib]** — **✅ 修正済み（#140 の段階 2）**
+
+**PPID（pairwise の `sub`）が salted hash で、一方向だった。**
+
+```
+sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
+```
+
+**OP 自身も戻せないため、`PPIDExtension.GetUserFromSub` が `pairwise` で `null` を返していた**
+（コード中のコメントは「取りようが無いので...。」）。その結果 —
+
+| 口 | `pairwise` のときの挙動 |
+|---|---|
+| `/userinfo` | **`sub` だけを返し、`profile` / `email` / `address` のクレームが空**（`user != null` の中だけで詰めているため） |
+| `ciba_result` | **401 / `invalid_token`** |
+| `SetDeviceToken` | 利用者を引けない |
+| オペレーション ログ | 利用者名が **`PPID: …`** のままで読めない |
+| `id_token_hint` からの利用者特定（#232） | 成立しない |
+
+**つまり `pairwise` は、選べるが機能しない状態だった。**
+
+**対応（#140 の段階 2）。** **PPID を「OP だけが戻せる暗号化」に変えた。**
+
+- **pairwise に求められるのは「OP 以外が戻せないこと」**であり、**一方向であることではない。**
+  **OP だけが鍵を持つ暗号化は、その条件を満たす**
+- **決定的**でなければならない（RP は `sub` を利用者の主キーとして保存するため、
+  同じ利用者・同じクライアントなら常に同じ値）。**鍵と IV を秘密と `client_id` から導出**して実現
+- **クライアントごとに変わる**（`client_id` を鍵材料に入れている）
+- 実装は `Util/PPIDExtension`（AES-CBC）。**対応表（新しいテーブル）を作らずに済む**ので、
+  **DDL の 3 方言と、既存データベースへの移行が要らない**
+- E2E テスト : **`RT-140.2`**（`pairwise` でも `/userinfo` がクレームを返す）、
+  **`RT-140.3`**（毎回同じ値になり、クライアントが違えば違う値になる）。
+  `test.ps1` が **`subject_types=pairwise` のクライアント（`TestClient_5`）を差し込む**
+
+> **制約 : 秘密（`SaltParameter`）を替えると、発行済みの PPID が全部変わる。**
+> **RP は `sub` を主キーとして保存している**ので、**RP 側では全員が別人になる。**
+>
+> **これは以前の salted hash でも同じ**で、この変更で悪化してはいない。
+> **効くのは漏洩時である。** 秘密を替えなければならないのに、替えると RP が壊れる。
+>
+> **解くには対応表が要る**（`client_id` × `user_id` → PPID を保存する）。
+> **導出が決定的なので、鍵を替える前に全組み合わせを計算して表に入れれば、
+> 発行済みの値を保ったまま移行できる。** D-9（署名鍵のローテーション）と同じ性質の宿題。
+
 ---
 
 ## 3. B. 異常系で落ちる（HTTP 500 になる）
@@ -1866,6 +1910,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
+| D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **不可。** PPID は秘密から導出するので、替えると**発行済みの値が全部変わる**（A-14）。**対応表を持てば解ける** | **漏洩時に替えられない。** 替えると、RP 側で全利用者が別人になる |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |

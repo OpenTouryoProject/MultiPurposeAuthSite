@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト ライブラリ部（CommonLibrary）コード分析
 
 対象: `root/programs/CommonLibrary`（**net10.0 / net48 の 2 系統**） / ブランチ: `develop`
-最終更新: 2026-09-28
+最終更新: 2026-09-30
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 「どこに何があるか」「どの規約に従うべきか」「何を壊しやすいか」を記す。
@@ -414,6 +414,23 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 
    **残るのは Google と Microsoft Account。** この 2 つは
    **ClientId / ClientSecret を渡すだけで済み、専用処理を持たない。**
+3-3. **Open棟梁 の `SymmetricCryptography.EncryptBytes` / `DecryptBytes` は使えない**（#140 の段階 2 で踏んだ）。
+   `Public/Security/SymmetricCryptography.cs` の `GenerateKeyFromPassword`（**7 引数**）が、
+   **「overloadへ」と書きながら自分自身を呼んでいる**（8 引数版＝`HashAlgorithmName` 付きではなく）。
+   **無限再帰し、スタック オーバーフローでプロセスが落ちる。**
+
+   ```
+   Stack overflow.
+   Repeated 16019 times:
+      at Touryo.Infrastructure.Public.Security.SymmetricCryptography.GenerateKeyFromPassword(...)
+      at Touryo.Infrastructure.Public.Security.SymmetricCryptography.EncryptBytes(Byte[], System.String)
+   ```
+
+   **`EncryptString` / `DecryptString` も同じ経路を通るので、対称鍵の API は丸ごと使えない。**
+   **上流（OpenTouryo）の不具合。** こちらでは `Util/PPIDExtension` が
+   **.NET の `Aes` を直接使う**ことで回避している。
+   **例外ではなくプロセスが落ちる**ので、**ログにも 500 にも残らない**（`MpasSite.err.log` にだけ出る）。
+
 4. **`Data/UserStore.cs` と `Data/UserStoreCore.cs` は薄いアダプタ。**
    実装を足すなら `CmnUserStore`。片方だけ直すと系統間で挙動がズレる。
 5. **TOTP（Authenticator アプリによる 2FA）は .NET 側にしか無い。**

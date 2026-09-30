@@ -491,6 +491,8 @@ try {
         #                               符号化しないと分割位置がずれるので、符号化したときだけ通る
         #     TestClient_4  : normal  … **post_logout_redirect_uri を登録**（#232）。
         #                               ログアウト後に RP へ戻せるか（登録が無いクライアントとの対照）
+        #     TestClient_5  : normal  … **subject_types = pairwise**（#140 の段階 2）。
+        #                               sub が PPID になっても /userinfo がクレームを返すか
         #   ※ Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
         #   ※ 秘密は JSON 文字列に素で埋めるので、「"」「\」「'」は使わないこと（net48 は一覧ごと差し替える）。
         $mtlsDn = @{ tls_client_auth_subject_dn = 'CN=mpas-e2e-mtls-client' }
@@ -504,6 +506,9 @@ try {
         # **ログアウト後の戻り先**（#232）。サイトごとに URL が違うので、定数で登録して
         #   サーバ側（CmnEndpoints.GetRedirectUriFromConstr）で解決させる。
         $postLogout = @{ post_logout_redirect_uri = 'test_self_logout' }
+
+        # **pairwise の登録**（#140 の段階 2）。sub が PPID（クライアントごとに違う値）になる。
+        $pairwise = @{ subject_types = 'pairwise' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
@@ -513,7 +518,8 @@ try {
             @{ Name = 'TestClient2_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc23000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
             @{ Name = 'TestClient_2';  Mode = 'normal'; ClientId = 'e2e0tc02000000000000000000000000'; Source = 'TestClient';  Override = $symbolSecret },
             @{ Name = 'TestClient_3';  Mode = 'normal'; ClientId = 'e2e0tc03000000000000000000000000'; Source = 'TestClient';  Override = $colonSecret },
-            @{ Name = 'TestClient_4';  Mode = 'normal'; ClientId = 'e2e0tc04000000000000000000000000'; Source = 'TestClient';  Override = $postLogout })) {
+            @{ Name = 'TestClient_4';  Mode = 'normal'; ClientId = 'e2e0tc04000000000000000000000000'; Source = 'TestClient';  Override = $postLogout },
+            @{ Name = 'TestClient_5';  Mode = 'normal'; ClientId = 'e2e0tc05000000000000000000000000'; Source = 'TestClient';  Override = $pairwise })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }

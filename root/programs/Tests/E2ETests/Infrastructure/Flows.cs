@@ -129,6 +129,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public const string TestClient_4 = "TestClient_4";
 
         /// <summary>
+        /// TestClient（normal）を写し、**subject_types を pairwise にした**クライアント（#140 の段階 2）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **sub が PPID（クライアントごとに違う値）になる。**
+        /// **PPID は OP だけが戻せる**ので、`/userinfo` は従来どおりクレームを返せる。
+        /// 以前は戻せず、**`sub` だけを返していた**（#140 の段階 2 で直した）。
+        /// </remarks>
+        public const string TestClient_5 = "TestClient_5";
+
+        /// <summary>
         /// TestClient_2 の client_secret（#237）。
         /// **test.ps1 の差し込みと同じ値にすること。**
         /// </summary>
@@ -531,6 +542,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient_4)
             {
                 // client_secret は写す元のまま（登録に足したのは post_logout_redirect_uri だけ）。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_5)
+            {
+                // client_secret は写す元のまま（登録で変えたのは subject_types だけ）。
                 sourceName = KnownClients.TestClient;
             }
 
