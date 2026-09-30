@@ -148,7 +148,7 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
     "client_secret": "...",
     "redirect_uri_code": "test_self_code",
     "client_name": "TestClient",
-    "subject_types": "uname",         // public, pairwise, uname
+    "subject_types": "uname",         // public, pairwise, uname（下記）
     "jwk_rsa_publickey": "..."
   },
   ...
@@ -157,6 +157,24 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 
 **`client_id` は環境ごとに違う。** `CommandLineTools` の `CreateClientsIdentity.exe` で生成する。
 このため、**コードやテストに `client_id` を直書きしない。** `client_name` から引くこと。
+
+### `subject_types` — `sub` に何を入れるか
+
+| 値 | `sub` | |
+|---|---|---|
+| `public` | 利用者の内部 ID | **OIDC の登録値** |
+| `pairwise` | **クライアントごとに違う PPID** | **OIDC の登録値。** OP だけが戻せる（#140 の段階 2） |
+| **`uname`** | **利用者名** | **この実装の独自値**（OIDC には無い）。**既定** |
+
+> **`uname` は、利用者名を RP に渡すための値ではない。**
+> **利用者名を渡したいなら `UserClaimsMapping` で `preferred_username` に対応付ける**
+> （#151 の段階 1。下の設定表）。
+>
+> **`RequireUniqueEmail` が `true`（雛形の既定）のとき、利用者名はメアドである。**
+> つまり **`uname` を選ぶと、`sub` としてメアドが全ての RP に渡る。**
+>
+> **`sub` は「その RP の中で利用者を指す識別子」**で、表示や照合のための属性ではない。
+> **`public` / `pairwise` を推す。** 既定値の扱いは #151 で検討中。
 
 | `client_name` | 用途 |
 |---|---|
@@ -447,6 +465,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|---|---|
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
+| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`subject_types=uname` で `sub` に載せる必要はない** |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
