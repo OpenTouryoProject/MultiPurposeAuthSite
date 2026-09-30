@@ -117,14 +117,29 @@ services:
       #   そのため localhost:44300（下流）と localhost:44301（上流）は **Cookie を共有する。**
       #   名前が同じだと、**上流でサインインしたときに下流のセッションが消え**、
       #   **下流が state / nonce を読めなくなって ID 連携が「エラー」になる**（実測）。
-      - sessionState__SessionCookieName=MultiPurposeAuthSiteUpstreamSession
+      - sessionState__SessionCookieName=MultiPurposeAuthSiteSession
 
       # **認証 Cookie の名前も分ける**（#250 の段階 4）。
       #   既定名（.AspNetCore.Identity.Application）が同じだと、
       #   **上流でサインインした瞬間に下流が蹴り出される**（実測）。
       #   **ID フェデレーションは「上流にサインイン → 下流がサインイン」なので、
       #   この経路を通るたびに必ずどちらかが切れる。**
-      - appSettings__AuthCookieName=.MultiPurposeAuthSiteUpstream
+      #
+      #   **「上流」は名前ではなく、下の接頭辞で表す**（#255）。
+      #   ここは **このアプリの Cookie であること**だけを示す。
+      - appSettings__AuthCookieName=.MultiPurposeAuthSite
+
+      # **名前を決められる Cookie すべてに、接頭辞を掛ける**（#255）。
+      #   **先頭が . のものは、その後ろに入る**ので、見た目が揃う。
+      #
+      #     .upstream_MultiPurposeAuthSite                    認証
+      #     upstream_MultiPurposeAuthSiteSession              セッション
+      #     upstream_auth_time / upstream_re_auth_at          max_age の判定
+      #     .upstream_AspNetCore.Mvc.CookieTempDataProvider   画面のメッセージ
+      #
+      #   **auth_time が混ざると再認証の要否を誤り、TempData が混ざると
+      #   画面のメッセージが出なくなる**（どちらもサインインは妨げない）。
+      - appSettings__CookieNamePrefix=upstream_
 
       # ---------------------------------------------------------------- E2E 用のクライアント登録
       #   **ID フェデレーションを E2E で駆動するために要る**（#250 の段階 5）。

@@ -45,6 +45,7 @@
 //*  2026/09/28  玄人 幸道         「別のアカウントでログイン」がサインアウトしていなかったのを修正（#247 で気付いた）
 //*  2026/09/30  玄人 幸道         ID 連携の Error に理由のトレースを足す（#253）
 //*  2026/09/30  玄人 幸道         未サインイン＋prompt=none で login_required を返す（#254）
+//*  2026/09/30  玄人 幸道         自身が書く Cookie の名前に接頭辞を付けられるようにした（#255）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -176,11 +177,19 @@ namespace MultiPurposeAuthSite.Controllers
         #region property
 
         /// <summary>SessionCookieName</summary>
+        /// <remarks>
+        /// **接頭辞を掛ける**（#255）。**`Startup` が同じ規則で名前を付けている**ので、
+        /// ここで掛けないと、**セッションを捨てるときに別の名前を消しに行く。**
+        ///
+        /// **net48 版は掛けない。** あちらのセッション Cookie は ASP.NET のもので
+        /// （`system.web/sessionState` の `cookieName`）、**接頭辞の対象外**である。
+        /// </remarks>
         private string SessionCookieName
         {
             get
             {
-                return GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName");
+                return Config.PrefixCookieName(
+                    GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName"));
             }
         }
 
@@ -251,7 +260,7 @@ namespace MultiPurposeAuthSite.Controllers
             // SessionIDの切換にはこのコードが必要である模様。
             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
             Response.Cookies.Set(this.SessionCookieName, "", this._cookieOptions);
-            Response.Cookies.Set(OAuth2AndOIDCConst.auth_time,
+            Response.Cookies.Set(Config.AuthTimeCookieName,
                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
         }
 
@@ -3070,7 +3079,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
             {
                 IRequestCookieCollection requestCookies = MyHttpContext.Current.Request.Cookies;
-                string auth_time = requestCookies.Get(OAuth2AndOIDCConst.auth_time);
+                string auth_time = requestCookies.Get(Config.AuthTimeCookieName);
 
                 if (string.IsNullOrEmpty(auth_time))
                 {
@@ -3168,8 +3177,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
                 Token.CmnEndpoints.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
                     max_age,
-                    MyHttpContext.Current.Request.Cookies.Get(OAuth2AndOIDCConst.auth_time),
-                    MyHttpContext.Current.Request.Cookies.Get(Const.ReAuthenticatedAt));
+                    MyHttpContext.Current.Request.Cookies.Get(Config.AuthTimeCookieName),
+                    MyHttpContext.Current.Request.Cookies.Get(Config.ReAuthenticatedAtCookieName));
 
                 if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.InvalidMaxAge)
                 {
@@ -3207,7 +3216,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // **再認証する**（OIDC Core 3.1.2.1）。
                     //   印を残してサインアウトし、同じ URL に戻す（この後は認証が要るのでサインイン画面になる）。
                     //   **印は繰り返しを防ぐため**（max_age=0 でも、再認証の直後なら続ける）。
-                    MyHttpContext.Current.Response.Cookies.Set(Const.ReAuthenticatedAt,
+                    MyHttpContext.Current.Response.Cookies.Set(Config.ReAuthenticatedAtCookieName,
                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
 
                     // **SignInManager でサインアウトする。**
@@ -3232,7 +3241,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // **再認証の印を消す**（#247）。
                     //   一度きりの印なので、ここまで来たら落とす。
-                    MyHttpContext.Current.Response.Cookies.Delete(Const.ReAuthenticatedAt);
+                    MyHttpContext.Current.Response.Cookies.Delete(Config.ReAuthenticatedAtCookieName);
 
                     // auth_timeを追加
                     this.AddAuthTimeClaim(max_age, claims, identity);

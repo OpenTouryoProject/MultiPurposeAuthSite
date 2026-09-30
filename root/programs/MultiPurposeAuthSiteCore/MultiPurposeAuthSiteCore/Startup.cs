@@ -27,6 +27,8 @@
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）のルートを追加（#232）
 //*  2026/09/30  玄人 幸道         Google の email_verified をクレームに写す（#140 の段階 1）
+//*  2026/09/30  玄人 幸道         AuthCookieName で認証 Cookie の名前を変えられるようにした（#250 の段階 4）
+//*  2026/10/01  玄人 幸道         TempData の Cookie にも接頭辞を付ける（#255）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -55,6 +57,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Caching.Memory;
 
 //using Microsoft.AspNetCore.Mvc.Cors.Internal;
+using Microsoft.AspNetCore.Mvc; // CookieTempDataProviderOptions（#255）
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.StdMigration;
@@ -142,7 +145,9 @@ namespace MultiPurposeAuthSite
                 {
                     Expiration = TimeSpan.FromDays(1), // 効かない
                     HttpOnly = true,
-                    Name = GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName"),
+                    // **接頭辞を掛ける**（#255。同じホストに 2 つ立てたときに分けるため）
+                    Name = Config.PrefixCookieName(
+                        GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName")),
                     Path = "/",
                     SameSite = SameSiteMode.Strict,
                     SecurePolicy = CookieSecurePolicy.SameAsRequest
@@ -372,6 +377,50 @@ namespace MultiPurposeAuthSite
 
             // AddMvc
             services.AddMvc();
+
+            // **TempData の Cookie の名前にも接頭辞を付ける**（#255）。
+            //   **空なら既定のまま**（`.AspNetCore.Mvc.CookieTempDataProvider`）。
+            //
+            //   **同じホストに 2 つ立てると、この Cookie も上書きし合う**
+            //   （Cookie のスコープにポートは入らないため）。
+            //   **中身は配備ごとの鍵で守られており相手は読めない**が、**消えるので
+            //   画面のメッセージ（[TempData] ErrorMessage など）が出なくなる。**
+            //
+            //   **net10.0 版だけの話。** net48 版の TempData はセッションに載る。
+            //   **PostConfigure で掛ける。** 既定の名前が入った後に読みたいため
+            //   （Configure だと、既定が入る前に走る余地がある）。
+            if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
+            {
+                services.PostConfigure<CookieTempDataProviderOptions>(options =>
+                {
+                    options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                });
+
+                // **Identity が使う Cookie すべてに掛ける**（#255）。
+                //   **AuthCookieName で名前を決めた後**に付けたいので、PostConfigure で行う。
+                //   AuthCookieName が空でも、**枠組みの既定名に接頭辞が付く。**
+                //
+                //   **サインインの Cookie（Application）だけでは足りない。**
+                //   **外部ログイン（External）は ID フェデレーションと外部 IdP の途中で使い**、
+                //   **2 要素認証（TwoFactor*）も同じように途中の状態を持つ。**
+                //   **これらが混ざると、連携や 2FA の途中で別のサイトの状態を掴む。**
+                string[] identitySchemes = new string[]
+                {
+                    IdentityConstants.ApplicationScheme,
+                    IdentityConstants.ExternalScheme,
+                    IdentityConstants.TwoFactorUserIdScheme,
+                    IdentityConstants.TwoFactorRememberMeScheme
+                };
+
+                foreach (string scheme in identitySchemes)
+                {
+                    services.PostConfigure<CookieAuthenticationOptions>(
+                        scheme, options =>
+                        {
+                            options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                        });
+                }
+            }
 
             // AddCors
             services.AddCors(

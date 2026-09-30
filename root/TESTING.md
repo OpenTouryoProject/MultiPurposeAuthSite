@@ -590,9 +590,36 @@ docker compose up -d upstream
 > | セッション（`MultiPurposeAuthSiteCoreSession`） | **上流のサインインが下流のセッションを消す** → `state` / `nonce` が読めず「エラー」画面 |
 > | 認証（`.AspNetCore.Identity.Application`） | **後にサインインした側が相手を蹴り出す** → 連携は正常終了するのに**下流がサインイン状態にならない** |
 >
-> **`docker-compose.yml` が、上流に別名を与えている**（`sessionState__SessionCookieName` /
-> `appSettings__AuthCookieName`）。**雛形の既定は空＝従来どおり**なので、
-> **1 サイトだけの配備には影響しない。**
+> **`docker-compose.yml` が、上流に別名と接頭辞を与えている**（#250 の段階 4 / #255）。
+> **雛形の既定は空＝従来どおり**なので、**1 サイトだけの配備には影響しない。**
+>
+> **接頭辞は、名前を決められるものすべてに掛かる**（実測）。
+>
+> ```
+> .upstream_MultiPurposeAuthSite                     認証（サインイン）
+> upstream_Identity.External                         外部ログイン・ID 連携の途中
+> upstream_MultiPurposeAuthSiteSession               セッション
+> upstream_auth_time / upstream_re_auth_at           max_age の判定
+> .upstream_AspNetCore.Mvc.CookieTempDataProvider    画面のメッセージ
+> ```
+>
+> **先頭が `.` のものは、その後ろに接頭辞が入る**（`.` は host-only を表す慣習なので潰さない）。
+>
+> **サインインの Cookie だけでは足りない。** **外部ログイン（`Identity.External`）は
+> ID フェデレーションの途中で使う**ので、ここが混ざると連携が壊れる。
+> `auth_time` は**再認証の要否**、TempData は**画面のメッセージ**に効く。
+>
+> **分けられないものが 1 つ残っている。**
+>
+> | Cookie | いまの扱い |
+> |---|---|
+> | `SessionTimeOut` | **Open棟梁 の定数**（`FxHttpCookieIndex`）。雛形は `FxSessionTimeOutCheck` を `off` にしており、**読まれないので無害**。分けるなら Open棟梁 側の対応が要る |
+>
+> **net48 版は、そもそも同名になりにくい**（実測）。
+> セッションは `mas_session`、AntiForgery は `__RequestVerificationToken` で、
+> **net10.0 版の名前と重ならない。TempData は Cookie に載らない**（セッションに載る）。
+> **ただし net48 版どうしを同じホストに立てると、`__RequestVerificationToken` が衝突する。**
+> **いまの構成では起きない**（上流は net10.0 版のコンテナ 1 つ）。
 >
 > **net48 版の下流では、もともと起きない**（Owin の既定名が `.AspNet.ApplicationCookie` で、
 > net10.0 版と重ならないため）。**net10.0 版の下流でだけ出る。**

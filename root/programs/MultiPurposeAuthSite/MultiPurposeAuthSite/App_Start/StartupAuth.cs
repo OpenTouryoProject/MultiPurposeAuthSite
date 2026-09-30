@@ -237,6 +237,23 @@ namespace MultiPurposeAuthSite
                 cookieOptions.CookieName = Config.AuthCookieName;
             }
 
+            // **接頭辞を掛ける**（#255）。**名前を決めた後に付ける。**
+            //   **先頭の `.` の後ろに入る**ので、`.AspNet.ApplicationCookie` は
+            //   `.upstream_AspNet.ApplicationCookie` になる。
+            //
+            //   **Owin は UseCookieAuthentication の中で既定名を決める**ため、
+            //   **ここではまだ CookieName が null のことがある**（実測。null を戻すと
+            //   ArgumentNullException で起動できない）。
+            //   **null のときは、枠組みと同じ規則で組み立ててから**掛ける。
+            if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
+            {
+                string baseCookieName = string.IsNullOrEmpty(cookieOptions.CookieName)
+                    ? CookieAuthenticationDefaults.CookiePrefix + cookieOptions.AuthenticationType
+                    : cookieOptions.CookieName;
+
+                cookieOptions.CookieName = Config.PrefixCookieName(baseCookieName);
+            }
+
             app.UseCookieAuthentication(cookieOptions);
 
             #endregion

@@ -41,6 +41,7 @@
 //*  2026/09/28  玄人 幸道         max_age の超過で再認証し、prompt=none なら login_required を返す（#247）
 //*  2026/09/30  玄人 幸道         ID 連携の Error に理由のトレースを足す（#253）
 //*  2026/09/30  玄人 幸道         未サインイン＋prompt=none で login_required を返す（#254）
+//*  2026/09/30  玄人 幸道         自身が書く Cookie の名前に接頭辞を付けられるようにした（#255）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -174,7 +175,7 @@ namespace MultiPurposeAuthSite.Controllers
             // SessionIDの切換にはこのコードが必要である模様。
             // https://support.microsoft.com/ja-jp/help/899918/how-and-why-session-ids-are-reused-in-asp-net
             Response.Cookies.Add(new HttpCookie(this.SessionCookieName, ""));
-            Response.Cookies[OAuth2AndOIDCConst.auth_time].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
+            Response.Cookies[Config.AuthTimeCookieName].Value = FormatConverter.ToW3cTimestamp(DateTime.UtcNow);
         }
 
         #region サインイン
@@ -2808,7 +2809,7 @@ namespace MultiPurposeAuthSite.Controllers
                 && claims.ContainsKey(OAuth2AndOIDCConst.claims_id_token) 
                 && ((JObject)claims[OAuth2AndOIDCConst.claims_id_token]).ContainsKey(OAuth2AndOIDCConst.auth_time)))
             {
-                string auth_time = Request.Cookies[OAuth2AndOIDCConst.auth_time].Value;
+                string auth_time = Request.Cookies[Config.AuthTimeCookieName].Value;
 
                 if (string.IsNullOrEmpty(auth_time))
                 {
@@ -2902,8 +2903,8 @@ namespace MultiPurposeAuthSite.Controllers
                 // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
                 Token.CmnEndpoints.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
                     max_age,
-                    Request.Cookies[OAuth2AndOIDCConst.auth_time]?.Value,
-                    Request.Cookies[Const.ReAuthenticatedAt]?.Value);
+                    Request.Cookies[Config.AuthTimeCookieName]?.Value,
+                    Request.Cookies[Config.ReAuthenticatedAtCookieName]?.Value);
 
                 if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.InvalidMaxAge)
                 {
@@ -2941,7 +2942,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // **再認証する**（OIDC Core 3.1.2.1）。
                     //   印を残してサインアウトし、同じ URL に戻す（この後は認証が要るのでサインイン画面になる）。
                     //   **印は繰り返しを防ぐため**（max_age=0 でも、再認証の直後なら続ける）。
-                    Response.Cookies.Add(new HttpCookie(Const.ReAuthenticatedAt,
+                    Response.Cookies.Add(new HttpCookie(Config.ReAuthenticatedAtCookieName,
                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow)));
                     this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
                     return new RedirectResult(Request.RawUrl);
@@ -2960,7 +2961,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                     // **再認証の印を消す**（#247）。
                     //   一度きりの印なので、ここまで来たら落とす。
-                    Response.Cookies.Add(new HttpCookie(Const.ReAuthenticatedAt, "")
+                    Response.Cookies.Add(new HttpCookie(Config.ReAuthenticatedAtCookieName, "")
                     {
                         Expires = DateTime.UtcNow.AddDays(-1)
                     });

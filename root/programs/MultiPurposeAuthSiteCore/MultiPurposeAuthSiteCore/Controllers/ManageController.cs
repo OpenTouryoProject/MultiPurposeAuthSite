@@ -218,11 +218,19 @@ namespace MultiPurposeAuthSite.Controllers
         #region property
 
         /// <summary>SessionCookieName</summary>
+        /// <remarks>
+        /// **接頭辞を掛ける**（#255）。**`Startup` が同じ規則で名前を付けている**ので、
+        /// ここで掛けないと、**セッションを捨てるときに別の名前を消しに行く。**
+        ///
+        /// **net48 版は掛けない。** あちらのセッション Cookie は ASP.NET のもので
+        /// （`system.web/sessionState` の `cookieName`）、**接頭辞の対象外**である。
+        /// </remarks>
         private string SessionCookieName
         {
             get
             {
-                return GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName");
+                return Config.PrefixCookieName(
+                    GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName"));
             }
         }
 
@@ -454,7 +462,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                            responseCookies.Set(Config.AuthTimeCookieName,
                                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
@@ -742,7 +750,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                            responseCookies.Set(Config.AuthTimeCookieName,
                                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
@@ -852,7 +860,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                            responseCookies.Set(Config.AuthTimeCookieName,
                                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
@@ -1848,7 +1856,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         //rememberBrowser: true); // rememberBrowser は true 固定
 
                                     IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                                    responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                                    responseCookies.Set(Config.AuthTimeCookieName,
                                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             
                                     // リダイレクト
@@ -3137,7 +3145,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
 
                 IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                responseCookies.Set(Config.AuthTimeCookieName,
                     FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
 
                 return true;
