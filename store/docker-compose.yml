@@ -126,6 +126,24 @@ services:
       #   この経路を通るたびに必ずどちらかが切れる。**
       - appSettings__AuthCookieName=.MultiPurposeAuthSiteUpstream
 
+      # ---------------------------------------------------------------- E2E 用のクライアント登録
+      #   **ID フェデレーションを E2E で駆動するために要る**（#250 の段階 5）。
+      #
+      #   **redirect_uri はクライアント 1 件に 1 つ**なので、
+      #   **下流 2 つ（net10.0 は 44300 / net48 は 44302）＝ クライアント 2 件**になる。
+      #
+      #   **E2E の下流は root で配信する**（test.ps1 が立てる Kestrel と IIS Express）。
+      #   雛形に元から在る IdFederation クライアントは
+      #   `/MultiPurposeAuthSite/...` 付きで、**手動確認（VS）用**である。こちらは消さない。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__client_secret=E2E_dY3kQ8pR6tW1vZ4xA7bN0mS5jL2hG9fC
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_code=https://localhost:44300/Account/IDFederationRedirectEndPoint
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__client_name=IdFederationE2ECore
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_secret=E2E_qP7wE2rT5yU8iO1pA4sD6fG9hJ3kL0zX
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_code=https://localhost:44302/Account/IDFederationRedirectEndPoint
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_name=IdFederationE2ENetFx
+
       # ---------------------------------------------------------------- リソースのパス
       #   **雛形は 15 箇所すべてが C:/root/files/resource/... である**（Windows 前提）。
       #   Linux では**ドライブ文字が効かない**ので、**マウント先（/resource）に振り替える**。

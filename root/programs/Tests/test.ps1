@@ -248,6 +248,51 @@ $script:UserClaimsMapping = [ordered]@{
     'preferred_username'  = 'user:UserName'
 }
 
+# **ID フェデレーションの下流として振る舞うための設定（#250 の段階 5）。**
+#   上流は store\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
+#   （建っていなければ、連携のテストは Skip される）。
+#
+#   **redirect_uri はクライアント 1 件に 1 つ**なので、**下流ごとに別のクライアント**を使う。
+#   登録は store\docker-compose.yml にある（上流に環境変数で差し込んでいる）。
+#
+#   **上流のエンドポイント（IdFederation{Authorize,Token,UserInfo}Endpoint）は上書きしない。**
+#   構成ファイルが既に 44301 を指しており、**テストはその値を読んで上流を探す**ため、
+#   ここで上書きすると、両者がずれたときに気付けなくなる。
+$script:IdFederationClients = @{
+    'core'  = @{
+        ClientId = 'e2e1c0de0000000000000000000000c1'
+        Secret   = 'E2E_dY3kQ8pR6tW1vZ4xA7bN0mS5jL2hG9fC'
+    }
+    'netfx' = @{
+        ClientId = 'e2e1c0de0000000000000000000000f2'
+        Secret   = 'E2E_qP7wE2rT5yU8iO1pA4sD6fG9hJ3kL0zX'
+    }
+}
+
+<#
+.SYNOPSIS
+    ID フェデレーションの下流として振る舞う設定を、環境変数に置く（#250 の段階 5）。
+.PARAMETER TargetKey
+    core / netfx
+.PARAMETER SiteUrl
+    そのサイトが待ち受ける URL（redirect_uri の組み立てに使う）
+#>
+function Set-IdFederationEnv
+{
+    param(
+        [Parameter(Mandatory)][string] $TargetKey,
+        [Parameter(Mandatory)][string] $SiteUrl
+    )
+
+    $c = $script:IdFederationClients[$TargetKey]
+
+    $env:OAuth2AndOidcClientID = $c.ClientId
+    $env:OAuth2AndOidcSecret = $c.Secret
+
+    # **E2E の下流は root で配信する**（VS の /MultiPurposeAuthSite とは形が違う）
+    $env:IdFederationRedirectEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationRedirectEndPoint'
+}
+
 function Wait-Site
 {
     param(
@@ -611,6 +656,9 @@ public static class MpasTestTls
         $env:EnableImplicitGrantType = 'true'
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
 
+        # ID フェデレーションの下流として振る舞う（#250 の段階 5）
+        Set-IdFederationEnv -TargetKey 'core' -SiteUrl $Url
+
         # テスト専用のクライアント（#224）: net10.0 は節へ 1 件足す
         if ($null -ne $injected) {
             foreach ($k in $injected.CoreEnv.Keys) {
@@ -718,6 +766,9 @@ public static class MpasTestTls
             #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
             $env:EnableImplicitGrantType = 'true'
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
+
+            # ID フェデレーションの下流として振る舞う（#250 の段階 5）
+            Set-IdFederationEnv -TargetKey 'netfx' -SiteUrl $NetFxUrl
 
             # テスト専用のクライアント（#224）: net48 は一覧ごと差し替える
             if ($null -ne $injected) {
