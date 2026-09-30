@@ -112,6 +112,20 @@ services:
       # **自己テストの口は開けておく**（上流でサインインを確かめるため）
       - appSettings__IsLockedDownTestEndpoints=false
 
+      # **自分自身を呼ぶときの宛先**（#250 の自己テスト）。
+      #   **自己テストは「サーバが自分自身を WebAPI で呼ぶ」**（client_credentials など）。
+      #   宛先は OAuth2AuthorizationServerEndpointsRootURI（= https://localhost:44301）から
+      #   組み立てられるが、**コンテナの中から localhost:44301 には届かない**
+      #   （待ち受けているのは 8080 / 8081。44301 はホスト側の公開ポート。実測で CLOSED）。
+      #
+      #   **Helper.GetContainerizatedAuthZServerUri が、この設定で宛先を差し替える**
+      #   （Windows でないときだけ働く）。
+      #
+      #   **HTTP のループバックにする。** HTTPS（8081）にすると、
+      #   **コンテナの中でホストの開発用証明書を検証できず**、証明書を信頼させる手当てが要る。
+      #   **自分自身への呼び出しなので、コンテナの外には出ない。**
+      - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
+
       # **セッション Cookie の名前を下流と分ける**（#250 の段階 4）。
       #   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）。
       #   そのため localhost:44300（下流）と localhost:44301（上流）は **Cookie を共有する。**

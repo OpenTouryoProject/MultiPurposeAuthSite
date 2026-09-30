@@ -190,6 +190,39 @@ docker compose up -d upstream
 > **`log4net` だけは中身（出力先）も Windows のパス**なので、
 > **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
 
+#### 上流コンテナの自己テスト（#250）
+
+**自己テストは「サーバが自分自身を WebAPI で呼ぶ」**（`client_credentials` など）。
+**コンテナの中からは、外向けのホスト名・ポートに届かない。**
+
+```
+コンテナ内   localhost:8080  : OPEN      ← 待ち受け（HTTP）
+コンテナ内   localhost:8081  : OPEN      ← 待ち受け（HTTPS）
+コンテナ内   localhost:44301 : CLOSED    ← ホスト側の公開ポート。**届かない**
+```
+
+**`docker-compose.yml` が `OAuth2ContainerizatedAuthSvrEPRootURI` に
+`http://localhost:8080` を与えている。** `Helper.GetContainerizatedAuthZServerUri` が、
+`Helper` を通る WebAPI 呼び出しの宛先をこれに差し替える（**Windows でないときだけ働く**）。
+
+> **HTTP のループバックにしてある。** HTTPS（8081）にすると、
+> **コンテナの中でホストの開発用証明書を検証できず**、証明書を信頼させる手当てが要る。
+> **自分自身への呼び出しなので、コンテナの外には出ない。**
+
+**実測（`/Home/Saml2OAuth2Starters` のボタンを叩いた結果）。**
+
+| ボタン | 結果 |
+|---|---|
+| `ClientCredentialsFlow` | **`access_token` が返る** |
+| `ResourceOwnerPasswordCredentialsFlow` | **`access_token` が返る** |
+| `JWTBearerTokenFlow` | **`access_token` が返る** |
+| `DeviceAuthZGrant` | 応答画面（`DeviceAuthZResponse`）まで進む |
+| `FAPI_CIBA_Profile` | `access_denied : The authentication device is not registered.`（**認証デバイスの登録が要る**。`RT-246.3` が Skip なのと同じ理由） |
+
+**画面遷移を伴うもの**（認可エンドポイントへブラウザが飛ぶ Authorization Code / Implicit / Hybrid / PKCE、
+および mTLS を使う FAPI2）は、**ここでは測っていない。**
+**mTLS はクライアント証明書の持ち込みが要る**ので、コンテナでは動かない。
+
 **起動できたかは、ディスカバリで確かめる。**
 
 ```powershell
