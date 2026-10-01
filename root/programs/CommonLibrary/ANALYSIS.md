@@ -1,7 +1,7 @@
 ﻿# ANALYSIS.md — 汎用認証サイト ライブラリ部（CommonLibrary）コード分析
 
 対象: `root/programs/CommonLibrary`（**net10.0 / net48 の 2 系統**） / ブランチ: `develop`
-最終更新: 2026-09-28
+最終更新: 2026-09-30
 
 本書は **コーディング・エージェントが本ディレクトリで作業する際の Context** を目的とした分析結果である。
 「どこに何があるか」「どの規約に従うべきか」「何を壊しやすいか」を記す。
@@ -252,9 +252,10 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `Extensions/Sts/DeviceAuthZProvider.cs` | Device Authorization Grant |
 | `Extensions/Sts/CibaProvider.cs` | CIBA（FAPI）。FCM プッシュと連携 |
 | `Extensions/Sts/RevocationProvider.cs` / `IssuedTokenProvider.cs` | revoke / introspect の裏付けデータ |
+| `Extensions/Sts/SubjectIdProvider.cs` | **発行した `sub` の対応表**（#151 の段階 2）。`(Sector, UserId) → Sub` と、その逆引き。**`sub` を「導出」から「データ」に変える**ので、`subject_types` の既定や PPID の作り方を変えても**発行済みの `sub` が動かない** |
 | `Extensions/Sts/RequestObjectProvider.cs` | Request Object の登録（`/ros`） |
 | `SamlProviders/CmnEndpoints.cs` | SAML2 の Request / Response |
-| `Util/PPIDExtension.cs` | `subject_types`（`public` / `pairwise` / `uname`）に応じた sub の生成 |
+| `Util/PPIDExtension.cs` | `subject_types`（`public` / `pairwise`）に応じた sub の生成。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 
 ### 7.2 対応しているグラント / 拡張
 
@@ -277,7 +278,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 "67d328bf...": {
   "client_secret": "...", "client_name": "TestClient",
   "redirect_uri_code": "test_self_code", "redirect_uri_token": "test_self_token",
-  "subject_types": "uname",          // public / pairwise / uname
+  // "subject_types" を書かなければ public（既定。他は pairwise のみ）
   "oauth2_oidc_mode": "fapi1",       // normal / fapi1 / fapi2 / device / fapi_ciba（省略時は normal。既知でない値は不正として拒否。#224）
   "jwk_rsa_publickey": "...", "jwk_ecdsa_publickey": "...",
   "tls_client_auth_subject_dn": "..."
@@ -397,6 +398,40 @@ JWK Set（`/jwkcerts` が返す `JwkSet.json`）は
 
    **FIDO/WebAuthn は「設定は在るが動かない」状態である。** 復活させるなら
    csproj への追加・`Config` のコメント解除・Controller のコメント解除がセットで要る。
+
+3-2. **外部ログインの Facebook / Twitter も、同じ「設定は在るが動かない」状態にした**（#249）。
+   **動かないからではなく、維持コストが便益に見合わないため取り下げた。**
+   - `../MultiPurposeAuthSiteCore` の `Startup.cs`、`../MultiPurposeAuthSite` の
+     `App_Start/StartupAuth.cs` の**登録ブロックをコメント アウト**（＝スキームが登録されない）
+   - net48 の `AccountController` / `ManageController` にあった
+     **メアド取得の専用処理もコメント アウト**（Facebook は Graph の `/me`、
+     Twitter は `api.twitter.com/1.1`）
+   - `Network/WebAPIHelper.cs` の **`GetTwitterAccountInfo` もコメント アウト**
+     （この 1 本のために OAuth 1.0a の署名を自前で組んでいた）
+   - **設定キーとパッケージ参照は残してある**（戻せるように）。
+     `true` にしても**登録がコメント アウトなので有効にならない**
+   - **ログイン画面のボタンは自動的に消える**
+     （`_ExternalLoginsListPartial.cshtml` が**登録済みスキームから生成**しているため）
+
+   **残るのは Google と Microsoft Account。** この 2 つは
+   **ClientId / ClientSecret を渡すだけで済み、専用処理を持たない。**
+3-3. **Open棟梁 の `SymmetricCryptography.EncryptBytes` / `DecryptBytes` は使えない**（#140 の段階 2 で踏んだ）。
+   `Public/Security/SymmetricCryptography.cs` の `GenerateKeyFromPassword`（**7 引数**）が、
+   **「overloadへ」と書きながら自分自身を呼んでいる**（8 引数版＝`HashAlgorithmName` 付きではなく）。
+   **無限再帰し、スタック オーバーフローでプロセスが落ちる。**
+
+   ```
+   Stack overflow.
+   Repeated 16019 times:
+      at Touryo.Infrastructure.Public.Security.SymmetricCryptography.GenerateKeyFromPassword(...)
+      at Touryo.Infrastructure.Public.Security.SymmetricCryptography.EncryptBytes(Byte[], System.String)
+   ```
+
+   **`EncryptString` / `DecryptString` も同じ経路を通るので、対称鍵の API は丸ごと使えない。**
+   **上流（OpenTouryo）の不具合。** こちらでは `Util/PPIDExtension` が
+   **.NET の `Aes` を直接使う**ことで回避している。
+   **例外ではなくプロセスが落ちる**ので、**ログにも 500 にも残らない**（`MpasSite.err.log` にだけ出る）。
+
 4. **`Data/UserStore.cs` と `Data/UserStoreCore.cs` は薄いアダプタ。**
    実装を足すなら `CmnUserStore`。片方だけ直すと系統間で挙動がズレる。
 5. **TOTP（Authenticator アプリによる 2FA）は .NET 側にしか無い。**

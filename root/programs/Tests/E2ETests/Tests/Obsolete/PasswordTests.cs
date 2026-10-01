@@ -110,9 +110,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Obsolete
                 {
                     JsonElement payload = Jwt.Payload(token.AccessToken);
 
-                    r.Verify("sub がテスト ユーザである",
-                        Jwt.String(payload, "sub") == TestEnv.TestUserName,
-                        TestEnv.TestUserName, "sub = " + (Jwt.String(payload, "sub") ?? "なし"));
+                    // **sub の値では判定しない**（#151 の段階 4。既定が public ＝ sub は利用者 ID）。
+                    //   **このフローは scope=email を要求している**ので、
+                    //   **誰のトークンかは email クレームで分かる。**
+                    r.Verify("認証したユーザのトークンである（email）",
+                        Jwt.String(payload, "email") == TestEnv.TestUserEmail,
+                        TestEnv.TestUserEmail, "email = " + (Jwt.String(payload, "email") ?? "なし"));
+
+                    r.Verify("sub が返る", !string.IsNullOrEmpty(Jwt.String(payload, "sub")),
+                        "返る", Jwt.String(payload, "sub") ?? "**返らない**");
                 }
 
                 r.Done();

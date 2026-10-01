@@ -497,7 +497,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.VerifyEqual("HTTP 200", "200", ((int)res.StatusCode).ToString());
 
-                r.VerifyEqual("sub がテスト ユーザである", TestEnv.TestUserName, res.String("sub"));
+                // **sub の値では判定しない**（#151 の段階 4）。
+                //   **id_token の sub と一致すること**を見る（OIDC Core §5.3.2）。
+                r.VerifyEqual("sub が id_token の sub と一致する",
+                    Jwt.String(Jwt.Payload(token.IdToken), "sub"), res.String("sub") ?? "（無し）");
 
                 r.Verify("WWW-Authenticate を付けない", res.Header("WWW-Authenticate") == null,
                     "（無し）", res.Header("WWW-Authenticate") ?? "（無し）");
@@ -1112,7 +1115,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 // **テスト ユーザは使えない。** CIBA のテスト（EX-8）が端末を登録するため、
                 // 実行順によっては「端末あり」になる。E2E からサインインしない別の利用者を指す。
-                const string NoDeviceUser = "tanaka@gmail.com";
+                const string NoDeviceUser = "tanaka"; // #151 の段階 3 で利用者名とメアドを分けた
 
                 r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = " + NoDeviceUser
                     + "（認証サイトが IsDebug のときに作る利用者。E2E は端末を登録しない）");

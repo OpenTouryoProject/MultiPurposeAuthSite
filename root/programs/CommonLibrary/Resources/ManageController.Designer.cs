@@ -70,24 +70,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Your E-mail has not been added. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddEmailFailure {
-            get {
-                return ResourceManager.GetString("AddEmailFailure", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Your E-mail has been added. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddEmailSuccess {
-            get {
-                return ResourceManager.GetString("AddEmailSuccess", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Your MsPass data has been added. に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddMsPassDataSuccess {
@@ -210,15 +192,6 @@ namespace MultiPurposeAuthSite.Resources {
         public static string FailedVerifyPhoneNumber {
             get {
                 return ResourceManager.GetString("FailedVerifyPhoneNumber", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Your E-mail has been removed. に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string RemoveEmailSuccess {
-            get {
-                return ResourceManager.GetString("RemoveEmailSuccess", resourceCulture);
             }
         }
         

@@ -96,10 +96,21 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
         #region CreateBy
 
         /// <summary>ApplicationUser生成</summary>
-        /// <param name="userName">string</param>
-        /// <param name="emailConfirmed">bool</param>
+        /// <param name="userName">利用者名（`@` を含まない）</param>
+        /// <param name="email">メアド</param>
+        /// <param name="emailConfirmed">メアドの検証が済んでいるか</param>
         /// <returns>ApplicationUser</returns>
-        public static ApplicationUser CreateUser(string userName, bool emailConfirmed)
+        /// <remarks>
+        /// **利用者名とメアドを、別の値として受ける**（#151 の段階 3）。
+        ///
+        /// **以前は `RequireUniqueEmail` で二択だった。**
+        ///   true  : 利用者名＝メアド（同じ値を入れていた）
+        ///   false : メアドを持たない（空文字列）
+        ///
+        /// **両方でサインインできるようにしたので、二択をやめた。**
+        /// **メアドは常に在り、一意である**（無いと `FindByEmailAsync` が成り立たない）。
+        /// </remarks>
+        public static ApplicationUser CreateUser(string userName, string email, bool emailConfirmed)
         {
             // ApplicationUserのCreate
             ApplicationUser user = new ApplicationUser
@@ -121,16 +132,8 @@ namespace MultiPurposeAuthSite // ルートでないとダメ？
             };
 
             // E-mail
-            if (Config.RequireUniqueEmail)
-            {
-                user.Email = userName;                                              // 入力値（パラメタ）
-                user.EmailConfirmed = emailConfirmed;                               // 設定値（パラメタ）
-            }
-            else
-            {
-                user.Email = "";                                                    // 固定値
-                user.EmailConfirmed = !Config.DisplayAgreementScreen;               // 固定値
-            }
+            user.Email = email;                                                     // 入力値（パラメタ）
+            user.EmailConfirmed = emailConfirmed;                                   // 設定値（パラメタ）
 
             return user;
         }

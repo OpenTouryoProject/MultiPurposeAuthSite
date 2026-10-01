@@ -873,15 +873,20 @@ namespace MultiPurposeAuthSite.Controllers
                         // scopeパラメタ
                         string[] scopes = (scope ?? "").Split(' ');
 
-                        // login_hintから、userとsubを取得。
+                        // **login_hint から利用者を引く**（#151 の段階 4）。
+                        //   **identity.Name は「利用者名」として扱われる**
+                        //   （CmnAccessToken が、ここから改めて sub を作る）。
+                        //   **sub を入れてはいけない**（利用者 ID や PPID なので、引けなくなる）。
+                        //
+                        //   **ここでは利用者の解決だけに使う**（戻り値の sub は使わない）。
                         ApplicationUser user = null;
-                        string sub = PPIDExtension.GetSubForOIDC(client_id, login_hint, out user);
+                        PPIDExtension.GetSubForOIDC(client_id, login_hint, out user);
 
                         if (user != null)
                         {
                             // codeの生成
                             string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                                new ClaimsIdentity(new GenericIdentity(sub)),
+                                new ClaimsIdentity(new GenericIdentity(user.UserName)),
                                 new NameValueCollection(),
                                 client_id, "", scopes, null, "");
 

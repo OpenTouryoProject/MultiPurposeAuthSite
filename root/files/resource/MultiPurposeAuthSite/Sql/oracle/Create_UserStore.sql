@@ -89,6 +89,20 @@ CREATE TABLE "RefreshTokenDictionary"(
     CONSTRAINT "PK.RefreshTokenDictionary" PRIMARY KEY ("Key")
 );
 
+-- sub（Subject Identifier）の対応表（#151 の段階 2）
+--   **発行した sub を記録する。** 以後はここから引くので、
+--   subject_types の既定や PPID の作り方を変えても、**発行済みの sub は動かない。**
+--   Sector : いまは client_id。**sector_identifier_uri に対応したら、その解決結果が入る**
+--            （列の意味は「Sector Identifier」。OIDC Core 8.1）
+--   Sub    : uname のとき利用者名（最大 256）、public のとき UserId、pairwise のとき PPID
+CREATE TABLE "SubjectIdentifier"(
+    "Sector" NVARCHAR2(256) NOT NULL,        -- *PK, Sector Identifier（いまは client_id）
+    "UserId" NVARCHAR2(38) NOT NULL,         -- *PK, guid
+    "Sub" NVARCHAR2(256) NOT NULL,           -- 発行した sub
+    "CreatedDate" DATE NOT NULL,
+    CONSTRAINT "PK.SubjectIdentifier" PRIMARY KEY ("Sector", "UserId")
+);
+
 CREATE TABLE "CustomizedConfirmation"(
     "UserId" NVARCHAR2(38) NOT NULL,         -- PK, guid
     "Value" NVARCHAR2(2000) NOT NULL,        -- Value
@@ -184,6 +198,9 @@ CREATE INDEX "IX_UserRoles.RoleId" ON "UserRoles" ("RoleId" ASC);
 CREATE INDEX "IX_UserLogins.UserId" ON "UserLogins" ("UserId" ASC);
 ---- UserClaims
 CREATE INDEX "IX_UserClaims.UserId" ON "UserClaims" ("UserId" ASC);
+---- SubjectIdentifier
+---- **逆引き（sub → 利用者）用。** 同じ Sector で 2 人が同じ sub を持ってはいけないので一意
+CREATE UNIQUE INDEX "IX_SubjectIdentifier.Sector_Sub" ON "SubjectIdentifier" ("Sector" ASC, "Sub" ASC);
 ---- TotpTokens
 CREATE INDEX "IX_TotpTokens.UserId" ON "TotpTokens" ("UserId" ASC);
 
@@ -203,3 +220,5 @@ ALTER TABLE "TotpTokens" ADD CONSTRAINT "FK.TotpTokens.Users_UserId" FOREIGN KEY
 ALTER TABLE "Saml2OAuth2Data" ADD CONSTRAINT "FK.Saml2OAuth2Data.Users_ClientID" FOREIGN KEY("ClientID") REFERENCES "Users" ("ClientID") ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE "FIDO2Data" ADD CONSTRAINT "FK.FIDO2Data.Users_UserName" FOREIGN KEY("UserName") REFERENCES "Users" ("UserName") ON DELETE CASCADE;
+---- SubjectIdentifier
+ALTER TABLE "SubjectIdentifier" ADD CONSTRAINT "FK.SubjectIdentifier.Users_UserId" FOREIGN KEY("UserId") REFERENCES "Users" ("Id") ON DELETE CASCADE;

@@ -61,33 +61,6 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add E-mail form に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddEmailH4 {
-            get {
-                return ResourceManager.GetString("AddEmailH4", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Submit に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddEmailSubmit {
-            get {
-                return ResourceManager.GetString("AddEmailSubmit", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Add E-mail に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string AddEmailTitle {
-            get {
-                return ResourceManager.GetString("AddEmailTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Add Microsoft Passport data form に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string AddMsPassDataH4 {
@@ -475,29 +448,11 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
-        ///   Add your E-mail に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexEmailAddActionLink {
-            get {
-                return ResourceManager.GetString("IndexEmailAddActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Change your E-mail に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IndexEmailChangeActionLink {
             get {
                 return ResourceManager.GetString("IndexEmailChangeActionLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Remove your E-mail に類似しているローカライズされた文字列を検索します。
-        /// </summary>
-        public static string IndexEmailRemoveButton {
-            get {
-                return ResourceManager.GetString("IndexEmailRemoveButton", resourceCulture);
             }
         }
         

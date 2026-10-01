@@ -248,6 +248,51 @@ $script:UserClaimsMapping = [ordered]@{
     'preferred_username'  = 'user:UserName'
 }
 
+# **ID フェデレーションの下流として振る舞うための設定（#250 の段階 5）。**
+#   上流は store\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
+#   （建っていなければ、連携のテストは Skip される）。
+#
+#   **redirect_uri はクライアント 1 件に 1 つ**なので、**下流ごとに別のクライアント**を使う。
+#   登録は store\docker-compose.yml にある（上流に環境変数で差し込んでいる）。
+#
+#   **上流のエンドポイント（IdFederation{Authorize,Token,UserInfo}Endpoint）は上書きしない。**
+#   構成ファイルが既に 44301 を指しており、**テストはその値を読んで上流を探す**ため、
+#   ここで上書きすると、両者がずれたときに気付けなくなる。
+$script:IdFederationClients = @{
+    'core'  = @{
+        ClientId = 'e2e1c0de0000000000000000000000c1'
+        Secret   = 'E2E_dY3kQ8pR6tW1vZ4xA7bN0mS5jL2hG9fC'
+    }
+    'netfx' = @{
+        ClientId = 'e2e1c0de0000000000000000000000f2'
+        Secret   = 'E2E_qP7wE2rT5yU8iO1pA4sD6fG9hJ3kL0zX'
+    }
+}
+
+<#
+.SYNOPSIS
+    ID フェデレーションの下流として振る舞う設定を、環境変数に置く（#250 の段階 5）。
+.PARAMETER TargetKey
+    core / netfx
+.PARAMETER SiteUrl
+    そのサイトが待ち受ける URL（redirect_uri の組み立てに使う）
+#>
+function Set-IdFederationEnv
+{
+    param(
+        [Parameter(Mandatory)][string] $TargetKey,
+        [Parameter(Mandatory)][string] $SiteUrl
+    )
+
+    $c = $script:IdFederationClients[$TargetKey]
+
+    $env:OAuth2AndOidcClientID = $c.ClientId
+    $env:OAuth2AndOidcSecret = $c.Secret
+
+    # **E2E の下流は root で配信する**（VS の /MultiPurposeAuthSite とは形が違う）
+    $env:IdFederationRedirectEndpoint = $SiteUrl.TrimEnd('/') + '/Account/IDFederationRedirectEndPoint'
+}
+
 function Wait-Site
 {
     param(
@@ -491,6 +536,14 @@ try {
         #                               符号化しないと分割位置がずれるので、符号化したときだけ通る
         #     TestClient_4  : normal  … **post_logout_redirect_uri を登録**（#232）。
         #                               ログアウト後に RP へ戻せるか（登録が無いクライアントとの対照）
+        #     TestClient_5  : normal  … **subject_types = pairwise**（#140 の段階 2）。
+        #                               sub が PPID になっても /userinfo がクレームを返すか
+        #     TestClient_6  : normal  … **subject_types を書かない**（#151 の段階 4）。
+        #     TestClient_7  : normal    **既定が public になった**ことを測る。
+        #                               **2 件要る**（public は「RP が違っても同じ sub」なので、
+        #                               2 つの client_id で同じ値になることを見る）。
+        #                               **client_id は新しい値**にすること。発行済みの sub は
+        #                               対応表から返るため（段階 2）、**既に使った client_id では測れない。**
         #   ※ Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
         #   ※ 秘密は JSON 文字列に素で埋めるので、「"」「\」「'」は使わないこと（net48 は一覧ごと差し替える）。
         $mtlsDn = @{ tls_client_auth_subject_dn = 'CN=mpas-e2e-mtls-client' }
@@ -504,6 +557,9 @@ try {
         # **ログアウト後の戻り先**（#232）。サイトごとに URL が違うので、定数で登録して
         #   サーバ側（CmnEndpoints.GetRedirectUriFromConstr）で解決させる。
         $postLogout = @{ post_logout_redirect_uri = 'test_self_logout' }
+
+        # **pairwise の登録**（#140 の段階 2）。sub が PPID（クライアントごとに違う値）になる。
+        $pairwise = @{ subject_types = 'pairwise' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
@@ -513,7 +569,10 @@ try {
             @{ Name = 'TestClient2_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc23000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
             @{ Name = 'TestClient_2';  Mode = 'normal'; ClientId = 'e2e0tc02000000000000000000000000'; Source = 'TestClient';  Override = $symbolSecret },
             @{ Name = 'TestClient_3';  Mode = 'normal'; ClientId = 'e2e0tc03000000000000000000000000'; Source = 'TestClient';  Override = $colonSecret },
-            @{ Name = 'TestClient_4';  Mode = 'normal'; ClientId = 'e2e0tc04000000000000000000000000'; Source = 'TestClient';  Override = $postLogout })) {
+            @{ Name = 'TestClient_4';  Mode = 'normal'; ClientId = 'e2e0tc04000000000000000000000000'; Source = 'TestClient';  Override = $postLogout },
+            @{ Name = 'TestClient_5';  Mode = 'normal'; ClientId = 'e2e0tc05000000000000000000000000'; Source = 'TestClient';  Override = $pairwise },
+            @{ Name = 'TestClient_6';  Mode = 'normal'; ClientId = 'e2e0tc06000000000000000000000000'; Source = 'TestClient';  Override = @{} },
+            @{ Name = 'TestClient_7';  Mode = 'normal'; ClientId = 'e2e0tc07000000000000000000000000'; Source = 'TestClient';  Override = @{} })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }
@@ -604,6 +663,9 @@ public static class MpasTestTls
         #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
         $env:EnableImplicitGrantType = 'true'
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
+
+        # ID フェデレーションの下流として振る舞う（#250 の段階 5）
+        Set-IdFederationEnv -TargetKey 'core' -SiteUrl $Url
 
         # テスト専用のクライアント（#224）: net10.0 は節へ 1 件足す
         if ($null -ne $injected) {
@@ -712,6 +774,9 @@ public static class MpasTestTls
             #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
             $env:EnableImplicitGrantType = 'true'
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
+
+            # ID フェデレーションの下流として振る舞う（#250 の段階 5）
+            Set-IdFederationEnv -TargetKey 'netfx' -SiteUrl $NetFxUrl
 
             # テスト専用のクライアント（#224）: net48 は一覧ごと差し替える
             if ($null -ne $injected) {

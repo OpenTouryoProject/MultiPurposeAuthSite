@@ -270,8 +270,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 if (!string.IsNullOrEmpty(token.AccessToken))
                 {
-                    r.VerifyEqual("承認したユーザのトークンである（sub）",
-                        TestEnv.TestUserName, Jwt.String(Jwt.Payload(token.AccessToken), "sub"));
+                    // **sub の値では判定しない**（#151 の段階 4。sub は利用者名から利用者 ID になった）。
+                    //   **このトークンの payload に利用者の属性は入っていない**
+                    //   （code からの発行は「カスタムクレームは含めない」。CmnAccessToken）。
+                    //   そこで **/userinfo に引かせる。**
+                    //   **sub から承認した利用者に戻れることまで確かめられる**ので、
+                    //   以前の「sub が利用者名と一致するか」より強い。
+                    JsonResponse userinfo = await client.UserInfoAsync(token.AccessToken);
+
+                    r.VerifyEqual("承認したユーザのトークンである（/userinfo の email）",
+                        TestEnv.TestUserEmail, userinfo.String("email") ?? "（無し）");
+
+                    r.VerifyEqual("/userinfo の sub が、トークンの sub と一致する",
+                        Jwt.String(Jwt.Payload(token.AccessToken), "sub"),
+                        userinfo.String("sub") ?? "（無し）");
                 }
 
                 r.Observe("refresh_token / id_token",

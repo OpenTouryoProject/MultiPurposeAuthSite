@@ -497,7 +497,6 @@
     <Content Include="Views\Manage\AddPaymentInformationPAYJP.cshtml" />
     <Content Include="Views\Account\VerifyEmailAddress.cshtml" />
     <Content Include="Views\Manage\VerifyEmailAddress.cshtml" />
-    <Content Include="Views\Manage\AddEmail.cshtml" />
     <Content Include="Views\Manage\ChangeEmail.cshtml" />
     <Content Include="Views\Manage\ChangeUserName.cshtml" />
     <Content Include="Views\Manage\AddUnstructuredData.cshtml" />

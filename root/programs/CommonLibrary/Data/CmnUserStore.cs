@@ -43,6 +43,7 @@ using MultiPurposeAuthSite;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Util.Sts;
+using MultiPurposeAuthSite.Extensions.Sts;
 
 using System;
 using System.Data;
@@ -230,7 +231,9 @@ namespace MultiPurposeAuthSite.Data
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
-                    user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                    user = ApplicationUser.CreateUser(
+                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        Config.AdministratorUID, true);
                     user.Id = userId;
 
 #if NETFX
@@ -343,7 +346,9 @@ namespace MultiPurposeAuthSite.Data
                     if (userName.ToUpper() == Config.AdministratorUID.ToUpper())
 #endif
                     {
-                        user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                        user = ApplicationUser.CreateUser(
+                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        Config.AdministratorUID, true);
 #if NETFX
                         user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
 #else
@@ -968,6 +973,10 @@ namespace MultiPurposeAuthSite.Data
                         CmnStore._users.Remove(CmnStore._users.First(x => x.Id == user.Id));
                         // ユーザの関連情報を削除
                         CmnStore._userRoleMap.RemoveAll(x => x.Item1 == user.Id);
+
+                        // **sub の対応表も消す**（#151 の段階 2）。
+                        //   **DB では外部キー（ON DELETE CASCADE）が消す**ので、mem だけ。
+                        SubjectIdProvider.DeleteByUserId(user.Id);
 
                         break;
 

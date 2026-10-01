@@ -39,6 +39,7 @@
 //*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
 //*  2026/09/27  玄人 幸道         記号を含む client_secret の TestClient_2 / TestClient_3 を追加（#237）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を登録した TestClient_4 を追加（#232）
+//*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
 //**********************************************************************************
 
 using System;
@@ -127,6 +128,40 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// 解決後の URL は PostLogoutRedirectUri で引く。
         /// </remarks>
         public const string TestClient_4 = "TestClient_4";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**subject_types を pairwise にした**クライアント（#140 の段階 2）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **sub が PPID（クライアントごとに違う値）になる。**
+        /// **PPID は OP だけが戻せる**ので、`/userinfo` は従来どおりクレームを返せる。
+        /// 以前は戻せず、**`sub` だけを返していた**（#140 の段階 2 で直した）。
+        /// </remarks>
+        public const string TestClient_5 = "TestClient_5";
+
+        /// <summary>
+        /// TestClient（normal）を写しただけのクライアント（#151 の段階 4）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **subject_types を書いていない**ので、**既定（段階 4 から public）**になる。
+        ///
+        /// **新しい client_id であることに意味がある。**
+        /// 発行済みの `sub` は対応表から返るので（段階 2）、
+        /// **既に使った client_id では「既定が変わったこと」を測れない。**
+        /// </remarks>
+        public const string TestClient_6 = "TestClient_6";
+
+        /// <summary>
+        /// TestClient_6 と同じ（subject_types を書いていない）、別の client_id（#151 の段階 4）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **public は「RP が違っても同じ sub」**なので、**2 件ないと測れない**
+        /// （pairwise との違いが、ここに出る）。
+        /// </remarks>
+        public const string TestClient_7 = "TestClient_7";
 
         /// <summary>
         /// TestClient_2 の client_secret（#237）。
@@ -531,6 +566,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             else if (clientName == KnownClients.TestClient_4)
             {
                 // client_secret は写す元のまま（登録に足したのは post_logout_redirect_uri だけ）。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_5)
+            {
+                // client_secret は写す元のまま（登録で変えたのは subject_types だけ）。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_6
+                || clientName == KnownClients.TestClient_7)
+            {
+                // client_secret は写す元のまま（**写しただけ**。#151 の段階 4）。
                 sourceName = KnownClients.TestClient;
             }
 

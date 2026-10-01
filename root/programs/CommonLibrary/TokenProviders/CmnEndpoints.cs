@@ -104,6 +104,8 @@
 //*  2026/09/29  玄人 幸道         経過を秒単位で比べる（再認証の直後を超過としない）（#247）
 //*  2026/09/29  玄人 幸道         refresh で登録種別のクレーム（fapi）が消えていたのを修正（#245）
 //*  2026/09/29  玄人 幸道         code_challenge を送った code は code_verifier を必須にした（#245）
+//*  2026/10/01  玄人 幸道         subject_types_supported の並びを public 先頭に（#151 の段階 4）
+//*  2026/10/02  玄人 幸道         subject_types_supported を OIDC の登録値だけにした（#151 の段階 5）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -190,8 +192,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                 OAuth2AndOIDCEnum.AuthMethods.tls_client_auth.ToStringByEmit()
             });
 
+            // **ES256 も通る**（#129 の段階 2）。
+            //   `client_assertion` の検証で、**登録された RSA / ECDSA の公開鍵を順に試す**
+            //   ようにしたため（`CmnEndpoints.ClientAuthentication`）。
+            //   **クライアントが ECDSA の公開鍵（jwk_ecdsa_publickey）を登録していれば ES256 が通る。**
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
-                "RS256"
+                "RS256", "ES256"
             });
             #endregion
 
@@ -289,8 +295,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #endregion
 
                 #region subject_types
+                // **OIDC の登録値だけを扱う**（既定は public）。
+                //   利用者名が要る RP は、**preferred_username**（UserClaimsMapping）を使う。
                 OpenIDConfig.Add("subject_types_supported", new List<string> {
-                    OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit(),
                     OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit(),
                     OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit()
                 });
@@ -448,9 +455,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                //OAuth2AndOIDCEnum.CibaMode.push.ToStringByEmit()
             });
 
-            // FAPI-CIBA プロファイルの
-            // RequestObjectの署名は、ES256 と PS256のみ許可
-            // ちなみに、Tokenの署名は、FAPI2に準拠する。
+            // **FAPI-CIBA が求める Request Object の署名は ES256 または PS256 だが、
+            //   この実装は ES256 だけを受け付ける**（#129 の段階 0 で、記述を実装に合わせた）。
+            //
+            //   **以前は「ES256 と PS256のみ許可」と書いてあったが、PS256 は通らない。**
+            //   `RequestObject.VerifyCiba` は ES256 に固定されており、
+            //   **Open棟梁 に `JWS_PS*` が無い**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
+            //   PS256 を通すには上流の対応が要る（#129）。
+            //
+            //   ちなみに、Tokenの署名は、FAPI2に準拠する。
+            //
             // **配列と boolean で広告する**（CIBA Core §4。#189 の 3・4）。
             //   以前は文字列だったため、素直に読む RP は型で落ちる。
             OpenIDConfig.Add("backchannel_authentication_request_signing_alg_values_supported", new List<string> {
@@ -4107,12 +4121,34 @@ namespace MultiPurposeAuthSite.TokenProviders
                     ? "" : (string)payload[OAuth2AndOIDCConst.iss];
 
                 // pubKey
-                string pubKey = string.IsNullOrEmpty(assertionIss)
-                    ? "" : CmnEndpoints.DecodeRegisteredJwk(
-                        Helper.GetInstance().GetJwkRsaPublickey(assertionIss));
+                //
+                // **登録された公開鍵を、RSA → ECDSA の順に試す**（#129 の段階 2）。
+                //   **以前は jwk_rsa_publickey しか渡しておらず、RS256 しか通らなかった。**
+                //   `JwtAssertion.Verify` は **JWK の `kty` を見て RSA / EC を選ぶ**ので、
+                //   **ECDSA の公開鍵を渡せば ES256 が通る**（框は両方に対応していた）。
+                //
+                // **アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。
+                //   **登録済みの鍵で順に検証する**だけなので、外から alg を選ばせていない。
+                //   **どちらの鍵でも通る**が、どちらも配備者が登録した鍵である。
+                //   （片方だけ登録すれば、その方式だけになる。）
+                string[] pubKeys = string.IsNullOrEmpty(assertionIss)
+                    ? new string[0]
+                    : new string[]
+                    {
+                        CmnEndpoints.DecodeRegisteredJwk(
+                            Helper.GetInstance().GetJwkRsaPublickey(assertionIss)),
+                        CmnEndpoints.DecodeRegisteredJwk(
+                            Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
+                    };
 
-                if (!string.IsNullOrEmpty(pubKey))
+                foreach (string pubKey in pubKeys)
                 {
+                    if (string.IsNullOrEmpty(pubKey))
+                    {
+                        // その方式の公開鍵が登録されていない
+                        continue;
+                    }
+
                     // 署名検証 ≒ クライアント認証
                     if (JwtAssertion.Verify(
                         assertion, out string iss, out string aud, out string scopes, out JObject jobj, pubKey))

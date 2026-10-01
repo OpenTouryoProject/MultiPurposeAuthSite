@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -31,6 +31,7 @@
 //*  2026/09/28  玄人 幸道         新規（#247）
 //*  2026/09/29  玄人 幸道         自己テスト経由の経路（手順 4・5）を追加（#247）
 //*  2026/09/29  玄人 幸道         秒単位の判定に合わせ、サインインから 1 秒以上ずらす（#247）
+//*  2026/09/30  玄人 幸道         未サインインの場合を追加（#254）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -318,18 +319,82 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         private static Dictionary<string, string> Parameters(
             ClientRegistration reg, string state, string maxAge)
         {
-            return new Dictionary<string, string>()
+            Dictionary<string, string> form = new Dictionary<string, string>()
             {
                 { "client_id", reg.ClientId },
                 { "response_type", "code" },
                 { "redirect_uri", reg.RedirectUri },
                 { "scope", "openid email" },
                 { "state", state },
-                { "nonce", "nonce-" + state },
-                { "max_age", maxAge }
+                { "nonce", "nonce-" + state }
             };
+
+            // **max_age は、指定があるときだけ送る**（#254 で「付けない場合」を測るため）。
+            if (maxAge != null)
+            {
+                form["max_age"] = maxAge;
+            }
+
+            return form;
         }
 
         #endregion
+
+        /// <summary>RT-247.4 未サインイン ＋ prompt=none なら login_required を返す</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **`RT-247.2` が測るのは「セッションは在るが古い」場合**である（`max_age` 超過）。
+        /// **「セッションがそもそも無い」場合は抜けていた**（#254）。
+        ///
+        /// **[Authorize] が、認可エンドポイントのコードに入る前に
+        /// サインイン画面へ飛ばしていた**ため、`prompt` を見る前に UI が出ていた。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT24704_未サインインでpromptがnoneならlogin_requiredを返す(string targetKey)
+        {
+            // **サインインしない**クライアントを使う（ここが RT-247.2 との違い）。
+            using (IdPClient client = this.Client(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-247.4",
+                    "サインインしていない状態で prompt=none なら、redirect_uri へ login_required を返す",
+                    "**`prompt=none` は「画面を出すな」という指定**である（OIDC Core §3.1.2.1）。"
+                    + "**認証できないなら、エラーを `redirect_uri` へ返す**（同 §3.1.2.6）。"
+                    + "**以前はサインイン画面が出ていた。** RP は「セッションが無い」ことを"
+                    + "**黙って確かめられなかった**（サイレント認証・セッション監視ができない）。",
+                    "OIDC Core §3.1.2.1 / §3.1.2.6 / #254");
+
+                r.Target(client.Target.DisplayName + " / client_name=" + KnownClients.TestClient
+                    + " / 未サインイン");
+
+                r.Step("サインインせずに、prompt=none で認可リクエストを送る");
+
+                Dictionary<string, string> form =
+                    MaxAgeTests.Parameters(reg, "state-rt2474", maxAge: null);
+                form["prompt"] = "none";
+
+                AuthZResponse authz = await client.AuthorizeAsync(form);
+
+                r.Verify("サインイン画面を出さない（リダイレクトで返る）", authz.Redirected,
+                    "リダイレクトする",
+                    authz.Redirected ? authz.RedirectTo : "**リダイレクトしない**（" + authz.ToString() + "）");
+
+                bool toRp = !string.IsNullOrEmpty(authz.Location)
+                    && authz.Location.StartsWith(reg.RedirectUri);
+
+                r.Verify("redirect_uri へ返る（ログイン画面ではない）", toRp,
+                    "登録した redirect_uri へ",
+                    string.IsNullOrEmpty(authz.Location) ? "**移らない**" : authz.Location);
+
+                r.VerifyEqual("エラーは login_required", "login_required", authz.Error ?? "（無し）");
+
+                r.VerifyEqual("state がそのまま返る", "state-rt2474", authz.State ?? "（無し）");
+
+                r.Done();
+            }
+        }
     }
 }

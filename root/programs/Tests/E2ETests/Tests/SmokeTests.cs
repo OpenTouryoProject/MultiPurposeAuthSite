@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（SM-1〜SM-5）
+//*  2026/10/01  玄人 幸道         SM-4.2（メアドでもサインイン）を追加（#151 の段階 3）
 //**********************************************************************************
 
 using System.Net;
@@ -206,6 +207,45 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                 await client.SignInAsync();
 
                 r.Verify("サインインできた", client.IsSignedIn,
+                    "リダイレクト（302）でセッションが確立する",
+                    client.IsSignedIn ? "確立した" : "確立しなかった");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>SM-4.2 メアドでもサインインできる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **利用者名とメアドのどちらでもサインインできる**（#151 の段階 3）。
+        /// 以前は「利用者名＝メアド」で、**値が 1 つしか無かった**ので測れなかった。
+        ///
+        /// **どちらとして引くかは `@` を含むかで決まる**（利用者名に `@` は禁じている）。
+        /// `SM-4` が利用者名、こちらがメアドを測る。
+        /// </remarks>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task SM0402_メアドでもサインインできる(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("SM-4.2",
+                    "テスト ユーザのメアドでもサインインできる",
+                    "**利用者名とメアドの両方を受ける**（#151 の段階 3）。"
+                    + "入力が `@` を含めばメアドとして引く。"
+                    + "**どちらか一方しか通らないなら、片方の経路が壊れている。**",
+                    "#151 の段階 3（利用者名とメアドの両方でサインイン）");
+
+                r.Target("email=" + TestEnv.TestUserEmail
+                    + "（利用者名は " + TestEnv.TestUserName + "）");
+
+                r.Step("(1) GET /Account/Login して __RequestVerificationToken を取る");
+                r.Step("(2) POST /Account/Login に、利用者名ではなくメアドを送る");
+
+                await client.SignInAsync(TestEnv.TestUserEmail);
+
+                r.Verify("メアドでサインインできた", client.IsSignedIn,
                     "リダイレクト（302）でセッションが確立する",
                     client.IsSignedIn ? "確立した" : "確立しなかった");
 

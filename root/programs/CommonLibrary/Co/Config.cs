@@ -47,6 +47,10 @@
 //*  2026/09/25  玄人 幸道         UserClaimsMapping（profile / address のクレームの対応付け）を追加（#230）
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         OAuth2EndSessionEndpoint（RP-Initiated Logout）を追加（#232）
+//*  2026/09/29  玄人 幸道         RequireVerifiedEmailForAccountLinking を追加（#140 の段階 1）
+//*  2026/09/30  玄人 幸道         DataProtectionKeyPath を追加（#251）
+//*  2026/09/30  玄人 幸道         AuthCookieName を追加（#250 の段階 4）
+//*  2026/09/30  玄人 幸道         CookieNamePrefix を追加（#255）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -61,6 +65,7 @@ using Newtonsoft.Json;
 using Microsoft.Extensions.Configuration;
 #endif
 
+using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
 using Touryo.Infrastructure.Public.Util;
 
@@ -449,17 +454,6 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// ユーザ名検証（E-mail形式で要求）
-        /// </summary>
-        public static bool RequireUniqueEmail
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireUniqueEmail"));
-            }
-        }
-
-        /// <summary>
         /// 約款画面を表示するかどうか
         /// </summary>
         public static bool DisplayAgreementScreen
@@ -623,7 +617,134 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region このサイト自身が書くCookieの名前（#255）
+
+        /// <summary>
+        /// このサイト自身が書く Cookie の名前に付ける接頭辞（#255）
+        /// </summary>
+        /// <remarks>
+        /// **空なら、従来どおり接頭辞なし。**
+        ///
+        /// **同じホストに 2 つ立てるときだけ指定する。**
+        /// **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+        /// `localhost:44300` と `localhost:44301` は **Cookie を共有し、上書きし合う。**
+        ///
+        /// **名前を決められる Cookie すべてに掛かる。**
+        /// **名前そのものは下の設定で決め、この設定は「どの配備か」を表す**（役割が違う）。
+        ///
+        /// | Cookie | 名前の決め方 |
+        /// |---|---|
+        /// | 認証・外部ログイン・2FA（Identity の 4 スキーム） | <see cref="AuthCookieName"/>、または枠組みの既定 |
+        /// | セッション | `sessionState:SessionCookieName` |
+        /// | `auth_time` / `re_auth_at` | このクラスの定数 |
+        /// | TempData（net10.0 版だけ） | 枠組みの既定 |
+        ///
+        /// **外部ログインの Cookie も要る。** **ID フェデレーションの途中で使う**ので、
+        /// ここが混ざると連携が壊れる（サインインの Cookie だけでは足りない）。
+        ///
+        /// **Open棟梁 が書く `SessionTimeOut` は分けられない**（`FxHttpCookieIndex` の定数）。
+        /// 雛形は `FxSessionTimeOutCheck` を `off` にしているため、**いまは読まれない。**
+        ///
+        /// **AntiForgery は対象外。** net10.0 版は名前にアプリごとのハッシュが入り、
+        /// **もともと衝突しない。** **net48 版のセッション Cookie も対象外**
+        /// （ASP.NET のもので、`system.web/sessionState` の `cookieName` で決まる）。
+        /// </remarks>
+        public static string CookieNamePrefix
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("CookieNamePrefix");
+            }
+        }
+
+        /// <summary>Cookie の名前に接頭辞を付ける（#255）</summary>
+        /// <param name="name">元の名前</param>
+        /// <returns>接頭辞を付けた名前（接頭辞が空なら、元のまま）</returns>
+        /// <remarks>
+        /// **先頭が `.` なら、その後ろに差し込む。**
+        ///
+        /// | 元の名前 | 付けた後（接頭辞が `upstream_`） |
+        /// |---|---|
+        /// | `auth_time` | `upstream_auth_time` |
+        /// | `.MultiPurposeAuthSite` | `.upstream_MultiPurposeAuthSite` |
+        /// | `.AspNetCore.Mvc.CookieTempDataProvider` | `.upstream_AspNetCore.Mvc.CookieTempDataProvider` |
+        ///
+        /// **先頭の `.` は「ホスト専用（host-only）」を表す慣習**で、
+        /// **枠組みが付けた `.` を潰さない**ため、後ろへ入れる。
+        /// **見た目も揃う**（どの Cookie も `.` の直後に接頭辞が来る）。
+        /// </remarks>
+        public static string PrefixCookieName(string name)
+        {
+            string prefix = Config.CookieNamePrefix;
+
+            if (string.IsNullOrEmpty(prefix) || string.IsNullOrEmpty(name))
+            {
+                return name;
+            }
+
+            if (name.StartsWith("."))
+            {
+                return "." + prefix + name.Substring(1);
+            }
+
+            return prefix + name;
+        }
+
+        /// <summary>
+        /// 前回の認証時刻を保存する Cookie の名前（#247 / #255）
+        /// </summary>
+        /// <remarks>**`max_age` の判定に使う。** 中身は W3C 形式の時刻。</remarks>
+        public static string AuthTimeCookieName
+        {
+            get
+            {
+                return Config.PrefixCookieName(OAuth2AndOIDCConst.auth_time);
+            }
+        }
+
+        /// <summary>
+        /// 再認証を求めた時刻を保存する Cookie の名前（#247 / #255）
+        /// </summary>
+        /// <remarks>**繰り返しを防ぐための印。** 判定は <see cref="AuthTimeCookieName"/> と対で行う。</remarks>
+        public static string ReAuthenticatedAtCookieName
+        {
+            get
+            {
+                return Config.PrefixCookieName(Const.ReAuthenticatedAt);
+            }
+        }
+
+        #endregion
+
         #region Cookie認証チケット
+
+        /// <summary>
+        /// Cookie認証チケットの名前（#250 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **空なら、そのプラットフォームの既定のまま**（従来どおり）。
+        ///   net10.0 版 : `.AspNetCore.Identity.Application`
+        ///   net48 版   : `.AspNet.ApplicationCookie`
+        ///
+        /// **同じホストに 2 つ立てるときだけ指定する。**
+        /// **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+        /// `localhost:44300` と `localhost:44301` は **Cookie を共有する。**
+        /// 名前が同じだと、**後にサインインした側が相手の Cookie を上書きし、
+        /// 相手は復号できずサインアウトする。**
+        ///
+        /// **パスが違っても解決しない。** 仮想ディレクトリ配下（`/MultiPurposeAuthSite`）と
+        /// root で **同名・別パスの Cookie が 2 つ並び**、どちらが読まれるかは決まらない。
+        ///
+        /// **ID フェデレーションは「上流にサインイン → 下流がサインイン」**なので、
+        /// **この経路を通るたびに、どちらかが必ず切れる**（#250 の段階 4 で実測）。
+        /// </remarks>
+        public static string AuthCookieName
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("AuthCookieName");
+            }
+        }
 
         /// <summary>
         /// Cookie認証チケットの有効期限
@@ -685,6 +806,68 @@ namespace MultiPurposeAuthSite.Co
                 return GetConfigParameter.GetConfigValue("SaltParameter");
             }
         }
+
+        #region DataProtectionKeyPath
+
+        /// <summary>
+        /// DataProtection の鍵の置き場（#251。C-13）
+        /// </summary>
+        /// <remarks>
+        /// **net10.0 版だけで使う。** net48 版は machineKey の話で、別。
+        ///
+        /// **指定しなければ、従来どおり `%LOCALAPPDATA%` 配下**（コンテナでは揮発）。
+        /// **指定すると、そこに鍵リングを置く**ので、
+        /// **再起動やコンテナの作り直しでもサインインが切れない。**
+        ///
+        /// **鍵そのものは書かない**（net48 の `machineKey` との違い）。
+        /// **鍵は自動生成・自動ローテーションされる。共有するのは置き場である。**
+        ///
+        /// **効くのは「画面のセッション」**（認証 Cookie / AntiForgery /
+        /// メール確認・パスワード リセットのリンク）。
+        /// **access_token / id_token・PPID・認可コード・refresh_token には影響しない。**
+        ///
+        /// **鍵リングは平文の XML。** 置き場の保護は運用側の責任。
+        /// </remarks>
+        public static string DataProtectionKeyPath
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("DataProtectionKeyPath");
+            }
+        }
+
+        #endregion
+
+        #region RequireVerifiedEmailForAccountLinking
+
+        /// <summary>
+        /// 外部 ID を既存アカウントに結び付けるとき、検証済みのメアドを要求するかどうか（#140 の段階 1）
+        /// </summary>
+        /// <remarks>
+        /// **既定は true（要求する）。**
+        /// 他の Require* と違い、**未設定を false（従来どおり）にしない。**
+        /// 未検証のメアドで既存アカウントに結び付けられるのは弱点であり、
+        /// **下位互換のために穴を開けたままにする既定にはしない**（#140 の段階 1）。
+        ///
+        /// false にすると従来どおりになる。**上流が `email_verified` を返さない場合に、
+        /// それでもメアドで結び付けたいとき**の逃げ道である
+        /// （その場合の代替は、ローカルでサインインしてから `/Manage/ManageLogins` で追加すること）。
+        ///
+        /// 判定は `Extensions.Sts.AccountLink` にある。
+        /// </remarks>
+        public static bool RequireVerifiedEmailForAccountLinking
+        {
+            get
+            {
+                string value = GetConfigParameter.GetConfigValue(
+                    "RequireVerifiedEmailForAccountLinking");
+
+                // **未設定は true（安全側）。** 他のキーと既定の向きが違うので、明示的に書く。
+                return string.IsNullOrEmpty(value) ? true : Convert.ToBoolean(value);
+            }
+        }
+
+        #endregion
 
         #region MicrosoftAccountAuthentication
 

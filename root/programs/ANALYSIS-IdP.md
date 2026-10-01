@@ -2,7 +2,7 @@
 
 対象: `root/programs` の IdP / STS 実装
 （`CommonLibrary` ＋ `MultiPurposeAuthSiteCore`（net10.0）＋ `MultiPurposeAuthSite`（net48）） / ブランチ: `develop`
-最終更新: 2026-09-29
+最終更新: 2026-09-30
 
 本書は各 `ANALYSIS.md` の続編で、**「IdP / STS としてのプロトコル実装がどこまで出来ていて、
 最新の仕様・慣行に対して何が足りないか」** だけを扱う。
@@ -64,7 +64,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | | Refresh Token | ✓ | ローテーションあり |
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
 | | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
-| | PPID（`subject_types`: `public` / `pairwise` / `uname`） | ✓ | `Util/PPIDExtension` |
+| | PPID（`subject_types`: `public` / `pairwise`） | ✓ | `Util/PPIDExtension`。**既定は `public`**（#151 の段階 4。独自値は段階 5 で廃止） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
 | | `/end_session`（RP-Initiated Logout） | ✓ | #232。Front-Channel / Back-Channel は未実装（5 節 D-1） |
@@ -74,7 +74,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | 拡張 | PKCE (RFC 7636) | ✓ | `plain` / `S256` |
 | | JARM（`query.jwt` / `fragment.jwt` / `form_post.jwt`） | ✓ | |
 | | Request Object（`request_uri`） | ✓ | |
-| | ID フェデレーション（他 IdP への委譲） | ✓ | |
+| | ID フェデレーション（他 IdP への委譲） | ✓ | **認可コード ＋ PKCE(S256) ＋ `client_secret_post`**（#140 の段階 3）。連携キーは `(iss, sub)`、`iss` は RFC 9207 でも照合。**上流は 1 つだけ**（D-15）。**目視・E2E とも実施済み**（上流は `store/` のコンテナ。`RT-140.4` 〜 `RT-140.7`。#250 の段階 4〜5。`TESTING.md` 5 節） |
 | | 2FA（SMS / Email / TOTP / プッシュ承認） | ✓ | プッシュ承認（`MobileApp`）は #213（net10.0）/ #216（net48） |
 
 **未実装**は 5 節にまとめた。
@@ -646,7 +646,7 @@ CIBA クライアントはこのキーを見つけられない。
 |---|---|---|---|
 | 9 | **設定に合わせて広告する**。`RequirePkceS256` が `true` なら `["S256"]`、既定（`false`）なら `["plain","S256"]` | 広告と実装を一致させる。**既定の挙動は変えない。** `RequirePkceS256` はサーバ全体の設定なので、要求者によらず 1 つに決まる（クライアント単位の `require_pkce` は「必須にするか」で別の話。Discovery にクライアント別の項目は無い） | `RT-189.5` |
 | 12 | **設定値にする**（`ServiceDocumentation`。既定は空、空なら出さない） | 任意の項目なので、嘘のプレースホルダ（`"・・・"`）を配らない | `RT-189.5` |
-| 10 | **変えない**（#151 に委ねる） | `uname` は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）。広告だけ直すと、実際の `sub` とズレる | — |
+| 10 | **変えない**（#151 に委ねる） → **✅ #151 の段階 4〜5 で解決** | 独自値は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）だった。広告だけ直すと、実際の `sub` とズレる。**段階 4 で既定を `public` に変え、段階 5 で独自値を廃止した**ので、**いまの広告は `public` / `pairwise` の 2 つ**＝実装どおりである | `RT-151.1` / `RT-151.2` |
 | 11 | **変えない**（D-2＝#229 に委ねる） | `request_object_endpoint` は FAPI1 の Request Object（JAR）の置き場所を示す独自拡張。**名前だけ PAR に寄せると、中身が PAR でないのに PAR と読まれる** | — |
 | 13 | **別 Issue（#230）**（`profile` / `address` のクレームは未実装。D-7） | 広告だけ足すと嘘になる | — |
 | 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、#129 と関連） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
@@ -738,6 +738,7 @@ else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
 |---|---|---|
 | `max_age` を超えている | **利用者を再認証する**（サインインさせ、`auth_time` を更新して続ける） | OIDC Core §3.1.2.1（`max_age`）／§2（`auth_time`） |
 | 再認証が必要だが `prompt=none` | `redirect_uri` へ **`login_required`** | OIDC Core §3.1.2.6 |
+| **そもそも未サインイン**だが `prompt=none` | `redirect_uri` へ **`login_required`**（**UI を出さない**） | OIDC Core §3.1.2.1 / §3.1.2.6 |
 | `max_age` が数値でない | `redirect_uri` へ **`invalid_request`** | RFC 6749 §4.1.2.1 |
 
 いずれも**エラー画面ではなく、`redirect_uri` へ返す**のが仕様である（A-6 と同じ筋）。
@@ -763,6 +764,19 @@ else { ViewData["Err"] = err; return View("Error"); }   ← err は空のまま
 - E2E : `RT-247.1`（再認証へ送る・**繰り返さない**・自己テストの 2 つのボタン）/
   `RT-247.2`（`login_required`）/ `RT-247.3`（`invalid_request`）。
   **テストはサインインから 1 秒以上ずらして測る**（速すぎると同じ秒に入り、超過にならない）
+
+**対応（#254）— 未サインインの場合。**
+
+**#247 が扱ったのは「セッションは在るが古い」場合だけだった。**
+**「セッションが無い」場合は、`[Authorize]` が認可エンドポイントのコードに入る前に
+サインイン画面へ飛ばしており、`prompt` を見る機会が無かった。**
+
+- **認可エンドポイント（GET）を `[AllowAnonymous]` にし、未認証のときの扱いを自分で決める。**
+  `prompt=none` なら **`login_required`**、そうでなければ
+  **`ChallengeResult`（net48 は `HttpUnauthorizedResult`）**＝ `[Authorize]` と同じ動き
+- **判定は `ValidateAuthZReqParam` より後に置く。**
+  **`redirect_uri` を照合する前に RP へ返すと、オープン リダイレクトになる**
+- E2E : `RT-247.4`（未サインイン ＋ `prompt=none` → `redirect_uri` へ `login_required`）
 
 > **ここに 3 回作り直した跡がある。** 記録として残す。
 > **(1) 印の新しさ（300 秒）だけを見る** → 手の操作が 5 分を超えると古い印と見なし、**二度サインイン**。
@@ -807,6 +821,140 @@ string access_token = CmnAccessToken.ProtectFromPayload(
 > **`ClientModePolicy` の表の 16 行に E2E を突き合わせ、空いていた 1 行
 > （`refresh_token × mTLS`）を埋めた**ところで出た。
 > **網羅の穴と実装の穴が同じ場所にあった。**
+
+### A-14. `subject_types=pairwise` のクライアントに、`sub` 以外を返せていなかった **[Lib]** — **✅ 修正済み（#140 の段階 2）**
+
+**PPID（pairwise の `sub`）が salted hash で、一方向だった。**
+
+```
+sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
+```
+
+**OP 自身も戻せないため、`PPIDExtension.GetUserFromSub` が `pairwise` で `null` を返していた**
+（コード中のコメントは「取りようが無いので...。」）。その結果 —
+
+| 口 | `pairwise` のときの挙動 |
+|---|---|
+| `/userinfo` | **`sub` だけを返し、`profile` / `email` / `address` のクレームが空**（`user != null` の中だけで詰めているため） |
+| `ciba_result` | **401 / `invalid_token`** |
+| `SetDeviceToken` | 利用者を引けない |
+| オペレーション ログ | 利用者名が **`PPID: …`** のままで読めない |
+| `id_token_hint` からの利用者特定（#232） | 成立しない |
+
+**つまり `pairwise` は、選べるが機能しない状態だった。**
+
+**対応（#140 の段階 2）。** **PPID を「OP だけが戻せる暗号化」に変えた。**
+
+- **pairwise に求められるのは「OP 以外が戻せないこと」**であり、**一方向であることではない。**
+  **OP だけが鍵を持つ暗号化は、その条件を満たす**
+- **決定的**でなければならない（RP は `sub` を利用者の主キーとして保存するため、
+  同じ利用者・同じクライアントなら常に同じ値）。**鍵と IV を秘密と `client_id` から導出**して実現
+- **クライアントごとに変わる**（`client_id` を鍵材料に入れている）
+- 実装は `Util/PPIDExtension`（AES-CBC）。**対応表（新しいテーブル）を作らずに済む**ので、
+  **DDL の 3 方言と、既存データベースへの移行が要らない**
+- E2E テスト : **`RT-140.2`**（`pairwise` でも `/userinfo` がクレームを返す）、
+  **`RT-140.3`**（毎回同じ値になり、クライアントが違えば違う値になる）。
+  `test.ps1` が **`subject_types=pairwise` のクライアント（`TestClient_5`）を差し込む**
+
+> **制約 : 秘密（`SaltParameter`）を替えると、発行済みの PPID が全部変わる。**
+> **RP は `sub` を主キーとして保存している**ので、**RP 側では全員が別人になる。**
+>
+> **これは以前の salted hash でも同じ**で、この変更で悪化してはいない。
+> **効くのは漏洩時である。** 秘密を替えなければならないのに、替えると RP が壊れる。
+>
+> **✅ この宿題は #151 の段階 2 で片付いた。**
+> **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、
+> **秘密を替えても、発行済みの値は動かない**（表から引くため）。詳細は下記。
+
+### `sub` の対応表（`SubjectIdentifier`）**[Lib]** — **✅ 実装（#151 の段階 2）**
+
+**`sub` が「導出」から「データ」になった。**
+
+```
+以前 : sub = f(subject_types, client_id, user_id, salt)   ← 式を変えると値が変わる
+いま : sub = 表から引く。無ければ作って入れる              ← 式を変えても既存の値は動かない
+```
+
+**RP は `sub` を利用者の主キーとして保存する。**
+値が変わると **RP 側では全員が別人になる**ので、そこを切り離した。
+
+| 表 | `SubjectIdentifier` |
+|---|---|
+| 主キー | **`(Sector, UserId)`** |
+| 逆引き | **`(Sector, Sub)` に一意索引**（同じ Sector で 2 人が同じ `sub` を持ってはいけない） |
+| 後始末 | **外部キー（`ON DELETE CASCADE`）**。`mem` は `SubjectIdProvider.DeleteByUserId` |
+
+- **`pairwise` 専用ではない。** `uname` / `public` の `sub` も入れる
+  （そうしないと、`subject_types` の既定値の変更を無害にできない）
+- **`Sector` は、いまは `client_id`。** `sector_identifier_uri`（OIDC Core §8.1）に対応したら
+  その解決結果が入る。**列の意味は「Sector Identifier」**なので、**対応しても既存行は有効**である。
+  変えるのは `PPIDExtension.GetSector` の 1 箇所だけ
+- **引く順** … **まず表**（設定に関わらず引ける）→ 無ければ `subject_types` で引く
+  （表を入れる前に発行した `sub` のため）
+
+**これで解ける問題。**
+
+| | |
+|---|---|
+| **#151** | **`subject_types` の既定を変えても、既存の RP が壊れない** |
+| **D-9-2** | **PPID の秘密を、漏洩時に替えられる** |
+
+### `subject_types` の既定を `public` に **[Lib]** — **✅ 実施（#151 の段階 4）**
+
+**既定を `uname`（独自値）から `public` に変えた。**
+
+**`uname` を落としたい理由は「独自値だから」より「`sub` に利用者名が入るから」である。**
+以前は「利用者名＝メアド」だったので、**`sub` としてメアドが全ての RP に渡っていた。**
+**`sub` は「その RP の中で利用者を指す識別子」**であって、表示用の属性ではない。
+
+| 変えたところ | |
+|---|---|
+| `Helper.GetSubjectTypes` | **登録に `subject_types` が無いときの戻り値**（2 箇所。構成ファイルと画面登録） |
+| `CmnEndpoints`（Discovery） | `subject_types_supported` の**並びを `public` 先頭**に（**`uname` は残す**） |
+| `ManageAddSaml2OAuth2DataViewModel` | **選択肢の先頭を `public`** に（＝ 画面の既定）。`uname` に `(deprecated)` を付けた |
+| 雛形（`app.config` / `appsettings.json`） | `TestClient` の `"subject_types": "uname"` を**消した**（＝ 既定に従う） |
+| `AccountController`（ID 連携） | **新規作成の利用者名を `preferred_username` から取る**（下記） |
+
+**既存の `sub` は動かない。** 段階 2 の対応表が効くため（上記）。
+**効くのは、まだ `sub` を発行していない（クライアント × 利用者）だけ**である。
+
+> **ID 連携の下流で、利用者名の出所が変わった。**
+> **以前は上流の `sub` を利用者名として使っていた**（`uname` だったから成り立っていた）。
+> **既定が `public` になると `sub` は利用者 ID** なので、
+> **`preferred_username` → メアドの `@` より前**の順にした。
+> **`sub` は見ない**（**下位互換は維持しないと決めてある**ので、`uname` の上流は考慮しない）。
+> **結び付ける鍵はメアド**なので、**どちらになっても同じ利用者に結び付く。**
+
+**踏んだ不具合が 2 つある。どちらも「`sub` が利用者名である」ことに依存していた。**
+
+| | |
+|---|---|
+| **CIBA / Device AuthZ が HTTP 500** | **認可コードの `identity.Name` に `sub` を入れていた。** `identity.Name` は**利用者名として**扱われる（`CmnAccessToken` が、そこから改めて `sub` を作る）。`uname` では同じ値だったので成り立っていた。**利用者名を入れるように直した** |
+| `Helper.GetClientIdByName` が NRE | **クライアント名でも利用者名でもない値**（`sub`）を渡されると `FindByName` が null を返し、**`user.ClientID` で落ちていた**（B 群と同じ性質）。**見つからなければ `""` を返す**ようにした |
+
+**測り方には注意が要る。** `RT-151.1` / `RT-151.2` は**新しい `client_id`**（`TestClient_6` / `TestClient_7`）で測る。
+**使い回した `client_id` では、対応表から以前の値が返る**ので、既定の変更が見えない
+（`root/TESTING.md` 5 節）。
+
+### 独自値 `uname` の廃止 **[Lib]** — **✅ 実施（#151 の段階 5）**
+
+**`subject_types` は `public` と `pairwise` の 2 つ**（どちらも OIDC Core §8 の登録値）になった。
+
+| 消したところ | |
+|---|---|
+| `PPIDExtension` | **`GetSubForOIDC` / `GetUserFromSub` の 3 分岐を 2 分岐に**（`pairwise` 以外は `public`） |
+| `CmnEndpoints`（Discovery） | `subject_types_supported` を **2 つ**に |
+| `ManageAddSaml2OAuth2DataViewModel` | 選択肢を **2 つ**に |
+| 雛形（`app.config` / `appsettings.json`） | 選択肢の説明から独自値を削除 |
+| `ManageController`（両アプリ） | **`AddEmail`（GET/POST）と `RemoveEmail` を削除**（段階 3 で引退させたもの）。状態メッセージの列挙体と対応付けも削除 |
+| ビュー | **`Views/Manage/AddEmail.cshtml` を削除**（net48 は `.csproj` の `Content` も） |
+| リソース | `ManageViews` の 5 件（`AddEmail*` / `IndexEmailAddActionLink` / `IndexEmailRemoveButton`）と `ManageController` の 3 件（`AddEmail*` / `RemoveEmailSuccess`）を削除 |
+
+> **設定に独自値が残っていても、エラーにはしない。**
+> **`pairwise` 以外は `public` として扱う**ので、`public` と同じ振る舞いになる
+> （**下位互換は維持しないと決めてある**ため、値の読み替えや警告は入れない）。
+>
+> **コードとコメントから独自値の名前を落とした**（履歴は MD 側に残す）。
 
 ---
 
@@ -1311,6 +1459,47 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   - `fapi1` / `device` の登録のクライアントには、`refresh_token` が返らなくなる（もともと使えなかった）
   - `oauth2_oidc_mode` に既知でない値を書いた登録は、全経路で拒否される（以前も、mTLS 以外はほぼ拒否されていた）
 
+### 署名アルゴリズムの対照表（#129 の段階 0）
+
+**どの口で、どの `alg` が実際に通るか。** 広告（Discovery）と実装を突き合わせたもの。
+**#129（384 / 512 への拡張）を検討するときの出発点**として置く。
+
+| 口 | Discovery の広告 | **実際に通る** | 決めているもの |
+|---|---|---|---|
+| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる** |
+| `id_token` | `id_token_signing_alg_values_supported: ["RS256","ES256"]` | RS256 / ES256 | **クライアントは選べない。** `oauth2_oidc_mode=fapi_ciba` のときだけ ES256、他は RS256 |
+| access_token | （広告しない） | RS256 / ES256 | 同上（`id_token` と同じ alg になる） |
+| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
+| CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
+| 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
+
+**広告と実装は一致している**（#189 / A-10 で整えた）。
+
+**`PS256` はどこにも無い。**
+**Open棟梁 に `JWS_PS*` が存在しない**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
+**FAPI 1.0 Advanced / FAPI-CIBA は `PS256` または `ES256` を求める**ので、
+**`PS256` を通すには上流の対応が要る。**
+
+> **コード中の記述が実装と食い違っていた。**
+> CIBA の広告のあたりに **「RequestObjectの署名は、ES256 と PS256のみ許可」** と書かれていたが、
+> **`PS256` は通らない。** #129 の段階 0 で、記述を実装に合わせた。
+
+**拡張するときに効く事実**（#129 の段階 0 で調べたもの）。
+
+- **Open棟梁 には `RS256/384/512` と `ES256/384/512` が既に在る**（`_Param` / `_X509` の両方）。
+  **待ちの状態は解消している**
+- **`client_assertion` の ES256 は、✅ 対応した**（#129 の段階 2）。
+  `JwtAssertion.Verify` が **JWK の `kty` を見て RSA / EC を選ぶ**ので、
+  **MPAS が RSA 鍵しか渡していないだけ**だった。
+  **登録された RSA → ECDSA の公開鍵を順に試す**ようにし、広告も `["RS256","ES256"]` にした。
+  **アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。
+  E2E テスト : **`RT-129.1`**（ES256 で通る／RS256 の対照／Discovery の広告）
+- **ES384 / ES512 は鍵の差し替えを伴う**（JWA で `ES256`→P-256、`ES384`→P-384、`ES512`→P-521。
+  曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**
+- **登録（クライアント）側に alg の項目が無い**。OIDC Registration 1.0 の
+  `id_token_signed_response_alg` / `request_object_signing_alg` /
+  `token_endpoint_auth_signing_alg` に相当するものが無い
+
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
 
 `VerifyAccessToken` は `header[JwtConst.alg]` を読んで `JWS_ES256_X509` / `JWS_RS256_X509` を選ぶ。
@@ -1415,7 +1604,26 @@ options.SlidingExpiration = true;
 Core 側は設定を無視して 2 分固定。SlidingExpiration があるので操作中は延びるが、
 **2 分放置するとサインアウトする**。設定の意味が失われている。
 
-### C-13. DataProtection の鍵が永続化されていない **[Core]**
+### C-13. DataProtection の鍵が永続化されていない **[Core]** — **✅ 修正済み（#251）**
+
+> **対応（#251）。** **設定キー `DataProtectionKeyPath` を足し、
+> 指定されていれば `PersistKeysToFileSystem` で鍵リングをそこに置く**ようにした
+> （`Startup.ConfigureServices`）。**未設定なら従来どおり**（下位互換）。
+>
+> - **net48 の `machineKey` と同じ役割**だが、**鍵そのものは設定に書かない。**
+>   **鍵は自動生成・自動ローテーションされ、共有するのは「置き場」**である
+> - **効くのは「画面のセッション」** … 認証 Cookie / AntiForgery /
+>   メール確認・パスワード リセットのリンク（`DataProtectorTokenProvider`）。
+>   **access_token・id_token（JWS）／ PPID（`SaltParameter` から導出）／
+>   認可コード・refresh_token（サーバ側のストア）には影響しない**
+> - **鍵リングは平文の XML。** 置き場の保護は運用側の責任
+>   （`ProtectKeysWithCertificate` は任意とした）
+> - **実測** : キーを指定して起動すると、**その場所に `key-….xml` が書かれる**ことを確認した
+> - **有効にした配備では、有効にした時点で 1 度だけ全員がサインアウトする**（鍵の置き場が変わるため）。
+>   **以降は再起動に耐える**
+>
+> **`AddDistributedMemoryCache`（E-2）は、まだそのまま。**
+> **スケールアウトするには、そちらも要る。**
 
 `services.AddDataProtection().PersistKeysTo***()` を呼んでいない。
 既定では鍵はローカル プロファイル（コンテナでは揮発）に置かれるため、
@@ -1763,6 +1971,93 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 `require_pkce` は**認可要求に `code_challenge` を必須化**し、この項は**そのコードの交換に
 `code_verifier` を必須化**する。**片方だけでは、PKCE は素通りできた。**
 
+### C-23. 外部 IdP の `email` を検証済みか確かめずにアカウントの突き合わせに使っていた **[Core][NetFx]** — **✅ 修正済み（#140 の段階 1）**
+
+**外部 ID を既存のローカル アカウントに結び付けるとき、鍵になるのは `email` だった**
+（`Config.RequireUniqueEmail` が true のとき `uid = email`）。
+**上流が「検証した」と言っているかを確かめていなかった。**
+
+| 経路 | 上流 | ロックダウンで閉じるか |
+|---|---|---|
+| **`ExternalLoginCallback`** | Microsoft / Google / Facebook / Twitter（SDK 経由） | **閉じない（常に有効）** |
+| `IDFederationRedirectEndPoint` | 明示設定した 1 社（汎用認証サイト） | 閉じる |
+
+**「連携キー」と「初回の突き合わせ」は別の話である。**
+
+| | 何をするか | 何を使うか |
+|---|---|---|
+| 連携キー | 上流の人とローカルの人を**恒久的に対応づける**（`UserLogins`） | 上流の識別子（`sub` / `userid`） |
+| **初回の突き合わせ** | リンクが無いとき、**既存アカウントに結ぶか**を決める | **ここでメアドを使っていた** |
+
+**識別子（`public` / `pairwise`）の話ではない。** 受け取った識別子はそのまま保存すればよく、
+**PPID を戻す必要も無い**（戻す必要があるのは発行した側だけ。#140 の論点 2 ＝ 段階 2）。
+
+**対応（#140 の段階 1）。** 判定を `CommonLibrary` に置いた（**`Extensions.Sts.AccountLink`**）。
+
+| 判定 | 動作 |
+|---|---|
+| メアドが鍵でない（`RequireUniqueEmail` が false） | **対象外。** 鍵は上流の識別子で、メアドは一致の確認にしか使っていない |
+| メアドが鍵 ＋ 上流が `email_verified: true` | 結び付ける |
+| メアドが鍵 ＋ **上流が言っていない / false** | **結び付けない。** 画面に理由を出し、`/Manage/ManageLogins` での明示的な追加へ誘導する |
+
+- **新規に作るアカウントの `EmailConfirmed` も、言い値では true にしない**
+  （以前は無条件に true。未検証のメアドが「確認済み」としてローカルに定着していた）
+- 設定は **`RequireVerifiedEmailForAccountLinking`**。**未設定でも true（安全側）。**
+  他の `Require*` と既定の向きが違うのは、**下位互換のために穴を開けたままにしない**ため
+- **上流が汎用認証サイトなら `email_verified` は取れる**（`user.EmailConfirmed`。A-4 / #184 で真偽値に直してある）
+- **Google は `email_verified` をクレームに写すようにした**（`Startup` / `StartupAuth`。#140 の段階 1）。
+  **Google は実際にメアドを検証しているのに、既定ではクレームにしていなかった**ため、
+  **検証している相手を拒否し続ける**ことになっていた
+  （net10.0 は `ClaimActions.MapJsonKey`、net48 は `GoogleOAuth2AuthenticationProvider.OnAuthenticated`）
+- **他の 3 つには足していない。** 判断材料が無いので、**拒否が正しい**
+
+> **キーの綴りが、両アプリで違った**（#140 の段階 1 で踏んだ）。
+>
+> | | userinfo の口 | メアド検証のキー |
+> |---|---|---|
+> | net10.0（`AddGoogle`） | OIDC の `oauth2/v3/userinfo` | **`email_verified`** |
+> | net48（Owin の `GoogleOAuth2`） | Google 独自の `oauth2/v2/userinfo` | **`verified_email`** |
+>
+> **net10.0 だけ通って net48 が通らない**症状になり、切り分けに 3 往復かかった。
+> **net48 は両方の綴りを見る**ようにしてある。
+>
+> **教訓**。**同じ「Google」でも、ライブラリが叩く口が違えばキーが違う。**
+> 症状が片系統だけに出たら、**まず「両アプリで同じ物を見ているか」を疑う。**
+> **クレームが見つからないときは、実際のキー名をログに出す**（値は出さない）。
+> 推測で直すより速い。
+
+| プロバイダ | `email_verified` | 既存アカウントへの自動リンク |
+|---|---|---|
+| **Google** | **写すようにした** | **結び付く**（検証済みのときだけ） |
+| Microsoft Account | Graph の `/me` に相当するクレームが無い | **結び付かない** |
+| Facebook | `verified` は**アカウント**の検証で、メアドの検証ではない | **結び付かない** |
+| Twitter | **メアド自体が返らない**のが普通 | **結び付かない** |
+
+**結び付かない場合の代替は、ローカルでサインインしてから `/Manage/ManageLogins` で追加すること。**
+
+**アカウント リンクに未検証のメアドを使わないのは OIDC の定石**であり、この実装に固有の事情ではない。
+
+**検証（実測 2026/09/30。net48 / net10.0 の両方）。**
+
+| 見たこと | 結果 |
+|---|---|
+| **拒否する側** : クレームを写す前に、既存アカウントと同じメアドで Google ログイン | **結び付かない**（両系統） |
+| 画面の理由（`ViewBag.Reason`） | **出た**（日本語リソースも解決された。両系統） |
+| **結び付く側** : クレームを写した後に、同じ手順 | **結び付いてサインインできた**（両系統） |
+| ビルド | 両系統で エラー 0 / 警告 0 |
+| 既存の E2E | 410 成功 / 失敗 0 / Skip 3（退行なし） |
+
+**両方の分岐を、両系統で実機で確かめた。**
+
+**外部ログインの経路は E2E で駆動できない**（4 プロバイダへのサインインが要る）ため、
+**この判定は目視で確かめている。回帰は E2E で守られていない。**
+
+>
+> **ID フェデレーション経路なら E2E で測る目算がある**（設定がもともと
+> 「別の汎用認証サイトを上流にする」前提で、`IdFederation` クライアントも雛形に登録済み。
+> `-Launch` は既に 2 サイト立てている）。**上流に `EmailConfirmed = false` の利用者を置けば、
+> 拒否側も測れる。** #140 の段階 2 で同じ土台が要るので、そこでまとめて作る。
+
 ---
 
 ## 5. D. 最新の IdP として不足している機能
@@ -1774,11 +2069,13 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-2 | **PAR（RFC 9126）** | **✅ 実装済み**（#229）。`/par` を新設（フォーム＋クライアント認証＋`expires_in`）。`/ros` は **RFC 9101 §5.2.1 の任意機能**として残す（`RT-229`） | FAPI 2.0 Security Profile は PAR を必須としている |
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
-| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`） | Mix-Up 攻撃への対策 |
+| D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）／**✅ 修正済み（#252）**。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`）。**`form_post` だけ抜けていた**（`iss` は `BuildRedirectUrl` が付けており、**URL を組まない `form_post` はそこを通らない**）。**View で出すようにした**（`RT-231.5` / `RT-231.6`） | Mix-Up 攻撃への対策 |
 | D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
+| D-15 | **ID フェデレーションの上流が 1 つだけ** | `Config.IdFederation{Authorize,Token,UserInfo,Redirect}Endpoint` の 1 組しか持てない。**#140 の段階 3 で連携キーを `(iss, sub)` にしたので、複数を持てる下地はできた**（`UserLogins` は issuer ごとに行を持てる）。残るのは**設定の形と、どの上流へ飛ばすかの画面**。**`SpRp_Isser`（期待する issuer）も 1 つしか持てない**ので、そこも合わせて要る | 複数の IdP と連携できない |
+| D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **✅ 解けた（#151 の段階 2）。** **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、**秘密を替えても発行済みの値は動かない**（表から引くため）。以前は導出していたので替えられなかった（A-14） | **漏洩時に替えられるようになった** |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
 | D-11 | 応答の `scope` | `/token` の応答に `scope` を返していない | 要求と付与が違う場合に RP が判別できない |
 | D-12 | **OAuth 2.1 への整合** | **✅ 既定を変えた（#220）**。雛形の Implicit / ROPC は `false`。PKCE は `client_secret` と併用可、`plain` は `RequirePkceS256`、`code_challenge` の必須化は `RequirePkce` で選べる（どちらも既定は従来どおり）。`permittedLevel` と `clientMode` も分離した（C-7 の 3）。**クライアント単位の `require_pkce` も追加**（#221）。**トークンはヘッダでのみ受け付けることを実測**（`21-2.1`。`?access_token=` は 401。#222） | 残り : 無し（`OAuth21Mode` の 1 キー化は見送り） |
@@ -1799,6 +2096,10 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | E-6 | 認可画面（`Views/Account/OAuth2Authorize.cshtml`）に **Deny ボタンが無い**。ユーザは拒否できず、`access_denied` を返す経路も無い。scope も生の識別子をそのまま表示している |
 | E-7 | `/jwkcerts` は毎回ファイルを読む（キャッシュ・`Cache-Control` なし） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
+| E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
+| E-10 | **✅ 修正済み（#140 の段階 3）**。同じ呼び出しが **`code_verifier` に `""` を渡しており、PKCE を使っていないのに PKCE のオーバーロード（`client_secret_post`）を選んでいた。** いまは実際の `code_verifier` を渡す |
+| E-11 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションが **認可応答の `iss`（RFC 9207）を見ていなかった。** `id_token` の `iss` は照合していたが、**OAuth 2.1 が Mix-Up 対策として挙げているのは応答パラメタの方。** いまは `SpRp_Isser` と照合する（**来なければ通す** — 実装していない OP があるため） |
+| E-12 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの要求スコープに**独自の `userid` / `roles`** が入っていた。**厳格な OP では `invalid_scope` になりうる**（この IdP 自身も #198 でスコープを絞る）。**標準だけにした。** `userid` は連携キーでなくなったので不要（`(iss, sub)` へ移行済み）。`state` も 10 → 32 文字にした |
 
 ---
 
@@ -1836,7 +2137,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **A-11 `/revoke` `/introspect` を RFC 7009 / 7662 に合わせる（本体を `CmnEndpoints` に集約）** #200 |
 | ✅ **A-7 エラーの HTTP ステータス（400 / 401）** #196 |
 | ✅ **A-10 discovery の誤りと未広告の整備**（#189 の 2〜8。`RT-189`）。残り（仕様方針の判断を伴う 9〜14）は #228 |
-| ✅ **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）**#247**。`prompt` の残り（`login` / `consent` / `select_account`）は C-3 |
+| ✅ **A-12 `max_age` を超えたときの応答**（再認証、`prompt=none` なら `login_required`、数値以外は `invalid_request`）**#247**／**未サインイン ＋ `prompt=none` も `login_required`（#254）**。`prompt` の残り（`login` / `consent` / `select_account`）は C-3 |
 
 ### フェーズ 2 — セキュリティの底上げ
 

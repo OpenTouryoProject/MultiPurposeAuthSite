@@ -102,12 +102,6 @@ namespace MultiPurposeAuthSite.Controllers
             AccountConflictInSocialLogin,
             /// <summary>SetTwoFactorSuccess</summary>
             SetTwoFactorSuccess,
-            /// <summary>AddEmailSuccess</summary>
-            AddEmailSuccess,
-            /// <summary>AddEmailFailure</summary>
-            AddEmailFailure,
-            /// <summary>RemoveEmailSuccess</summary>
-            RemoveEmailSuccess,
             /// <summary>AddPhoneSuccess</summary>
             AddPhoneSuccess,
             /// <summary>RemovePhoneSuccess</summary>
@@ -218,11 +212,19 @@ namespace MultiPurposeAuthSite.Controllers
         #region property
 
         /// <summary>SessionCookieName</summary>
+        /// <remarks>
+        /// **接頭辞を掛ける**（#255）。**`Startup` が同じ規則で名前を付けている**ので、
+        /// ここで掛けないと、**セッションを捨てるときに別の名前を消しに行く。**
+        ///
+        /// **net48 版は掛けない。** あちらのセッション Cookie は ASP.NET のもので
+        /// （`system.web/sessionState` の `cookieName`）、**接頭辞の対象外**である。
+        /// </remarks>
         private string SessionCookieName
         {
             get
             {
-                return GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName");
+                return Config.PrefixCookieName(
+                    GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName"));
             }
         }
 
@@ -316,9 +318,6 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemoveExternalLoginSuccess ? Resources.ManageController.RemoveExternalLoginSuccess
                 : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
-                : message == EnumManageMessageId.AddEmailSuccess ? Resources.ManageController.AddEmailSuccess
-                : message == EnumManageMessageId.AddEmailFailure ? Resources.ManageController.AddEmailFailure
-                : message == EnumManageMessageId.RemoveEmailSuccess ? Resources.ManageController.RemoveEmailSuccess
                 : message == EnumManageMessageId.AddPhoneSuccess ? Resources.ManageController.AddPhoneSuccess
                 : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
                 : message == EnumManageMessageId.AddPaymentInformationSuccess ? Resources.ManageController.AddPaymentInformationSuccess
@@ -402,8 +401,9 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ChangeUserName()
         {
-            if (!Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **利用者名の編集は、常に出せる**（#151 の段階 3）。
+            //   以前は「利用者名＝メアド」の配備では出せなかった（メアドの編集で兼ねていた）。
+            if (Config.AllowEditingUserName
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
@@ -430,8 +430,9 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = null;
             Microsoft.AspNetCore.Identity.SignInResult signInResult = null;
 
-            if (!Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **利用者名の編集は、常に出せる**（#151 の段階 3）。
+            //   以前は「利用者名＝メアド」の配備では出せなかった（メアドの編集で兼ねていた）。
+            if (Config.AllowEditingUserName
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ManageChangeUserNameViewModelの検証
@@ -454,7 +455,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                            responseCookies.Set(Config.AuthTimeCookieName,
                                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
@@ -685,112 +686,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region E-mail
 
-        #region Create
-
-        /// <summary>
-        /// E-mailの追加画面（初期表示）
-        /// GET: /Manage/AddEmail
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        public ActionResult AddEmail()
-        {
-            if (!Config.RequireUniqueEmail
-                && Config.CanEditEmail
-                && Config.EnableEditingOfUserAttribute)
-            {
-                return View();
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-
-        /// <summary>
-        /// E-mailの追加画面（E-mailの追加）
-        /// POST: /Manage/AddEmail
-        /// </summary>
-        /// <param name="model">ManageEmailViewModel</param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddEmail(ManageEmailViewModel model)
-        {
-            if (!Config.RequireUniqueEmail
-                && Config.CanEditEmail
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ManageEmailViewModelの検証
-                if (ModelState.IsValid)
-                {
-                    // ManageEmailViewModelの検証に成功
-                    ApplicationUser user = await UserManager.GetUserAsync(User);
-
-                    // Passwordチェック
-                    if (Config.RequirePasswordInEditingUserNameAndEmail)
-                    {
-                        // パスワードのチェック
-                        AspNetId.SignInResult result = await SignInManager.PasswordSignInAsync(
-                            userName: user.UserName,                                  // アカウント(UID)
-                            password: model.Password,                                 // アカウント(PWD)
-                            isPersistent: false,                                      // アカウント記憶
-                            lockoutOnFailure: Config.UserLockoutEnabledByDefault);    // ロックアウト
-
-                        if (result.Succeeded)
-                        {
-                            // Passwordが一致した。
-                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
-                                FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
-                            // 処理を継続
-                        }
-                        else
-                        {
-                            // Passwordが一致しない。
-                            // 再表示
-                            return View(model);
-                        }
-                    }
-                    else
-                    {
-                        // ノーチェック
-                        // 処理を継続
-                    }
-
-                    // DB ストアに保存
-                    CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
-                    {
-                        Code = GetPassword.Base64UrlSecret(128),
-                        Email = model.Email // 更新後のメアド
-                    };
-                    CustomizedConfirmationProvider.GetInstance()
-                        .CreateCustomizedConfirmationData(user.Id, customizedConfirmationJson);
-
-                    // 確認メールの送信
-                    this.SendConfirmEmail(user.Id, customizedConfirmationJson.Email, customizedConfirmationJson.Code);
-
-                    // 再表示
-                    return View("VerifyEmailAddress");
-                }
-                else
-                {
-                    // ManageEmailViewModelの検証に失敗
-                }
-
-                // 再表示
-                return View(model);
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
-        }
-
-        #endregion
-
         #region Update (Edit/Change)
 
         /// <summary>
@@ -801,8 +696,9 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ChangeEmail()
         {
-            if (Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **メアドの編集は CanEditEmail が持つ**（#151 の段階 3）。
+            //   以前は AllowEditingUserName で出し分けていた（メアド＝利用者名だったため）。
+            if (Config.CanEditEmail
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
@@ -826,8 +722,9 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChangeEmail(ManageEmailViewModel model)
         {
-            if (Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **メアドの編集は CanEditEmail が持つ**（#151 の段階 3）。
+            //   以前は AllowEditingUserName で出し分けていた（メアド＝利用者名だったため）。
+            if (Config.CanEditEmail
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ManageEmailViewModelの検証
@@ -852,7 +749,7 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // Passwordが一致した。
                             IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                            responseCookies.Set(Config.AuthTimeCookieName,
                                 FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             // 処理を継続
                         }
@@ -955,13 +852,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (!string.IsNullOrWhiteSpace(email))
                         {
-                            // 更新（UserName＝メアドの場合は、UserNameも更新）
-                            string oldUserName = "";
-                            if (Config.RequireUniqueEmail)
-                            {
-                                oldUserName = user.UserName;
-                                user.UserName = email;
-                            }
+                            // **メアドを変えても、利用者名は変えない**（#151 の段階 3）。
+                            //   以前は「利用者名＝メアド」だったので、両方を書き換えていた。
+                            string oldUserName = user.UserName;
                             user.Email = email;
 
                             // 場合によっては、Email & UserName を更新するため。
@@ -977,20 +870,14 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (await this.ReSignInAsync(user.Id))
                                 {
                                     // 再ログインに成功
-                                    if (Config.RequireUniqueEmail)
-                                    {
-                                        // メールの送信
-                                        this.SendChangeCompletedEmail(user);
+                                    // メールの送信
+                                    this.SendChangeCompletedEmail(user);
 
-                                        // オペレーション・トレース・ログ出力
-                                        Logging.MyOperationTrace(string.Format(
-                                            "{0}({1}) has changed own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
-                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
-                                    }
-                                    else
-                                    {
-                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
-                                    }
+                                    // オペレーション・トレース・ログ出力
+                                    //   **利用者名ではなくメアドが変わった**ので、新しいメアドを出す（#151 の段階 3）。
+                                    Logging.MyOperationTrace(string.Format(
+                                        "{0}({1}) has changed own e-mail address to {2}.", user.Id, oldUserName, user.Email));
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
                                 }
                                 else
                                 {
@@ -1000,14 +887,7 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // E-mail更新に失敗
-                                if (Config.RequireUniqueEmail)
-                                {
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
-                                }
-                                else
-                                {
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
-                                }
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
                             }
                         }
                         else
@@ -1027,59 +907,6 @@ namespace MultiPurposeAuthSite.Controllers
 
             // エラー画面
             return View("Error");
-        }
-
-        #endregion
-
-        #region Delete
-
-        /// <summary>
-        /// E-mailの削除
-        /// POST: /Manage/RemoveEmail
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveEmail()
-        {
-            ApplicationUser user = await UserManager.GetUserAsync(User);
-
-            if (!Config.RequireUniqueEmail
-                && Config.CanEditEmail
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // null クリア
-                IdentityResult result = await UserManager.SetEmailAsync(user, "");
-
-                // 結果の確認
-                if (result.Succeeded)
-                {
-                    // E-mail削除の成功
-
-                    // 再ログイン
-                    if (await this.ReSignInAsync(user.Id))
-                    {
-                        // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveEmailSuccess });
-                    }
-                    else
-                    {
-                        // 再ログインに失敗
-                    }
-                }
-                else
-                {
-                    // E-mail削除の失敗
-                }
-
-                // Index - Error
-                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
         }
 
         #endregion
@@ -1772,15 +1599,8 @@ namespace MultiPurposeAuthSite.Controllers
                     string name = nameClaim.Value;
                     string email = emailClaim.Value;
 
-                    string uid = "";
-                    if (Config.RequireUniqueEmail)
-                    {
-                        uid = email;
-                    }
-                    else
-                    {
-                        uid = name;
-                    }
+                    // **鍵はメアド**（#151 の段階 3）。
+                    string uid = email;
 
                     if (!string.IsNullOrWhiteSpace(email)
                         && !string.IsNullOrWhiteSpace(name))
@@ -1848,7 +1668,7 @@ namespace MultiPurposeAuthSite.Controllers
                                         //rememberBrowser: true); // rememberBrowser は true 固定
 
                                     IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                                    responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                                    responseCookies.Set(Config.AuthTimeCookieName,
                                         FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
                             
                                     // リダイレクト
@@ -3137,7 +2957,7 @@ namespace MultiPurposeAuthSite.Controllers
                         //rememberBrowser: true);     // ブラウザ記憶(2FA) // 既定値
 
                 IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                responseCookies.Set(OAuth2AndOIDCConst.auth_time,
+                responseCookies.Set(Config.AuthTimeCookieName,
                     FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
 
                 return true;

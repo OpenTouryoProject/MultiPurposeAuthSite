@@ -148,7 +148,7 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
     "client_secret": "...",
     "redirect_uri_code": "test_self_code",
     "client_name": "TestClient",
-    "subject_types": "uname",         // public, pairwise, uname
+    // "subject_types" は書かなければ public（既定。下記）
     "jwk_rsa_publickey": "..."
   },
   ...
@@ -157,6 +157,103 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 
 **`client_id` は環境ごとに違う。** `CommandLineTools` の `CreateClientsIdentity.exe` で生成する。
 このため、**コードやテストに `client_id` を直書きしない。** `client_name` から引くこと。
+
+### `subject_types` — `sub` に何を入れるか
+
+| 値 | `sub` | |
+|---|---|---|
+| **`public`** | 利用者の内部 ID | **既定**（OIDC Core 8 章） |
+| `pairwise` | **クライアントごとに違う PPID** | OP だけが戻せる（#140 の段階 2） |
+
+**扱うのはこの 2 つだけである**（#151 の段階 5）。
+**書かなければ `public`** で、**画面（`Manage/AddSaml2OAuth2Data`）の選択肢も、この 2 つ**になる。
+
+> **`sub` は「その RP の中で利用者を指す識別子」**で、表示や照合のための属性ではない。
+> **利用者名を渡したいなら `UserClaimsMapping` で `preferred_username` に対応付ける**
+> （#151 の段階 1。下の設定表）。
+
+#### 独自値 `uname` は廃止した（#151 の段階 5）
+
+**かつては `uname`（`sub` に利用者名を入れる独自値）が在り、それが既定だった。**
+
+| | |
+|---|---|
+| 何が問題だったか | **以前は「利用者名＝メアド」**だったので、**`sub` としてメアドが全ての RP に渡っていた** |
+| 代わり | **`preferred_username`**（#151 の段階 1） |
+| 廃止の順序 | 段階 4 で**既定を `public` に**、段階 5 で**値そのものを廃止** |
+
+**設定に `"subject_types": "uname"` が残っていても、エラーにはならない。**
+**`pairwise` 以外は `public` として扱う**ので、**`public` と同じ振る舞いになる。**
+**`subject_types_supported` にも出さない。**
+
+#### 既定値を変えても、発行済みの `sub` は動かない
+
+**RP は `sub` を利用者の主キーとして保存する。** 値が変わると、**RP 側では全員が別人になる。**
+
+**そうならないのは、発行した `sub` を表に記録しているため**である（#151 の段階 2。`SubjectIdProvider`）。
+
+| | |
+|---|---|
+| **既に `sub` を発行した（クライアント × 利用者）** | **表の値を返し続ける**（＝ 以前と同じ値。昔の利用者名のままのこともある） |
+| **まだ発行していない組み合わせ** | **いまの設定（既定は `public`）で作る** |
+
+**つまり、既定値の変更が効くのは「これから」だけである。**
+**既存の配備で `sub` を `public` に揃えたいなら、表の行を消す**ことになる
+（消すと、その RP から見て別人になる）。
+
+### 利用者名とメアド（#151 の段階 3）
+
+**利用者名とメアドは、別の項目である。** **サインインはどちらでも通る。**
+
+| | |
+|---|---|
+| サインインの入力 | **1 つの欄**（「利用者名またはメアド」）。**`@` を含めばメアド**として引く |
+| 利用者名 | **`@` を使えない**（含めると、入力がどちらなのか決まらなくなる） |
+| メアド | **常に在って一意**（`FindByEmailAsync` が成り立つ必要がある） |
+
+> **`RequireUniqueEmail` の設定は削除した。**
+> 以前は「利用者名＝メアド」か「メアドを持たない」の二択だった。
+> **両方でサインインできるようにしたので、二択が成り立たない**
+> （メアドを外すと、サインインもパスワード再設定もできなくなる）。
+>
+> **既存の配備は、そのまま動く。** **既存の利用者名は書き換えていない**ので、
+> **メアド形式の利用者名が残る。** その利用者は**メアドとして引かれる**が、
+> **値が同じなので同じ利用者に当たる。**
+> **`@` の禁止は、新しく作る・変えるときだけ掛かる。**
+
+**画面を 2 つ削除した**（#151 の段階 3 で引退させ、**段階 5 で消した**）。
+
+| 消した画面 | なぜ在ったか |
+|---|---|
+| `Manage/AddEmail` | **メアドを持たない利用者**に、後から足すためのもの |
+| `Manage/RemoveEmail` | 同様に、外すためのもの |
+
+**メアドは常に在って一意**（サインインの識別子）になったので、どちらも成り立たない
+（外すと、サインインもパスワード再設定もできなくなる）。
+**アクションもビューも無いので、叩くと 404 になる。**
+
+**メアドの変更は `Manage/ChangeEmail`**（門番は `CanEditEmail`）、
+**利用者名の変更は `Manage/ChangeUserName`**（門番は `AllowEditingUserName`）。
+
+#### ID 連携・外部ログインで作られる利用者名（#151 の段階 4）
+
+**上流が返す `sub` は、利用者名ではない**（既定が `public` ＝ 利用者 ID）。
+**そこで、下流が新規に作るときの名前は、この順で決める。**
+
+| 順 | 使う値 | いつ |
+|---|---|---|
+| 1 | **`preferred_username`** | 上流が返していて、利用者名として使えるとき |
+| 2 | **メアドの `@` より前** | 返っていないとき |
+
+> **`sub` は見ない。** 段階 4 より前の上流（`subject_types=uname`）では `sub` が利用者名だったが、
+> **下位互換は維持しない**と決めてある。
+>
+> **結び付ける鍵はメアド**なので、**名前がどちらになっても、同じ利用者に結び付く。**
+> ここで決まるのは**新規に作るときの名前だけ**である。
+>
+> **上流（相手の OP）に `preferred_username` を出してもらうには、上流側の設定が要る**
+> （`UserClaimsMapping`）。**汎用認証サイト同士なら、上流にこれを入れる。**
+> **ID 連携の要求スコープには `profile` が入っている**ので、対応付けがあれば返る。
 
 | `client_name` | 用途 |
 |---|---|
@@ -447,12 +544,19 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|---|---|
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
+| `DataProtectionKeyPath` | `""`（空） | **コンテナでは必須**（#251） | **DataProtection の鍵の置き場。** 空なら `%LOCALAPPDATA%` 配下（**コンテナでは揮発 → 再起動で全員サインアウト**）。**net48 の `machineKey` と同じ役割**だが、**鍵そのものは書かない**（置き場を共有する。鍵は自動生成・自動ローテーション）。**効くのは画面のセッション**（認証 Cookie / AntiForgery / メール確認のリンク）で、**access_token・PPID・refresh_token には影響しない**。**鍵リングは平文の XML**。**net10.0 版だけ** |
+| `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
+| `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。AntiForgery は**もともとアプリごとに違う名前**になるので対象外。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
+| `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
+| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4） |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
 | `RequirePkce` / `RequirePkceS256` | `false` | **任意**（下の注意 5） | **OAuth 2.1 に寄せるための締め金**（#220）。既定は従来どおり緩い。`RequirePkceS256` は Discovery の `code_challenge_methods_supported` にも効く（#228） |
+| `RequireVerifiedEmailForAccountLinking` | **`true`**（#140 の段階 1 で追加） | `true` のまま | **外部 ID を既存アカウントに結び付けるとき、上流が `email_verified: true` と言ったメアドだけを鍵にする。** **未設定でも `true`**（他の `Require*` と既定の向きが違う）。`false` にすると従来どおり（上流の言い値で結び付ける）。**Google は `email_verified` を写すようにしたので自動リンクできる。Microsoft Account は示せないので、`/Manage/ManageLogins` での明示的な追加になる** |
+| `FacebookAuthentication` / `TwitterAuthentication` | `false` | **触らない** | **サポートを取り下げた**（#249）。**`true` にしても有効にならない**（アプリ側の登録をコメント アウトしてある）。**動かないからではなく、維持コストが便益に見合わないため。** キーを残してあるのは戻せるようにするため（`CommonLibrary/ANALYSIS.md` 12 節） |
 | `ServiceDocumentation` | `""`（空） | **任意** | Discovery の `service_documentation`。**空なら出さない**（#228）。文書を公開しているなら、その URL |
 | `AuthRequestPushUri` | `/par` | 既定のまま | PAR（RFC 9126）の口（#229）。独自の `/ros`（`RequestObjectRegUri`）とは別。**改名した**（旧 `PushedAuthorizationRequestEndpoint`。下の 12 節） |
 | `OAuth2AuthorizationCodeExpireTimeSpanFromSeconds` | `600` | 既定のまま（または短く） | 認可コードの寿命（#188）。RFC 6749 §4.1.2 は 10 分以内を推奨 |

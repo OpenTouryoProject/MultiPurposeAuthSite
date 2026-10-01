@@ -73,10 +73,12 @@
     <Compile Include="Data\CmnRoleStore.cs" />
     <Compile Include="Data\StopUserStoreException.cs" />
     <Compile Include="Data\CmnUserStore.cs" />
+    <Compile Include="Extensions\Sts\AccountLink.cs" />
     <Compile Include="Extensions\Sts\DeviceAuthZProvider.cs" />
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
     <Compile Include="Extensions\Sts\SelfTestClient.cs" />
+    <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />
     <Compile Include="Extensions\Sts\UserClaims.cs" />
     <Compile Include="Notifications\FcmService.cs" />
     <Compile Include="SamlProviders\CmnEndpoints.cs" />

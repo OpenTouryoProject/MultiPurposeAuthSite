@@ -29,6 +29,7 @@
 //*  2026/09/13  玄人 幸道         SQL系: 行なしで500になる不具合と、Result(NULL)のキャストを修正（#207で判明）
 //*  2026/09/13  玄人 幸道         Oracle: Result(NUMBER(3))の読み出しをConvertで正規化（#207で判明）
 //*  2026/09/13  玄人 幸道         Oracle: AuthReqExp(decimal)のlongへの明示キャスト（#207で判明）
+//*  2026/10/01  玄人 幸道         codeのidentityに利用者名を入れる（subではない）（#151 の段階 4）
 //**********************************************************************************
 
 using System;
@@ -610,11 +611,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string client_id = tempdic["client_id"];
             string scope = tempdic["scope"];
 
-            ApplicationUser user = null;
-            string sub = PPIDExtension.GetSubForOIDC(client_id, userName, out user);
-
+            // **identity.Name に入れるのは利用者名**（#151 の段階 4）。
+            //   **sub を入れてはいけない。** sub は利用者 ID（または PPID）であり、
+            //   **CmnAccessToken が identity.Name から改めて sub を作る**ため、
+            //   入れると token エンドポイントで利用者を引けなくなる。
             return Token.CmnEndpoints.CreateCodeInAuthZNRes(
-                new ClaimsIdentity(new GenericIdentity(sub)), new NameValueCollection(),
+                new ClaimsIdentity(new GenericIdentity(userName)), new NameValueCollection(),
                 client_id, "", (scope ?? "").Split(' '), null, "");
         }
 

@@ -154,114 +154,122 @@ namespace MultiPurposeAuthSite.Network
 
         #region TwitterWebAPI
 
-        /// <summary>
-        /// GetTwitterAccountInfo
-        /// https://api.twitter.com/1.1/account/verify_credentials.json
-        /// </summary>
-        /// <param name="request_query">クエリ</param>
-        /// <param name="oauth_token">oauth token</param>
-        /// <param name="oauth_token_secret">oauth token secret</param>
-        /// <param name="oauth_consumer_key">oauth consumer key</param>
-        /// <param name="oauth_consumer_secret">oauth consumer secret</param>
-        /// <returns></returns>
-        public async Task<JObject> GetTwitterAccountInfo(
-            string request_query,
-            string oauth_token, string oauth_token_secret,
-            string oauth_consumer_key, string oauth_consumer_secret)
-        {
-            string resource_url = "https://api.twitter.com/1.1/account/verify_credentials.json";
+        // **Twitter は取り下げた**（#249）。
+        //   **動かないからではなく、維持コストが便益に見合わないため。**
+        //   **この 1 本のためだけに、OAuth 1.0a の署名を自前で組んでいた。**
+        //   呼び出し元は net48 の AccountController / ManageController の 2 箇所で、
+        //   そちらも同時にコメントアウトしてある。
+        //
+        //   **削除せずコメントアウトにしてある**（WebAuthn / MS Passport と同じ扱い）。
 
-            // oauth implementation details
-            string oauth_version = "1.0";
-            string oauth_signature_method = "HMAC-SHA1";
+        ///// <summary>
+        ///// GetTwitterAccountInfo
+        ///// https://api.twitter.com/1.1/account/verify_credentials.json
+        ///// </summary>
+        ///// <param name="request_query">クエリ</param>
+        ///// <param name="oauth_token">oauth token</param>
+        ///// <param name="oauth_token_secret">oauth token secret</param>
+        ///// <param name="oauth_consumer_key">oauth consumer key</param>
+        ///// <param name="oauth_consumer_secret">oauth consumer secret</param>
+        ///// <returns></returns>
+        //public async Task<JObject> GetTwitterAccountInfo(
+            //string request_query,
+            //string oauth_token, string oauth_token_secret,
+            //string oauth_consumer_key, string oauth_consumer_secret)
+        //{
+            //string resource_url = "https://api.twitter.com/1.1/account/verify_credentials.json";
 
-            // unique request details
-            string oauth_nonce = CustomEncode.ToBase64String(
-                CustomEncode.StringToByte(DateTime.Now.Ticks.ToString(), CustomEncode.us_ascii));
+            //// oauth implementation details
+            //string oauth_version = "1.0";
+            //string oauth_signature_method = "HMAC-SHA1";
 
-            TimeSpan timeSpan = DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-            string oauth_timestamp = Convert.ToInt64(timeSpan.TotalSeconds).ToString();
+            //// unique request details
+            //string oauth_nonce = CustomEncode.ToBase64String(
+                //CustomEncode.StringToByte(DateTime.Now.Ticks.ToString(), CustomEncode.us_ascii));
 
-            // create oauth signature
-            string baseFormat =
-                "oauth_consumer_key={0}&oauth_nonce={1}&oauth_signature_method={2}" +
-                "&oauth_timestamp={3}&oauth_token={4}&oauth_version={5}";
+            //TimeSpan timeSpan = DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+            //string oauth_timestamp = Convert.ToInt64(timeSpan.TotalSeconds).ToString();
 
-            string baseString = string.Format(baseFormat,
-                oauth_consumer_key,
-                oauth_nonce,
-                oauth_signature_method,
-                oauth_timestamp,
-                oauth_token,
-                oauth_version);
+            //// create oauth signature
+            //string baseFormat =
+                //"oauth_consumer_key={0}&oauth_nonce={1}&oauth_signature_method={2}" +
+                //"&oauth_timestamp={3}&oauth_token={4}&oauth_version={5}";
 
-            baseString = string.Concat(
-                "GET&",
-                Uri.EscapeDataString(resource_url),
-                "&",
-                Uri.EscapeDataString(request_query),
-                "%26", // !? こうしないと {"errors":[{"message":"Could not authenticate you","code":32}]} になる。　
-                Uri.EscapeDataString(baseString));
+            //string baseString = string.Format(baseFormat,
+                //oauth_consumer_key,
+                //oauth_nonce,
+                //oauth_signature_method,
+                //oauth_timestamp,
+                //oauth_token,
+                //oauth_version);
 
-            string compositeKey = string.Concat(
-                Uri.EscapeDataString(oauth_consumer_secret),
-                "&",
-                Uri.EscapeDataString(oauth_token_secret));
+            //baseString = string.Concat(
+                //"GET&",
+                //Uri.EscapeDataString(resource_url),
+                //"&",
+                //Uri.EscapeDataString(request_query),
+                //"%26", // !? こうしないと {"errors":[{"message":"Could not authenticate you","code":32}]} になる。　
+                //Uri.EscapeDataString(baseString));
 
-            string oauth_signature;
-            using (HMACSHA1 hasher = new HMACSHA1(
-                CustomEncode.StringToByte(compositeKey, CustomEncode.us_ascii)))
-            {
-                oauth_signature = CustomEncode.ToBase64String(
-                    hasher.ComputeHash(CustomEncode.StringToByte(baseString, CustomEncode.us_ascii)));
-            }
+            //string compositeKey = string.Concat(
+                //Uri.EscapeDataString(oauth_consumer_secret),
+                //"&",
+                //Uri.EscapeDataString(oauth_token_secret));
 
-            // create the request header
-            var headerFormat =
-                "OAuth oauth_consumer_key=\"{0}\"," +
-                " oauth_nonce=\"{1}\", oauth_signature=\"{2}\"," +
-                " oauth_signature_method=\"{3}\", oauth_timestamp=\"{4}\"," +
-                " oauth_token=\"{5}\", oauth_version=\"{6}\"";
+            //string oauth_signature;
+            //using (HMACSHA1 hasher = new HMACSHA1(
+                //CustomEncode.StringToByte(compositeKey, CustomEncode.us_ascii)))
+            //{
+                //oauth_signature = CustomEncode.ToBase64String(
+                    //hasher.ComputeHash(CustomEncode.StringToByte(baseString, CustomEncode.us_ascii)));
+            //}
 
-            var authHeader = string.Format(headerFormat,
-                Uri.EscapeDataString(oauth_consumer_key),
-                Uri.EscapeDataString(oauth_nonce),
-                Uri.EscapeDataString(oauth_signature),
-                Uri.EscapeDataString(oauth_signature_method),
-                Uri.EscapeDataString(oauth_timestamp),
-                Uri.EscapeDataString(oauth_token),
-                Uri.EscapeDataString(oauth_version));
+            //// create the request header
+            //var headerFormat =
+                //"OAuth oauth_consumer_key=\"{0}\"," +
+                //" oauth_nonce=\"{1}\", oauth_signature=\"{2}\"," +
+                //" oauth_signature_method=\"{3}\", oauth_timestamp=\"{4}\"," +
+                //" oauth_token=\"{5}\", oauth_version=\"{6}\"";
 
-            // make the request
+            //var authHeader = string.Format(headerFormat,
+                //Uri.EscapeDataString(oauth_consumer_key),
+                //Uri.EscapeDataString(oauth_nonce),
+                //Uri.EscapeDataString(oauth_signature),
+                //Uri.EscapeDataString(oauth_signature_method),
+                //Uri.EscapeDataString(oauth_timestamp),
+                //Uri.EscapeDataString(oauth_token),
+                //Uri.EscapeDataString(oauth_version));
 
-            resource_url += "?" + request_query;
+            //// make the request
 
-            // URL
-            Uri webApiEndpointUri = new Uri(resource_url);
+            //resource_url += "?" + request_query;
 
-            // 通信用の変数
-            HttpRequestMessage httpRequestMessage = null;
-            HttpResponseMessage httpResponseMessage = null;
+            //// URL
+            //Uri webApiEndpointUri = new Uri(resource_url);
 
-            // HttpRequestMessage (Method & RequestUri)
-            httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Get,
-                RequestUri = webApiEndpointUri
-            };
+            //// 通信用の変数
+            //HttpRequestMessage httpRequestMessage = null;
+            //HttpResponseMessage httpResponseMessage = null;
 
-            // HttpRequestMessage (Headers)
-            httpRequestMessage.Headers.Add(OAuth2AndOIDCConst.HttpHeader_Authorization, authHeader);
-            //httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("OAuth", authHeader);
+            //// HttpRequestMessage (Method & RequestUri)
+            //httpRequestMessage = new HttpRequestMessage
+            //{
+                //Method = HttpMethod.Get,
+                //RequestUri = webApiEndpointUri
+            //};
 
-            //httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            //// HttpRequestMessage (Headers)
+            //httpRequestMessage.Headers.Add(OAuth2AndOIDCConst.HttpHeader_Authorization, authHeader);
+            ////httpRequestMessage.Headers.Authorization = new AuthenticationHeaderValue("OAuth", authHeader);
 
-            httpRequestMessage.Headers.ExpectContinue = false;
+            ////httpRequestMessage.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
-            // HttpResponseMessage
-            httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
-            return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
-        }
+            //httpRequestMessage.Headers.ExpectContinue = false;
+
+            //// HttpResponseMessage
+            //httpResponseMessage = await _webAPIHttpClient.SendAsync(httpRequestMessage);
+            //return (JObject)JsonConvert.DeserializeObject(await httpResponseMessage.Content.ReadAsStringAsync());
+        //}
 
         #endregion
 

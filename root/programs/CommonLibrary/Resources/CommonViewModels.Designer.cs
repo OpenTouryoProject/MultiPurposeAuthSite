@@ -401,6 +401,15 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("UserName", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   User name or e-mail address に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string UserNameOrEmail {
+            get {
+                return ResourceManager.GetString("UserNameOrEmail", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Search by user name に類似しているローカライズされた文字列を検索します。

@@ -126,6 +126,9 @@
   <data name="Login_emailconfirm" xml:space="preserve">
     <value>E-Mail Confirmation is needed !</value>
   </data>
+  <data name="Register_InvalidUserName" xml:space="preserve">
+    <value>The user name must not contain &quot;@&quot; (use the e-mail address field instead).</value>
+  </data>
   <data name="Login_Error" xml:space="preserve">
     <value>Invalid Sign-in attempt.</value>
   </data>

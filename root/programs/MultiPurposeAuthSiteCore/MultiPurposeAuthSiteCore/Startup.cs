@@ -26,6 +26,9 @@
 //*  2026/09/25  玄人 幸道         設定キーの改名（AuthRequestPushUri）に追随（#236）
 //*  2026/09/27  玄人 幸道         AuthRequestPushUri は Open棟梁 側で読むようにした（#236 の宿題）
 //*  2026/09/27  玄人 幸道         /end_session（RP-Initiated Logout）のルートを追加（#232）
+//*  2026/09/30  玄人 幸道         Google の email_verified をクレームに写す（#140 の段階 1）
+//*  2026/09/30  玄人 幸道         AuthCookieName で認証 Cookie の名前を変えられるようにした（#250 の段階 4）
+//*  2026/10/01  玄人 幸道         TempData の Cookie にも接頭辞を付ける（#255）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -54,6 +57,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Caching.Memory;
 
 //using Microsoft.AspNetCore.Mvc.Cors.Internal;
+using Microsoft.AspNetCore.Mvc; // CookieTempDataProviderOptions（#255）
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Framework.StdMigration;
@@ -141,7 +145,9 @@ namespace MultiPurposeAuthSite
                 {
                     Expiration = TimeSpan.FromDays(1), // 効かない
                     HttpOnly = true,
-                    Name = GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName"),
+                    // **接頭辞を掛ける**（#255。同じホストに 2 つ立てたときに分けるため）
+                    Name = Config.PrefixCookieName(
+                        GetConfigParameter.GetAnyConfigValue("sessionState:SessionCookieName")),
                     Path = "/",
                     SameSite = SameSiteMode.Strict,
                     SecurePolicy = CookieSecurePolicy.SameAsRequest
@@ -307,6 +313,37 @@ namespace MultiPurposeAuthSite
             // HttpContextのマイグレーション用
             services._AddHttpContextAccessor();
 
+            #region DataProtection の鍵の永続化（#251。C-13）
+
+            // **鍵の置き場を指定しないと、%LOCALAPPDATA% 配下に置かれる**（コンテナでは揮発）。
+            //   そうすると —
+            //     ・**再起動で認証 Cookie と AntiForgery トークンが全て無効**になる
+            //     ・**複数インスタンスでインスタンス間の Cookie が通らない**
+            //     ・**メール確認 / パスワード リセットのリンクが切れる**
+            //       （DataProtectorTokenProvider が使う）
+            //
+            //   **net48 の <machineKey> と同じ役割**だが、**鍵そのものは設定に書かない。**
+            //   **鍵は自動生成・自動ローテーションされ、その「置き場」を共有する。**
+            //
+            //   **access_token / id_token には影響しない**（JWS。自前の署名鍵）。
+            //   **PPID にも影響しない**（SaltParameter から導出）。
+            //   **認可コード / refresh_token にも影響しない**（サーバ側のストアに保存）。
+            //   つまり「発行済みのトークンが無効になる」話ではなく、
+            //   **「画面のセッションが切れる」**話である。
+            //
+            // **未設定なら、従来どおり何もしない**（下位互換）。
+            if (!string.IsNullOrEmpty(Config.DataProtectionKeyPath))
+            {
+                services.AddDataProtection()
+                    .PersistKeysToFileSystem(
+                        new DirectoryInfo(Config.DataProtectionKeyPath));
+
+                // **鍵リングは平文の XML である。** マウント先の保護は運用側の責任。
+                //   証明書で包む（ProtectKeysWithCertificate）かどうかは、ここでは決めない。
+            }
+
+            #endregion
+
             services.Configure<CookiePolicyOptions>(options =>
             {
                 // This lambda determines whether user consent
@@ -340,6 +377,50 @@ namespace MultiPurposeAuthSite
 
             // AddMvc
             services.AddMvc();
+
+            // **TempData の Cookie の名前にも接頭辞を付ける**（#255）。
+            //   **空なら既定のまま**（`.AspNetCore.Mvc.CookieTempDataProvider`）。
+            //
+            //   **同じホストに 2 つ立てると、この Cookie も上書きし合う**
+            //   （Cookie のスコープにポートは入らないため）。
+            //   **中身は配備ごとの鍵で守られており相手は読めない**が、**消えるので
+            //   画面のメッセージ（[TempData] ErrorMessage など）が出なくなる。**
+            //
+            //   **net10.0 版だけの話。** net48 版の TempData はセッションに載る。
+            //   **PostConfigure で掛ける。** 既定の名前が入った後に読みたいため
+            //   （Configure だと、既定が入る前に走る余地がある）。
+            if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
+            {
+                services.PostConfigure<CookieTempDataProviderOptions>(options =>
+                {
+                    options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                });
+
+                // **Identity が使う Cookie すべてに掛ける**（#255）。
+                //   **AuthCookieName で名前を決めた後**に付けたいので、PostConfigure で行う。
+                //   AuthCookieName が空でも、**枠組みの既定名に接頭辞が付く。**
+                //
+                //   **サインインの Cookie（Application）だけでは足りない。**
+                //   **外部ログイン（External）は ID フェデレーションと外部 IdP の途中で使い**、
+                //   **2 要素認証（TwoFactor*）も同じように途中の状態を持つ。**
+                //   **これらが混ざると、連携や 2FA の途中で別のサイトの状態を掴む。**
+                string[] identitySchemes = new string[]
+                {
+                    IdentityConstants.ApplicationScheme,
+                    IdentityConstants.ExternalScheme,
+                    IdentityConstants.TwoFactorUserIdScheme,
+                    IdentityConstants.TwoFactorRememberMeScheme
+                };
+
+                foreach (string scheme in identitySchemes)
+                {
+                    services.PostConfigure<CookieAuthenticationOptions>(
+                        scheme, options =>
+                        {
+                            options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                        });
+                }
+            }
 
             // AddCors
             services.AddCors(
@@ -379,7 +460,11 @@ namespace MultiPurposeAuthSite
                     // ユーザー
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#user
                     //idOptions.SignIn.AllowedUserNameCharacters = false;
-                    idOptions.User.RequireUniqueEmail = Config.RequireUniqueEmail;
+                    // **メアドは常に一意**（#151 の段階 3）。
+                    //   **利用者名とメアドの両方でサインインできる**ので、
+                    //   **メアドが一意でないと FindByEmailAsync が成り立たない。**
+                    //   以前は RequireUniqueEmail の設定で切り替えていた（その設定は落とした）。
+                    idOptions.User.RequireUniqueEmail = true;
 
                     // サインイン
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#sign-in
@@ -451,7 +536,17 @@ namespace MultiPurposeAuthSite
                     options.SlidingExpiration = Config.AuthCookieSlidingExpiration;
 
                     //options.AccessDeniedPath = "/Identity/Account/AccessDenied";
-                    //options.Cookie.Name = "YourAppCookieName";
+
+                    // **Cookie の名前を設定で変えられるようにする**（#250 の段階 4）。
+                    //   **空なら既定のまま**（`.AspNetCore.Identity.Application`）。
+                    //   **同じホストに 2 つ立てるときだけ指定する**
+                    //   （Cookie のスコープにポートは入らないため、
+                    //     上流と下流を同じホストで動かすと、同名の Cookie が奪い合いになる）。
+                    if (!string.IsNullOrEmpty(Config.AuthCookieName))
+                    {
+                        options.Cookie.Name = Config.AuthCookieName;
+                    }
+
                     options.Cookie.HttpOnly = true;
 
                     // ※ SecurityStamp の検証（OnValidatePrincipal）は書かない。
@@ -476,25 +571,48 @@ namespace MultiPurposeAuthSite
                 {
                     options.ClientId = Config.GoogleAuthenticationClientId;
                     options.ClientSecret = Config.GoogleAuthenticationClientSecret;
+
+                    // **email_verified をクレームに写す**（#140 の段階 1）。
+                    //   Google は userinfo で email_verified を返すが、
+                    //   **既定の ClaimActions には含まれない**ので、明示的に写す。
+                    //   これが無いと、**Google はメアドを検証しているのに**
+                    //   「言っていない」扱いになり、既存アカウントへのリンクが拒否される
+                    //   （判定は Extensions.Sts.AccountLink）。
+                    //
+                    //   **他の 3 つ（Microsoft / Facebook / Twitter）には足さない。**
+                    //     Microsoft : Graph の /me に相当するクレームが無い
+                    //     Facebook  : verified はアカウントの検証で、メアドの検証ではない
+                    //     Twitter   : メアド自体が返らないのが普通
+                    options.ClaimActions.MapJsonKey(
+                        OAuth2AndOIDCConst.email_verified, OAuth2AndOIDCConst.email_verified);
                 });
             }
-            if (Config.FacebookAuthentication)
-            {
-                authenticationBuilder.AddFacebook(options =>
-                {
-                    options.AppId = Config.FacebookAuthenticationClientId;
-                    options.AppSecret = Config.FacebookAuthenticationClientSecret;
-                });
-            }
-            if (Config.TwitterAuthentication)
-            {
-                authenticationBuilder.AddTwitter(options =>
-                {
-                    options.ConsumerKey = Config.TwitterAuthenticationClientId;
-                    options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
-                    options.RetrieveUserDetails = true;
-                });
-            }
+            // **Facebook / Twitter は取り下げた**（#249）。
+            //   **動かないからではなく、維持コストが便益に見合わないため。**
+            //   ・この 2 つだけ、メアドを取るための専用コードを抱えていた（net48 側）
+            //   ・両アプリに二重にあり、外部 API の変更に追随する必要があった
+            //   ・#140 の段階 1（C-23）以降、**検証済みのメアドを示せないので、
+            //     既存アカウントへの自動リンクができない側に固定される**
+            //
+            //   **削除せずコメントアウトにしてある**（WebAuthn / MS Passport と同じ扱い）。
+            //   判断が変われば戻せるように、パッケージ参照と設定キーも残してある。
+            //if (Config.FacebookAuthentication)
+            //{
+            //    authenticationBuilder.AddFacebook(options =>
+            //    {
+            //        options.AppId = Config.FacebookAuthenticationClientId;
+            //        options.AppSecret = Config.FacebookAuthenticationClientSecret;
+            //    });
+            //}
+            //if (Config.TwitterAuthentication)
+            //{
+            //    authenticationBuilder.AddTwitter(options =>
+            //    {
+            //        options.ConsumerKey = Config.TwitterAuthenticationClientId;
+            //        options.ConsumerSecret = Config.TwitterAuthenticationClientSecret;
+            //        options.RetrieveUserDetails = true;
+            //    });
+            //}
             #endregion
 
             #region OAuth2 / OIDC

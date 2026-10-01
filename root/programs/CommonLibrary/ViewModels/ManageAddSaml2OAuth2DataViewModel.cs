@@ -21,6 +21,8 @@
 //*  2020/03/04  西野 大介         CIBA対応実施
 //*  2026/09/18  玄人 幸道         クライアント単位の PKCE 必須化（require_pkce）を追加（#221）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri（RP-Initiated Logout）を追加（#232）
+//*  2026/10/01  玄人 幸道         subject_types の選択肢を public 先頭にした（#151 の段階 4）
+//*  2026/10/02  玄人 幸道         subject_types の選択肢を OIDC の登録値だけにした（#151 の段階 5）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -125,15 +127,16 @@ namespace MultiPurposeAuthSite.ViewModels
         public string SubjectTypes { get; set; }
 
         /// <summary>SubjectTypesアイテムリスト</summary>
+        /// <remarks>
+        /// **先頭が既定の選択**なので、**public を先頭に置く**。
+        /// **利用者名を渡したいなら `preferred_username`**（`UserClaimsMapping`）。
+        /// </remarks>
         public List<SelectListItem> DdlSubjectTypesItems
         {
             get
             {
                 return new List<SelectListItem>()
                 {
-                    new SelectListItem() {
-                        Text = "user name",
-                        Value = OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "public",
                         Value = OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit() },

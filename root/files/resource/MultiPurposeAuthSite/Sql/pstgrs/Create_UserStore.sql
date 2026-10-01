@@ -88,6 +88,20 @@ CREATE TABLE RefreshTokenDictionary(
     CONSTRAINT PK_RefreshTokenDictionary PRIMARY KEY (Key)
 );
 
+-- sub（Subject Identifier）の対応表（#151 の段階 2）
+--   **発行した sub を記録する。** 以後はここから引くので、
+--   subject_types の既定や PPID の作り方を変えても、**発行済みの sub は動かない。**
+--   Sector : いまは client_id。**sector_identifier_uri に対応したら、その解決結果が入る**
+--            （列の意味は「Sector Identifier」。OIDC Core 8.1）
+--   Sub    : uname のとき利用者名（最大 256）、public のとき UserId、pairwise のとき PPID
+CREATE TABLE SubjectIdentifier(
+    Sector varchar(256) NOT NULL,            -- *PK, Sector Identifier（いまは client_id）
+    UserId varchar(38) NOT NULL,             -- *PK, guid
+    Sub varchar(256) NOT NULL,               -- 発行した sub
+    CreatedDate timestamp NOT NULL,
+    CONSTRAINT PK_SubjectIdentifier PRIMARY KEY (Sector, UserId)
+);
+
 CREATE TABLE CustomizedConfirmation(
     UserId varchar(38) NOT NULL,             -- PK, guid
     Value varchar(2000) NOT NULL,            -- Value
@@ -175,6 +189,9 @@ CREATE INDEX IX_UserRoles_RoleId ON UserRoles (RoleId);
 CREATE INDEX IX_UserLogins_UserId ON UserLogins (UserId);
 ---- UserClaims
 CREATE INDEX IX_UserClaims_UserId ON UserClaims (UserId);
+---- SubjectIdentifier
+---- **逆引き（sub → 利用者）用。** 同じ Sector で 2 人が同じ sub を持ってはいけないので一意
+CREATE UNIQUE INDEX IX_SubjectIdentifier_Sector_Sub ON SubjectIdentifier (Sector, Sub);
 ---- TotpTokens
 CREATE INDEX IX_TotpTokens_UserId ON TotpTokens (UserId);
 
@@ -192,3 +209,5 @@ ALTER TABLE TotpTokens ADD CONSTRAINT FK_TotpTokens_Users_UserId FOREIGN KEY(Use
 ALTER TABLE Saml2OAuth2Data ADD CONSTRAINT FK_Saml2OAuth2Data_Users_ClientID FOREIGN KEY(ClientID) REFERENCES Users (ClientID) ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE FIDO2Data ADD CONSTRAINT FK_FIDO2Data_Users_UserName FOREIGN KEY(UserName) REFERENCES Users (UserName) ON DELETE CASCADE;
+---- SubjectIdentifier
+ALTER TABLE SubjectIdentifier ADD CONSTRAINT FK_SubjectIdentifier_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;

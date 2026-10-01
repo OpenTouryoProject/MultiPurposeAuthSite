@@ -59,6 +59,47 @@ $env:MPAS_CONNSTR_SQL = '...'
 .\2_RunAllTests.ps1 -Launch -UserStoreType sql
 ```
 
+#### E2E 用の DBMS は `store/` で立てる（#250 の段階 1）
+
+**このリポジトリの `store/` が、3 方言をまとめて立てる**（SQL Server / Oracle / PostgreSQL）。
+
+```powershell
+cd store
+.\1_DockerComposeUp.bat      # DDL を流し込んでから起動する
+.\2_DockerComposeDown.bat    # -v 付き。作り直せるように残さない
+```
+
+**ポートは +1 にしてある。**
+
+| | `store/`（E2E） | 既定のポート |
+|---|---|---|
+| SQL Server | **1434** | 1433 |
+| Oracle | **1522** | 1521 |
+| PostgreSQL | **5433** | 5432 |
+
+> **なぜ +1 か。** **手動確認は
+> [LocalServicesOnDocker](https://github.com/NetDevInfraWGinOSSConsortium/LocalServicesOnDocker)
+> を使い続ける**（RP アプリなどもそちらに繋ぐ）。
+> **既定ポートを空けておくことで、E2E 用と同時に起動できる。**
+>
+> **コミット済みの `ConnectionString_*` はポートを書いていない**ので、
+> **既定ポート ＝ LocalServicesOnDocker** を指す。**手動確認はそのまま。**
+
+**E2E に渡す接続文字列。**
+
+```powershell
+$env:MPAS_CONNSTR_SQL = 'Data Source=localhost,1434;Initial Catalog=UserStore;User ID=sa;Password=<pw>;Encrypt=false;'
+$env:MPAS_CONNSTR_ODP = 'User Id=SCOTT;Password=<pw>;Data Source=localhost:1522/FREEPDB1;'
+$env:MPAS_CONNSTR_NPS = 'HOST=localhost;PORT=5433;DATABASE=UserStore;USER ID=postgres;PASSWORD=<pw>;'
+```
+
+- **DDL は `0_CopyInitSql.ps1` が repo から流し込む**（`1_DockerComposeUp.bat` が先に呼ぶ）。
+  コピー先は**生成物**で `.gitignore` 済み。**原本は `root/files/resource/.../Sql/` だけ**
+- **`store/` の DB は使い捨てにできる。** そのため、下の
+  「古いデータベースを使い回すと、列が足りない」は **E2E 側では起きない**
+  （手動側＝LocalServicesOnDocker では引き続き起こりうる）
+- **Oracle の初回起動は数分かかる**（`docker compose ps` が healthy になるまで待つ）
+
 | ストア | 接続文字列の環境変数 | 上書きされる設定キー |
 |---|---|---|
 | `sql` | `MPAS_CONNSTR_SQL` | `ConnectionString_SQL` |
@@ -92,6 +133,116 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 > **原因は未特定。** 「両ターゲットの取り合い」は確かめたが**説明になっていない**
 > （この値を書くのは `UserClaimsTests` だけで、同じクラスのケースは並列に走らない。
 > 利用者の行が重複しているわけでもない）。**落ちたら、まず 1 クラスだけで回して切り分ける。**
+>
+> **実測（#250 の段階 1。`store/` の 3 方言）** : 同じ型が**別のテストでも出た。**
+>
+> | ストア | 落ちたもの | 1 クラスだけで回すと |
+> |---|---|---|
+> | `sql` | `RT-233.2`（core） | **22/22 通る** |
+> | `ora` | `RT-230.3`（core） | **8/8 通る** |
+> | `npg` | 無し（210 成功 / 失敗 0） | － |
+>
+> **分かっていること。** **core だけ／DB ストアのときだけ／通しのときだけ／毎回 1 件だけ。**
+> **落ちるテストは毎回違う**（`RT-230.1` / `RT-230.3` / `RT-233.2`）。
+> **`mem` では出ない**（各サイトが別の入れ物のため）。**原因は依然として未特定。**
+
+#### 上流の IdP も `store/` で立てる（#250 の段階 2〜3）
+
+**ハイブリッド ID フェデレーションの「上流側」を、コンテナで 1 つ建てる。**
+**下流（連携する側）はホストで動かす**（Visual Studio / `test.ps1 -Launch`）。
+
+```powershell
+cd store
+.\3_PublishUpstream.ps1      # publish と証明書（1_DockerComposeUp.bat が先に呼ぶ）
+docker compose up -d upstream
+```
+
+| | 値 | なぜ |
+|---|---|---|
+| URL | **`https://localhost:44301`** | 雛形が上流として書いている番号 |
+| パス | **root**（`/authorize`） | `UsePathBase` を呼んでいない |
+| ストア | **`mem`** | 雛形のテスト利用者が自動で作られる。上流に DB は要らない |
+| 証明書 | **ホストの `dotnet dev-certs`** を書き出したもの | 既に信頼済み。**ブラウザが警告を出さない** |
+| ログ | `store/logs/`（`ACCESS` / `OPERATION` / `SQLTRACE`） | **ホストから読める** |
+
+**net48 版はコンテナ化しない。** 上流は 1 つあればよく、**net10.0 版で足りる**。
+
+> **パスの形が VS と違う。** 雛形の `IdFederation{Authorize,Token,UserInfo}Endpoint` は
+> **`https://localhost:44301/MultiPurposeAuthSite/...`** を指している。これは
+> **IIS Express の仮想ディレクトリ**の形で、**Kestrel（コンテナ）は root で配信する。**
+> **下流はこの 3 つを `/MultiPurposeAuthSite` 抜きに向ける必要がある**
+> （E2E は `appSettings__...` の環境変数で渡せる。4 節と同じ形）。
+>
+> **`UsePathBase` を足して VS に合わせることはしなかった。**
+> E2E の net10.0 版（`https://localhost:44300`）も**既に root で配信している**ので、
+> **root がこのアプリの Kestrel での通常の形である。**
+
+**リソースはイメージに入れず、ホストの `C:\root\files\resource` をマウントする**（読み取り専用）。
+**署名鍵（`X509` の pfx、`JwkSet.json`）を含む**ため、イメージに焼くべきではない。
+中身は [`Readme.ja.md`](Readme.ja.md) の手順で用意されているものを、そのまま使う。
+
+> **雛形の設定は 15 箇所が `C:/root/files/resource/...` である**（Windows 前提）。
+> **Linux ではドライブ文字が効かない**ので、`docker-compose.yml` が
+> **15 個すべてをマウント先（`/resource`）に振り替えている。**
+> **1 つでも漏らすと、その設定を使った瞬間に落ちる**ので、
+> `appsettings.json` を `"C:/root/files` で grep した数と突き合わせること。
+>
+> **`log4net` だけは中身（出力先）も Windows のパス**なので、
+> **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
+
+#### 上流コンテナの自己テスト（#250）
+
+**自己テストは「サーバが自分自身を WebAPI で呼ぶ」**（`client_credentials` など）。
+**コンテナの中からは、外向けのホスト名・ポートに届かない。**
+
+```
+コンテナ内   localhost:8080  : OPEN      ← 待ち受け（HTTP）
+コンテナ内   localhost:8081  : OPEN      ← 待ち受け（HTTPS）
+コンテナ内   localhost:44301 : CLOSED    ← ホスト側の公開ポート。**届かない**
+```
+
+**`docker-compose.yml` が `OAuth2ContainerizatedAuthSvrEPRootURI` に
+`http://localhost:8080` を与えている。** `Helper.GetContainerizatedAuthZServerUri` が、
+`Helper` を通る WebAPI 呼び出しの宛先をこれに差し替える（**Windows でないときだけ働く**）。
+
+> **HTTP のループバックにしてある。** HTTPS（8081）にすると、
+> **コンテナの中でホストの開発用証明書を検証できず**、証明書を信頼させる手当てが要る。
+> **自分自身への呼び出しなので、コンテナの外には出ない。**
+
+**実測（`/Home/Saml2OAuth2Starters` のボタンを叩いた結果）。**
+
+| ボタン | 結果 |
+|---|---|
+| `ClientCredentialsFlow` | **`access_token` が返る** |
+| `ResourceOwnerPasswordCredentialsFlow` | **`access_token` が返る** |
+| `JWTBearerTokenFlow` | **`access_token` が返る** |
+| `DeviceAuthZGrant` | 応答画面（`DeviceAuthZResponse`）まで進む |
+| `FAPI_CIBA_Profile` | `access_denied : The authentication device is not registered.`（**認証デバイスの登録が要る**。`RT-246.3` が Skip なのと同じ理由） |
+
+**画面遷移を伴うもの**（認可エンドポイントへブラウザが飛ぶ Authorization Code / Implicit / Hybrid / PKCE、
+および mTLS を使う FAPI2）は、**ここでは測っていない。**
+**mTLS はクライアント証明書の持ち込みが要る**ので、コンテナでは動かない。
+
+**起動できたかは、ディスカバリで確かめる。**
+
+```powershell
+Invoke-RestMethod https://localhost:44301/.well-known/openid-configuration
+Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つが出る
+```
+
+**`jwkcerts` が返れば、マウントした署名鍵まで読めている。**
+
+> **DataProtection の鍵の置き場（#251）も、ここで効いている。**
+> `appSettings__DataProtectionKeyPath=/keys` を `store/keys` にマウントしてあるので、
+> **コンテナを作り直してもサインインが切れない。**
+>
+> **実測** : サインインしてから `docker restart` / `docker compose rm -sf` + `up` を
+> それぞれ 2 回。**4 回とも `/Manage/Index` は 200**（サインインは維持された）。
+>
+> **起動を待たずに叩くと、サインイン画面に飛ばされる。** 判定の前に
+> `jwkcerts` が返るまで待つこと（決め打ちの `sleep` では足りないことがある）。
+
+**ID フェデレーションの目視・E2E は、まだこれから**（5 節「ID フェデレーション」）。
 
 ### 4 つのストアの実測（#245 の段階 3）
 
@@ -114,6 +265,12 @@ Oracle は `gvenzl/oracle-free:23-slim` で、接続先の PDB は **`FREEPDB1`*
 **実際に起きたこと。** `npg` と `ora` の `RefreshTokenDictionary` に、
 **#188 で足した 2 列（`FamilyId` / `UsedDate`）が無かった。**
 `sql` は作り直してあったので揃っていた。
+
+> **列だけでなく、表が増えることもある。**
+> **#151 の段階 2 で `SubjectIdentifier` を足した**（16 表 → **17 表**）。
+> **`store/`（E2E）は `2_DockerComposeDown.bat` → `1_DockerComposeUp.bat` で作り直せば済む。**
+> **手動確認の DB（LocalServicesOnDocker）は、自分で `Create_UserStore.sql` を流し直すこと。**
+> 表が無いと、**サインイン（`sub` の記録）で落ちる。**
 
 - 症状は **HTTP 500 が 67 件**（`42703: column "familyid" ... does not exist`）。
   **トークンが出ないので、関係の無いケースまで巻き添えで落ちる**（85 件 失敗）
@@ -271,7 +428,7 @@ TC が倒れている状態の EX は、拡張の問題なのか土台の問題�
 ### net48 版も同時に測る
 
 **`-Launch` は 2 つのサイトを立てる。** **原本のケースを、両系統に同じだけ流す。**
-実測 2026/09/29 : **413 件**（原本 208 件 × 2 − 片系統だけのもの）。**数は増え続けるので、ここに書いた値は目安である**（正確な数は実行結果と `TESTCASES.md` を見る）。
+実測 2026/10/01 : **439 件**（原本 221 件 × 2 − 片系統だけのもの）。**数は増え続けるので、ここに書いた値は目安である**（正確な数は実行結果と `TESTCASES.md` を見る）。
 
 | 対象 | 待ち受け | 立て方 |
 |---|---|---|
@@ -380,6 +537,248 @@ cd root
 | `FA-6.1`〜`FA-6.5` の **netfx** | **5 件増えて成功**（付けないと対象すら作られない） |
 | `RT-246.3` の **netfx** | **成功 → Skip**（netfx もクライアント証明書を要求するため。既知の副作用） |
 | 失敗 | **0 のまま** |
+
+### ID フェデレーション（#140 / #250 の段階 5）
+
+**E2E で駆動している**（`RT-140.4` 〜 `RT-140.7`）。**上流の IdP が要る。**
+
+| | |
+|---|---|
+| `RT-140.4` | 連携でサインインできる（**PKCE(S256)** と **`prompt=none`** を付けて要求していることも見る） |
+| `RT-140.5` | **二度目の連携でも同じ利用者**になる（連携キーが `(iss, sub)` であること） |
+| `RT-140.6` | **上流が未サインインなら成立しない**（`prompt=none` の意味） |
+| `RT-140.7` | 連携の認可応答にも **`iss`** が付く（#252 が実経路で効いていること） |
+
+**上流を先に建てておくこと。** 建っていなければ、**この 4 件（×2 ターゲット）だけが Skip される。**
+
+```powershell
+cd store
+.\3_PublishUpstream.ps1
+docker compose up -d upstream
+```
+
+> **建て忘れると、黙って Skip される。** 「全テスト OK」と出ても、**連携は測れていない。**
+> **Skip の件数**（サマリに出る）と、**Skip の理由**で気付くこと。
+
+> **上流は「作り直さないと古いまま」である。** ここが一番踏みやすい。
+> **アプリを直したら、必ず `3_PublishUpstream.ps1` と `docker compose up -d --build upstream` を回す。**
+>
+> **実測（#250 の段階 5）** : `FormPost.cshtml` を直した（#252）あと、**上流を作り直さずに**
+> `RT-140.7` を回して落ちた。**下流は新しく、上流だけが古い**という状態で、
+> **「直したはずのものが直っていない」ように見える。**
+
+**下流の設定は `test.ps1` が差し込む**（`Set-IdFederationEnv`）。
+
+| 設定 | 値 |
+|---|---|
+| `OAuth2AndOidcClientID` / `Secret` | **ターゲットごとに別のクライアント**（`redirect_uri` は 1 件に 1 つのため） |
+| `IdFederationRedirectEndpoint` | そのサイトの URL ＋ `/Account/IDFederationRedirectEndPoint` |
+
+**上流のエンドポイント（`IdFederation{Authorize,Token,UserInfo}Endpoint`）は上書きしない。**
+**構成ファイルの値が、そのままサイトの向き先である。**
+**テストはその値を読んで上流を探す**ので、上書きすると、両者がずれたときに気付けなくなる。
+
+**上流側のクライアント登録は `store/docker-compose.yml` にある**（`IdFederationE2ECore` / `IdFederationE2ENetFx`）。
+**雛形の `IdFederation` クライアントは手動確認（VS）用**で、`/MultiPurposeAuthSite` 付きのまま残してある。
+
+**上流は `preferred_username` も返す**（`docker-compose.yml` の `UserClaimsMapping`。#151 の段階 4）。
+**`subject_types` の既定が `public` になり、`sub` は利用者 ID になった**ので、
+**下流が新規に作る利用者名は、`preferred_username` から取る**
+（無ければメアドの `@` より前。`CONFIGURATION.md`「ID 連携・外部ログインで作られる利用者名」）。
+
+> **入れ忘れても連携は成立する**（鍵はメアドなので）。
+> **変わるのは、新規に作られる利用者の名前だけ**である。
+
+**#140 の段階 3 で、この経路をまとめて直した**
+（連携キーを `(iss, sub)` へ／認可応答の `iss` を検証／PKCE(S256) を追加／
+要求スコープを標準だけに／`Helper` のホスト書き換えを回避）。
+**ビルドと通し（414 件）で「他を壊していないこと」までは確かめたが、
+経路そのものは動かしていない。**
+
+**上流のコンテナは #250 の段階 2〜3 で建った**（1 節「上流の IdP も `store/` で立てる」）。
+**段階 4 で、下流の設定をそこへ向け、目視が net48 版・net10.0 版の両方で通った。**
+**段階 5 で E2E に入れた**（`RT-140.4` 〜 `RT-140.7`。5 節「ID フェデレーション」）。
+**上流を建て忘れると Skip される**ので、そこだけは人が見ること。
+
+#### 目視の手順（#250 の段階 4）
+
+1. **上流を建てる。**
+
+   ```powershell
+   cd store
+   .\3_PublishUpstream.ps1
+   docker compose up -d upstream
+   ```
+
+2. **上流でサインインしておく。** `https://localhost:44301/Account/Login`
+   **`prompt=none` で連携するので、先に上流のセッションが要る**（無いと `login_required`）。
+
+3. **下流を VS から動かす**（net48 版 / net10.0 版のどちらでも）。
+   **どちらも `https://localhost:44300/MultiPurposeAuthSite` で待ち受ける**ので、
+   **上流に登録済みの `IdFederation` クライアントの `redirect_uri_code` と一致する。**
+
+4. **下流の `/Account/Login` で「ID連携でサインイン」を押す。**
+
+**向け先は雛形に入れてある**（`_appsettings.json` / `_app.config`）。**書き換えは要らない。**
+
+> **Cookie の名前を、上流と下流で分けてある**（#250 の段階 4）。
+> **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+> `localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有する。**
+> 名前が同じだと、次の 2 つが起きる（**どちらも実測した**）。
+>
+> | 同名の Cookie | 症状 |
+> |---|---|
+> | セッション（`MultiPurposeAuthSiteCoreSession`） | **上流のサインインが下流のセッションを消す** → `state` / `nonce` が読めず「エラー」画面 |
+> | 認証（`.AspNetCore.Identity.Application`） | **後にサインインした側が相手を蹴り出す** → 連携は正常終了するのに**下流がサインイン状態にならない** |
+>
+> **`docker-compose.yml` が、上流に別名と接頭辞を与えている**（#250 の段階 4 / #255）。
+> **雛形の既定は空＝従来どおり**なので、**1 サイトだけの配備には影響しない。**
+>
+> **接頭辞は、名前を決められるものすべてに掛かる**（実測）。
+>
+> ```
+> .upstream_MultiPurposeAuthSite                     認証（サインイン）
+> upstream_Identity.External                         外部ログイン・ID 連携の途中
+> upstream_MultiPurposeAuthSiteSession               セッション
+> upstream_auth_time / upstream_re_auth_at           max_age の判定
+> .upstream_AspNetCore.Mvc.CookieTempDataProvider    画面のメッセージ
+> ```
+>
+> **先頭が `.` のものは、その後ろに接頭辞が入る**（`.` は host-only を表す慣習なので潰さない）。
+>
+> **サインインの Cookie だけでは足りない。** **外部ログイン（`Identity.External`）は
+> ID フェデレーションの途中で使う**ので、ここが混ざると連携が壊れる。
+> `auth_time` は**再認証の要否**、TempData は**画面のメッセージ**に効く。
+>
+> **分けられないものが 1 つ残っている。**
+>
+> | Cookie | いまの扱い |
+> |---|---|
+> | `SessionTimeOut` | **Open棟梁 の定数**（`FxHttpCookieIndex`）。雛形は `FxSessionTimeOutCheck` を `off` にしており、**読まれないので無害**。分けるなら Open棟梁 側の対応が要る |
+>
+> **net48 版は、そもそも同名になりにくい**（実測）。
+> セッションは `mas_session`、AntiForgery は `__RequestVerificationToken` で、
+> **net10.0 版の名前と重ならない。TempData は Cookie に載らない**（セッションに載る）。
+> **ただし net48 版どうしを同じホストに立てると、`__RequestVerificationToken` が衝突する。**
+> **いまの構成では起きない**（上流は net10.0 版のコンテナ 1 つ）。
+>
+> **net48 版の下流では、もともと起きない**（Owin の既定名が `.AspNet.ApplicationCookie` で、
+> net10.0 版と重ならないため）。**net10.0 版の下流でだけ出る。**
+>
+> **上流のコンテナを作り直す前に触っていたブラウザには、古い Cookie が残る。**
+> 直したあとも直らないときは、**`localhost` の Cookie を消してから試すこと。**
+
+| 設定 | 値 |
+|---|---|
+| `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` |
+| `IdFederationTokenEndpoint` | `https://localhost:44301/token` |
+| `IdFederationUserInfoEndpoint` | `https://localhost:44301/userinfo` |
+| `IdFederationRedirectEndpoint` | `https://localhost:44300/MultiPurposeAuthSite/Account/IDFederationRedirectEndPoint` |
+
+> **`/MultiPurposeAuthSite` を外した**（#250 の段階 4）。**コンテナは root で配信する。**
+> 付いていたのは IIS Express の仮想ディレクトリの形で、**上流の実体が無かった。**
+
+#### 上流側は、下流を通さずに測ってある（#250 の段階 4）
+
+**下流がすることを、そのまま上流に対して行って確かめた。**
+
+| 手順 | 結果 |
+|---|---|
+| 上流でサインイン | OK |
+| `/authorize`（`prompt=none` / PKCE S256 / `response_mode=form_post`） | **200。`code` と `state` が自動送信フォームで返る** |
+| `/token`（`code` ＋ `code_verifier` ＋ Basic 認証） | **`access_token` / `id_token` / `refresh_token`** |
+| `id_token` の `iss` / `aud` / `nonce` | `https://ssoauth.opentouryo.com` / `06d2…`（一致）/ 一致 |
+| `/userinfo` の `sub` | **`id_token` の `sub` と一致**（OIDC Core §5.3.2） |
+| `/userinfo` の `email_verified` | **`true`**（C-23 の判定を通る） |
+| `code_verifier` を外した `/token` | **400 で拒否**（C-22 の守り） |
+
+**残っているのは「下流がこれを受け取って、利用者を作る／結び付ける」ところだけである。**
+
+#### 失敗したら、下流の OPERATION ログを見る（#253）
+
+**`Error` 画面が出たときの理由は、すべて OPERATION ログに出る**（`C:\root\files\resource\Log\OPERATION.<日付>.log`）。
+
+```
+The state of the authorization response did not match the session. (response: len=32, session: (empty))
+The id_token of the ID federation was not accepted. (verified: True, nonce matched: False)
+The token response of the ID federation had no id_token.
+The iss of the authorization response did not match the expected issuer.
+The sub of /userinfo did not match the sub of the id_token.
+The id_token had no iss claim.
+The ID federation redirect endpoint is locked down. (IsLockedDownTestEndpoints)
+The ID federation did not complete. (the error view was returned)
+```
+
+**最後の 1 行は、経路の終わりを示す受け皿である。**
+**それだけが出ていたら、利用者の作成か外部ログインの追加に失敗している**（そこは `AddErrors` するだけで画面に出ない）。
+
+> **`state` / `nonce` の値そのものは出さない**（`(empty)` か `len=<長さ>` だけ）。
+> **切り分けに要るのはそこまでである。**
+
+> **目視で 2 つ見つけた**（#250 の段階 4）。**どちらも E2E では出なかった。**
+>
+> | 見つけたもの | 出る側 |
+> |---|---|
+> | **Cookie の名前が上流と下流で同じ**（認証 / セッション） | **net10.0 版の下流だけ**（net48 版は Owin の既定名が違う） |
+> | **`OAuth2AndOIDCClient.HttpClient` が初期化されていない** | **net48 版だけ**（net10.0 版は `Program.Main` で入れている） |
+>
+> **後者は #140 の段階 3 の副作用である。** ID フェデレーションが `Helper` を通さなくなり、
+> **`Helper` のコンストラクタが設定していた `HttpClient` が入らなくなった**（`/token` で null 参照）。
+> **`Global.asax.cs` の `Application_Start` で、net10.0 版と同じように入れる**ようにした。
+>
+> **この 2 つは、E2E に入れていれば見つかった。** 段階 5 の理由がここにある。
+
+> **`sub` は利用者 ID（GUID）である。** 上流の `IdFederation` クライアントに
+> `subject_types` の登録が無く、**既定（`public`）に従うため**（#151 の段階 4。
+> **それより前は利用者名＝メアドが入っていた**）。
+> **連携キー `(iss, sub)` はこの値で作られる。**
+>
+> **既定を変えると、既存の連携は鍵が合わなくなる。**
+> **その場合はメアドで引き直して、新しい鍵を足す**
+> （下流の `IDFederationRedirectEndPoint`。**上流が `email_verified` を言っている必要がある**）。
+> **つまり張り直しは自動で起きる**が、**上流が検証済みと言わない場合は結び付けない。**
+
+> **`id_token` には `email` / `email_verified` が入らない。**
+> 下流は **`/userinfo` から読む**ので、C-23 の判定はそちらで通る。
+
+> **上流はコンテナ 1 つで、下流は 2 つとも E2E が立てるサイトである。**
+> `-Launch` が立てる 2 サイト（net48 / net10.0）を、**どちらも同じ上流へ向ける。**
+>
+> **Cookie は 1 つの入れ物で扱う**（`IdPClient` の `CookieContainer`。ブラウザと同じ）。
+> **上流と下流が同じホストでも成り立つのは、Cookie 名を分けたからである**（#250 の段階 4）。
+
+### `subject_types` の既定（#151 の段階 4）
+
+**既定は `public` である**（#151 の段階 4 で変え、段階 5 で独自値を廃止した）。
+E2E で 2 件測っている。
+
+| | |
+|---|---|
+| `RT-151.1` | **`subject_types` を書かないクライアントの `sub` が、利用者名ではなく利用者 ID**（GUID）である |
+| `RT-151.2` | **`public` の `sub` は、クライアントが違っても同じ**（`pairwise` との対照） |
+
+**使うのは `TestClient_6` / `TestClient_7`**（`test.ps1 -Launch` が差し込む。**構成ファイルには無い**）。
+
+> **既に使った `client_id` では、既定を測れない。**
+> **発行した `sub` は対応表に記録される**ので（#151 の段階 2）、
+> **設定を変えても、その組み合わせでは以前の値が返る**（それが段階 2 の目的である）。
+> **新しい `client_id` を使うと、表に行が無いので、新しい既定で作られる。**
+>
+> **だから、既定の判定は「新しい client_id でだけ」行うこと。**
+> `TestClient` や `MVC_Sample` で `sub` の値を決め打ちすると、
+> **`mem` では新しい既定、使い回した DB では以前の値**になり、ストアによって結果が変わる。
+
+**`sub` の値そのもので「誰か」を判定しているテストは、すべて直した**（段階 4）。
+
+| 直したところ | いまの判定 |
+|---|---|
+| `TC-6.2`（id_token の必須クレーム） | **`sub` が `/userinfo` の `sub` と一致する**（OIDC Core §5.3.2） |
+| `TC-6.5` / `RT-196.7`（`/userinfo`） | **`sub` が `id_token` の `sub` と一致する** |
+| `EX-4.3`（Device AuthZ） | **`/userinfo` の `email`** が承認した利用者である |
+| `TC-4.1`（ROPC） | トークンの **`email`** が認証した利用者である |
+
+> **`sub` は「同じ利用者・同じ RP なら同じ値」であることに意味がある。**
+> **値の形は、配備（既定を変える前か後か）によって違う。**
 
 ### 有効期限（`RT-188`）と `-ShortLifetimes`
 

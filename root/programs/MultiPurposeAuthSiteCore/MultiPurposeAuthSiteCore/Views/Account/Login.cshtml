@@ -48,26 +48,16 @@
                 @Html.ValidationSummary(true, "", new { @class = "text-danger" })
                 @Html.HiddenFor(m => m.ReturnUrl)
 
-                if (Config.RequireUniqueEmail)
-                {
-                    <div class="form-group">
-                        @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
-                        <div class="col-md-10">
-                            @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
-                            @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
-                        </div>
+                @* **「利用者名またはメアド」の入力**（#151 の段階 3）。
+                   **欄の名前（Email）は変えていない。** ビュー・リソース・E2E・ID 連携の
+                   login_hint に波及するため、名前の整理は後の段階に回す。 *@
+                <div class="form-group">
+                    @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
+                    <div class="col-md-10">
+                        @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+                        @Html.ValidationMessageFor(m => m.Email, "", new { @class = "text-danger" })
                     </div>
-                }
-                else
-                {
-                    <div class="form-group">
-                        @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
-                        <div class="col-md-10">
-                            @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
-                            @Html.ValidationMessageFor(m => m.Name, "", new { @class = "text-danger" })
-                        </div>
-                    </div>
-                }
+                </div>
 
                 <div class="form-group">
                     @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })

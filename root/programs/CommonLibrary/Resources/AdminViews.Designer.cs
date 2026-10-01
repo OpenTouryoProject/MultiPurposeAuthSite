@@ -392,5 +392,14 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("UsersAdminUserName", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   E-mail に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string UsersAdminEmail {
+            get {
+                return ResourceManager.GetString("UsersAdminEmail", resourceCulture);
+            }
+        }
     }
 }

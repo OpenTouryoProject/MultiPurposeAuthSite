@@ -228,6 +228,9 @@
   <data name="UnstructuredData2" xml:space="preserve">
     <value>UnstructuredData2</value>
   </data>
+  <data name="UserNameOrEmail" xml:space="preserve">
+    <value>User name or e-mail address</value>
+  </data>
   <data name="UserName" xml:space="preserve">
     <value>User name</value>
   </data>

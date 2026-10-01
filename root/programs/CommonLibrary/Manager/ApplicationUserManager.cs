@@ -74,9 +74,13 @@ namespace MultiPurposeAuthSite.Manager
             // ユーザ名のための検証ロジックを設定（メアド）
             manager.UserValidator = new UserValidator<ApplicationUser>(manager)
             {
-                // ユーザ名は、E-mail
                 AllowOnlyAlphanumericUserNames = Config.AllowOnlyAlphanumericUserNames,
-                RequireUniqueEmail = Config.RequireUniqueEmail
+
+                // **メアドは常に一意**（#151 の段階 3）。
+                //   **利用者名とメアドの両方でサインインできる**ので、
+                //   **メアドが一意でないと FindByEmailAsync が成り立たない。**
+                //   以前は RequireUniqueEmail の設定で切り替えていた（その設定は落とした）。
+                RequireUniqueEmail = true
             };
 
             #endregion

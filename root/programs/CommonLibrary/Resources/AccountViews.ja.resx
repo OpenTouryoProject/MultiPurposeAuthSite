@@ -138,6 +138,9 @@
   <data name="EmailConfirmationTitle" xml:space="preserve">
     <value>e-mailアドレスが確認されました。</value>
   </data>
+  <data name="ExternalLoginNeedsVerifiedEmail" xml:space="preserve">
+    <value>この外部サービスがメール アドレスを検証済みと示さなかったため、既存のアカウントには結び付けませんでした。ローカル アカウントでサインインし、[ログインの管理] から追加してください。</value>
+  </data>
   <data name="ExternalLoginFailureH3" xml:space="preserve">
     <value>サービスによるログインに失敗しました。</value>
   </data>

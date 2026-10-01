@@ -18,16 +18,20 @@
 //*  2017/04/24  西野 大介         新規
 //*  2026/09/11  玄人 幸道         OAuth2 / OIDC の API の 401 を、ログイン画面への 302 に変えない（#196）
 //*  2026/09/11  玄人 幸道         401 を 302 に変えない対象を、Web API に登録済みのルートから判定する（一覧を二重に持たない）
+//*  2026/09/30  玄人 幸道         Google の email_verified をクレームに写す（#140 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Entity;
 using MultiPurposeAuthSite.Manager;
 using MultiPurposeAuthSite.Data;
+using MultiPurposeAuthSite.Log;
 using MultiPurposeAuthSite.Network;
 using MultiPurposeAuthSite.TokenProviders;
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -44,6 +48,7 @@ using Microsoft.Owin.Security.Cookies;
 using Microsoft.Owin.Security.OAuth;
 using Microsoft.Owin.Security.MicrosoftAccount;
 using Microsoft.Owin.Security.Google;
+using Newtonsoft.Json.Linq;
 using Microsoft.Owin.Security.Facebook;
 using Microsoft.Owin.Security.Twitter;
 
@@ -168,7 +173,7 @@ namespace MultiPurposeAuthSite
             System.Action<CookieApplyRedirectContext> defaultApplyRedirect =
                 new CookieAuthenticationProvider().OnApplyRedirect;
 
-            app.UseCookieAuthentication(new CookieAuthenticationOptions
+            CookieAuthenticationOptions cookieOptions = new CookieAuthenticationOptions
             {
                 AuthenticationType = DefaultAuthenticationTypes.ApplicationCookie,  // 認証タイプを設定する。
                 LoginPath = new PathString("/Account/Login"),                       // ログイン画面のパスを設定する。
@@ -220,7 +225,36 @@ namespace MultiPurposeAuthSite
                 // Cookie認証チケットの有効期限を半分過ぎた祭の要求で再発行(Sliding)される。
                 SlidingExpiration = Config.AuthCookieSlidingExpiration,
 
-            });
+            };
+
+            // **Cookie の名前を設定で変えられるようにする**（#250 の段階 4）。
+            //   **空なら既定のまま**（Owin の `.AspNet.ApplicationCookie`）。
+            //   **同じホストに 2 つ立てるときだけ指定する**
+            //   （Cookie のスコープにポートは入らないため、
+            //     上流と下流を同じホストで動かすと、同名の Cookie が奪い合いになる）。
+            if (!string.IsNullOrEmpty(Config.AuthCookieName))
+            {
+                cookieOptions.CookieName = Config.AuthCookieName;
+            }
+
+            // **接頭辞を掛ける**（#255）。**名前を決めた後に付ける。**
+            //   **先頭の `.` の後ろに入る**ので、`.AspNet.ApplicationCookie` は
+            //   `.upstream_AspNet.ApplicationCookie` になる。
+            //
+            //   **Owin は UseCookieAuthentication の中で既定名を決める**ため、
+            //   **ここではまだ CookieName が null のことがある**（実測。null を戻すと
+            //   ArgumentNullException で起動できない）。
+            //   **null のときは、枠組みと同じ規則で組み立ててから**掛ける。
+            if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
+            {
+                string baseCookieName = string.IsNullOrEmpty(cookieOptions.CookieName)
+                    ? CookieAuthenticationDefaults.CookiePrefix + cookieOptions.AuthenticationType
+                    : cookieOptions.CookieName;
+
+                cookieOptions.CookieName = Config.PrefixCookieName(baseCookieName);
+            }
+
+            app.UseCookieAuthentication(cookieOptions);
 
             #endregion
 
@@ -303,7 +337,81 @@ namespace MultiPurposeAuthSite
                         UseProxy = Config.UseInternetProxy
                     },
                     ClientId = Config.GoogleAuthenticationClientId,
-                    ClientSecret = Config.GoogleAuthenticationClientSecret
+                    ClientSecret = Config.GoogleAuthenticationClientSecret,
+
+                    // **email_verified をクレームに写す**（#140 の段階 1）。
+                    //   Google は userinfo で email_verified を返すが、
+                    //   **Owin の Google プロバイダはクレームにしない**ので、ここで足す。
+                    //   これが無いと、**Google はメアドを検証しているのに**
+                    //   「言っていない」扱いになり、既存アカウントへのリンクが拒否される
+                    //   （判定は Extensions.Sts.AccountLink）。
+                    //
+                    //   **他の 3 つ（Microsoft / Facebook / Twitter）には足さない。**
+                    //     Microsoft : Graph の /me に相当するクレームが無い
+                    //     Facebook  : verified はアカウントの検証で、メアドの検証ではない
+                    //     Twitter   : メアド自体が返らないのが普通
+                    Provider = new GoogleOAuth2AuthenticationProvider
+                    {
+                        OnAuthenticated = (context) =>
+                        {
+                            // **ここで落ちてもサインインを止めない**（#140 の段階 1）。
+                            //   このクレームは**付加情報**であり、**無ければ「検証済みでない」として
+                            //   扱われるだけ**（判定は Extensions.Sts.AccountLink）。
+                            //   **安全側に倒れる**ので、例外でサインイン全体を壊す理由が無い。
+                            //   **握り潰さず、必ずログに残す。**
+                            try
+                            {
+                                // **綴りが 2 つある。**
+                                //   OIDC の userinfo（oauth2/v3）は `email_verified`、
+                                //   Google 独自の userinfo（oauth2/v2）は **`verified_email`** を返す。
+                                //   **Owin の実装がどちらを叩くかに依存させない**ため、両方を見る
+                                //   （net10.0 の ClaimActions は `email_verified` で足りている）。
+                                //
+                                //   **JToken を string にキャストしない。**
+                                //   値は JSON の真偽値で来るため、キャストは型によって例外になりうる。
+                                //   ToString() で文字列にする
+                                //   （"True" / "true" のどちらでも、判定側の bool.TryParse が読む）。
+                                JToken emailVerifiedToken = null;
+
+                                if (context.User != null)
+                                {
+                                    emailVerifiedToken =
+                                        context.User[OAuth2AndOIDCConst.email_verified]
+                                        ?? context.User["verified_email"];
+                                }
+
+                                if (emailVerifiedToken != null)
+                                {
+                                    string emailVerified = emailVerifiedToken.ToString();
+
+                                    if (!string.IsNullOrEmpty(emailVerified))
+                                    {
+                                        context.Identity.AddClaim(new Claim(
+                                            OAuth2AndOIDCConst.email_verified, emailVerified));
+                                    }
+                                }
+                                else
+                                {
+                                    // **何が返っているかが分からないと、次の一手が決められない。**
+                                    //   **キー名だけ**を出す（値は出さない。個人情報を書かないため）。
+                                    Logging.MyOperationTrace(
+                                        "Google returned neither email_verified nor verified_email. "
+                                        + "Keys = ["
+                                        + ((context.User == null) ? "(User is null)"
+                                            : string.Join(", ", context.User.Properties()
+                                                .Select(x => x.Name)))
+                                        + "]. The account will not be linked by e-mail address.");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Logging.MyOperationTrace(
+                                    "Failed to copy email_verified from Google: " + ex.ToString());
+                            }
+
+                            return Task.FromResult(0);
+                        }
+                    }
                 };
                 // スコープを追加する。
                 options.Scope.Add(OAuth2AndOIDCConst.Scope_Openid);
@@ -318,76 +426,88 @@ namespace MultiPurposeAuthSite
 
             #region FacebookAuthentication
 
-            if (Config.FacebookAuthentication)
-            {
-                FacebookAuthenticationOptions options = new FacebookAuthenticationOptions
-                {
-                    BackchannelHttpHandler = new WebRequestHandler()
-                    {
-                        Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = Config.UseInternetProxy
-                    },
-                    AppId = Config.FacebookAuthenticationClientId,
-                    AppSecret = Config.FacebookAuthenticationClientSecret,
-                    Provider = new FacebookAuthenticationProvider
-                    {
-                        OnAuthenticated = context =>
-                        {
-                            context.Identity.AddClaim(new System.Security.Claims.Claim("FacebookAccessToken", context.AccessToken));
-                            return Task.FromResult(true);
-                        }
-                    }
-                };
-                // スコープを追加する。
-                options.Scope.Add(OAuth2AndOIDCConst.Scope_Email);
+            // **Facebook / Twitter は取り下げた**（#249）。
+            //   **動かないからではなく、維持コストが便益に見合わないため。**
+            //   ・**この 2 つだけ、メアドを取るための専用コードを抱えていた**
+            //     （Facebook は Graph の /me、Twitter は api.twitter.com/1.1）。
+            //     Google / Microsoft Account は ClientId / ClientSecret を渡すだけで済む
+            //   ・両アプリに二重にあり、**外部 API が変わるたびに追随の判断が要る**
+            //   ・#140 の段階 1（C-23）以降、**検証済みのメアドを示せないので、
+            //     既存アカウントへの自動リンクができない側に固定される**
+            //
+            //   **削除せずコメントアウトにしてある**（WebAuthn / MS Passport と同じ扱い）。
+            //   判断が変われば戻せるように、**パッケージ参照と設定キーも残してある。**
+            //if (Config.FacebookAuthentication)
+            //{
+            //    FacebookAuthenticationOptions options = new FacebookAuthenticationOptions
+            //    {
+            //        BackchannelHttpHandler = new WebRequestHandler()
+            //        {
+            //            Proxy = CreateProxy.GetInternetProxy(),
+            //            UseProxy = Config.UseInternetProxy
+            //        },
+            //        AppId = Config.FacebookAuthenticationClientId,
+            //        AppSecret = Config.FacebookAuthenticationClientSecret,
+            //        Provider = new FacebookAuthenticationProvider
+            //        {
+            //            OnAuthenticated = context =>
+            //            {
+            //                context.Identity.AddClaim(new System.Security.Claims.Claim("FacebookAccessToken", context.AccessToken));
+            //                return Task.FromResult(true);
+            //            }
+            //        }
+            //    };
+            //    // スコープを追加する。
+            //    options.Scope.Add(OAuth2AndOIDCConst.Scope_Email);
 
-                // FacebookAuthenticationの有効化
-                app.UseFacebookAuthentication(options);
-            }
+            //    // FacebookAuthenticationの有効化
+            //    app.UseFacebookAuthentication(options);
+            //}
 
             #endregion
 
             #region TwitterAuthentication
 
-            if (Config.TwitterAuthentication)
-            {
-                TwitterAuthenticationOptions options = new TwitterAuthenticationOptions
-                {
-                    BackchannelHttpHandler = new WebRequestHandler()
-                    {
-                        Proxy = CreateProxy.GetInternetProxy(),
-                        UseProxy = Config.UseInternetProxy
-                    },
-                    ConsumerKey = Config.TwitterAuthenticationClientId,
-                    ConsumerSecret = Config.TwitterAuthenticationClientSecret,
+            // **取り下げた**（#249。理由は上の FacebookAuthentication の節）。
+            //if (Config.TwitterAuthentication)
+            //{
+            //    TwitterAuthenticationOptions options = new TwitterAuthenticationOptions
+            //    {
+            //        BackchannelHttpHandler = new WebRequestHandler()
+            //        {
+            //            Proxy = CreateProxy.GetInternetProxy(),
+            //            UseProxy = Config.UseInternetProxy
+            //        },
+            //        ConsumerKey = Config.TwitterAuthenticationClientId,
+            //        ConsumerSecret = Config.TwitterAuthenticationClientSecret,
 
-                    Provider = new TwitterAuthenticationProvider
-                    {
-                        OnAuthenticated = (context) =>
-                        {
-                            context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_token", context.AccessToken));
-                            context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_secret", context.AccessTokenSecret));
-                            return Task.FromResult(0);
-                        }
-                    },
+            //        Provider = new TwitterAuthenticationProvider
+            //        {
+            //            OnAuthenticated = (context) =>
+            //            {
+            //                context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_token", context.AccessToken));
+            //                context.Identity.AddClaim(new System.Security.Claims.Claim("urn:twitter:access_secret", context.AccessTokenSecret));
+            //                return Task.FromResult(0);
+            //            }
+            //        },
 
-                    BackchannelCertificateValidator = new CertificateSubjectKeyIdentifierValidator(
-                        new string[] {
-                            "A5EF0B11CEC04103A34A659048B21CE0572D7D47",  // VeriSign Class 3 Secure Server CA - G2
-                            "0D445C165344C1827E1D20AB25F40163D8BE79A5",  // VeriSign Class 3 Secure Server CA - G3
-                            "7FD365A7C2DDECBBF03009F34339FA02AF333133",  // VeriSign Class 3 Public Primary Certification Authority - G5
-                            "39A55D933676616E73A761DFA16A7E59CDE66FAD",  // Symantec Class 3 Secure Server CA - G4
-                            "5168FF90AF0207753CCCD9656462A212B859723B",  // DigiCert SHA2 High Assurance Server C‎A 
-                            "B13EC36903F8BF4701D498261A0802EF63642BC3" } // DigiCert High Assurance EV Root CA
-                            ),
-                };
+            //        BackchannelCertificateValidator = new CertificateSubjectKeyIdentifierValidator(
+            //            new string[] {
+            //                "A5EF0B11CEC04103A34A659048B21CE0572D7D47",  // VeriSign Class 3 Secure Server CA - G2
+            //                "0D445C165344C1827E1D20AB25F40163D8BE79A5",  // VeriSign Class 3 Secure Server CA - G3
+            //                "7FD365A7C2DDECBBF03009F34339FA02AF333133",  // VeriSign Class 3 Public Primary Certification Authority - G5
+            //                "39A55D933676616E73A761DFA16A7E59CDE66FAD",  // Symantec Class 3 Secure Server CA - G4
+            //                "5168FF90AF0207753CCCD9656462A212B859723B",  // DigiCert SHA2 High Assurance Server C‎A
+            //                "B13EC36903F8BF4701D498261A0802EF63642BC3" } // DigiCert High Assurance EV Root CA
+            //                ),
+            //    };
 
-                // スコープを追加する。
-                // ・・・
+            //    // スコープを追加する。
+            //    // ・・・
 
-                // TwitterAuthenticationの有効化
-                app.UseTwitterAuthentication(options);
-            }
+            //    // TwitterAuthenticationの有効化
+            //    app.UseTwitterAuthentication(options);
+            //}
 
             #endregion
 

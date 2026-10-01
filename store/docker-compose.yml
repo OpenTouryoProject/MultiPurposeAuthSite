@@ -1,6 +1,26 @@
-version: '3.4'
+# ##################################################################################################
+# E2E テスト用の UserStore（SQL Server / Oracle / PostgreSQL）
+#
+#   **これは E2E 専用である。** 手動確認は LocalServicesOnDocker を使う。
+#   そのため **ポートを +1 にしてある**（同時に起動できるように）。
+#
+#     SQL Server : 1434 → 1433    （LocalServicesOnDocker は 1433）
+#     Oracle     : 1522 → 1521    （同 1521）
+#     PostgreSQL : 5433 → 5432    （同 5432）
+#
+#   **接続文字列は、設定ファイルではなく環境変数で E2E に渡す**（#250 の段階 1）。
+#   コミット済みの ConnectionString_* はポートを書いていないので**既定ポート**を指し、
+#   そのまま LocalServicesOnDocker（手動確認）を向く。
+#
+#   使い方は root/TESTING.md 1 節「ストアを切り替える」を見ること。
+#
+#   **DDL は 0_CopyInitSql.ps1 が repo から流し込む。** 起動時に各コンテナが実行する。
+#   （1_DockerComposeUp.bat が、先に 0_CopyInitSql.ps1 を呼ぶ）
+# ##################################################################################################
 
 services:
+
+  # ------------------------------------------------------------------ PostgreSQL
   postgres:
     image: postgres
     restart: always
@@ -9,15 +29,16 @@ services:
       - POSTGRES_PASSWORD=seigi@123
       - POSTGRES_DB=UserStore
     ports:
-      - 5432:5432
+      - 5433:5432
     volumes:
+      # **データは持たせない。** E2E 用なので、作り直せる方がよい。
       #- ./postgres/data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
-    networks:
-      - common_link
 
+  # ------------------------------------------------------------------ SQL Server
   sqlserver:
-    image: microsoft/mssql-server-linux:latest
+    # **イメージ名を直した**（microsoft/mssql-server-linux は廃止。#250 の段階 1）
+    image: mcr.microsoft.com/mssql/server:2022-latest
     restart: always
     command: "sh -c '/init/0_start-up.sh & /opt/mssql/bin/sqlservr;'"
     environment:
@@ -27,13 +48,174 @@ services:
       - MSSQL_LCID=1041
       - MSSQL_COLLATION=Japanese_CI_AS
     ports:
-      - 1433:1433
+      - 1434:1433
     volumes:
       #- ./sqlserver/mssql-db:/var/opt/mssql
       - ./sqlserver/init:/init
-    networks:
-      - common_link
 
-networks:
-  common_link:
-    external: true
+  # ------------------------------------------------------------------ Oracle
+  #   **#250 の段階 1 で追加した。** これが無かったため、3 方言の通し（#245 の段階 3）は
+  #   LocalServicesOnDocker（別リポジトリ）で測っていた。
+  #
+  #   **初回起動は数分かかる**（データベースの作成）。健全性を見てから使うこと。
+  #   PDB は FREEPDB1（XEPDB1 ではない）。
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    restart: always
+    environment:
+      - ORACLE_PASSWORD=seigi@123
+      # **APP_USER で SCOTT を作らせる**（DDL は SCOTT のスキーマに作る）
+      - APP_USER=SCOTT
+      - APP_USER_PASSWORD=tiger
+    ports:
+      - 1522:1521
+    volumes:
+      - ./oracle/init:/container-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+
+  # ------------------------------------------------------------------ 上流の IdP（#250 の段階 2〜3）
+  #   **ハイブリッド IdP の上流側**だけを動かす。
+  #   **下流（連携する側）はホストで動かす**（Visual Studio / test.ps1 -Launch）。
+  #
+  #   **PathBase は無い**ので root で配信する（https://localhost:44301/authorize など）。
+  #   Visual Studio の仮想ディレクトリ（/MultiPurposeAuthSite）とは形が違う。
+  #
+  #   **UserStoreType は mem。** 上流は「サインインできる IdP が 1 つあればよい」ので、
+  #   **雛形のテスト利用者が自動で作られる mem** が一番手間が無い
+  #   （DB を使う上流は別途検討）。
+  #
+  #   **44301 は、雛形がもともと上流として書いている番号**である
+  #   （IdFederation{Authorize,Token,UserInfo}Endpoint が https://localhost:44301/... を指す）。
+  upstream:
+    build: ./app
+    restart: always
+    ports:
+      - 44301:8081
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTPS_PORTS=8081
+      # **ホストの開発用証明書を書き出したもの**（3_PublishUpstream.ps1 が用意する）。
+      #   既に信頼されているので、**自己テストでブラウザが警告を出さない。**
+      - Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+      - Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
+
+      # ここから汎用認証サイト側（設定は __ 区切りで IConfiguration に載る）
+      - appSettings__UserStoreType=mem
+      # **自分自身の URL。** 発行する絶対 URL（issuer 以外）はここから作られる
+      - appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:44301
+      # **DataProtection の鍵をマウントに置く**（#251）。作り直しでサインインが切れないように
+      - appSettings__DataProtectionKeyPath=/keys
+      # **自己テストの口は開けておく**（上流でサインインを確かめるため）
+      - appSettings__IsLockedDownTestEndpoints=false
+
+      # **自分自身を呼ぶときの宛先**（#250 の自己テスト）。
+      #   **自己テストは「サーバが自分自身を WebAPI で呼ぶ」**（client_credentials など）。
+      #   宛先は OAuth2AuthorizationServerEndpointsRootURI（= https://localhost:44301）から
+      #   組み立てられるが、**コンテナの中から localhost:44301 には届かない**
+      #   （待ち受けているのは 8080 / 8081。44301 はホスト側の公開ポート。実測で CLOSED）。
+      #
+      #   **Helper.GetContainerizatedAuthZServerUri が、この設定で宛先を差し替える**
+      #   （Windows でないときだけ働く）。
+      #
+      #   **HTTP のループバックにする。** HTTPS（8081）にすると、
+      #   **コンテナの中でホストの開発用証明書を検証できず**、証明書を信頼させる手当てが要る。
+      #   **自分自身への呼び出しなので、コンテナの外には出ない。**
+      - appSettings__OAuth2ContainerizatedAuthSvrEPRootURI=http://localhost:8080
+
+      # **セッション Cookie の名前を下流と分ける**（#250 の段階 4）。
+      #   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）。
+      #   そのため localhost:44300（下流）と localhost:44301（上流）は **Cookie を共有する。**
+      #   名前が同じだと、**上流でサインインしたときに下流のセッションが消え**、
+      #   **下流が state / nonce を読めなくなって ID 連携が「エラー」になる**（実測）。
+      - sessionState__SessionCookieName=MultiPurposeAuthSiteSession
+
+      # **認証 Cookie の名前も分ける**（#250 の段階 4）。
+      #   既定名（.AspNetCore.Identity.Application）が同じだと、
+      #   **上流でサインインした瞬間に下流が蹴り出される**（実測）。
+      #   **ID フェデレーションは「上流にサインイン → 下流がサインイン」なので、
+      #   この経路を通るたびに必ずどちらかが切れる。**
+      #
+      #   **「上流」は名前ではなく、下の接頭辞で表す**（#255）。
+      #   ここは **このアプリの Cookie であること**だけを示す。
+      - appSettings__AuthCookieName=.MultiPurposeAuthSite
+
+      # **名前を決められる Cookie すべてに、接頭辞を掛ける**（#255）。
+      #   **先頭が . のものは、その後ろに入る**ので、見た目が揃う。
+      #
+      #     .upstream_MultiPurposeAuthSite                    認証
+      #     upstream_MultiPurposeAuthSiteSession              セッション
+      #     upstream_auth_time / upstream_re_auth_at          max_age の判定
+      #     .upstream_AspNetCore.Mvc.CookieTempDataProvider   画面のメッセージ
+      #
+      #   **auth_time が混ざると再認証の要否を誤り、TempData が混ざると
+      #   画面のメッセージが出なくなる**（どちらもサインインは妨げない）。
+      - appSettings__CookieNamePrefix=upstream_
+
+      # ---------------------------------------------------------------- E2E 用のクライアント登録
+      #   **ID フェデレーションを E2E で駆動するために要る**（#250 の段階 5）。
+      #
+      #   **redirect_uri はクライアント 1 件に 1 つ**なので、
+      #   **下流 2 つ（net10.0 は 44300 / net48 は 44302）＝ クライアント 2 件**になる。
+      #
+      #   **E2E の下流は root で配信する**（test.ps1 が立てる Kestrel と IIS Express）。
+      #   雛形に元から在る IdFederation クライアントは
+      #   `/MultiPurposeAuthSite/...` 付きで、**手動確認（VS）用**である。こちらは消さない。
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__client_secret=E2E_dY3kQ8pR6tW1vZ4xA7bN0mS5jL2hG9fC
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_code=https://localhost:44300/Account/IDFederationRedirectEndPoint
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000c1__client_name=IdFederationE2ECore
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_secret=E2E_qP7wE2rT5yU8iO1pA4sD6fG9hJ3kL0zX
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_code=https://localhost:44302/Account/IDFederationRedirectEndPoint
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_token=-
+      - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_name=IdFederationE2ENetFx
+
+      # ---------------------------------------------------------------- 利用者名を下流へ渡す
+      #   **sub では渡せない**（#151 の段階 4 で、既定が public になった ＝ sub は利用者 ID）。
+      #   **利用者名は preferred_username で渡す**（#151 の段階 1 の UserClaimsMapping）。
+      #
+      #   **下流は、新規に作る利用者の名前にこれを使う**（無ければメアドの「@」より前）。
+      #   **ID 連携は scope=openid profile email phone address で要求する**ので、
+      #   **profile が入っており、この対応付けが効く。**
+      - appSettings__UserClaimsMapping__preferred_username=user:UserName
+
+      # ---------------------------------------------------------------- リソースのパス
+      #   **雛形は 15 箇所すべてが C:/root/files/resource/... である**（Windows 前提）。
+      #   Linux では**ドライブ文字が効かない**ので、**マウント先（/resource）に振り替える**。
+      #
+      #   **数が多いので、1 つでも漏らすと、使った瞬間に落ちる。**
+      #   appsettings.json を `"C:/root/files` で grep した 15 個と、ここが一致していること。
+      #
+      #   log4net だけは**中身（出力先）も Windows のパス**なので、
+      #   **イメージに入れた差し替え版**（/app/LogConf.xml）を指す。
+      - appSettings__FxLog4NetConfFile=/app/LogConf.xml
+      - appSettings__FxXMLSPDefinition=/resource/XML/SPDefinition.xml
+      - appSettings__FxXMLMSGDefinition=/resource/XML/MSGDefinition.xml
+      - appSettings__FxXMLTCDefinition=/resource/XML/TCDefinition.xml
+      - appSettings__FxXMLTMInProcessDefinition=/resource/XML/TMInProcessDefinition.xml
+      - appSettings__FirebaseServiceAccountKey=/resource/MultiPurposeAuthSite/FirebaseServiceAccountKey.json
+      - appSettings__ContentOfLetterFilePath=/resource/MultiPurposeAuthSite/Txt
+      - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet.json
+      - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Server.pfx
+      - appSettings__EcdsaPfxFilePath=/resource/X509/SHA256ECDSA_Server.pfx
+      - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Server.cer
+      - appSettings__SpRp_EcdsaCerFilePath=/resource/X509/SHA256ECDSA_Server.cer
+      - appSettings__SpRp_RsaPfxFilePath=/resource/X509/SHA256RSA_Client.pfx
+      - appSettings__SpRp_EcdsaPfxFilePath=/resource/X509/SHA256ECDSA_Client.pfx
+      - appSettings__SpRp_ClientCertPfxFilePath=/resource/X509/SHA256RSAClientCert.pfx
+    volumes:
+      - ./cert:/https:ro
+      - ./keys:/keys
+      # **ホストのリソースを、そのまま読ませる**（署名鍵を含むのでイメージには入れない）。
+      #   このパスは Readme.ja.md の手順で用意されるもので、**プロジェクトの決め打ちである。**
+      - C:/root/files/resource:/resource:ro
+      # **ログをホストから読めるようにする**（#140 の目視で要る）
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "dotnet", "--info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30

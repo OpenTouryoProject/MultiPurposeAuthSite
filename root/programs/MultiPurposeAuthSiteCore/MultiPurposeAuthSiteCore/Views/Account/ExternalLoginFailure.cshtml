@@ -17,6 +17,7 @@
     //*  日時        更新者            内容
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
+    //*  2026/09/29  玄人 幸道         理由（ViewBag.Reason）を出す（#140 の段階 1）
     //**********************************************************************************
 *@
 
@@ -33,6 +34,15 @@
     <h2>@ViewBag.Title</h2>
     <h3 class="text-danger">@AccountViews.ExternalLoginFailureH3</h3>
 </hgroup>
+
+@* **理由が在れば出す**（#140 の段階 1）。
+   文面の無いエラー画面だと、利用者が次に何をすればよいか分からない。 *@
+@if (ViewBag.Reason != null)
+{
+    <div class="alert alert-warning">
+        @ViewBag.Reason
+    </div>
+}
 
 @* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
 @section FooterScriptsSection{

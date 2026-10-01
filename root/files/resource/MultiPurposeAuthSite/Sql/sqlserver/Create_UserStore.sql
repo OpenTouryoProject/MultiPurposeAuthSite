@@ -111,6 +111,21 @@ CREATE TABLE [RefreshTokenDictionary](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+-- sub（Subject Identifier）の対応表（#151 の段階 2）
+--   **発行した sub を記録する。** 以後はここから引くので、
+--   subject_types の既定や PPID の作り方を変えても、**発行済みの sub は動かない。**
+--   Sector : いまは client_id。**sector_identifier_uri に対応したら、その解決結果が入る**
+--            （列の意味は「Sector Identifier」。OIDC Core 8.1）
+--   Sub    : uname のとき利用者名（最大 256）、public のとき UserId、pairwise のとき PPID
+CREATE TABLE [SubjectIdentifier](
+    [Sector] [nvarchar](256) NOT NULL,       -- *PK, Sector Identifier（いまは client_id）
+    [UserId] [nvarchar](38) NOT NULL,        -- *PK, guid
+    [Sub] [nvarchar](256) NOT NULL,          -- 発行した sub
+    [CreatedDate] [smalldatetime] NOT NULL,
+    CONSTRAINT [PK.SubjectIdentifier] PRIMARY KEY NONCLUSTERED ([Sector] ASC, [UserId] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [CustomizedConfirmation](
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [Value] [nvarchar](max) NOT NULL,        -- Value
@@ -206,6 +221,9 @@ CREATE NONCLUSTERED INDEX [IX_UserRoles.RoleId] ON [UserRoles] ([RoleId] ASC) WI
 CREATE NONCLUSTERED INDEX [IX_UserLogins.UserId] ON [UserLogins] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ---- UserClaims
 CREATE NONCLUSTERED INDEX [IX_UserClaims.UserId] ON [UserClaims] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+---- SubjectIdentifier
+---- **逆引き（sub → 利用者）用。** 同じ Sector で 2 人が同じ sub を持ってはいけないので一意
+CREATE UNIQUE NONCLUSTERED INDEX [IX_SubjectIdentifier.Sector_Sub] ON [SubjectIdentifier] ([Sector] ASC, [Sub] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ---- TotpTokens
 CREATE NONCLUSTERED INDEX [IX_TotpTokens.UserId] ON [TotpTokens] ([UserId] ASC) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 
@@ -223,3 +241,5 @@ ALTER TABLE [TotpTokens] WITH CHECK ADD CONSTRAINT [FK.TotpTokens.Users_UserId] 
 ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_ClientID] FOREIGN KEY([ClientID]) REFERENCES [Users] ([ClientID]) ON DELETE CASCADE
 ---- FIDO2Data
 ALTER TABLE [FIDO2Data] WITH CHECK ADD CONSTRAINT [FK.FIDO2Data.Users_UserName] FOREIGN KEY([UserName]) REFERENCES [Users] ([UserName]) ON DELETE CASCADE
+---- SubjectIdentifier
+ALTER TABLE [SubjectIdentifier] WITH CHECK ADD CONSTRAINT [FK.SubjectIdentifier.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE

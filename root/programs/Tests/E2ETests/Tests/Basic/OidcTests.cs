@@ -140,8 +140,24 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
                     issuer, Jwt.String(idToken, "iss"));
 
                 // --- sub ---
-                r.VerifyEqual("sub が認証したユーザである",
-                    TestEnv.TestUserName, Jwt.String(idToken, "sub"));
+                //   **値は見ない**（#151 の段階 4 で、sub は利用者名から利用者 ID になった）。
+                //   **確かめるのは「利用者を指していること」**で、
+                //   それは **/userinfo が同じ sub を返すか**で分かる（OIDC Core §5.3.2）。
+                string sub = Jwt.String(idToken, "sub");
+
+                r.Verify("sub が返る", !string.IsNullOrEmpty(sub),
+                    "返る", string.IsNullOrEmpty(sub) ? "**返らない**" : sub);
+
+                JsonResponse subUserInfo = await client.UserInfoAsync(token.AccessToken);
+
+                r.VerifyEqual("sub が /userinfo の sub と一致する（＝ 利用者を指している）",
+                    sub, subUserInfo.String("sub") ?? "（無し）");
+
+                r.Note("**sub の値では、誰かを判定しない**（#151 の段階 4）。"
+                    + "**既定が public になり、sub は利用者 ID になった。**"
+                    + "ただし**発行済みの組み合わせでは、以前の値（利用者名）が返る**ので"
+                    + "（対応表。段階 2）、**値の形は配備によって違う。**"
+                    + "**sub は「同じ利用者・同じ RP なら同じ値」であることに意味がある。**");
 
                 // --- aud ---
                 r.VerifyEqual("aud が自クライアントの client_id と一致する",
@@ -321,8 +337,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Basic
 
                 r.Verify("JSON が返る", u1.IsJson, "JSON", u1.ToString());
 
-                r.VerifyEqual("sub がテスト ユーザである",
-                    TestEnv.TestUserName, u1.String("sub"));
+                // **id_token の sub と一致しなければならない**（OIDC Core §5.3.2）。
+                //   **値そのものは見ない**（#151 の段階 4）。
+                r.VerifyEqual("sub が id_token の sub と一致する",
+                    Jwt.String(Jwt.Payload(t1.IdToken), "sub"), u1.String("sub") ?? "（無し）");
 
                 r.Verify("email スコープの属性が返る",
                     u1.KindOf("email") != JsonValueKind.Undefined,

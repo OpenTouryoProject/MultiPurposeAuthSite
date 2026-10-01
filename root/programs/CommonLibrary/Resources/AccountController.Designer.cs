@@ -95,6 +95,15 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("Login_Error", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   The user name must not contain &quot;@&quot; (use the e-mail address field instead). に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string Register_InvalidUserName {
+            get {
+                return ResourceManager.GetString("Register_InvalidUserName", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Confirm e-mail account に類似しているローカライズされた文字列を検索します。

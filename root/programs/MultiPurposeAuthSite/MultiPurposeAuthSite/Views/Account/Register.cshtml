@@ -45,24 +45,20 @@
             @Html.AntiForgeryToken()
             @Html.ValidationSummary("", new { @class = "text-danger" })
 
-            if (Config.RequireUniqueEmail)
-            {
-                <div class="form-group">
-                    @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
-                    <div class="col-md-10">
-                        @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
-                    </div>
+            @* **利用者名とメアドの両方を入れてもらう**（#151 の段階 3）。
+               どちらでもサインインできる。**利用者名に `@` は使えない。** *@
+            <div class="form-group">
+                @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
+                <div class="col-md-10">
+                    @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
                 </div>
-            }
-            else
-            {
-                <div class="form-group">
-                    @Html.LabelFor(m => m.Name, new { @class = "col-md-2 control-label" })
-                    <div class="col-md-10">
-                        @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
-                    </div>
+            </div>
+            <div class="form-group">
+                @Html.LabelFor(m => m.Email, new { @class = "col-md-2 control-label" })
+                <div class="col-md-10">
+                    @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
                 </div>
-            }
+            </div>
 
             <div class="form-group">
                 @Html.LabelFor(m => m.Password, new { @class = "col-md-2 control-label" })

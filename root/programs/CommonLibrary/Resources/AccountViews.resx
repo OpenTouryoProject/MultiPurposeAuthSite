@@ -138,6 +138,9 @@
   <data name="EmailConfirmationTitle" xml:space="preserve">
     <value>E-mail address was confirmed.</value>
   </data>
+  <data name="ExternalLoginNeedsVerifiedEmail" xml:space="preserve">
+    <value>This service did not confirm that your e-mail address is verified, so it was not linked to the existing account. Please sign in with your local account and add this login from "Manage logins".</value>
+  </data>
   <data name="ExternalLoginFailureH3" xml:space="preserve">
     <value>Unsuccessful login with service.</value>
   </data>

@@ -582,7 +582,7 @@ namespace MultiPurposeAuthSite.Controllers
 
             SelfTestClient.CibaResult result = await SelfTestClient.RunCibaProfileAsync(
                 this.ClientId,      // FAPI2用か自前のクライアント
-                "tanaka@gmail.com", // プッシュ通知の対象となるアカウント
+                "tanaka",           // プッシュ通知の対象となるアカウント（#151 の段階 3 で利用者名とメアドを分けた）
                 MaxWaitSeconds);
 
             ViewBag.ClientId = this.ClientId;
