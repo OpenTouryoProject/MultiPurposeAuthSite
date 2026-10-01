@@ -288,6 +288,12 @@ namespace MultiPurposeAuthSite.Controllers
                 if (!Const.IsValidUserName(userViewModel.Name))
                 {
                     ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
+
+                    // **この画面は ViewBag.RoleId を使う。** 詰めずに返すとビューで落ちる。
+                    //   dataValueField, dataTextField = "Name"
+                    ViewBag.RoleId = new SelectList(RoleManager.Roles, "Name", "Name");
+
+                    // 再表示（入力値は残す）
                     return View(userViewModel);
                 }
 
@@ -418,19 +424,25 @@ namespace MultiPurposeAuthSite.Controllers
                 // 編集結果を反映
                 //   **利用者名とメアドを、それぞれ反映する**（#151 の段階 3）。
                 //   以前は「利用者名＝メアド」で、メアドを入れると利用者名も変わっていた。
-                if (!Const.IsValidUserName(editUser.Name))
+                //   **ここで return しない。**
+                //   この画面は RolesList を持つモデルを要するので、
+                //   **下の「再表示」に落として、そこで作らせる**（詰めずに返すとビューで落ちる）。
+                bool userNameIsValid = Const.IsValidUserName(editUser.Name);
+
+                if (!userNameIsValid)
                 {
                     ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
-                    return View(editUser);
+                }
+                else
+                {
+                    user.UserName = editUser.Name;
+                    user.Email = editUser.Email;
                 }
 
-                user.UserName = editUser.Name;
-                user.Email = editUser.Email;
-
                 // ユーザーの更新
-                if (string.IsNullOrWhiteSpace(user.UserName))
+                if (!userNameIsValid || string.IsNullOrWhiteSpace(user.UserName))
                 {
-                    // 入力値が無いので更新しない。
+                    // 入力値が無い（または利用者名が不正な）ので更新しない。
                 }
                 else
                 {

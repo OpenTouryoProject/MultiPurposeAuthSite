@@ -29,6 +29,12 @@ namespace MultiPurposeAuthSite.ViewModels
     public class AccountRegisterViewModel : BaseViewModel
     {
         /// <summary>Name</summary>
+        /// <remarks>
+        /// **利用者名とメアドは、どちらも必須である**（#151 の段階 3）。
+        /// **空欄を「`@` が使えません」と言わないため**に、ここで必須にする
+        /// （以前はどちらか一方しか使わなかったので、必須にできなかった）。
+        /// </remarks>
+        [Required(AllowEmptyStrings = false)]
         [Display(Name = "UserName", ResourceType = typeof(Resources.CommonViewModels))]
         [StringLength(
             Const.MaxLengthOfUserName,
@@ -37,6 +43,8 @@ namespace MultiPurposeAuthSite.ViewModels
         public string Name { get; set; }
 
         /// <summary>E-mail</summary>
+        /// <remarks>**必須である**（#151 の段階 3。メアドは常に在って一意）。</remarks>
+        [Required(AllowEmptyStrings = false)]
         [EmailAddress]
         [Display(Name = "Email", ResourceType = typeof(Resources.CommonViewModels))]
         public string Email { get; set; }
