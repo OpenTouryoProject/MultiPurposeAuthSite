@@ -222,6 +222,9 @@
   <data name="UsersAdminIndexCreate" xml:space="preserve">
     <value>新規作成</value>
   </data>
+  <data name="UsersAdminEmail" xml:space="preserve">
+    <value>メアド</value>
+  </data>
   <data name="UsersAdminUserName" xml:space="preserve">
     <value>ユーザー名</value>
   </data>
