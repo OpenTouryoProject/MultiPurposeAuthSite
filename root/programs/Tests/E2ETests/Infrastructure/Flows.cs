@@ -39,6 +39,7 @@
 //*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
 //*  2026/09/27  玄人 幸道         記号を含む client_secret の TestClient_2 / TestClient_3 を追加（#237）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を登録した TestClient_4 を追加（#232）
+//*  2026/09/30  玄人 幸道         subject_types=pairwise のクライアント（TestClient_5）を追加（#140 の段階 2）
 //*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
 //**********************************************************************************
 

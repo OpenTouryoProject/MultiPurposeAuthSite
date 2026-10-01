@@ -51,6 +51,7 @@
 //*  2026/09/30  玄人 幸道         DataProtectionKeyPath を追加（#251）
 //*  2026/09/30  玄人 幸道         AuthCookieName を追加（#250 の段階 4）
 //*  2026/09/30  玄人 幸道         CookieNamePrefix を追加（#255）
+//*  2026/10/01  玄人 幸道         RequireUniqueEmail の設定を削除（#151 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
