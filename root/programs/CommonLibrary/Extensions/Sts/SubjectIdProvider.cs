@@ -58,9 +58,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
     /// | #151 | `subject_types` の既定を `public` に変えても、既存の RP が壊れない |
     /// | D-9-2 | PPID の秘密（`SaltParameter`）を**漏洩時に替えられる** |
     ///
-    /// **`pairwise` 専用ではない。** `uname` / `public` の `sub` も入れる
+    /// **`pairwise` 専用ではない。** `public` の `sub`（＝ 利用者 ID）も入れる
     /// （そうしないと、既定値の変更を無害にできない）。
-    /// `uname` / `public` では**同じ値が Sector ごとに入る**（冗長）が、害は無い。
+    /// `public` では**同じ値が Sector ごとに入る**（冗長）が、害は無い。
     /// むしろ表の意味が **「この RP には、この利用者を、この `sub` で名乗った」**になり、
     /// **守りたい契約そのもの**を記録することになる。
     ///

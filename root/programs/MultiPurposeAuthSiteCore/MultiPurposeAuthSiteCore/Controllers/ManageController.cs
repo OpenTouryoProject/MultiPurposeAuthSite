@@ -102,12 +102,6 @@ namespace MultiPurposeAuthSite.Controllers
             AccountConflictInSocialLogin,
             /// <summary>SetTwoFactorSuccess</summary>
             SetTwoFactorSuccess,
-            /// <summary>AddEmailSuccess</summary>
-            AddEmailSuccess,
-            /// <summary>AddEmailFailure</summary>
-            AddEmailFailure,
-            /// <summary>RemoveEmailSuccess</summary>
-            RemoveEmailSuccess,
             /// <summary>AddPhoneSuccess</summary>
             AddPhoneSuccess,
             /// <summary>RemovePhoneSuccess</summary>
@@ -324,9 +318,6 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.RemoveExternalLoginSuccess ? Resources.ManageController.RemoveExternalLoginSuccess
                 : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
-                : message == EnumManageMessageId.AddEmailSuccess ? Resources.ManageController.AddEmailSuccess
-                : message == EnumManageMessageId.AddEmailFailure ? Resources.ManageController.AddEmailFailure
-                : message == EnumManageMessageId.RemoveEmailSuccess ? Resources.ManageController.RemoveEmailSuccess
                 : message == EnumManageMessageId.AddPhoneSuccess ? Resources.ManageController.AddPhoneSuccess
                 : message == EnumManageMessageId.RemovePhoneSuccess ? Resources.ManageController.RemovePhoneSuccess
                 : message == EnumManageMessageId.AddPaymentInformationSuccess ? Resources.ManageController.AddPaymentInformationSuccess
@@ -695,50 +686,6 @@ namespace MultiPurposeAuthSite.Controllers
 
         #region E-mail
 
-        #region Create
-
-        /// <summary>
-        /// E-mailの追加画面（初期表示）
-        /// GET: /Manage/AddEmail
-        /// </summary>
-        /// <returns>ActionResult</returns>
-        [HttpGet]
-        public ActionResult AddEmail()
-        {
-            // **この画面は引退した**（#151 の段階 3）。
-            //   **メアドを持たない利用者**のための機能だった（後から足す／外す）。
-            //   **メアドは常に在って一意**（サインインの識別子）になったので、成り立たない。
-            //   **外すとサインインもパスワード再設定もできなくなる。**
-            //   メアドの変更は ChangeEmail を使う。
-            //   **アクションとビューの削除は、uname を落とす段階と併せて行う。**
-
-            // エラー画面
-            return View("Error");
-        }
-
-        /// <summary>
-        /// E-mailの追加画面（E-mailの追加）
-        /// POST: /Manage/AddEmail
-        /// </summary>
-        /// <param name="model">ManageEmailViewModel</param>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> AddEmail(ManageEmailViewModel model)
-        {
-            // **この画面は引退した**（#151 の段階 3）。
-            //   **メアドを持たない利用者**のための機能だった（後から足す／外す）。
-            //   **メアドは常に在って一意**（サインインの識別子）になったので、成り立たない。
-            //   **外すとサインインもパスワード再設定もできなくなる。**
-            //   メアドの変更は ChangeEmail を使う。
-            //   **アクションとビューの削除は、uname を落とす段階と併せて行う。**
-
-            // エラー画面
-            return View("Error");
-        }
-
-        #endregion
-
         #region Update (Edit/Change)
 
         /// <summary>
@@ -957,32 +904,6 @@ namespace MultiPurposeAuthSite.Controllers
                     }
                 }
             }
-
-            // エラー画面
-            return View("Error");
-        }
-
-        #endregion
-
-        #region Delete
-
-        /// <summary>
-        /// E-mailの削除
-        /// POST: /Manage/RemoveEmail
-        /// </summary>
-        /// <returns>ActionResultを非同期に返す</returns>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<ActionResult> RemoveEmail()
-        {
-            ApplicationUser user = await UserManager.GetUserAsync(User);
-
-            // **この画面は引退した**（#151 の段階 3）。
-            //   **メアドを持たない利用者**のための機能だった（後から足す／外す）。
-            //   **メアドは常に在って一意**（サインインの識別子）になったので、成り立たない。
-            //   **外すとサインインもパスワード再設定もできなくなる。**
-            //   メアドの変更は ChangeEmail を使う。
-            //   **アクションとビューの削除は、uname を落とす段階と併せて行う。**
 
             // エラー画面
             return View("Error");

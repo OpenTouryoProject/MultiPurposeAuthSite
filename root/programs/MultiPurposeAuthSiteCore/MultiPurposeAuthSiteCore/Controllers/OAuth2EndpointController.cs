@@ -901,16 +901,11 @@ namespace MultiPurposeAuthSite.Controllers
                         string[] scopes = (scope ?? "").Split(' ');
 
                         // **login_hint から利用者を引く**（#151 の段階 4）。
-                        //   **以前は GetSubForOIDC で sub を作り、それを identity の名前にしていた。**
-                        //   **sub が利用者名だったから成り立っていた**（既定が uname）。
-                        //
                         //   **identity.Name は「利用者名」として扱われる**
                         //   （CmnAccessToken が、ここから改めて sub を作る）。
-                        //   **既定が public になると sub は利用者 ID** なので、
-                        //   **そのまま入れると、token エンドポイントで利用者を引けなくなる。**
+                        //   **sub を入れてはいけない**（利用者 ID や PPID なので、引けなくなる）。
                         //
                         //   **ここでは利用者の解決だけに使う**（戻り値の sub は使わない）。
-                        //   **sub は、token エンドポイントで改めて作られる。**
                         ApplicationUser user = null;
                         PPIDExtension.GetSubForOIDC(client_id, login_hint, out user);
 

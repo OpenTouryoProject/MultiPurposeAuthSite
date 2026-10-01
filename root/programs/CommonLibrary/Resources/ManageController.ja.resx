@@ -120,12 +120,6 @@
   <data name="AccountConflictInSocialLogin" xml:space="preserve">
     <value>ソーシャルログインでアカウントが一致しません。</value>
   </data>
-  <data name="AddEmailFailure" xml:space="preserve">
-    <value>E-mailは追加されませんでした。</value>
-  </data>
-  <data name="AddEmailSuccess" xml:space="preserve">
-    <value>E-mailが追加されました。</value>
-  </data>
   <data name="AddMsPassDataSuccess" xml:space="preserve">
     <value>MsPassデータが追加されました。</value>
   </data>
@@ -167,9 +161,6 @@
   </data>
   <data name="FailedVerifyPhoneNumber" xml:space="preserve">
     <value>電話番号を確認できませんでした</value>
-  </data>
-  <data name="RemoveEmailSuccess" xml:space="preserve">
-    <value>E-mailが削除されました。</value>
   </data>
   <data name="RemoveExternalLoginSuccess" xml:space="preserve">
     <value>外部ログインが削除されました。</value>

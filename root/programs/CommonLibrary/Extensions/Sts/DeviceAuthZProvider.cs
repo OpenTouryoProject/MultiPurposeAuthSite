@@ -612,10 +612,9 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             string scope = tempdic["scope"];
 
             // **identity.Name に入れるのは利用者名**（#151 の段階 4）。
-            //   **以前は sub を入れていた。** sub が利用者名だったから成り立っていた（既定が uname）。
-            //   **既定が public になると sub は利用者 ID** なので、
-            //   **そのまま入れると、token エンドポイントで利用者を引けなくなる**
-            //   （CmnAccessToken が identity.Name から改めて sub を作る）。
+            //   **sub を入れてはいけない。** sub は利用者 ID（または PPID）であり、
+            //   **CmnAccessToken が identity.Name から改めて sub を作る**ため、
+            //   入れると token エンドポイントで利用者を引けなくなる。
             return Token.CmnEndpoints.CreateCodeInAuthZNRes(
                 new ClaimsIdentity(new GenericIdentity(userName)), new NameValueCollection(),
                 client_id, "", (scope ?? "").Split(' '), null, "");

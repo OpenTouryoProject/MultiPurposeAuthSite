@@ -379,12 +379,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     //
                     //   **pairwise のクライアントを使う**（test.ps1 -Launch が差し込む）。
                     //   **pairwise の sub は、利用者の ID から作る**ので、
-                    //   **アカウントが違えば必ず違う。**
-                    //
-                    //   **既定（#151 の段階 4 から public）でも、sub は利用者の ID である**ので
-                    //   判定にはなるが、**段階 4 より前は uname（＝ 利用者名）だった。**
-                    //   **利用者名は、別のアカウントが作られても同じになり得る**ので、
-                    //   **ここは既定に依らない pairwise のままにしておく。**
+                    //   **アカウントが違えば必ず違う**（既定の public でも同じことが言えるが、
+                    //   **設定に依らない方を選んでおく**）。
                     ClientRegistration reg =
                         Flows.InjectedRegistration(client, KnownClients.TestClient_5);
 

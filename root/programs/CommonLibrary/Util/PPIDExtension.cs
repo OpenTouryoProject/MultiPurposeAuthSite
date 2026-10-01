@@ -26,6 +26,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2020/01/07  西野 大介         新規
 //*  2026/09/30  玄人 幸道         PPID を OP だけが戻せる形にした（#140 の段階 2）
+//*  2026/10/02  玄人 幸道         subject_types を public / pairwise の 2 つにした（#151 の段階 5）
 //**********************************************************************************
 
 #if NETFX
@@ -116,24 +117,20 @@ namespace MultiPurposeAuthSite.Util
                     // Resource Owner認証
                     string subjectTypes = Helper.GetInstance().GetSubjectTypes(clientId);
 
-                    if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit())
-                    {
-                        sub = user.Id;
-                    }
-                    else if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
+                    // **pairwise だけが別**（それ以外は public。既定も public）。
+                    if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
                     {
                         sub = PPIDExtension.GeneratePPIDByUserID(clientId, user.Id); // PPID
                     }
-                    else //if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit())
+                    else
                     {
-                        // 汎用認証サイトのデフォルト値（仕様）
-                        sub = userName;
+                        sub = user.Id;
                     }
 
                     // **発行した sub を記録し、2 回目以降はそこから返す**（#151 の段階 2）。
                     //   **計算し直さない**ので、`subject_types` の既定や PPID の作り方を変えても、
                     //   **発行済みの sub は動かない**（RP は sub を主キーとして保存している）。
-                    //   `pairwise` だけでなく `uname` / `public` も入れる。
+                    //   **pairwise 専用ではなく、public も入れる。**
                     //   そうしないと、既定値の変更を無害にできない。
                     sub = SubjectIdProvider.GetOrAdd(
                         PPIDExtension.GetSector(clientId), user.Id, sub);
@@ -187,11 +184,8 @@ namespace MultiPurposeAuthSite.Util
 
             // **表に無い場合は、従来どおり subject_types で引く。**
             //   表を入れる前に発行した sub、または利用者が削除された場合。
-            if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit())
-            {
-                user = CmnUserStore.FindById(sub);
-            }
-            else if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
+            // **pairwise だけが別**（それ以外は public。既定も public）。
+            if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit())
             {
                 // **PPID を復号して UserID を取り出す**（#140 の段階 2）。
                 //   以前は「取りようが無いので...。」と null を返していた。
@@ -203,10 +197,9 @@ namespace MultiPurposeAuthSite.Util
 
                 user = string.IsNullOrEmpty(userId) ? null : CmnUserStore.FindById(userId);
             }
-            else //if (subjectTypes == OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit())
+            else
             {
-                // 汎用認証サイトのデフォルト値（仕様）
-                user = CmnUserStore.FindByName(sub);
+                user = CmnUserStore.FindById(sub);
             }
 
             return user;

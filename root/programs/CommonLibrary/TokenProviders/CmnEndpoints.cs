@@ -105,6 +105,7 @@
 //*  2026/09/29  玄人 幸道         refresh で登録種別のクレーム（fapi）が消えていたのを修正（#245）
 //*  2026/09/29  玄人 幸道         code_challenge を送った code は code_verifier を必須にした（#245）
 //*  2026/10/01  玄人 幸道         subject_types_supported の並びを public 先頭に（#151 の段階 4）
+//*  2026/10/02  玄人 幸道         subject_types_supported を OIDC の登録値だけにした（#151 の段階 5）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -294,14 +295,11 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #endregion
 
                 #region subject_types
-                // **既定値は public**（#151 の段階 4）。**先頭に出す。**
-                //   **uname は独自値で、非推奨**（sub に利用者名が入る）。
-                //   利用者名が要る RP は、**preferred_username**（UserClaimsMapping。段階 1）を使う。
-                //   **広告は続ける**（設定すれば動くため）。外すのは段階 5。
+                // **OIDC の登録値だけを扱う**（既定は public）。
+                //   利用者名が要る RP は、**preferred_username**（UserClaimsMapping）を使う。
                 OpenIDConfig.Add("subject_types_supported", new List<string> {
                     OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit(),
-                    OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit(),
-                    OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit()
+                    OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit()
                 });
                 #endregion
 

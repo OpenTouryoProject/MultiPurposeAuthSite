@@ -729,8 +729,8 @@ The ID federation did not complete. (the error view was returned)
 > **この 2 つは、E2E に入れていれば見つかった。** 段階 5 の理由がここにある。
 
 > **`sub` は利用者 ID（GUID）である。** 上流の `IdFederation` クライアントに
-> `subject_types` の登録が無く、**既定に従うため**（#151 の段階 4 で `public` になった。
-> **段階 4 より前は `uname`** だったので、利用者名＝メアドが入っていた）。
+> `subject_types` の登録が無く、**既定（`public`）に従うため**（#151 の段階 4。
+> **それより前は利用者名＝メアドが入っていた**）。
 > **連携キー `(iss, sub)` はこの値で作られる。**
 >
 > **既定を変えると、既存の連携は鍵が合わなくなる。**
@@ -749,7 +749,8 @@ The ID federation did not complete. (the error view was returned)
 
 ### `subject_types` の既定（#151 の段階 4）
 
-**既定は `uname` から `public` に変わった。** E2E で 2 件測っている。
+**既定は `public` である**（#151 の段階 4 で変え、段階 5 で独自値を廃止した）。
+E2E で 2 件測っている。
 
 | | |
 |---|---|

@@ -44,7 +44,7 @@
 //*  2026/09/25  玄人 幸道         CIBA の認証要求をクライアント認証つきで送る口を追加（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を引く口を追加（#232）
 //*  2026/09/28  玄人 幸道         PAR（/par）に認可リクエストを預ける口を追加（#246）
-//*  2026/10/01  玄人 幸道         subject_types の既定値を uname から public へ（#151 の段階 4）
+//*  2026/10/01  玄人 幸道         subject_types の既定値を public に変更（#151 の段階 4）
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
 //**********************************************************************************
 
@@ -1049,18 +1049,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <param name="isResourceOwner">bool</param>
         /// <returns>ClientMode</returns>
         /// <remarks>
-        /// **登録に subject_types が無いときの既定値は `public`**（#151 の段階 4）。
+        /// **登録に subject_types が無いときの既定値は `public`**。
+        /// **扱う値は `public` と `pairwise` の 2 つ**（OIDC Core §8）。
         ///
-        /// **以前の既定値は `uname`**（独自値）で、**`sub` に利用者名が入っていた。**
         /// `sub` は「その RP の中で利用者を指す識別子」であって、表示用の属性ではない。
-        /// **利用者名を RP に渡したいなら `preferred_username`**（`UserClaimsMapping`。#151 の段階 1）。
+        /// **利用者名を RP に渡したいなら `preferred_username`**（`UserClaimsMapping`）。
         ///
-        /// **既に発行した `sub` は、この変更で動かない。**
+        /// **既定値を変えても、既に発行した `sub` は動かない。**
         /// `SubjectIdProvider` が (Sector, UserId) → sub を記録しており、
         /// **PPIDExtension は、まずそこを引く**（#151 の段階 2）。
         /// つまり**効くのは、まだ `sub` を発行していない組み合わせだけ**である。
-        ///
-        /// **`uname` は残してある**（設定すれば従来どおり動く）が、**非推奨**である。
         /// </remarks>
         public string GetSubjectTypes(string client_id, out bool isResourceOwner)
         {
@@ -1079,7 +1077,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
                 else
                 {
-                    // **既定値は public**（#151 の段階 4。**以前は uname**）。
+                    // 既定値
                     return OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit();
                 }
             }
@@ -1098,7 +1096,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
                 else
                 {
-                    // **既定値は public**（#151 の段階 4。**以前は uname**）。
+                    // 既定値
                     return OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit();
                 }
             }

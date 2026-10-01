@@ -45,11 +45,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// RT-151.1 / .2 `subject_types` の既定値（#151 の段階 4）。
     /// </summary>
     /// <remarks>
-    /// **既定は `uname`（独自値）から `public` に変わった。**
+    /// **既定は `public`** で、**`sub` には利用者 ID が入る。**
     ///
-    /// `uname` は **`sub` に利用者名をそのまま入れる。**
-    /// 以前は「利用者名＝メアド」だったので、**メアドが全ての RP に渡っていた。**
     /// `sub` は「その RP の中で利用者を指す識別子」であって、表示用の属性ではない。
+    /// **以前は `sub` に利用者名（当時はメアド）が入っており、全ての RP に渡っていた。**
     /// **利用者名が要る RP は `preferred_username`**（`UserClaimsMapping`。段階 1）を使う。
     ///
     /// **測るには、新しい client_id が要る。**
@@ -80,9 +79,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 TestReport r = this.Report("RT-151.1",
                     "subject_types を書かないクライアントの sub は、利用者名ではなく利用者 ID",
-                    "**既定を uname から public に変えた**（#151 の段階 4）。"
-                    + "uname は独自値で、**`sub` に利用者名がそのまま入る。**"
-                    + "以前は「利用者名＝メアド」だったため、**メアドが全ての RP に渡っていた。**"
+                    "**既定は public で、`sub` は利用者 ID である**（#151 の段階 4）。"
+                    + "**以前は `sub` に利用者名がそのまま入っていた**（当時は利用者名＝メアド）ので、"
+                    + "**メアドが全ての RP に渡っていた。**"
                     + "**`sub` は RP の中で利用者を指す識別子**であって、表示用の属性ではない。",
                     "OIDC Core §8（Subject Identifier Types）/ §5.1（preferred_username）/ #151 の段階 4");
 
@@ -107,11 +106,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Verify("sub が返る", !string.IsNullOrEmpty(sub),
                     "返る", string.IsNullOrEmpty(sub) ? "**返らない**" : "返った（値は伏せる）");
 
-                r.Verify("sub が利用者名ではない（＝ uname ではない）",
+                r.Verify("sub が利用者名ではない",
                     sub != TestEnv.TestUserName,
                     "利用者名ではない",
                     (sub == TestEnv.TestUserName)
-                        ? "**利用者名がそのまま出ている**（既定が uname のまま）" : "利用者名ではない");
+                        ? "**利用者名がそのまま出ている**" : "利用者名ではない");
 
                 r.Verify("sub がメアドでもない",
                     sub != TestEnv.TestUserEmail,
@@ -202,8 +201,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**public は「隠さない」選択である。**"
                     + "`sub` は利用者 ID なので、**RP 同士が突き合わせれば同じ人だと分かる。**"
-                    + "**それが困る RP には pairwise を登録する。**"
-                    + "**uname も「同じ値」になる**が、**値が利用者名（＝個人を示す文字列）である点が違う。**");
+                    + "**それが困る RP には pairwise を登録する。**");
 
                 r.Done();
             }

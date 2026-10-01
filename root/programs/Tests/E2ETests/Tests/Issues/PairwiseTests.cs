@@ -180,9 +180,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "違う",
                     (other == first) ? "**同じ**（RP 同士で突き合わせられる）" : "違う");
 
-                r.Note("**(2) の相手は subject_types の既定**で、"
-                    + "**#151 の段階 4 から public**（それ以前は uname）である。"
-                    + "いずれにせよ pairwise とは別の値になるので、**この検証の意味は変わらない。**"
+                r.Note("**(2) の相手は subject_types の既定（public）**なので、"
+                    + "**利用者 ID がそのまま sub になる。**"
                     + "**ここで見たいのは「突き合わせられないこと」**で、"
                     + "pairwise 同士の比較は、クライアントをもう 1 つ差し込まないと測れない。"
                     + "**既定が public であること自体は RT-151.2 が測る。**");
