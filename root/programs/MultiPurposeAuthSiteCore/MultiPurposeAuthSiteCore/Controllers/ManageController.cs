@@ -410,8 +410,9 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ChangeUserName()
         {
-            if (!Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **利用者名の編集は、常に出せる**（#151 の段階 3）。
+            //   以前は「利用者名＝メアド」の配備では出せなかった（メアドの編集で兼ねていた）。
+            if (Config.AllowEditingUserName
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
@@ -438,8 +439,9 @@ namespace MultiPurposeAuthSite.Controllers
             ApplicationUser user = null;
             Microsoft.AspNetCore.Identity.SignInResult signInResult = null;
 
-            if (!Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **利用者名の編集は、常に出せる**（#151 の段階 3）。
+            //   以前は「利用者名＝メアド」の配備では出せなかった（メアドの編集で兼ねていた）。
+            if (Config.AllowEditingUserName
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ManageChangeUserNameViewModelの検証
@@ -703,17 +705,15 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public ActionResult AddEmail()
         {
-            if (!Config.RequireUniqueEmail
-                && Config.CanEditEmail
-                && Config.EnableEditingOfUserAttribute)
-            {
-                return View();
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+            // **この画面は引退した**（#151 の段階 3）。
+            //   **メアドを持たない利用者**のための機能だった（後から足す／外す）。
+            //   **メアドは常に在って一意**（サインインの識別子）になったので、成り立たない。
+            //   **外すとサインインもパスワード再設定もできなくなる。**
+            //   メアドの変更は ChangeEmail を使う。
+            //   **アクションとビューの削除は、uname を落とす段階と併せて行う。**
+
+            // エラー画面
+            return View("Error");
         }
 
         /// <summary>
@@ -726,75 +726,15 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> AddEmail(ManageEmailViewModel model)
         {
-            if (!Config.RequireUniqueEmail
-                && Config.CanEditEmail
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // ManageEmailViewModelの検証
-                if (ModelState.IsValid)
-                {
-                    // ManageEmailViewModelの検証に成功
-                    ApplicationUser user = await UserManager.GetUserAsync(User);
+            // **この画面は引退した**（#151 の段階 3）。
+            //   **メアドを持たない利用者**のための機能だった（後から足す／外す）。
+            //   **メアドは常に在って一意**（サインインの識別子）になったので、成り立たない。
+            //   **外すとサインインもパスワード再設定もできなくなる。**
+            //   メアドの変更は ChangeEmail を使う。
+            //   **アクションとビューの削除は、uname を落とす段階と併せて行う。**
 
-                    // Passwordチェック
-                    if (Config.RequirePasswordInEditingUserNameAndEmail)
-                    {
-                        // パスワードのチェック
-                        AspNetId.SignInResult result = await SignInManager.PasswordSignInAsync(
-                            userName: user.UserName,                                  // アカウント(UID)
-                            password: model.Password,                                 // アカウント(PWD)
-                            isPersistent: false,                                      // アカウント記憶
-                            lockoutOnFailure: Config.UserLockoutEnabledByDefault);    // ロックアウト
-
-                        if (result.Succeeded)
-                        {
-                            // Passwordが一致した。
-                            IResponseCookies responseCookies = MyHttpContext.Current.Response.Cookies;
-                            responseCookies.Set(Config.AuthTimeCookieName,
-                                FormatConverter.ToW3cTimestamp(DateTime.UtcNow), this._cookieOptions);
-                            // 処理を継続
-                        }
-                        else
-                        {
-                            // Passwordが一致しない。
-                            // 再表示
-                            return View(model);
-                        }
-                    }
-                    else
-                    {
-                        // ノーチェック
-                        // 処理を継続
-                    }
-
-                    // DB ストアに保存
-                    CustomizedConfirmationJson customizedConfirmationJson = new CustomizedConfirmationJson
-                    {
-                        Code = GetPassword.Base64UrlSecret(128),
-                        Email = model.Email // 更新後のメアド
-                    };
-                    CustomizedConfirmationProvider.GetInstance()
-                        .CreateCustomizedConfirmationData(user.Id, customizedConfirmationJson);
-
-                    // 確認メールの送信
-                    this.SendConfirmEmail(user.Id, customizedConfirmationJson.Email, customizedConfirmationJson.Code);
-
-                    // 再表示
-                    return View("VerifyEmailAddress");
-                }
-                else
-                {
-                    // ManageEmailViewModelの検証に失敗
-                }
-
-                // 再表示
-                return View(model);
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
@@ -809,8 +749,9 @@ namespace MultiPurposeAuthSite.Controllers
         [HttpGet]
         public async Task<ActionResult> ChangeEmail()
         {
-            if (Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **メアドの編集は CanEditEmail が持つ**（#151 の段階 3）。
+            //   以前は AllowEditingUserName で出し分けていた（メアド＝利用者名だったため）。
+            if (Config.CanEditEmail
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ユーザの取得
@@ -834,8 +775,9 @@ namespace MultiPurposeAuthSite.Controllers
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> ChangeEmail(ManageEmailViewModel model)
         {
-            if (Config.RequireUniqueEmail
-                && Config.AllowEditingUserName
+            // **メアドの編集は CanEditEmail が持つ**（#151 の段階 3）。
+            //   以前は AllowEditingUserName で出し分けていた（メアド＝利用者名だったため）。
+            if (Config.CanEditEmail
                 && Config.EnableEditingOfUserAttribute)
             {
                 // ManageEmailViewModelの検証
@@ -963,13 +905,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (!string.IsNullOrWhiteSpace(email))
                         {
-                            // 更新（UserName＝メアドの場合は、UserNameも更新）
-                            string oldUserName = "";
-                            if (Config.RequireUniqueEmail)
-                            {
-                                oldUserName = user.UserName;
-                                user.UserName = email;
-                            }
+                            // **メアドを変えても、利用者名は変えない**（#151 の段階 3）。
+                            //   以前は「利用者名＝メアド」だったので、両方を書き換えていた。
+                            string oldUserName = user.UserName;
                             user.Email = email;
 
                             // 場合によっては、Email & UserName を更新するため。
@@ -985,20 +923,14 @@ namespace MultiPurposeAuthSite.Controllers
                                 if (await this.ReSignInAsync(user.Id))
                                 {
                                     // 再ログインに成功
-                                    if (Config.RequireUniqueEmail)
-                                    {
-                                        // メールの送信
-                                        this.SendChangeCompletedEmail(user);
+                                    // メールの送信
+                                    this.SendChangeCompletedEmail(user);
 
-                                        // オペレーション・トレース・ログ出力
-                                        Logging.MyOperationTrace(string.Format(
-                                            "{0}({1}) has changed own e-mail address to {2}.", user.Id, oldUserName, user.UserName));
-                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
-                                    }
-                                    else
-                                    {
-                                        return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailSuccess });
-                                    }
+                                    // オペレーション・トレース・ログ出力
+                                    //   **利用者名ではなくメアドが変わった**ので、新しいメアドを出す（#151 の段階 3）。
+                                    Logging.MyOperationTrace(string.Format(
+                                        "{0}({1}) has changed own e-mail address to {2}.", user.Id, oldUserName, user.Email));
+                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailSuccess });
                                 }
                                 else
                                 {
@@ -1008,14 +940,7 @@ namespace MultiPurposeAuthSite.Controllers
                             else
                             {
                                 // E-mail更新に失敗
-                                if (Config.RequireUniqueEmail)
-                                {
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
-                                }
-                                else
-                                {
-                                    return RedirectToAction("Index", new { Message = EnumManageMessageId.AddEmailFailure });
-                                }
+                                return RedirectToAction("Index", new { Message = EnumManageMessageId.ChangeEmailFailure });
                             }
                         }
                         else
@@ -1052,42 +977,15 @@ namespace MultiPurposeAuthSite.Controllers
         {
             ApplicationUser user = await UserManager.GetUserAsync(User);
 
-            if (!Config.RequireUniqueEmail
-                && Config.CanEditEmail
-                && Config.EnableEditingOfUserAttribute)
-            {
-                // null クリア
-                IdentityResult result = await UserManager.SetEmailAsync(user, "");
+            // **この画面は引退した**（#151 の段階 3）。
+            //   **メアドを持たない利用者**のための機能だった（後から足す／外す）。
+            //   **メアドは常に在って一意**（サインインの識別子）になったので、成り立たない。
+            //   **外すとサインインもパスワード再設定もできなくなる。**
+            //   メアドの変更は ChangeEmail を使う。
+            //   **アクションとビューの削除は、uname を落とす段階と併せて行う。**
 
-                // 結果の確認
-                if (result.Succeeded)
-                {
-                    // E-mail削除の成功
-
-                    // 再ログイン
-                    if (await this.ReSignInAsync(user.Id))
-                    {
-                        // 再ログインに成功
-                        return RedirectToAction("Index", new { Message = EnumManageMessageId.RemoveEmailSuccess });
-                    }
-                    else
-                    {
-                        // 再ログインに失敗
-                    }
-                }
-                else
-                {
-                    // E-mail削除の失敗
-                }
-
-                // Index - Error
-                return RedirectToAction("Index", new { Message = EnumManageMessageId.Error });
-            }
-            else
-            {
-                // エラー画面
-                return View("Error");
-            }
+            // エラー画面
+            return View("Error");
         }
 
         #endregion
@@ -1780,15 +1678,8 @@ namespace MultiPurposeAuthSite.Controllers
                     string name = nameClaim.Value;
                     string email = emailClaim.Value;
 
-                    string uid = "";
-                    if (Config.RequireUniqueEmail)
-                    {
-                        uid = email;
-                    }
-                    else
-                    {
-                        uid = name;
-                    }
+                    // **鍵はメアド**（#151 の段階 3）。
+                    string uid = email;
 
                     if (!string.IsNullOrWhiteSpace(email)
                         && !string.IsNullOrWhiteSpace(name))

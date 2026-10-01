@@ -46,27 +46,21 @@
         @Html.ValidationSummary(true)
         @Html.HiddenFor(model => model.Id)
         
+        @* **利用者名とメアドを、それぞれ編集する**（#151 の段階 3）。
+           以前は「利用者名＝メアド」で、片方しか出していなかった。 *@
         <div class="form-group">
-            @if (Config.RequireUniqueEmail)
-            {
-                @Html.LabelFor(model => model.Email, new { @class = "control-label col-md-2" })
-            }
-            else
-            {
-                @Html.LabelFor(model => model.Name, new { @class = "control-label col-md-2" })
-            }
-
+            @Html.LabelFor(model => model.Name, new { @class = "control-label col-md-2" })
             <div class="col-md-10">
-                
-                @if (Config.RequireUniqueEmail)
-                {
-                    @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
-                    @Html.ValidationMessageFor(model => model.Email);
-                }
-                else
-                {
-                    @Html.TextBoxFor(m => m.Name, new { @class = "form-control"})
-                }
+                @Html.TextBoxFor(m => m.Name, new { @class = "form-control" })
+                @Html.ValidationMessageFor(model => model.Name);
+            </div>
+        </div>
+
+        <div class="form-group">
+            @Html.LabelFor(model => model.Email, new { @class = "control-label col-md-2" })
+            <div class="col-md-10">
+                @Html.TextBoxFor(m => m.Email, new { @class = "form-control" })
+                @Html.ValidationMessageFor(model => model.Email);
             </div>
         </div>
 

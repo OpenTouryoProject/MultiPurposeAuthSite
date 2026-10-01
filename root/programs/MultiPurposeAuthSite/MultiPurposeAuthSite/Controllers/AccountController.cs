@@ -224,27 +224,16 @@ namespace MultiPurposeAuthSite.Controllers
             }
             */
 
-            // サインアップしたユーザを取得
-            if (Config.RequireUniqueEmail)
+            // **Email 欄が「利用者名またはメアド」の入力である**（#151 の段階 3）。
+            //   **欄の名前は変えていない。** ビュー・リソース・E2E・ID 連携の login_hint に
+            //   波及するため、名前の整理は後の段階に回す。
+            return View(new AccountLoginViewModel
             {
-                return View(new AccountLoginViewModel
-                {
-                    ReturnUrl = returnUrl,
-                    Email = loginHint,
-                    Fido2Data = fido2Challenge,
-                    SequenceNo = sequenceNo
-                });
-            }
-            else
-            {
-                return View(new AccountLoginViewModel
-                {
-                    ReturnUrl = returnUrl,
-                    Name = loginHint,
-                    Fido2Data = fido2Challenge,
-                    SequenceNo = sequenceNo
-                });
-            }
+                ReturnUrl = returnUrl,
+                Email = loginHint,
+                Fido2Data = fido2Challenge,
+                SequenceNo = sequenceNo
+            });
         }
 
         /// <summary>
@@ -271,18 +260,13 @@ namespace MultiPurposeAuthSite.Controllers
 
                     if (!string.IsNullOrWhiteSpace(model.Password))
                     {
-                        string uid = "";
-                        // サインアップしたユーザを取得
-                        if (Config.RequireUniqueEmail)
-                        {
-                            uid = model.Email;
-                        }
-                        else
-                        {
-                            uid = model.Name;
-                        }
+                        // **利用者名とメアドの、どちらでも受ける**（#151 の段階 3）。
+                        //   **`@` を含むならメアド**として引く（利用者名に `@` は禁じている）。
+                        string uid = model.Email;
 
-                        ApplicationUser user = await UserManager.FindByNameAsync(uid);
+                        ApplicationUser user = Const.LooksLikeEmail(uid)
+                            ? await UserManager.FindByEmailAsync(uid)
+                            : await UserManager.FindByNameAsync(uid);
 
                         if (user == null)
                         {
@@ -296,8 +280,10 @@ namespace MultiPurposeAuthSite.Controllers
                             {
                                 // EmailConfirmed == true の場合、
                                 // パスワード入力失敗回数に基づいてアカウントがロックアウトされるように設定するには、shouldLockout: true に変更する
+                                // **入力した値ではなく、引いた利用者の利用者名で署名する**（#151 の段階 3）。
+                                //   **メアドで引いた場合、入力値は利用者名ではない。**
                                 signInStatus = await SignInManager.PasswordSignInAsync(
-                                    userName: uid,                                      // アカウント(UID)
+                                    userName: user.UserName,                                      // アカウント(UID)
                                     password: model.Password,                           // アカウント(PWD)
                                     isPersistent: model.RememberMe,                     // アカウント記憶
                                     shouldLockout: Config.UserLockoutEnabledByDefault); // ロックアウト
@@ -325,16 +311,9 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // ID連携のサインイン
 
-                    string uid = "";
-                    // サインアップしたユーザを取得
-                    if (Config.RequireUniqueEmail)
-                    {
-                        uid = model.Email;
-                    }
-                    else
-                    {
-                        uid = model.Name;
-                    }
+                    // **入力された値を、そのまま login_hint として上流へ渡す**（#151 の段階 3）。
+                    //   利用者名でもメアドでもよい（上流がどう解釈するかは上流しだい）。
+                    string uid = model.Email;
 
                     // 認可エンドポイント
                     string oAuthAuthorizeEndpoint =
@@ -811,27 +790,24 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // AccountRegisterViewModelの検証に成功
 
-                    string uid = "";
-                    // サインアップしたユーザを取得
-                    if (Config.RequireUniqueEmail)
-                    {
-                        // model.Emailはチェック済み。
-                        uid = model.Email;
-                    }
-                    else
-                    {
-                        // model.Nameのカスタムのチェック処理は必要か？
-                        uid = model.Name;
-                    }
+                    // **利用者名とメアドの両方を受け取る**（#151 の段階 3）。
+                    //   以前はどちらか一方を `uid` に潰していた（画面には両方在ったのに）。
+                    string userName = model.Name;
+                    string email = model.Email;
 
-                    if (!string.IsNullOrWhiteSpace(uid))
+                    // **利用者名に `@` を禁じる**（サインインの入力がどちらなのか決まらなくなるため）。
+                    if (!Const.IsValidUserName(userName))
                     {
-                        // uidが空文字列でない場合。
+                        ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(email))
+                    {
+                        // 利用者名もメアドも在る場合。
 
                         #region サインアップ
 
                         // ユーザを作成
-                        ApplicationUser user = ApplicationUser.CreateUser(uid, false);
+                        ApplicationUser user = ApplicationUser.CreateUser(userName, email, false);
 
                         // ApplicationUserManagerのCreateAsync
                         IdentityResult result = await UserManager.CreateAsync(
@@ -858,36 +834,16 @@ namespace MultiPurposeAuthSite.Controllers
                                 await this.UserManager.AddToRoleAsync(user.Id, Const.Role_Admin);
                             }
 
-                            if (Config.RequireUniqueEmail)
-                            {
-                                // サインインの前にメアド検証用のメールを送信して、
-                                this.SendConfirmEmail(user);
+                            // **メアドは常に在るので、必ず検証する**（#151 の段階 3）。
+                            //   以前は「メアド無し」の配備があり、そのときは
+                            //   約款画面またはサインイン画面へ直行していた。
+                            //   **約款は、メアド検証のリンクを踏んだ後に出る**（下の Agreement）。
 
-                                // VerifyEmailAddress画面へ遷移
-                                return View("VerifyEmailAddress");
-                            }
-                            else
-                            {
-                                if (Config.DisplayAgreementScreen)
-                                {
-                                    // 約款あり
-                                    // 約款画面を表示
-                                    return View(
-                                        "Agreement",
-                                         new AccountAgreementViewModel
-                                         {
-                                             UserId = user.Id,
-                                             Code = "dummy",
-                                             Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
-                                             AcceptedAgreement = false
-                                         });
-                                }
-                                else
-                                {
-                                    // Login画面へ遷移
-                                    return View("Login");
-                                }
-                            }
+                            // サインインの前にメアド検証用のメールを送信して、
+                            this.SendConfirmEmail(user);
+
+                            // VerifyEmailAddress画面へ遷移
+                            return View("VerifyEmailAddress");
 
                             #endregion
                         }
@@ -896,7 +852,8 @@ namespace MultiPurposeAuthSite.Controllers
                             #region サインアップ失敗
 
                             // サインアップ済みの可能性を探る
-                            ApplicationUser oldUser = await UserManager.FindByNameAsync(uid);
+                            //   **メアドで引く**（#151 の段階 3。鍵はメアド）。
+                            ApplicationUser oldUser = await UserManager.FindByEmailAsync(email);
 
                             if (oldUser == null)
                             {
@@ -954,40 +911,14 @@ namespace MultiPurposeAuthSite.Controllers
                                         // 結果の確認
                                         if (result.Succeeded)
                                         {
-                                            // メアド検証の再送について
-                                            if (Config.RequireUniqueEmail)
-                                            {
-                                                // 再度、メアド検証
+                                            // **メアドは常に在るので、必ず検証の再送をする**（#151 の段階 3）。
+                                            //   以前は「メアド無し」の配備があり、そのときは約款画面へ直行していた。
 
-                                                // メアド検証用のメールを送信して、
-                                                this.SendConfirmEmail(user);
+                                            // メアド検証用のメールを送信して、
+                                            this.SendConfirmEmail(user);
 
-                                                // VerifyEmailAddress
-                                                //ViewBag.Link = callbackUrl;
-                                                return View("VerifyEmailAddress");
-                                            }
-                                            else
-                                            {
-                                                if (Config.DisplayAgreementScreen)
-                                                {
-                                                    // 約款あり
-                                                    // 約款画面を表示
-                                                    return View(
-                                                        "Agreement",
-                                                         new AccountAgreementViewModel
-                                                         {
-                                                             UserId = user.Id,
-                                                             Code = "dummy",
-                                                             Agreement = GetContentOfLetter.Get("Agreement", CustomEncode.UTF_8, null),
-                                                             AcceptedAgreement = false
-                                                         });
-                                                }
-                                                else
-                                                {
-                                                    // Login画面へ遷移
-                                                    return View("Login");
-                                                }
-                                            }
+                                            // VerifyEmailAddress
+                                            return View("VerifyEmailAddress");
                                         }
                                         else
                                         {
@@ -1137,70 +1068,39 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     // AccountAgreementViewModelの検証に成功
 
-                    if (Config.RequireUniqueEmail)
+                    // **メアドのアクティベーションを必ず伴う**（#151 の段階 3）。
+                    //   以前は「メアド無し」の配備があり、そのときは EmailConfirmed を
+                    //   直に true にしてサインイン画面へ送っていた。
+                    if (model.AcceptedAgreement)
                     {
-                        if (model.AcceptedAgreement)
+                        // 同意された。
+                        ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+
+                        // アクティベーション
+                        IdentityResult result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
+
+                        // メアド検証結果 ( "EmailConfirmation" or "Error"
+                        if (result.Succeeded)
                         {
-                            // 同意された。
-                            ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
+                            // メールの送信
+                            this.SendRegisterCompletedEmail(user);
 
-                            // アクティベーション
-                            IdentityResult result = await UserManager.ConfirmEmailAsync(model.UserId, model.Code);
+                            // オペレーション・トレース・ログ出力
+                            Logging.MyOperationTrace(string.Format("{0}({1}) has been activated.", user.Id, user.UserName));
 
-                            // メアド検証結果 ( "EmailConfirmation" or "Error"
-                            if (result.Succeeded)
-                            {
-                                // メールの送信
-                                this.SendRegisterCompletedEmail(user);
-
-                                // オペレーション・トレース・ログ出力
-                                Logging.MyOperationTrace(string.Format("{0}({1}) has been activated.", user.Id, user.UserName));
-
-                                // 完了画面
-                                return View("EmailConfirmation");
-                            }
-                            else
-                            {
-                                // 失敗
-                                this.AddErrors(result);
-                            }
+                            // 完了画面
+                            return View("EmailConfirmation");
                         }
                         else
                         {
-                            // 同意されていない。
-                            // todo: 必要に応じて、エラーメッセージの表示を検討してください。
+                            // 失敗
+                            this.AddErrors(result);
                         }
                     }
                     else
                     {
-                        if (model.AcceptedAgreement)
-                        {
-                            // 同意された。
-
-                            // アクティベーション
-                            ApplicationUser user = await UserManager.FindByIdAsync(model.UserId);
-                            user.EmailConfirmed = true;
-                            IdentityResult result = await UserManager.UpdateAsync(user);
-
-                            if (result.Succeeded)
-                            {
-                                // オペレーション・トレース・ログ出力
-                                Logging.MyOperationTrace(string.Format("{0}({1}) has been activated.", user.Id, user.UserName));
-
-                                // Login画面へ遷移
-                                return View("Login");
-                            }
-                            else
-                            {
-                                // 失敗
-                                this.AddErrors(result);
-                            }
-                        }
-                        else
-                        {
-                            // 同意されていない。
-                            // todo: 必要に応じて、エラーメッセージの表示を検討してください。
-                        }
+                        // 同意されていない。
+                        // todo: 必要に応じて、エラーメッセージの表示を検討してください。
                     }
                 }
                 else
@@ -1838,15 +1738,16 @@ namespace MultiPurposeAuthSite.Controllers
                     string emailVerified =
                         identity.FindFirst(OAuth2AndOIDCConst.email_verified)?.Value;
 
-                    string uid = "";
-                    if (Config.RequireUniqueEmail)
-                    {
-                        uid = email;
-                    }
-                    else
-                    {
-                        uid = name;
-                    }
+                    // **鍵はメアド**（#151 の段階 3）。
+                    //   以前は RequireUniqueEmail で「メアド」か「上流の識別子」かを選んでいた。
+                    //   **メアドは常に在って一意**なので、鍵はメアドで決まる。
+                    string uid = email;
+
+                    // **新規に作るときの利用者名**（#151 の段階 3）。
+                    //   上流の識別子がそのまま使えるならそれを、
+                    //   **`@` を含んで使えないならメアドから作る**（利用者名に `@` は禁じている）。
+                    string newUserName = Const.IsValidUserName(name)
+                        ? name : Const.UserNameFromEmail(email);
 
                     if (!string.IsNullOrWhiteSpace(email)
                         && !string.IsNullOrWhiteSpace(name))
@@ -1892,17 +1793,16 @@ namespace MultiPurposeAuthSite.Controllers
                             // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
 
                             // サインアップ済みの可能性を探る
-                            user = await UserManager.FindByNameAsync(uid);
+                            // **メアドで引く**（#151 の段階 3。鍵がメアドになった）。
+// サインアップ済みの可能性を探る
+                            user = await UserManager.FindByEmailAsync(uid);
 
                             if (user != null)
                             {
                                 // サインアップ済み → 外部ログイン追加だけで済む
 
                                 // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
-                                //   RequireUniqueEmail が true のとき、uid ＝ メアドなので**メアドが鍵**である。
-                                //   false のときの鍵は上流の識別子で、メアドは一致の確認にしか使っていない。
-                                if (Sts.AccountLink.CheckLinkToExistingUser(
-                                    Config.RequireUniqueEmail, emailVerified)
+                                if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
                                         == Sts.AccountLinkCheck.NeedsVerifiedEmail)
                                 {
                                     // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
@@ -1917,23 +1817,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 }
 
                                 // 外部ログイン（ = UserLoginInfo ）の追加
-                                if (Config.RequireUniqueEmail)
-                                {
-                                    result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
-                                }
-                                else
-                                {
-                                    if (email == user.Email)
-                                    {
-                                        // メアドも一致
-                                        result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
-                                    }
-                                    else
-                                    {
-                                        // メアド不一致
-                                        result = new IdentityResult();
-                                    }
-                                }
+                                // **メアドで引いているので、メアドの一致は自明**（#151 の段階 3）。
+                                //   以前は「鍵が上流の識別子」の場合に備えて、ここで突き合わせていた。
+                                result = await UserManager.AddLoginAsync(user.Id, externalLoginInfo.Login);
 
                                 // クレーム（emailClaim, nameClaim, etc.）の追加
                                 if (result.Succeeded)
@@ -1989,12 +1875,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 //return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
 
                                 // 外部ログイン プロバイダのユーザー情報でユーザを作成
-                                // uid = 連携先メアドの場合、E-mail confirmationはしない（true）。
-                                user = ApplicationUser.CreateUser(uid, true);
-
-                                // サインアップ時のみ、メアドも追加
-                                //（RequireUniqueEmail = false時を想定）
-                                user.Email = email;
+                                // **利用者名とメアドを別に渡す**（#151 の段階 3）。
+                                //   以前は uid を利用者名にしてから、メアドを後で入れ直していた。
+                                user = ApplicationUser.CreateUser(newUserName, email, true);
 
                                 // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
                                 user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
@@ -2264,15 +2147,16 @@ namespace MultiPurposeAuthSite.Controllers
                     Claim nameClaim = new Claim(OAuth2AndOIDCConst.UrnSubjectClaim, name);
                     Claim emailClaim = new Claim(OAuth2AndOIDCConst.UrnEmailClaim, email);
 
-                    string uid = "";
-                    if (Config.RequireUniqueEmail)
-                    {
-                        uid = email;
-                    }
-                    else
-                    {
-                        uid = name;
-                    }
+                    // **鍵はメアド**（#151 の段階 3）。
+                    //   以前は RequireUniqueEmail で「メアド」か「上流の識別子」かを選んでいた。
+                    //   **メアドは常に在って一意**なので、鍵はメアドで決まる。
+                    string uid = email;
+
+                    // **新規に作るときの利用者名**（#151 の段階 3）。
+                    //   上流の識別子がそのまま使えるならそれを、
+                    //   **`@` を含んで使えないならメアドから作る**（利用者名に `@` は禁じている）。
+                    string newUserName = Const.IsValidUserName(name)
+                        ? name : Const.UserNameFromEmail(email);
 
                     // **/userinfo の sub は、id_token の sub と一致しなければならない**
                     //   （OIDC Core §5.3.2。一致しなければトークンの取り違えを疑う）。
@@ -2360,17 +2244,16 @@ namespace MultiPurposeAuthSite.Controllers
                             // 外部ログインだけで済むか、サインアップからかを確認する必要がある。
 
                             // サインアップ済みの可能性を探る
-                            user = await UserManager.FindByNameAsync(uid);
+                            // **メアドで引く**（#151 の段階 3。鍵がメアドになった）。
+// サインアップ済みの可能性を探る
+                            user = await UserManager.FindByEmailAsync(uid);
 
                             if (user != null)
                             {
                                 // サインアップ済み → 外部ログイン追加だけで済む
 
                                 // **メアドを鍵にして既存アカウントに結ぶなら、検証済みでなければならない**（#140 の段階 1）。
-                                //   RequireUniqueEmail が true のとき、uid ＝ メアドなので**メアドが鍵**である。
-                                //   false のときの鍵は上流の識別子で、メアドは一致の確認にしか使っていない。
-                                if (Sts.AccountLink.CheckLinkToExistingUser(
-                                    Config.RequireUniqueEmail, emailVerified)
+                                if (Sts.AccountLink.CheckLinkToExistingUser(emailVerified)
                                         == Sts.AccountLinkCheck.NeedsVerifiedEmail)
                                 {
                                     // **結び付けない。** 画面に理由を出し、明示的な追加へ誘導する。
@@ -2385,23 +2268,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 }
 
                                 // 外部ログイン（ = UserLoginInfo ）の追加
-                                if (Config.RequireUniqueEmail)
-                                {
-                                    result = await UserManager.AddLoginAsync(user.Id, login);
-                                }
-                                else
-                                {
-                                    if (email == user.Email)
-                                    {
-                                        // メアドも一致
-                                        result = await UserManager.AddLoginAsync(user.Id, login);
-                                    }
-                                    else
-                                    {
-                                        // メアド不一致
-                                        result = new IdentityResult();
-                                    }
-                                }
+                                // **メアドで引いているので、メアドの一致は自明**（#151 の段階 3）。
+                                //   以前は「鍵が上流の識別子」の場合に備えて、ここで突き合わせていた。
+                                result = await UserManager.AddLoginAsync(user.Id, login);
 
                                 // クレーム（emailClaim, nameClaim, etc.）の追加
                                 if (result.Succeeded)
@@ -2457,12 +2326,9 @@ namespace MultiPurposeAuthSite.Controllers
                                 //return View("ExternalLoginConfirmation", new ExternalLoginConfirmationViewModel { Email = email });
 
                                 // 外部ログイン プロバイダのユーザー情報でユーザを作成
-                                // uid = 連携先メアドの場合、E-mail confirmationはしない（true）。
-                                user = ApplicationUser.CreateUser(uid, true);
-
-                                // サインアップ時のみ、メアドも追加
-                                //（RequireUniqueEmail = false時を想定）
-                                user.Email = email;
+                                // **利用者名とメアドを別に渡す**（#151 の段階 3）。
+                                //   以前は uid を利用者名にしてから、メアドを後で入れ直していた。
+                                user = ApplicationUser.CreateUser(newUserName, email, true);
 
                                 // **上流が検証していないメアドを「確認済み」として定着させない**（#140 の段階 1）。
                                 user.EmailConfirmed = Sts.AccountLink.EmailConfirmedForNewUser(emailVerified);
@@ -4654,7 +4520,9 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region 管理者ユーザ
 
-                user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                user = ApplicationUser.CreateUser(
+                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        Config.AdministratorUID, true);
                 result = await this.UserManager.CreateAsync(user, Config.AdministratorPWD);
                 if (result.Succeeded)
                 {
@@ -4673,24 +4541,24 @@ namespace MultiPurposeAuthSite.Controllers
                     && !string.IsNullOrWhiteSpace(password))
                 {
                     // 管理者ユーザを作成
-                    user = ApplicationUser.CreateUser("super_tanaka@gmail.com", true);
+                    user = ApplicationUser.CreateUser("super_tanaka", "super_tanaka@gmail.com", true);
 
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
                         await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, Const.Role_User);
+                            (await this.UserManager.FindByNameAsync("super_tanaka")).Id, Const.Role_User);
                         await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka@gmail.com")).Id, Const.Role_Admin);
+                            (await this.UserManager.FindByNameAsync("super_tanaka")).Id, Const.Role_Admin);
                     }
 
                     // 一般ユーザを作成
-                    user = ApplicationUser.CreateUser("tanaka@gmail.com", true);
+                    user = ApplicationUser.CreateUser("tanaka", "tanaka@gmail.com", true);
                     result = await this.UserManager.CreateAsync(user, password);
                     if (result.Succeeded)
                     {
                         await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("tanaka@gmail.com")).Id, Const.Role_User);
+                            (await this.UserManager.FindByNameAsync("tanaka")).Id, Const.Role_User);
                     }
                 }
 

@@ -231,7 +231,9 @@ namespace MultiPurposeAuthSite.Data
                     // 既存のユーザストアに接続して、ユーザを返す。
 
                     // テスト：管理者ユーザを返す。
-                    user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                    user = ApplicationUser.CreateUser(
+                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        Config.AdministratorUID, true);
                     user.Id = userId;
 
 #if NETFX
@@ -344,7 +346,9 @@ namespace MultiPurposeAuthSite.Data
                     if (userName.ToUpper() == Config.AdministratorUID.ToUpper())
 #endif
                     {
-                        user = ApplicationUser.CreateUser(Config.AdministratorUID, true);
+                        user = ApplicationUser.CreateUser(
+                        Const.UserNameFromEmail(Config.AdministratorUID),
+                        Config.AdministratorUID, true);
 #if NETFX
                         user.PasswordHash = (new CustomPasswordHasher()).HashPassword(Config.AdministratorPWD);
 #else

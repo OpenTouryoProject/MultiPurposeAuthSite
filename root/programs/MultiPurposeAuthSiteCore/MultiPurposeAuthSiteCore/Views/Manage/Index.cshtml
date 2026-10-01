@@ -74,23 +74,11 @@
         <dl class="dl-horizontal">
             @if (Config.AllowEditingUserName)
             {
-                // UserNameの変更が許可されている場合。
-                if (Config.RequireUniqueEmail)
-                {
-                    // UserName＝メアドの場合
-                    <dt>Email :</dt>
-                    <dd>
-                        [@Html.ActionLink(ManageViews.IndexEmailChangeActionLink, "ChangeEmail")]
-                    </dd>
-                }
-                else
-                {
-                    // UserName≠メアドの場合
-                    <dt>UserName :</dt>
-                    <dd>
-                        [@Html.ActionLink(ManageViews.IndexUserNameChangeActionLink, "ChangeUserName")]
-                    </dd>
-                }
+                // **利用者名の変更**（#151 の段階 3）。メアドの変更は、この下に別で出す。
+                <dt>UserName :</dt>
+                <dd>
+                    [@Html.ActionLink(ManageViews.IndexUserNameChangeActionLink, "ChangeUserName")]
+                </dd>
             }
             else
             {
@@ -110,40 +98,16 @@
                 ]
             </dd>
 
-            @if (Config.RequireUniqueEmail)
+            @* **メアドの変更**（#151 の段階 3）。
+               **「追加」と「削除」は引退した。** メアドを持たない利用者のための機能で、
+               **メアドが常に在って一意**（サインインの識別子）になったため成り立たない。 *@
+            @if (Config.CanEditEmail)
             {
-                // UserName＝メアドの場合
-            }
-            else
-            {
-                // UserName≠メアドの場合（のメアド追加
-                if (Config.CanEditEmail)
-                {
-                    // メアドの変更が許可されている場合。
-
-                    <dt>@ManageViews.IndexEmail :</dt>
-                    <dd>
-                        @if (string.IsNullOrEmpty(Model.Email))
-                        {
-                            <text>None</text><br />
-                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
-                        }
-                        else
-                        {
-                            <text>@Model.Email</text><br />
-                            <text>[&nbsp;&nbsp;@Html.ActionLink(ManageViews.IndexEmailAddActionLink, "AddEmail")&nbsp;&nbsp;]</text>
-                            using (Html.BeginForm("RemoveEmail", "Manage", FormMethod.Post, new { @class = "form-horizontal", role = "form", onsubmit = "Fx_OnSubmit();" }))
-                            {
-                                @Html.AntiForgeryToken()
-                                <text>[<input type="submit" value="@ManageViews.IndexEmailRemoveButton" class="btn btn-link" />]</text>
-                            }
-                        }
-                    </dd>
-                }
-                else
-                {
-                    // メアドの変更が許可されていない場合。
-                }
+                <dt>@ManageViews.IndexEmail :</dt>
+                <dd>
+                    @Model.Email<br />
+                    [@Html.ActionLink(ManageViews.IndexEmailChangeActionLink, "ChangeEmail")]
+                </dd>
             }
 
             @if (Config.CanEditPhone)

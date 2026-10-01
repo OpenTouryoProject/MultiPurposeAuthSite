@@ -1112,7 +1112,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 // **テスト ユーザは使えない。** CIBA のテスト（EX-8）が端末を登録するため、
                 // 実行順によっては「端末あり」になる。E2E からサインインしない別の利用者を指す。
-                const string NoDeviceUser = "tanaka@gmail.com";
+                const string NoDeviceUser = "tanaka"; // #151 の段階 3 で利用者名とメアドを分けた
 
                 r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = " + NoDeviceUser
                     + "（認証サイトが IsDebug のときに作る利用者。E2E は端末を登録しない）");

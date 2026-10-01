@@ -454,17 +454,6 @@ namespace MultiPurposeAuthSite.Co
         }
 
         /// <summary>
-        /// ユーザ名検証（E-mail形式で要求）
-        /// </summary>
-        public static bool RequireUniqueEmail
-        {
-            get
-            {
-                return Convert.ToBoolean(GetConfigParameter.GetConfigValue("RequireUniqueEmail"));
-            }
-        }
-
-        /// <summary>
         /// 約款画面を表示するかどうか
         /// </summary>
         public static bool DisplayAgreementScreen

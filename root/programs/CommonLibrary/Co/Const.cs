@@ -115,9 +115,9 @@ namespace MultiPurposeAuthSite.Co
         /// **`userid` が返らなくなっても、検証済みメアドの突き合わせで拾われて新しい鍵へ移行する**
         /// （C-23 の判定を通る。上流が `email_verified` を返すため）。
         ///
-        /// > **`RequireUniqueEmail` が false の配備だけは注意が要る。**
-        /// > その場合の突き合わせは利用者名（＝上流の `sub`）なので、
-        /// > **旧い鍵の利用者は拾われず、新しいアカウントが作られる。**
+        /// > **突き合わせは常にメアドである**（#151 の段階 3）。
+        /// > 以前は `RequireUniqueEmail` が false の配備で利用者名が鍵になり、
+        /// > **旧い鍵の利用者が拾われない**という穴があった。その設定は落とした。
         /// </remarks>
         public static readonly string IdFederationScopes =
             OAuth2AndOIDCConst.Scope_Openid + " "
@@ -176,7 +176,76 @@ namespace MultiPurposeAuthSite.Co
         /// 印より後に認証されていれば、**一度は再認証した**と判断して先へ進む。
         /// </remarks>
         public const string ReAuthenticatedAt = "re_auth_at";
-        
+
+        #endregion
+
+        #region 利用者の識別子（#151 の段階 3）
+
+        /// <summary>
+        /// 入力された識別子が、メアドの形かどうか（#151 の段階 3）
+        /// </summary>
+        /// <param name="identifier">サインイン画面に入力された値</param>
+        /// <returns>メアドの形なら true</returns>
+        /// <remarks>
+        /// **利用者名とメアドの両方でサインインできる。**
+        /// どちらとして引くかを、**`@` を含むかどうか**で決める。
+        ///
+        /// **新しい利用者名に `@` を禁じている**ので（<see cref="IsValidUserName"/>）、
+        /// **この判定は曖昧にならない。**
+        ///
+        /// > **既存の利用者名は書き換えていない。** 以前は「利用者名＝メアド」だったため、
+        /// > **`@` を含む利用者名が残っている。**
+        /// > その利用者は**メアドとして引かれる**が、**値が同じなので同じ利用者に当たる。**
+        /// </remarks>
+        public static bool LooksLikeEmail(string identifier)
+        {
+            return !string.IsNullOrEmpty(identifier) && identifier.Contains("@");
+        }
+
+        /// <summary>
+        /// 利用者名として使える値かどうか（#151 の段階 3）
+        /// </summary>
+        /// <param name="userName">利用者名</param>
+        /// <returns>使えるなら true</returns>
+        /// <remarks>
+        /// **`@` を含む利用者名を認めない。**
+        /// 認めると、**サインインの入力がメアドなのか利用者名なのか決まらない。**
+        ///
+        /// **新しく作る・変えるときだけ掛ける。**
+        /// **既存の利用者名（以前の「利用者名＝メアド」）は、そのまま使い続けられる。**
+        /// </remarks>
+        public static bool IsValidUserName(string userName)
+        {
+            return !string.IsNullOrWhiteSpace(userName) && !userName.Contains("@");
+        }
+
+        /// <summary>
+        /// メアドから、利用者名の既定値を作る（#151 の段階 3）
+        /// </summary>
+        /// <param name="email">メアド</param>
+        /// <returns>`@` より前の部分（`@` が無ければ、そのまま）</returns>
+        /// <remarks>
+        /// **利用者名を別に決められない場面で使う。**
+        ///
+        /// | 使う場所 | なぜ |
+        /// |---|---|
+        /// | 管理者・テスト利用者の生成 | 設定にあるのは**メアドだけ**（`AdministratorUID`） |
+        /// | 外部ログイン・ID 連携での新規作成 | 上流が返すのは `sub` と**メアド**で、利用者名は無い |
+        ///
+        /// **一意性は呼び出し側が確かめる。** ここは形を整えるだけ。
+        /// </remarks>
+        public static string UserNameFromEmail(string email)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                return email;
+            }
+
+            int at = email.IndexOf('@');
+
+            return (at > 0) ? email.Substring(0, at) : email;
+        }
+
         #endregion
     }
 }

@@ -73,25 +73,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <summary>
         /// 既存アカウントに結び付けてよいかを判定する。
         /// </summary>
-        /// <param name="emailIsMatchingKey">
-        /// **メアドが突き合わせの鍵かどうか。**
-        /// `Config.RequireUniqueEmail` が true のとき、利用者名＝メアドなので鍵になる。
-        /// false のときの鍵は上流の識別子で、メアドは一致の確認にしか使っていない。
-        /// </param>
         /// <param name="emailVerified">
         /// 上流が返した `email_verified`（クレームの値、または JSON の値を文字列にしたもの）。
         /// **無い場合は null / 空**を渡す（「返さない」と「false」は同じ扱いにする）。
         /// </param>
         /// <returns>AccountLinkCheck</returns>
-        public static AccountLinkCheck CheckLinkToExistingUser(
-            bool emailIsMatchingKey, string emailVerified)
+        /// <remarks>
+        /// **引数から `emailIsMatchingKey` を落とした**（#151 の段階 3）。
+        /// 以前は `RequireUniqueEmail` が false の配備で**鍵が上流の識別子**になり、
+        /// メアドは一致の確認にしか使っていなかったため、判定の対象外にしていた。
+        /// **メアドは常に在って一意になったので、常に鍵である。**
+        /// </remarks>
+        public static AccountLinkCheck CheckLinkToExistingUser(string emailVerified)
         {
-            if (!emailIsMatchingKey)
-            {
-                // 鍵は上流の識別子。メアドは確認にしか使っていないので、この判定の対象外。
-                return AccountLinkCheck.Ok;
-            }
-
             if (!Config.RequireVerifiedEmailForAccountLinking)
             {
                 // 従来どおり（設定で明示的に戻した場合）。

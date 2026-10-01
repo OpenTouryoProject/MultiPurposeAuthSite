@@ -282,16 +282,17 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = null;
 
                 // （一般）ユーザを作成
-                if (Config.RequireUniqueEmail)
+                //   **利用者名とメアドの両方を渡す**（#151 の段階 3）。
+                //   以前はどちらか一方を利用者名にして、もう一方を捨てていた。
+                //   **利用者名に `@` は使えない**（サインインの入力がどちらなのか決まらなくなる）。
+                if (!Const.IsValidUserName(userViewModel.Name))
                 {
-                    // userViewModel.Emailはチェック済み。
-                    user = ApplicationUser.CreateUser(userViewModel.Email, true);
+                    ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
+                    return View(userViewModel);
                 }
-                else
-                {
-                    // userViewModel.Nameのカスタムのチェック処理は必要か？
-                    user = ApplicationUser.CreateUser(userViewModel.Name, true);
-                }
+
+                user = ApplicationUser.CreateUser(
+                    userViewModel.Name, userViewModel.Email, true);
 
                 // ApplicationUserManagerのCreateAsync
                 IdentityResult userResult = await UserManager.CreateAsync(
@@ -415,17 +416,16 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(editUser.Id);                
 
                 // 編集結果を反映
-                if (Config.RequireUniqueEmail)
+                //   **利用者名とメアドを、それぞれ反映する**（#151 の段階 3）。
+                //   以前は「利用者名＝メアド」で、メアドを入れると利用者名も変わっていた。
+                if (!Const.IsValidUserName(editUser.Name))
                 {
-                    // userViewModel.Emailはチェック済み。
-                    user.UserName = editUser.Email;
-                    user.Email = editUser.Email;
+                    ModelState.AddModelError("", Resources.AccountController.Register_InvalidUserName);
+                    return View(editUser);
                 }
-                else
-                {
-                    // userViewModel.Nameのカスタムのチェック処理は必要か？
-                    user.UserName = editUser.Name;
-                }
+
+                user.UserName = editUser.Name;
+                user.Email = editUser.Email;
 
                 // ユーザーの更新
                 if (string.IsNullOrWhiteSpace(user.UserName))

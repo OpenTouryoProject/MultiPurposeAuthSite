@@ -113,10 +113,8 @@
     // 登録されるTestUserのpassword
     "TestUserPWD": "[password of TestUser]",
 
-    // ユーザ名検証（既定のユーザ名は、E-mail
     "AllowOnlyAlphanumericUserNames": "false",
     // UserNameがEmailかどうか
-    "RequireUniqueEmail": "true",
     // 約款画面を表示するかどうか
     "DisplayAgreementScreen": "false",
     // メアド検証リンクの有効期限 24  時間

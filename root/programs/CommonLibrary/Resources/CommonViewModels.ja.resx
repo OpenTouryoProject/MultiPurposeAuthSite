@@ -192,6 +192,9 @@
   <data name="UnstructuredData2" xml:space="preserve">
     <value>非構造化データ2</value>
   </data>
+  <data name="UserNameOrEmail" xml:space="preserve">
+    <value>利用者名またはメアド</value>
+  </data>
   <data name="UserName" xml:space="preserve">
     <value>ユーザ名</value>
   </data>

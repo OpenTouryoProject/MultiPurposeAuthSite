@@ -289,7 +289,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public static string ProgramsDir { get; private set; }
 
         /// <summary>テスト ユーザ名</summary>
+        /// <remarks>
+        /// **利用者名とメアドは別の値である**（#151 の段階 3）。
+        /// 以前は「利用者名＝メアド」だったため、この 1 つで足りていた。
+        /// **サインインはどちらでも通る**ので、既定はこちら（利用者名）を使う。
+        /// </remarks>
         public static string TestUserName { get; private set; }
+
+        /// <summary>テスト ユーザのメアド（#151 の段階 3）</summary>
+        /// <remarks>**メアドでのサインインを測るときに使う**（`SM-4.2`）。</remarks>
+        public static string TestUserEmail { get; private set; }
 
         /// <summary>
         /// 2 人目のテスト ユーザ（認証サイトが IsDebug のときに作る一般ユーザ）。
@@ -304,8 +313,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         static TestEnv()
         {
             ProgramsDir = FindProgramsDir();
-            TestUserName = "super_tanaka@gmail.com";
-            SecondUserName = "tanaka@gmail.com";
+            // **利用者名とメアドを分けた**（#151 の段階 3）。
+            //   種データ（CreateData）が、この組み合わせで作る。
+            TestUserName = "super_tanaka";
+            TestUserEmail = "super_tanaka@gmail.com";
+            SecondUserName = "tanaka";
 
             // 既定値（baseUrl は null ＝ 構成ファイルから導出）
             Register(CoreKey, "net10.0版 (MultiPurposeAuthSiteCore)", null,

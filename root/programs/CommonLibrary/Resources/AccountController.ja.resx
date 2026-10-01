@@ -126,6 +126,9 @@
   <data name="Login_emailconfirm" xml:space="preserve">
     <value>電子メールの確認が必要です！</value>
   </data>
+  <data name="Register_InvalidUserName" xml:space="preserve">
+    <value>利用者名に「@」は使えません（メアドは、メアドの欄に入れてください）。</value>
+  </data>
   <data name="Login_Error" xml:space="preserve">
     <value>サインイン試行に失敗しました。</value>
   </data>

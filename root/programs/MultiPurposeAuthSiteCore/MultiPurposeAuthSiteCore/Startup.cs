@@ -460,7 +460,11 @@ namespace MultiPurposeAuthSite
                     // ユーザー
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#user
                     //idOptions.SignIn.AllowedUserNameCharacters = false;
-                    idOptions.User.RequireUniqueEmail = Config.RequireUniqueEmail;
+                    // **メアドは常に一意**（#151 の段階 3）。
+                    //   **利用者名とメアドの両方でサインインできる**ので、
+                    //   **メアドが一意でないと FindByEmailAsync が成り立たない。**
+                    //   以前は RequireUniqueEmail の設定で切り替えていた（その設定は落とした）。
+                    idOptions.User.RequireUniqueEmail = true;
 
                     // サインイン
                     // https://docs.microsoft.com/ja-jp/aspnet/core/security/authentication/identity-configuration?view=aspnetcore-2.2#sign-in
