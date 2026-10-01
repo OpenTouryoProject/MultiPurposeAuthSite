@@ -64,7 +64,7 @@ nonce まわりは C-14（#190）＋ C-16（#191）で仕様どおりに揃っ�
 | | Refresh Token | ✓ | ローテーションあり |
 | トークン | JWS 署名 access_token / id_token（RS256 / ES256） | ✓ | |
 | | JWE 暗号化 id_token（FAPI2） | ✓ | RSA-OAEP + AES-GCM |
-| | PPID（`subject_types`: `public` / `pairwise` / `uname`） | ✓ | `Util/PPIDExtension` |
+| | PPID（`subject_types`: `public` / `pairwise` / `uname`） | ✓ | `Util/PPIDExtension`。**既定は `public`**（#151 の段階 4。`uname` は独自値で非推奨） |
 | | mTLS Sender-Constrained（`cnf.x5t#S256`） | ✓ | 発行（`/token`）と照合（`/userinfo` ほか）。C-19 |
 | エンドポイント | `/token` `/userinfo` `/revoke` `/introspect` `/jwkcerts` | ✓ | |
 | | `/end_session`（RP-Initiated Logout） | ✓ | #232。Front-Channel / Back-Channel は未実装（5 節 D-1） |
@@ -646,7 +646,7 @@ CIBA クライアントはこのキーを見つけられない。
 |---|---|---|---|
 | 9 | **設定に合わせて広告する**。`RequirePkceS256` が `true` なら `["S256"]`、既定（`false`）なら `["plain","S256"]` | 広告と実装を一致させる。**既定の挙動は変えない。** `RequirePkceS256` はサーバ全体の設定なので、要求者によらず 1 つに決まる（クライアント単位の `require_pkce` は「必須にするか」で別の話。Discovery にクライアント別の項目は無い） | `RT-189.5` |
 | 12 | **設定値にする**（`ServiceDocumentation`。既定は空、空なら出さない） | 任意の項目なので、嘘のプレースホルダ（`"・・・"`）を配らない | `RT-189.5` |
-| 10 | **変えない**（#151 に委ねる） | `uname` は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）。広告だけ直すと、実際の `sub` とズレる | — |
+| 10 | **変えない**（#151 に委ねる） → **✅ #151 の段階 4 で解決** | `uname` は**登録の既定であり、実際の振る舞い**（`sub` に利用者名）。広告だけ直すと、実際の `sub` とズレる。**段階 4 で、実際の既定を `public` に変えた**ので、**広告の並びも `public` 先頭にした**（`uname` は非推奨として残す。外すのは段階 5） | `RT-151.1` / `RT-151.2` |
 | 11 | **変えない**（D-2＝#229 に委ねる） | `request_object_endpoint` は FAPI1 の Request Object（JAR）の置き場所を示す独自拡張。**名前だけ PAR に寄せると、中身が PAR でないのに PAR と読まれる** | — |
 | 13 | **別 Issue（#230）**（`profile` / `address` のクレームは未実装。D-7） | 広告だけ足すと嘘になる | — |
 | 14 | **別 Issue**（`end_session` は D-1＝#232、`iss` は D-5＝#231。`registration` は D-4 で、#129 と関連） | いずれも未実装。とくに `iss`（RFC 9207）は認可応答に値を足す実装が要る | — |
@@ -898,6 +898,43 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
 |---|---|
 | **#151** | **`subject_types` の既定を変えても、既存の RP が壊れない** |
 | **D-9-2** | **PPID の秘密を、漏洩時に替えられる** |
+
+### `subject_types` の既定を `public` に **[Lib]** — **✅ 実施（#151 の段階 4）**
+
+**既定を `uname`（独自値）から `public` に変えた。**
+
+**`uname` を落としたい理由は「独自値だから」より「`sub` に利用者名が入るから」である。**
+以前は「利用者名＝メアド」だったので、**`sub` としてメアドが全ての RP に渡っていた。**
+**`sub` は「その RP の中で利用者を指す識別子」**であって、表示用の属性ではない。
+
+| 変えたところ | |
+|---|---|
+| `Helper.GetSubjectTypes` | **登録に `subject_types` が無いときの戻り値**（2 箇所。構成ファイルと画面登録） |
+| `CmnEndpoints`（Discovery） | `subject_types_supported` の**並びを `public` 先頭**に（**`uname` は残す**） |
+| `ManageAddSaml2OAuth2DataViewModel` | **選択肢の先頭を `public`** に（＝ 画面の既定）。`uname` に `(deprecated)` を付けた |
+| 雛形（`app.config` / `appsettings.json`） | `TestClient` の `"subject_types": "uname"` を**消した**（＝ 既定に従う） |
+| `AccountController`（ID 連携） | **新規作成の利用者名を `preferred_username` から取る**（下記） |
+
+**既存の `sub` は動かない。** 段階 2 の対応表が効くため（上記）。
+**効くのは、まだ `sub` を発行していない（クライアント × 利用者）だけ**である。
+
+> **ID 連携の下流で、利用者名の出所が変わった。**
+> **以前は上流の `sub` を利用者名として使っていた**（`uname` だったから成り立っていた）。
+> **既定が `public` になると `sub` は利用者 ID** なので、
+> **`preferred_username` → メアドの `@` より前**の順にした。
+> **`sub` は見ない**（**下位互換は維持しないと決めてある**ので、`uname` の上流は考慮しない）。
+> **結び付ける鍵はメアド**なので、**どちらになっても同じ利用者に結び付く。**
+
+**踏んだ不具合が 2 つある。どちらも「`sub` が利用者名である」ことに依存していた。**
+
+| | |
+|---|---|
+| **CIBA / Device AuthZ が HTTP 500** | **認可コードの `identity.Name` に `sub` を入れていた。** `identity.Name` は**利用者名として**扱われる（`CmnAccessToken` が、そこから改めて `sub` を作る）。`uname` では同じ値だったので成り立っていた。**利用者名を入れるように直した** |
+| `Helper.GetClientIdByName` が NRE | **クライアント名でも利用者名でもない値**（`sub`）を渡されると `FindByName` が null を返し、**`user.ClientID` で落ちていた**（B 群と同じ性質）。**見つからなければ `""` を返す**ようにした |
+
+**測り方には注意が要る。** `RT-151.1` / `RT-151.2` は**新しい `client_id`**（`TestClient_6` / `TestClient_7`）で測る。
+**使い回した `client_id` では、対応表から以前の値が返る**ので、既定の変更が見えない
+（`root/TESTING.md` 5 節）。
 
 ---
 

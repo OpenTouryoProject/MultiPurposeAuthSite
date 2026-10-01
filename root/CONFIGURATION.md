@@ -148,7 +148,7 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
     "client_secret": "...",
     "redirect_uri_code": "test_self_code",
     "client_name": "TestClient",
-    "subject_types": "uname",         // public, pairwise, uname（下記）
+    // "subject_types" は書かなければ public（既定。下記）
     "jwk_rsa_publickey": "..."
   },
   ...
@@ -162,9 +162,12 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 
 | 値 | `sub` | |
 |---|---|---|
-| `public` | 利用者の内部 ID | **OIDC の登録値** |
+| **`public`** | 利用者の内部 ID | **OIDC の登録値。既定**（#151 の段階 4） |
 | `pairwise` | **クライアントごとに違う PPID** | **OIDC の登録値。** OP だけが戻せる（#140 の段階 2） |
-| **`uname`** | **利用者名** | **この実装の独自値**（OIDC には無い）。**既定** |
+| `uname` | **利用者名** | **この実装の独自値**（OIDC には無い）。**非推奨** |
+
+**既定は `public` である**（#151 の段階 4。**以前は `uname`**）。
+**書かなければ `public`** で、**画面（`Manage/AddSaml2OAuth2Data`）の既定の選択も `public`** になる。
 
 > **`uname` は、利用者名を RP に渡すための値ではない。**
 > **利用者名を渡したいなら `UserClaimsMapping` で `preferred_username` に対応付ける**
@@ -176,7 +179,24 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 > **既存の利用者名は書き換えていない**ので、**メアド形式の利用者名は残っている。**
 >
 > **`sub` は「その RP の中で利用者を指す識別子」**で、表示や照合のための属性ではない。
-> **`public` / `pairwise` を推す。** 既定値の扱いは #151 で検討中。
+
+#### 既定値を変えても、発行済みの `sub` は動かない
+
+**RP は `sub` を利用者の主キーとして保存する。** 値が変わると、**RP 側では全員が別人になる。**
+
+**そうならないのは、発行した `sub` を表に記録しているため**である（#151 の段階 2。`SubjectIdProvider`）。
+
+| | |
+|---|---|
+| **既に `sub` を発行した（クライアント × 利用者）** | **表の値を返し続ける**（＝ 以前と同じ値。`uname` なら利用者名のまま） |
+| **まだ発行していない組み合わせ** | **新しい既定（`public`）で作る** |
+
+**つまり、既定値の変更が効くのは「これから」だけである。**
+**既存の配備で `sub` を `public` に揃えたいなら、表の行を消す**ことになる
+（消すと、その RP から見て別人になる）。
+
+**`uname` は残してある。** 書けば従来どおり動く。
+**`subject_types_supported` にも出し続ける**（外すのは #151 の段階 5）。
 
 ### 利用者名とメアド（#151 の段階 3）
 
@@ -208,6 +228,26 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 **どちらも `Error` を返す。** **アクションとビューの削除は、`uname` を落とす段階と併せて行う。**
 **メアドの変更は `Manage/ChangeEmail`**（門番は `CanEditEmail`）、
 **利用者名の変更は `Manage/ChangeUserName`**（門番は `AllowEditingUserName`）。
+
+#### ID 連携・外部ログインで作られる利用者名（#151 の段階 4）
+
+**上流が返す `sub` は、利用者名ではない**（既定が `public` ＝ 利用者 ID）。
+**そこで、下流が新規に作るときの名前は、この順で決める。**
+
+| 順 | 使う値 | いつ |
+|---|---|---|
+| 1 | **`preferred_username`** | 上流が返していて、利用者名として使えるとき |
+| 2 | **メアドの `@` より前** | 返っていないとき |
+
+> **`sub` は見ない。** 段階 4 より前の上流（`subject_types=uname`）では `sub` が利用者名だったが、
+> **下位互換は維持しない**と決めてある。
+>
+> **結び付ける鍵はメアド**なので、**名前がどちらになっても、同じ利用者に結び付く。**
+> ここで決まるのは**新規に作るときの名前だけ**である。
+>
+> **上流（相手の OP）に `preferred_username` を出してもらうには、上流側の設定が要る**
+> （`UserClaimsMapping`）。**汎用認証サイト同士なら、上流にこれを入れる。**
+> **ID 連携の要求スコープには `profile` が入っている**ので、対応付けがあれば返る。
 
 | `client_name` | 用途 |
 |---|---|
@@ -502,7 +542,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。AntiForgery は**もともとアプリごとに違う名前**になるので対象外。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
-| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`subject_types=uname` で `sub` に載せる必要はない** |
+| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`subject_types=uname`（非推奨）で `sub` に載せる必要はない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4） |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |

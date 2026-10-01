@@ -21,6 +21,7 @@
 //*  2020/03/04  西野 大介         CIBA対応実施
 //*  2026/09/18  玄人 幸道         クライアント単位の PKCE 必須化（require_pkce）を追加（#221）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri（RP-Initiated Logout）を追加（#232）
+//*  2026/10/01  玄人 幸道         subject_types の選択肢を public 先頭にし、uname に非推奨を示した（#151 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -125,6 +126,12 @@ namespace MultiPurposeAuthSite.ViewModels
         public string SubjectTypes { get; set; }
 
         /// <summary>SubjectTypesアイテムリスト</summary>
+        /// <remarks>
+        /// **先頭が既定の選択**なので、**public を先頭に置く**（#151 の段階 4）。
+        /// **uname は独自値で、非推奨**（`sub` に利用者名が入り、全ての RP に渡る）。
+        /// **利用者名を渡したいなら `preferred_username`**（`UserClaimsMapping`。段階 1）。
+        /// **一覧には残す**（既存の登録を編集するときに、値が消えないように）。
+        /// </remarks>
         public List<SelectListItem> DdlSubjectTypesItems
         {
             get
@@ -132,14 +139,14 @@ namespace MultiPurposeAuthSite.ViewModels
                 return new List<SelectListItem>()
                 {
                     new SelectListItem() {
-                        Text = "user name",
-                        Value = OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit() },
-                    new SelectListItem() {
                         Text = "public",
                         Value = OAuth2AndOIDCEnum.SubjectTypes.@public.ToStringByEmit() },
                     new SelectListItem() {
                         Text = "pairwise",
-                        Value = OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit() }
+                        Value = OAuth2AndOIDCEnum.SubjectTypes.pairwise.ToStringByEmit() },
+                    new SelectListItem() {
+                        Text = "user name (deprecated)",
+                        Value = OAuth2AndOIDCEnum.SubjectTypes.uname.ToStringByEmit() }
                 };
             }
         }

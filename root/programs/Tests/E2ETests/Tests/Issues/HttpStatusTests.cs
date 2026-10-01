@@ -497,7 +497,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.VerifyEqual("HTTP 200", "200", ((int)res.StatusCode).ToString());
 
-                r.VerifyEqual("sub がテスト ユーザである", TestEnv.TestUserName, res.String("sub"));
+                // **sub の値では判定しない**（#151 の段階 4）。
+                //   **id_token の sub と一致すること**を見る（OIDC Core §5.3.2）。
+                r.VerifyEqual("sub が id_token の sub と一致する",
+                    Jwt.String(Jwt.Payload(token.IdToken), "sub"), res.String("sub") ?? "（無し）");
 
                 r.Verify("WWW-Authenticate を付けない", res.Header("WWW-Authenticate") == null,
                     "（無し）", res.Header("WWW-Authenticate") ?? "（無し）");

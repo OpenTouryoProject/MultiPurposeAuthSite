@@ -255,7 +255,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 | `Extensions/Sts/SubjectIdProvider.cs` | **発行した `sub` の対応表**（#151 の段階 2）。`(Sector, UserId) → Sub` と、その逆引き。**`sub` を「導出」から「データ」に変える**ので、`subject_types` の既定や PPID の作り方を変えても**発行済みの `sub` が動かない** |
 | `Extensions/Sts/RequestObjectProvider.cs` | Request Object の登録（`/ros`） |
 | `SamlProviders/CmnEndpoints.cs` | SAML2 の Request / Response |
-| `Util/PPIDExtension.cs` | `subject_types`（`public` / `pairwise` / `uname`）に応じた sub の生成 |
+| `Util/PPIDExtension.cs` | `subject_types`（`public` / `pairwise` / `uname`）に応じた sub の生成。**既定は `public`**（#151 の段階 4。`uname` は非推奨） |
 
 ### 7.2 対応しているグラント / 拡張
 
@@ -278,7 +278,7 @@ Open棟梁の `Touryo.Infrastructure.Framework.Authentication`（`OAuth2AndOIDCC
 "67d328bf...": {
   "client_secret": "...", "client_name": "TestClient",
   "redirect_uri_code": "test_self_code", "redirect_uri_token": "test_self_token",
-  "subject_types": "uname",          // public / pairwise / uname
+  // "subject_types" を書かなければ public（既定。#151 の段階 4。uname は非推奨）
   "oauth2_oidc_mode": "fapi1",       // normal / fapi1 / fapi2 / device / fapi_ciba（省略時は normal。既知でない値は不正として拒否。#224）
   "jwk_rsa_publickey": "...", "jwk_ecdsa_publickey": "...",
   "tls_client_auth_subject_dn": "..."

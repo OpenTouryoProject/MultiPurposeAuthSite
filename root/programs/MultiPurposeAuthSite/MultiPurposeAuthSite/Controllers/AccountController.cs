@@ -42,6 +42,7 @@
 //*  2026/09/30  玄人 幸道         ID 連携の Error に理由のトレースを足す（#253）
 //*  2026/09/30  玄人 幸道         未サインイン＋prompt=none で login_required を返す（#254）
 //*  2026/09/30  玄人 幸道         自身が書く Cookie の名前に接頭辞を付けられるようにした（#255）
+//*  2026/10/01  玄人 幸道         ID 連携の新規作成で preferred_username を優先（#151 の段階 4）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1794,7 +1795,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // サインアップ済みの可能性を探る
                             // **メアドで引く**（#151 の段階 3。鍵がメアドになった）。
-// サインアップ済みの可能性を探る
                             user = await UserManager.FindByEmailAsync(uid);
 
                             if (user != null)
@@ -2152,11 +2152,21 @@ namespace MultiPurposeAuthSite.Controllers
                     //   **メアドは常に在って一意**なので、鍵はメアドで決まる。
                     string uid = email;
 
-                    // **新規に作るときの利用者名**（#151 の段階 3）。
-                    //   上流の識別子がそのまま使えるならそれを、
-                    //   **`@` を含んで使えないならメアドから作る**（利用者名に `@` は禁じている）。
-                    string newUserName = Const.IsValidUserName(name)
-                        ? name : Const.UserNameFromEmail(email);
+                    // **新規に作るときの利用者名**（#151 の段階 3・段階 4）。
+                    //   **上流の sub は利用者名ではない**（既定が public ＝ 利用者 ID）。
+                    //   **利用者名は preferred_username で受け取る**
+                    //   （上流が UserClaimsMapping で出す。#151 の段階 1）。
+                    //   **無ければメアドの「@」より前**（利用者名に `@` は禁じている）。
+                    //
+                    //   **sub は見ない。** 段階 4 より前の上流（subject_types=uname）では
+                    //   sub が利用者名だったが、**下位互換は維持しない**と決めてある。
+                    //
+                    //   **鍵はメアド**なので、**名前がどちらになっても同じ利用者に結び付く**（上の uid）。
+                    //   ここで決まるのは、**新規に作るときの名前だけ**である。
+                    string preferredUserName = (string)jobj[Const.PreferredUserNameClaim];
+
+                    string newUserName = Const.IsValidUserName(preferredUserName)
+                        ? preferredUserName : Const.UserNameFromEmail(email);
 
                     // **/userinfo の sub は、id_token の sub と一致しなければならない**
                     //   （OIDC Core §5.3.2。一致しなければトークンの取り違えを疑う）。
@@ -2245,7 +2255,6 @@ namespace MultiPurposeAuthSite.Controllers
 
                             // サインアップ済みの可能性を探る
                             // **メアドで引く**（#151 の段階 3。鍵がメアドになった）。
-// サインアップ済みの可能性を探る
                             user = await UserManager.FindByEmailAsync(uid);
 
                             if (user != null)

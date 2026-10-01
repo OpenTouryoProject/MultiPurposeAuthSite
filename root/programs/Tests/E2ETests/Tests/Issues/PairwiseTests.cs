@@ -159,7 +159,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "OIDC Core §8.1（Pairwise Identifier Algorithm）/ #140 の段階 2");
 
                 r.Target("client_name=" + KnownClients.TestClient_5 + "（pairwise）と "
-                    + KnownClients.TestClient + "（既定）");
+                    + KnownClients.TestClient + "（既定 = public）");
 
                 r.Step("(1) pairwise のクライアントで 2 回、トークンを取る");
 
@@ -180,9 +180,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "違う",
                     (other == first) ? "**同じ**（RP 同士で突き合わせられる）" : "違う");
 
-                r.Note("**(2) の相手は subject_types の既定（uname）**なので、"
-                    + "そもそも形が違う。**ここで見たいのは「突き合わせられないこと」**で、"
-                    + "pairwise 同士の比較は、クライアントをもう 1 つ差し込まないと測れない。");
+                r.Note("**(2) の相手は subject_types の既定**で、"
+                    + "**#151 の段階 4 から public**（それ以前は uname）である。"
+                    + "いずれにせよ pairwise とは別の値になるので、**この検証の意味は変わらない。**"
+                    + "**ここで見たいのは「突き合わせられないこと」**で、"
+                    + "pairwise 同士の比較は、クライアントをもう 1 つ差し込まないと測れない。"
+                    + "**既定が public であること自体は RT-151.2 が測る。**");
 
                 r.Done();
             }

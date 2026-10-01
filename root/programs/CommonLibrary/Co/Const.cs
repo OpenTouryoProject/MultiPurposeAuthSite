@@ -34,6 +34,7 @@
 //*  2026/09/27  玄人 幸道         ログアウト後の戻り先のテスト用の定数を追加（#232）
 //*  2026/09/28  玄人 幸道         再認証の印（max_age）の Cookie キーを追加（#247）
 //*  2026/09/30  玄人 幸道         ID 連携の要求スコープを標準だけにした（#140 の段階 3）
+//*  2026/10/01  玄人 幸道         利用者名を運ぶクレーム（preferred_username）を追加（#151 の段階 4）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -245,6 +246,16 @@ namespace MultiPurposeAuthSite.Co
 
             return (at > 0) ? email.Substring(0, at) : email;
         }
+
+        /// <summary>
+        /// 利用者名を運ぶ標準のクレーム（#151 の段階 4）
+        /// </summary>
+        /// <remarks>
+        /// **`sub` の代わりに利用者名を運ぶのは、これ**（OIDC Core §5.1）。
+        /// **出す側は `UserClaimsMapping`** で `user:UserName` に対応付ける（#151 の段階 1）。
+        /// **受ける側（ID 連携の下流）は、新規作成の利用者名にこれを使う。**
+        /// </remarks>
+        public const string PreferredUserNameClaim = "preferred_username";
 
         #endregion
     }

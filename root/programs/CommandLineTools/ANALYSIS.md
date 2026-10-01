@@ -45,7 +45,7 @@ Open棟梁の `GetPassword.Base64UrlSecret(32)` を client_secret にして 5 �
 
 `redirect_uri_*` と `client_name` は `hogehoge{i}` の固定値なので、**貼った後に手で直す。**
 `subject_types` / `oauth2_oidc_mode` / `jwk_*_publickey` / `tls_client_auth_subject_dn` は
-生成されないので、必要なら手で足す
+生成されないので、必要なら手で足す（**`subject_types` は書かなければ `public`**。#151 の段階 4）
 （[`../CommonLibrary/ANALYSIS.md`](../CommonLibrary/ANALYSIS.md) 7.3 節）。
 
 ### 2.2 `CreateJwkSetJson`

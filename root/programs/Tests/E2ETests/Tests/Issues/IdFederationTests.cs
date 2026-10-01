@@ -378,9 +378,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     //   連携で作られた（または結び付いた）アカウントの識別子である。
                     //
                     //   **pairwise のクライアントを使う**（test.ps1 -Launch が差し込む）。
-                    //   **既定（uname）の sub は利用者名**なので、
-                    //   **別のアカウントが作られても同じ値になり、判定にならない。**
-                    //   pairwise の sub は**利用者の ID から作る**ので、アカウントが違えば必ず違う。
+                    //   **pairwise の sub は、利用者の ID から作る**ので、
+                    //   **アカウントが違えば必ず違う。**
+                    //
+                    //   **既定（#151 の段階 4 から public）でも、sub は利用者の ID である**ので
+                    //   判定にはなるが、**段階 4 より前は uname（＝ 利用者名）だった。**
+                    //   **利用者名は、別のアカウントが作られても同じになり得る**ので、
+                    //   **ここは既定に依らない pairwise のままにしておく。**
                     ClientRegistration reg =
                         Flows.InjectedRegistration(client, KnownClients.TestClient_5);
 

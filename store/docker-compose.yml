@@ -173,6 +173,15 @@ services:
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__redirect_uri_token=-
       - appSettings__OAuth2ClientsInformation__e2e1c0de0000000000000000000000f2__client_name=IdFederationE2ENetFx
 
+      # ---------------------------------------------------------------- 利用者名を下流へ渡す
+      #   **sub では渡せない**（#151 の段階 4 で、既定が public になった ＝ sub は利用者 ID）。
+      #   **利用者名は preferred_username で渡す**（#151 の段階 1 の UserClaimsMapping）。
+      #
+      #   **下流は、新規に作る利用者の名前にこれを使う**（無ければメアドの「@」より前）。
+      #   **ID 連携は scope=openid profile email phone address で要求する**ので、
+      #   **profile が入っており、この対応付けが効く。**
+      - appSettings__UserClaimsMapping__preferred_username=user:UserName
+
       # ---------------------------------------------------------------- リソースのパス
       #   **雛形は 15 箇所すべてが C:/root/files/resource/... である**（Windows 前提）。
       #   Linux では**ドライブ文字が効かない**ので、**マウント先（/resource）に振り替える**。
