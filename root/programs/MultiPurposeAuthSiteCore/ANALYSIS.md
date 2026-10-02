@@ -120,10 +120,12 @@ MultiPurposeAuthSiteCore/
    │   │                                          jwkcerts / ros / device_authz / ciba_* /
    │   │                                          .well-known / samlmetadata
    │   ├─ OAuth2ResourceServerController.cs 223 行  リソース サーバ側の疎通用 WebAPI
+   │   ├─ UsersAdminController.cs        581 行  利用者の管理（#258 で net48 版から移植）
+   │   ├─ RolesAdminController.cs        401 行  ロールの管理（#258 で net48 版から移植）
    │   ├─ ErrorController.cs             85 行
    │   ├─ PingController.cs              54 行  死活監視
    │   └─ ValuesController.cs            58 行  疎通確認（`api/values/get`）
-   ├─ Views/{Account,Manage,Home,Error,Shared}/*.cshtml
+   ├─ Views/{Account,Manage,Home,UsersAdmin,RolesAdmin,Error,Shared}/*.cshtml
    ├─ wwwroot/{css,js,images,lib}/       … bootstrap / jQuery 等はリポジトリに直接格納
    ├─ _appsettings.json                  … テンプレート（git 管理下）
    ├─ appsettings.json                   … 実ファイル（.gitignore）
@@ -478,13 +480,23 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 |---|---|---|
 | TOTP（Authenticator アプリ 2FA） | **✓ あり**（`EnableTwoFactorAuthenticator` / リカバリ コード / `ManageTwoFactorAuthenticator`） | ✗ 無し |
 | プッシュ 2FA（`MobileApp`） | ✓ あり（`SendCode` の中で一覧に足し、コードは `Email` で作る。#213） | ✓ あり（**2FAプロバイダとして登録**する。`Manager/MobileAppTokenProvider`。#216） |
-| ユーザ・ロール管理画面 | **✗ 無し**（`Config.EnableAdministrationOfUsersAndRoles` を読む Controller が無い） | ✓ `UsersAdminController` / `RolesAdminController` |
+| ユーザ・ロール管理画面 | **✓ あり**（#258 で移植。`Config.EnableAdministrationOfUsersAndRoles` で開閉） | ✓ `UsersAdminController` / `RolesAdminController` |
 | FIDO2 サーバ用 WebAPI | ✗ 無し | △ `Fido2ServerController.cs` は在るが**ビルド対象外** |
 | 疎通用 WebAPI | ✓ `ValuesController` | ✗ |
 | WebAuthn / MS Passport | ✗（`../CommonLibrary` 側ごと無効） | ✗（同左） |
 
-> **`EnableAdministrationOfUsersAndRoles` は .NET 側では「STS 専用モードの判定」にしか
-> 効いていない。** 管理画面そのものが無いため、true にしても net10.0 では画面は出ない。
+> **`EnableAdministrationOfUsersAndRoles` は、両系統で同じ 2 つに効く**（#258）。
+> **① 管理画面の入口**（2 つの Controller の `Authorize()`）と
+> **② STS 専用モードの判定**（`Util/Sts/OnlySts.Check()`）である。
+> **移植するまでは ① の効く先が無かった**（画面が無かったため）。
+
+> **メニューは `SystemAdmin` ロールで出る**（`Views/Shared/_Layout.cshtml` の `canShowAdminScreen`）。
+> **門番（`Authorize()`）も `SystemAdmin` を見る**ので、
+> **`Admin` ロールだけの利用者（雛形の `super_tanaka`）では開けない**（net48 版と同じ）。
+
+> **`RoleManager.Roles` が要る。** ロールの一覧と、利用者へのロール割り当てが使う。
+> **移植にあたって `../CommonLibrary` の `RoleStoreCore` に
+> `IQueryableRoleStore` を実装した**（#258。それまでは例外になっていた）。
 
 ---
 

@@ -149,6 +149,9 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   `IUserAuthenticatorKeyStore` `IUserAuthenticationTokenStore` `IUserTwoFactorRecoveryCodeStore`
   `IUserLoginStore` `IUserClaimStore`
 - ロール側も同じ形（`CmnRoleStore` ← `RoleStoreCore` / net48 は `UserStore` と同居）。
+  **`RoleStoreCore` は `IRoleStore` と `IQueryableRoleStore`**（後者は #258 で追加）。
+  **`RoleManager.Roles` は `IQueryableRoleStore` が無いと例外になる**ので、
+  **ロールの管理画面と、利用者へのロール割り当てはこれが前提**である。
 
 ### 4.1 UserStore の 4 プロバイダ
 

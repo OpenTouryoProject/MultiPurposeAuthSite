@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/12/04  西野 大介         新規
+//*  2026/10/02  玄人 幸道         ロールの一覧（IQueryableRoleStore）を実装（#258）
 //**********************************************************************************
 
 #if NETFX
@@ -54,7 +55,9 @@ namespace MultiPurposeAuthSite.Data
     /// <summary>
     /// RoleStoreCoreでApplicationRoleを永続化する。
     /// </summary>
-    public class RoleStoreCore : IRoleStore<ApplicationRole>
+    public class RoleStoreCore :
+        IRoleStore<ApplicationRole>,
+        IQueryableRoleStore<ApplicationRole>
     {
         #region CRUD(共通)
 
@@ -99,6 +102,18 @@ namespace MultiPurposeAuthSite.Data
             this.ThrowIfDisposed();
 
             return Task.FromResult(CmnRoleStore.FindByName(normalizedRoleName));
+        }
+
+        /// <summary>Roles</summary>
+        /// <remarks>
+        /// **ロールの一覧**（`IQueryableRoleStore`）。
+        /// **`RoleManager.Roles` は、これが無いと例外になる**
+        /// （ロールの管理画面と、利用者へのロール割り当てが成り立たない。#258）。
+        /// `UserStoreCore` の `Users` と対になる。
+        /// </remarks>
+        public IQueryable<ApplicationRole> Roles
+        {
+            get { return CmnRoleStore.Roles; }
         }
 
         #endregion

@@ -18,6 +18,8 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
     //*  2019/05/2*  西野 大介         SAML2対応実施
+    //*  2026/10/02  玄人 幸道         UsersAdmin / RolesAdmin のメニューを有効にした（#258）
+    //*  2026/10/02  玄人 幸道         管理画面の導線を EnableAdministrationOfUsersAndRoles でも出し分けた（#258）
     //**********************************************************************************
 *@
 @* マスタ・ページに相当 *@
@@ -42,7 +44,11 @@
         {
             roles = await UserManager.GetRolesAsync(user);
         }
-        canShowAdminScreen = (roles.Where(x => x == Const.Role_SystemAdmin).Any());
+        // **ロックダウンされていれば、導線も出さない**（#258）。
+        //   **門番（Controller の Authorize()）は、どちらも見ている。**
+        //   出しておくと、押した先でエラーになるだけである。
+        canShowAdminScreen = Config.EnableAdministrationOfUsersAndRoles
+            && (roles.Where(x => x == Const.Role_SystemAdmin).Any());
     }
 
     #endregion
@@ -115,7 +121,7 @@ else
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("Scroll", "Scroll", "Home", null, new { style = "color:peachpuff" })
                         </li>
-    @*if (canShowAdminScreen)
+    if (canShowAdminScreen)
     {
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("UsersAdmin Screen", "Index", "UsersAdmin", null, new { style = "color:peachpuff" })
@@ -123,7 +129,7 @@ else
                         <li>
                             <i class="fa fa-arrow-circle-right"></i> @Html.ActionLink("RolesAdmin Screen", "Index", "RolesAdmin", null, new { style = "color:peachpuff" })
                         </li>
-    }*@
+    }
 }
                     </ul>
                 </div>
