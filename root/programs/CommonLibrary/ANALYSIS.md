@@ -149,6 +149,11 @@ UserStore : IUserStore<...> ほか          UserStoreCore : IUserStore<Applicati
   `IUserAuthenticatorKeyStore` `IUserAuthenticationTokenStore` `IUserTwoFactorRecoveryCodeStore`
   `IUserLoginStore` `IUserClaimStore`
 - ロール側も同じ形（`CmnRoleStore` ← `RoleStoreCore` / net48 は `UserStore` と同居）。
+- **ロール名は「正規化した名前」で突き合わせる**（#257 で判明）。
+  **Identity Core はストアに大文字化した名前を渡す**ので、`Roles.Name` と比べると
+  **大文字小文字を区別するストア（`ora` / `npg`）で一致しない**
+  （`CmnUserStore` の `RoleNameCol_*`。`root/TESTING.md`「4 つのストアの実測」）。
+  **返す側（`GetRoles`）は生の名前**である。アプリは `Const.Role_*` と比べるため。
   **`RoleStoreCore` は `IRoleStore` と `IQueryableRoleStore`**（後者は #258 で追加）。
   **`RoleManager.Roles` は `IQueryableRoleStore` が無いと例外になる**ので、
   **ロールの管理画面と、利用者へのロール割り当てはこれが前提**である。

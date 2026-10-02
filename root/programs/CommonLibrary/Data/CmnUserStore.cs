@@ -34,6 +34,7 @@
 //*  2020/12/23  西野 大介         NormalizedUserNamenの所、userName.ToUpper()
 //*  2026/09/30  玄人 幸道         利用者の削除で、発行した sub の対応表も消すようにした（#151 の段階 2）
 //*  2026/10/01  玄人 幸道         管理者の作成で、利用者名とメアドを別に渡すようにした（#151 の段階 3）
+//*  2026/10/02  玄人 幸道         ロール名を正規化名で突き合わせる（ora / npg で付かなかった）（#257 で判明）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -72,6 +73,45 @@ namespace MultiPurposeAuthSite.Data
     /// <summary>BaseUserStore</summary>
     internal class CmnUserStore : CmnStore
     {
+        #region ロール名の突き合わせに使う列
+
+        /// <remarks>
+        /// **Identity Core は、ストアに「正規化した名前」（大文字）を渡す。**
+        /// `UserManager.AddToRoleAsync(user, "User")` は、ストアには `"USER"` で届く。
+        ///
+        /// **`Roles.Name` と突き合わせると、大文字小文字を区別するストアで一致しない。**
+        ///
+        /// | ストア | 以前の挙動 |
+        /// |---|---|
+        /// | `mem` | **正しかった**（`NormalizedName` と突き合わせていた） |
+        /// | `sql` | **偶然通っていた**（照合順序が大文字小文字を区別しない） |
+        /// | `ora` / `npg` | **一致せず、副問い合わせが NULL になり、挿入が失敗していた** |
+        ///
+        /// 失敗は `catch` で握り潰されるため、**ロールが付かないことしか残らなかった**
+        /// （`ORA-01400: ("UserRoles"."RoleId")にはNULLは挿入できません`）。
+        ///
+        /// **net48（Identity 2.x）は正規化しない**ので、そちらは `Name` で突き合わせる。
+        /// **`NormalizedName` は、どちらの経路でも入っている**
+        /// （`ApplicationRole.NormalizedName` は net48 では `Name.ToUpper()` を返す）。
+        /// </remarks>
+#if NETCORE
+        /// <summary>ロール名の突き合わせに使う列（SQL Server）</summary>
+        private const string RoleNameCol_Sql = "[NormalizedName]";
+        /// <summary>ロール名の突き合わせに使う列（Oracle）</summary>
+        private const string RoleNameCol_Ora = "\"NormalizedName\"";
+        /// <summary>ロール名の突き合わせに使う列（PostgreSQL）</summary>
+        private const string RoleNameCol_Npg = "\"normalizedname\"";
+#else
+        /// <summary>ロール名の突き合わせに使う列（SQL Server）</summary>
+        private const string RoleNameCol_Sql = "[Name]";
+        /// <summary>ロール名の突き合わせに使う列（Oracle）</summary>
+        private const string RoleNameCol_Ora = "\"Name\"";
+        /// <summary>ロール名の突き合わせに使う列（PostgreSQL）</summary>
+        private const string RoleNameCol_Npg = "\"name\"";
+#endif
+
+        #endregion
+
         #region CRUD(共通)
 
         #region C (Create)
@@ -863,7 +903,7 @@ namespace MultiPurposeAuthSite.Data
                                             cnn.Execute(
                                                 "DELETE FROM [UserRoles] " +
                                                 "WHERE [UserRoles].[UserId] = @UserId " +
-                                                "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
+                                                "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles]." + RoleNameCol_Sql + " = @roleName)",
                                                 new { UserId = user.Id, roleName = roleName });
 
                                             break;
@@ -873,7 +913,7 @@ namespace MultiPurposeAuthSite.Data
                                             cnn.Execute(
                                                 "DELETE FROM \"UserRoles\" " +
                                                 "WHERE \"UserRoles\".\"UserId\" = :UserId " +
-                                                "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
+                                                "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\"." + RoleNameCol_Ora + " = :roleName)",
                                                 new { UserId = user.Id, roleName = roleName });
 
                                             break;
@@ -883,7 +923,7 @@ namespace MultiPurposeAuthSite.Data
                                             cnn.Execute(
                                                 "DELETE FROM \"userroles\" " +
                                                 "WHERE \"userroles\".\"userid\" = @UserId " +
-                                                "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
+                                                "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\"." + RoleNameCol_Npg + " = @roleName)",
                                                 new { UserId = user.Id, roleName = roleName });
 
                                             break;
@@ -899,7 +939,7 @@ namespace MultiPurposeAuthSite.Data
 
                                             cnn.Execute(
                                                 "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
-                                                "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
+                                                "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles]." + RoleNameCol_Sql + " = @roleName))",
                                                 new { UserId = user.Id, roleName = roleName });
 
                                             break;
@@ -908,7 +948,7 @@ namespace MultiPurposeAuthSite.Data
 
                                             cnn.Execute(
                                                 "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
-                                                "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
+                                                "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\"." + RoleNameCol_Ora + " = :roleName))",
                                                 new { UserId = user.Id, roleName = roleName });
 
                                             break;
@@ -917,7 +957,7 @@ namespace MultiPurposeAuthSite.Data
 
                                             cnn.Execute(
                                                 "INSERT INTO \"userroles\" (\"userid\", \"roleid\") " +
-                                                "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE \"name\" = @roleName))",
+                                                "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE " + RoleNameCol_Npg + " = @roleName))",
                                                 new { UserId = user.Id, roleName = roleName });
 
                                             break;
@@ -1486,7 +1526,7 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "INSERT INTO [UserRoles] ([UserRoles].[UserId], [UserRoles].[RoleId]) " +
-                                        "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName))",
+                                        "VALUES (@UserId, (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles]." + RoleNameCol_Sql + " = @roleName))",
                                         new { UserId = user.Id, roleName = roleName });
 
                                     break;
@@ -1495,7 +1535,7 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "INSERT INTO \"UserRoles\" (\"UserRoles\".\"UserId\", \"UserRoles\".\"RoleId\") " +
-                                        "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName))",
+                                        "VALUES (:UserId, (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\"." + RoleNameCol_Ora + " = :roleName))",
                                         new { UserId = user.Id, roleName = roleName });
 
                                     break;
@@ -1504,7 +1544,7 @@ namespace MultiPurposeAuthSite.Data
 
                                     cnn.Execute(
                                         "INSERT INTO \"userroles\" (\"userid\", \"roleid\") " +
-                                        "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE \"name\" = @roleName))",
+                                        "VALUES (@UserId, (SELECT \"id\" FROM \"roles\" WHERE " + RoleNameCol_Npg + " = @roleName))",
                                         new { UserId = user.Id, roleName = roleName });
 
                                     break;
@@ -1718,7 +1758,7 @@ namespace MultiPurposeAuthSite.Data
                                     cnn.Execute(
                                         "DELETE FROM [UserRoles] " +
                                         "WHERE [UserRoles].[UserId] = @UserId " +
-                                        "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles].[Name] = @roleName)",
+                                        "      AND [UserRoles].[RoleId] = (SELECT [Roles].[Id] FROM [Roles] WHERE [Roles]." + RoleNameCol_Sql + " = @roleName)",
                                         new { UserId = user.Id, roleName = roleName });
 
                                     break;
@@ -1728,7 +1768,7 @@ namespace MultiPurposeAuthSite.Data
                                     cnn.Execute(
                                         "DELETE FROM \"UserRoles\" " +
                                         "WHERE \"UserRoles\".\"UserId\" = :UserId " +
-                                        "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\".\"Name\" = :roleName)",
+                                        "      AND \"UserRoles\".\"RoleId\" = (SELECT \"Roles\".\"Id\" FROM \"Roles\" WHERE \"Roles\"." + RoleNameCol_Ora + " = :roleName)",
                                         new { UserId = user.Id, roleName = roleName });
 
                                     break;
@@ -1738,7 +1778,7 @@ namespace MultiPurposeAuthSite.Data
                                     cnn.Execute(
                                         "DELETE FROM \"userroles\" " +
                                         "WHERE \"userroles\".\"userid\" = @UserId " +
-                                        "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\".\"name\" = @roleName)",
+                                        "      AND \"userroles\".\"roleid\" = (SELECT \"roles\".\"id\" FROM \"roles\" WHERE \"roles\"." + RoleNameCol_Npg + " = @roleName)",
                                         new { UserId = user.Id, roleName = roleName });
 
                                     break;
