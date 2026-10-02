@@ -1500,7 +1500,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**。
   **✅ 対応した（#129 の段階 3）。** **鍵はリポジトリに在った**（`SHA384ECDSA.pfx` / `SHA521ECDSA.pfx`）
 - **登録（クライアント）側の alg の項目**は、**`id_token_signed_response_alg` を ✅ 足した**（#129 の段階 2。下記）。
-  **検証する側**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**
+  **検証する側**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**（#262）
 
 ### 署名アルゴリズムを登録で選べるようにした（#129 の段階 2）
 
@@ -1531,7 +1531,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 - **CIBA は `ES256` のまま**（FAPI-CIBA が `PS256` / `ES256` を求めるため、登録値で上書きしない）
 - **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま**
 - **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**。
-  **受ける alg を登録で狭めるのは別の話**なので、段階を分けた
+  **受ける alg を登録で狭めるのは別の話**なので、**#262 に切り出した**
 - **E2E** : **`RT-129.3`**（`RS512` で署名され、`jwkcerts` の同じ鍵で検証でき、`kid` が `RS256` と同じ。
   **自分の検証経路＝C-8 で固定した集合も、これを受ける**）／
   **`RT-129.4`**（Discovery が `RS256 RS384 RS512 ES256` を、**この順で**広告する）
@@ -1628,7 +1628,7 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
   **`RT-129.6`**（**Discovery が広告する alg すべてに、`jwkcerts` の鍵が在る**）
 - **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
 - **残り** : **`PS256` は段階 4**（下記で ✅ 対応した）。
-  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は、まだ無い
+  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は、まだ無い（#262）
 
 ### PS256 / PS384 / PS512（RSASSA-PSS）（#129 の段階 4）
 
@@ -1672,7 +1672,8 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
 - **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である。
   **`jwkcerts` も変わらない**（鍵を足していないため、RP 側の作業も無い）
 - **残り** : **検証する側の登録項目**（`request_object_signing_alg` /
-  `token_endpoint_auth_signing_alg`）。**受ける alg をクライアント単位で狭める話**なので、別に扱う
+  `token_endpoint_auth_signing_alg`）。**受ける alg をクライアント単位で狭める話**なので、
+  **#262 に切り出した**（#129 は段階 4 で完了）
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]** — **✅ 修正済み（#129 の段階 1）**
 
