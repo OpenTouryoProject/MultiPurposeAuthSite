@@ -50,6 +50,7 @@
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
 //*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
+//*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
 //**********************************************************************************
 
 using System;
@@ -400,6 +401,40 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 return;
             }
 
+            await this.SignInCoreAsync(
+                userName ?? TestEnv.TestUserName, this.Config.Get("TestUserPWD"));
+        }
+
+        /// <summary>
+        /// 管理者（AdministratorUID）でサインインする（#257）。
+        /// </summary>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **利用者・ロールの管理画面は `SystemAdmin` ロールを要求する**
+        /// （`UsersAdminController` の `Authorize`）。
+        /// **雛形のテスト利用者（super_tanaka）は `User` / `Admin` しか持たない**ので、
+        /// 管理画面を測るには、こちらで入る必要がある。
+        ///
+        /// **利用者名はメアドの「@」より前**（#151 の段階 3 で、そう作られる）。
+        /// **パスワードは構成ファイルから読む**（`AdministratorPWD`。**値は出力しない**）。
+        ///
+        /// **サインイン済みでも、入り直す**（別の利用者で入っていることがあるため）。
+        /// </remarks>
+        public async Task SignInAsAdministratorAsync()
+        {
+            string uid = this.Config.Get("AdministratorUID") ?? "";
+            int at = uid.IndexOf('@');
+
+            await this.SignInCoreAsync(
+                (at > 0) ? uid.Substring(0, at) : uid, this.Config.Get("AdministratorPWD"));
+        }
+
+        /// <summary>サインインの本体（利用者名とパスワードを指定する）</summary>
+        /// <param name="userName">利用者名</param>
+        /// <param name="password">パスワード</param>
+        /// <returns>Task</returns>
+        private async Task SignInCoreAsync(string userName, string password)
+        {
             HttpResponseMessage get = await this.GetAsync("/Account/Login");
             string html = await get.Content.ReadAsStringAsync();
 
@@ -414,8 +449,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             Dictionary<string, string> form = new Dictionary<string, string>()
             {
                 { "__RequestVerificationToken", m.Groups["value"].Value },
-                { "Email", userName ?? TestEnv.TestUserName },
-                { "Password", this.Config.Get("TestUserPWD") },
+                { "Email", userName },
+                { "Password", password },
                 { "RememberMe", "false" },
                 { "submitButtonName", "normal_signin" }
             };
@@ -429,8 +464,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 throw new InvalidOperationException(
                     "サインインに失敗しました（HTTP " + (int)post.StatusCode
-                    + "、利用者 " + (userName ?? TestEnv.TestUserName)
-                    + "）。TestUserPWD と testUserName を確認してください。");
+                    + "、利用者 " + userName
+                    + "）。構成ファイルの利用者名とパスワードを確認してください。");
             }
 
             this.IsSignedIn = true;
