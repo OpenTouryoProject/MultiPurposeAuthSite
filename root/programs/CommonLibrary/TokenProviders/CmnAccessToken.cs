@@ -40,6 +40,7 @@
 //*  2026/09/23  玄人 幸道         cnf を RFC 8705 の形式で書き、提示された証明書と照合する口を追加
 //*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
 //*  2026/09/27  玄人 幸道         署名検証の鍵選択を切り出し、署名だけを検証する口を追加（#232）
+//*  2026/10/02  玄人 幸道         受ける alg を自分が発行する 2 つに固定（C-8）（#129 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -465,10 +466,35 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>JWT の署名を検証する鍵（JWS）を選ぶ（#232 で切り出し）</summary>
         /// <param name="jwt">JWS（コンパクト形式）</param>
-        /// <returns>JWS（決まらなければ null）</returns>
+        /// <returns>JWS（決まらなければ null ＝ 検証失敗）</returns>
         /// <remarks>
-        /// **VerifyAccessToken の中にあったものを、そのまま切り出した**（振る舞いは変えていない）。
-        /// **id_token_hint の検証（#232）でも同じ鍵選択が要る**ため、共通化した。
+        /// **ここで検証するのは「この認可サーバが発行したトークン」だけ**である
+        /// （access_token / id_token / id_token_hint）。相手の OP が発行したものは通らない。
+        ///
+        /// **受ける alg を、自分が発行する 2 つに固定する**（C-8。#129 の段階 1）。
+        ///
+        /// | ヘッダの alg | |
+        /// |---|---|
+        /// | `RS256` / `ES256` | **受ける**（この認可サーバが発行しうる） |
+        /// | それ以外（`none` / `HS256` / `RS384` など） | **即、検証失敗**（null を返す） |
+        ///
+        /// **以前は、知らない alg を RS256 として扱っていた。**
+        /// 署名は自分の公開鍵で確かめるので偽造はできなかったが、
+        /// **サーバが期待する alg を決めていなかった**（アルゴリズム混同の温床）。
+        /// **alg の選択肢を増やす前に、受ける範囲を決めておく**（#129 の段階 2 以降）。
+        ///
+        /// **鍵は、alg に対応するものを選ぶ。**
+        ///
+        /// | ヘッダ | 使う鍵 |
+        /// |---|---|
+        /// | `kid` が空 | **自分の証明書**（alg に対応する方。RSA / ECDSA） |
+        /// | `kid` が在る | **JWK Set の、その kid**。**JWK の alg がヘッダと一致すること** |
+        /// | `kid` が JWK Set に無い | **自分の証明書**（alg に対応する方）に落とす |
+        ///
+        /// **kid を引けないときに証明書へ落とすのは、従来どおり**である
+        /// （`JwkSet.json` を置いていない配備でも、自分の鍵で検証できる）。
+        /// **以前は、そこで必ず RSA を選んでいた**ので、
+        /// **ES256 で発行したトークンが検証できなかった。**
         /// </remarks>
         private static JWS SelectJws(string jwt)
         {
@@ -498,19 +524,19 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 string alg = header[JwtConst.alg];
 
+                // **自分が発行する alg だけを受ける**（C-8。#129 の段階 1）。
+                //   この認可サーバが署名に使うのは RS256 と ES256 の 2 つだけで、
+                //   jwkcerts も *_signing_alg_values_supported も、その 2 つを広告している。
+                //   **それ以外の alg のトークンは、自分が発行したものではない。**
+                if (alg != JwtConst.RS256 && alg != JwtConst.ES256)
+                {
+                    return null;
+                }
+
                 if (string.IsNullOrEmpty(header[JwtConst.kid]))
                 {
-                    // 証明書を使用
-                    if (alg == JwtConst.ES256)
-                    {
-                        // ES256
-                        jws = new JWS_ES256_X509(CmnClientParams.EcdsaCerFilePath, "");
-                    }
-                    else
-                    {
-                        // RS256
-                        jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
-                    }
+                    // 証明書を使用（alg に対応する鍵）
+                    jws = CmnAccessToken.SelectJwsFromCertificate(alg);
                 }
                 else
                 {
@@ -524,13 +550,20 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     if (jwkObject == null)
                     {
-                        // 証明書を使用
-                        jws = new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
+                        // kid を引けなかった（JwkSet.json が無い、または載っていない kid）。
+                        //   **証明書に落とす**（従来どおり）。**ただし alg に対応する鍵を選ぶ。**
+                        jws = CmnAccessToken.SelectJwsFromCertificate(alg);
+                    }
+                    else if ((string)jwkObject[JwtConst.alg] != alg)
+                    {
+                        // **JWK の alg と、ヘッダの alg が食い違っている。**
+                        //   どちらを信じるかという話にしないため、受けない。
+                        return null;
                     }
                     else
                     {
                         // Jwkを使用
-                        if ((string)jwkObject[JwtConst.alg] == JwtConst.ES256)
+                        if (alg == JwtConst.ES256)
                         {
                             // ES256
                             EccPublicKeyConverter epkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
@@ -548,6 +581,23 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             return jws;
+        }
+
+        /// <summary>自分の証明書から、alg に対応する JWS を作る（C-8。#129 の段階 1）</summary>
+        /// <param name="alg">ヘッダの alg（RS256 / ES256 のいずれか）</param>
+        /// <returns>JWS</returns>
+        /// <remarks>
+        /// **呼ぶ前に alg を確かめてあること**（`SelectJws` が RS256 / ES256 に限っている）。
+        /// **公開鍵（.cer）で検証する。** 署名に使う秘密鍵（.pfx）は、ここでは要らない。
+        /// </remarks>
+        private static JWS SelectJwsFromCertificate(string alg)
+        {
+            if (alg == JwtConst.ES256)
+            {
+                return new JWS_ES256_X509(CmnClientParams.EcdsaCerFilePath, "");
+            }
+
+            return new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
         }
 
         /// <summary>JWT の署名だけを検証する（#232）</summary>

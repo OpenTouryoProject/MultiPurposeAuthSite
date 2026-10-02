@@ -30,8 +30,10 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/09  玄人 幸道         新規（基本テストの追加に伴う）
 //*  2026/09/11  玄人 幸道         BASE64URL の変換を Base64Url へ集約
+//*  2026/10/02  玄人 幸道         alg だけを書き換える口を追加（C-8）（#129 の段階 1）
 //**********************************************************************************
 
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -131,6 +133,46 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 : "署名が公開鍵と一致しない";
 
             return result;
+        }
+
+        /// <summary>
+        /// ヘッダの alg だけを書き換えた JWT を作る（署名と kid は、そのまま）。
+        ///
+        /// **認可サーバが「受ける alg」を決めているか**を確かめるために使う（C-8。#129 の段階 1）。
+        /// **`ToAlgNone` はヘッダを丸ごと作り替える**ので、`kid` が消えて alg の判定まで届かない。
+        /// こちらは **`kid` を残す**ので、鍵が引けたうえで alg だけが違う形になる。
+        /// </summary>
+        /// <param name="jwt">元の JWT</param>
+        /// <param name="alg">書き換える alg（例 : HS256 / RS384 / PS256）</param>
+        /// <returns>alg を書き換えた JWT</returns>
+        public static string WithAlg(string jwt, string alg)
+        {
+            string[] parts = jwt.Split('.');
+
+            if (parts.Length != 3)
+            {
+                return jwt;
+            }
+
+            // ヘッダを読んで、alg だけ差し替える（他の項目は保つ）。
+            Dictionary<string, object> header = new Dictionary<string, object>();
+
+            using (JsonDocument doc = JsonDocument.Parse(
+                Encoding.UTF8.GetString(Base64Url.Decode(parts[0]))))
+            {
+                foreach (JsonProperty p in doc.RootElement.EnumerateObject())
+                {
+                    header[p.Name] = p.Value.ToString();
+                }
+            }
+
+            header["alg"] = alg;
+
+            string rewritten = Base64Url.Encode(
+                Encoding.UTF8.GetBytes(JsonSerializer.Serialize(header)));
+
+            // **署名はそのまま。** 受け付けてしまえば、それだけで問題になる。
+            return rewritten + "." + parts[1] + "." + parts[2];
         }
 
         /// <summary>
