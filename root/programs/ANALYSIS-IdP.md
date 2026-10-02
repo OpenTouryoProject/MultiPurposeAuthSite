@@ -1467,21 +1467,20 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
 | `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる** |
-| `id_token` | `id_token_signing_alg_values_supported: ["RS256","RS384","RS512","ES256","ES384","ES512"]` | **左の 6 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
-| access_token | （広告しない） | 同上（6 つ） | 同上（`id_token` と同じ alg になる） |
+| `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
+| access_token | （広告しない） | 同上（9 つ） | 同上（`id_token` と同じ alg になる） |
 | Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
 | CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
 | 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
 
 **広告と実装は一致している**（#189 / A-10 で整えた）。
 
-**`PS256` はどこにも無い。**
-**Open棟梁 に `JWS_PS*` が存在しない**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
+**`PS256` は、段階 0 の時点ではどこにも無かった。**
+**Open棟梁 に `JWS_PS*` が存在しなかった**ためである。
 **FAPI 1.0 Advanced / FAPI-CIBA は `PS256` または `ES256` を求める**ので、
-**`PS256` を通すには上流の対応が要る**
-（起票済み : [OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)。
-**PSS 自体は `DigitalSign.Padding` で動く**ことまで実測した。足りないのは `JwtConst.PS*` と
-`JWS_PS*` のクラスで、**`JWS_RS*` を写して `Padding` を `Pss` にする**形で足りる見込み）。
+**上流の対応が要った** → **✅ 上流に入った**
+（[OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)。
+**この実装も段階 4 で `PS256` / `PS384` / `PS512` を発行するようにした**。下記）。
 
 > **コード中の記述が実装と食い違っていた。**
 > CIBA の広告のあたりに **「RequestObjectの署名は、ES256 と PS256のみ許可」** と書かれていたが、
@@ -1537,7 +1536,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   **自分の検証経路＝C-8 で固定した集合も、これを受ける**）／
   **`RT-129.4`**（Discovery が `RS256 RS384 RS512 ES256` を、**この順で**広告する）
 - **`ES384` / `ES512` は段階 3**（鍵の差し替えを伴う）。
-  **`PS256` は段階 4**（上流の対応が要る。[OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)）
+  **`PS256` は段階 4**（上流の対応が要った。[OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)。✅ 対応済み）
 - **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
 
 ### ES384 / ES512 と、鍵の表（#129 の段階 3 / D-9）
@@ -1628,9 +1627,52 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
   `kid` が曲線ごとに違い、曲線が食い違うトークンは受けない）／
   **`RT-129.6`**（**Discovery が広告する alg すべてに、`jwkcerts` の鍵が在る**）
 - **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
-- **残り** : **`PS256` は段階 4**（`JWS_PS*` が上流に無い。
-  起票済み : [OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)）。
-  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）も、まだ無い
+- **残り** : **`PS256` は段階 4**（下記で ✅ 対応した）。
+  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は、まだ無い
+
+### PS256 / PS384 / PS512（RSASSA-PSS）（#129 の段階 4）
+
+**FAPI 1.0 Advanced / FAPI-CIBA は、ID Token の署名に `PS256` または `ES256` を求める。**
+段階 3 までは `ES256` しか選べなかった（上流に `JWS_PS*` が無かった）。
+
+| | |
+|---|---|
+| 発行する alg | **9 つ**（`RS*` 3 ＋ `PS*` 3 ＋ `ES*` 3） |
+| 鍵 | **4 本のまま。** **`PS*` は `RS*` と同じ RSA の 1 本**で、**パディングだけが違う** |
+| `kid` | **`RS256` と同じ値**（RFC 7638 は kty / n / e から作る）。＝ **`jwkcerts` に鍵を足す必要が無い** |
+| 広告の並び | **`RS*` → `PS*` → `ES*`**（鍵ごとに固まる。**順序に仕様上の意味は無い**） |
+
+**実装はほぼ表への 3 行である**（#129 の段階 3 で `SigningKeys` に寄せてあるため）。
+`CreateJwsFromPfx` / `CreateJwsFromCer` / `CreateJwsFromJwk` に `JWS_PS*` の分岐を足し、
+**設定キーは `RS*` と同じものを指す。**
+
+> **`jwkcerts` の JWK の `alg` は `RS256` のまま**である。
+> RSA の鍵 1 本に対して JWK は 1 件なので、**6 つの alg を書き分けられない。**
+> **これでよい** —— RFC 7517 の `alg` は「用途」で任意であり、
+> **この実装は `kty`（と EC では `crv`）で照合する**（`IsSameKeyType`）。
+
+#### `kty` が同じなので、`PS*` は「3 つ目の関門」で落ちる
+
+**`RS256` のトークンの alg を `PS256` に書き換えると、鍵の照合は通ってしまう**
+（どちらも `kty=RSA` で、`kid` も同じ鍵を指す）。
+**落ちるのは署名の検証**である（PKCS #1 v1.5 の署名を RSASSA-PSS として検証するため）。
+
+| 関門 | 書き換えた alg | 落ちるところ |
+|---|---|---|
+| 1 | `HS256` / `HS384` / `none` | **`SupportedAlgs` に無い**（即、拒否） |
+| 2 | `ES256` / `ES384` / `ES512` | **`kty` が違う**（RSA ≠ EC） |
+| 3 | `PS256` / `PS384` / `PS512` | **`kty` は同じ。署名が合わない** |
+
+**実測で 3 つとも拒否することを確かめている**（`RT-129.2`）。
+
+- **E2E** : **`RT-129.7`**（`PS256` / `PS384` / `PS512` で署名され、
+  **`kid` が `RS256` と同じ**で、**`jwkcerts` の RSA 公開鍵で RSASSA-PSS として検証でき**、
+  `/userinfo` が受ける）／**`RT-129.2` の (4)**（パディングが違えば受けない）
+- **CIBA は `ES256` のまま**（登録値で上書きしない）。**JARM も `RS256` のまま**
+- **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である。
+  **`jwkcerts` も変わらない**（鍵を足していないため、RP 側の作業も無い）
+- **残り** : **検証する側の登録項目**（`request_object_signing_alg` /
+  `token_endpoint_auth_signing_alg`）。**受ける alg をクライアント単位で狭める話**なので、別に扱う
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]** — **✅ 修正済み（#129 の段階 1）**
 
@@ -1642,7 +1684,7 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
 
 | | |
 |---|---|
-| **受ける alg を固定した** | **この認可サーバが発行するものだけ**（**`SigningKeys` の表**。段階 1 では `RS256` / `ES256`、**段階 2 で `RS384` / `RS512`、段階 3 で `ES384` / `ES512` を足した**）。**それ以外は即、検証失敗**（`none` / `HS256` / `PS256` …） |
+| **受ける alg を固定した** | **この認可サーバが発行するものだけ**（**`SigningKeys` の表**。段階 1 では `RS256` / `ES256`、**段階 2 で `RS384` / `RS512`、段階 3 で `ES384` / `ES512`、段階 4 で `PS*` を足した**）。**それ以外は即、検証失敗**（`none` / `HS256` / `HS384` …） |
 | **鍵を alg に対応させた** | **以前は、`kid` を引けないときに必ず RSA を選んでいた**ので、**ES256 で発行したトークンが検証できなかった** |
 | **JWK とヘッダの食い違いを拒む** | `kid` で引いた JWK の `alg` が**ヘッダの `alg` と違えば受けない**（どちらを信じるかという話にしない） |
 
@@ -1653,9 +1695,10 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
 
 - **`kid` を引けないときに証明書へ落とす動きは、従来どおり**残した
   （`JwkSet.json` を置いていない配備でも、自分の鍵で検証できる）
-- **E2E** : `RT-129.2`（`HS256` / `PS256` / `none` に書き換えたトークンを拒む。
-  **関門は 2 つ**で、**発行しない alg**は即、拒否し、
-  **発行する alg でも鍵（`kty` / `crv`）が合わなければ拒否する**）。
+- **E2E** : `RT-129.2`（`HS256` / `HS384` / `none` に書き換えたトークンを拒む。
+  **関門は 3 つ**で、**発行しない alg**は即、拒否し、
+  **発行する alg でも鍵（`kty` / `crv`）が合わなければ拒否**し、
+  **鍵まで合っても署名が合わなければ拒否する**（`PS*` はここで落ちる））。
   **署名と `kid` はそのまま**にして**ヘッダの `alg` だけ**を書き換えるので、**alg の判定そのもの**を測れる
   （`TC-6.4` はヘッダを丸ごと作り替えるため、`kid` が消えて alg の判定まで届かない）
 - **受ける集合を増やすときは、`RT-129.2` の一覧も直す**（黙って広がらないようにするため）

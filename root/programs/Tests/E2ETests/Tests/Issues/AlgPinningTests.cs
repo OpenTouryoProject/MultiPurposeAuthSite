@@ -31,6 +31,7 @@
 //*  2026/10/02  玄人 幸道         新規（C-8。#129 の段階 1）
 //*  2026/10/02  玄人 幸道         RS384 / RS512 を受けるようになったので一覧を直した（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         ES384 / ES512 を発行するようになったので関門を 2 つに分けた（#129 の段階 3）
+//*  2026/10/03  玄人 幸道         PS* を発行するようになったので関門を 3 つに分けた（#129 の段階 4）
 //**********************************************************************************
 
 using System.Text.Json;
@@ -48,7 +49,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// </summary>
     /// <remarks>
     /// **この認可サーバが署名に使うのは `SigningKeys.SupportedAlgs`** である
-    /// （`RS256` / `RS384` / `RS512` / `ES256` / `ES384` / `ES512`）。
+    /// （`RS256` / `RS384` / `RS512` / `PS256` / `PS384` / `PS512` / `ES256` / `ES384` / `ES512`）。
     /// **以前は、ヘッダの `alg` を読んで検証器を選び、知らない値は RS256 として扱っていた。**
     /// 署名は自分の公開鍵で確かめるので**偽造はできなかった**が、
     /// **サーバが期待する alg を決めていなかった**（アルゴリズム混同の温床。C-8）。
@@ -82,8 +83,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "**この認可サーバが発行する alg は `SigningKeys.SupportedAlgs`** で、"
                     + "`jwkcerts` と Discovery も、その一覧から作っている。"
                     + "**以前は、知らない alg を RS256 として扱っていた**（C-8）。"
-                    + "**関門は 2 つ**で、**発行しない alg は即、拒否**し、"
-                    + "**発行する alg でも、鍵（kty / crv）が合わなければ拒否**する（#129 の段階 3）。",
+                    + "**関門は 3 つ**で、**発行しない alg は即、拒否**し、"
+                    + "**発行する alg でも、鍵（kty / crv）が合わなければ拒否**し（#129 の段階 3）、"
+                    + "**鍵まで合っても、署名が合わなければ拒否**する（#129 の段階 4）。",
                     "JWT BCP（RFC 8725）§3.1 / OIDC Core §3.1.3.7 / C-8");
 
                 r.Target(client.Target.DisplayName);
@@ -102,7 +104,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) **発行しない alg** に書き換えて叩く（署名と kid は、そのまま）");
 
-                foreach (string alg in new string[] { "HS256", "PS256", "none" })
+                foreach (string alg in new string[] { "HS256", "HS384", "none" })
                 {
                     JsonResponse res = await client.UserInfoAsync(
                         Jwks.WithAlg(token.AccessToken, alg));
@@ -115,7 +117,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         accepted ? "**受理してしまった**" : "拒否した");
                 }
 
-                r.Step("(3) **発行するが、鍵が合わない alg** に書き換えて叩く（#129 の段階 3）");
+                r.Step("(3) **発行するが、鍵の種類が合わない alg** に書き換えて叩く（#129 の段階 3）");
 
                 foreach (string alg in new string[] { "ES256", "ES384", "ES512" })
                 {
@@ -130,15 +132,34 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         accepted ? "**受理してしまった**" : "拒否した");
                 }
 
-                r.Note("**`HS256` は、公開鍵を共通鍵として使わせる古典的な混同**である。"
-                    + "**`PS256` は、この実装がまだ発行しない**（#129 の段階 4）。"
-                    + "**`RS384` / `RS512` は段階 2、`ES384` / `ES512` は段階 3 で発行するようになった**ので、"
-                    + "**(2) の一覧からは外した**（**増やしたら、このテストの一覧も直すこと**）。");
+                r.Step("(4) **鍵までは合うが、パディングが違う alg** に書き換えて叩く（#129 の段階 4）");
 
-                r.Note("**(3) は別の関門である。** トークンは RS256 で署名してあり、`kid` は RSA の鍵を指す。"
-                    + "**alg だけ `ES*` に書き換えると、鍵の種類（`kty`）が食い違う**ので受けない。"
-                    + "**`ES*` 同士の食い違い（曲線）は `RT-129.5` で見る**"
-                    + "（`ES384` のトークンの alg を `ES512` に書き換える）。");
+                foreach (string alg in new string[] { "PS256", "PS384", "PS512" })
+                {
+                    JsonResponse res = await client.UserInfoAsync(
+                        Jwks.WithAlg(token.AccessToken, alg));
+
+                    bool accepted = res.IsJson && res.KindOf("sub") != JsonValueKind.Undefined;
+
+                    r.Verify("alg=" + alg + "（RSA の鍵は合うが PKCS #1 v1.5 の署名）でユーザ情報を返さない",
+                        !accepted,
+                        "返さない",
+                        accepted ? "**受理してしまった**" : "拒否した");
+                }
+
+                r.Note("**`HS256` / `HS384` は、公開鍵を共通鍵として使わせる古典的な混同**である。"
+                    + "**`RS384` / `RS512` は段階 2、`ES384` / `ES512` は段階 3、`PS*` は段階 4 で"
+                    + "発行するようになった**ので、**(2) の一覧からは外した**"
+                    + "（**増やしたら、このテストの一覧も直すこと**）。");
+
+                r.Note("**(2) 〜 (4) は、別々の関門である。** トークンは `RS256` で署名してあり、"
+                    + "`kid` は RSA の鍵を指す。"
+                    + "**(2)** は `SupportedAlgs` に無いので**即、拒否**。"
+                    + "**(3)** は `ES*` なので**鍵の種類（`kty`）が食い違って拒否**。"
+                    + "**(4)** は `PS*` で**鍵は同じ RSA の 1 本**だから `kty` では弾けず、"
+                    + "**パディング（RSASSA-PSS）が違うので署名の検証で落ちる。**"
+                    + "**`ES*` 同士の食い違い（曲線）は `RT-129.5`**、"
+                    + "**`PS*` が正しく通ること自体は `RT-129.7`** で見る。");
 
                 r.Note("**`alg=none` は `TC-6.4` でも見ている。**"
                     + "あちらは**ヘッダを丸ごと作り替えて署名を落とす**（`kid` も消える）。"

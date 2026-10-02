@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         ES384 / ES512 と、広告と鍵の突き合わせを追加（#129 の段階 3）
+//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 を追加（#129 の段階 4）
 //**********************************************************************************
 
 using System.Text.Json;
@@ -175,11 +176,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string[] algs = discovery.Strings("id_token_signing_alg_values_supported");
                 string joined = (algs == null) ? "（無し）" : string.Join(" ", algs);
 
-                r.VerifyEqual("id_token_signing_alg_values_supported が 6 つ（RS256 RS384 RS512 ES256 ES384 ES512）",
-                    "RS256 RS384 RS512 ES256 ES384 ES512", joined);
+                r.VerifyEqual("id_token_signing_alg_values_supported が 9 つ"
+                    + "（RSA の 6 つ → EC の 3 つ の順）",
+                    "RS256 RS384 RS512 PS256 PS384 PS512 ES256 ES384 ES512", joined);
 
                 r.Note("**順序まで固定している。** 一覧は `SigningKeys` の表 1 か所から作っており、"
-                    + "**順序が変わるときは、そこを触ったとき**である（気付けた方がよい）。");
+                    + "**順序が変わるときは、そこを触ったとき**である（気付けた方がよい）。"
+                    + "**並びは鍵ごと**で、**RSA の 1 本を使う 6 つ**（`RS*` ＋ `PS*`）のあと、"
+                    + "**曲線ごとに鍵が分かれる 3 つ**（`ES*`）が来る。"
+                    + "**順序そのものに仕様上の意味は無い**（RFC 8414 / OIDC Discovery）。");
 
                 r.Done();
             }
@@ -335,6 +340,95 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**新しい鍵を `jwkcerts` に先に載せ、RP のキャッシュが切れてから署名に使う**"
                     + "（手順は `CONFIGURATION.md`）。**`JwkSet.json` は追記式**なので、"
                     + "**退役した鍵も、消すまで載り続ける。**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-129.7 PS256 / PS384 / PS512（RSASSA-PSS）で署名できる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT12907_PSSで署名され同じ鍵で検証できる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-129.7",
+                    "PS256 / PS384 / PS512 で署名され、jwkcerts の同じ RSA 鍵で検証できる",
+                    "**FAPI 1.0 Advanced / FAPI-CIBA は `PS256` または `ES256` を求める。**"
+                    + "**`PS*` は RSASSA-PSS** で、**鍵は `RS*` と同じ 1 本**（違いはパディング）。"
+                    + "**`kid` も `RS256` と同じ**（RFC 7638 は kty / n / e から作る）ので、"
+                    + "**`jwkcerts` に鍵を足す必要が無い。**"
+                    + "**自分の検証経路（C-8 で固定した受ける集合）も、これを受けること**まで見る。",
+                    "FAPI 1.0 Advanced §8.6 / JWA（RFC 7518）§3.5 / RFC 7638 / #129 の段階 4");
+
+                r.Target(client.Target.DisplayName);
+
+                JsonResponse jwks = await client.GetJsonAsync("/jwkcerts");
+
+                // **RS256 の対照**（kid を比べるため）。
+                ClientRegistration rs256 = Flows.Registration(client, KnownClients.TestClient);
+
+                AuthZResponse authzRs = await Flows.AuthorizeCodeAsync(
+                    client, rs256, scope: "openid email", redirectUri: rs256.RedirectUri);
+
+                JsonResponse tokenRs = await Flows.ExchangeCodeAsync(
+                    client, rs256, authzRs.Code, redirectUri: rs256.RedirectUri);
+
+                string kidRs256 = Jwt.String(Jwt.Header(tokenRs.IdToken), "kid") ?? "（無し）";
+
+                foreach (string[] c in new string[][] {
+                    new string[] { "PS256", KnownClients.TestClient_11 },
+                    new string[] { "PS384", KnownClients.TestClient_12 },
+                    new string[] { "PS512", KnownClients.TestClient_13 } })
+                {
+                    string alg = c[0];
+
+                    // **構成ファイルには無い**（test.ps1 -Launch が差し込む）。
+                    ClientRegistration reg = Flows.InjectedRegistration(client, c[1]);
+
+                    r.Step("(" + alg + ") 認可コード フローでトークンを取り、ヘッダと署名を見る");
+
+                    AuthZResponse authz = await Flows.AuthorizeCodeAsync(
+                        client, reg, scope: "openid email", redirectUri: reg.RedirectUri);
+
+                    Assert.False(string.IsNullOrEmpty(authz.Code), "前提: 認可コードが返ること");
+
+                    JsonResponse token = await Flows.ExchangeCodeAsync(
+                        client, reg, authz.Code, redirectUri: reg.RedirectUri);
+
+                    Assert.False(string.IsNullOrEmpty(token.IdToken), "前提: id_token が返ること");
+
+                    r.VerifyEqual("access_token の alg が " + alg,
+                        alg, Jwt.String(Jwt.Header(token.AccessToken), "alg") ?? "（無し）");
+
+                    r.VerifyEqual("id_token の alg も " + alg + "（access_token に揃う）",
+                        alg, Jwt.String(Jwt.Header(token.IdToken), "alg") ?? "（無し）");
+
+                    r.VerifyEqual("**kid は RS256 と同じ**（鍵が 1 本だから）",
+                        kidRs256, Jwt.String(Jwt.Header(token.IdToken), "kid") ?? "（無し）");
+
+                    Jwks.Result verify = Jwks.Verify(token.IdToken, jwks.Json);
+
+                    r.Verify("JWK Set の RSA 公開鍵で検証できる（RSASSA-PSS として）",
+                        verify.Verified, "検証できる", verify.Detail);
+
+                    JsonResponse userinfo = await client.UserInfoAsync(token.AccessToken);
+
+                    r.Verify("/userinfo が応答する（受ける集合に " + alg + " が入っている）",
+                        userinfo.IsJson && userinfo.KindOf("sub") != JsonValueKind.Undefined,
+                        "sub を含む JSON", userinfo.ToString());
+                }
+
+                r.Note("**`jwkcerts` の鍵は 4 本のまま**である（RSA 1 本 ＋ EC 3 本）。"
+                    + "**`PS*` は `RS*` と同じ鍵を使う**ので、**9 つの alg に対して鍵は 4 本**になる。"
+                    + "**JWK の `alg` は `RS256` のまま**だが、**それでよい**"
+                    + "（RFC 7517 の `alg` は「用途」で任意。照合は `kty` で行う）。");
+
+                r.Note("**パディングが違えば、鍵が合っていても通らない。**"
+                    + "`RS256` で署名したトークンの alg を `PS256` に書き換えても受けないことは、"
+                    + "**`RT-129.2` の (4)** で見ている。");
 
                 r.Done();
             }

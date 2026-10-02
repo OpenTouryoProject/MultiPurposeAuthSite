@@ -544,6 +544,10 @@ try {
         #                               曲線が alg に紐づく（P-384 の鍵）
         #     TestClient_10 : normal  … **id_token_signed_response_alg = ES512**（#129 の段階 3）。
         #                               同上（P-521 の鍵）
+        #     TestClient_11 : normal  … **id_token_signed_response_alg = PS256**（#129 の段階 4）。
+        #                               RSASSA-PSS。**鍵は RS256 と同じ**で、パディングだけが違う
+        #     TestClient_12 : normal  … **同 PS384**
+        #     TestClient_13 : normal  … **同 PS512**
         #     TestClient_6  : normal  … **subject_types を書かない**（#151 の段階 4）。
         #     TestClient_7  : normal    **既定が public になった**ことを測る。
         #                               **2 件要る**（public は「RP が違っても同じ sub」なので、
@@ -573,6 +577,11 @@ try {
         # **EC は曲線が alg に紐づく**（#129 の段階 3）。**鍵が分かれる**（P-384 / P-521）。
         $es384 = @{ id_token_signed_response_alg = 'ES384' }
         $es512 = @{ id_token_signed_response_alg = 'ES512' }
+
+        # **RSASSA-PSS**（#129 の段階 4）。**鍵は RS* と同じ 1 本**で、パディングだけが違う。
+        $ps256 = @{ id_token_signed_response_alg = 'PS256' }
+        $ps384 = @{ id_token_signed_response_alg = 'PS384' }
+        $ps512 = @{ id_token_signed_response_alg = 'PS512' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
@@ -588,7 +597,10 @@ try {
             @{ Name = 'TestClient_7';  Mode = 'normal'; ClientId = 'e2e0tc07000000000000000000000000'; Source = 'TestClient';  Override = @{} },
             @{ Name = 'TestClient_8';  Mode = 'normal'; ClientId = 'e2e0tc08000000000000000000000000'; Source = 'TestClient';  Override = $rs512 },
             @{ Name = 'TestClient_9';  Mode = 'normal'; ClientId = 'e2e0tc09000000000000000000000000'; Source = 'TestClient';  Override = $es384 },
-            @{ Name = 'TestClient_10'; Mode = 'normal'; ClientId = 'e2e0tc10000000000000000000000000'; Source = 'TestClient';  Override = $es512 })) {
+            @{ Name = 'TestClient_10'; Mode = 'normal'; ClientId = 'e2e0tc10000000000000000000000000'; Source = 'TestClient';  Override = $es512 },
+            @{ Name = 'TestClient_11'; Mode = 'normal'; ClientId = 'e2e0tc11000000000000000000000000'; Source = 'TestClient';  Override = $ps256 },
+            @{ Name = 'TestClient_12'; Mode = 'normal'; ClientId = 'e2e0tc12000000000000000000000000'; Source = 'TestClient';  Override = $ps384 },
+            @{ Name = 'TestClient_13'; Mode = 'normal'; ClientId = 'e2e0tc13000000000000000000000000'; Source = 'TestClient';  Override = $ps512 })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }

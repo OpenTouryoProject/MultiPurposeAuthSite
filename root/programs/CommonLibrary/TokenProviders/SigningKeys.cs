@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（#129 の段階 3 / D-9）
 //*  2026/10/03  玄人 幸道         ECのJWK検証を上流のJWS_ES*_Paramに戻した（OpenTouryo#595）
+//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 を追加（#129 の段階 4）
 //**********************************************************************************
 
 using System.Security.Cryptography;
@@ -63,7 +64,13 @@ namespace MultiPurposeAuthSite.TokenProviders
     /// 参照すると、ソース参照している `CreateJwkSetJson` が CommonLibrary ごと必要になる。
     /// 設定は `GetConfigParameter` で直に引く（`Config` / `CmnClientParams` と同じ流儀）。
     ///
-    /// **`RS256` / `RS384` / `RS512` は同じ RSA の鍵**で、**ダイジェストだけが違う。**
+    /// **RSA の 6 つは、同じ 1 本の鍵**である。
+    ///
+    /// | | 違い |
+    /// |---|---|
+    /// | `RS256` / `RS384` / `RS512` | **ダイジェストだけ**（パディングは PKCS #1 v1.5） |
+    /// | `PS256` / `PS384` / `PS512` | **パディングが RSASSA-PSS**（#129 の段階 4） |
+    ///
     /// **`ES256` / `ES384` / `ES512` は曲線が alg に紐づく**ので、**鍵が 3 本に分かれる**
     /// （JWA : `ES256`→P-256、`ES384`→P-384、`ES512`→P-521）。
     /// </remarks>
@@ -174,6 +181,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (this.Alg == JwtConst.RS256) { return new JWS_RS256_X509(path, password); }
                 if (this.Alg == JwtConst.RS384) { return new JWS_RS384_X509(path, password); }
                 if (this.Alg == JwtConst.RS512) { return new JWS_RS512_X509(path, password); }
+                if (this.Alg == JwtConst.PS256) { return new JWS_PS256_X509(path, password); }
+                if (this.Alg == JwtConst.PS384) { return new JWS_PS384_X509(path, password); }
+                if (this.Alg == JwtConst.PS512) { return new JWS_PS512_X509(path, password); }
                 if (this.Alg == JwtConst.ES256) { return new JWS_ES256_X509(path, password); }
                 if (this.Alg == JwtConst.ES384) { return new JWS_ES384_X509(path, password); }
                 if (this.Alg == JwtConst.ES512) { return new JWS_ES512_X509(path, password); }
@@ -190,6 +200,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 if (this.Alg == JwtConst.RS256) { return new JWS_RS256_X509(path, ""); }
                 if (this.Alg == JwtConst.RS384) { return new JWS_RS384_X509(path, ""); }
                 if (this.Alg == JwtConst.RS512) { return new JWS_RS512_X509(path, ""); }
+                if (this.Alg == JwtConst.PS256) { return new JWS_PS256_X509(path, ""); }
+                if (this.Alg == JwtConst.PS384) { return new JWS_PS384_X509(path, ""); }
+                if (this.Alg == JwtConst.PS512) { return new JWS_PS512_X509(path, ""); }
                 if (this.Alg == JwtConst.ES256) { return new JWS_ES256_X509(path, ""); }
                 if (this.Alg == JwtConst.ES384) { return new JWS_ES384_X509(path, ""); }
                 if (this.Alg == JwtConst.ES512) { return new JWS_ES512_X509(path, ""); }
@@ -212,12 +225,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 if (this.IsRsa)
                 {
-                    // **RS256 / RS384 / RS512 は同じ鍵**なので、鍵の変換は RS._256 で足りる。
+                    // **RSA の 6 つは同じ鍵**なので、鍵の変換は RS._256 で足りる。
                     RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
                     RSAParameters param = rpkc.JwkToProvider(jwkObject).ExportParameters(false);
 
                     if (this.Alg == JwtConst.RS384) { return new JWS_RS384_Param(param); }
                     if (this.Alg == JwtConst.RS512) { return new JWS_RS512_Param(param); }
+                    if (this.Alg == JwtConst.PS256) { return new JWS_PS256_Param(param); }
+                    if (this.Alg == JwtConst.PS384) { return new JWS_PS384_Param(param); }
+                    if (this.Alg == JwtConst.PS512) { return new JWS_PS512_Param(param); }
 
                     return new JWS_RS256_Param(param);
                 }
@@ -278,7 +294,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             ///
             /// | | `kid` の材料 | |
             /// |---|---|---|
-            /// | RSA | kty / n / e | **`RS._256` 固定で作る。** そうしないと `RS256` / `RS384` / `RS512` で `kid` が変わり、**1 本の鍵が 3 つに見える** |
+            /// | RSA | kty / n / e | **`RS._256` 固定で作る。** そうしないとダイジェストごとに `kid` が変わり、**1 本の鍵が 6 つに見える**（`RS*` ＋ `PS*`） |
             /// | EC | crv / kty / x / y | **alg のダイジェストで作る。** 鍵そのものが曲線ごとに違うので、`kid` も違ってよい |
             ///
             /// **署名（`JwkFromPfx`）と JWK Set の生成（`JwkFromCer`）が同じ作り方をすること。**
@@ -307,7 +323,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **増やすときは、この表に 1 行足すだけでよい。**
         /// ただし **E2E の `RT-129.2`（受けない alg の一覧）も直すこと**
         /// （黙って広がらないようにするため）。
-        /// **`PS256` は #129 の段階 4**（上流に `JWS_PS*` が無い。OpenTouryoProject/OpenTouryo#596）。
         /// </remarks>
         private static readonly Entry[] _entries = new Entry[]
         {
@@ -317,6 +332,14 @@ namespace MultiPurposeAuthSite.TokenProviders
             new Entry(JwtConst.RS384,
                 "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
             new Entry(JwtConst.RS512,
+                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+
+            // RSA / RSASSA-PSS（**鍵は RS* と同じ 1 本**。パディングだけが違う。#129 の段階 4）
+            new Entry(JwtConst.PS256,
+                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+            new Entry(JwtConst.PS384,
+                "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
+            new Entry(JwtConst.PS512,
                 "RsaPfxFilePath", "RsaPfxPassword", "SpRp_RsaCerFilePath"),
 
             // EC（**曲線が alg に紐づく**ので、鍵が 3 本に分かれる）

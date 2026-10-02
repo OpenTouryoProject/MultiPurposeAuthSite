@@ -476,7 +476,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// | ヘッダの alg | |
         /// |---|---|
         /// | `SigningKeys.SupportedAlgs` のいずれか | **受ける**（この認可サーバが発行しうる） |
-        /// | それ以外（`none` / `HS256` / `PS256` など） | **即、検証失敗**（null を返す） |
+        /// | それ以外（`none` / `HS256` / `HS384` など） | **即、検証失敗**（null を返す） |
         ///
         /// **以前は、知らない alg を RS256 として扱っていた。**
         /// 署名は自分の公開鍵で確かめるので偽造はできなかったが、
@@ -593,7 +593,6 @@ namespace MultiPurposeAuthSite.TokenProviders
         ///
         /// **増やすときは表に 1 行足す。** ただし **E2E の `RT-129.2`（受けない alg の一覧）も直すこと**
         /// （黙って広がらないようにするため）。
-        /// **`PS256` は #129 の段階 4**（上流に `JWS_PS*` が無い。OpenTouryoProject/OpenTouryo#596）。
         /// </remarks>
         public static string[] SupportedAlgs
         {

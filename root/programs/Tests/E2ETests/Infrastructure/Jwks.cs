@@ -33,6 +33,7 @@
 //*  2026/10/02  玄人 幸道         alg だけを書き換える口を追加（C-8）（#129 の段階 1）
 //*  2026/10/02  玄人 幸道         RS384 / RS512 も検証できるようにした（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         EC（ES256 / ES384 / ES512）も検証できるようにした（#129 の段階 3）
+//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512（RSASSA-PSS）も検証できるようにした（#129 の段階 4）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -50,8 +51,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
     /// 「RP が公開鍵だけで検証できるか」を確かめたことにならない。
     /// ここでは System.Security.Cryptography だけで組む。
     ///
-    /// **RSA（RS256 / RS384 / RS512）と EC（ES256 / ES384 / ES512）の両方**を扱う
-    /// （#129 の段階 2・3）。
+    /// **RSA（`RS*` / `PS*`）と EC（`ES*`）の両方**を扱う（#129 の段階 2〜4）。
+    /// **`PS*` は RSASSA-PSS** で、**鍵は `RS*` と同じ 1 本**である。
     /// </summary>
     public static class Jwks
     {
@@ -95,12 +96,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
             // **alg から、鍵の種類とダイジェストが決まる**（JWA）。
             //
-            //   | alg | kty | crv | ダイジェスト |
-            //   |---|---|---|---|
-            //   | RS256 / RS384 / RS512 | RSA | （無し。**1 本の鍵で 3 つ**） | SHA-256 / 384 / 512 |
-            //   | ES256 | EC | P-256 | SHA-256 |
-            //   | ES384 | EC | P-384 | SHA-384 |
-            //   | ES512 | EC | P-521 | SHA-512 |
+            //   | alg | kty | crv | ダイジェスト | パディング |
+            //   |---|---|---|---|---|
+            //   | RS256 / RS384 / RS512 | RSA | （無し。**1 本の鍵で 6 つ**） | SHA-256 / 384 / 512 | PKCS #1 v1.5 |
+            //   | PS256 / PS384 / PS512 | RSA | 同上 | SHA-256 / 384 / 512 | **RSASSA-PSS** |
+            //   | ES256 | EC | P-256 | SHA-256 | － |
+            //   | ES384 | EC | P-384 | SHA-384 | － |
+            //   | ES512 | EC | P-521 | SHA-512 | － |
             string kty = null;
             string crv = null;
             HashAlgorithmName hash;
@@ -133,6 +135,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     return result;
                 }
 
+                // **RS* は PKCS #1 v1.5、PS* は RSASSA-PSS**（#129 の段階 4）。
+                //   **鍵は同じ 1 本**で、パディングとダイジェストだけが違う。
+                RSASignaturePadding padding = result.Alg.StartsWith("PS")
+                    ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1;
+
                 using (RSA rsa = RSA.Create())
                 {
                     RSAParameters p = new RSAParameters()
@@ -144,7 +151,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     rsa.ImportParameters(p);
 
                     result.Verified = rsa.VerifyData(
-                        signingInput, signature, hash, RSASignaturePadding.Pkcs1);
+                        signingInput, signature, hash, padding);
                 }
             }
             else
@@ -332,8 +339,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             string family = alg.Substring(0, 2);
             string size   = alg.Substring(2);
 
-            if (family == "RS")
+            if (family == "RS" || family == "PS")
             {
+                // **RS* と PS* は同じ RSA の鍵**（違いはパディング。#129 の段階 4）。
                 kty = "RSA";
             }
             else if (family == "ES")
