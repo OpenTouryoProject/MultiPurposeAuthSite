@@ -46,6 +46,7 @@
 //*  2026/09/28  玄人 幸道         PAR（/par）に認可リクエストを預ける口を追加（#246）
 //*  2026/10/01  玄人 幸道         subject_types の既定値を public に変更（#151 の段階 4）
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
+//*  2026/10/02  玄人 幸道         id_token_signed_response_alg を引く口を追加（#129 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -85,6 +86,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
@@ -1251,6 +1253,63 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // 登録が無い
             return false;
+        }
+
+        #endregion
+
+        #region id_token_signed_response_alg
+
+        /// <summary>client_id から id_token_signed_response_alg を取得する（#129 の段階 2）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（登録が無ければ RS256）</returns>
+        /// <remarks>
+        /// **そのクライアントに発行する access_token と id_token の署名 alg** である
+        /// （OIDC Dynamic Registration の `id_token_signed_response_alg`）。
+        ///
+        /// **`/token` の id_token は、access_token のヘッダ alg に従って署名する**実装なので、
+        /// **2 つを揃える**（CIBA が ES256 を使う既存の作りと同じ形）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | 登録が無い | **`RS256`**（＝ 従来どおり） |
+        /// | 既知でない値 | **入口で拒否する**（`CmnEndpoints.CheckClientMode`。#224 と同じ方針） |
+        ///
+        /// **CIBA は ES256 のまま**である（FAPI-CIBA が PS256 / ES256 を求めるため、登録値で上書きしない）。
+        /// **JARM（`authorization_signing_alg_values_supported`）も RS256 のまま。**
+        /// </remarks>
+        public string GetIdTokenSignedResponseAlg(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey("id_token_signed_response_alg")
+                    && !string.IsNullOrEmpty(dic["id_token_signed_response_alg"]))
+                {
+                    return dic["id_token_signed_response_alg"];
+                }
+
+                return JwtConst.RS256;
+            }
+
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                ManageAddSaml2OAuth2DataViewModel model =
+                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+
+                if (!string.IsNullOrEmpty(model.IdTokenSignedResponseAlg))
+                {
+                    return model.IdTokenSignedResponseAlg;
+                }
+            }
+
+            // 登録が無い
+            return JwtConst.RS256;
         }
 
         #endregion

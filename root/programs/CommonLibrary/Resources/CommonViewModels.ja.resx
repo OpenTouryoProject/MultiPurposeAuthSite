@@ -231,6 +231,9 @@
   <data name="ResponseMode" xml:space="preserve">
     <value>OAuth2/OIDC の ResponseMode</value>
   </data>
+  <data name="IdTokenSignedResponseAlg" xml:space="preserve">
+    <value>署名アルゴリズム（id_token_signed_response_alg）</value>
+  </data>
   <data name="SubjectTypes" xml:space="preserve">
     <value>サブジェクト識別子タイプ</value>
   </data>

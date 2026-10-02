@@ -41,6 +41,7 @@
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を登録した TestClient_4 を追加（#232）
 //*  2026/09/30  玄人 幸道         subject_types=pairwise のクライアント（TestClient_5）を追加（#140 の段階 2）
 //*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
+//*  2026/10/02  玄人 幸道         RS512 で署名する TestClient_8 を追加（#129 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -163,6 +164,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// （pairwise との違いが、ここに出る）。
         /// </remarks>
         public const string TestClient_7 = "TestClient_7";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を RS512** にしたクライアント（#129 の段階 2）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **鍵は RS256 と同じ**（同じ RSA の証明書）。**ダイジェストだけが違う。**
+        /// **kid も同じ**（RFC 7638 は鍵から作る）ので、**`jwkcerts` の同じ鍵で検証できる。**
+        /// </remarks>
+        public const string TestClient_8 = "TestClient_8";
 
         /// <summary>
         /// TestClient_2 の client_secret（#237）。
@@ -578,6 +589,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 || clientName == KnownClients.TestClient_7)
             {
                 // client_secret は写す元のまま（**写しただけ**。#151 の段階 4）。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_8)
+            {
+                // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2）。
                 sourceName = KnownClients.TestClient;
             }
 

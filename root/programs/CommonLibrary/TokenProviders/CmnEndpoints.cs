@@ -107,6 +107,7 @@
 //*  2026/09/30  玄人 幸道         client_assertion を ES256 でも検証できるようにし、広告を揃えた（#129 の段階 2）
 //*  2026/10/01  玄人 幸道         subject_types_supported の並びを public 先頭に（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         subject_types_supported を OIDC の登録値だけにした（#151 の段階 5）
+//*  2026/10/02  玄人 幸道         登録された id_token_signed_response_alg で署名する（#129 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -280,9 +281,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #endregion
 
                 #region id_token
-                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
-                    "RS256", "ES256"
-                });
+                // **一覧は CmnAccessToken.SupportedAlgs が持つ**（#129 の段階 2）。
+                //   **発行・検証・広告が同じ一覧を見る**ので、増やしても食い違わない。
+                OpenIDConfig.Add("id_token_signing_alg_values_supported",
+                    new List<string>(CmnAccessToken.SupportedAlgs));
 
                 // **alg と enc は対で広告する**（OIDC Discovery 1.0 §3。#189 の 5）。
                 //   実装は JWE_RsaOaepAesGcm（Open棟梁）で、鍵の暗号化が RSA-OAEP、本文が A256GCM。
@@ -2355,10 +2357,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
                 Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
+                // **登録された署名 alg**（#129 の段階 2）
+                string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
+
                 // AccessTokenの生成
                 access_token = CmnAccessToken.CreateFromClaims(
                 	client_id, identity.Name, identity.Claims,
-                    DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes));
+                    DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes), signingAlg);
 
                 JObject jObj = (JObject)JsonConvert.DeserializeObject(
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
@@ -2372,10 +2377,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         if (s == OAuth2AndOIDCConst.Scope_Openid)
                         {
+                            // **access_token に揃える**（#129 の段階 2）。鍵は alg で決まる。
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
                                 HashClaimType.AtHash | HashClaimType.SHash,
-                                Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
+                                (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxFilePath : Config.RsaPfxFilePath,
+                                (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxPassword : Config.RsaPfxPassword,
+                                jwkString, signingAlg);
                         }
                     }
                 }
@@ -2463,7 +2471,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 access_token = CmnAccessToken.ProtectFromPayload(
                 	client_id, tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                    null, clientMode, out string aud, out string sub);
+                    null, clientMode, out string aud, out string sub,
+                    // **登録された署名 alg で署名する**（#129 の段階 2）
+                    Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                 // Client認証のclient_idとToken類のaudをチェック
                 if (client_id != aud) { throw new Exception("[client_id != aud]"); }
@@ -2478,10 +2488,15 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (s == OAuth2AndOIDCConst.Scope_Openid)
                     {
+                        // **access_token に揃える**（#129 の段階 2）。鍵は alg で決まる。
+                        string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
+
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, code, state, // at_hash, c_hash, s_hash
                             HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
+                            (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxFilePath : Config.RsaPfxFilePath,
+                            (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxPassword : Config.RsaPfxPassword,
+                            jwkString, signingAlg);
                     }
                 }
 
@@ -2651,7 +2666,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        x509, clientMode, out string aud, out string sub);
+                        x509, clientMode, out string aud, out string sub,
+                        // **登録された署名 alg で署名する**（#129 の段階 2）
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -2786,7 +2803,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            x509, clientMode, out string aud, out string sub);
+                            x509, clientMode, out string aud, out string sub,
+                            // **登録された署名 alg で署名する**（#129 の段階 2）
+                            Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)
@@ -2929,7 +2948,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
                             	client_id, identity.Name, identity.Claims,
-                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                                // **登録された署名 alg で署名する**（#129 の段階 2）
+                                Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                             // オペレーション・トレース・ログ出力
                             string name = Helper.GetInstance().GetClientName(client_id);
@@ -3052,7 +3073,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
                         client_id, identity.Name, identity.Claims,
-                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                        // **登録された署名 alg で署名する**（#129 の段階 2）
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format(
@@ -3150,7 +3173,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(
                                     iss, identity.Name, identity.Claims,
-                                    DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                                    DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                                    // **登録された署名 alg で署名する**（#129 の段階 2。client_id は iss）
+                                    Helper.GetInstance().GetIdTokenSignedResponseAlg(iss));
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format(
@@ -3268,7 +3293,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub);
+                        null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub,
+                        // **登録された署名 alg で署名する**（#129 の段階 2）
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -4218,6 +4245,19 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
             }
 
+            // **登録された署名 alg が、扱える値かを確かめる**（#129 の段階 2）。
+            //   **既知でない値は、不正な登録として拒否する**（#224 と同じ方針）。
+            //   ここで止めないと、**発行の直前で既定（RS256）に落ちて、設定の誤りが分からない。**
+            string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
+
+            if (!CmnAccessToken.IsSupportedAlg(signingAlg))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The registered id_token_signed_response_alg is not supported.");
+                return false;
+            }
+
             // 登録された種別
             string clientModeString = Helper.GetInstance().GetClientMode(client_id);
 
@@ -4318,10 +4358,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                         }
                         else
                         {
-                            // RS256
+                            // RS256 / RS384 / RS512
+                            //   **access_token のヘッダ alg に揃える**（#129 の段階 2）。
+                            //   **渡さないと既定（RS256）に落ちて、access_token と食い違う。**
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", "", // c_hash, s_hash は /token で生成不可
-                                HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "");
+                                HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "", alg);
                         }
                     }
                     else

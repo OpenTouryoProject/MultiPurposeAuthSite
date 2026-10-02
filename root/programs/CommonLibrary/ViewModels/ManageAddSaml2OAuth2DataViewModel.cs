@@ -23,6 +23,7 @@
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri（RP-Initiated Logout）を追加（#232）
 //*  2026/10/01  玄人 幸道         subject_types の選択肢を public 先頭にした（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         subject_types の選択肢を OIDC の登録値だけにした（#151 の段階 5）
+//*  2026/10/02  玄人 幸道         id_token_signed_response_alg を追加（#129 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -146,6 +147,39 @@ namespace MultiPurposeAuthSite.ViewModels
                 };
             }
         }
+        #endregion
+
+        #region IdTokenSignedResponseAlg
+
+        /// <summary>IdTokenSignedResponseAlg</summary>
+        /// <remarks>
+        /// **そのクライアントに発行する access_token と id_token の署名 alg**（#129 の段階 2）。
+        /// **空なら `RS256`**（＝ 従来どおり）。
+        /// </remarks>
+        [Display(Name = "IdTokenSignedResponseAlg", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "id_token_signed_response_alg")]
+        public string IdTokenSignedResponseAlg { get; set; }
+
+        /// <summary>IdTokenSignedResponseAlg アイテムリスト</summary>
+        /// <remarks>
+        /// **一覧は `CmnAccessToken.SupportedAlgs` が持っている**が、
+        /// **ViewModel から TokenProviders を参照しない**ため、ここでは並べ直している。
+        /// **増やすときは、両方を直すこと**（#129 の段階 3 以降）。
+        /// </remarks>
+        public List<SelectListItem> DdlIdTokenSignedResponseAlgItems
+        {
+            get
+            {
+                return new List<SelectListItem>()
+                {
+                    new SelectListItem() { Text = "RS256（既定）", Value = "RS256" },
+                    new SelectListItem() { Text = "RS384", Value = "RS384" },
+                    new SelectListItem() { Text = "RS512", Value = "RS512" },
+                    new SelectListItem() { Text = "ES256", Value = "ES256" }
+                };
+            }
+        }
+
         #endregion
 
         #region ClientType

@@ -31,6 +31,7 @@
 //*  2026/09/09  玄人 幸道         新規（基本テストの追加に伴う）
 //*  2026/09/11  玄人 幸道         BASE64URL の変換を Base64Url へ集約
 //*  2026/10/02  玄人 幸道         alg だけを書き換える口を追加（C-8）（#129 の段階 1）
+//*  2026/10/02  玄人 幸道         RS384 / RS512 も検証できるようにした（#129 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -88,10 +89,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             result.Alg = Jwt.String(header, "alg");
             result.Kid = Jwt.String(header, "kid");
 
-            if (result.Alg != "RS256")
+            // **RSA の鍵で検証できる alg**（#129 の段階 2 で RS384 / RS512 を足した）。
+            //   **鍵は 1 つで、ダイジェストだけが違う。** ES256 は別の鍵種になるので、ここでは見ない。
+            HashAlgorithmName hash;
+
+            if (result.Alg == "RS256")
             {
-                // このテストは RS256 だけを見る。ES256 は別の鍵種になる。
-                result.Detail = "alg が RS256 ではない（" + (result.Alg ?? "なし") + "）";
+                hash = HashAlgorithmName.SHA256;
+            }
+            else if (result.Alg == "RS384")
+            {
+                hash = HashAlgorithmName.SHA384;
+            }
+            else if (result.Alg == "RS512")
+            {
+                hash = HashAlgorithmName.SHA512;
+            }
+            else
+            {
+                result.Detail = "alg が RS256 / RS384 / RS512 ではない（" + (result.Alg ?? "なし") + "）";
                 return result;
             }
 
@@ -125,11 +141,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 byte[] signature    = Base64Url.Decode(parts[2]);
 
                 result.Verified = rsa.VerifyData(
-                    signingInput, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                    signingInput, signature, hash, RSASignaturePadding.Pkcs1);
             }
 
             result.Detail = result.Verified
-                ? "JWK Set の公開鍵（kid=" + result.Kid + "）で検証できた"
+                ? "JWK Set の公開鍵（kid=" + result.Kid + " / alg=" + result.Alg + "）で検証できた"
                 : "署名が公開鍵と一致しない";
 
             return result;

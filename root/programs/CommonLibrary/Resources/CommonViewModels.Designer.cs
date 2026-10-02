@@ -365,6 +365,15 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("SubjectTypes", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Signing algorithm (id_token_signed_response_alg) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IdTokenSignedResponseAlg {
+            get {
+                return ResourceManager.GetString("IdTokenSignedResponseAlg", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   The DN of the client certificate to use. に類似しているローカライズされた文字列を検索します。

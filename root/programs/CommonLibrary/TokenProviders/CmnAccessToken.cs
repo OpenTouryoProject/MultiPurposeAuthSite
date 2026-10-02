@@ -41,6 +41,8 @@
 //*  2026/09/25  玄人 幸道         profile / address のクレームを、設定の対応付けから返す（#230）
 //*  2026/09/27  玄人 幸道         署名検証の鍵選択を切り出し、署名だけを検証する口を追加（#232）
 //*  2026/10/02  玄人 幸道         受ける alg を自分が発行する 2 つに固定（C-8）（#129 の段階 1）
+//*  2026/10/02  玄人 幸道         RS384 / RS512 を発行・検証できるようにした（#129 の段階 2）
+//*  2026/10/02  玄人 幸道         署名する鍵の選択を SelectJwsForSigning に切り出した（#129 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -81,6 +83,78 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #region Create
 
+        #region SelectJwsForSigning
+
+        /// <summary>署名に使う JWS を選ぶ（kid / jku まで入れて返す）</summary>
+        /// <param name="alg">alg（SupportedAlgs のいずれか）</param>
+        /// <returns>JWS</returns>
+        /// <remarks>
+        /// **鍵は 2 つ**（RSA と ECDSA）で、**`RS256` / `RS384` / `RS512` は同じ RSA の鍵**である。
+        /// **ダイジェストだけが違う。**
+        ///
+        /// **`kid` は鍵から作る**（RFC 7638 : kty / n / e）ので、
+        /// **`RS256` / `RS384` / `RS512` で同じ値**になる。
+        /// ＝ **RP は `jwkcerts` に載っている鍵で、そのまま検証できる**
+        /// （どのダイジェストかは、ヘッダの alg が伝える）。
+        ///
+        /// **既知でない alg は `RS256` として扱う。** 入口（`CmnEndpoints.CheckClientMode`）で
+        /// 弾いてあるので、ここへは来ない。
+        /// </remarks>
+        private static JWS SelectJwsForSigning(string alg)
+        {
+            if (alg == JwtConst.ES256)
+            {
+                JWS_ES256_X509 jwsES256 = new JWS_ES256_X509(
+                    Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword);
+
+                // 鍵変換
+                EccPublicKeyConverter epkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
+
+                // JWSHeaderのセット
+                Dictionary<string, string> jwk =
+                    JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                        epkc.X509PfxToJwk(Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, HashAlgorithmName.SHA256));
+
+                jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
+                jwsES256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+
+                return jwsES256;
+            }
+            else
+            {
+                JWS_RSA jwsRSA = null;
+
+                if (alg == JwtConst.RS384)
+                {
+                    jwsRSA = new JWS_RS384_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
+                }
+                else if (alg == JwtConst.RS512)
+                {
+                    jwsRSA = new JWS_RS512_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
+                }
+                else
+                {
+                    jwsRSA = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
+                }
+
+                // 鍵変換（kid を作るだけなので、ダイジェストは問わない）
+                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
+
+                // JWSHeaderのセット
+                // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
+                Dictionary<string, string> jwk =
+                    JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                        rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
+
+                jwsRSA.JWSHeader.kid = jwk[JwtConst.kid];
+                jwsRSA.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+
+                return jwsRSA;
+            }
+        }
+
+        #endregion
+
         #region Claims経由
 
         /// <summary>CreateFromClaims</summary>
@@ -88,10 +162,12 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="userName">string</param>
         /// <param name="claims">IEnumerable(Claim)</param>
         /// <param name="ExpiresUtc">DateTimeOffset</param>
+        /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
         /// <returns>JWT文字列</returns>
         public static string CreateFromClaims(
             string clientId, string userName,
-            IEnumerable<Claim> identityClaims, DateTimeOffset expiresUtc)
+            IEnumerable<Claim> identityClaims, DateTimeOffset expiresUtc,
+            string alg = JwtConst.RS256)
         {
             string jti = Guid.NewGuid().ToString("N");
             string json = "";
@@ -208,28 +284,14 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region JWS化
 
-            JWS_RS256_X509 jwsRS256 = null;
-
-            // JWT_RS256_X509
-            jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
-
-            // 鍵変換
-            RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-
-            // JWSHeaderのセット
-            // kid : https://openid-foundation-japan.github.io/rfc7638.ja.html#Example
-            Dictionary<string, string> jwk =
-                JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                    rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
-
-            jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-            jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
+            // **登録された alg で署名する**（#129 の段階 2）。鍵の選択は SelectJwsForSigning が持つ。
+            JWS jws = CmnAccessToken.SelectJwsForSigning(alg);
 
             // ここでストアに登録
             IssuedTokenProvider.Create(jti, json, clientId, audience);
 
             // 署名
-            return jwsRS256.Create(json);
+            return jws.Create(json);
 
             #endregion
         }
@@ -400,60 +462,17 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region JWS化
 
-            if (alg == JwtConst.ES256)
-            {
-                JWS_ES256_X509 jwsES256 = null;
+            // **登録された alg で署名する**（#129 の段階 2）。鍵の選択は SelectJwsForSigning が持つ。
+            JWS jws = CmnAccessToken.SelectJwsForSigning(alg);
 
-                // 署名
-                jwsES256 = new JWS_ES256_X509(Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword);
+            // ここでストアに登録
+            if (!string.IsNullOrEmpty(clientId))
+                // ... clientIdがnullのケースは、
+                // IntrospectTokenから処理共通化のために利用されるケース。
+                IssuedTokenProvider.Create(jti, json, clientId, audience);
 
-                // 鍵変換
-                EccPublicKeyConverter epkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
-
-                // JWSHeaderのセット
-                Dictionary<string, string> jwk =
-                    JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                        epkc.X509PfxToJwk(Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, HashAlgorithmName.SHA256));
-
-                jwsES256.JWSHeader.kid = jwk[JwtConst.kid];
-                jwsES256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
-
-                // ここでストアに登録
-                if (!string.IsNullOrEmpty(clientId))
-                    // ... clientIdがnullのケースは、
-                    // IntrospectTokenから処理共通化のために利用されるケース。
-                    IssuedTokenProvider.Create(jti, json, clientId, audience);
-
-                // 署名
-                return jwsES256.Create(json);
-            }
-            else // 既定 は RS256
-            {
-                JWS_RS256_X509 jwsRS256 = null;
-
-                // 署名
-                jwsRS256 = new JWS_RS256_X509(Config.RsaPfxFilePath, Config.RsaPfxPassword);
-
-                // 鍵変換
-                RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-
-                // JWSHeaderのセット
-                Dictionary<string, string> jwk =
-                    JsonConvert.DeserializeObject<Dictionary<string, string>>(
-                        rpkc.X509PfxToJwk(Config.RsaPfxFilePath, Config.RsaPfxPassword));
-
-                jwsRS256.JWSHeader.kid = jwk[JwtConst.kid];
-                jwsRS256.JWSHeader.jku = Config.OAuth2AuthorizationServerEndpointsRootURI + OAuth2AndOIDCParams.JwkSetUri;
-
-                // ここでストアに登録
-                if (!string.IsNullOrEmpty(clientId))
-                    // ... clientIdがnullのケースは、
-                    // IntrospectTokenから処理共通化のために利用されるケース。
-                    IssuedTokenProvider.Create(jti, json, clientId, audience);
-
-                // 署名
-                return jwsRS256.Create(json);
-            }
+            // 署名
+            return jws.Create(json);
 
             #endregion
         }
@@ -525,10 +544,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 string alg = header[JwtConst.alg];
 
                 // **自分が発行する alg だけを受ける**（C-8。#129 の段階 1）。
-                //   この認可サーバが署名に使うのは RS256 と ES256 の 2 つだけで、
-                //   jwkcerts も *_signing_alg_values_supported も、その 2 つを広告している。
+                //   **一覧は 1 か所で持つ**（#129 の段階 2 で RS384 / RS512 を足した）。
                 //   **それ以外の alg のトークンは、自分が発行したものではない。**
-                if (alg != JwtConst.RS256 && alg != JwtConst.ES256)
+                if (!CmnAccessToken.IsSupportedAlg(alg))
                 {
                     return null;
                 }
@@ -554,9 +572,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         //   **証明書に落とす**（従来どおり）。**ただし alg に対応する鍵を選ぶ。**
                         jws = CmnAccessToken.SelectJwsFromCertificate(alg);
                     }
-                    else if ((string)jwkObject[JwtConst.alg] != alg)
+                    else if (!CmnAccessToken.IsSameKeyType(jwkObject, alg))
                     {
-                        // **JWK の alg と、ヘッダの alg が食い違っている。**
+                        // **JWK の鍵の種類と、ヘッダの alg が食い違っている。**
                         //   どちらを信じるかという話にしないため、受けない。
                         return null;
                     }
@@ -571,10 +589,22 @@ namespace MultiPurposeAuthSite.TokenProviders
                         }
                         else
                         {
-                            // RS256
+                            // RS256 / RS384 / RS512（**鍵は同じ**。ダイジェストだけ違う）
                             RsaPublicKeyConverter rpkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-                            jws = new JWS_RS256_Param(
-                                rpkc.JwkToProvider(jwkObject).ExportParameters(false));
+                            RSAParameters param = rpkc.JwkToProvider(jwkObject).ExportParameters(false);
+
+                            if (alg == JwtConst.RS384)
+                            {
+                                jws = new JWS_RS384_Param(param);
+                            }
+                            else if (alg == JwtConst.RS512)
+                            {
+                                jws = new JWS_RS512_Param(param);
+                            }
+                            else
+                            {
+                                jws = new JWS_RS256_Param(param);
+                            }
                         }
                     }
                 }
@@ -597,7 +627,71 @@ namespace MultiPurposeAuthSite.TokenProviders
                 return new JWS_ES256_X509(CmnClientParams.EcdsaCerFilePath, "");
             }
 
+            // RS256 / RS384 / RS512（**鍵は同じ**。ダイジェストだけ違う）
+            if (alg == JwtConst.RS384)
+            {
+                return new JWS_RS384_X509(CmnClientParams.RsaCerFilePath, "");
+            }
+
+            if (alg == JwtConst.RS512)
+            {
+                return new JWS_RS512_X509(CmnClientParams.RsaCerFilePath, "");
+            }
+
             return new JWS_RS256_X509(CmnClientParams.RsaCerFilePath, "");
+        }
+
+        /// <summary>この認可サーバが署名に使う alg（#129 の段階 1・2）</summary>
+        /// <remarks>
+        /// **一覧はここだけで持つ。** 発行（`ProtectFromPayload`）・検証（`SelectJws`）・
+        /// 広告（Discovery の `*_signing_alg_values_supported`）が、同じ一覧を見る。
+        ///
+        /// **増やすときは、ここと E2E（`RT-129.2`）を併せて直す**
+        /// （黙って広がらないようにするため）。**ES384 / ES512 は #129 の段階 3、PS256 は段階 4。**
+        /// </remarks>
+        public static readonly string[] SupportedAlgs = new string[]
+        {
+            JwtConst.RS256, JwtConst.RS384, JwtConst.RS512, JwtConst.ES256
+        };
+
+        /// <summary>この認可サーバが署名に使う alg かどうか</summary>
+        /// <param name="alg">alg</param>
+        /// <returns>使うなら true</returns>
+        public static bool IsSupportedAlg(string alg)
+        {
+            return !string.IsNullOrEmpty(alg)
+                && Array.IndexOf(CmnAccessToken.SupportedAlgs, alg) >= 0;
+        }
+
+        /// <summary>JWK の鍵の種類と、alg が合っているか（#129 の段階 2）</summary>
+        /// <param name="jwkObject">JWK</param>
+        /// <param name="alg">ヘッダの alg</param>
+        /// <returns>合っていれば true</returns>
+        /// <remarks>
+        /// **以前は JWK の `alg` と完全一致を求めていた**（C-8）。
+        /// **同じ鍵で RS256 / RS384 / RS512 を使えるようにした**ので、
+        /// **一致ではなく「鍵の種類が合っているか」で見る**（RFC 7517 の `alg` は「用途」で、任意）。
+        ///
+        /// | alg | 要る kty |
+        /// |---|---|
+        /// | `RS*` | `RSA` |
+        /// | `ES*` | `EC` |
+        /// </remarks>
+        private static bool IsSameKeyType(JObject jwkObject, string alg)
+        {
+            string kty = (string)jwkObject[JwtConst.kty];
+
+            if (alg.StartsWith("RS"))
+            {
+                return kty == JwtConst.RSA;
+            }
+
+            if (alg.StartsWith("ES"))
+            {
+                return kty == JwtConst.EC;
+            }
+
+            return false;
         }
 
         /// <summary>JWT の署名だけを検証する（#232）</summary>

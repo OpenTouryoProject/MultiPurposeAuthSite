@@ -20,6 +20,7 @@
     //*  2019/02/18  西野 大介         FAPI2 CC対応実施
     //*  2019/12/25  西野 大介         PPID、PKCE 4 SPA対応による見直し
     //*  2026/09/27  玄人 幸道         post_logout_redirect_uri の入力欄を追加（#232）
+    //*  2026/10/02  玄人 幸道         署名アルゴリズムの入力欄を追加（#129 の段階 2）
     //**********************************************************************************
 *@
 
@@ -113,6 +114,13 @@
         @Html.LabelFor(m => m.SubjectTypes, new { @class = "col-md-2 control-label" })
         <div class="col-md-3">
             @Html.DropDownListFor(model => model.SubjectTypes, Model.DdlSubjectTypesItems, new { @class = "form-control" })
+        </div>
+    </div>
+    @* **署名アルゴリズム**（#129 の段階 2）。access_token と id_token に効く *@
+    <div class="form-group">
+        @Html.LabelFor(m => m.IdTokenSignedResponseAlg, new { @class = "col-md-2 control-label" })
+        <div class="col-md-3">
+            @Html.DropDownListFor(model => model.IdTokenSignedResponseAlg, Model.DdlIdTokenSignedResponseAlgItems, new { @class = "form-control" })
         </div>
     </div>
     @*<div class="form-group">

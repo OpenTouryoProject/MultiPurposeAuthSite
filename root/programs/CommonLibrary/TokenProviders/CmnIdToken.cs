@@ -33,6 +33,7 @@
 //*  2020/03/17  西野 大介         CIBA対応実施 (ES256)
 //*  2026/09/07  玄人 幸道         nonce無しでもid_tokenを発行するよう修正（#183）
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
+//*  2026/10/02  玄人 幸道         RS384 / RS512 でも署名できるようにした（#129 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -75,7 +76,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="pfxFilePath">string</param>
         /// <param name="pfxPassword">string</param>
         /// <param name="cerJwkString">string</param>
-        /// <param name="alg">string</param>
+        /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
         /// <returns>id_token</returns>
         public static string ChangeToIdTokenFromAccessToken(
             string access_token, string code, string state, HashClaimType hct,
@@ -201,15 +202,32 @@ namespace MultiPurposeAuthSite.TokenProviders
                             }
                             else
                             {
-                                // RS256
-                                jws = new JWS_RS256_X509(pfxFilePath, pfxPassword);
+                                // RS256 / RS384 / RS512
+                                //   **鍵は 1 つで、ダイジェストだけが違う**（#129 の段階 2）。
+                                //   **kid は鍵から作る**（RFC 7638）ので、3 つで同じ値になる。
+                                JWS_RSA jwsRSA = null;
+
+                                if (alg == JwtConst.RS384)
+                                {
+                                    jwsRSA = new JWS_RS384_X509(pfxFilePath, pfxPassword);
+                                }
+                                else if (alg == JwtConst.RS512)
+                                {
+                                    jwsRSA = new JWS_RS512_X509(pfxFilePath, pfxPassword);
+                                }
+                                else
+                                {
+                                    jwsRSA = new JWS_RS256_X509(pfxFilePath, pfxPassword);
+                                }
 
                                 if (!string.IsNullOrEmpty(jwsHeader.jku)
                                 && !string.IsNullOrEmpty(jwsHeader.kid))
                                 {
-                                    ((JWS_RS256)jws).JWSHeader.jku = jwsHeader.jku;
-                                    ((JWS_RS256)jws).JWSHeader.kid = jwsHeader.kid;
+                                    jwsRSA.JWSHeader.jku = jwsHeader.jku;
+                                    jwsRSA.JWSHeader.kid = jwsHeader.kid;
                                 }
+
+                                jws = jwsRSA;
                             }
 
                             // Create

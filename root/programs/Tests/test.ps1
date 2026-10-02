@@ -538,6 +538,8 @@ try {
         #                               ログアウト後に RP へ戻せるか（登録が無いクライアントとの対照）
         #     TestClient_5  : normal  … **subject_types = pairwise**（#140 の段階 2）。
         #                               sub が PPID になっても /userinfo がクレームを返すか
+        #     TestClient_8  : normal  … **id_token_signed_response_alg = RS512**（#129 の段階 2）。
+        #                               登録した alg で署名されるか（鍵は RS256 と同じ）
         #     TestClient_6  : normal  … **subject_types を書かない**（#151 の段階 4）。
         #     TestClient_7  : normal    **既定が public になった**ことを測る。
         #                               **2 件要る**（public は「RP が違っても同じ sub」なので、
@@ -560,6 +562,9 @@ try {
 
         # **pairwise の登録**（#140 の段階 2）。sub が PPID（クライアントごとに違う値）になる。
         $pairwise = @{ subject_types = 'pairwise' }
+
+        # **署名アルゴリズムの登録**（#129 の段階 2）。**鍵は RS256 と同じ**で、ダイジェストだけ違う。
+        $rs512 = @{ id_token_signed_response_alg = 'RS512' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
@@ -572,7 +577,8 @@ try {
             @{ Name = 'TestClient_4';  Mode = 'normal'; ClientId = 'e2e0tc04000000000000000000000000'; Source = 'TestClient';  Override = $postLogout },
             @{ Name = 'TestClient_5';  Mode = 'normal'; ClientId = 'e2e0tc05000000000000000000000000'; Source = 'TestClient';  Override = $pairwise },
             @{ Name = 'TestClient_6';  Mode = 'normal'; ClientId = 'e2e0tc06000000000000000000000000'; Source = 'TestClient';  Override = @{} },
-            @{ Name = 'TestClient_7';  Mode = 'normal'; ClientId = 'e2e0tc07000000000000000000000000'; Source = 'TestClient';  Override = @{} })) {
+            @{ Name = 'TestClient_7';  Mode = 'normal'; ClientId = 'e2e0tc07000000000000000000000000'; Source = 'TestClient';  Override = @{} },
+            @{ Name = 'TestClient_8';  Mode = 'normal'; ClientId = 'e2e0tc08000000000000000000000000'; Source = 'TestClient';  Override = $rs512 })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }

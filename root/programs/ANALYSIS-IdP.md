@@ -1467,8 +1467,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
 | `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる** |
-| `id_token` | `id_token_signing_alg_values_supported: ["RS256","ES256"]` | RS256 / ES256 | **クライアントは選べない。** `oauth2_oidc_mode=fapi_ciba` のときだけ ES256、他は RS256 |
-| access_token | （広告しない） | RS256 / ES256 | 同上（`id_token` と同じ alg になる） |
+| `id_token` | `id_token_signing_alg_values_supported: ["RS256","RS384","RS512","ES256"]` | RS256 / RS384 / RS512 / ES256（#129 の段階 2 で RS384 / RS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
+| access_token | （広告しない） | RS256 / RS384 / RS512 / ES256 | 同上（`id_token` と同じ alg になる） |
 | Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
 | CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
 | 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
@@ -1496,9 +1496,44 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   E2E テスト : **`RT-129.1`**（ES256 で通る／RS256 の対照／Discovery の広告）
 - **ES384 / ES512 は鍵の差し替えを伴う**（JWA で `ES256`→P-256、`ES384`→P-384、`ES512`→P-521。
   曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**
-- **登録（クライアント）側に alg の項目が無い**。OIDC Registration 1.0 の
-  `id_token_signed_response_alg` / `request_object_signing_alg` /
-  `token_endpoint_auth_signing_alg` に相当するものが無い
+- **登録（クライアント）側の alg の項目**は、**`id_token_signed_response_alg` を ✅ 足した**（#129 の段階 2。下記）。
+  **検証する側**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**
+
+### 署名アルゴリズムを登録で選べるようにした（#129 の段階 2）
+
+**`RS384` / `RS512` を足し、クライアントの登録 `id_token_signed_response_alg` で選べるようにした。**
+**段階 0 の対照表で「登録側に alg の項目が無い」と書いた箇所**が、ここで埋まる。
+
+| | |
+|---|---|
+| 発行する alg | **`RS256` / `RS384` / `RS512` / `ES256`**（`CmnAccessToken.SupportedAlgs`） |
+| 選び方 | **クライアントの登録 `id_token_signed_response_alg`**。**書かなければ `RS256`**（＝ 従来どおり） |
+| 効く範囲 | **access_token と id_token の両方**（2 つは同じ alg になる） |
+| 既知でない値 | **入口で拒否する**（`CheckClientMode` → `unauthorized_client`。#224 と同じ方針） |
+
+**鍵は増えない。** `RS256` / `RS384` / `RS512` は**同じ RSA の鍵**で、**ダイジェストだけが違う。**
+**`kid` は鍵から作る**（RFC 7638 : kty / n / e）ので**3 つで同じ値**になり、
+**RP は `jwkcerts` の同じ鍵でそのまま検証できる**（どのダイジェストかはヘッダの `alg` が伝える）。
+
+**一覧は 1 か所に寄せた**（`CmnAccessToken.SupportedAlgs`）。
+**発行（`SelectJwsForSigning`）・検証（`SelectJws`）・広告（Discovery）が同じ一覧を見る**ので、
+**増やしても食い違わない。**
+
+> **id_token は、渡さないと既定に落ちる。**
+> `CmnIdToken.ChangeToIdTokenFromAccessToken` の `alg` は**既定が `RS256`** で、
+> **`/token` の呼び出し側が、ヘッダから読んだ `alg` を渡していなかった。**
+> **access_token だけ `RS512`、id_token は `RS256`** という状態になり、**`RT-129.3` で見つかった。**
+> **既定値のある引数は、渡し忘れても動く。** 測らないと分からない。
+
+- **CIBA は `ES256` のまま**（FAPI-CIBA が `PS256` / `ES256` を求めるため、登録値で上書きしない）
+- **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま**
+- **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**。
+  **受ける alg を登録で狭めるのは別の話**なので、段階を分けた
+- **E2E** : **`RT-129.3`**（`RS512` で署名され、`jwkcerts` の同じ鍵で検証でき、`kid` が `RS256` と同じ。
+  **自分の検証経路＝C-8 で固定した集合も、これを受ける**）／
+  **`RT-129.4`**（Discovery が `RS256 RS384 RS512 ES256` を、**この順で**広告する）
+- **`ES384` / `ES512` は段階 3**（鍵の差し替えを伴う）。**`PS256` は段階 4**（上流の対応が要る）
+- **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]** — **✅ 修正済み（#129 の段階 1）**
 
@@ -1510,7 +1545,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 | | |
 |---|---|
-| **受ける alg を固定した** | **`RS256` / `ES256` だけ**（この認可サーバが発行する 2 つ）。**それ以外は即、検証失敗**（`none` / `HS256` / `RS384` …） |
+| **受ける alg を固定した** | **この認可サーバが発行するものだけ**（`CmnAccessToken.SupportedAlgs`。段階 1 では `RS256` / `ES256`、**段階 2 で `RS384` / `RS512` を足した**）。**それ以外は即、検証失敗**（`none` / `HS256` / `ES384` / `PS256` …） |
 | **鍵を alg に対応させた** | **以前は、`kid` を引けないときに必ず RSA を選んでいた**ので、**ES256 で発行したトークンが検証できなかった** |
 | **JWK とヘッダの食い違いを拒む** | `kid` で引いた JWK の `alg` が**ヘッダの `alg` と違えば受けない**（どちらを信じるかという話にしない） |
 
@@ -1521,7 +1556,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 - **`kid` を引けないときに証明書へ落とす動きは、従来どおり**残した
   （`JwkSet.json` を置いていない配備でも、自分の鍵で検証できる）
-- **E2E** : `RT-129.2`（`HS256` / `RS384` / `ES384` / `PS256` / `none` に書き換えたトークンを拒む）。
+- **E2E** : `RT-129.2`（`HS256` / `ES384` / `PS256` / `none` に書き換えたトークンを拒む。
+  **`RS384` / `RS512` は段階 2 で受けるようになったので、一覧から外した**）。
   **署名と `kid` はそのまま**にして**ヘッダの `alg` だけ**を書き換えるので、**alg の判定そのもの**を測れる
   （`TC-6.4` はヘッダを丸ごと作り替えるため、`kid` が消えて alg の判定まで届かない）
 - **受ける集合を増やすときは、`RT-129.2` の一覧も直す**（黙って広がらないようにするため）

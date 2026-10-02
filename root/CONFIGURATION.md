@@ -149,6 +149,7 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
     "redirect_uri_code": "test_self_code",
     "client_name": "TestClient",
     // "subject_types" は書かなければ public（既定。下記）
+    // "id_token_signed_response_alg" は書かなければ RS256（既定。下記）
     "jwk_rsa_publickey": "..."
   },
   ...
@@ -200,6 +201,29 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 **つまり、既定値の変更が効くのは「これから」だけである。**
 **既存の配備で `sub` を `public` に揃えたいなら、表の行を消す**ことになる
 （消すと、その RP から見て別人になる）。
+
+### `id_token_signed_response_alg` — 署名アルゴリズム（#129 の段階 2）
+
+| 値 | ダイジェスト | 鍵 | |
+|---|---|---|---|
+| **`RS256`** | SHA-256 | RSA（`RsaPfxFilePath`） | **既定**（書かなければこれ） |
+| `RS384` | SHA-384 | **同じ RSA の鍵** | |
+| `RS512` | SHA-512 | **同じ RSA の鍵** | |
+| `ES256` | SHA-256 | **ECDSA**（`EcdsaPfxFilePath`。鍵が別） | |
+
+**access_token と id_token の両方に効く**（2 つは同じ alg になる）。
+**既知でない値を書いた登録は、入口で拒否される**（`unauthorized_client`。#224 と同じ方針）。
+**画面（`Manage/AddSaml2OAuth2Data`）からも選べる。**
+
+**`kid` は鍵から作る**（RFC 7638 : kty / n / e）ので、**`RS256` / `RS384` / `RS512` で同じ値**になる。
+＝ **RP は `jwkcerts` の同じ鍵でそのまま検証でき、どのダイジェストかはヘッダの `alg` が伝える。**
+
+**一覧は `CmnAccessToken.SupportedAlgs` の 1 か所**にあり、
+**Discovery の `id_token_signing_alg_values_supported` も、そこから作っている。**
+
+> **CIBA（`oauth2_oidc_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
+> （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
+> **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
 
 ### 利用者名とメアド（#151 の段階 3）
 

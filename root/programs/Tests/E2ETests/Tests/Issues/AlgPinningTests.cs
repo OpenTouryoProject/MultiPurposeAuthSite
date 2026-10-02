@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（C-8。#129 の段階 1）
+//*  2026/10/02  玄人 幸道         RS384 / RS512 を受けるようになったので一覧を直した（#129 の段階 2）
 //**********************************************************************************
 
 using System.Text.Json;
@@ -45,7 +46,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// RT-129.2 受ける alg を、自分が発行する 2 つに固定する（C-8。#129 の段階 1）。
     /// </summary>
     /// <remarks>
-    /// **この認可サーバが署名に使うのは `RS256` と `ES256` だけ**である。
+    /// **この認可サーバが署名に使うのは `RS256` / `RS384` / `RS512` / `ES256`** である
+    /// （`CmnAccessToken.SupportedAlgs`）。
     /// **以前は、ヘッダの `alg` を読んで検証器を選び、知らない値は RS256 として扱っていた。**
     /// 署名は自分の公開鍵で確かめるので**偽造はできなかった**が、
     /// **サーバが期待する alg を決めていなかった**（アルゴリズム混同の温床。C-8）。
@@ -76,7 +78,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 TestReport r = this.Report("RT-129.2",
                     "ヘッダの alg を書き換えたトークンを、認可サーバが受け付けない",
-                    "**この認可サーバが発行する alg は RS256 と ES256 だけ**で、"
+                    "**この認可サーバが発行する alg は RS256 / RS384 / RS512 / ES256**で、"
                     + "`jwkcerts` と Discovery もその 2 つを広告している。"
                     + "**以前は、知らない alg を RS256 として扱っていた**（C-8）。"
                     + "**受ける集合を固定する**ことで、"
@@ -99,7 +101,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) ヘッダの alg だけを書き換えて叩く（署名と kid は、そのまま）");
 
-                foreach (string alg in new string[] { "HS256", "RS384", "ES384", "PS256", "none" })
+                foreach (string alg in new string[] { "HS256", "ES384", "PS256", "none" })
                 {
                     JsonResponse res = await client.UserInfoAsync(
                         Jwks.WithAlg(token.AccessToken, alg));
@@ -113,9 +115,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 }
 
                 r.Note("**`HS256` は、公開鍵を共通鍵として使わせる古典的な混同**である。"
-                    + "**`RS384` / `ES384` / `PS256` は、この実装がまだ発行しない**"
-                    + "（#129 の段階 2〜4 で増える予定の値）。"
-                    + "**増やしたら、このテストの一覧も直すこと。**");
+                    + "**`ES384` / `PS256` は、この実装がまだ発行しない**"
+                    + "（#129 の段階 3〜4 で増える予定の値）。"
+                    + "**`RS384` / `RS512` は、段階 2 で受けるようになったので、ここから外した**"
+                    + "（**増やしたら、このテストの一覧も直すこと**）。");
 
                 r.Note("**`alg=none` は `TC-6.4` でも見ている。**"
                     + "あちらは**ヘッダを丸ごと作り替えて署名を落とす**（`kid` も消える）。"
