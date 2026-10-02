@@ -98,6 +98,7 @@
     <Compile Include="TokenProviders\ClientModePolicy.cs" />
     <Compile Include="TokenProviders\CmnEndpoints.cs" />
     <Compile Include="TokenProviders\CmnIdToken.cs" />
+    <Compile Include="TokenProviders\SigningKeys.cs" />
     <Compile Include="Util\IdP\ExternalLoginStarter.cs" />
     <Compile Include="Util\IdP\CheckRole.cs" />
     <Compile Include="Util\IdP\CustomizedConfirmationProvider.cs" />

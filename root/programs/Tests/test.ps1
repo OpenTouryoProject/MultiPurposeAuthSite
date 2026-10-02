@@ -540,6 +540,10 @@ try {
         #                               sub が PPID になっても /userinfo がクレームを返すか
         #     TestClient_8  : normal  … **id_token_signed_response_alg = RS512**（#129 の段階 2）。
         #                               登録した alg で署名されるか（鍵は RS256 と同じ）
+        #     TestClient_9  : normal  … **id_token_signed_response_alg = ES384**（#129 の段階 3）。
+        #                               曲線が alg に紐づく（P-384 の鍵）
+        #     TestClient_10 : normal  … **id_token_signed_response_alg = ES512**（#129 の段階 3）。
+        #                               同上（P-521 の鍵）
         #     TestClient_6  : normal  … **subject_types を書かない**（#151 の段階 4）。
         #     TestClient_7  : normal    **既定が public になった**ことを測る。
         #                               **2 件要る**（public は「RP が違っても同じ sub」なので、
@@ -565,6 +569,10 @@ try {
 
         # **署名アルゴリズムの登録**（#129 の段階 2）。**鍵は RS256 と同じ**で、ダイジェストだけ違う。
         $rs512 = @{ id_token_signed_response_alg = 'RS512' }
+
+        # **EC は曲線が alg に紐づく**（#129 の段階 3）。**鍵が分かれる**（P-384 / P-521）。
+        $es384 = @{ id_token_signed_response_alg = 'ES384' }
+        $es512 = @{ id_token_signed_response_alg = 'ES512' }
         $injected = $null
         $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
         foreach ($c in @(
@@ -578,7 +586,9 @@ try {
             @{ Name = 'TestClient_5';  Mode = 'normal'; ClientId = 'e2e0tc05000000000000000000000000'; Source = 'TestClient';  Override = $pairwise },
             @{ Name = 'TestClient_6';  Mode = 'normal'; ClientId = 'e2e0tc06000000000000000000000000'; Source = 'TestClient';  Override = @{} },
             @{ Name = 'TestClient_7';  Mode = 'normal'; ClientId = 'e2e0tc07000000000000000000000000'; Source = 'TestClient';  Override = @{} },
-            @{ Name = 'TestClient_8';  Mode = 'normal'; ClientId = 'e2e0tc08000000000000000000000000'; Source = 'TestClient';  Override = $rs512 })) {
+            @{ Name = 'TestClient_8';  Mode = 'normal'; ClientId = 'e2e0tc08000000000000000000000000'; Source = 'TestClient';  Override = $rs512 },
+            @{ Name = 'TestClient_9';  Mode = 'normal'; ClientId = 'e2e0tc09000000000000000000000000'; Source = 'TestClient';  Override = $es384 },
+            @{ Name = 'TestClient_10'; Mode = 'normal'; ClientId = 'e2e0tc10000000000000000000000000'; Source = 'TestClient';  Override = $es512 })) {
 
             $base = ''
             if ($null -ne $injected) { $base = $injected.NetFxValue }

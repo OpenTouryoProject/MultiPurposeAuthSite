@@ -34,6 +34,7 @@
 //*  2026/09/07  玄人 幸道         nonce無しでもid_tokenを発行するよう修正（#183）
 //*  2026/09/07  玄人 幸道         JWTの数値・真偽値クレームの型を修正（#184）
 //*  2026/10/02  玄人 幸道         RS384 / RS512 でも署名できるようにした（#129 の段階 2）
+//*  2026/10/02  玄人 幸道         署名する鍵を SigningKeys の表から引く（#129 の段階 3 / D-9）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -73,8 +74,8 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="code">string</param>
         /// <param name="state">string</param>
         /// <param name="hct">HashClaimType</param>
-        /// <param name="pfxFilePath">string</param>
-        /// <param name="pfxPassword">string</param>
+        /// <param name="pfxFilePath">string（**JWE（FAPI2）のときだけ使う。**#129 の段階 3）</param>
+        /// <param name="pfxPassword">string（同上）</param>
         /// <param name="cerJwkString">string</param>
         /// <param name="alg">署名アルゴリズム（既定は RS256。#129 の段階 2）</param>
         /// <returns>id_token</returns>
@@ -186,48 +187,31 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 JsonConvert.DeserializeObject<JWS_Header>(
                                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(temp[0]), CustomEncode.UTF_8));
 
-                            // JWS
-                            JWS jws = null;
-                            if (alg == JwtConst.ES256)
-                            {
-                                // ES256
-                                jws = new JWS_ES256_X509(pfxFilePath, pfxPassword);
+                            // JWS（**鍵は SigningKeys の表が持つ**。#129 の段階 3 / D-9）
+                            SigningKeys.Entry key = SigningKeys.Of(alg);
 
-                                if (!string.IsNullOrEmpty(jwsHeader.jku)
-                                && !string.IsNullOrEmpty(jwsHeader.kid))
-                                {
-                                    ((JWS_ES256)jws).JWSHeader.jku = jwsHeader.jku;
-                                    ((JWS_ES256)jws).JWSHeader.kid = jwsHeader.kid;
-                                }
+                            if (key == null)
+                            {
+                                // 扱わない alg（入口の CheckClientMode で弾いてある）。
+                                return "";
                             }
-                            else
-                            {
-                                // RS256 / RS384 / RS512
-                                //   **鍵は 1 つで、ダイジェストだけが違う**（#129 の段階 2）。
-                                //   **kid は鍵から作る**（RFC 7638）ので、3 つで同じ値になる。
-                                JWS_RSA jwsRSA = null;
 
-                                if (alg == JwtConst.RS384)
+                            JWS jws = key.CreateJwsFromPfx();
+
+                            // **jku / kid は access_token から写す**（鍵が同じなので同じ値になる）。
+                            if (!string.IsNullOrEmpty(jwsHeader.jku)
+                            && !string.IsNullOrEmpty(jwsHeader.kid))
+                            {
+                                if (key.IsRsa)
                                 {
-                                    jwsRSA = new JWS_RS384_X509(pfxFilePath, pfxPassword);
-                                }
-                                else if (alg == JwtConst.RS512)
-                                {
-                                    jwsRSA = new JWS_RS512_X509(pfxFilePath, pfxPassword);
+                                    ((JWS_RSA)jws).JWSHeader.jku = jwsHeader.jku;
+                                    ((JWS_RSA)jws).JWSHeader.kid = jwsHeader.kid;
                                 }
                                 else
                                 {
-                                    jwsRSA = new JWS_RS256_X509(pfxFilePath, pfxPassword);
+                                    ((JWS_ECDSA)jws).JWSHeader.jku = jwsHeader.jku;
+                                    ((JWS_ECDSA)jws).JWSHeader.kid = jwsHeader.kid;
                                 }
-
-                                if (!string.IsNullOrEmpty(jwsHeader.jku)
-                                && !string.IsNullOrEmpty(jwsHeader.kid))
-                                {
-                                    jwsRSA.JWSHeader.jku = jwsHeader.jku;
-                                    jwsRSA.JWSHeader.kid = jwsHeader.kid;
-                                }
-
-                                jws = jwsRSA;
                             }
 
                             // Create

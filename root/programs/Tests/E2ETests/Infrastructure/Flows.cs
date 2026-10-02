@@ -42,6 +42,7 @@
 //*  2026/09/30  玄人 幸道         subject_types=pairwise のクライアント（TestClient_5）を追加（#140 の段階 2）
 //*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         RS512 で署名する TestClient_8 を追加（#129 の段階 2）
+//*  2026/10/02  玄人 幸道         ES384 / ES512 で署名する TestClient_9 / _10 を追加（#129 の段階 3）
 //**********************************************************************************
 
 using System;
@@ -174,6 +175,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// **kid も同じ**（RFC 7638 は鍵から作る）ので、**`jwkcerts` の同じ鍵で検証できる。**
         /// </remarks>
         public const string TestClient_8 = "TestClient_8";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を ES384** にしたクライアント（#129 の段階 3）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **EC は曲線が alg に紐づく**（JWA : ES384 → P-384）ので、**RS とは違って鍵が分かれる。**
+        /// **kid も曲線ごとに違う**ので、`jwkcerts` には P-256 / P-384 / P-521 の 3 本が載る。
+        /// </remarks>
+        public const string TestClient_9 = "TestClient_9";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を ES512** にしたクライアント（#129 の段階 3）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>**`ES512` の曲線は `P-521`**（512 ではない。JWA）。</remarks>
+        public const string TestClient_10 = "TestClient_10";
 
         /// <summary>
         /// TestClient_2 の client_secret（#237）。
@@ -591,9 +609,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 // client_secret は写す元のまま（**写しただけ**。#151 の段階 4）。
                 sourceName = KnownClients.TestClient;
             }
-            else if (clientName == KnownClients.TestClient_8)
+            else if (clientName == KnownClients.TestClient_8
+                || clientName == KnownClients.TestClient_9
+                || clientName == KnownClients.TestClient_10)
             {
-                // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2）。
+                // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2・3）。
                 sourceName = KnownClients.TestClient;
             }
 

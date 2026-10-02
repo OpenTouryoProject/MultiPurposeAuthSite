@@ -202,28 +202,59 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 **既存の配備で `sub` を `public` に揃えたいなら、表の行を消す**ことになる
 （消すと、その RP から見て別人になる）。
 
-### `id_token_signed_response_alg` — 署名アルゴリズム（#129 の段階 2）
+### `id_token_signed_response_alg` — 署名アルゴリズム（#129 の段階 2・3）
 
-| 値 | ダイジェスト | 鍵 | |
-|---|---|---|---|
-| **`RS256`** | SHA-256 | RSA（`RsaPfxFilePath`） | **既定**（書かなければこれ） |
-| `RS384` | SHA-384 | **同じ RSA の鍵** | |
-| `RS512` | SHA-512 | **同じ RSA の鍵** | |
-| `ES256` | SHA-256 | **ECDSA**（`EcdsaPfxFilePath`。鍵が別） | |
+| 値 | ダイジェスト | 鍵 | 設定キー | |
+|---|---|---|---|---|
+| **`RS256`** | SHA-256 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ） |
+| `RS384` | SHA-384 | **同じ RSA の鍵** | 同上 | |
+| `RS512` | SHA-512 | **同じ RSA の鍵** | 同上 | |
+| `ES256` | SHA-256 | EC（**P-256**） | `EcdsaPfxFilePath` | |
+| `ES384` | SHA-384 | EC（**P-384**） | `Ecdsa384PfxFilePath` | #129 の段階 3 |
+| `ES512` | SHA-512 | EC（**P-521**） | `Ecdsa512PfxFilePath` | 同上。**曲線は 521**（512 ではない） |
 
 **access_token と id_token の両方に効く**（2 つは同じ alg になる）。
 **既知でない値を書いた登録は、入口で拒否される**（`unauthorized_client`。#224 と同じ方針）。
-**画面（`Manage/AddSaml2OAuth2Data`）からも選べる。**
+**画面（`Manage/AddSaml2OAuth2Data`）からも選べる**（選択肢も下の表から作る）。
 
-**`kid` は鍵から作る**（RFC 7638 : kty / n / e）ので、**`RS256` / `RS384` / `RS512` で同じ値**になる。
-＝ **RP は `jwkcerts` の同じ鍵でそのまま検証でき、どのダイジェストかはヘッダの `alg` が伝える。**
+**鍵は 4 本で、alg は 6 つある。**
 
-**一覧は `CmnAccessToken.SupportedAlgs` の 1 か所**にあり、
-**Discovery の `id_token_signing_alg_values_supported` も、そこから作っている。**
+| | |
+|---|---|
+| **RSA は 1 本**（`RS256` / `RS384` / `RS512` が共有） | **`kid` は kty / n / e から作る**ので、**3 つで同じ値**になる。RP は同じ鍵で検証でき、どのダイジェストかはヘッダの `alg` が伝える |
+| **EC は 3 本**（`ES256` / `ES384` / `ES512`） | **曲線が alg に紐づく**（JWA）ので、**鍵そのものが別**。`kid` も別になる |
+
+**alg → 鍵の対応は `SigningKeys`（`CommonLibrary/TokenProviders`）の表 1 か所**にあり、
+**発行・検証・Discovery の広告・`jwkcerts` の生成が、すべてその表を見る**（#129 の段階 3 / D-9）。
 
 > **CIBA（`oauth2_oidc_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
 > **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
+
+### 署名鍵の入れ替え（ローテーション。D-9）
+
+**RP は `jwkcerts` をキャッシュする。** したがって**順序が要る。**
+
+| | すること | なぜ |
+|---|---|---|
+| 1 | 新しい鍵を作り、**`jwkcerts` に先に載せる**（まだ署名には使わない） | **RP が新しい `kid` を引けるようにしてから**署名を切り替える |
+| 2 | **RP のキャッシュが切れるのを待つ** | キャッシュの寿命は RP 側の都合。待たないと「知らない `kid`」で弾かれる |
+| 3 | **設定の `*PfxFilePath` を新しい鍵に向け、再起動** | ここから新しい `kid` で署名が始まる |
+| 4 | **旧いトークンの寿命が過ぎたら、旧い `kid` を `jwkcerts` から外す** | `OAuth2AccessTokenExpireTimeSpanFromMinutes` を過ぎれば、旧い鍵で検証する相手はいない |
+
+**1 は `CreateJwkSetJson` が行う**（`CommandLineTools`）。
+
+```
+CreateJwkSetJson.exe
+```
+
+**このツールは `SigningKeys` の表を回して、`jwkcerts` に載せる鍵を決める**
+（表をソース参照しているので、**アプリが署名に使う鍵と食い違わない**）。
+**追記しかしない**ので、**1 を繰り返しても旧い鍵は消えない。**
+**4（旧い鍵を外す）は `JwkSet.json` を手で編集する**（＝ 消すのは人が決める）。
+
+> **広告（Discovery）と公開鍵（`jwkcerts`）が揃っていることは E2E で測っている**（`RT-129.6`）。
+> **表に alg を足したのに `CreateJwkSetJson` を回していない**という食い違いは、そこで落ちる。
 
 ### 利用者名とメアド（#151 の段階 3）
 

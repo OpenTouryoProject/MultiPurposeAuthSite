@@ -14,6 +14,22 @@
       "x": "QHqRgMdwA7DemAL3OrTMMUOPs6dvLLiguQYRTv8Iaro",
       "y": "l6P2TEqzx5g_S2A3CPTasScM3dS8Dt-KYBY3WCARxCE",
       "kid": "1hOkka5RGTfClu2KrEHESrdGrilx-NS5EOzVgS5JMvM"
+    },
+    {
+      "kty": "EC",
+      "alg": "ES384",
+      "crv": "P-384",
+      "x": "qeyd2iMw8DZT7Yy3KO0mOuok1JBBdMwEuJTa81Upg06fbVbotK8yuhDSVkzSFsw3",
+      "y": "thH6faasSDmEO4zeVNdc5LbZJprQmL7JN3NZzYUJmF1GhQEl6QaZh-6f1QhDH0St",
+      "kid": "e_kI1ZJ_x9ttzEU_DICgGhJeNK8ghcW3bSl7KFM6eVefpKJHA5ecCowzJw69r9Vr"
+    },
+    {
+      "kty": "EC",
+      "alg": "ES512",
+      "crv": "P-521",
+      "x": "AQoRdSDzXLfin6CFhLxDOL0_Cfn-QcwgdbMkMGgwTeA4gDIygCOEy4m0eyTmEnjYdBOMN5JtYUiprdZZriAGzrHC",
+      "y": "ATj5JBej9ztfsArJLUMCs4edyCgPuItefh7KFGfeefI7YjB-pakcKxzhHZ1h2UhR183bnQ4rrXc71N5WAl3d5BqZ",
+      "kid": "OaO51pUD4-aJ8skED2eag0nvd1kfqIwo9BhB86PEZ34PBLE4TiHv6v9LCK20r0c6x06bULLSi84PcldSN2n6DQ"
     }
   ]
 }

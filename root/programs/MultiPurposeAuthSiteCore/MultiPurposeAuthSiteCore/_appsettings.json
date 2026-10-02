@@ -226,6 +226,11 @@
     "RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
     "EcdsaPfxPassword": "test",
     "EcdsaPfxFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
+    // ES384 / ES512 は曲線が alg に紐づくので、鍵が分かれる（#129 の段階 3）
+    "Ecdsa384PfxPassword": "test",
+    "Ecdsa384PfxFilePath": "C:/root/files/resource/X509/SHA384ECDSA.pfx",
+    "Ecdsa512PfxPassword": "test",
+    "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
     "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
     // Grant Typeの有効・無効
     "EnableAuthorizationCodeGrantType": "true",
@@ -477,6 +482,8 @@
     // Token検証用
     "SpRp_RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
     "SpRp_EcdsaCerFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.cer",
+    "SpRp_Ecdsa384CerFilePath": "C:/root/files/resource/X509/SHA384ECDSA.cer",
+    "SpRp_Ecdsa512CerFilePath": "C:/root/files/resource/X509/SHA521ECDSA.cer",
     // クライアント認証用
     "SpRp_RsaPfxPassword": "test",
     "SpRp_RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Client.pfx",

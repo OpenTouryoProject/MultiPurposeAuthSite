@@ -273,6 +273,50 @@ OpenTouryo を別途 clone してビルドし、`mpas_dev.bat` で複写する�
 > **取得ステップの合否は、出力ではなくフォルダの実在で判定している。**
 > `xcopy` の失敗は `: error` の形で出ないため、出力解析では拾えない。
 
+### アセンブリを入れ替えたら、`bin_locked_*` のような残骸を消す
+
+**`-Libs Force` でアセンブリを取り直しても、アプリの出力が古いままになることがある。**
+
+**MSBuild は、参照の解決でプロジェクト配下の出力フォルダも候補にする。**
+したがって、**ビルドが削除できずに名前を変えて残した出力**（`bin_locked_<日時>` など）が
+プロジェクト直下に在ると、**`HintPath` より先に、そこが解決される。**
+
+```
+解決されたファイル パスは "...\MultiPurposeAuthSiteCore\bin_locked_20260929_103249\Debug\net10.0\OpenTouryo.Public.Security.dll" です。
+```
+
+**`bin` と `obj` を消しても直らない。** 残骸は `bin` ではないので、Clean の対象にならない。
+
+**実測（2026/10/03。#129 の段階 3）** : 上流の修正（[OpenTouryo#595](https://github.com/OpenTouryoProject/OpenTouryo/issues/595)）を
+取り込んだあと、**net48 版だけ直り、net10.0 版は直らなかった。**
+net10.0 版のプロジェクト直下に **9 月 29 日の `bin_locked_*`** が残っており、
+そこの古い DLL が解決されていた。**消して建て直したら直った。**
+
+**見分け方。** 参照しているアセンブリと、アプリの出力を突き合わせる。
+
+```powershell
+# 参照元（新しいはず）
+Get-Item root\programs\OpenTouryoAssemblies\Build_netcore100\net10.0\OpenTouryo.Public.Security.dll |
+  Select-Object Length, LastWriteTime
+
+# アプリの出力（古ければ、別の場所から来ている）
+Get-ChildItem root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\bin -Recurse `
+  -Filter OpenTouryo.Public.Security.dll | Select-Object FullName, Length, LastWriteTime
+
+# 残骸を探す
+Get-ChildItem root\programs -Recurse -Directory -Filter "bin_locked*"
+```
+
+**どこから来たかは MSBuild に聞ける。**
+
+```powershell
+dotnet build <sln> -c Debug -v:detailed | Select-String "解決されたファイル パス.*OpenTouryo.Public.Security"
+```
+
+> **サイトを動かしたままビルドすると、この残骸ができる。**
+> E2E は起動と停止を行うが、**落ちたサイトが残ると `bin` を掴み続ける**。
+> 詳細 → [`TESTING.md`](TESTING.md) 5 節
+
 ### カレント ディレクトリ探索を切る環境では、取得が空振りする
 
 OpenTouryo のビルド バッチは、兄弟のバッチを**裸の名前**で呼ぶ（`call 2_Build_NuGet_net48.bat`）。

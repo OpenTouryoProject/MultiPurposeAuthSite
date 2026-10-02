@@ -1467,8 +1467,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
 | `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる** |
-| `id_token` | `id_token_signing_alg_values_supported: ["RS256","RS384","RS512","ES256"]` | RS256 / RS384 / RS512 / ES256（#129 の段階 2 で RS384 / RS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
-| access_token | （広告しない） | RS256 / RS384 / RS512 / ES256 | 同上（`id_token` と同じ alg になる） |
+| `id_token` | `id_token_signing_alg_values_supported: ["RS256","RS384","RS512","ES256","ES384","ES512"]` | **左の 6 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
+| access_token | （広告しない） | 同上（6 つ） | 同上（`id_token` と同じ alg になる） |
 | Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
 | CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
 | 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
@@ -1478,7 +1478,10 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 **`PS256` はどこにも無い。**
 **Open棟梁 に `JWS_PS*` が存在しない**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
 **FAPI 1.0 Advanced / FAPI-CIBA は `PS256` または `ES256` を求める**ので、
-**`PS256` を通すには上流の対応が要る。**
+**`PS256` を通すには上流の対応が要る**
+（起票済み : [OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)。
+**PSS 自体は `DigitalSign.Padding` で動く**ことまで実測した。足りないのは `JwtConst.PS*` と
+`JWS_PS*` のクラスで、**`JWS_RS*` を写して `Padding` を `Pss` にする**形で足りる見込み）。
 
 > **コード中の記述が実装と食い違っていた。**
 > CIBA の広告のあたりに **「RequestObjectの署名は、ES256 と PS256のみ許可」** と書かれていたが、
@@ -1495,7 +1498,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   **アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。
   E2E テスト : **`RT-129.1`**（ES256 で通る／RS256 の対照／Discovery の広告）
 - **ES384 / ES512 は鍵の差し替えを伴う**（JWA で `ES256`→P-256、`ES384`→P-384、`ES512`→P-521。
-  曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**
+  曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**。
+  **✅ 対応した（#129 の段階 3）。** **鍵はリポジトリに在った**（`SHA384ECDSA.pfx` / `SHA521ECDSA.pfx`）
 - **登録（クライアント）側の alg の項目**は、**`id_token_signed_response_alg` を ✅ 足した**（#129 の段階 2。下記）。
   **検証する側**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**
 
@@ -1532,8 +1536,101 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 - **E2E** : **`RT-129.3`**（`RS512` で署名され、`jwkcerts` の同じ鍵で検証でき、`kid` が `RS256` と同じ。
   **自分の検証経路＝C-8 で固定した集合も、これを受ける**）／
   **`RT-129.4`**（Discovery が `RS256 RS384 RS512 ES256` を、**この順で**広告する）
-- **`ES384` / `ES512` は段階 3**（鍵の差し替えを伴う）。**`PS256` は段階 4**（上流の対応が要る）
+- **`ES384` / `ES512` は段階 3**（鍵の差し替えを伴う）。
+  **`PS256` は段階 4**（上流の対応が要る。[OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)）
 - **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
+
+### ES384 / ES512 と、鍵の表（#129 の段階 3 / D-9）
+
+**`ES384` / `ES512` を足し、alg → 鍵の対応を 1 か所に寄せた。**
+
+| | |
+|---|---|
+| 発行する alg | **6 つ**（`RS256` / `RS384` / `RS512` / `ES256` / `ES384` / `ES512`） |
+| 鍵 | **4 本**（RSA 1 本 ＋ EC 3 本）。**RSA は 3 つの alg で共有**し、**EC は曲線が alg に紐づく** |
+| 表の場所 | **`CommonLibrary/TokenProviders/SigningKeys.cs`** |
+| 表を見る側 | **発行**（`SelectJwsForSigning`）・**検証**（`SelectJws` / `SelectJwsFromCertificate`）・**広告**（Discovery）・**`jwkcerts` の生成**（`CreateJwkSetJson`） |
+
+**鍵は新しく作っていない。** `root/files/resource/X509/` に **`SHA384ECDSA.pfx`（P-384）** と
+**`SHA521ECDSA.pfx`（P-521）** が在った（`GenECDsaCertByOpenSSL.bat` が作ったもの）。
+**設定キーを足して、表から引くようにしただけ**である。
+
+#### D-9「発行側が 1 本を固定参照」の実体は、対応が散っていたこと
+
+**鍵の入れ替えそのものは、もともと回る形になっていた**（`JwkSet.json` は追記式で、
+検証は `kid` で引く）。**無停止の入れ替えを妨げていたのは、alg → 鍵の対応が 3 箇所に散っていたこと**である。
+
+| 散っていた場所 | 何が起きうるか |
+|---|---|
+| 発行（`CmnAccessToken`） | |
+| 証明書での検証（`CmnAccessToken`） | **署名した鍵と、検証に落ちる鍵が食い違う** |
+| `jwkcerts` の生成（`CreateJwkSetJson` が **RSA と ES256 を決め打ち**） | **載っていない鍵で署名する**（RP は検証できない） |
+
+**`CreateJwkSetJson` が `SigningKeys` の表を回すようにした。**
+**ツールは、その 1 ファイルだけをソース参照する**（`Compile Include` の `Link`。
+CommonLibrary ごと参照すると、コンソール ツールに DB ドライバまで付いてくる）。
+＝ **アプリが署名に使う鍵が、そのまま `jwkcerts` に載る。**
+
+**入れ替えの手順は `CONFIGURATION.md`** に書いた（**先に載せ、キャッシュを待ち、切り替え、後で外す**）。
+
+#### `kty` だけでは足りなかった（`crv` まで突き合わせる）
+
+**`ES256` / `ES384` / `ES512` は、どれも `kty=EC`** である。
+`IsSameKeyType` は **`kty` だけを見ていた**ので、
+**P-256 の鍵で `ES512` のトークンを受けうる形**だった。**`crv` まで突き合わせるようにした。**
+
+**実害は出ていない。** 段階 2 まで `ES384` / `ES512` は**受ける集合に無かった**ので、
+**alg の固定（C-8）で先に弾かれていた。**
+**発行し始めるのと同じ段階で入れた**のが、この修正である。
+E2E : **`RT-129.5`**（`ES384` のトークンの alg を `ES512` に書き換えると受けない）。
+
+#### 上流（Open棟梁）の不具合を踏んだ — **✅ 上流で修正済み（[OpenTouryo#595](https://github.com/OpenTouryoProject/OpenTouryo/issues/595)）**
+
+**`JWS_ES384_Param` / `JWS_ES512_Param` が、Windows では検証できなかった。**
+
+`DigitalSignECDsaCng(ECParameters, bool)` が**ダイジェストを受け取っていなかった**ため、
+検証が `ECDsaCng.VerifyData(data, sign)` ＝ **`ECDsaCng.HashAlgorithm` の既定（SHA-256）**になっていた。
+**`ES256` だけ、たまたま合っていた。**
+
+**実測（Open棟梁 の DLL を直に叩いて確認したもの）**
+
+| alg | `JWS_ES*_X509`（証明書） | `JWS_ES*_Param`（JWK）<br>2026/10/02（修正前） | `JWS_ES*_Param`（JWK）<br>2026/10/03（修正後） |
+|---|---|---|---|
+| `ES256` | ○ | ○ | ○ |
+| `ES384` | ○ | **×** | **○** |
+| `ES512` | ○ | **×** | **○** |
+
+（修正後は **net48 / net10.0 の両方**で確認した。`DigitalSignECDsaCng` に
+ダイジェストを渡す引数が増え、`JWS_ES*_Param` がそれを渡すようになっている。
+**`JWS_ES*_Param` の引数は変わっていない**ので、呼ぶ側は元のままで良い。）
+
+`_X509` は `DigitalSignECDsaX509(path, password, hashAlgorithmName)` に**ダイジェストを渡していた。**
+Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡していた。
+**Windows（Cng）の経路だけが渡していなかった。**
+
+**`kid` で JWK を引く経路が、この `_Param` である。**
+＝ **鍵の入れ替え（D-9）で要る経路**なので、避けて通れなかった。
+
+| | |
+|---|---|
+| **修正前** | `SigningKeys` の中に `EcdsaJwkVerifier`（`JWS_ECDSA` の派生）を置いて回避していた |
+| **修正後** | **回避の派生 class は外し、上流の `JWS_ES*_Param` をそのまま使う** |
+
+> **これは「受けられない」不具合**（false negative）であって、**通してしまう類ではなかった。**
+> SHA-256 で検証されるのは**P-384 / P-521 の鍵で SHA-256 の署名を作れたときだけ**で、
+> この実装は **alg と鍵を対応させている**ので、そういう署名は発行しない。
+
+> **上流のアセンブリを入れ替えたら、アプリの出力も作り直すこと。**
+> **`bin_locked_*` のような「名前を変えて残した出力」が、参照の解決で先に当たる。**
+> 詳細 → [`BUILDING.md`](../BUILDING.md) 3 節
+
+- **E2E** : **`RT-129.5`**（`ES384` / `ES512` で署名され、`jwkcerts` の曲線の合う鍵で検証でき、
+  `kid` が曲線ごとに違い、曲線が食い違うトークンは受けない）／
+  **`RT-129.6`**（**Discovery が広告する alg すべてに、`jwkcerts` の鍵が在る**）
+- **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
+- **残り** : **`PS256` は段階 4**（`JWS_PS*` が上流に無い。
+  起票済み : [OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)）。
+  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）も、まだ無い
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]** — **✅ 修正済み（#129 の段階 1）**
 
@@ -1545,7 +1642,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 | | |
 |---|---|
-| **受ける alg を固定した** | **この認可サーバが発行するものだけ**（`CmnAccessToken.SupportedAlgs`。段階 1 では `RS256` / `ES256`、**段階 2 で `RS384` / `RS512` を足した**）。**それ以外は即、検証失敗**（`none` / `HS256` / `ES384` / `PS256` …） |
+| **受ける alg を固定した** | **この認可サーバが発行するものだけ**（**`SigningKeys` の表**。段階 1 では `RS256` / `ES256`、**段階 2 で `RS384` / `RS512`、段階 3 で `ES384` / `ES512` を足した**）。**それ以外は即、検証失敗**（`none` / `HS256` / `PS256` …） |
 | **鍵を alg に対応させた** | **以前は、`kid` を引けないときに必ず RSA を選んでいた**ので、**ES256 で発行したトークンが検証できなかった** |
 | **JWK とヘッダの食い違いを拒む** | `kid` で引いた JWK の `alg` が**ヘッダの `alg` と違えば受けない**（どちらを信じるかという話にしない） |
 
@@ -1556,8 +1653,9 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 - **`kid` を引けないときに証明書へ落とす動きは、従来どおり**残した
   （`JwkSet.json` を置いていない配備でも、自分の鍵で検証できる）
-- **E2E** : `RT-129.2`（`HS256` / `ES384` / `PS256` / `none` に書き換えたトークンを拒む。
-  **`RS384` / `RS512` は段階 2 で受けるようになったので、一覧から外した**）。
+- **E2E** : `RT-129.2`（`HS256` / `PS256` / `none` に書き換えたトークンを拒む。
+  **関門は 2 つ**で、**発行しない alg**は即、拒否し、
+  **発行する alg でも鍵（`kty` / `crv`）が合わなければ拒否する**）。
   **署名と `kid` はそのまま**にして**ヘッダの `alg` だけ**を書き換えるので、**alg の判定そのもの**を測れる
   （`TC-6.4` はヘッダを丸ごと作り替えるため、`kid` が消えて alg の判定まで届かない）
 - **受ける集合を増やすときは、`RT-129.2` の一覧も直す**（黙って広がらないようにするため）
@@ -2127,7 +2225,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
-| D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
+| D-9 | 署名鍵のローテーション運用 | **✅ 解けた（#129 の段階 3）。** **alg → 鍵の対応を `SigningKeys` の表 1 か所に寄せ**、**`CreateJwkSetJson` がその表を回して `jwkcerts` を作る**ようにした（ソース参照）。**JWK Set は追記式**なので、**新しい鍵を先に載せ、RP のキャッシュが切れてから署名に切り替えられる**（手順は `CONFIGURATION.md`）。**広告と鍵が揃っていることは `RT-129.6` で測る** | **無停止で替えられるようになった**（残り : 旧い `kid` を外すのは手作業） |
 | D-15 | **ID フェデレーションの上流が 1 つだけ** | `Config.IdFederation{Authorize,Token,UserInfo,Redirect}Endpoint` の 1 組しか持てない。**#140 の段階 3 で連携キーを `(iss, sub)` にしたので、複数を持てる下地はできた**（`UserLogins` は issuer ごとに行を持てる）。残るのは**設定の形と、どの上流へ飛ばすかの画面**。**`SpRp_Isser`（期待する issuer）も 1 つしか持てない**ので、そこも合わせて要る | 複数の IdP と連携できない |
 | D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **✅ 解けた（#151 の段階 2）。** **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、**秘密を替えても発行済みの値は動かない**（表から引くため）。以前は導出していたので替えられなかった（A-14） | **漏洩時に替えられるようになった** |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
@@ -2227,7 +2325,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-4 Dynamic Client Registration |
 | D-7 `profile` / `address` クレーム |
 | D-8 複数 `redirect_uri` |
-| D-9 鍵ローテーション |
+| ✅ **D-9 鍵ローテーション**（alg → 鍵の表に寄せ、`jwkcerts` をその表から作る）**#129 の段階 3** |
 | D-13 レート制限 |
 
 ### フェーズ 5 — 土台

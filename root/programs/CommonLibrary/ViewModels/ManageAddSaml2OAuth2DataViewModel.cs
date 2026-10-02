@@ -24,6 +24,7 @@
 //*  2026/10/01  玄人 幸道         subject_types の選択肢を public 先頭にした（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         subject_types の選択肢を OIDC の登録値だけにした（#151 の段階 5）
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を追加（#129 の段階 2）
+//*  2026/10/02  玄人 幸道         署名アルゴリズムの選択肢を SigningKeys の表から作る（#129 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -162,21 +163,27 @@ namespace MultiPurposeAuthSite.ViewModels
 
         /// <summary>IdTokenSignedResponseAlg アイテムリスト</summary>
         /// <remarks>
-        /// **一覧は `CmnAccessToken.SupportedAlgs` が持っている**が、
-        /// **ViewModel から TokenProviders を参照しない**ため、ここでは並べ直している。
-        /// **増やすときは、両方を直すこと**（#129 の段階 3 以降）。
+        /// **一覧は `SigningKeys` の表が持つ**（#129 の段階 3 / D-9）。
+        /// **並びも表のまま**で、**既定（`RS256`）が先頭に来る。**
+        /// ＝ **表に 1 行足せば、画面の選択肢も増える。**
         /// </remarks>
         public List<SelectListItem> DdlIdTokenSignedResponseAlgItems
         {
             get
             {
-                return new List<SelectListItem>()
+                List<SelectListItem> items = new List<SelectListItem>();
+
+                foreach (string alg in TokenProviders.SigningKeys.SupportedAlgs)
                 {
-                    new SelectListItem() { Text = "RS256（既定）", Value = "RS256" },
-                    new SelectListItem() { Text = "RS384", Value = "RS384" },
-                    new SelectListItem() { Text = "RS512", Value = "RS512" },
-                    new SelectListItem() { Text = "ES256", Value = "ES256" }
-                };
+                    items.Add(new SelectListItem()
+                    {
+                        // 先頭が既定（登録しなかったときの値）。
+                        Text = (items.Count == 0) ? alg + "（既定）" : alg,
+                        Value = alg
+                    });
+                }
+
+                return items;
             }
         }
 

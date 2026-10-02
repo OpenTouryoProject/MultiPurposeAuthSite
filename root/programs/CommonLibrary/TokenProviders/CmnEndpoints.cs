@@ -108,6 +108,7 @@
 //*  2026/10/01  玄人 幸道         subject_types_supported の並びを public 先頭に（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         subject_types_supported を OIDC の登録値だけにした（#151 の段階 5）
 //*  2026/10/02  玄人 幸道         登録された id_token_signed_response_alg で署名する（#129 の段階 2）
+//*  2026/10/02  玄人 幸道         id_token の鍵選択を alg 1 つに寄せた（#129 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2377,13 +2378,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         if (s == OAuth2AndOIDCConst.Scope_Openid)
                         {
-                            // **access_token に揃える**（#129 の段階 2）。鍵は alg で決まる。
+                            // **access_token に揃える**（#129 の段階 2）。
+                            //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
                                 HashClaimType.AtHash | HashClaimType.SHash,
-                                (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxFilePath : Config.RsaPfxFilePath,
-                                (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxPassword : Config.RsaPfxPassword,
-                                jwkString, signingAlg);
+                                Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString, signingAlg);
                         }
                     }
                 }
@@ -2488,15 +2488,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (s == OAuth2AndOIDCConst.Scope_Openid)
                     {
-                        // **access_token に揃える**（#129 の段階 2）。鍵は alg で決まる。
+                        // **access_token に揃える**（#129 の段階 2）。
+                        //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
                         string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
 
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, code, state, // at_hash, c_hash, s_hash
                             HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxFilePath : Config.RsaPfxFilePath,
-                            (signingAlg == JwtConst.ES256) ? Config.EcdsaPfxPassword : Config.RsaPfxPassword,
-                            jwkString, signingAlg);
+                            Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString, signingAlg);
                     }
                 }
 
@@ -4348,23 +4347,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (string.IsNullOrEmpty(jwkString))
                     {
                         // JWS
-                        string alg = (string)jObjHeader[JwtConst.alg];
-                        if (alg == JwtConst.ES256)
-                        {
-                            // ES256
-                            id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
-                                access_token, "", "", // c_hash, s_hash は /token で生成不可
-                                HashClaimType.None, Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, "", alg);
-                        }
-                        else
-                        {
-                            // RS256 / RS384 / RS512
-                            //   **access_token のヘッダ alg に揃える**（#129 の段階 2）。
-                            //   **渡さないと既定（RS256）に落ちて、access_token と食い違う。**
-                            id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
-                                access_token, "", "", // c_hash, s_hash は /token で生成不可
-                                HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "", alg);
-                        }
+                        //   **access_token のヘッダ alg に揃える**（#129 の段階 2）。
+                        //   **渡さないと既定（RS256）に落ちて、access_token と食い違う。**
+                        //   **鍵は alg から引く**（#129 の段階 3）ので、ここで alg ごとに分けない。
+                        id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                            access_token, "", "", // c_hash, s_hash は /token で生成不可
+                            HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "",
+                            (string)jObjHeader[JwtConst.alg]);
                     }
                     else
                     {
