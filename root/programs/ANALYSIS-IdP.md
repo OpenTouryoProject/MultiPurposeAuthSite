@@ -1724,6 +1724,15 @@ CORS を開くべきなのは `/userinfo` と `.well-known` 程度で、
 
 ### C-10. `redirect_uri` の比較が大文字小文字を無視 **[Lib]**
 
+**2 つの論点が同居している。起票先を分けた。**
+
+| | 論点 | 行き先 |
+|---|---|---|
+| 1 | **照合が大文字小文字を無視**（下記） | **#263**（公開の Issue。仕様不適合として扱う） |
+| 2 | **自己テスト用の抜け道**（下記） | **非公開の経路で報告済み**（`SECURITY.md` の Private vulnerability reporting） |
+
+#### 1. 照合が大文字小文字を無視（#263）
+
 ```csharp
 // CommonLibrary/TokenProviders/CmnEndpoints.cs:717
 if (redirect_uri.ToLower() == preRegisteredUri.ToLower())
@@ -1732,10 +1741,24 @@ if (redirect_uri.ToLower() == preRegisteredUri.ToLower())
 RFC 6749 §3.1.2.3 / OIDC Core §3.1.2.1 は **単純文字列比較（大文字小文字を区別）** を求める。
 URI のパス・クエリは大文字小文字を区別するため、緩めた分だけ一致範囲が広がる。
 
-また `CheckRedirectUri` には
+**`post_logout_redirect_uri` の方は、既に単純文字列比較である**
+（`StringComparison.Ordinal`。#232 で実装したとき、仕様が exactly match と書いているため）。
+**`redirect_uri` だけが揃っていない。**
+
+**E2E は書いてあるが Skip 指定**（`RT-245.4`。実測で**認可コードが発行された**）。
+**直せば Skip を外して回帰になる**（いまも通しの Skip 3 件のうち 2 件がこれ）。
+
+#### 2. 自己テスト用の抜け道
+
+`CheckRedirectUri` には
 **「`Config.OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Manage` は
 どの client_id でも無条件に許可」** という自己テスト用の抜け道がある。
 `Config.IsLockedDownTestEndpoints` の対象外なので、**本番で閉じられない。**
+
+> **こちらは非公開の経路で報告してある**（番号はここに書かない）。
+> **宛先は配備自身の設定から組み立てる固定値**で、攻撃者が選べるわけではないため、
+> **深刻度は低いと評価している。** 問題と見ているのは**本番で閉じられないこと**である。
+> **望ましい対応は、自己テスト用のクライアントを 1 件登録して、特別扱いを無くすこと。**
 
 ### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]** — **✅ 修正済み（#188 / #229）**
 
@@ -2344,7 +2367,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | C-4 / C-5 / C-11 有効期限の実装（code / refresh_token / request object）＋ ワンタイム化 ＋ 再利用検知 |
 | ✅ **C-8 検証アルゴリズムの固定** #129 の段階 1 |
 | C-9 CORS をエンドポイント単位に |
-| C-10 `redirect_uri` の厳密比較、テスト用抜け道のロックダウン対象化 |
+| C-10 `redirect_uri` の厳密比較（**#263**）、テスト用抜け道のロックダウン対象化（**非公開で報告済み**） |
 | C-12 / C-13 Cookie 有効期限の設定反映、DataProtection の永続化 |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
