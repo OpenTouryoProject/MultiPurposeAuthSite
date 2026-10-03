@@ -53,6 +53,7 @@
 //*  2026/09/30  玄人 幸道         CookieNamePrefix を追加（#255）
 //*  2026/10/01  玄人 幸道         RequireUniqueEmail の設定を削除（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         TestUserSuffix を追加（#260）
+//*  2026/10/04  玄人 幸道         CorsAllowedOrigins を追加（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -678,6 +679,25 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("CookieNamePrefix");
+            }
+        }
+
+        /// <summary>CORS で追加して許可するオリジン（任意。#265）</summary>
+        /// <remarks>
+        /// **空でよい。** 既定では、**構成ファイルに登録された public クライアントの
+        /// `redirect_uri_*` からオリジンを導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **ここは、その導出で拾えないものを足すための口**である。
+        ///
+        /// **区切りは空白かカンマ。** 値はオリジン（`https://host:port`）で書く。
+        /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
+        ///
+        /// **`*` は書かないこと。** 書いても拒否する（`ProductionCheck` が警告する）。
+        /// </remarks>
+        public static string CorsAllowedOrigins
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("CorsAllowedOrigins");
             }
         }
 

@@ -164,6 +164,11 @@
     "CookieNamePrefix": "",
     "AuthCookieName": "",
     // Cookie認証チケットの有効期限は2週間 24 * 14 = 336 時間
+    // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
+    //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
+    //   ここは、その導出で拾えないものを足すための口（空白かカンマ区切り）。
+    //   **末尾の「/」は付けない。「*」は書かない**（落とすので許可されない）。
+    "CorsAllowedOrigins": "",
     "AuthCookieExpiresFromHours": "336",
     // Cookie認証チケットのSliding（再発行）機能
     "AuthCookieSlidingExpiration": "true",

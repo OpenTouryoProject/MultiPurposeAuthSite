@@ -48,6 +48,7 @@
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を引く口を追加（#129 の段階 2）
 //*  2026/10/03  玄人 幸道         検証する側のalgを引く口を追加（#262）
+//*  2026/10/04  玄人 幸道         CORSのオリジン導出のため、publicクライアントのredirect_uriを返す口を追加（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1403,6 +1404,53 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // 登録が無い（＝ 絞らない）
             return null;
+        }
+
+        #endregion
+
+        #region GetConfigClientsPublicRedirectUris
+
+        /// <summary>
+        /// 構成ファイルに登録された **public クライアント**の `redirect_uri_*` を返す（#265）
+        /// </summary>
+        /// <returns>登録値（記号のまま。重複は除いていない）</returns>
+        /// <remarks>
+        /// **CORS で許可するオリジンを導くために使う**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **記号の解決とオリジンの取り出しは、呼ぶ側で行う**（`GetRedirectUriFromConstr` が在る側）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **public クライアントに限る** | `client_secret` が空のもの。**confidential は `/token` をサーバ間で呼ぶ**ので、ブラウザから叩かせる必要が無い |
+        /// | **構成ファイルに限る** | **画面登録（`saml2OAuth2Data`）は含めない。** プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、`DataProvider` に全件を列挙する口が無く、分散キャッシュも無い（E-2） |
+        ///
+        /// **画面登録の SPA は、`Config.CorsAllowedOrigins` に足して通す。**
+        /// </remarks>
+        public List<string> GetConfigClientsPublicRedirectUris()
+        {
+            List<string> uris = new List<string>();
+
+            foreach (string clientId in this.Oauth2ClientsInfo.Keys)
+            {
+                Dictionary<string, string> client = this.Oauth2ClientsInfo[clientId];
+
+                // **confidential は対象外**（client_secret を持つもの）。
+                if (client.ContainsKey("client_secret")
+                    && !string.IsNullOrEmpty(client["client_secret"]))
+                {
+                    continue;
+                }
+
+                foreach (string key in new string[] { "redirect_uri_code", "redirect_uri_token" })
+                {
+                    if (client.ContainsKey(key)
+                        && !string.IsNullOrEmpty(client[key]))
+                    {
+                        uris.Add(client[key]);
+                    }
+                }
+            }
+
+            return uris;
         }
 
         #endregion

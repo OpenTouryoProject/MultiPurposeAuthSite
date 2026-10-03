@@ -52,6 +52,7 @@
 //*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
 //*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/04  玄人 幸道         CORSを測る口（Origin付きGET / プリフライト）を追加（#265）
 //**********************************************************************************
 
 using System;
@@ -195,6 +196,57 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
 
             return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>Origin を付けて GET する（CORS を測るため。#265）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="origin">Origin ヘッダの値</param>
+        /// <returns>応答</returns>
+        public Task<HttpResponseMessage> GetWithOriginAsync(string pathOrUrl, string origin)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Get, this.Absolute(pathOrUrl));
+
+            req.Headers.Add("Origin", origin);
+
+            return this._http.SendAsync(req);
+        }
+
+        /// <summary>CORS のプリフライト（OPTIONS）を送る（#265）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="origin">Origin ヘッダの値</param>
+        /// <param name="method">Access-Control-Request-Method（叩きたいメソッド）</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **`Access-Control-Request-Method` は、実際に叩くメソッドを入れること。**
+        /// ASP.NET Core は**この値で経路を選ぶ**ので、
+        /// GET だけの口に `POST` を書くと、**経路が当たらず 404 になる**（実測で踏んだ）。
+        /// </remarks>
+        public Task<HttpResponseMessage> PreflightAsync(
+            string pathOrUrl, string origin, string method)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Options, this.Absolute(pathOrUrl));
+
+            req.Headers.Add("Origin", origin);
+            req.Headers.Add("Access-Control-Request-Method", method);
+            req.Headers.Add("Access-Control-Request-Headers", "authorization,content-type");
+
+            return this._http.SendAsync(req);
+        }
+
+        /// <summary>応答の Access-Control-Allow-Origin（無ければ空）（#265）</summary>
+        /// <param name="res">応答</param>
+        /// <returns>値（無ければ空）</returns>
+        public static string AllowOrigin(HttpResponseMessage res)
+        {
+            if (res == null
+                || !res.Headers.Contains("Access-Control-Allow-Origin"))
+            {
+                return "";
+            }
+
+            return string.Join(",", res.Headers.GetValues("Access-Control-Allow-Origin"));
         }
 
         /// <summary>JSONを返すエンドポイントをGETする</summary>

@@ -5251,6 +5251,43 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **絞るのは「受ける側」だけ**である。**発行する側（`id_token_signed_response_alg`）は #129 の段階 2 で入っており、別の項目。**
 - **`request_object_signing_alg` も同じ形で足した**（#262）。**ただし、受ける集合が `RS256` だけ**なので（上流の `RequestObject.Verify` が RS256 固定）、**いまは書ける値が 1 つしか無く、絞っても結果が変わらない。****受ける alg を増やすのは「広げる側」の話**で、#262 では扱っていない。
 
+## RT-265.1 公開情報は全開、ブラウザから叩く口は登録から導いたオリジンだけ、/revoke と /introspect には CORS を付けない
+
+| | |
+|---|---|
+| 観点 | **以前は全エンドポイントで `AllowAnyOrigin` だった**（#265）。`Startup.cs` の `UseCors` にインラインの全開ポリシーが在り、**`/token` `/revoke` `/introspect` まで任意オリジンから叩けた。****開ける必要があるのは `/userinfo` と公開情報、それに SPA が叩く `/token` 程度**で、**`/revoke` `/introspect` はブラウザから叩く口ではない。****許すオリジンは、登録した `redirect_uri` から導く**（Keycloak の Web origins の既定値 `+` と同じ考え方）。 |
+| 根拠 | Fetch Standard（CORS）/ OAuth 2.0 for Browser-Based Apps / #265 |
+| テスト | `RT26501_CORSが口の性質ごとに分かれている` |
+
+**手順**
+
+1. 公開情報は、許していないオリジンにも開く
+1. ブラウザから叩く口は、導出したオリジンだけ通る
+1. /revoke と /introspect には CORS を付けない
+
+**検証（合否を判定する）**
+
+- 導出したオリジンが、サイト自身のオリジンとは違う（測る前提）
+- /.well-known/openid-configuration の Access-Control-Allow-Origin
+- /jwkcerts の Access-Control-Allow-Origin
+- /token は、導出したオリジンを許す
+- /token は、それ以外を許さない
+- /SetDeviceToken は、導出したオリジンを許す
+- /SetDeviceToken は、それ以外を許さない
+- /ciba_result は、導出したオリジンを許す
+- /ciba_result は、それ以外を許さない
+- /2fa_result は、導出したオリジンを許す
+- /2fa_result は、それ以外を許さない
+- /userinfo は、導出したオリジンを許す
+- /userinfo は、それ以外を許さない
+- /revoke は、許したオリジンにも CORS を付けない
+- /introspect は、許したオリジンにも CORS を付けない
+
+**補足**
+
+- **`Access-Control-Allow-Credentials` は、どちらのポリシーにも付けていない。****Cookie で通る口をこの範囲に入れない**ため（入れると、他オリジンの JS から利用者の資格情報で呼べる）。
+- **プリフライトは、実際に叩くメソッドで測ること。**ASP.NET Core は `Access-Control-Request-Method` で経路を選ぶので、**GET だけの口に `POST` を書くと、経路が当たらず 404 になる**（実測で踏んだ）。
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

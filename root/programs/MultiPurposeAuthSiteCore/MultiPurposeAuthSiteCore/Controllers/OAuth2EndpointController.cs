@@ -74,6 +74,7 @@
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials と /revoke・/introspect で非対称の認証を受ける（#239）
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（#237）
 //*  2026/10/01  玄人 幸道         CIBA の認可コードに、sub ではなく利用者名を入れるようにした（#151 の段階 4）
+//*  2026/10/04  玄人 幸道         CORSを口ごとの属性にした（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite;
@@ -121,7 +122,12 @@ using Touryo.Infrastructure.Public.Security;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuth2EndpointのApiController（ライブラリ）</summary>
-    [EnableCors]
+    //  **CORS はクラスに付けない**（#265）。**口ごとに属性で選ぶ。**
+    //    以前はここに [EnableCors]（ポリシー名なし）が付いており、
+    //    Startup のインラインの全開ポリシーと合わせて、
+    //    **/token /revoke /introspect まで任意オリジンから叩けた。**
+    //  **付けていない口は CORS 無し**（ブラウザから叩く口ではない）。
+    //    /revoke /introspect /device_authz /ciba_authz /par /ros
     //[ApiController]
     [MyBaseAsyncApiController(httpAuthHeader: EnumHttpAuthHeader.None)] // 認証無し（自前）
     public class OAuth2EndpointController : ControllerBase
@@ -194,6 +200,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="formData">FormDataCollection</param>
         /// <returns>成功は 200、エラーは 400 / 401（RFC 6749 5.1 / 5.2）（#196）</returns>
         [HttpPost]
+        [EnableCors(Const.CorsPolicyBrowserApi)]   // SPA（public クライアント ＋ PKCE）が叩く（#265）
         public IActionResult OAuth2Token(IFormCollection formData)
         {
             // **トークンを含む応答は、キャッシュに残してはならない**（RFC 6749 5.1 / 5.2 の MUST）（#218）。
@@ -369,6 +376,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>成功は 200、エラーは 401 と WWW-Authenticate: Bearer（RFC 6750 3）（#196）</returns>
         [HttpGet]
+        [EnableCors(Const.CorsPolicyBrowserApi)]   // ブラウザから読む口（#265）
         public async Task<IActionResult> GetUserClaims()
         {
             // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
@@ -1068,6 +1076,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 認証デバイス（authentication_device）が、プッシュ通知を受けて「許可 / 拒否」を押したときに呼ぶ。
         /// </remarks>
         [HttpPost]
+        [EnableCors(Const.CorsPolicyBrowserApi)]   // 認証デバイスの web ビルド（PWA）が叩く（#265）
         public IActionResult CibaPushResult(IFormCollection formData)
         {
             // クライアント認証（Bearer トークン）
@@ -1128,6 +1137,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>ContentResult</returns>
         [HttpGet]
+        [EnableCors(Const.CorsPolicyPublicDocs)]   // jwkcerts（公開情報。#265）
         public ContentResult JwksUri()
         {
             return this.Content(
@@ -1243,6 +1253,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ContentResult</returns>
         [HttpGet]
         [Route(".well-known/openid-configuration")] // ココは固定
+        [EnableCors(Const.CorsPolicyPublicDocs)]   // .well-known/openid-configuration（公開情報。#265）
         public ContentResult OpenIDConfig()
         {
             // JsonSerializerSettingsを指定して、可読性の高いJSONを返す。
@@ -1268,6 +1279,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>ContentResult</returns>
         [HttpGet]
         [Route("samlmetadata")]  // ココは固定
+        [EnableCors(Const.CorsPolicyPublicDocs)]   // samlmetadata（公開情報。#265）
         public ContentResult SamlMetadata()
         {
             // XmlWriterSettingsを指定して、可読性の高いXMLを返す。
@@ -1318,6 +1330,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 認証デバイス（authentication_device）が、サインインの後に呼ぶ（端末の登録）。
         /// </remarks>
         [HttpPost]
+        [EnableCors(Const.CorsPolicyBrowserApi)]   // 同上（#265）
         public async Task<IActionResult> SetDeviceToken(IFormCollection formData)
         {
             string device_token = (formData == null) ? null : (string)formData["device_token"];
@@ -1378,6 +1391,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// サインインを完了させるのは、待っているブラウザ側（Account/TwoFactorPushStatus）。
         /// </remarks>
         [HttpPost]
+        [EnableCors(Const.CorsPolicyBrowserApi)]   // 同上（#265）
         public async Task<IActionResult> TwoFactorPushResult(IFormCollection formData)
         {
             // クライアント認証（Bearer トークン）

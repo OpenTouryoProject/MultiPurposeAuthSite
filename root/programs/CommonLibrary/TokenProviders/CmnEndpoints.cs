@@ -112,6 +112,7 @@
 //*  2026/10/03  玄人 幸道         検証する側のalgを登録で絞る（#262）
 //*  2026/10/03  玄人 幸道         redirect_uriを単純文字列比較にした（#263）
 //*  2026/10/04  玄人 幸道         redirect_uriの登録迂回の分岐を削除（C-10）
+//*  2026/10/04  玄人 幸道         CORSで許可するオリジンの導出を追加（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3961,6 +3962,98 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return ret;
         }
+
+        #region GetCorsAllowedOrigins
+
+        /// <summary>CORS で許可するオリジン（#265）</summary>
+        /// <returns>オリジンの一覧（重複なし。1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **2 つを合わせる。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **導出** | **構成ファイルの public クライアントの `redirect_uri_*`**（記号を解決し、`http` / `https` のオリジンだけ取る） |
+        /// | **追加分** | `Config.CorsAllowedOrigins`（空でよい） |
+        ///
+        /// **SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ので、
+        /// **登録を足せば、CORS の設定を別に書かなくてよい。**
+        /// **Keycloak の Web origins の既定値 `+`（Valid Redirect URIs のオリジンを使う）と、
+        /// Entra ID の SPA プラットフォームと同じ考え方**である。
+        ///
+        /// **`*` は受けない。** 書かれていても落とす（`ProductionCheck` が警告する）。
+        /// **カスタム スキーム**（`com.opentouryo:/oauthredirect` など）**も落とす。**
+        /// ネイティブの折り返し先はブラウザの話ではないため。
+        /// </remarks>
+        public static List<string> GetCorsAllowedOrigins()
+        {
+            List<string> origins = new List<string>();
+
+            // 1. 登録から導く。
+            foreach (string registered in Helper.GetInstance().GetConfigClientsPublicRedirectUris())
+            {
+                // 定数値（test_self_code など）は実 URL に変換する。
+                string origin = CmnEndpoints.ToOrigin(
+                    CmnEndpoints.GetRedirectUriFromConstr(registered));
+
+                if (!string.IsNullOrEmpty(origin)
+                    && !origins.Contains(origin))
+                {
+                    origins.Add(origin);
+                }
+            }
+
+            // 2. 追加分（設定）。
+            string extra = Config.CorsAllowedOrigins;
+
+            if (!string.IsNullOrEmpty(extra))
+            {
+                foreach (string value in extra.Split(
+                    new char[] { ' ', ',', '	' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string origin = CmnEndpoints.ToOrigin(value.Trim());
+
+                    if (!string.IsNullOrEmpty(origin)
+                        && !origins.Contains(origin))
+                    {
+                        origins.Add(origin);
+                    }
+                }
+            }
+
+            return origins;
+        }
+
+        /// <summary>URL をオリジン（scheme://host[:port]）にする（#265）</summary>
+        /// <param name="url">URL（またはオリジン）</param>
+        /// <returns>オリジン（`http` / `https` でなければ空）</returns>
+        /// <remarks>
+        /// **`http` / `https` だけを受ける。**
+        /// **カスタム スキームと `*` は空を返す**（ブラウザのオリジンにならないため）。
+        /// **既定のポートは付けない**（`Uri` の規則どおり。CORS の比較はヘッダの文字列同士）。
+        /// </remarks>
+        private static string ToOrigin(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+            {
+                return "";
+            }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+            {
+                return "";
+            }
+
+            if (uri.Scheme != Uri.UriSchemeHttp
+                && uri.Scheme != Uri.UriSchemeHttps)
+            {
+                return "";
+            }
+
+            // GetLeftPart(Authority) は、既定のポートを省いた「scheme://host[:port]」を返す。
+            return uri.GetLeftPart(UriPartial.Authority);
+        }
+
+        #endregion
 
         #region Redirect URLの組み立て
 

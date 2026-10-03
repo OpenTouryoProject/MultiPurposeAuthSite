@@ -489,6 +489,62 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 > **`post_logout_redirect_uri` は、#232 の時点から同じ比較である**（`StringComparison.Ordinal`）。
 > **`redirect_uri` だけが揃っていなかったので、揃えた。**
 
+### CORS — ブラウザから叩ける口を絞る（net10.0 版。#265）
+
+**net10.0 版は、口の性質ごとに CORS を分けている。**
+
+| 口 | 方針 |
+|---|---|
+| `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata` | **常に全開**（公開情報。RP の検出に使う） |
+| `/userinfo` / `/token` / `/SetDeviceToken` / `/ciba_result` / `/2fa_result` | **許すオリジンだけ** |
+| `/revoke` / `/introspect` / `/device_authz` / `/ciba_authz` / `/par` / `/ros` | **CORS を付けない**（ブラウザから叩く口ではない） |
+
+**`Access-Control-Allow-Credentials` は付けない**（Cookie は飛ばない）。
+
+#### 許すオリジンは、登録から導く
+
+**設定を書かなくてよい。**
+**構成ファイルの public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`**
+から、オリジンを取る。
+
+```json
+"AuthenticationDevice_Web": { "redirect_uri_code": "http://localhost:5610/" }
+```
+
+→ **`http://localhost:5610` が許される。**
+
+**SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ので、
+**クライアントを登録すれば、CORS のための作業は要らない。**
+
+> **Keycloak の Web origins の既定値 `+`（Valid Redirect URIs のオリジンを使う）と、
+> Entra ID の SPA プラットフォームと同じ考え方**である。
+
+**記号（`test_self_code` など）は解決してから取る。**
+**カスタム スキーム**（`com.opentouryo:/oauthredirect`）**は落とす** — ブラウザの話ではないため。
+
+#### `CorsAllowedOrigins` — 導出で拾えないものを足す（任意）
+
+```json
+"CorsAllowedOrigins": "https://spa.example https://spa2.example:8443"
+```
+
+- **区切りは空白かカンマ。** **末尾の `/` は付けない**（CORS の比較はオリジン同士）
+- **`*` は書かない。** 落とすので許可されず、`ProductionCheck` が警告する
+- **画面（`/Manage/AddSaml2OAuth2Data`）から登録した SPA は、ここに足す。**
+  画面登録は導出に含めていない（プリフライトは `client_id` を持たないため
+  オリジンの集合全体が要るが、user store には全件を列挙する口が無い）
+
+#### 影響しないもの
+
+| | 理由 |
+|---|---|
+| **サーバサイドの Web RP**（confidential） | `/token` は**サーバ間**で呼ぶ。ブラウザがするのは `/authorize` への遷移と戻りだけ |
+| **ネイティブ / デスクトップ / モバイル** | **CORS を課すのはブラウザ**で、HTTP スタック直叩きは `Origin` を送らない |
+| **net48 版** | **別の仕組み**（Web API の `[EnableCors]`）。#265 では触っていない |
+
+> **WebView / Electron / Cordova / Flutter Web は、ブラウザ実行なので対象**である。
+> 同梱の認証デバイスの web ビルドがこれに当たる（`AuthenticationDevice_Web` の登録から導出される）。
+
 ## 5. ルート URI と、自己テストの折り返し（重要）
 
 ```

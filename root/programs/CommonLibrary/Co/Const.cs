@@ -161,6 +161,25 @@ namespace MultiPurposeAuthSite.Co
 
         #endregion
 
+        #region CORS のポリシー名（#265）
+
+        /// <summary>公開情報の口のポリシー名（#265）</summary>
+        /// <remarks>
+        /// `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata`。
+        /// **誰でも読んでよい**（RP の検出に使う）。
+        /// </remarks>
+        public const string CorsPolicyPublicDocs = "MpasPublicDocs";
+
+        /// <summary>ブラウザから叩く口のポリシー名（#265）</summary>
+        /// <remarks>
+        /// `/token` / `/userinfo` / `/SetDeviceToken` / `/ciba_result` / `/2fa_result`。
+        /// **許すオリジンだけ**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **`/revoke` `/introspect` には付けない**（ブラウザから叩く口ではない）。
+        /// </remarks>
+        public const string CorsPolicyBrowserApi = "MpasBrowserApi";
+
+        #endregion
+
         #region テスト用
 
         /// <summary>テスト用ClientIdを保存するSession, CookieのKey</summary>

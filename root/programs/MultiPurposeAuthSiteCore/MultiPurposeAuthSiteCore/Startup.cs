@@ -33,9 +33,11 @@
 //*  2026/09/30  玄人 幸道         認証 Cookie の名前を設定できるようにした（#250 の段階 4）
 //*  2026/10/01  玄人 幸道         TempData の Cookie にも接頭辞を付ける（#255）
 //*  2026/10/01  玄人 幸道         メアドの一意を常に必須にした（#151 の段階 3）
+//*  2026/10/04  玄人 幸道         CORSをエンドポイント単位にした（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
+using MultiPurposeAuthSite.TokenProviders;
 using MultiPurposeAuthSite.Data;
 using MultiPurposeAuthSite.Password;
 using MultiPurposeAuthSite.Notifications;
@@ -165,13 +167,15 @@ namespace MultiPurposeAuthSite
             app.UseAuthentication();
             app.UseAuthorization();
             
-            app.UseCors( //認証・認可の後ろ
-                builder => builder
-                    .AllowAnyOrigin()
-                    .AllowAnyMethod()
-                    .AllowAnyHeader());
-                    
-            //.AllowCredentials());
+            // **CORS**（#265）。**既定のポリシーは置かない。**
+            //   **口ごとに属性で選ぶ**（`[EnableCors("...")]` / `[DisableCors]`）。
+            //   以前はここにインラインで全開のポリシーを書いていたため、
+            //   **`/token` `/revoke` `/introspect` まで任意オリジンから叩けた。**
+            //
+            //   **位置は変えていない**（認証・認可の後ろ）。
+            //   プリフライト（`OPTIONS`）が 204 で返ることは実測済みで、
+            //   **動いているものを動かさない。**
+            app.UseCors();
             
             app.UseEndpoints(endpoints =>
             {
@@ -426,16 +430,52 @@ namespace MultiPurposeAuthSite
                 }
             }
 
-            // AddCors
-            services.AddCors(
-                o => o.AddPolicy("AllowAllOrigins",
-                builder =>
+            // AddCors（#265）
+            //
+            //   **口の性質で分ける。** 既定のポリシーは置かない（属性で選ぶ）。
+            //
+            //   | ポリシー | 付ける口 |
+            //   |---|---|
+            //   | MpasPublicDocs  | `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata` |
+            //   | MpasBrowserApi  | `/token` `/userinfo` `/SetDeviceToken` `/ciba_result` `/2fa_result` |
+            //   | （付けない）    | `/revoke` `/introspect` `/device_authz` `/ciba_authz` `/par` `/ros` |
+            //
+            //   **`AllowCredentials` は、どちらにも付けない。**
+            //   **Cookie で通る口をこの範囲に入れない**ためである
+            //   （入れると、他オリジンの JS から利用者の資格情報で呼べる）。
+            string[] corsOrigins = CmnEndpoints.GetCorsAllowedOrigins().ToArray();
+
+            services.AddCors(o =>
+            {
+                // **公開情報。** 誰でも読んでよい（RP の検出に使う）。
+                o.AddPolicy(Const.CorsPolicyPublicDocs, builder =>
+                {
+                    builder
+                    .AllowAnyOrigin()
+                    .WithMethods("GET")
+                    .AllowAnyHeader();
+                });
+
+                // **ブラウザから叩く口。** **許すオリジンだけ。**
+                //   **1 件も無ければ、どのオリジンも通さない**（安全側の既定）。
+                o.AddPolicy(Const.CorsPolicyBrowserApi, builder =>
+                {
+                    builder
+                    .WithOrigins(corsOrigins)
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+                });
+
+                // **自己テスト用の口（ValuesController）だけが使う。**
+                //   `Config.IsLockedDownTestEndpoints` が true の配備では、その口自体が閉じる。
+                o.AddPolicy("AllowAllOrigins", builder =>
                 {
                     builder
                     .AllowAnyOrigin()
                     .AllowAnyMethod()
                     .AllowAnyHeader();
-                }));
+                });
+            });
 
             #region ASP.NET Core Identity
 

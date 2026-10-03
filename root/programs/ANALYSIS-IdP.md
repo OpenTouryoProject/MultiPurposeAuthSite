@@ -1746,23 +1746,56 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
   （`TC-6.4` はヘッダを丸ごと作り替えるため、`kid` が消えて alg の判定まで届かない）
 - **受ける集合を増やすときは、`RT-129.2` の一覧も直す**（黙って広がらないようにするため）
 
-### C-9. CORS が全エンドポイントで `AllowAnyOrigin` **[Core]** — **#265**
+### C-9. CORS が全エンドポイントで `AllowAnyOrigin` **[Core]** — **✅ 修正済み（#265）**
+
+**直す前。**
 
 ```csharp
 // Startup.cs:Configure
 app.UseCors(builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 ```
 
-`OAuth2EndpointController` の `[EnableCors]`（ポリシー名なし）はこのインライン ポリシーに解決される。
-`/token` `/revoke` `/introspect` まで任意オリジンから叩ける。
+`OAuth2EndpointController` の `[EnableCors]`（ポリシー名なし）がこのインライン ポリシーに解決され、
+**`/token` `/revoke` `/introspect` まで任意オリジンから叩けた**（実測）。
 `AllowCredentials` は付いていないので Cookie は飛ばないが、
-**任意のサイトの JS がユーザのブラウザからトークン エンドポイントを直接呼べる**状態ではある。
+**任意のサイトの JS が、利用者のブラウザからトークン エンドポイントを直接呼べる**状態だった。
 
-CORS を開くべきなのは `/userinfo` と `.well-known` 程度で、
-`/token` は SPA の PKCE 用に**必要なオリジンだけ**許可するのが定石。
+**直し方。** **既定のポリシーを置かず、口ごとに属性で選ぶ**ようにした。
 
-なお CORS の設定が **3 重**になっている（`AddCors` の名前付きポリシー `AllowAllOrigins`、
-`UseCors` のインライン、`[EnableCors]` の既定ポリシー）。整理対象。
+| 口 | 方針 |
+|---|---|
+| `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata` | **常に全開**（公開情報。`MpasPublicDocs`） |
+| `/userinfo` / `/token` / `/SetDeviceToken` / `/ciba_result` / `/2fa_result` | **許すオリジンだけ**（`MpasBrowserApi`） |
+| `/revoke` / `/introspect` / `/device_authz` / `/ciba_authz` / `/par` / `/ros` | **CORS を付けない** |
+
+**許すオリジンは、登録から導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+
+**構成ファイルの public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`** を
+記号を解決してから `http` / `https` のオリジンだけ集める。
+**SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ので、
+**登録を足せば、CORS の設定を別に書かなくてよい。**
+**Keycloak の Web origins の既定値 `+`（Valid Redirect URIs のオリジンを使う）と、
+Entra ID の SPA プラットフォームと同じ考え方**である。
+**追加分は `CorsAllowedOrigins`**（空でよい。導出で拾えないものを足す口）。
+
+- **`AllowCredentials` は、どちらのポリシーにも付けない。**
+  **Cookie で通る口をこの範囲に入れない**ため（入れると、他オリジンの JS から資格情報で呼べる）
+- **画面登録（`saml2OAuth2Data`）は導出に含めない。**
+  プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、
+  `DataProvider` に全件を列挙する口が無く、**分散キャッシュも無い**（E-2）。
+  **画面登録の SPA は `CorsAllowedOrigins` に足して通す**
+- **3 重定義（E-3）も片付いた。** `AllowAllOrigins` は**自己テスト用の口だけ**が使う
+  （`ValuesController` / `TestHybridFlow`。どちらも `IsLockedDownTestEndpoints` で経路ごと閉じる）
+- **E2E** : **`RT-265.1`**（公開情報は全開／ブラウザから叩く口は導出したオリジンだけ／
+  `/revoke` `/introspect` には付かない）。**net10.0 版だけ**。
+  **旧挙動に戻すと落ちることを確かめてある**（`/revoke` が `*` を返す）
+- **利用者への影響** : **挙動が変わる。**
+  **任意オリジンから `/token` を叩いている SPA は、登録から導出されるか
+  `CorsAllowedOrigins` に書かれていないと動かなくなる。**
+  **`.well-known` / `jwkcerts` は従来どおり。**
+  **サーバサイドの Web RP とネイティブ / モバイルは影響なし**（CORS はブラウザの仕組み）
+
+> **net48 版は触っていない。** あちらは Web API の `[EnableCors]` という別の仕組みである。
 
 ### C-10. `redirect_uri` の比較が大文字小文字を無視 **[Lib]** — **✅ 修正済み（#263）**
 
@@ -2414,7 +2447,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 |---|---|
 | E-1 | `Startup.cs` 方式のまま。.NET 6 以降の Minimal Hosting（`WebApplication.CreateBuilder`）へ寄せると、`Program.cs` の `IWebHost` / `IHost` のコメント アウト群も整理できる |
 | E-2 | `AddDistributedMemoryCache()` のままなのでスケールアウト不可。**DataProtection の方は ✅ 永続化できるようにした**（C-13 / #251。`DataProtectionKeyPath`） |
-| E-3 | CORS が 3 重定義（C-9） |
+| E-3 | ✅ **CORS の 3 重定義を片付けた**（C-9 / #265）。既定のポリシーを置かず、口ごとに属性で選ぶ。`AllowAllOrigins` は自己テスト用の口だけが使う |
 | E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
 | E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
 | E-6 | 認可画面（`Views/Account/OAuth2Authorize.cshtml`）に **Deny ボタンが無い**。ユーザは拒否できず、`access_denied` を返す経路も無い。scope も生の識別子をそのまま表示している |
@@ -2471,7 +2504,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化（net10.0 版）** #194 |
 | C-4 / C-5 / C-11 有効期限の実装（code / refresh_token / request object）＋ ワンタイム化 ＋ 再利用検知 |
 | ✅ **C-8 検証アルゴリズムの固定** #129 の段階 1 |
-| C-9 CORS をエンドポイント単位に（**#265**） |
+| ✅ **C-9 CORS をエンドポイント単位に** #265 |
 | ✅ **C-10 `redirect_uri` の厳密比較** #263 ／ **テスト用抜け道の削除**（`test_self_code_manage`） |
 | ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251（`AddDistributedMemoryCache` は E-2 として残る） |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
