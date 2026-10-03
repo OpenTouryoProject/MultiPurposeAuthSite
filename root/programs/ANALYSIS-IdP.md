@@ -1746,7 +1746,7 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
   （`TC-6.4` はヘッダを丸ごと作り替えるため、`kid` が消えて alg の判定まで届かない）
 - **受ける集合を増やすときは、`RT-129.2` の一覧も直す**（黙って広がらないようにするため）
 
-### C-9. CORS が全エンドポイントで `AllowAnyOrigin` **[Core]**
+### C-9. CORS が全エンドポイントで `AllowAnyOrigin` **[Core]** — **#265**
 
 ```csharp
 // Startup.cs:Configure
@@ -1891,18 +1891,42 @@ if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
 > 読む回数を 1 回にまとめるのではなく、**応答を作り終えた時点で消す**ことで、
 > 「2 回目の認可要求には使えない」を実現した。
 
-### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]**
+### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]** — **✅ 修正済み（#223）**
+
+**直す前。** net10.0 版は 2 分固定だった。
 
 ```csharp
-// Startup.cs:401
 options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
 options.SlidingExpiration = true;
 ```
 
 `Config.AuthCookieExpiresFromHours` / `AuthCookieSlidingExpiration` は
-**net48 版（`App_Start/StartupAuth.cs:194,196`）でしか使われていない。**
-Core 側は設定を無視して 2 分固定。SlidingExpiration があるので操作中は延びるが、
-**2 分放置するとサインアウトする**。設定の意味が失われている。
+**net48 版（`App_Start/StartupAuth.cs:227,229`）でしか使われていなかった。**
+Core 側は設定を無視して 2 分固定で、`SlidingExpiration` があるので操作中は延びるが、
+**2 分放置するとサインアウトしていた**。設定の意味が失われていた。
+
+**直し方**（`Startup.ConfigureServices`。コミット `2af1915`）。
+**`ConfigureApplicationCookie` の中で、net48 と同じ設定キーを読む**ようにした。
+
+```csharp
+services.ConfigureApplicationCookie(options =>
+    {
+        // **net48 と同じ設定キーで揃える**（App_Start/StartupAuth.cs）。
+        options.ExpireTimeSpan = Config.AuthCookieExpiresFromHours;
+        options.SlidingExpiration = Config.AuthCookieSlidingExpiration;
+```
+
+**置き場所が本題だった。** 以前は `authenticationBuilder.AddCookie(options => ...)` に書いていたが、
+**それはスキーム `Cookies` の設定で、サインインには使われていなかった**
+（`AddIdentity` が既定を `Identity.Application` にするため）。
+**`LoginPath` も含めて、書いた設定が 1 つも効いていなかった。**
+`ConfigureApplicationCookie` は `Identity.Application` を設定するので、**ここに書いたことが効く。**
+
+- **設定キーは両系統の雛形にあり、値も同じ**（`AuthCookieExpiresFromHours` = 336 時間 /
+  `AuthCookieSlidingExpiration` = true）
+- **`new TimeSpan(0, 2, 0)` は、どちらのアプリにも残っていない**
+- **利用者への影響** : **設定が効くようになった。**
+  **既定の雛形では 2 分から 336 時間（14 日）に伸びる**ので、**net48 版と揃う**
 
 ### C-13. DataProtection の鍵が永続化されていない **[Core]** — **✅ 修正済み（#251）**
 
@@ -2389,7 +2413,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | # | 内容 |
 |---|---|
 | E-1 | `Startup.cs` 方式のまま。.NET 6 以降の Minimal Hosting（`WebApplication.CreateBuilder`）へ寄せると、`Program.cs` の `IWebHost` / `IHost` のコメント アウト群も整理できる |
-| E-2 | `AddDistributedMemoryCache()` / DataProtection 未永続化（C-13）でスケールアウト不可 |
+| E-2 | `AddDistributedMemoryCache()` のままなのでスケールアウト不可。**DataProtection の方は ✅ 永続化できるようにした**（C-13 / #251。`DataProtectionKeyPath`） |
 | E-3 | CORS が 3 重定義（C-9） |
 | E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
 | E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
@@ -2447,9 +2471,9 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化（net10.0 版）** #194 |
 | C-4 / C-5 / C-11 有効期限の実装（code / refresh_token / request object）＋ ワンタイム化 ＋ 再利用検知 |
 | ✅ **C-8 検証アルゴリズムの固定** #129 の段階 1 |
-| C-9 CORS をエンドポイント単位に |
+| C-9 CORS をエンドポイント単位に（**#265**） |
 | ✅ **C-10 `redirect_uri` の厳密比較** #263 ／ **テスト用抜け道の削除**（`test_self_code_manage`） |
-| C-12 / C-13 Cookie 有効期限の設定反映、DataProtection の永続化 |
+| ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251（`AddDistributedMemoryCache` は E-2 として残る） |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 
