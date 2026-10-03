@@ -445,88 +445,6 @@ function New-IisExpressConfig
     $doc.Save($Path)
 }
 
-function Get-InjectedTestClient
-{
-    <#
-    .SYNOPSIS
-    テスト専用のクライアントを、環境変数で差し込むための値を作る（#224）。
-
-    .DESCRIPTION
-    **既存の登録（既定は TestClient4）を写し、名前と oauth2_oidc_mode、-Override の項目だけを変える。**
-    公開鍵（jwk_*_publickey）ごと写すので、署名検証を通り、
-    **登録種別の判定まで届く**。雛形にも実設定にも手を入れない。
-
-    **写す値は、JSON の生のテキスト**（\\ などのエスケープを含むまま）。
-    -Override の値も、JSON の文字列として書く。
-
-    差し込み方は、アプリによって違う。
-      net10.0 : クライアント一覧は「節」として読むので、
-                appSettings__OAuth2ClientsInformation__<client_id>__<項目> で 1 件足せる
-      net48   : 1 個の値（JSON 文字列）として読むので、
-                OAuth2ClientsInformation を一覧ごと差し替える（FxContainerization=ON）
-
-    **JSON は構文解析しない。** 5.1 の ConvertFrom-Json は // コメントを読めない。
-    登録は入れ子の無い平らなオブジェクトなので、生のテキストから区画を取り出す。
-    **net48 は XML として読まない。** 属性値の改行が空白に潰れ、// が以降を飲む（CONFIGURATION.md 9 節）。
-
-    **2 件目以降は、-NetFxBody に前の NetFxValue を渡す。** net48 は一覧ごと差し替えるので、
-    前に足した分の上へ、さらに足す。
-
-    .OUTPUTS
-    ClientId / CoreEnv（環境変数名 → 値）/ NetFxValue。取り出せなければ $null。
-    #>
-    param(
-        [string] $Name,
-        [string] $Mode,
-        [string] $ClientId,
-        [string] $NetFxBody = '',
-        [string] $Source = 'TestClient4',
-        [hashtable] $Override = @{}
-    )
-
-    $coreText  = [System.IO.File]::ReadAllText((Join-Path $coreDir 'appsettings.json'))
-
-    # 写す元の区画（入れ子の無い { ... }）
-    $m = [regex]::Match($coreText,
-        '\{[^{}]*"client_name"\s*:\s*"' + [regex]::Escape($Source) + '"[^{}]*\}')
-    if (-not $m.Success) { return $null }
-
-    $fields = [ordered]@{}
-    foreach ($f in [regex]::Matches($m.Value, '"([A-Za-z0-9_]+)"\s*:\s*"((?:[^"\\]|\\.)*)"')) {
-        $fields[$f.Groups[1].Value] = $f.Groups[2].Value
-    }
-    $fields['client_name'] = $Name
-    $fields['oauth2_oidc_mode'] = $Mode
-    foreach ($k in $Override.Keys) { $fields[$k] = $Override[$k] }
-
-    # net10.0 : 節へ 1 件足す
-    #   環境変数は JSON ではないので、エスケープを戻した値を渡す（\\ → \ など）。
-    $coreEnv = @{}
-    foreach ($k in $fields.Keys) {
-        $coreEnv["appSettings__OAuth2ClientsInformation__${ClientId}__$k"] =
-            [regex]::Unescape($fields[$k])
-    }
-
-    # net48 : 一覧の末尾の } の手前に 1 件足す
-    if ([string]::IsNullOrEmpty($NetFxBody)) {
-        $netFxText = [System.IO.File]::ReadAllText((Join-Path $netFxDir 'app.config'))
-        $n = [regex]::Match($netFxText,
-            'key="OAuth2ClientsInformation"\s+value=''(.*?)''\s*/>',
-            [System.Text.RegularExpressions.RegexOptions]::Singleline)
-        if (-not $n.Success) { return $null }
-        $NetFxBody = $n.Groups[1].Value
-    }
-
-    $body  = $NetFxBody.TrimEnd()
-    if (-not $body.EndsWith('}')) { return $null }
-
-    $pairs = ($fields.Keys | ForEach-Object { '"{0}": "{1}"' -f $_, $fields[$_] }) -join ', '
-    $netFxValue = $body.Substring(0, $body.Length - 1).TrimEnd() +
-        ",`r`n  `"$ClientId`": { $pairs }`r`n}"
-
-    return @{ ClientId = $ClientId; CoreEnv = $coreEnv; NetFxValue = $netFxValue }
-}
-
 $core  = $null
 $netFx = $null
 
@@ -558,126 +476,17 @@ try {
 
         New-Item -ItemType Directory -Force $LogDir | Out-Null
 
-        # **テスト専用のクライアントを差し込む**（#224 / #226）。
-        #   既存の登録を写し、登録種別などだけ変えたもの
-        #   （公開鍵ごと写すので、署名検証で先に落ちない）。設定ファイルは書き換えない。
-        #     TestClient4_2 : normal  … CIBA を fapi_ciba 以外の登録で使うと拒否されるか
-        #     TestClient4_3 : fapi_1  … 既知でない登録値（書き間違い）なら拒否されるか（#224 の段階 2）
-        #     TestClient2_2 : fapi2   … mTLS で通るか（#226）。Subject はテスト専用の値
-        #     TestClient2_3 : fapi_1  … 同じ証明書でも、登録値が不正なら拒否されるか（#226 / #224 の E）
-        #     TestClient_2  : normal  … **記号を含む client_secret**（#237）。
-        #                               Basic の符号化（RFC 6749 2.3.1）を、符号化あり・無しの両方で測る
-        #     TestClient_3  : normal  … **「:」を含む client_secret**（#237）。
-        #                               符号化しないと分割位置がずれるので、符号化したときだけ通る
-        #     TestClient_4  : normal  … **post_logout_redirect_uri を登録**（#232）。
-        #                               ログアウト後に RP へ戻せるか（登録が無いクライアントとの対照）
-        #     TestClient_5  : normal  … **subject_types = pairwise**（#140 の段階 2）。
-        #                               sub が PPID になっても /userinfo がクレームを返すか
-        #     TestClient_8  : normal  … **id_token_signed_response_alg = RS512**（#129 の段階 2）。
-        #                               登録した alg で署名されるか（鍵は RS256 と同じ）。
-        #                               **token_endpoint_auth_signing_alg = RS256 も登録する**（#262）。
-        #                               「発行する側」と「受ける側」は別の項目なので同居できる。
-        #                               **専用のクライアントを足さないのは、net48 の制約のため**
-        #                               （下の「差し込める件数には上限がある」を参照）
-        #     TestClient_9  : normal  … **id_token_signed_response_alg = ES384**（#129 の段階 3）。
-        #                               曲線が alg に紐づく（P-384 の鍵）
-        #     TestClient_10 : normal  … **id_token_signed_response_alg = ES512**（#129 の段階 3）。
-        #                               同上（P-521 の鍵）
-        #     TestClient_11 : normal  … **id_token_signed_response_alg = PS256**（#129 の段階 4）。
-        #                               RSASSA-PSS。**鍵は RS256 と同じ**で、パディングだけが違う
-        #     TestClient_12 : normal  … **同 PS384**
-        #     TestClient_13 : normal  … **同 PS512**
-        #     TestClient_6  : normal  … **subject_types を書かない**（#151 の段階 4）。
-        #     TestClient_7  : normal    **既定が public になった**ことを測る。
-        #                               **2 件要る**（public は「RP が違っても同じ sub」なので、
-        #                               2 つの client_id で同じ値になることを見る）。
-        #                               **client_id は新しい値**にすること。発行済みの sub は
-        #                               対応表から返るため（段階 2）、**既に使った client_id では測れない。**
-        #   ※ Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
-        #   ※ 秘密は JSON 文字列に素で埋めるので、「"」「\」「'」は使わないこと（net48 は一覧ごと差し替える）。
+        # **テスト専用のクライアントは、ここでは差し込まない**（#264）。
+        #   **サーバ側の種データが、テスト利用者の登録（saml2OAuth2Data）として作る**
+        #   （`CommonLibrary/Extensions/Sts/TestClients.cs`。`IsDebug` ＋ `TestUserPWD` のとき）。
         #
-        #   ※ **差し込める件数には上限がある**（#262 で踏んだ。外すのは #264）。
-        #     net48 は一覧ごと 1 本の環境変数で渡すため、**1 件足すと約 1.3 KB 増える。**
-        #     **Windows の環境ブロックは全体で 32,767 文字**までで、
-        #     **超えると IIS Express が起動はするが、全要求が 500 になる**（ログに例外は出ない）。
-        #     **いまの 16 件で約 26.8 KB** あり、他の環境変数と合わせて上限に近い。
-        #     **足す前に、既存のクライアントに登録項目を相乗りできないかを見ること。**
-        #     切り分け方は TESTING.md 1 節。
-        $mtlsDn = @{ tls_client_auth_subject_dn = 'CN=mpas-e2e-mtls-client' }
-
-        # **E2E の KnownClients.SymbolSecret / ColonSecret と同じ値にすること。**
-        #   「+」は form-urlencoded の復号で空白に変わるため、**符号化したかどうかで値が変わる**。
-        #   「:」は Basic の分割位置そのものなので、符号化しないと資格情報として読めない。
-        $symbolSecret = @{ client_secret = 'e2e+ab/cd=ef' }
-        $colonSecret  = @{ client_secret = 'e2e:ab+cd' }
-
-        # **ログアウト後の戻り先**（#232）。サイトごとに URL が違うので、定数で登録して
-        #   サーバ側（CmnEndpoints.GetRedirectUriFromConstr）で解決させる。
-        $postLogout = @{ post_logout_redirect_uri = 'test_self_logout' }
-
-        # **pairwise の登録**（#140 の段階 2）。sub が PPID（クライアントごとに違う値）になる。
-        $pairwise = @{ subject_types = 'pairwise' }
-
-        # **署名アルゴリズムの登録**（#129 の段階 2）。**鍵は RS256 と同じ**で、ダイジェストだけ違う。
-        #   **検証する側の alg も相乗りさせる**（#262）。**client_assertion を RS256 だけに絞る。**
-        #   写す元（TestClient）は RSA と ECDSA の鍵を両方登録しているので、
-        #   **絞らなければ ES256 でも通る**（RT-129.1）。**絞ると通らない**（RT-262.1）。
-        #   **専用のクライアントを足さないのは、件数の上限のため**（上記）。
-        #   **RT-129.3 は authorization code なので、client_assertion の絞り込みは効かない。**
-        $rs512 = @{ id_token_signed_response_alg = 'RS512'; token_endpoint_auth_signing_alg = 'RS256' }
-
-        # **EC は曲線が alg に紐づく**（#129 の段階 3）。**鍵が分かれる**（P-384 / P-521）。
-        $es384 = @{ id_token_signed_response_alg = 'ES384' }
-        $es512 = @{ id_token_signed_response_alg = 'ES512' }
-
-        # **RSASSA-PSS**（#129 の段階 4）。**鍵は RS* と同じ 1 本**で、パディングだけが違う。
-        $ps256 = @{ id_token_signed_response_alg = 'PS256' }
-        $ps384 = @{ id_token_signed_response_alg = 'PS384' }
-        $ps512 = @{ id_token_signed_response_alg = 'PS512' }
-        $injected = $null
-        $injectedIds = [ordered]@{}   # テストへ渡す環境変数名 → client_id
-        foreach ($c in @(
-            @{ Name = 'TestClient4_2'; Mode = 'normal'; ClientId = 'e2e0tc42000000000000000000000000'; Source = 'TestClient4'; Override = @{} },
-            @{ Name = 'TestClient4_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc43000000000000000000000000'; Source = 'TestClient4'; Override = @{} },
-            @{ Name = 'TestClient2_2'; Mode = 'fapi2';  ClientId = 'e2e0tc22000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
-            @{ Name = 'TestClient2_3'; Mode = 'fapi_1'; ClientId = 'e2e0tc23000000000000000000000000'; Source = 'TestClient2'; Override = $mtlsDn },
-            @{ Name = 'TestClient_2';  Mode = 'normal'; ClientId = 'e2e0tc02000000000000000000000000'; Source = 'TestClient';  Override = $symbolSecret },
-            @{ Name = 'TestClient_3';  Mode = 'normal'; ClientId = 'e2e0tc03000000000000000000000000'; Source = 'TestClient';  Override = $colonSecret },
-            @{ Name = 'TestClient_4';  Mode = 'normal'; ClientId = 'e2e0tc04000000000000000000000000'; Source = 'TestClient';  Override = $postLogout },
-            @{ Name = 'TestClient_5';  Mode = 'normal'; ClientId = 'e2e0tc05000000000000000000000000'; Source = 'TestClient';  Override = $pairwise },
-            @{ Name = 'TestClient_6';  Mode = 'normal'; ClientId = 'e2e0tc06000000000000000000000000'; Source = 'TestClient';  Override = @{} },
-            @{ Name = 'TestClient_7';  Mode = 'normal'; ClientId = 'e2e0tc07000000000000000000000000'; Source = 'TestClient';  Override = @{} },
-            @{ Name = 'TestClient_8';  Mode = 'normal'; ClientId = 'e2e0tc08000000000000000000000000'; Source = 'TestClient';  Override = $rs512 },
-            @{ Name = 'TestClient_9';  Mode = 'normal'; ClientId = 'e2e0tc09000000000000000000000000'; Source = 'TestClient';  Override = $es384 },
-            @{ Name = 'TestClient_10'; Mode = 'normal'; ClientId = 'e2e0tc10000000000000000000000000'; Source = 'TestClient';  Override = $es512 },
-            @{ Name = 'TestClient_11'; Mode = 'normal'; ClientId = 'e2e0tc11000000000000000000000000'; Source = 'TestClient';  Override = $ps256 },
-            @{ Name = 'TestClient_12'; Mode = 'normal'; ClientId = 'e2e0tc12000000000000000000000000'; Source = 'TestClient';  Override = $ps384 },
-            @{ Name = 'TestClient_13'; Mode = 'normal'; ClientId = 'e2e0tc13000000000000000000000000'; Source = 'TestClient';  Override = $ps512 })) {
-
-            $base = ''
-            if ($null -ne $injected) { $base = $injected.NetFxValue }
-
-            $one = Get-InjectedTestClient -Name $c.Name -Mode $c.Mode -ClientId $c.ClientId -NetFxBody $base `
-                -Source $c.Source -Override $c.Override
-            if ($null -eq $one) {
-                $injected = $null
-                $injectedIds.Clear()
-                break
-            }
-
-            if ($null -eq $injected) {
-                $injected = $one
-            }
-            else {
-                foreach ($k in $one.CoreEnv.Keys) { $injected.CoreEnv[$k] = $one.CoreEnv[$k] }
-                $injected.NetFxValue = $one.NetFxValue
-            }
-            $injectedIds['MPAS_' + $c.Name.ToUpperInvariant()] = $c.ClientId
-        }
-
-        if ($null -eq $injected) {
-            Write-Warning 'TestClient / TestClient2 / TestClient4 の登録を取り出せなかったため、テスト専用のクライアントは差し込みません（FA-5 / FA-6 / RT-237 / RT-232 は Skip）。'
-        }
+        #   **以前は環境変数で差し込んでいた**が、**net48 版は一覧ごと 1 本の環境変数**で渡すため、
+        #   **件数に上限があった**（#262 で踏んだ。約 17 件で Windows の環境ブロック 32,767 文字を
+        #   超え、**IIS Express が起動するのに全要求が 500 になる**）。
+        #   **user store は 1 件ずつ別の行なので、上限が無い。**
+        #
+        #   **client_id は固定値**で、**E2E の `KnownClients.SeededClientIds` と揃えてある。**
+        #   そのため、**テストへ渡す環境変数（`MPAS_<名前>`）も要らない。**
 
         # **有効期限のテスト（#188）は、寿命をごく短くして測る。**
         #   既定（認可コード 600 秒 / Request Object 300 秒 / refresh_token 14 日）を待つのは現実的でない。
@@ -752,13 +561,6 @@ public static class MpasTestTls
 
         # ID フェデレーションの下流として振る舞う（#250 の段階 5）
         Set-IdFederationEnv -TargetKey 'core' -SiteUrl $Url
-
-        # テスト専用のクライアント（#224）: net10.0 は節へ 1 件足す
-        if ($null -ne $injected) {
-            foreach ($k in $injected.CoreEnv.Keys) {
-                Set-Item -Path ("Env:\" + $k) -Value $injected.CoreEnv[$k]
-            }
-        }
 
         # **profile / address のクレームの対応付け（#230）。**
         #   この実装は氏名・住所の項目を持たず、入れ物は UnstructuredData（中身は導入する側が決める）。
@@ -868,11 +670,6 @@ public static class MpasTestTls
             # ID フェデレーションの下流として振る舞う（#250 の段階 5）
             Set-IdFederationEnv -TargetKey 'netfx' -SiteUrl $NetFxUrl
 
-            # テスト専用のクライアント（#224）: net48 は一覧ごと差し替える
-            if ($null -ne $injected) {
-                $env:OAuth2ClientsInformation = $injected.NetFxValue
-            }
-
             # クレームの対応付け（#230）。net48 は 1 個の値（JSON 文字列）として読む。
             $env:UserClaimsMapping = '{' + (
                 ($script:UserClaimsMapping.GetEnumerator() | ForEach-Object {
@@ -909,18 +706,6 @@ public static class MpasTestTls
             Remove-Item Env:\RequestObjectExpireTimeSpanFromSeconds -ErrorAction SilentlyContinue
             Remove-Item Env:\OAuth2RefreshTokenExpireTimeSpanFromDays -ErrorAction SilentlyContinue
             $env:MPAS_SHORT_LIFETIMES = 'true'   # RT-188 を回してよい（#188）
-        }
-
-        # テスト専用のクライアント（#224）: 差し込みの値はテスト側へ持ち込まない。
-        #   テストには client_id だけを渡す（client_secret などは写す元と同じなので、構成ファイルから読める）。
-        if ($null -ne $injected) {
-            foreach ($k in $injected.CoreEnv.Keys) {
-                Remove-Item -Path ("Env:\" + $k) -ErrorAction SilentlyContinue
-            }
-            Remove-Item Env:\OAuth2ClientsInformation -ErrorAction SilentlyContinue
-            foreach ($k in $injectedIds.Keys) {
-                Set-Item -Path ("Env:\" + $k) -Value $injectedIds[$k]
-            }
         }
 
         # 役目は終わっている。テスト側へ持ち込まない。

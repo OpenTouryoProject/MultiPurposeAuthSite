@@ -854,7 +854,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
   **DDL の 3 方言と、既存データベースへの移行が要らない**
 - E2E テスト : **`RT-140.2`**（`pairwise` でも `/userinfo` がクレームを返す）、
   **`RT-140.3`**（毎回同じ値になり、クライアントが違えば違う値になる）。
-  `test.ps1` が **`subject_types=pairwise` のクライアント（`TestClient_5`）を差し込む**
+  **`subject_types=pairwise` のクライアント（`TestClient_5`）は種データが作る**（#264）
 
 > **制約 : 秘密（`SaltParameter`）を替えると、発行済みの PPID が全部変わる。**
 > **RP は `sub` を主キーとして保存している**ので、**RP 側では全員が別人になる。**
@@ -1405,7 +1405,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | fapi1 | 認可コード ＋ `client_secret` ＋ PKCE `S256`（併用） | 拒否（`unsupported_grant_type`）。併用の経路は、PKCE を検証だけに使い、`client_secret` の認証として扱うため。**段階 2 で「設計どおり」と判断**（D） |
 | fapi1 | Hybrid（`code id_token`） | 拒否。**ただし `error=access_denied` のリダイレクトで返る**（`/token` 側は `unsupported_grant_type`。経路でエラー コードがそろっていない）。**段階 2 で、要求の検証時に `unauthorized_client` を返すよう改めた**（B / C） |
 | fapi1 / fapi2 / fapi_ciba | Device AuthZ グラント | **修正前は client_secret だけで発行していた**（C-18）。修正後は `unauthorized_client` |
-| normal | CIBA | 拒否（`unsupported_grant_type`）。**ただしトークンの段階で。** 開始（`/ciba_authz`）は登録種別を見ないので、**利用者にプッシュ通知が届き、承認させた後で**拒否になる（`FA-5.1`）。**段階 2 で、開始の時点で `unauthorized_client` を返すよう改めた**（B / C）。測るために、TestClient4 を写して登録種別だけ normal にした `TestClient4_2` を、`test.ps1 -Launch` が環境変数で差し込む（公開鍵ごと写すので署名検証を通る。設定ファイルは変えない） |
+| normal | CIBA | 拒否（`unsupported_grant_type`）。**ただしトークンの段階で。** 開始（`/ciba_authz`）は登録種別を見ないので、**利用者にプッシュ通知が届き、承認させた後で**拒否になる（`FA-5.1`）。**段階 2 で、開始の時点で `unauthorized_client` を返すよう改めた**（B / C）。測るために、TestClient4 を写して登録種別だけ normal にした `TestClient4_2` を、**種データが作る**（公開鍵ごと写すので署名検証を通る。設定ファイルは変えない。#264） |
 
 
 **設計上の問題が 3 つある。**
@@ -2183,8 +2183,8 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 
 **英数字だけの秘密では、符号化しても同じ文字列になる**。
 このため**既存の E2E では現れず**（雛形の秘密は base64url の英数字）、
-**記号を含む秘密のクライアントを差し込んで測る**ようにした
-（`RT-237.1`〜`.3`。差し込みの仕組みは #224）。
+**記号を含む秘密のクライアントを用意して測る**ようにした
+（`RT-237.1`〜`.3`。**種データで作る**。#264。もとの仕組みは #224）。
 
 送り側（Open棟梁 の `CreateBasicAuthenticationHeaderValue`）は OpenTouryo #592 で符号化するようになった。
 **送り側だけを直すと、受け側が復号しない認可サーバに繋がらなくなる**ため、

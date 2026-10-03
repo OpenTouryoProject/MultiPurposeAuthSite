@@ -409,30 +409,51 @@ ALTER TABLE "RefreshTokenDictionary" MODIFY ("FamilyId" NOT NULL);
 > **`mem` と違い、状態が残る。** 同じデータベースを使い回すと、前回のテスト ユーザや
 > クライアント登録がそのまま残る。作り直したいときは、データベースを作り直す。
 
-### テスト専用クライアントを足せる件数には上限がある（#262 で踏んだ / #264）
+### テスト専用クライアントは、種データで作る（#264）
 
-**`test.ps1 -Launch` は、構成ファイルに無いクライアントを差し込む**（`TestClient_8` など）。
-**net48 版だけ、一覧ごと 1 本の環境変数で渡している。**
+**E2E は、構成ファイルに無いクライアント登録を要る**（`TestClient_8` など）。
+**サーバ側の種データが、テスト利用者の登録（`saml2OAuth2Data`）として作る。**
+
+```
+root/programs/CommonLibrary/Extensions/Sts/TestClients.cs   表（16 件）
+    ↓  AccountController.CreateTestUsers（IsDebug ＋ TestUserPWD）
+利用者 1 人 ＝ クライアント登録 1 件（client_name は利用者名そのもの）
+```
+
+| | |
+|---|---|
+| **構成ファイルに残すもの** | 自己テスト画面が名前で選ぶもの（`TestClient`〜`TestClient6`。`HomeController` に直書き）、`IdFederation`、サンプル RP |
+| **種データで作るもの** | **E2E だけが使うもの**（16 件。`Tests/README.md`） |
+
+- **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**
+- **`client_id` は固定値。** **`Sts.TestClients.Entries` と `Flows.KnownClients.SeededClientIds`
+  を同じ値にしておくこと**（E2E は構成ファイルを読む作りで、user store は読めない）
+- **件数の上限が無い。** user store は 1 件ずつ別の行になる
+
+#### 以前は環境変数で差し込んでいて、件数に上限があった（#262 で踏んだ）
+
+**net48 版だけ、クライアント一覧を 1 本の環境変数で渡していた。**
 
 ```
 net10.0 : appSettings__OAuth2ClientsInformation__<client_id>__<項目>   … 1 件ずつ足せる
 net48   : OAuth2ClientsInformation                                      … 一覧ごと差し替える
 ```
 
-**net48 の値は、1 件増えるごとに約 1.3 KB 伸びる**（写す元が JWK 2 本を持つため）。
-**Windows の環境ブロックは、変数すべてで 32,767 文字まで**である。
+**1 件増えるごとに約 1.3 KB 伸び**（写す元が JWK 2 本を持つため）、
+**Windows の環境ブロックは変数すべてで 32,767 文字**までだった。
 
 | 差し込み件数 | `OAuth2ClientsInformation` の長さ |
 |---|---|
-| 13 件 | 約 22.8 KB |
-| 16 件（いま） | 約 26.8 KB |
-| 17 件 | 約 28.2 KB（**他の変数と合わせて上限を超える**） |
+| 16 件（#262 の時点） | 約 26.2 KB |
+| 17 件 | 約 27.5 KB（**他の変数と合わせて上限を超える**） |
+| **0 件（#264 の後）** | **差し込まない**（構成ファイルの 7.4 KB だけ） |
 
-**超えると、こう出る。**
+**超えると、こう出た。** **同じ罠は他の環境変数でも起こりうる**ので、残しておく。
 
 - **IIS Express は起動する**（ポートは開き、プロセスも残る）
 - **が、全要求が HTTP 500 になる。** `/.well-known/openid-configuration` も 500
 - **`Log` に例外が出ない。** `IisExpress.out.log` には `HTTP status 500.0` だけが並ぶ
+- **`SmokeTests` が 12 件すべて落ちる**ので、「net48 版が起動していない」ようにしか見えない
 
 **切り分けは、同じ `applicationhost.config` で手で起動すること。**
 **手で起動すると 200 が返る**なら、原因はコードではなく**環境変数**である
@@ -441,15 +462,6 @@ net48   : OAuth2ClientsInformation                                      … 一�
 ```
 & "$env:ProgramFiles\IIS Express\iisexpress.exe" /config:<生成された applicationhost.config> /site:MultiPurposeAuthSite
 ```
-
-**したがって、クライアントを足す前に、既存のクライアントに登録項目を相乗りできないかを見る。**
-**登録項目は、向きが違えば干渉しない。**
-`TestClient_8` は `id_token_signed_response_alg`（**発行する側**。#129 の段階 2）と
-`token_endpoint_auth_signing_alg`（**受ける側**。#262）を同時に登録している。
-
-> **上限そのものを外すのは #264 である。** **#262 では扱っていない。**
-> 案は 2 つで、**(A) 使わないクライアントに `jwk_*` を写さない**（1 件の 66% がこれ）、
-> **(B) net48 も 1 件ずつ渡せる形にする**（環境変数ではなく `app.config` を書き換える、など）。
 
 ## 2. 構造
 
@@ -975,7 +987,7 @@ E2E で 2 件測っている。
 | `RT-151.1` | **`subject_types` を書かないクライアントの `sub` が、利用者名ではなく利用者 ID**（GUID）である |
 | `RT-151.2` | **`public` の `sub` は、クライアントが違っても同じ**（`pairwise` との対照） |
 
-**使うのは `TestClient_6` / `TestClient_7`**（`test.ps1 -Launch` が差し込む。**構成ファイルには無い**）。
+**使うのは `TestClient_6` / `TestClient_7`**（**構成ファイルには無い。** 種データが作る。#264）。
 
 > **既に使った `client_id` では、既定を測れない。**
 > **発行した `sub` は対応表に記録される**ので（#151 の段階 2）、

@@ -45,6 +45,7 @@
 //*  2026/10/02  玄人 幸道         ES384 / ES512 で署名する TestClient_9 / _10 を追加（#129 の段階 3）
 //*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 〜 _13 を追加（#129 の段階 4）
 //*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
+//*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
 //**********************************************************************************
 
 using System;
@@ -223,6 +224,52 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>同 PS512（#129 の段階 4）</summary>
         public const string TestClient_13 = "TestClient_13";
+
+        #region 種データで登録される client_id（#264）
+
+        /// <summary>
+        /// **種データ（`Sts.TestClients`）で登録されるクライアントの client_id**（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **以前は test.ps1 -Launch が環境変数で差し込み、client_id を `MPAS_<名前>` で渡していた。**
+        /// **net48 版は一覧ごと 1 本の環境変数**なので**件数に上限があり**（#262 で踏んだ）、
+        /// **利用者の登録（`saml2OAuth2Data`）に寄せた**（#264）。
+        ///
+        /// **user store は構成ファイルから読めない**ので、**client_id を固定値で持つ。**
+        /// **サーバ側の `Sts.TestClients.Entries` と同じ値にすること。**
+        /// 揃っていなければ「登録されていない」で落ちる。
+        /// </remarks>
+        private static readonly Dictionary<string, string> SeededClientIds
+            = new Dictionary<string, string>()
+            {
+                { KnownClients.TestClient_2,  "e2e0tc02000000000000000000000000" },
+                { KnownClients.TestClient_3,  "e2e0tc03000000000000000000000000" },
+                { KnownClients.TestClient_4,  "e2e0tc04000000000000000000000000" },
+                { KnownClients.TestClient_5,  "e2e0tc05000000000000000000000000" },
+                { KnownClients.TestClient_6,  "e2e0tc06000000000000000000000000" },
+                { KnownClients.TestClient_7,  "e2e0tc07000000000000000000000000" },
+                { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
+                { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
+                { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
+                { KnownClients.TestClient2_3, "e2e0tc23000000000000000000000000" },
+                { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
+                { KnownClients.TestClient_9,  "e2e0tc09000000000000000000000000" },
+                { KnownClients.TestClient_10, "e2e0tc10000000000000000000000000" },
+                { KnownClients.TestClient_11, "e2e0tc11000000000000000000000000" },
+                { KnownClients.TestClient_12, "e2e0tc12000000000000000000000000" },
+                { KnownClients.TestClient_13, "e2e0tc13000000000000000000000000" }
+            };
+
+        /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
+        /// <param name="clientName">クライアント名</param>
+        /// <returns>client_id（種データに無ければ null）</returns>
+        public static string SeededClientId(string clientName)
+        {
+            return KnownClients.SeededClientIds.TryGetValue(clientName ?? "", out string clientId)
+                ? clientId : null;
+        }
+
+        #endregion
 
         /// <summary>
         /// TestClient_2 の client_secret（#237）。
@@ -651,12 +698,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 sourceName = KnownClients.TestClient;
             }
 
+            // **client_id は固定値**（#264）。
+            //   **以前は test.ps1 -Launch が環境変数（`MPAS_<名前>`）で渡していた**が、
+            //   **サーバ側の種データ（`Sts.TestClients`）に寄せた**ので、環境変数を使わない。
+            //   **`-Launch` を付けずに、手で起動したサイトに対しても測れる**ようになった。
             string clientId = sourceName != null
-                ? Environment.GetEnvironmentVariable("MPAS_" + clientName.ToUpperInvariant()) : null;
+                ? KnownClients.SeededClientId(clientName) : null;
 
             Skip.If(string.IsNullOrEmpty(clientId),
-                "client_name=" + clientName + " は差し込まれていません"
-                + "（test.ps1 -Launch のときだけサイトへ差し込む。#224）。");
+                "client_name=" + clientName + " の登録がありません"
+                + "（種データは IsDebug ＋ TestUserPWD のときだけ作る。#264）。");
 
             // client_secret・redirect_uri・公開鍵は写す元と同じなので、構成ファイルの写す元から引ける。
             ClientRegistration source = Flows.Registration(client, sourceName);

@@ -60,25 +60,39 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient5` | 登録の `scope` で、要求してよいスコープを制限（#198） |
 | `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221） |
 
-**構成ファイルに無いクライアントを、`test.ps1 -Launch` が環境変数で差し込むこともある**（#224）。
+**構成ファイルに無いクライアントもある**（#224 / #264）。
 雛形にも実設定にも足さずに済むので、**特定の組み合わせを試すためだけのクライアント**に使う。
+
+**種データが、テスト利用者の登録（`saml2OAuth2Data`）として作る**（#264）。
+表は **`CommonLibrary/Extensions/Sts/TestClients.cs`** にあり、
+**`IsDebug` ＋ `TestUserPWD` のときだけ**作られる。
 
 | client_name | 何か | 引き方 |
 |---|---|---|
 | `TestClient4_2` | `TestClient4`（fapi_ciba）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
-| `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | `Flows.InjectedRegistration` |
-| `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | `Flows.InjectedRegistration` |
-| `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | `Flows.InjectedRegistration` |
-| `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | `Flows.InjectedRegistration` |
-| `TestClient_3` | 同じく写しで、**`client_secret` に `:` を含む**（`KnownClients.ColonSecret`）。符号化しないと資格情報として読めない値（#237） | `Flows.InjectedRegistration` |
-| `TestClient_4` | 同じく写しで、**`post_logout_redirect_uri` を登録**（`test_self_logout`）。ログアウト後に RP へ戻せるかを測る（#232） | `Flows.InjectedRegistration` |
+| `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | 同上 |
+| `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
+| `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | 同上 |
+| `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | 同上 |
+| `TestClient_3` | 同じく写しで、**`client_secret` に `:` を含む**（`KnownClients.ColonSecret`）。符号化しないと資格情報として読めない値（#237） | 同上 |
+| `TestClient_4` | 同じく写しで、**`post_logout_redirect_uri` を登録**（`test_self_logout`）。ログアウト後に RP へ戻せるかを測る（#232） | 同上 |
+| `TestClient_5` | 同じく写しで、**`subject_types = pairwise`**（#140 の段階 2） | 同上 |
+| `TestClient_6` / `_7` | **写しただけ**（`subject_types` を書かない）。**既定が public になった**ことを 2 つの client_id で測る（#151 の段階 4） | 同上 |
+| `TestClient_8`〜`_13` | 同じく写しで、**`id_token_signed_response_alg`** を `RS512` / `ES384` / `ES512` / `PS256` / `PS384` / `PS512` に（#129 の段階 2〜4）。`_8` は **`token_endpoint_auth_signing_alg = RS256`** も登録（#262） | 同上 |
 
-- net10.0 は `appSettings__OAuth2ClientsInformation__<client_id>__<項目>` で 1 件足し、
-  net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
-- **差し込むのは `-Launch` のときだけ。** 既に動いているサイトへ向けたときは、使うテストが Skip する
-- **秘密を差し替えたものは、写す元の秘密では認証できない。**
-  `Flows.InjectedRegistration` が `KnownClients` の定数を返すので、**test.ps1 と同じ値にしておくこと**
-- 秘密は JSON の文字列に素で埋める（net48 は一覧ごと差し替える）ので、**`"` `\` `'` は使わない**
+- **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
+  **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
+- **`client_id` は固定値。** E2E は構成ファイルを読む作りなので user store は読めない。
+  **`Flows.KnownClients.SeededClientIds` と `Sts.TestClients.Entries` を同じ値にしておくこと**
+- **`client_secret` を差し替えたものは、写す元の秘密では認証できない。**
+  **`KnownClients.SymbolSecret` / `ColonSecret` も、表と同じ値にしておくこと**
+- **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**（種データはサイト側が作る）
+- **`isResourceOwner` はどこでも分岐に使われていない**ので、**構成ファイルの登録と同じに振る舞う**
+
+> **以前は `test.ps1 -Launch` が環境変数で差し込んでいた**（#224）。
+> **net48 版だけ `OAuth2ClientsInformation` を一覧ごと差し替える**ため、
+> **件数に上限があった**（#262 で踏んだ。`TESTING.md` 1 節）。**#264 で寄せた。**
+
 
 **クレームの対応付け（`UserClaimsMapping`）も、同じやり方で差し込む**（#230）。
 

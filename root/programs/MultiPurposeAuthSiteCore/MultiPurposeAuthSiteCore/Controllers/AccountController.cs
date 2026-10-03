@@ -51,6 +51,7 @@
 //*  2026/10/01  玄人 幸道         利用者名とメアドの両方でサインインできるようにし、サインアップを見直した（#151 の段階 3）
 //*  2026/10/01  玄人 幸道         ID 連携の新規作成で preferred_username を優先（#151 の段階 4）
 //*  2026/10/03  玄人 幸道         テスト利用者の名前に接尾辞を付けられるようにした（#260）
+//*  2026/10/03  玄人 幸道         E2E専用のクライアント登録を種データにした（#264）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4879,6 +4880,46 @@ namespace MultiPurposeAuthSite.Controllers
                 {
                     user.UnstructuredData = SampleUnstructuredData;
                     await this.UserManager.UpdateAsync(user);
+                }
+            }
+
+            // **E2E 専用のクライアント登録**（#264）。
+            //   **以前は test.ps1 -Launch が環境変数で差し込んでいた**が、
+            //   **net48 版は一覧ごと 1 本の環境変数**で渡すため、**件数に上限があった**
+            //   （#262 で踏んだ。IIS Express が起動するのに全要求が 500 になる）。
+            //   **利用者の登録（saml2OAuth2Data）に寄せた**ので、**上限が無い。**
+            //
+            //   **接尾辞は付けない。** client_name は E2E が名前で引くため
+            //   （Sts.TestClients の表と、E2E の KnownClients を同じ値で揃える）。
+            //   **サイトごとに分ける必要も無い**（作った後は読むだけで、書き換え合わない。#260）。
+            foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
+            {
+                string saml2OAuth2Data = Sts.TestClients.CreateSaml2OAuth2Data(entry);
+
+                if (string.IsNullOrEmpty(saml2OAuth2Data))
+                {
+                    // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
+                    continue;
+                }
+
+                if (await this.UserManager.FindByNameAsync(entry.ClientName) == null)
+                {
+                    ApplicationUser user = ApplicationUser.CreateUser(
+                        entry.ClientName, entry.ClientName + "@gmail.com", true);
+
+                    // **client_id は固定値**（既定の Guid.NewGuid を上書きする）。
+                    user.ClientID = entry.ClientId;
+
+                    // **ロールは要らない**（このクライアントはサインインしない）。
+                    await this.UserManager.CreateAsync(user, password);
+                }
+
+                // **登録が無ければ入れる**（在れば触らない）。
+                //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
+                //   **書き込みを 1 回に閉じる。**
+                if (string.IsNullOrEmpty(Sts.DataProvider.Get(entry.ClientId)))
+                {
+                    Sts.DataProvider.Create(entry.ClientId, saml2OAuth2Data);
                 }
             }
         }

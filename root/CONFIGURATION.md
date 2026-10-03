@@ -77,7 +77,10 @@ set appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:443
 > 1 個の値として読むキー（`GetConfigValue`）は、上のとおり足せない。
 > net48 はクライアント一覧を 1 個の値（JSON 文字列）として読むので、
 > `FxContainerization=ON` のうえで `OAuth2ClientsInformation` を**一覧ごと差し替える**必要がある。
-> E2E はこれを使って、テスト専用のクライアントを差し込んでいる（`Tests/README.md`）。
+> **E2E は、これを使っていない**（#264）。テスト専用のクライアントは
+> **利用者の登録（`saml2OAuth2Data`）として種データで作る**ので、
+> **net48 の「一覧ごと差し替える」が要らない**（`Tests/README.md`）。
+> **一覧ごと差し替えると、環境ブロックの 32,767 文字に当たる**（`TESTING.md` 1 節）。
 
 ### `FxContainerization` — 環境変数を優先する（net48 / net10.0 の両方）
 
@@ -376,7 +379,16 @@ CreateJwkSetJson.exe
 | `TestClient3` | Device Authorization Grant。**`client_secret` を持たない**（パブリック クライアント） |
 | `TestClient4` | CIBA |
 | `TestClient5` | 登録の `scope` で、要求してよいスコープを制限した例（#198、E2E テスト用） |
+| `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221、E2E テスト用） |
 | `MVC_Sample` ほか | 絶対 URL の `redirect_uri` を持つサンプル |
+
+> **自己テスト画面は、この名前で選んでいる**（`HomeController`）。**消すと画面が動かない。**
+
+> **E2E だけが使うクライアントは、ここには無い**（#264）。
+> **テスト利用者の登録（`saml2OAuth2Data`）として種データが作る**
+> （`CommonLibrary/Extensions/Sts/TestClients.cs`。`IsDebug` ＋ `TestUserPWD` のときだけ）。
+> **一覧を環境変数で差し替えると、環境ブロックの 32,767 文字に当たる**ため
+> （`TESTING.md` 1 節）。
 
 ### `scope` — 要求してよいスコープ（任意）
 
