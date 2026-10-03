@@ -4512,7 +4512,7 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | | |
 |---|---|
-| 観点 | **以前は `?ret=OK_ABNORMAL_END` という URL に移るだけだった。**`OK_` が接頭辞で、その後ろが判定という形なので、**可否が読めず、失敗した理由も出ていなかった**（#246 の 3-a）。**画面（Razor）は実行時コンパイル**なので、ビルドでは分からない。ここでは login_hint が **端末（device_token）を登録していない 2 人目の利用者**（tanaka）なので、**認証要求が受け付けられず ABNORMAL_END で終わるのが正しい。** |
+| 観点 | **以前は `?ret=OK_ABNORMAL_END` という URL に移るだけだった。**`OK_` が接頭辞で、その後ろが判定という形なので、**可否が読めず、失敗した理由も出ていなかった**（#246 の 3-a）。**画面（Razor）は実行時コンパイル**なので、ビルドでは分からない。ここでは login_hint が **端末（device_token）を登録していない 2 人目の利用者**（tanaka_core）なので、**認証要求が受け付けられず ABNORMAL_END で終わるのが正しい。** |
 | 根拠 | #246 の 3-a / 3-b |
 | テスト | `RT24602_自己テストのCIBAボタンが判定と理由を画面に出す` |
 
@@ -5126,6 +5126,51 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - 作成の画面が再表示される（入力欄が在る）
 - **ロール名の欄のエラーになる**
 
+## RT-261.1 仕込んだ標準クレームが、profile / address スコープで /userinfo に出る
+
+| | |
+|---|---|
+| 観点 | **IdP として何を返せるのかが、触っても分からなかった**（#261）。入力画面は `usd1` / `usd2` の 2 欄で、`UserClaimsMapping` の既定は空だった。**入れ物（`UnstructuredData`）は JSON のまま**にしつつ、**`IsDebug` のときに標準クレームのサンプルを仕込む**ようにした。**雛形の対応付けも、設定ファイルにコメントで示してある。** |
+| 根拠 | OIDC Core §5.1 / §5.1.1 / §5.4 / #261 |
+| テスト | `RT26101_標準クレームのサンプルがuserinfoに出る` |
+
+**手順**
+
+1. profile と address を要求してトークンを取り、/userinfo を呼ぶ
+1. profile のクレームが、仕込んだ値で返る
+1. updated_at は数値で返る（NumericDate。OIDC Core §5.1）
+1. address は、副フィールドを持つオブジェクトで返る（OIDC Core §5.1.1）
+1. 入れていないキーは返らない
+
+**検証（合否を判定する）**
+
+- HTTP 200
+- given_name
+- family_name
+- nickname
+- profile
+- picture
+- website
+- gender
+- birthdate
+- zoneinfo
+- locale
+- updated_at の型が数値
+- updated_at の値
+- address が JSON オブジェクト
+- address.formatted
+- address.street_address
+- address.region
+- address.postal_code
+- address.country
+- middle_name は返らない（サンプルに入れていない）
+
+**補足**
+
+- **`name` と `address.locality` は、ここでは見ない。**雛形の対応付けは、その 2 つを **`usd1` / `usd2`（管理画面で入れられる 2 欄）**へ向けてある。**画面から入れた値が返ることは `RT-230.*` で測る**ので、**サンプルと二重に持たせていない**（#261 の判断）。
+- **`preferred_username` / `email` / `phone_number` もサンプルに入れていない。****`user:` で `ApplicationUser` から直に取れる**ため（#151 の段階 1）。
+- **管理画面で入れられるのは `usd1` / `usd2` の 2 欄だけ**である。**このサンプルは、管理画面で保存すると消える**（画面が持たないキーは、読み込みで捨てられ、保存で JSON ごと置き換わる）。**1 人目ではなく 2 人目に仕込んでいるのは、そのため**である。
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る
@@ -5591,5 +5636,5 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 | テスト | Skip の理由（Issue 番号・実測日・実測結果） |
 |---|---|
-| `RT24504_redirect_uriは大文字小文字まで一致しなければ通らない` | 未修正: ANALYSIS-IdP.md の C-10（`redirect_uri` の比較が大文字小文字を無視）。`CheckRedirectUri` が `ToLower()` 同士で比べているため、パスの大文字小文字だけが違う値でも照合が通る。実測 2026/09/29（net10.0版 (MultiPurposeAuthSiteCore)）: **認可コードが発行された。**期待する動作 = 単純文字列比較（RFC 6749 §3.1.2）で照合し、認可コードを発行しない。ロードマップのフェーズ 2（C-10）で直す。 |
+| `RT24504_redirect_uriは大文字小文字まで一致しなければ通らない` | 未修正: ANALYSIS-IdP.md の C-10（`redirect_uri` の比較が大文字小文字を無視）。`CheckRedirectUri` が `ToLower()` 同士で比べているため、パスの大文字小文字だけが違う値でも照合が通る。実測 2026/09/29（net48版 (MultiPurposeAuthSite)）: **認可コードが発行された。**期待する動作 = 単純文字列比較（RFC 6749 §3.1.2）で照合し、認可コードを発行しない。ロードマップのフェーズ 2（C-10）で直す。 |
 

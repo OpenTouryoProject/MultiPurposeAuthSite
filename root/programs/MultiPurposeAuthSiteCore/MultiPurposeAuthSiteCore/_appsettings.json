@@ -467,6 +467,41 @@
     //   **sub は利用者を指す識別子なので、そこに利用者名を載せてはならない。**
     //   sub は「その RP の中で利用者を指す識別子」、preferred_username は「表示・照合用の属性」。
     //   **RP が主キーに使ってよいのは sub だけ**で、preferred_username は変わりうる（改名）。
+    // **標準クレームを返すときのサンプル**（#261）。**既定は空のまま**にしてある。
+    //   左がクレーム名（OIDC Core 5.1）、右が値の在り処。
+    //     ・`UnstructuredData`（JSON）の中のパス … `.` で辿る（例 : address.postal_code）
+    //     ・`user:<項目>` … ApplicationUser から直に取る（UserName / Email / PhoneNumber）
+    //   **IsDebug のとき、2 人目のテスト利用者（tanaka）に、この形の JSON が入る**
+    //   （AccountController.SampleUnstructuredData）。
+    //
+    //   "UserClaimsMapping": {
+    //     "name":                   "name",
+    //     "family_name":            "family_name",
+    //     "given_name":             "given_name",
+    //     "nickname":               "nickname",
+    //     "profile":                "profile",
+    //     "picture":                "picture",
+    //     "website":                "website",
+    //     "gender":                 "gender",
+    //     "birthdate":              "birthdate",
+    //     "zoneinfo":               "zoneinfo",
+    //     "locale":                 "locale",
+    //     "updated_at":             "updated_at",
+    //     "address.formatted":      "address.formatted",
+    //     "address.street_address": "address.street_address",
+    //     "address.locality":       "address.locality",
+    //     "address.region":         "address.region",
+    //     "address.postal_code":    "address.postal_code",
+    //     "address.country":        "address.country",
+    //     "preferred_username":     "user:UserName"
+    //   }
+    //
+    //   **管理画面で入れられるのは usd1 / usd2 の 2 欄だけ**である。
+    //   それ以外のキーは、**導入する側が入れる**（画面を足すか、別の経路で書く）。
+    //
+    //   **E2E だけは、name と address.locality を usd1 / usd2 に向けている**（test.ps1）。
+    //     **画面から入れた値が返ることを測り続けるため**である（RT-230.*）。
+    //     そのため **E2E の報告書には `name ← usd1` と出る。** 上のサンプルとは違う。
     "UserClaimsMapping": {
     },
 

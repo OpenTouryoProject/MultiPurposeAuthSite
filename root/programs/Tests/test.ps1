@@ -243,9 +243,31 @@ $iisTmpl  = Join-Path $env:ProgramFiles 'IIS Express\config\templates\PersonalWe
 #   値は UnstructuredData の中のキー（usd1 / usd2 は /Manage/AddUnstructuredData で入れられる）
 #   または user:<項目>。**両サイトへ同じ内容を差し込む**（RT-230 が参照する）。
 $script:UserClaimsMapping = [ordered]@{
+    # **画面（usd1 / usd2）から入れた値を測る分**（#230。RT-230.*）。
+    #   **ここは標準クレームの名前に変えない。** 管理画面で入れられるのは この 2 欄だけなので、
+    #   変えると「画面から入れた値が返る」経路を測れなくなる（#261 の判断）。
     'name'                = 'usd1'
     'address.locality'    = 'usd2'
+    # **ApplicationUser から直に取る分**（#151 の段階 1）。
     'preferred_username'  = 'user:UserName'
+    # **仕込んだ標準クレームを測る分**（#261。2 人目の利用者の UnstructuredData）。
+    #   キー名とクレーム名が同じなので、対応付けは素直に 1 対 1 になる。
+    'given_name'          = 'given_name'
+    'family_name'         = 'family_name'
+    'nickname'            = 'nickname'
+    'profile'             = 'profile'
+    'picture'             = 'picture'
+    'website'             = 'website'
+    'gender'              = 'gender'
+    'birthdate'           = 'birthdate'
+    'zoneinfo'            = 'zoneinfo'
+    'locale'              = 'locale'
+    'updated_at'          = 'updated_at'
+    'address.formatted'   = 'address.formatted'
+    'address.street_address' = 'address.street_address'
+    'address.region'      = 'address.region'
+    'address.postal_code' = 'address.postal_code'
+    'address.country'     = 'address.country'
 }
 
 # **テスト利用者の接尾辞（#260）。**

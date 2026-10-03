@@ -610,7 +610,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。AntiForgery は**もともとアプリごとに違う名前**になるので対象外。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
-| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4） |
+| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4）。**サンプルは下の「標準クレームを返す」**（#261） |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
 | `TestUserSuffix` | `""`（空） | **E2E が渡す。手で設定しない** | **テスト利用者の名前に付ける接尾辞**（#260）。空なら `super_tanaka` / `tanaka`。**E2E は 2 つのサイトを同時に立てる**ので、**DB ストアでは同じ利用者の行を書き換え合う。**`test.ps1` がサイトごとに `_core` / `_netfx` を渡して分ける。**初期化済みの DB でも、居なければ作る**ので、接尾辞を変えても DB を作り直さなくてよい |
@@ -728,6 +728,92 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > 本番の値そのものは書かない。
 
 ---
+
+## 標準クレームを返す（#261）
+
+**`profile` / `address` のクレームは、設定の対応付けで返す**（#230）。
+**この実装は氏名・住所の項目を持たない。** 入れ物は `ApplicationUser.UnstructuredData`（JSON）で、
+**中身は導入する側が決める**という方針である（`Extensions/Sts/UserClaims.cs`）。
+
+### 入れ物（`UnstructuredData`）
+
+**OIDC Core 5.1 の標準クレームを、そのままのキー名で入れた例。**
+
+```json
+{
+  "given_name": "Taro",
+  "family_name": "Tanaka",
+  "nickname": "taro",
+  "profile": "https://example.com/taro",
+  "picture": "https://example.com/taro.png",
+  "website": "https://example.com/",
+  "gender": "male",
+  "birthdate": "1990-01-23",
+  "zoneinfo": "Asia/Tokyo",
+  "locale": "ja-JP",
+  "updated_at": 1759449600,
+  "address": {
+    "formatted": "100-0001 1-1 Chiyoda, Chiyoda-ku, Tokyo, JP",
+    "street_address": "1-1 Chiyoda, Chiyoda-ku",
+    "region": "Tokyo",
+    "postal_code": "100-0001",
+    "country": "JP"
+  }
+}
+```
+
+**`IsDebug` のときは、2 人目のテスト利用者（`tanaka`）にこれが入る**
+（`AccountController.SampleUnstructuredData`）。**E2E が `RT-261.1` で測っている。**
+
+### 対応付け（`UserClaimsMapping`）
+
+**キー名をクレーム名に合わせておけば、対応付けは 1 対 1 になる。**
+
+```json
+"UserClaimsMapping": {
+  "name":                   "name",
+  "family_name":            "family_name",
+  "given_name":             "given_name",
+  "birthdate":              "birthdate",
+  "updated_at":             "updated_at",
+  "address.postal_code":    "address.postal_code",
+  "address.country":        "address.country",
+  "preferred_username":     "user:UserName"
+}
+```
+
+| 値の書き方 | 意味 |
+|---|---|
+| `name` | `UnstructuredData` の `name` |
+| `address.postal_code` | `UnstructuredData` の `address` の中の `postal_code`（`.` で辿る） |
+| `user:UserName` | `ApplicationUser` から直に取る（白名簿は `UserName` / `Email` / `PhoneNumber`） |
+
+**`address.<副フィールド>` は、まとめて 1 つの `address` オブジェクトに組み立てて返す**（OIDC Core 5.1.1）。
+
+### 型は、入れた側の JSON が決める
+
+**`UserClaimsMapping` はクレーム名と在り処だけを持ち、型は持たない。**
+**`UnstructuredData` に入れた JSON の型が、そのまま返る**（#261）。
+
+| JSON | 返る型 |
+|---|---|
+| `"updated_at": 1759449600` | **数値**（OIDC Core 5.1 の NumericDate。これが正しい） |
+| `"updated_at": "1759449600"` | 文字列（**引用符付きで返るので、RP が落ちうる**） |
+
+> **以前は、すべて文字列にして返していた**（#261 で直した）。
+> **#184 と同じ種類の誤り**である（あちらは JWT のクレーム、こちらは `UnstructuredData` 由来）。
+
+### 管理画面で入れられるのは `usd1` / `usd2` だけ
+
+**`Manage/AddUnstructuredData` の画面は 2 欄しか持たない。**
+
+> **画面で保存すると、それ以外のキーは消える。**
+> 画面の ViewModel（`ManageAddUnstructuredDataViewModel`）は `usd1` / `usd2` しか持たないので、
+> **読み込みで他のキーが捨てられ、保存で JSON ごと置き換わる**
+> （`user.UnstructuredData = JsonConvert.SerializeObject(model)`）。
+
+**標準クレームを運用で入れるなら、画面を足すか、別の経路で `UnstructuredData` を書くことになる。**
+**#261 では画面を変えていない**（入れ物の中身は導入する側が決める、という方針を保つため）。
 
 ## 12. 改名した設定キー（#236）
 

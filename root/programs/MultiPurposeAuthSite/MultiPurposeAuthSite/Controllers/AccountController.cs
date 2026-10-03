@@ -4481,6 +4481,49 @@ namespace MultiPurposeAuthSite.Controllers
         /// MvcApplication(Global.asax).Application_Startからコチラに移動してきた。
         /// </summary>
         /// <summary>
+        /// 2 人目のテスト利用者に仕込む、標準クレームのサンプル（#261）。
+        /// </summary>
+        /// <remarks>
+        /// **OIDC Core 5.1 の標準クレームを、`UnstructuredData`（JSON）に入れた例**である。
+        /// **`UserClaimsMapping` で対応付けると、`/userinfo` と id_token に出る**（#230）。
+        /// 雛形の対応付けは `_appsettings.json` / `_app.config` にコメントで置いてある。
+        ///
+        /// **`name` と `address.locality` は、わざと入れていない。**
+        /// 雛形の対応付けは、その 2 つを **`usd1` / `usd2`（管理画面で入れられる 2 欄）**に
+        /// 向けてある（**画面から入れた値が返ることを E2E で測り続けるため**。`RT-230.*`）。
+        ///
+        /// **`preferred_username` / `email` / `phone_number` も入れていない。**
+        /// **`user:` で `ApplicationUser` から直に取れる**ので、二重に持たない（#151 の段階 1）。
+        ///
+        /// > **この JSON は、管理画面で保存すると消える。**
+        /// > 画面（`ManageAddUnstructuredDataViewModel`）は `usd1` / `usd2` しか持たないので、
+        /// > **読み込みで他のキーが捨てられ、保存で JSON ごと置き換わる。**
+        /// > **仕込み先を 2 人目にしてあるのは、そのため**である
+        /// > （`RT-230.*` は 1 人目の画面を叩く）。
+        /// </remarks>
+        private const string SampleUnstructuredData =
+            "{"
+            + "\"given_name\":\"Taro\","
+            + "\"family_name\":\"Tanaka\","
+            + "\"nickname\":\"taro\","
+            + "\"profile\":\"https://example.com/taro\","
+            + "\"picture\":\"https://example.com/taro.png\","
+            + "\"website\":\"https://example.com/\","
+            + "\"gender\":\"male\","
+            + "\"birthdate\":\"1990-01-23\","
+            + "\"zoneinfo\":\"Asia/Tokyo\","
+            + "\"locale\":\"ja-JP\","
+            + "\"updated_at\":1759449600,"
+            + "\"address\":{"
+            + "\"formatted\":\"100-0001 1-1 Chiyoda, Chiyoda-ku, Tokyo, JP\","
+            + "\"street_address\":\"1-1 Chiyoda, Chiyoda-ku\","
+            + "\"region\":\"Tokyo\","
+            + "\"postal_code\":\"100-0001\","
+            + "\"country\":\"JP\""
+            + "}"
+            + "}";
+
+        /// <summary>
         /// テスト利用者を作る（IsDebug ＋ TestUserPWD が在るときだけ）。
         /// </summary>
         /// <returns>Task</returns>
@@ -4529,10 +4572,27 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = ApplicationUser.CreateUser(
                     normalName, normalName + "@gmail.com", true);
 
+                // **標準クレームのサンプルを持たせる**（#261）。
+                user.UnstructuredData = SampleUnstructuredData;
+
                 if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
                 {
                     await this.UserManager.AddToRoleAsync(
                         (await this.UserManager.FindByNameAsync(normalName)).Id, Const.Role_User);
+                }
+            }
+            else
+            {
+                // **既に居る利用者にも、空なら入れる**（#261）。
+                //   **#260 より前に作られた DB を、作り直させないため。**
+                //   **空のときだけ**なので、利用者が自分で入れた値は上書きしない。
+                ApplicationUser user = await this.UserManager.FindByNameAsync(normalName);
+
+                if (user != null
+                    && string.IsNullOrEmpty(user.UnstructuredData))
+                {
+                    user.UnstructuredData = SampleUnstructuredData;
+                    await this.UserManager.UpdateAsync(user);
                 }
             }
         }

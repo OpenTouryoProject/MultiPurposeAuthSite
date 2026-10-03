@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/25  玄人 幸道         新規（profile / address のクレームを設定で対応付ける。#230）
+//*  2026/10/03  玄人 幸道         クレームの型をJSONのまま返す（updated_atは数値）（#261）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -276,7 +277,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             try
             {
-                return JsonConvert.DeserializeObject(user.UnstructuredData) as JObject;
+                // **日付らしい文字列を DateTime にしない**（#261）。
+                //   既定（`DateParseHandling.DateTime`）だと `"1990-01-23"`（birthdate）が
+                //   `JTokenType.Date` になり、**文字列に戻すときに書式が変わる。**
+                //   **クレームの値は JSON の形のまま扱いたい**ので、素の文字列で読む。
+                JsonSerializerSettings settings = new JsonSerializerSettings()
+                {
+                    DateParseHandling = DateParseHandling.None
+                };
+
+                return JsonConvert.DeserializeObject(user.UnstructuredData, settings) as JObject;
             }
             catch
             {
@@ -357,6 +367,23 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// <summary>JSON の値を、クレームの値にする（空は null）</summary>
         /// <param name="token">JToken</param>
         /// <returns>値（空なら null）</returns>
+        /// <remarks>
+        /// **JSON の型を保つ**（#261）。
+        ///
+        /// **`updated_at` は数値である**（OIDC Core 5.1。NumericDate ＝ エポックからの秒数）。
+        /// 以前は**すべて文字列にしていた**ので、`"1759449600"` のように**引用符付きで返っていた。**
+        /// **#184 と同じ種類の誤り**である（あちらは JWT のクレーム、こちらは `UnstructuredData` 由来）。
+        ///
+        /// | JSON の型 | 返す型 |
+        /// |---|---|
+        /// | 数値（整数 / 小数） | **数値のまま** |
+        /// | 真偽値 | **真偽値のまま** |
+        /// | 文字列 | 文字列（空なら null） |
+        /// | オブジェクト・配列 | そのまま（`address` を丸ごと持っている場合） |
+        ///
+        /// **型を決めるのは、入れた側（`UnstructuredData` の JSON）である。**
+        /// 設定（`UserClaimsMapping`）はクレーム名と在り処だけを持ち、型は持たない。
+        /// </remarks>
         private static object ToClaimValue(JToken token)
         {
             if (token == null || token.Type == JTokenType.Null)
@@ -368,6 +395,21 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 // オブジェクト・配列は、そのまま返す（`address` を丸ごと持っている場合）。
                 return token;
+            }
+
+            if (token.Type == JTokenType.Integer)
+            {
+                return (long)token;
+            }
+
+            if (token.Type == JTokenType.Float)
+            {
+                return (double)token;
+            }
+
+            if (token.Type == JTokenType.Boolean)
+            {
+                return (bool)token;
             }
 
             string value = (string)token;
