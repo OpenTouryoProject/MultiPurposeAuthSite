@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（#257）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/03  玄人 幸道         管理画面のテストを同じコレクションに入れた（#260）
 //**********************************************************************************
 
 using System;
@@ -63,8 +65,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// **net48 版と net10.0 版の両方で測る**（#258 で移植した。それまでは net48 版だけだった）。
     /// </remarks>
+    [Collection(UsersAdminTests.AdminScreenCollection)]
     public class UsersAdminTests : TargetTestBase
     {
+        /// <summary>
+        /// **管理画面を管理者で駆動する**テストのコレクション（#260）。
+        /// </summary>
+        /// <remarks>
+        /// **同じコレクションのクラスは、並行して動かない。**
+        ///
+        /// `UsersAdmin` と `RolesAdmin` は、**同じ管理者でサインインし、利用者とロールを書く。**
+        /// 並行すると、**片方の変更でもう片方の認証 Cookie が無効になる**ことがある
+        /// （ASP.NET Identity は `SecurityStamp` で Cookie を検証する）。
+        ///
+        /// **実測（2026/10/03。`ora`）** : 2 回に 1 回ほど、`RT-257.12` が
+        /// **HTTP 200 のはずのところで 302**（サインイン画面へのリダイレクト）になった。
+        /// **このコレクションに入れると、落ちなくなる。**
+        /// </remarks>
+        internal const string AdminScreenCollection = "管理画面（管理者でサインインする）";
+
         /// <summary>コンストラクタ</summary>
         /// <param name="output">ITestOutputHelper</param>
         public UsersAdminTests(ITestOutputHelper output) : base(output)
@@ -87,7 +106,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**両方が、それぞれの列に出ている**ことを押さえる。",
                     "#151 の段階 3 / #257");
 
-                r.Target("利用者 = " + TestEnv.TestUserName);
+                r.Target("利用者 = " + TestEnv.TestUserName(targetKey));
 
                 r.Step("(1) 管理者で一覧を開く");
 
@@ -99,13 +118,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) テスト利用者の行を読む");
 
-                string email = UsersAdmin.FindEmail(body, TestEnv.TestUserName);
+                string email = UsersAdmin.FindEmail(body, TestEnv.TestUserName(targetKey));
 
                 r.Verify("テスト利用者の行が在る",
                     email != null, "在る", (email != null) ? "在る" : "**無い**");
 
                 r.VerifyEqual("**メアドの列に、その利用者のメアドが出る**",
-                    TestEnv.TestUserEmail, email ?? "（無し）");
+                    TestEnv.TestUserEmail(targetKey), email ?? "（無し）");
 
                 r.Note("**利用者名の列とメアドの列を、別に読んでいる。**"
                     + "**同じ値が両方に出ていた**のが、段階 3 より前の姿である"

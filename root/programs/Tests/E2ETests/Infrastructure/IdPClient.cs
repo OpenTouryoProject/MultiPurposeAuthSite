@@ -51,6 +51,7 @@
 //*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
 //*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System;
@@ -384,7 +385,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// UserStoreType=mem のとき、利用者は初回アクセスで作成される。
         ///
         /// **2 人目の利用者も、同じパスワード（TestUserPWD）で作られる。**
-        /// 認証サイトは IsDebug のとき super_tanaka@gmail.com と tanaka@gmail.com を作る
+        /// 認証サイトは IsDebug のとき super_tanaka / tanaka を作る
+        /// （**ターゲットごとに接尾辞が付く**。#260）
         /// （AccountController の CreateData）。EX-8.4 は、その 2 人目を使う。
         /// </summary>
         /// <param name="userName">サインインする利用者（null ならテスト ユーザ）</param>
@@ -402,7 +404,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             await this.SignInCoreAsync(
-                userName ?? TestEnv.TestUserName, this.Config.Get("TestUserPWD"));
+                userName ?? TestEnv.TestUserName(this.Target.Key), this.Config.Get("TestUserPWD"));
         }
 
         /// <summary>
@@ -412,7 +414,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <remarks>
         /// **利用者・ロールの管理画面は `SystemAdmin` ロールを要求する**
         /// （`UsersAdminController` の `Authorize`）。
-        /// **雛形のテスト利用者（super_tanaka）は `User` / `Admin` しか持たない**ので、
+        /// **雛形のテスト利用者（super_tanaka…）は `User` / `Admin` しか持たない**ので、
         /// 管理画面を測るには、こちらで入る必要がある。
         ///
         /// **利用者名はメアドの「@」より前**（#151 の段階 3 で、そう作られる）。

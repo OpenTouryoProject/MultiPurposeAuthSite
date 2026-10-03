@@ -47,6 +47,7 @@
 //*  2026/09/30  玄人 幸道         ID 連携の鍵を (iss, sub) にし、iss の検証と PKCE(S256) を追加（#140 の段階 3）
 //*  2026/10/01  玄人 幸道         利用者名とメアドの両方でサインインできるようにし、サインアップを見直した（#151 の段階 3）
 //*  2026/10/01  玄人 幸道         ID 連携の新規作成で preferred_username を優先（#151 の段階 4）
+//*  2026/10/03  玄人 幸道         テスト利用者の名前に接尾辞を付けられるようにした（#260）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4479,6 +4480,63 @@ namespace MultiPurposeAuthSite.Controllers
         /// より後に動く処理の実装位置が不明だったので、巡り巡って
         /// MvcApplication(Global.asax).Application_Startからコチラに移動してきた。
         /// </summary>
+        /// <summary>
+        /// テスト利用者を作る（IsDebug ＋ TestUserPWD が在るときだけ）。
+        /// </summary>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **名前に接尾辞を付けられる**（`TestUserSuffix`。#260）。**空なら従来どおり。**
+        ///
+        /// **E2E は net48 版と net10.0 版を同時に立てて、同じケースを両方に流す。**
+        /// **DB ストアでは 1 つの DB を共有する**ため、分けないと
+        /// **同じ利用者の属性（`DeviceToken` / `UnstructuredData`）を書き換え合う。**
+        ///
+        /// **居なければ作る**（**初期化済みの DB でも呼ばれる**）。
+        /// **接尾辞を変えても、DB を作り直さなくてよい**ようにするため。
+        /// </remarks>
+        private async Task CreateTestUsers()
+        {
+            string password = Config.TestUserPWD;
+
+            if (!Config.IsDebug
+                || string.IsNullOrWhiteSpace(password))
+            {
+                return;
+            }
+
+            string suffix = Config.TestUserSuffix;
+            string superName = "super_tanaka" + suffix;
+            string normalName = "tanaka" + suffix;
+
+            // 管理者ユーザを作成
+            if (await this.UserManager.FindByNameAsync(superName) == null)
+            {
+                ApplicationUser user = ApplicationUser.CreateUser(
+                    superName, superName + "@gmail.com", true);
+
+                if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
+                {
+                    await this.UserManager.AddToRoleAsync(
+                        (await this.UserManager.FindByNameAsync(superName)).Id, Const.Role_User);
+                    await this.UserManager.AddToRoleAsync(
+                        (await this.UserManager.FindByNameAsync(superName)).Id, Const.Role_Admin);
+                }
+            }
+
+            // 一般ユーザを作成
+            if (await this.UserManager.FindByNameAsync(normalName) == null)
+            {
+                ApplicationUser user = ApplicationUser.CreateUser(
+                    normalName, normalName + "@gmail.com", true);
+
+                if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
+                {
+                    await this.UserManager.AddToRoleAsync(
+                        (await this.UserManager.FindByNameAsync(normalName)).Id, Const.Role_User);
+                }
+            }
+        }
+
         private async Task CreateData()
         {
             // ロックを取得する
@@ -4512,6 +4570,11 @@ namespace MultiPurposeAuthSite.Controllers
                     // DBMS Providerの場合、
                     if (await DataAccess.IsDBMSInitialized())
                     {
+                        // **初期化済みでも、テスト利用者だけは作り足す**（#260）。
+                        //   **接尾辞（TestUserSuffix）を変えたら、その利用者は未作成**である。
+                        //   **DB を作り直させないため**に、足りなければここで作る。
+                        await this.CreateTestUsers();
+
                         // 初期化済み。
                         return; // break;
                     }
@@ -4547,32 +4610,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region テスト・ユーザ
 
-                string password = Config.TestUserPWD;
-
-                if (Config.IsDebug
-                    && !string.IsNullOrWhiteSpace(password))
-                {
-                    // 管理者ユーザを作成
-                    user = ApplicationUser.CreateUser("super_tanaka", "super_tanaka@gmail.com", true);
-
-                    result = await this.UserManager.CreateAsync(user, password);
-                    if (result.Succeeded)
-                    {
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka")).Id, Const.Role_User);
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka")).Id, Const.Role_Admin);
-                    }
-
-                    // 一般ユーザを作成
-                    user = ApplicationUser.CreateUser("tanaka", "tanaka@gmail.com", true);
-                    result = await this.UserManager.CreateAsync(user, password);
-                    if (result.Succeeded)
-                    {
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("tanaka")).Id, Const.Role_User);
-                    }
-                }
+                await this.CreateTestUsers();
 
                 #endregion
 

@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -33,6 +33,7 @@
 //*  2026/09/25  玄人 幸道         クライアント認証（RT-234.4 / .5）を追加し、各要求に資格情報を添えた（#234 の段階 3）
 //*  2026/09/27  玄人 幸道         長い jti でも使い切りが効くことを追加（#243）
 //*  2026/09/28  玄人 幸道         自己テストの CIBA ボタン（RT-246.2）を追加（#246 の 3-a）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System;
@@ -83,7 +84,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             return RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId, new Dictionary<string, object>()
             {
-                { "login_hint", TestEnv.TestUserName },
+                // **static ヘルパなので、client からターゲットを引く**（#260）。
+                { "login_hint", TestEnv.TestUserName(client.Target.Key) },
                 { "binding_message", bindingMessage }
             });
         }
@@ -109,7 +111,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
                 string bindingMessage = "E2E-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（/ros を経由しない。認証デバイスとプッシュ通知は、テストで置き換える）");
 
                 r.Step("(1) 利用者 : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -348,7 +350,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string jws = await RequestObjectBuilder.CreateCibaAsync(
                     client, reg.ClientId, new Dictionary<string, object>()
                     {
-                        { "login_hint", TestEnv.TestUserName },
+                        { "login_hint", TestEnv.TestUserName(targetKey) },
                         { "binding_message", "E2E-aud" },
                         { "aud", otherAud }
                     });
@@ -399,7 +401,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 string jws = await RequestObjectBuilder.CreateCibaAsync(
                     client, reg.ClientId, new Dictionary<string, object>()
                     {
-                        { "login_hint", TestEnv.TestUserName },
+                        { "login_hint", TestEnv.TestUserName(targetKey) },
                         { "binding_message", "E2E-no-aud" },
                         { RequestObjectBuilder.RemoveClaim, "aud" }
                     });
@@ -678,7 +680,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**可否が読めず、失敗した理由も出ていなかった**（#246 の 3-a）。"
                     + "**画面（Razor）は実行時コンパイル**なので、ビルドでは分からない。"
                     + "ここでは login_hint が **端末（device_token）を登録していない 2 人目の利用者**"
-                    + "（" + TestEnv.SecondUserName + "）なので、"
+                    + "（" + TestEnv.SecondUserName(targetKey) + "）なので、"
                     + "**認証要求が受け付けられず ABNORMAL_END で終わるのが正しい。**",
                     "#246 の 3-a / 3-b");
 

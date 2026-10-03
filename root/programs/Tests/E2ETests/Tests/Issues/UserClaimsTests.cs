@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/25  玄人 幸道         新規（#230）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/03  玄人 幸道         既定の利用者の行を書くコレクションに入れた（#260）
 //**********************************************************************************
 
 using System;
@@ -60,6 +62,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     ///
     /// **値は既定の利用者に入るので、最後に消す**（他のテストへ持ち越さない）。
     /// </remarks>
+    // **既定の利用者の行を書くので、CIBA の端末登録と並行させない**（#260）。
+    //   どちらも同じ行を UPDATE するため、並行すると先に書いた値が消える。
+    [Collection(Tests.Extended.CibaTests.DeviceCollection)]
     public class UserClaimsTests : TargetTestBase
     {
         /// <summary>コンストラクタ</summary>
@@ -131,7 +136,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.VerifyEqual("name が、usd1 に入れた値で返る", fullName, userInfo.String("name") ?? "（無し）");
 
                     r.VerifyEqual("preferred_username が、UserName で返る",
-                        TestEnv.TestUserName, userInfo.String("preferred_username") ?? "（無し）");
+                        TestEnv.TestUserName(targetKey), userInfo.String("preferred_username") ?? "（無し）");
 
                     r.Step("(4) address が、副フィールドを持つオブジェクトで返る");
 

@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/30  玄人 幸道         新規（#140 の段階 2）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System.Threading.Tasks;
@@ -111,9 +112,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     "返る", string.IsNullOrEmpty(sub) ? "**返らない**" : "返った（値は伏せる）");
 
                 r.Verify("sub が利用者名そのものではない",
-                    sub != TestEnv.TestUserName,
+                    sub != TestEnv.TestUserName(targetKey),
                     "利用者名ではない",
-                    (sub == TestEnv.TestUserName) ? "**利用者名がそのまま出ている**" : "利用者名ではない");
+                    (sub == TestEnv.TestUserName(targetKey)) ? "**利用者名がそのまま出ている**" : "利用者名ではない");
 
                 r.Step("(3) /userinfo を叩く");
 

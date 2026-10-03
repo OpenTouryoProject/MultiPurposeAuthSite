@@ -248,6 +248,19 @@ $script:UserClaimsMapping = [ordered]@{
     'preferred_username'  = 'user:UserName'
 }
 
+# **テスト利用者の接尾辞（#260）。**
+#   **2 つのサイトを同時に立てるので、DB ストアでは 1 つの DB を共有する。**
+#   分けないと、**同じ利用者の DeviceToken / UnstructuredData を書き換え合って**
+#   間欠で落ちる（RT-230.* / RT-233.* / EX-8.*）。
+#   **mem では各サイトが自前のストア（プロセス内）を持つので、もともと起きない。**
+#
+#   サイト側は appSettings の TestUserSuffix として読み（種データの名前に付く）、
+#   テスト側は MPAS_<対象>_TESTUSER_SUFFIX として読む（同じ値を見る）。
+#   **上流（ID フェデレーションの IdP）には渡さない。** 別の DB なので分ける必要が無く、
+#   渡すと「上流に居ない利用者」でサインインしようとして落ちる。
+$script:TestUserSuffixCore  = '_core'
+$script:TestUserSuffixNetFx = '_netfx'
+
 # **ID フェデレーションの下流として振る舞うための設定（#250 の段階 5）。**
 #   上流は store\ のコンテナ（https://localhost:44301）で、**test.ps1 の管理外**である
 #   （建っていなければ、連携のテストは Skip される）。
@@ -692,6 +705,12 @@ public static class MpasTestTls
         $env:EnableImplicitGrantType = 'true'
         $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
 
+        # **テスト利用者をサイトごとに分ける**（#260）。
+        #   2 つのサイトを同時に立てるので、DB ストアでは 1 つの DB を共有する。
+        #   分けないと、同じ利用者の DeviceToken / UnstructuredData を書き換え合って
+        #   間欠で落ちる。**mem では各サイトが自前のストアを持つので、もともと起きない。**
+        $env:TestUserSuffix = $script:TestUserSuffixCore
+
         # ID フェデレーションの下流として振る舞う（#250 の段階 5）
         Set-IdFederationEnv -TargetKey 'core' -SiteUrl $Url
 
@@ -771,6 +790,7 @@ public static class MpasTestTls
         Write-Host '起動しました。' -ForegroundColor Green
         $env:MPAS_CORE_BASEURL = $Url
         $env:MPAS_CORE_FCM_OUTBOX = $coreOutbox
+        $env:MPAS_CORE_TESTUSER_SUFFIX = $script:TestUserSuffixCore
         if ($null -ne $mtlsHook) { $env:MPAS_CORE_MTLS = 'true' }   # FA-6 を回してよい（#226）
 
         # --------------------------------------------------------------
@@ -802,6 +822,9 @@ public static class MpasTestTls
             #   無効なままだと Skip になり、廃止したフローの回帰が効かなくなる。
             $env:EnableImplicitGrantType = 'true'
             $env:EnableResourceOwnerPasswordCredentialsGrantType = 'true'
+
+            # **テスト利用者をサイトごとに分ける**（#260。上の net10.0 側と同じ理由）
+            $env:TestUserSuffix = $script:TestUserSuffixNetFx
 
             # ID フェデレーションの下流として振る舞う（#250 の段階 5）
             Set-IdFederationEnv -TargetKey 'netfx' -SiteUrl $NetFxUrl
@@ -838,6 +861,7 @@ public static class MpasTestTls
             Write-Host '起動しました。' -ForegroundColor Green
             $env:MPAS_NETFX_BASEURL = $NetFxUrl
             $env:MPAS_NETFX_FCM_OUTBOX = $netFxOutbox
+            $env:MPAS_NETFX_TESTUSER_SUFFIX = $script:TestUserSuffixNetFx
             if ($NetFxMtls) { $env:MPAS_NETFX_MTLS = 'true' }   # FA-6 を net48 版でも回す（#226）
         }
 
@@ -937,6 +961,9 @@ finally {
         Remove-Item Env:\FcmOutboxDirectory -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_CORE_FCM_OUTBOX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_NETFX_FCM_OUTBOX -ErrorAction SilentlyContinue
+        Remove-Item Env:\TestUserSuffix -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_CORE_TESTUSER_SUFFIX -ErrorAction SilentlyContinue
+        Remove-Item Env:\MPAS_NETFX_TESTUSER_SUFFIX -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_TESTCLIENT4_2 -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_TESTCLIENT4_3 -ErrorAction SilentlyContinue
         Remove-Item Env:\MPAS_TESTCLIENT2_2 -ErrorAction SilentlyContinue

@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/12  玄人 幸道         プッシュ通知の送信箱（MPAS_CORE_FCM_OUTBOX / MPAS_NETFX_FCM_OUTBOX）を受け取る（#196）
 //*  2026/10/01  玄人 幸道         テスト利用者の利用者名とメアドを分けた（#151 の段階 3）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに分けた（#260）
 //**********************************************************************************
 
 using System;
@@ -53,6 +54,22 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         /// <summary>テスト対象とするか</summary>
         public bool Enabled { get; set; }
+
+        /// <summary>
+        /// テスト利用者の名前に付く接尾辞（#260）。
+        /// </summary>
+        /// <remarks>
+        /// **サイトごとにテスト利用者を分けるためのもの**（`_core` / `_netfx`）。
+        ///
+        /// **E2E は 2 つのサイトを同時に立てて、同じケースを両方に流す。**
+        /// **DB ストアでは 1 つの DB を共有する**ので、分けないと
+        /// **両サイトが同じ利用者の属性（`DeviceToken` / `UnstructuredData`）を書き換え合う。**
+        /// **`mem` では各サイトが自前のストアを持つので、以前から起きていない。**
+        ///
+        /// **サイト側は `TestUserSuffix` で同じ値を読む**（`test.ps1` が両方へ渡す）。
+        /// **空なら従来どおり**（`super_tanaka` / `tanaka`）。
+        /// </remarks>
+        public string TestUserSuffix { get; set; }
 
         private string _baseUrl = null;
 
@@ -289,17 +306,44 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>root/programs の絶対パス</summary>
         public static string ProgramsDir { get; private set; }
 
-        /// <summary>テスト ユーザ名</summary>
+        /// <summary>テスト ユーザ名の土台（接尾辞を付ける前）</summary>
+        private const string TestUserBase = "super_tanaka";
+
+        /// <summary>2 人目のテスト ユーザ名の土台（接尾辞を付ける前）</summary>
+        private const string SecondUserBase = "tanaka";
+
+        /// <summary>`MPAS_TESTUSER` による上書き（両ターゲットに効く）</summary>
+        private static string _testUserOverride = null;
+
+        /// <summary>テスト ユーザ名（**ターゲットごとに違う**。#260）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>利用者名</returns>
         /// <remarks>
         /// **利用者名とメアドは別の値である**（#151 の段階 3）。
-        /// 以前は「利用者名＝メアド」だったため、この 1 つで足りていた。
+        /// 以前は「利用者名＝メアド」だったため、1 つで足りていた。
         /// **サインインはどちらでも通る**ので、既定はこちら（利用者名）を使う。
+        ///
+        /// **ターゲットごとに分かれている**（#260）。
+        /// **2 つのサイトが同じ DB を共有すると、同じ利用者の属性を書き換え合う**ため。
         /// </remarks>
-        public static string TestUserName { get; private set; }
+        public static string TestUserName(string targetKey)
+        {
+            if (!string.IsNullOrEmpty(_testUserOverride))
+            {
+                return _testUserOverride;
+            }
 
-        /// <summary>テスト ユーザのメアド（#151 の段階 3）</summary>
+            return TestUserBase + Suffix(targetKey);
+        }
+
+        /// <summary>テスト ユーザのメアド（#151 の段階 3 / #260）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>メアド</returns>
         /// <remarks>**メアドでのサインインを測るときに使う**（`SM-4.2`）。</remarks>
-        public static string TestUserEmail { get; private set; }
+        public static string TestUserEmail(string targetKey)
+        {
+            return TestUserName(targetKey) + "@gmail.com";
+        }
 
         /// <summary>
         /// 2 人目のテスト ユーザ（認証サイトが IsDebug のときに作る一般ユーザ）。
@@ -307,18 +351,45 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// 「別の利用者」を要するテスト（EX-8.4）で使う。
         /// **この利用者には端末（device_token）を登録しないこと。**
         /// RT-210.1 が「端末が無い利用者」として使っている。
+        /// **ターゲットごとに分かれている**（#260）。
         /// </summary>
-        public static string SecondUserName { get; private set; }
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>利用者名</returns>
+        public static string SecondUserName(string targetKey)
+        {
+            return SecondUserBase + Suffix(targetKey);
+        }
+
+        /// <summary>上流（ID フェデレーションの IdP）のテスト ユーザ名</summary>
+        /// <remarks>
+        /// **接尾辞を付けない**（#260）。
+        ///
+        /// **上流は `store/` のコンテナ 1 つで、自分のストアを持つ。**
+        /// 下流（net48 版 / net10.0 版）とは**別の DB** なので、**分ける必要が無い。**
+        /// **`docker-compose.yml` に `TestUserSuffix` を与えていない**ので、
+        /// **上流の種データは `super_tanaka` である。**
+        ///
+        /// **下流の接尾辞を上流へ渡してはならない**（その利用者は上流に居ない）。
+        /// </remarks>
+        public static string UpstreamUserName
+        {
+            get { return TestUserBase; }
+        }
+
+        /// <summary>ターゲットの接尾辞（未登録のキーでは空）</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>接尾辞</returns>
+        private static string Suffix(string targetKey)
+        {
+            TargetInfo target;
+            return (targetKey != null && _targets.TryGetValue(targetKey, out target))
+                ? (target.TestUserSuffix ?? "") : "";
+        }
 
         /// <summary>静的コンストラクタ</summary>
         static TestEnv()
         {
             ProgramsDir = FindProgramsDir();
-            // **利用者名とメアドを分けた**（#151 の段階 3）。
-            //   種データ（CreateData）が、この組み合わせで作る。
-            TestUserName = "super_tanaka";
-            TestUserEmail = "super_tanaka@gmail.com";
-            SecondUserName = "tanaka";
 
             // 既定値（baseUrl は null ＝ 構成ファイルから導出）
             Register(CoreKey, "net10.0版 (MultiPurposeAuthSiteCore)", null,
@@ -343,6 +414,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 DisplayName = displayName,
                 Enabled = true,
                 BaseUrl = baseUrl,
+                // **既定は空**（＝ 従来どおりの super_tanaka / tanaka）。
+                //   test.ps1 -Launch が、サイトごとの接尾辞を環境変数で渡す（#260）。
+                TestUserSuffix = "",
                 ConfigPath = Path.GetFullPath(Path.Combine(ProgramsDir, configPath))
             };
         }
@@ -408,11 +482,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 JsonElement root = doc.RootElement;
 
+                // **両ターゲットに効く上書き**（#260 より前からある口）。
+                //   **接尾辞より強い**ので、DB ストアでは書き換え合いが起きうる。
                 JsonElement user;
                 if (root.TryGetProperty("testUserName", out user)
                     && user.ValueKind == JsonValueKind.String)
                 {
-                    TestUserName = user.GetString();
+                    _testUserOverride = user.GetString();
                 }
 
                 JsonElement targets;
@@ -456,18 +532,19 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>環境変数があれば読む</summary>
         private static void ApplyEnvironmentVariables()
         {
-            Override(CoreKey, "MPAS_CORE_BASEURL", "MPAS_CORE_CONFIG", "MPAS_CORE_FCM_OUTBOX");
-            Override(NetFxKey, "MPAS_NETFX_BASEURL", "MPAS_NETFX_CONFIG", "MPAS_NETFX_FCM_OUTBOX");
+            Override(CoreKey, "MPAS_CORE_BASEURL", "MPAS_CORE_CONFIG", "MPAS_CORE_FCM_OUTBOX",
+                "MPAS_CORE_TESTUSER_SUFFIX");
+            Override(NetFxKey, "MPAS_NETFX_BASEURL", "MPAS_NETFX_CONFIG", "MPAS_NETFX_FCM_OUTBOX",
+                "MPAS_NETFX_TESTUSER_SUFFIX");
 
-            string user = Environment.GetEnvironmentVariable("MPAS_TESTUSER");
-            if (!string.IsNullOrEmpty(user))
-            {
-                TestUserName = user;
-            }
+            // **両ターゲットに効く上書き**（手で 1 人の利用者を指すとき）。
+            //   **接尾辞より強い**ので、DB ストアでは書き換え合いが起きうる（#260）。
+            _testUserOverride = Environment.GetEnvironmentVariable("MPAS_TESTUSER");
         }
 
         /// <summary>環境変数1組でテスト対象を上書きする</summary>
-        private static void Override(string key, string baseUrlVar, string configVar, string fcmOutboxVar)
+        private static void Override(string key, string baseUrlVar, string configVar,
+            string fcmOutboxVar, string testUserSuffixVar)
         {
             TargetInfo target = _targets[key];
 
@@ -487,6 +564,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             if (!string.IsNullOrEmpty(outbox))
             {
                 target.FcmOutbox = outbox;
+            }
+
+            // **接尾辞は空文字も意味を持つ**ので、null かどうかで判定する（#260）。
+            string suffix = Environment.GetEnvironmentVariable(testUserSuffixVar);
+            if (suffix != null)
+            {
+                target.TestUserSuffix = suffix;
             }
         }
 

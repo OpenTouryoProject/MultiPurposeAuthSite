@@ -179,7 +179,9 @@ OAuth2ClientEndpointsRootURI
 |---|---|
 | `MPAS_CORE_BASEURL` / `MPAS_NETFX_BASEURL` | 叩き先の URL |
 | `MPAS_CORE_CONFIG` / `MPAS_NETFX_CONFIG` | 構成ファイルのパス（`root/programs` からの相対） |
-| `MPAS_TESTUSER` | テスト ユーザ名 |
+| `MPAS_TESTUSER` | テスト ユーザ名（**両対象に効く**。接尾辞より強い） |
+| `MPAS_CORE_TESTUSER_SUFFIX` | net10.0 版のテスト利用者の接尾辞（#260。`test.ps1` が `_core` を渡す） |
+| `MPAS_NETFX_TESTUSER_SUFFIX` | net48 版のテスト利用者の接尾辞（同上。`_netfx`） |
 | `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` | プッシュ通知の送信箱（`-Launch` が設定する。無ければ CIBA の `EX-8` は Skip） |
 | `MPAS_CONNSTR_SQL` / `MPAS_CONNSTR_ODP` / `MPAS_CONNSTR_NPS` | `-UserStoreType` で `sql` / `ora` / `npg` に切り替えるときの接続文字列（#207） |
 

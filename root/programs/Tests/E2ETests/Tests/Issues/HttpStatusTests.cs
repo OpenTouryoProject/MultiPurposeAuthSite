@@ -42,6 +42,7 @@
 //*  2026/09/16  玄人 幸道         RT-213.1 を net48 版でも測る（#216）
 //*  2026/10/01  玄人 幸道         sub の期待値を利用者名にした（#151 の段階 3）
 //*  2026/10/01  玄人 幸道         sub の判定を id_token との一致に替えた（#151 の段階 4）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -1117,7 +1118,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 // **テスト ユーザは使えない。** CIBA のテスト（EX-8）が端末を登録するため、
                 // 実行順によっては「端末あり」になる。E2E からサインインしない別の利用者を指す。
-                const string NoDeviceUser = "tanaka"; // #151 の段階 3 で利用者名とメアドを分けた
+                // **ターゲットごとに違う**（#260）。2 つのサイトが同じ DB を共有すると、
+                //   同じ利用者の属性を書き換え合うため、テスト利用者を分けてある。
+                string NoDeviceUser = TestEnv.SecondUserName(targetKey);
+
+                // **種データが在ることを確かめてから進む**（#260）。
+                //   **サイトは GET /Account/Login（と /Account/Register）でしか種データを作らない。**
+                //   このテストは /ros と /ciba_authz しか叩かないので、
+                //   **他のテストがサインインしていなければ、利用者が居ない**（unknown_user_id になる）。
+                //   実行順に依存しないよう、ここで 1 回踏んでおく。
+                await client.GetAsync("/Account/Login");
 
                 r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint = " + NoDeviceUser
                     + "（認証サイトが IsDebug のときに作る利用者。E2E は端末を登録しない）");

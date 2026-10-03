@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -29,6 +29,8 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/02  玄人 幸道         新規（#257）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/03  玄人 幸道         管理画面のテストを同じコレクションに入れた（#260）
 //**********************************************************************************
 
 using System;
@@ -58,6 +60,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **管理者でサインインする**（`SystemAdmin` ロール）。
     /// **作ったロールは、同じテストの中で消す**（DB ストアでは残るため）。
     /// </remarks>
+    // **UsersAdmin と同じ管理者で、同じ利用者・ロールを書く**ので並行させない（#260）。
+    [Collection(UsersAdminTests.AdminScreenCollection)]
     public class RolesAdminTests : TargetTestBase
     {
         /// <summary>コンストラクタ</summary>
@@ -216,9 +220,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.VerifyEqual("HTTP 200", "200", ((int)details.StatusCode).ToString());
 
                 r.Verify("**属している利用者が出る**（テスト利用者）",
-                    body.Contains(TestEnv.TestUserName),
-                    TestEnv.TestUserName + " が出る",
-                    body.Contains(TestEnv.TestUserName) ? "出る" : "**出ない**");
+                    body.Contains(TestEnv.TestUserName(targetKey)),
+                    TestEnv.TestUserName(targetKey) + " が出る",
+                    body.Contains(TestEnv.TestUserName(targetKey)) ? "出る" : "**出ない**");
 
                 try
                 {
@@ -242,9 +246,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                         "200", ((int)empty.StatusCode).ToString());
 
                     r.Verify("属していない利用者は出ない",
-                        !emptyBody.Contains(TestEnv.TestUserName),
+                        !emptyBody.Contains(TestEnv.TestUserName(targetKey)),
                         "出ない",
-                        emptyBody.Contains(TestEnv.TestUserName) ? "**出ている**" : "出ない");
+                        emptyBody.Contains(TestEnv.TestUserName(targetKey)) ? "**出ている**" : "出ない");
                 }
                 finally
                 {

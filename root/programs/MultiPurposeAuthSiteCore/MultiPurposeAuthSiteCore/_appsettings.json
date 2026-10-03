@@ -112,6 +112,9 @@
 
     // 登録されるTestUserのpassword
     "TestUserPWD": "[password of TestUser]",
+    // テスト利用者の名前に付ける接尾辞（#260）。空なら super_tanaka / tanaka。
+    //   E2E（test.ps1）が、サイトごとに _core / _netfx を与える。
+    "TestUserSuffix": "",
 
     "AllowOnlyAlphanumericUserNames": "false",
     // UserNameがEmailかどうか
