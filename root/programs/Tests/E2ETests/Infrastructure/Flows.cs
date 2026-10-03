@@ -46,6 +46,7 @@
 //*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 〜 _13 を追加（#129 の段階 4）
 //*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
 //*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
+//*  2026/10/04  玄人 幸道         TestClient_15とtest_self_code_manageの解決を追加（C-10）
 //**********************************************************************************
 
 using System;
@@ -225,6 +226,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// <summary>同 PS512（#129 の段階 4）</summary>
         public const string TestClient_13 = "TestClient_13";
 
+        /// <summary>
+        /// TestClient（normal）を写し、**redirect_uri_code を `test_self_code_manage`** にした
+        /// クライアント（C-10）。**構成ファイルには無い。** 種データが作る（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **管理画面の自己テスト（`GetOAuth2Token`）の折り返し先を、登録値として表したもの。**
+        /// **以前は `CheckRedirectUri` に「この URL なら登録を確かめずに通す」分岐が在った**
+        /// （`ANALYSIS-IdP.md` の C-10）。**記号にして通常の照合に載せ、分岐を消した。**
+        /// </remarks>
+        public const string TestClient_15 = "TestClient_15";
+
         #region 種データで登録される client_id（#264）
 
         /// <summary>
@@ -248,6 +260,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_5,  "e2e0tc05000000000000000000000000" },
                 { KnownClients.TestClient_6,  "e2e0tc06000000000000000000000000" },
                 { KnownClients.TestClient_7,  "e2e0tc07000000000000000000000000" },
+                { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
                 { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
@@ -406,6 +419,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 return client.ToLocalUrl(
                     root + client.Config.Get("OAuth2ImplicitGrantClient_Account"));
+            }
+
+            // 管理画面の自己テストの折り返し先（C-10）。
+            if (value == "test_self_code_manage")
+            {
+                return client.ToLocalUrl(
+                    root + client.Config.Get("OAuth2AuthorizationCodeGrantClient_Manage"));
             }
 
             // ログアウト後の戻り先（#232）。サーバ側は「クライアント側の口 ＋ /Home/Index」。
@@ -653,6 +673,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             // **client_secret を差し替えたものは、写す元の秘密では認証できない**（#237）。
             string overriddenSecret = null;
 
+            // **redirect_uri を差し替えたものも、写す元の値では通らない**（C-10）。
+            string overriddenRedirectUri = null;
+
             if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3)
             {
                 sourceName = KnownClients.TestClient4;
@@ -697,6 +720,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2〜4）。
                 sourceName = KnownClients.TestClient;
             }
+            else if (clientName == KnownClients.TestClient_15)
+            {
+                // **折り返し先だけを差し替えた**（C-10）。client_secret は写す元のまま。
+                sourceName = KnownClients.TestClient;
+                overriddenRedirectUri = Flows.ResolveRedirectUri(client, "test_self_code_manage");
+            }
 
             // **client_id は固定値**（#264）。
             //   **以前は test.ps1 -Launch が環境変数（`MPAS_<名前>`）で渡していた**が、
@@ -716,7 +745,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 ClientId = clientId,
                 ClientSecret = overriddenSecret ?? source.ClientSecret,
-                RedirectUri = source.RedirectUri,
+                RedirectUri = overriddenRedirectUri ?? source.RedirectUri,
                 RedirectUriToken = source.RedirectUriToken
             };
         }

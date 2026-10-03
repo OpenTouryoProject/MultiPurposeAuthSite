@@ -446,10 +446,27 @@ OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に
 サーバが `CmnEndpoints.GetRedirectUriFromConstr` で実 URL に解決する。
 
 ```
-test_self_code   → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Account
-test_self_token  → OAuth2ClientEndpointsRootURI + OAuth2ImplicitGrantClient_Account
-test_self_logout → OAuth2ClientEndpointsRootURI + /Home/Index（post_logout_redirect_uri 用。#232）
+test_self_code        → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Account
+test_self_token       → OAuth2ClientEndpointsRootURI + OAuth2ImplicitGrantClient_Account
+test_self_logout      → OAuth2ClientEndpointsRootURI + /Home/Index（post_logout_redirect_uri 用。#232）
+test_self_code_manage → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Manage
 ```
+
+**`test_self_code_manage` は、管理画面の「トークンを取る」用**である（C-10）。
+
+`/Manage/Index` の「トークンを取る」（`GetOAuth2Token`）は、
+**サインイン中の利用者自身のクライアント登録**で認可を要求する。
+**その折り返し先が、この記号である。**
+
+| | |
+|---|---|
+| **新規登録** | `redirect_uri_code` の**既定がこの値**になっている。そのまま動作確認できる |
+| **動作確認の後** | **自分の RP の折り返し先に書き換える**（クライアント 1 件に `redirect_uri_code` は 1 つ） |
+| **既存の登録** | **この値でなければ、このボタンは通らない**（`invalid_request`）。画面で登録し直す |
+
+> **以前は、この URL だけ「登録を確かめずに通す」分岐が `CheckRedirectUri` に在った**（C-10）。
+> **`IsLockedDownTestEndpoints` の対象外で、本番で閉じられなかった**ので、
+> **記号にして通常の照合に載せ、分岐を消した。** **例外は無い。**
 
 **`OAuth2AuthorizationServerEndpointsRootURI` ではなく `OAuth2ClientEndpointsRootURI` を使う。**
 既定では同じ値だが、変えるときは両方見ること。

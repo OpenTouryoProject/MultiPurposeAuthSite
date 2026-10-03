@@ -79,6 +79,7 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_5` | 同じく写しで、**`subject_types = pairwise`**（#140 の段階 2） | 同上 |
 | `TestClient_6` / `_7` | **写しただけ**（`subject_types` を書かない）。**既定が public になった**ことを 2 つの client_id で測る（#151 の段階 4） | 同上 |
 | `TestClient_8`〜`_13` | 同じく写しで、**`id_token_signed_response_alg`** を `RS512` / `ES384` / `ES512` / `PS256` / `PS384` / `PS512` に（#129 の段階 2〜4）。`_8` は **`token_endpoint_auth_signing_alg = RS256`** も登録（#262） | 同上 |
+| `TestClient_15` | 同じく写しで、**`redirect_uri_code` を `test_self_code_manage`** に（C-10）。**管理画面の自己テストの折り返し先が、登録値として通る**ことを測る | 同上 |
 
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
@@ -87,6 +88,10 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 - **`client_secret` を差し替えたものは、写す元の秘密では認証できない。**
   **`KnownClients.SymbolSecret` / `ColonSecret` も、表と同じ値にしておくこと**
 - **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**（種データはサイト側が作る）
+- **サイトは `GET /Account/Login` でしか種データを作らない**（`CreateData`。#210 で踏んだ）。
+  **`TargetTestBase.Client` が 1 度だけ呼んで揃えている**（`TargetInfo.EnsureSeedData`）。
+  **これが無いと、サインインしないテストが 401 になる**（`RT-237.*` で踏んだ。
+  **先に走る他のクラスがサインインしているかどうかに依存して、間欠で落ちる**）
 - **`isResourceOwner` はどこでも分岐に使われていない**ので、**構成ファイルの登録と同じに振る舞う**
 
 > **以前は `test.ps1 -Launch` が環境変数で差し込んでいた**（#224）。

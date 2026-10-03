@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/03  玄人 幸道         新規（#264）
+//*  2026/10/04  玄人 幸道         TestClient_15（test_self_code_manage）を追加（C-10）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -260,6 +261,18 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 ClientName = "TestClient_7", ClientId = "e2e0tc07000000000000000000000000",
                 ClientMode = "normal", SourceName = "TestClient"
+            },
+            new Entry()
+            {
+                // **管理画面の自己テストの折り返し先を登録したもの**（C-10）。
+                //   **記号が解決され、通常の照合で通ること**を測る（`RT-C10.1`）。
+                //   以前は `CheckRedirectUri` の分岐が、**登録を確かめずにこの URL を通していた。**
+                ClientName = "TestClient_15", ClientId = "e2e0tc15000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "redirect_uri_code", Co.Const.TestSelfCodeManage }
+                }
             }
         };
 

@@ -111,6 +111,7 @@
 //*  2026/10/02  玄人 幸道         id_token の鍵選択を alg 1 つに寄せた（#129 の段階 3）
 //*  2026/10/03  玄人 幸道         検証する側のalgを登録で絞る（#262）
 //*  2026/10/03  玄人 幸道         redirect_uriを単純文字列比較にした（#263）
+//*  2026/10/04  玄人 幸道         redirect_uriの登録迂回の分岐を削除（C-10）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2318,20 +2319,15 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // redirect_uriの指定が有る。
 
-                // 指定されたredirect_uriを使用する場合は、チェックが必要になる。
-                if (
-                    // self_code : Authorization Codeグラント種別
-                    redirect_uri == (Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage))
-                {
-                    // 特別に、許可されたredirect_uri
-                    valid_redirect_uri = redirect_uri;
-                    return true;
-                }
-                else
+                // **指定された redirect_uri は、必ず登録と突き合わせる。**
+                //   **以前は「管理画面の折り返し先なら、登録を確かめずに通す」分岐が在った**（C-10）。
+                //   **`IsLockedDownTestEndpoints` の対象外で、本番で閉じられなかった。**
+                //   **`test_self_code_manage` を記号にして登録値で表せるようにし、分岐を消した。**
+                //   **例外は無い。**
                 {
                     // クライアント識別子に対応する事前登録したredirect_uri
                     string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
-                    
+
                     // 定数値は変換する。
                     preRegisteredUri = CmnEndpoints.GetRedirectUriFromConstr(preRegisteredUri);
 
@@ -3943,6 +3939,13 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                 ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
+            }
+            else if (constr.ToLower() == Const.TestSelfCodeManage)
+            {
+                // **管理画面の自己テスト（GetOAuth2Token）の折り返し先**（C-10）。
+                //   **以前は CheckRedirectUri の分岐で、登録を確かめずに通していた。**
+                //   **記号にして、通常の照合に載せた。**
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage;
             }
             else if (constr.ToLower() == Const.TestSelfLogout)
             {

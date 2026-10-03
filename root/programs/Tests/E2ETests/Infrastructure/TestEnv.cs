@@ -152,6 +152,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
 
         private bool? _reachable = null;
 
+        /// <summary>種データを作らせたか（#264）</summary>
+        private bool _seeded = false;
+
+        /// <summary>_seeded の番をする錠（テスト クラスは並行して走る）</summary>
+        private readonly object _seedLock = new object();
+
         /// <summary>起動していないときの理由</summary>
         public string UnavailableReason { get; private set; }
 
@@ -284,6 +290,68 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return this._reachable.Value;
+        }
+
+        #endregion
+
+        #region EnsureSeedData
+
+        /// <summary>種データを作らせる（#264）</summary>
+        /// <remarks>
+        /// **サイトは `GET /Account/Login`（と `/Account/Register`）でしか種データを作らない**
+        /// （`AccountController.CreateData`。#210 で踏んだ）。
+        ///
+        /// **#264 で、E2E 専用のクライアント登録も種データに移した。**
+        /// そのため、**サインインしないテストが差し込みのクライアントを使うと、
+        /// まだ登録が無くて 401 になりうる**（`RT-237.*` で踏んだ。**先に走る他のクラスに依存する**）。
+        /// **以前は環境変数で渡していたので、プロセス開始から在った。**
+        ///
+        /// **そこで、クライアントを作る時点で 1 度だけ呼ぶ。**
+        /// **錠を取るのは、テスト クラスが並行して走るため**
+        /// （印だけ先に立てると、2 本目が種データの出来上がりを待たずに進む）。
+        ///
+        /// **失敗しても繰り返さない。** ここで測りたいのは種データではなく、
+        /// 足りなければテスト自身が落ちて分かる。
+        /// </remarks>
+        public void EnsureSeedData()
+        {
+            if (this._seeded)
+            {
+                return;
+            }
+
+            lock (this._seedLock)
+            {
+                if (this._seeded)
+                {
+                    return;
+                }
+
+                try
+                {
+                    using (HttpClientHandler handler = new HttpClientHandler())
+                    {
+                        handler.AllowAutoRedirect = false;
+                        handler.ServerCertificateCustomValidationCallback =
+                            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+                        using (HttpClient http = new HttpClient(handler))
+                        {
+                            http.Timeout = TimeSpan.FromSeconds(30);
+
+                            // **応答は見ない。** 呼ぶこと自体が目的（CreateData が走る）。
+                            http.GetAsync(this.BaseUrl + "/Account/Login")
+                                .GetAwaiter().GetResult();
+                        }
+                    }
+                }
+                catch
+                {
+                    // 取れなくても、ここでは落とさない。
+                }
+
+                this._seeded = true;
+            }
         }
 
         #endregion
