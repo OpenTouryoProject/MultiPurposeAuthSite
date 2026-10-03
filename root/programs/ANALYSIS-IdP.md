@@ -1787,7 +1787,7 @@ Entra ID の SPA プラットフォームと同じ考え方**である。
 - **3 重定義（E-3）も片付いた。** `AllowAllOrigins` は**自己テスト用の口だけ**が使う
   （`ValuesController` / `TestHybridFlow`。どちらも `IsLockedDownTestEndpoints` で経路ごと閉じる）
 - **E2E** : **`RT-265.1`**（公開情報は全開／ブラウザから叩く口は導出したオリジンだけ／
-  `/revoke` `/introspect` には付かない）。**net10.0 版だけ**。
+  `/revoke` `/introspect` には付かない／`Allow-Credentials` を付けない）。**両系統に流す。**
   **旧挙動に戻すと落ちることを確かめてある**（`/revoke` が `*` を返す）
 - **利用者への影響** : **挙動が変わる。**
   **任意オリジンから `/token` を叩いている SPA は、登録から導出されるか
@@ -1795,7 +1795,9 @@ Entra ID の SPA プラットフォームと同じ考え方**である。
   **`.well-known` / `jwkcerts` は従来どおり。**
   **サーバサイドの Web RP とネイティブ / モバイルは影響なし**（CORS はブラウザの仕組み）
 
-> **net48 版は触っていない。** あちらは Web API の `[EnableCors]` という別の仕組みである。
+> **net48 版も、同じ方針に揃えてある。**
+> **仕組みは違う**（あちらは Web API の `[EnableCors]` ＝ `ICorsPolicyProvider` の属性）が、
+> **外から見た振る舞いは同じ**である。**`RT-265.1` を両系統に流して固定している。**
 
 ### C-10. `redirect_uri` の比較が大文字小文字を無視 **[Lib]** — **✅ 修正済み（#263）**
 

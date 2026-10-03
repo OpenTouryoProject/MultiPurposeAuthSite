@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2019/03/05  西野 大介         新規
+//*  2026/10/04  玄人 幸道         CORS（資格情報付き）を外した
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -60,15 +61,20 @@ using Touryo.Infrastructure.Public.Str;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>Fido2ServerのApiController（ライブラリ）</summary>
-    [EnableCors(
-        // リソースへのアクセスを許可されている発生元
-        origins: "*",
-        // リソースによってサポートされているヘッダー
-        headers: "*",
-        // リソースによってサポートされているメソッド
-        methods: "*",
-        // 
-        SupportsCredentials = true)]
+    //  **CORS は付けない。**
+    //    以前はここに origins: "*" ＋ SupportsCredentials = true が付いていた。
+    //    **`origins: "*"` と `SupportsCredentials = true` を同時に指定すると、
+    //    System.Web.Http.Cors は Allow-Origin に要求の Origin を反映し、
+    //    Allow-Credentials: true を付ける。**
+    //    **この controller は HttpContext.Current.Session を使う**ので、
+    //    **他オリジンの JS が、利用者のセッションで登録・認証の手順を駆動できる形だった。**
+    //
+    //    **そもそも WebAuthn はオリジンに紐づく**（rpId と clientDataJSON の origin を照合する）。
+    //    **他オリジンから有効な attestation / assertion は作れない**ので、
+    //    **クロス オリジンで開ける意味が無い。**
+    //
+    //    **この controller は、いま csproj に含まれておらずビルドされない。**
+    //    **有効化するときに穴を連れて来ないよう、ここで外しておく。**
     public class Fido2ServerController : ApiController
     {
         #region 登録フロー

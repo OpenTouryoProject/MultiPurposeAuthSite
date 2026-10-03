@@ -73,6 +73,7 @@
 //*  2026/09/26  玄人 幸道         refresh_token / ROPC / client_credentials と /revoke・/introspect で非対称の認証を受ける（#239）
 //*  2026/09/27  玄人 幸道         Basic の資格情報を復号して照合する（#237）
 //*  2026/10/01  玄人 幸道         CIBA の認可コードに、sub ではなく利用者名を入れるようにした（#151 の段階 4）
+//*  2026/10/04  玄人 幸道         CORSを口ごとの属性にし、資格情報付きを止めた
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -121,15 +122,15 @@ using Touryo.Infrastructure.Public.Security;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuth2EndpointのApiController（ライブラリ）</summary>
-    [EnableCors(
-        // リソースへのアクセスを許可されている発生元
-        origins: "*",
-        // リソースによってサポートされているヘッダー
-        headers: "*",
-        // リソースによってサポートされているメソッド
-        methods: "*",
-        // 
-        SupportsCredentials = true)]
+    //  **CORS はクラスに付けない。** **口ごとに属性で選ぶ**（net10.0 版の #265 と揃える）。
+    //    以前はここに次が付いていた。
+    //      [EnableCors(origins: "*", headers: "*", methods: "*", SupportsCredentials = true)]
+    //    **`origins: "*"` と `SupportsCredentials = true` を同時に指定すると、
+    //    System.Web.Http.Cors は Allow-Origin に要求の Origin を反映し、
+    //    Allow-Credentials: true を付ける。**
+    //    **任意のオリジンから、利用者の Cookie を伴った要求が許されていた**（実測）。
+    //  **付けていない口は CORS 無し**（ブラウザから叩く口ではない）。
+    //    /revoke /introspect /device_authz /ciba_authz /par /ros
     [MyBaseAsyncApiController(httpAuthHeader: EnumHttpAuthHeader.None)] // 認証無し（自前）
     public class OAuth2EndpointController : ApiController
     {
@@ -171,6 +172,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="formData">FormDataCollection</param>
         /// <returns>成功は 200、エラーは 400 / 401（RFC 6749 5.1 / 5.2）（#196）</returns>
         [HttpPost]
+        [MpasBrowserApiCors]   // SPA（public クライアント ＋ PKCE）が叩く
         public IHttpActionResult OAuth2Token(FormDataCollection formData)
         {
             // **トークンを含む応答は、キャッシュに残してはならない**（RFC 6749 5.1 / 5.2 の MUST）（#218）。
@@ -349,6 +351,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>成功は 200、エラーは 401 と WWW-Authenticate: Bearer（RFC 6750 3）（#196）</returns>
         [HttpGet]
+        [MpasBrowserApiCors]   // ブラウザから読む口
         public async Task<IHttpActionResult> GetUserClaims()
         {
             // **資格情報・属性を返すので、キャッシュに残さない**（#218）。
@@ -1043,6 +1046,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 認証デバイス（authentication_device）が、プッシュ通知を受けて「許可 / 拒否」を押したときに呼ぶ。
         /// </remarks>
         [HttpPost]
+        [MpasBrowserApiCors]   // 認証デバイスの web ビルド（PWA）が叩く
         public IHttpActionResult CibaPushResult(FormDataCollection formData)
         {
             // クライアント認証（Bearer トークン）
@@ -1103,6 +1107,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// </summary>
         /// <returns>HttpResponseMessage</returns>
         [HttpGet]
+        [MpasPublicDocsCors]   // jwkcerts（公開情報）
         public HttpResponseMessage JwksUri()
         {
             return new HttpResponseMessage()
@@ -1218,6 +1223,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>HttpResponseMessage</returns>
         [HttpGet]
         [Route(".well-known/openid-configuration")]  // ココは固定
+        [MpasPublicDocsCors]   // .well-known/openid-configuration（公開情報）
         public HttpResponseMessage OpenIDConfig()
         {
             // JsonSerializerSettingsを指定して、可読性の高いJSONを返す。
@@ -1244,6 +1250,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// <returns>HttpResponseMessage</returns>
         [HttpGet]
         [Route("samlmetadata")]  // ココは固定
+        [MpasPublicDocsCors]   // samlmetadata（公開情報）
         public HttpResponseMessage SamlMetadata()
         {
             // XmlWriterSettingsを指定して、可読性の高いXMLを返す。
@@ -1297,6 +1304,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// 認証デバイス（authentication_device）が、サインインの後に呼ぶ（端末の登録）。
         /// </remarks>
         [HttpPost]
+        [MpasBrowserApiCors]   // 同上
         public async Task<IHttpActionResult> SetDeviceToken(FormDataCollection formData)
         {
             string device_token = (formData == null) ? null : (string)formData["device_token"];
@@ -1360,6 +1368,7 @@ namespace MultiPurposeAuthSite.Controllers
         /// net48 版は MobileApp のプロバイダを登録しているので、それで検証する。
         /// </remarks>
         [HttpPost]
+        [MpasBrowserApiCors]   // 同上
         public async Task<IHttpActionResult> TwoFactorPushResult(FormDataCollection formData)
         {
             // クライアント認証（Bearer トークン）

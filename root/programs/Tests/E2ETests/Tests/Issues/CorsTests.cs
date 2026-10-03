@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/04  玄人 幸道         新規（#265）
+//*  2026/10/04  玄人 幸道         両系統に流すようにし、資格情報の確認を足した
 //**********************************************************************************
 
 using System;
@@ -62,8 +63,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// **SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ため。
     /// 追加分は `CorsAllowedOrigins`（空でよい）。
     ///
-    /// **net10.0 版だけのテスト**である。
-    /// **net48 版は Web API の `[EnableCors]` という別の仕組み**で、#265 では触っていない。
+    /// **両系統に流す。** **仕組みは違う**（net10.0 版はポリシー、net48 版は Web API の属性）が、
+    /// **外から見た振る舞いは同じ**にしてある。
     /// </remarks>
     public class CorsTests : TargetTestBase
     {
@@ -78,10 +79,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         public CorsTests(ITestOutputHelper output) : base(output) { }
 
         /// <summary>RT-265.1 CORS が口の性質ごとに分かれている</summary>
-        /// <param name="targetKey">core</param>
+        /// <param name="targetKey">core / netfx</param>
         /// <returns>Task</returns>
         [SkippableTheory]
-        [MemberData(nameof(CoreOnly))]
+        [MemberData(nameof(AllTargets))]
         public async Task RT26501_CORSが口の性質ごとに分かれている(string targetKey)
         {
             using (IdPClient client = this.Client(targetKey))
@@ -98,6 +99,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     + "**許すオリジンは、登録した `redirect_uri` から導く**"
                     + "（Keycloak の Web origins の既定値 `+` と同じ考え方）。",
                     "Fetch Standard（CORS）/ OAuth 2.0 for Browser-Based Apps / #265");
+
+                // **両系統で同じ振る舞いを測る。**
+                //   仕組みは違う（net10.0 版はポリシー、net48 版は Web API の属性）。
 
                 // **導出元の登録から、許されるオリジンを作る。**
                 //   **サーバ側と同じ計算**になっていることも、これで一緒に測れる。
@@ -175,6 +179,17 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                     r.VerifyEqual(ep + " は、許したオリジンにも CORS を付けない",
                         "（無し）", CorsTests.Shown(IdPClient.AllowOrigin(res)));
                 }
+
+                r.Step("(4) 資格情報は許さない");
+
+                HttpResponseMessage credentials =
+                    await client.PreflightAsync("/token", allowed, "POST");
+
+                r.VerifyEqual("/token に Access-Control-Allow-Credentials を付けない",
+                    "（無し）",
+                    CorsTests.Shown(credentials.Headers.Contains("Access-Control-Allow-Credentials")
+                        ? string.Join(",", credentials.Headers.GetValues("Access-Control-Allow-Credentials"))
+                        : ""));
 
                 r.Note("**`Access-Control-Allow-Credentials` は、どちらのポリシーにも付けていない。**"
                     + "**Cookie で通る口をこの範囲に入れない**ため"
