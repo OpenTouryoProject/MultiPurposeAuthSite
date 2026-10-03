@@ -109,6 +109,7 @@
 //*  2026/10/02  玄人 幸道         subject_types_supported を OIDC の登録値だけにした（#151 の段階 5）
 //*  2026/10/02  玄人 幸道         登録された id_token_signed_response_alg で署名する（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         id_token の鍵選択を alg 1 つに寄せた（#129 の段階 3）
+//*  2026/10/03  玄人 幸道         検証する側のalgを登録で絞る（#262）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -199,6 +200,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   `client_assertion` の検証で、**登録された RSA / ECDSA の公開鍵を順に試す**
             //   ようにしたため（`CmnEndpoints.ClientAuthentication`）。
             //   **クライアントが ECDSA の公開鍵（jwk_ecdsa_publickey）を登録していれば ES256 が通る。**
+            //   **一覧は 1 か所から作る**（#262）。広告と、登録値の検証が同じものを見る。
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
                 "RS256", "ES256"
             });
@@ -344,6 +346,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #endregion
 
                 #region RequestObject
+                //   **一覧は 1 か所から作る**（#262）。
                 OpenIDConfig.Add("request_object_signing_alg_values_supported", new List<string> {
                     "RS256"
                 });
@@ -1342,6 +1345,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                 pubKey = CmnEndpoints.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkRsaPublickey(iss));
 
+                // **登録 request_object_signing_alg で絞る**（#262）。
+                //   **CIBA（上の分岐）は対象外**。あちらは ES256 固定で、仕様でも別の登録項目。
+                if (!CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetRequestObjectSigningAlg(iss),
+                    CmnEndpoints.RequestObjectSigningAlgs,
+                    CmnEndpoints.TryReadJwtAlg(requestObject)))
+                {
+                    return false;
+                }
+
                 // 署名検証
                 result = !string.IsNullOrEmpty(pubKey)
                     && RequestObject.Verify(requestObject, out iss, pubKey);
@@ -1460,6 +1473,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                // **登録 request_object_signing_alg で絞る**（#262）。
+                if (!CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
+                    CmnEndpoints.RequestObjectSigningAlgs,
+                    CmnEndpoints.TryReadJwtAlg(request)))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "The request object is not signed with the registered request_object_signing_alg.");
+                    return false;
+                }
 
                 if (!RequestObject.Verify(request, out string iss, pubKey))
                 {
@@ -2049,6 +2074,101 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return !string.IsNullOrEmpty(code_challenge_method)
                 && !string.IsNullOrEmpty(code_challenge);
+        }
+
+        #endregion
+
+        #region 検証する側の alg（#262）
+
+        /// <summary>`client_assertion` で受ける alg（#262）</summary>
+        /// <remarks>
+        /// **この一覧が、広告（`token_endpoint_auth_signing_alg_values_supported`）と、
+        /// 登録値の検証（`token_endpoint_auth_signing_alg`）の両方を決める。**
+        ///
+        /// **中身は上流の都合である。** `JwtAssertion.Verify` が
+        /// **JWK の `kty` を見て `JWS_RS256_Param` / `JWS_ES256_Param` を選ぶ**ので、この 2 つになる。
+        /// **広げるには上流の対応が要る**（alg を受け取るオーバーロードが無い）。
+        /// </remarks>
+        public static readonly string[] TokenEndpointAuthSigningAlgs = new string[]
+        {
+            JwtConst.RS256, JwtConst.ES256
+        };
+
+        /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262）</summary>
+        /// <remarks>
+        /// **`RequestObject.Verify` が `JWS_RS256_Param` 固定**なので、いまは `RS256` だけ。
+        /// **CIBA の `request` は別**（`VerifyCiba` が `ES256` 固定。仕様でも別の登録項目）。
+        /// </remarks>
+        public static readonly string[] RequestObjectSigningAlgs = new string[]
+        {
+            JwtConst.RS256
+        };
+
+        /// <summary>登録された alg で絞ってよいか（#262）</summary>
+        /// <param name="registeredAlg">登録された alg（null / 空 なら絞らない）</param>
+        /// <param name="supported">受ける集合</param>
+        /// <param name="actualAlg">実際に来た JWT のヘッダの alg</param>
+        /// <returns>通してよければ true</returns>
+        /// <remarks>
+        /// **3 つに分かれる。**
+        ///
+        /// | 登録 | 判定 |
+        /// |---|---|
+        /// | 無い（null / 空） | **通す**（従来どおり。絞らない） |
+        /// | 在るが、**受ける集合に無い値** | **拒否**（不正な登録。#224 と同じ方針） |
+        /// | 在って、受ける集合の値 | **実際の alg と一致したときだけ通す** |
+        ///
+        /// **実際の alg が読めないとき（JWT でない等）は拒否**する。
+        /// </remarks>
+        private static bool AllowsVerifyingAlg(
+            string registeredAlg, string[] supported, string actualAlg)
+        {
+            if (string.IsNullOrEmpty(registeredAlg))
+            {
+                // 登録が無い ＝ 絞らない。
+                return true;
+            }
+
+            if (Array.IndexOf(supported, registeredAlg) < 0)
+            {
+                // **受ける集合に無い値が登録されている**（設定の誤り）。
+                return false;
+            }
+
+            return !string.IsNullOrEmpty(actualAlg)
+                && registeredAlg == actualAlg;
+        }
+
+        /// <summary>JWT のヘッダから alg を読む（読めなければ null）（#262）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>alg（読めなければ null）</returns>
+        private static string TryReadJwtAlg(string jwt)
+        {
+            if (string.IsNullOrEmpty(jwt))
+            {
+                return null;
+            }
+
+            try
+            {
+                string[] segments = jwt.Split('.');
+
+                if (segments.Length != 3)
+                {
+                    return null;
+                }
+
+                JObject header = (JObject)JsonConvert.DeserializeObject(
+                    CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
+
+                return (string)header[JwtConst.alg];
+            }
+            catch
+            {
+                // Base64Url・JSON として壊れている。
+                return null;
+            }
         }
 
         #endregion
@@ -4167,6 +4287,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                         CmnEndpoints.DecodeRegisteredJwk(
                             Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
                     };
+
+                // **登録 token_endpoint_auth_signing_alg で絞る**（#262）。
+                //   **登録が無ければ、従来どおり両方を試す**（下位互換）。
+                //   **登録が在れば、その alg でなければ通さない**
+                //   （鍵を両方登録したクライアントを、片方に絞れるようにするため）。
+                //   **既知でない値が登録されていれば拒否する**（#224 と同じ方針）。
+                if (!CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetTokenEndpointAuthSigningAlg(assertionIss),
+                    CmnEndpoints.TokenEndpointAuthSigningAlgs,
+                    CmnEndpoints.TryReadJwtAlg(assertion)))
+                {
+                    proof = ClientModePolicy.Proof.None;
+                    client_id = "";
+                    return false;
+                }
 
                 foreach (string pubKey in pubKeys)
                 {

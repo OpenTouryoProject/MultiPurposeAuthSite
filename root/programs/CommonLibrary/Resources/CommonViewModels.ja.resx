@@ -234,6 +234,12 @@
   <data name="IdTokenSignedResponseAlg" xml:space="preserve">
     <value>署名アルゴリズム（id_token_signed_response_alg）</value>
   </data>
+  <data name="RequestObjectSigningAlg" xml:space="preserve">
+    <value>Request Object の署名アルゴリズム（request_object_signing_alg）</value>
+  </data>
+  <data name="TokenEndpointAuthSigningAlg" xml:space="preserve">
+    <value>client_assertion の署名アルゴリズム（token_endpoint_auth_signing_alg）</value>
+  </data>
   <data name="SubjectTypes" xml:space="preserve">
     <value>サブジェクト識別子タイプ</value>
   </data>

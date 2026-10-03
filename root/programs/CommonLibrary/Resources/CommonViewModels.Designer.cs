@@ -367,6 +367,24 @@ namespace MultiPurposeAuthSite.Resources {
         }
 
         /// <summary>
+        ///   Request object signing algorithm (request_object_signing_alg) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RequestObjectSigningAlg {
+            get {
+                return ResourceManager.GetString("RequestObjectSigningAlg", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Client assertion signing algorithm (token_endpoint_auth_signing_alg) に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string TokenEndpointAuthSigningAlg {
+            get {
+                return ResourceManager.GetString("TokenEndpointAuthSigningAlg", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Signing algorithm (id_token_signed_response_alg) に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string IdTokenSignedResponseAlg {

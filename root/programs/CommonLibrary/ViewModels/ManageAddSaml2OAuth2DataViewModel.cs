@@ -25,6 +25,7 @@
 //*  2026/10/02  玄人 幸道         subject_types の選択肢を OIDC の登録値だけにした（#151 の段階 5）
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を追加（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         署名アルゴリズムの選択肢を SigningKeys の表から作る（#129 の段階 3）
+//*  2026/10/03  玄人 幸道         検証する側のalgの登録項目を追加（#262）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -185,6 +186,79 @@ namespace MultiPurposeAuthSite.ViewModels
 
                 return items;
             }
+        }
+
+        #endregion
+
+        #region TokenEndpointAuthSigningAlg / RequestObjectSigningAlg
+
+        /// <summary>TokenEndpointAuthSigningAlg</summary>
+        /// <remarks>
+        /// **`client_assertion`（`private_key_jwt`）を、この alg だけに絞る**（#262）。
+        /// **空なら絞らない**（登録された鍵で順に試す ＝ 従来どおり）。
+        /// </remarks>
+        [Display(Name = "TokenEndpointAuthSigningAlg", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "token_endpoint_auth_signing_alg")]
+        public string TokenEndpointAuthSigningAlg { get; set; }
+
+        /// <summary>TokenEndpointAuthSigningAlg アイテムリスト</summary>
+        /// <remarks>
+        /// **一覧は `CmnEndpoints.TokenEndpointAuthSigningAlgs` が持つ**（広告もそこから作る）。
+        /// ＝ **受ける alg が増えれば、画面の選択肢も増える**（`SigningKeys` と同じ考え方）。
+        /// **先頭は空**（＝ 絞らない）である。
+        /// </remarks>
+        public List<SelectListItem> DdlTokenEndpointAuthSigningAlgItems
+        {
+            get
+            {
+                return ManageAddSaml2OAuth2DataViewModel.VerifyingAlgItems(
+                    TokenProviders.CmnEndpoints.TokenEndpointAuthSigningAlgs);
+            }
+        }
+
+        /// <summary>RequestObjectSigningAlg</summary>
+        /// <remarks>
+        /// **Request Object（`/ros` / `/par` / `request`）を、この alg だけに絞る**（#262）。
+        /// **空なら絞らない。**
+        ///
+        /// **CIBA の `request` は対象外**である（`ES256` 固定で、仕様でも別の登録項目）。
+        /// </remarks>
+        [Display(Name = "RequestObjectSigningAlg", ResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "request_object_signing_alg")]
+        public string RequestObjectSigningAlg { get; set; }
+
+        /// <summary>RequestObjectSigningAlg アイテムリスト</summary>
+        /// <remarks>
+        /// **一覧は `CmnEndpoints.RequestObjectSigningAlgs` が持つ。**
+        /// **いまは `RS256` だけ**である（上流の `RequestObject.Verify` が RS256 固定のため）。
+        /// **増やすのは「広げる側」の話**で、#262 では扱っていない。
+        /// </remarks>
+        public List<SelectListItem> DdlRequestObjectSigningAlgItems
+        {
+            get
+            {
+                return ManageAddSaml2OAuth2DataViewModel.VerifyingAlgItems(
+                    TokenProviders.CmnEndpoints.RequestObjectSigningAlgs);
+            }
+        }
+
+        /// <summary>検証する側の alg の選択肢を作る（先頭は「絞らない」）</summary>
+        /// <param name="algs">受ける alg</param>
+        /// <returns>選択肢</returns>
+        private static List<SelectListItem> VerifyingAlgItems(string[] algs)
+        {
+            List<SelectListItem> items = new List<SelectListItem>()
+            {
+                // **空 ＝ 絞らない**（登録しないのと同じ）。
+                new SelectListItem() { Text = "（絞らない）", Value = "" }
+            };
+
+            foreach (string alg in algs)
+            {
+                items.Add(new SelectListItem() { Text = alg, Value = alg });
+            }
+
+            return items;
         }
 
         #endregion

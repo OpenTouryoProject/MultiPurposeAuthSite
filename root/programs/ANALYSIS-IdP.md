@@ -1466,10 +1466,10 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
-| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる** |
+| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる。登録 `token_endpoint_auth_signing_alg` で片方に絞れる**（#262） |
 | `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
 | access_token | （広告しない） | 同上（9 つ） | 同上（`id_token` と同じ alg になる） |
-| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
+| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify`。**登録 `request_object_signing_alg` で絞れる**が、受ける集合が 1 つなので結果は変わらない（#262） |
 | CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
 | 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
 
@@ -1500,7 +1500,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**。
   **✅ 対応した（#129 の段階 3）。** **鍵はリポジトリに在った**（`SHA384ECDSA.pfx` / `SHA521ECDSA.pfx`）
 - **登録（クライアント）側の alg の項目**は、**`id_token_signed_response_alg` を ✅ 足した**（#129 の段階 2。下記）。
-  **検証する側**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**（#262）
+  **検証する側**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）も
+  **✅ 足した**（#262。**書かなければ絞らない**。受ける alg を広げるのは別の話）
 
 ### 署名アルゴリズムを登録で選べるようにした（#129 の段階 2）
 
@@ -1530,8 +1531,8 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 - **CIBA は `ES256` のまま**（FAPI-CIBA が `PS256` / `ES256` を求めるため、登録値で上書きしない）
 - **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま**
-- **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は**まだ無い**。
-  **受ける alg を登録で狭めるのは別の話**なので、**#262 に切り出した**
+- **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は
+  **#262 で ✅ 足した**（**狭める側だけ**。受ける alg を広げるのは上流の対応が要る）
 - **E2E** : **`RT-129.3`**（`RS512` で署名され、`jwkcerts` の同じ鍵で検証でき、`kid` が `RS256` と同じ。
   **自分の検証経路＝C-8 で固定した集合も、これを受ける**）／
   **`RT-129.4`**（Discovery が `RS256 RS384 RS512 ES256` を、**この順で**広告する）
@@ -1628,7 +1629,7 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
   **`RT-129.6`**（**Discovery が広告する alg すべてに、`jwkcerts` の鍵が在る**）
 - **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
 - **残り** : **`PS256` は段階 4**（下記で ✅ 対応した）。
-  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は、まだ無い（#262）
+  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は **#262 で対応済み**
 
 ### PS256 / PS384 / PS512（RSASSA-PSS）（#129 の段階 4）
 
@@ -1671,9 +1672,50 @@ Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡し�
 - **CIBA は `ES256` のまま**（登録値で上書きしない）。**JARM も `RS256` のまま**
 - **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である。
   **`jwkcerts` も変わらない**（鍵を足していないため、RP 側の作業も無い）
-- **残り** : **検証する側の登録項目**（`request_object_signing_alg` /
-  `token_endpoint_auth_signing_alg`）。**受ける alg をクライアント単位で狭める話**なので、
-  **#262 に切り出した**（#129 は段階 4 で完了）
+- **残り** : 無し。**検証する側の登録項目**（`request_object_signing_alg` /
+  `token_endpoint_auth_signing_alg`）は **#262 で対応済み**（#129 は段階 4 で完了）
+
+### 検証する側の alg をクライアント単位で登録できるようにした（#262）
+
+**#129 で足したのは「発行する側」だけ**だった（`id_token_signed_response_alg`）。
+**「受ける側」の登録項目が無く、広告との非対称が残っていた。**
+
+| | 広告（Discovery） | 登録（クライアント） |
+|---|---|---|
+| `client_assertion` | `token_endpoint_auth_signing_alg_values_supported` | **無かった → ✅ 足した** |
+| Request Object | `request_object_signing_alg_values_supported` | **無かった → ✅ 足した** |
+
+**効くのは `client_assertion` である。**
+`ClientAuthentication` は**登録された RSA → ECDSA の公開鍵を順に試す**ため、
+**両方の鍵を登録したクライアントは `RS256` でも `ES256` でも認証が通っていた**。
+**登録で片方に絞れる**ようにした（OIDC Registration 1.0 §2 / FAPI 1.0 Advanced §8.6）。
+
+| 登録 | 振る舞い |
+|---|---|
+| 書かない | **両方通る**（従来どおり） |
+| `RS256` | **`ES256` のアサーションは通らない** |
+| **受ける集合の外**（例 : `PS256`） | **通らない**（不正な登録として拒否。#224 と同じ方針） |
+
+**`request_object_signing_alg` は、いま書ける値が 1 つだけ**である。
+**受ける側が `RS256` 固定**（上流の `RequestObject.Verify` が `JWS_RS256_Param` 決め打ち）なので、
+**絞っても結果は変わらない。** **それでも項目を用意したのは、広告との非対称を先に解消しておくため**で、
+**受ける alg が増えた時点で、値を書けるようになるだけ**になる。
+**受ける alg を広げるのは「広げる側」の話**で、#262 では扱っていない（上流の対応が要る）。
+
+**CIBA の `request` は対象外**である。**`ES256` 固定**で、
+**仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+
+**受ける集合は 1 か所が持つ**（`CmnEndpoints.TokenEndpointAuthSigningAlgs` /
+`CmnEndpoints.RequestObjectSigningAlgs`）。**広告・登録値の検証・画面の選択肢が、同じものを見る**
+（発行する側が `SigningKeys` の表 1 か所を見るのと同じ考え方。#129 の段階 3）。
+
+- **絞る口は 3 つ** : `ClientAuthentication`（`client_assertion`）／
+  `/ros` の FAPI2-CC（`RequestObject.Verify`）／`request` パラメタ（JAR）
+- **E2E** : **`RT-262.1`**（`token_endpoint_auth_signing_alg=RS256` のクライアントは、
+  **`RS256` は通り、`ES256` は通らない**。**絞っていないクライアントは `ES256` でも通る**）／
+  **`RT-129.1`**（絞らなければ両方通る＝従来どおり）
+- **画面でも選べる**（`AddSaml2OAuth2Data`。**先頭が「絞らない」**）
+- **利用者への影響** : **無し。** **書かなければ絞らない**ので、**既存の登録は従来どおり**である
 
 ### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]** — **✅ 修正済み（#129 の段階 1）**
 

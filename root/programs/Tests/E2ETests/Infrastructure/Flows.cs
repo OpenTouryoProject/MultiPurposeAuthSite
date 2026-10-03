@@ -44,6 +44,7 @@
 //*  2026/10/02  玄人 幸道         RS512 で署名する TestClient_8 を追加（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         ES384 / ES512 で署名する TestClient_9 / _10 を追加（#129 の段階 3）
 //*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 〜 _13 を追加（#129 の段階 4）
+//*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
 //**********************************************************************************
 
 using System;
@@ -168,12 +169,25 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         public const string TestClient_7 = "TestClient_7";
 
         /// <summary>
-        /// TestClient（normal）を写し、**id_token_signed_response_alg を RS512** にしたクライアント（#129 の段階 2）。
-        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を RS512**、
+        /// **token_endpoint_auth_signing_alg を RS256** にしたクライアント
+        /// （#129 の段階 2 / #262）。**構成ファイルには無い。** test.ps1 -Launch が差し込む。
         /// </summary>
         /// <remarks>
         /// **鍵は RS256 と同じ**（同じ RSA の証明書）。**ダイジェストだけが違う。**
         /// **kid も同じ**（RFC 7638 は鍵から作る）ので、**`jwkcerts` の同じ鍵で検証できる。**
+        ///
+        /// **2 つの登録は、別の向きを指している**（#262）。
+        /// `id_token_signed_response_alg` は**発行する側**、
+        /// `token_endpoint_auth_signing_alg` は**受ける側**なので、同居しても干渉しない
+        /// （`RT-129.3` は authorization code で測るため、受ける側の絞り込みは効かない）。
+        /// **写す元は RSA と ECDSA の公開鍵を両方登録している**ので、
+        /// **絞らなければ、どちらの鍵でも `client_assertion` が通る**（`RT-129.1`）。
+        /// **絞ると、`ES256` は通らない**（`RT-262.1`）。
+        ///
+        /// **専用のクライアントを足していないのは、net48 の制約のため。**
+        /// net48 は一覧ごと 1 本の環境変数で受けるので、**件数に上限がある**
+        /// （test.ps1 の差し込み一覧のコメント / TESTING.md 1 節）。
         /// </remarks>
         public const string TestClient_8 = "TestClient_8";
 

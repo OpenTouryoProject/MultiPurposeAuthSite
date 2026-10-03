@@ -47,6 +47,7 @@
 //*  2026/10/01  玄人 幸道         subject_types の既定値を public に変更（#151 の段階 4）
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を引く口を追加（#129 の段階 2）
+//*  2026/10/03  玄人 幸道         検証する側のalgを引く口を追加（#262）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -1310,6 +1311,98 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // 登録が無い
             return JwtConst.RS256;
+        }
+
+        #endregion
+
+        #region token_endpoint_auth_signing_alg / request_object_signing_alg
+
+        /// <summary>client_id から token_endpoint_auth_signing_alg を取得する（#262）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（**登録が無ければ null** ＝ 絞らない）</returns>
+        /// <remarks>
+        /// **`client_assertion`（`private_key_jwt`）を、この alg だけに絞る**
+        /// （OIDC Registration 1.0 §2 の `token_endpoint_auth_signing_alg`）。
+        ///
+        /// **発行する側（`GetIdTokenSignedResponseAlg`）と既定が逆**である。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **発行する側** | 登録が無ければ **`RS256`**（何かで署名しなければならない） |
+        /// | **受ける側（これ）** | 登録が無ければ **null** ＝ **絞らない**（従来どおり、登録された鍵で順に試す） |
+        ///
+        /// **既知でない値は、使う側（`CmnEndpoints.ClientAuthentication`）が拒否する。**
+        /// 受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs`。
+        /// </remarks>
+        public string GetTokenEndpointAuthSigningAlg(string client_id)
+        {
+            return this.GetVerifyingAlg(client_id, "token_endpoint_auth_signing_alg",
+                model => model.TokenEndpointAuthSigningAlg);
+        }
+
+        /// <summary>client_id から request_object_signing_alg を取得する（#262）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（**登録が無ければ null** ＝ 絞らない）</returns>
+        /// <remarks>
+        /// **Request Object（`/ros` / `/par` / `request` パラメタ）を、この alg だけに絞る**
+        /// （OIDC Registration 1.0 §2 の `request_object_signing_alg`）。
+        ///
+        /// **CIBA の `request` は対象外**である。**あちらは `ES256` 固定**で、
+        /// **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+        ///
+        /// 受ける集合は `CmnEndpoints.RequestObjectSigningAlgs`。
+        /// </remarks>
+        public string GetRequestObjectSigningAlg(string client_id)
+        {
+            return this.GetVerifyingAlg(client_id, "request_object_signing_alg",
+                model => model.RequestObjectSigningAlg);
+        }
+
+        /// <summary>検証する側の alg を、登録から引く（#262）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="key">*.config の項目名</param>
+        /// <param name="fromModel">画面登録（saml2OAuth2Data）から取り出す式</param>
+        /// <returns>alg（登録が無ければ null）</returns>
+        /// <remarks>
+        /// **2 つの項目で同じ引き方になる**ので、1 か所にまとめた。
+        /// **`GetIdTokenSignedResponseAlg` と違い、既定値を持たない**（null ＝ 絞らない）。
+        /// </remarks>
+        private string GetVerifyingAlg(string client_id, string key,
+            Func<ManageAddSaml2OAuth2DataViewModel, string> fromModel)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey(key)
+                    && !string.IsNullOrEmpty(dic[key]))
+                {
+                    return dic[key];
+                }
+
+                return null;
+            }
+
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                ManageAddSaml2OAuth2DataViewModel model =
+                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+
+                string value = fromModel(model);
+
+                if (!string.IsNullOrEmpty(value))
+                {
+                    return value;
+                }
+            }
+
+            // 登録が無い（＝ 絞らない）
+            return null;
         }
 
         #endregion

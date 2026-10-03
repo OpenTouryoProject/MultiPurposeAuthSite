@@ -332,6 +332,9 @@
         "post_logout_redirect_uri": "test_self_logout",
         "client_name": "TestClient",
         // "subject_types" は書かない → **既定は public**（OIDC Core 8 章）。
+        // **検証する側の alg は、書かなければ絞らない**（#262）。
+        //   "token_endpoint_auth_signing_alg": "RS256"  … client_assertion を RS256 だけに
+        //   "request_object_signing_alg":      "RS256"  … Request Object を RS256 だけに
         //   public   : sub = 利用者 ID（既定）
         //   pairwise : sub = RP ごとに違う値（PPID）
         //   **利用者名を RP に渡したいなら UserClaimsMapping で preferred_username に**。

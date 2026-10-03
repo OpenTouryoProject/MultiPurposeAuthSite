@@ -574,7 +574,11 @@ try {
         #     TestClient_5  : normal  … **subject_types = pairwise**（#140 の段階 2）。
         #                               sub が PPID になっても /userinfo がクレームを返すか
         #     TestClient_8  : normal  … **id_token_signed_response_alg = RS512**（#129 の段階 2）。
-        #                               登録した alg で署名されるか（鍵は RS256 と同じ）
+        #                               登録した alg で署名されるか（鍵は RS256 と同じ）。
+        #                               **token_endpoint_auth_signing_alg = RS256 も登録する**（#262）。
+        #                               「発行する側」と「受ける側」は別の項目なので同居できる。
+        #                               **専用のクライアントを足さないのは、net48 の制約のため**
+        #                               （下の「差し込める件数には上限がある」を参照）
         #     TestClient_9  : normal  … **id_token_signed_response_alg = ES384**（#129 の段階 3）。
         #                               曲線が alg に紐づく（P-384 の鍵）
         #     TestClient_10 : normal  … **id_token_signed_response_alg = ES512**（#129 の段階 3）。
@@ -591,6 +595,14 @@ try {
         #                               対応表から返るため（段階 2）、**既に使った client_id では測れない。**
         #   ※ Subject は E2E の KnownClients.MtlsSubjectDn と同じ値にすること。
         #   ※ 秘密は JSON 文字列に素で埋めるので、「"」「\」「'」は使わないこと（net48 は一覧ごと差し替える）。
+        #
+        #   ※ **差し込める件数には上限がある**（#262 で踏んだ）。
+        #     net48 は一覧ごと 1 本の環境変数で渡すため、**1 件足すと約 1.3 KB 増える。**
+        #     **Windows の環境ブロックは全体で 32,767 文字**までで、
+        #     **超えると IIS Express が起動はするが、全要求が 500 になる**（ログに例外は出ない）。
+        #     **いまの 16 件で約 26.8 KB** あり、他の環境変数と合わせて上限に近い。
+        #     **足す前に、既存のクライアントに登録項目を相乗りできないかを見ること。**
+        #     切り分け方は TESTING.md 1 節。
         $mtlsDn = @{ tls_client_auth_subject_dn = 'CN=mpas-e2e-mtls-client' }
 
         # **E2E の KnownClients.SymbolSecret / ColonSecret と同じ値にすること。**
@@ -607,7 +619,12 @@ try {
         $pairwise = @{ subject_types = 'pairwise' }
 
         # **署名アルゴリズムの登録**（#129 の段階 2）。**鍵は RS256 と同じ**で、ダイジェストだけ違う。
-        $rs512 = @{ id_token_signed_response_alg = 'RS512' }
+        #   **検証する側の alg も相乗りさせる**（#262）。**client_assertion を RS256 だけに絞る。**
+        #   写す元（TestClient）は RSA と ECDSA の鍵を両方登録しているので、
+        #   **絞らなければ ES256 でも通る**（RT-129.1）。**絞ると通らない**（RT-262.1）。
+        #   **専用のクライアントを足さないのは、件数の上限のため**（上記）。
+        #   **RT-129.3 は authorization code なので、client_assertion の絞り込みは効かない。**
+        $rs512 = @{ id_token_signed_response_alg = 'RS512'; token_endpoint_auth_signing_alg = 'RS256' }
 
         # **EC は曲線が alg に紐づく**（#129 の段階 3）。**鍵が分かれる**（P-384 / P-521）。
         $es384 = @{ id_token_signed_response_alg = 'ES384' }

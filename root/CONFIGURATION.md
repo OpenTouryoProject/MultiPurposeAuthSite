@@ -150,6 +150,8 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
     "client_name": "TestClient",
     // "subject_types" は書かなければ public（既定。下記）
     // "id_token_signed_response_alg" は書かなければ RS256（既定。下記）
+    // "token_endpoint_auth_signing_alg" / "request_object_signing_alg" は
+    //   書かなければ絞らない（#262。下記）
     "jwk_rsa_publickey": "..."
   },
   ...
@@ -237,6 +239,55 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 > **CIBA（`oauth2_oidc_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
 > （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
 > **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
+
+## 検証する側の alg を、クライアント単位で絞る（#262）
+
+**`id_token_signed_response_alg`（上記）は「発行する側」である。**
+**こちらは「受ける側」** — **そのクライアントから、どの alg で来るか**を宣言する
+（OIDC Registration 1.0 §2）。
+
+| 登録項目 | 効く口 | 書ける値 |
+|---|---|---|
+| `token_endpoint_auth_signing_alg` | `/token` の `client_assertion`（`private_key_jwt`） | **`RS256` / `ES256`** |
+| `request_object_signing_alg` | Request Object（`/ros` / `/par` / `request`） | **`RS256`** |
+
+**どちらも、書かなければ絞らない**（＝ 従来どおり）。**画面からも選べる**（先頭が「絞らない」）。
+
+### 何が変わるか
+
+**`client_assertion` で効く。**
+
+**クライアントが RSA と ECDSA の公開鍵を両方登録していると、
+`RS256` でも `ES256` でも認証が通る**（登録された鍵を順に試すため）。
+**`token_endpoint_auth_signing_alg` を書くと、その alg だけに絞れる。**
+
+| 登録 | 振る舞い |
+|---|---|
+| 書かない | **両方通る**（従来どおり） |
+| `RS256` | **`ES256` のアサーションは通らない** |
+| **書ける値の外**（例 : `PS256`） | **通らない**（不正な登録として拒否。#224 と同じ方針） |
+
+**E2E** : `RT-262.1`（絞ると `ES256` が通らない）／`RT-129.1`（絞らなければ両方通る）。
+
+### `request_object_signing_alg` は、いま書ける値が 1 つだけ
+
+**受ける側は `RS256` 固定**である（上流の `RequestObject.Verify` が `JWS_RS256_Param` 決め打ち）。
+**そのため、絞っても結果は変わらない。**
+
+**それでも項目を用意してある。**
+`request_object_signing_alg_values_supported`（広告）に対して
+**登録側の項目が無いという非対称を、先に解消しておくため**である。
+**受ける alg が増えた時点で、値を書けるようになるだけ**になる。
+
+> **CIBA の `request` は対象外**である。**`ES256` 固定**で、
+> **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+
+### 一覧は 1 か所から作る
+
+**受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs` /
+`CmnEndpoints.RequestObjectSigningAlgs`** にあり、
+**広告（Discovery）と、登録値の検証と、画面の選択肢が、同じものを見る。**
+（発行する側が `SigningKeys` の表 1 か所を見るのと、同じ考え方。#129 の段階 3）
 
 ### 署名鍵の入れ替え（ローテーション。D-9）
 

@@ -219,6 +219,12 @@
   <data name="IdTokenSignedResponseAlg" xml:space="preserve">
     <value>Signing algorithm (id_token_signed_response_alg)</value>
   </data>
+  <data name="RequestObjectSigningAlg" xml:space="preserve">
+    <value>Request object signing algorithm (request_object_signing_alg)</value>
+  </data>
+  <data name="TokenEndpointAuthSigningAlg" xml:space="preserve">
+    <value>Client assertion signing algorithm (token_endpoint_auth_signing_alg)</value>
+  </data>
   <data name="SubjectTypes" xml:space="preserve">
     <value>Subject Identifier types</value>
   </data>
