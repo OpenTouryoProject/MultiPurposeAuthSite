@@ -442,6 +442,24 @@ test_self_logout → OAuth2ClientEndpointsRootURI + /Home/Index（post_logout_re
 **`OAuth2AuthorizationServerEndpointsRootURI` ではなく `OAuth2ClientEndpointsRootURI` を使う。**
 既定では同じ値だが、変えるときは両方見ること。
 
+### `redirect_uri` は、登録値と 1 文字も違っていてはならない（#263）
+
+**照合は単純文字列比較である**（RFC 6749 §3.1.2.3 が指す RFC 3986 §6.2.1 /
+OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/` の有無も区別する。**
+
+```
+登録 : https://rp.example.com/Callback
+要求 : https://rp.example.com/callback   → 通らない（invalid_request）
+要求 : https://rp.example.com/Callback/  → 通らない（invalid_request）
+```
+
+**#263 より前は、大文字小文字を無視していた**（`ToLower()` 同士で比べていた）。
+**登録と大文字小文字が違う `redirect_uri` を送っている RP は、認可に失敗するようになる。**
+**登録どおりに送っている RP には影響しない。**
+
+> **`post_logout_redirect_uri` は、#232 の時点から同じ比較である**（`StringComparison.Ordinal`）。
+> **`redirect_uri` だけが揃っていなかったので、揃えた。**
+
 ## 5. ルート URI と、自己テストの折り返し（重要）
 
 ```

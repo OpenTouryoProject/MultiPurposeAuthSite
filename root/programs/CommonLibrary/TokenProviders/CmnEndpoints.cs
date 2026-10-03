@@ -110,6 +110,7 @@
 //*  2026/10/02  玄人 幸道         登録された id_token_signed_response_alg で署名する（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         id_token の鍵選択を alg 1 つに寄せた（#129 の段階 3）
 //*  2026/10/03  玄人 幸道         検証する側のalgを登録で絞る（#262）
+//*  2026/10/03  玄人 幸道         redirect_uriを単純文字列比較にした（#263）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1047,8 +1048,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // **登録値と完全一致**（§3）。
-            //   redirect_uri の照合（CheckRedirectUri）は大文字小文字を無視するが（C-10）、
-            //   **こちらは仕様が exactly match と書いているので、そのまま比較する。**
+            //   **redirect_uri の照合（CheckRedirectUri）も、同じ単純文字列比較である**（#263）。
+            //   以前はあちらだけ大文字小文字を無視していた（C-10）。
             string registered = CmnEndpoints.GetRedirectUriFromConstr(
                 Helper.GetInstance().GetClientsPostLogoutRedirectUri(aud) ?? "");
 
@@ -2336,7 +2337,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
                     //if (redirect_uri.StartsWith(preRegisteredUri))
                     if (preRegisteredUri == null) preRegisteredUri = ""; // null対策
-                    if (redirect_uri.ToLower() == preRegisteredUri.ToLower()) // LowerCaseに揃える
+
+                    // **単純文字列比較**（#263）。**大文字小文字を区別する。**
+                    //   RFC 6749 §3.1.2.3 は RFC 3986 §6.2.1（Simple String Comparison）を指しており、
+                    //   **正規化せず、1 文字ずつ比べること**を求めている（OIDC Core §3.1.2.1 も exact match）。
+                    //   **URI 全体を比べる。** スキームとホストは RFC 3986 では大文字小文字を区別しないが、
+                    //   **仕様が「正規化しない比較」と言っているので、そこも揃っていなければ通さない。**
+                    //   以前は `ToLower()` 同士で比べていたため、**パスの大文字小文字だけが違う値でも通っていた**
+                    //   （`post_logout_redirect_uri` の方は #232 の時点から Ordinal で比べている）。
+                    if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
                     {
                         // 完全一致する場合。
                         valid_redirect_uri = redirect_uri;
