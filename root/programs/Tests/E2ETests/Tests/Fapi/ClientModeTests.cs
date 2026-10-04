@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -36,6 +36,7 @@
 //*                                FA-1.4 を認可エンドポイントでの拒否に改めた（#224 の段階 2）
 //*  2026/09/22  玄人 幸道         FA-2.1 の注記を、mTLS の通る側（FA-6.1）に合わせた（#226）
 //*  2026/09/26  玄人 幸道         FA-1.2 を、refresh_token を「非対称の証明でだけ使える」に改めた（#239 の段階 3）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -211,7 +212,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Fapi
                 JsonResponse ropc = await client.TokenAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
+                    { "username", TestEnv.TestUserName(targetKey) },
                     { "password", client.Config.Get("TestUserPWD") },
                     { "scope", "email profile" },
                     { "client_id", reg.ClientId },

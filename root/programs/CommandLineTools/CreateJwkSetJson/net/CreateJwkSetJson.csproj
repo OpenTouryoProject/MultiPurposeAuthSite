@@ -58,6 +58,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Program.cs" />
+    <!-- **署名に使う鍵の表を、アプリと共有する**（#129 の段階 3 / D-9）。
+         CommonLibrary ごと参照すると重いので、この 1 ファイルだけをソース参照する。 -->
+    <Compile Include="..\..\..\CommonLibrary\TokenProviders\SigningKeys.cs">
+      <Link>SigningKeys.cs</Link>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

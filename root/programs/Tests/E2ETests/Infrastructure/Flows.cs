@@ -39,7 +39,14 @@
 //*  2026/09/22  玄人 幸道         mTLS 用の TestClient2_2 / TestClient2_3 と、その Subject を追加（#226）
 //*  2026/09/27  玄人 幸道         記号を含む client_secret の TestClient_2 / TestClient_3 を追加（#237）
 //*  2026/09/27  玄人 幸道         post_logout_redirect_uri を登録した TestClient_4 を追加（#232）
+//*  2026/09/30  玄人 幸道         subject_types=pairwise のクライアント（TestClient_5）を追加（#140 の段階 2）
 //*  2026/10/01  玄人 幸道         既定の subject_types を測る TestClient_6 / TestClient_7 を追加（#151 の段階 4）
+//*  2026/10/02  玄人 幸道         RS512 で署名する TestClient_8 を追加（#129 の段階 2）
+//*  2026/10/02  玄人 幸道         ES384 / ES512 で署名する TestClient_9 / _10 を追加（#129 の段階 3）
+//*  2026/10/03  玄人 幸道         PS256 / PS384 / PS512 の TestClient_11 〜 _13 を追加（#129 の段階 4）
+//*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
+//*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
+//*  2026/10/04  玄人 幸道         TestClient_15とtest_self_code_manageの解決を追加（C-10）
 //**********************************************************************************
 
 using System;
@@ -162,6 +169,120 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// （pairwise との違いが、ここに出る）。
         /// </remarks>
         public const string TestClient_7 = "TestClient_7";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を RS512**、
+        /// **token_endpoint_auth_signing_alg を RS256** にしたクライアント
+        /// （#129 の段階 2 / #262）。**構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **鍵は RS256 と同じ**（同じ RSA の証明書）。**ダイジェストだけが違う。**
+        /// **kid も同じ**（RFC 7638 は鍵から作る）ので、**`jwkcerts` の同じ鍵で検証できる。**
+        ///
+        /// **2 つの登録は、別の向きを指している**（#262）。
+        /// `id_token_signed_response_alg` は**発行する側**、
+        /// `token_endpoint_auth_signing_alg` は**受ける側**なので、同居しても干渉しない
+        /// （`RT-129.3` は authorization code で測るため、受ける側の絞り込みは効かない）。
+        /// **写す元は RSA と ECDSA の公開鍵を両方登録している**ので、
+        /// **絞らなければ、どちらの鍵でも `client_assertion` が通る**（`RT-129.1`）。
+        /// **絞ると、`ES256` は通らない**（`RT-262.1`）。
+        ///
+        /// **専用のクライアントを足していないのは、net48 の制約のため。**
+        /// net48 は一覧ごと 1 本の環境変数で受けるので、**件数に上限がある**
+        /// （test.ps1 の差し込み一覧のコメント / TESTING.md 1 節）。
+        /// </remarks>
+        public const string TestClient_8 = "TestClient_8";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を ES384** にしたクライアント（#129 の段階 3）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **EC は曲線が alg に紐づく**（JWA : ES384 → P-384）ので、**RS とは違って鍵が分かれる。**
+        /// **kid も曲線ごとに違う**ので、`jwkcerts` には P-256 / P-384 / P-521 の 3 本が載る。
+        /// </remarks>
+        public const string TestClient_9 = "TestClient_9";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を ES512** にしたクライアント（#129 の段階 3）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>**`ES512` の曲線は `P-521`**（512 ではない。JWA）。</remarks>
+        public const string TestClient_10 = "TestClient_10";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**id_token_signed_response_alg を PS256** にしたクライアント（#129 の段階 4）。
+        /// **構成ファイルには無い。** test.ps1 -Launch が差し込む。
+        /// </summary>
+        /// <remarks>
+        /// **RSASSA-PSS。鍵は `RS*` と同じ 1 本**で、**パディングだけが違う。**
+        /// **`kid` も `RS256` と同じ**（RFC 7638 は kty / n / e から作る）。
+        /// </remarks>
+        public const string TestClient_11 = "TestClient_11";
+
+        /// <summary>同 PS384（#129 の段階 4）</summary>
+        public const string TestClient_12 = "TestClient_12";
+
+        /// <summary>同 PS512（#129 の段階 4）</summary>
+        public const string TestClient_13 = "TestClient_13";
+
+        /// <summary>
+        /// TestClient（normal）を写し、**redirect_uri_code を `test_self_code_manage`** にした
+        /// クライアント（C-10）。**構成ファイルには無い。** 種データが作る（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **管理画面の自己テスト（`GetOAuth2Token`）の折り返し先を、登録値として表したもの。**
+        /// **以前は `CheckRedirectUri` に「この URL なら登録を確かめずに通す」分岐が在った**
+        /// （`ANALYSIS-IdP.md` の C-10）。**記号にして通常の照合に載せ、分岐を消した。**
+        /// </remarks>
+        public const string TestClient_15 = "TestClient_15";
+
+        #region 種データで登録される client_id（#264）
+
+        /// <summary>
+        /// **種データ（`Sts.TestClients`）で登録されるクライアントの client_id**（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **以前は test.ps1 -Launch が環境変数で差し込み、client_id を `MPAS_<名前>` で渡していた。**
+        /// **net48 版は一覧ごと 1 本の環境変数**なので**件数に上限があり**（#262 で踏んだ）、
+        /// **利用者の登録（`saml2OAuth2Data`）に寄せた**（#264）。
+        ///
+        /// **user store は構成ファイルから読めない**ので、**client_id を固定値で持つ。**
+        /// **サーバ側の `Sts.TestClients.Entries` と同じ値にすること。**
+        /// 揃っていなければ「登録されていない」で落ちる。
+        /// </remarks>
+        private static readonly Dictionary<string, string> SeededClientIds
+            = new Dictionary<string, string>()
+            {
+                { KnownClients.TestClient_2,  "e2e0tc02000000000000000000000000" },
+                { KnownClients.TestClient_3,  "e2e0tc03000000000000000000000000" },
+                { KnownClients.TestClient_4,  "e2e0tc04000000000000000000000000" },
+                { KnownClients.TestClient_5,  "e2e0tc05000000000000000000000000" },
+                { KnownClients.TestClient_6,  "e2e0tc06000000000000000000000000" },
+                { KnownClients.TestClient_7,  "e2e0tc07000000000000000000000000" },
+                { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
+                { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
+                { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
+                { KnownClients.TestClient2_2, "e2e0tc22000000000000000000000000" },
+                { KnownClients.TestClient2_3, "e2e0tc23000000000000000000000000" },
+                { KnownClients.TestClient_8,  "e2e0tc08000000000000000000000000" },
+                { KnownClients.TestClient_9,  "e2e0tc09000000000000000000000000" },
+                { KnownClients.TestClient_10, "e2e0tc10000000000000000000000000" },
+                { KnownClients.TestClient_11, "e2e0tc11000000000000000000000000" },
+                { KnownClients.TestClient_12, "e2e0tc12000000000000000000000000" },
+                { KnownClients.TestClient_13, "e2e0tc13000000000000000000000000" }
+            };
+
+        /// <summary>種データで登録される client_id（無ければ null）（#264）</summary>
+        /// <param name="clientName">クライアント名</param>
+        /// <returns>client_id（種データに無ければ null）</returns>
+        public static string SeededClientId(string clientName)
+        {
+            return KnownClients.SeededClientIds.TryGetValue(clientName ?? "", out string clientId)
+                ? clientId : null;
+        }
+
+        #endregion
 
         /// <summary>
         /// TestClient_2 の client_secret（#237）。
@@ -298,6 +419,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 return client.ToLocalUrl(
                     root + client.Config.Get("OAuth2ImplicitGrantClient_Account"));
+            }
+
+            // 管理画面の自己テストの折り返し先（C-10）。
+            if (value == "test_self_code_manage")
+            {
+                return client.ToLocalUrl(
+                    root + client.Config.Get("OAuth2AuthorizationCodeGrantClient_Manage"));
             }
 
             // ログアウト後の戻り先（#232）。サーバ側は「クライアント側の口 ＋ /Home/Index」。
@@ -545,6 +673,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             // **client_secret を差し替えたものは、写す元の秘密では認証できない**（#237）。
             string overriddenSecret = null;
 
+            // **redirect_uri を差し替えたものも、写す元の値では通らない**（C-10）。
+            string overriddenRedirectUri = null;
+
             if (clientName == KnownClients.TestClient4_2 || clientName == KnownClients.TestClient4_3)
             {
                 sourceName = KnownClients.TestClient4;
@@ -579,13 +710,33 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 // client_secret は写す元のまま（**写しただけ**。#151 の段階 4）。
                 sourceName = KnownClients.TestClient;
             }
+            else if (clientName == KnownClients.TestClient_8
+                || clientName == KnownClients.TestClient_9
+                || clientName == KnownClients.TestClient_10
+                || clientName == KnownClients.TestClient_11
+                || clientName == KnownClients.TestClient_12
+                || clientName == KnownClients.TestClient_13)
+            {
+                // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2〜4）。
+                sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_15)
+            {
+                // **折り返し先だけを差し替えた**（C-10）。client_secret は写す元のまま。
+                sourceName = KnownClients.TestClient;
+                overriddenRedirectUri = Flows.ResolveRedirectUri(client, "test_self_code_manage");
+            }
 
+            // **client_id は固定値**（#264）。
+            //   **以前は test.ps1 -Launch が環境変数（`MPAS_<名前>`）で渡していた**が、
+            //   **サーバ側の種データ（`Sts.TestClients`）に寄せた**ので、環境変数を使わない。
+            //   **`-Launch` を付けずに、手で起動したサイトに対しても測れる**ようになった。
             string clientId = sourceName != null
-                ? Environment.GetEnvironmentVariable("MPAS_" + clientName.ToUpperInvariant()) : null;
+                ? KnownClients.SeededClientId(clientName) : null;
 
             Skip.If(string.IsNullOrEmpty(clientId),
-                "client_name=" + clientName + " は差し込まれていません"
-                + "（test.ps1 -Launch のときだけサイトへ差し込む。#224）。");
+                "client_name=" + clientName + " の登録がありません"
+                + "（種データは IsDebug ＋ TestUserPWD のときだけ作る。#264）。");
 
             // client_secret・redirect_uri・公開鍵は写す元と同じなので、構成ファイルの写す元から引ける。
             ClientRegistration source = Flows.Registration(client, sourceName);
@@ -594,7 +745,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 ClientId = clientId,
                 ClientSecret = overriddenSecret ?? source.ClientSecret,
-                RedirectUri = source.RedirectUri,
+                RedirectUri = overriddenRedirectUri ?? source.RedirectUri,
                 RedirectUriToken = source.RedirectUriToken
             };
         }

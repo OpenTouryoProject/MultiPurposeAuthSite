@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/30  玄人 幸道         新規（#250 の段階 5 : ID フェデレーションを E2E で駆動する）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System;
@@ -156,7 +157,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 new Dictionary<string, string>()
                 {
                     { "__RequestVerificationToken", m.Groups["value"].Value },
-                    { "Email", TestEnv.TestUserName },
+                    // **上流の利用者である**（#260）。**下流の接尾辞を渡してはならない。**
+                    //   上流は自分のストアを持ち、種データは super_tanaka である。
+                    { "Email", TestEnv.UpstreamUserName },
                     { "Password", client.Config.Get("TestUserPWD") },
                     { "RememberMe", "false" },
                     { "submitButtonName", "normal_signin" }
@@ -218,7 +221,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 new Dictionary<string, string>()
                 {
                     { "__RequestVerificationToken", m.Groups["value"].Value },
-                    { "Email", TestEnv.TestUserName },
+                    // **下流の画面なので、下流のターゲットから引く**（#260）。
+                    { "Email", TestEnv.TestUserName(client.Target.Key) },
                     { "Password", "" },
                     { "RememberMe", "false" },
                     { "submitButtonName", "id_federation_signin" }

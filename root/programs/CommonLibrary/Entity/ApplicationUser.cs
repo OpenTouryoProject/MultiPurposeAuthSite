@@ -19,6 +19,7 @@
 //*  201X/XX/XX  西野 大介         TotpAuthenticatorKey追加(Core)
 //*  201X/XX/XX  西野 大介         FIDO2PublicKey追加(WebAuthn)
 //*  2020/02/27  西野 大介         DeviceToken追加(プッシュ通知)
+//*  2026/10/01  玄人 幸道         CreateUser を利用者名とメアドの 2 つを受け取る形にした（#151 の段階 3）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;

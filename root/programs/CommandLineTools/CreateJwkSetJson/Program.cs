@@ -5,7 +5,7 @@
 #region Apache License
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License. 
+// you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -29,13 +29,15 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2018/08/15  西野 大介         新規
+//*  2026/10/02  玄人 幸道         署名に使う鍵をすべて載せる（#129 の段階 3 / D-9）
 //**********************************************************************************
 
+using System;
 using System.IO;
-using System.Security.Cryptography;
 
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+using MultiPurposeAuthSite.TokenProviders;
 
 using Touryo.Infrastructure.Framework.Authentication;
 
@@ -45,6 +47,20 @@ using Touryo.Infrastructure.Public.Security.Jwt;
 
 namespace CreateJwkSetJson
 {
+    /// <summary>
+    /// `jwkcerts` が返す JWK Set（`JwkSet.json`）を作る。
+    /// </summary>
+    /// <remarks>
+    /// **アプリが署名に使う鍵を、そのまま載せる。**
+    /// 載せる鍵は **`SigningKeys` の表**（CommonLibrary）が決める。
+    /// **このツールは、その 1 ファイルをソース参照している**（`Compile Include` の `Link`）。
+    /// ＝ **アプリが発行できる alg と、公開鍵の一覧が食い違わない**（D-9）。
+    ///
+    /// **追記しかしない。** 既に載っている `kid` は、そのまま残す。
+    /// **鍵の入れ替え（ローテーション）で要るのは、この性質**である
+    /// （新しい鍵を先に載せ、RP のキャッシュが切れてから署名に使う。`CONFIGURATION.md`）。
+    /// **退役した鍵を外すのは、手で消す**（＝ 消すのは人が決める）。
+    /// </remarks>
     class Program
     {
         static void Main(string[] args)
@@ -53,18 +69,6 @@ namespace CreateJwkSetJson
             // configの初期化
             GetConfigParameter.InitConfiguration("appsettings.json");
 #endif
-
-            // 現在の証明書のJwk
-            RsaPublicKeyConverter rpbkc = new RsaPublicKeyConverter(JWS_RSA.RS._256);
-            EccPublicKeyConverter epbkc = new EccPublicKeyConverter(JWS_ECDSA.ES._256);
-
-            JObject rsaJwkObject = 
-                JsonConvert.DeserializeObject<JObject>(
-                    rpbkc.X509CerToJwk(CmnClientParams.RsaCerFilePath));
-
-            JObject ecdsaJwkObject =
-                JsonConvert.DeserializeObject<JObject>(
-                    epbkc.X509CerToJwk(CmnClientParams.EcdsaCerFilePath));
 
             // JwkSet.jsonファイルの存在チェック
             if (!ResourceLoader.Exists(OAuth2AndOIDCParams.JwkSetFilePath, false))
@@ -80,25 +84,35 @@ namespace CreateJwkSetJson
             // JwkSet.jsonファイルのロード
             JwkSet jwkSetObject = JwkSet.LoadJwkSet(OAuth2AndOIDCParams.JwkSetFilePath);
 
-            // 判定
             if (jwkSetObject == null)
             {
-                // 新規
+                // 新規（空のファイルだった）
                 jwkSetObject = new JwkSet();
-                jwkSetObject.keys.Add(rsaJwkObject);
-                jwkSetObject.keys.Add(ecdsaJwkObject);
             }
-            else
-            {
-                // 既存
 
-                // kidの重複確認
-                JwkSet.AddJwkToJwkSet(jwkSetObject, rsaJwkObject);
-                JwkSet.AddJwkToJwkSet(jwkSetObject, ecdsaJwkObject);
+            int before = jwkSetObject.keys.Count;
+
+            // **署名に使う鍵を、すべて載せる**（#129 の段階 3）。
+            //   RS256 / RS384 / RS512 は同じ鍵（kid も同じ）なので、2 つ目以降は追記されない。
+            foreach (string alg in SigningKeys.SupportedAlgs)
+            {
+                SigningKeys.Entry key = SigningKeys.Of(alg);
+                JObject jwkObject = key.JwkFromCer();
+
+                // kidの重複確認（追記しかしない）
+                JwkSet.AddJwkToJwkSet(jwkSetObject, jwkObject);
+
+                Console.WriteLine("{0,-5} kid={1} <- {2}",
+                    alg, (string)jwkObject[JwtConst.kid], key.CerFilePath);
             }
 
             // jwkSetObjectのセーブ
             JwkSet.SaveJwkSet(OAuth2AndOIDCParams.JwkSetFilePath, jwkSetObject);
+
+            Console.WriteLine();
+            Console.WriteLine("{0} : 鍵 {1} 本（{2} 本を追記）",
+                OAuth2AndOIDCParams.JwkSetFilePath,
+                jwkSetObject.keys.Count, jwkSetObject.keys.Count - before);
         }
     }
 }

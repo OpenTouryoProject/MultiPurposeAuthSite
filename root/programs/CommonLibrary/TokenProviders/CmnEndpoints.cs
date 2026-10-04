@@ -104,8 +104,15 @@
 //*  2026/09/29  玄人 幸道         経過を秒単位で比べる（再認証の直後を超過としない）（#247）
 //*  2026/09/29  玄人 幸道         refresh で登録種別のクレーム（fapi）が消えていたのを修正（#245）
 //*  2026/09/29  玄人 幸道         code_challenge を送った code は code_verifier を必須にした（#245）
+//*  2026/09/30  玄人 幸道         client_assertion を ES256 でも検証できるようにし、広告を揃えた（#129 の段階 2）
 //*  2026/10/01  玄人 幸道         subject_types_supported の並びを public 先頭に（#151 の段階 4）
 //*  2026/10/02  玄人 幸道         subject_types_supported を OIDC の登録値だけにした（#151 の段階 5）
+//*  2026/10/02  玄人 幸道         登録された id_token_signed_response_alg で署名する（#129 の段階 2）
+//*  2026/10/02  玄人 幸道         id_token の鍵選択を alg 1 つに寄せた（#129 の段階 3）
+//*  2026/10/03  玄人 幸道         検証する側のalgを登録で絞る（#262）
+//*  2026/10/03  玄人 幸道         redirect_uriを単純文字列比較にした（#263）
+//*  2026/10/04  玄人 幸道         redirect_uriの登録迂回の分岐を削除（C-10）
+//*  2026/10/04  玄人 幸道         CORSで許可するオリジンの導出を追加（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -196,6 +203,7 @@ namespace MultiPurposeAuthSite.TokenProviders
             //   `client_assertion` の検証で、**登録された RSA / ECDSA の公開鍵を順に試す**
             //   ようにしたため（`CmnEndpoints.ClientAuthentication`）。
             //   **クライアントが ECDSA の公開鍵（jwk_ecdsa_publickey）を登録していれば ES256 が通る。**
+            //   **一覧は 1 か所から作る**（#262）。広告と、登録値の検証が同じものを見る。
             OpenIDConfig.Add("token_endpoint_auth_signing_alg_values_supported", new List<string> {
                 "RS256", "ES256"
             });
@@ -279,9 +287,10 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #endregion
 
                 #region id_token
-                OpenIDConfig.Add("id_token_signing_alg_values_supported", new List<string> {
-                    "RS256", "ES256"
-                });
+                // **一覧は CmnAccessToken.SupportedAlgs が持つ**（#129 の段階 2）。
+                //   **発行・検証・広告が同じ一覧を見る**ので、増やしても食い違わない。
+                OpenIDConfig.Add("id_token_signing_alg_values_supported",
+                    new List<string>(CmnAccessToken.SupportedAlgs));
 
                 // **alg と enc は対で広告する**（OIDC Discovery 1.0 §3。#189 の 5）。
                 //   実装は JWE_RsaOaepAesGcm（Open棟梁）で、鍵の暗号化が RSA-OAEP、本文が A256GCM。
@@ -340,6 +349,7 @@ namespace MultiPurposeAuthSite.TokenProviders
                 #endregion
 
                 #region RequestObject
+                //   **一覧は 1 か所から作る**（#262）。
                 OpenIDConfig.Add("request_object_signing_alg_values_supported", new List<string> {
                     "RS256"
                 });
@@ -1040,8 +1050,8 @@ namespace MultiPurposeAuthSite.TokenProviders
             }
 
             // **登録値と完全一致**（§3）。
-            //   redirect_uri の照合（CheckRedirectUri）は大文字小文字を無視するが（C-10）、
-            //   **こちらは仕様が exactly match と書いているので、そのまま比較する。**
+            //   **redirect_uri の照合（CheckRedirectUri）も、同じ単純文字列比較である**（#263）。
+            //   以前はあちらだけ大文字小文字を無視していた（C-10）。
             string registered = CmnEndpoints.GetRedirectUriFromConstr(
                 Helper.GetInstance().GetClientsPostLogoutRedirectUri(aud) ?? "");
 
@@ -1338,6 +1348,16 @@ namespace MultiPurposeAuthSite.TokenProviders
                 pubKey = CmnEndpoints.DecodeRegisteredJwk(
                     Helper.GetInstance().GetJwkRsaPublickey(iss));
 
+                // **登録 request_object_signing_alg で絞る**（#262）。
+                //   **CIBA（上の分岐）は対象外**。あちらは ES256 固定で、仕様でも別の登録項目。
+                if (!CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetRequestObjectSigningAlg(iss),
+                    CmnEndpoints.RequestObjectSigningAlgs,
+                    CmnEndpoints.TryReadJwtAlg(requestObject)))
+                {
+                    return false;
+                }
+
                 // 署名検証
                 result = !string.IsNullOrEmpty(pubKey)
                     && RequestObject.Verify(requestObject, out iss, pubKey);
@@ -1456,6 +1476,18 @@ namespace MultiPurposeAuthSite.TokenProviders
                 }
 
                 pubKey = CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(pubKey), CustomEncode.us_ascii);
+
+                // **登録 request_object_signing_alg で絞る**（#262）。
+                if (!CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetRequestObjectSigningAlg(client_id),
+                    CmnEndpoints.RequestObjectSigningAlgs,
+                    CmnEndpoints.TryReadJwtAlg(request)))
+                {
+                    err.Add(OAuth2AndOIDCConst.error, "invalid_request_object"); // RFC 9101 §6.3（Open棟梁の定数に無い）
+                    err.Add(OAuth2AndOIDCConst.error_description,
+                        "The request object is not signed with the registered request_object_signing_alg.");
+                    return false;
+                }
 
                 if (!RequestObject.Verify(request, out string iss, pubKey))
                 {
@@ -2049,6 +2081,101 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         #endregion
 
+        #region 検証する側の alg（#262）
+
+        /// <summary>`client_assertion` で受ける alg（#262）</summary>
+        /// <remarks>
+        /// **この一覧が、広告（`token_endpoint_auth_signing_alg_values_supported`）と、
+        /// 登録値の検証（`token_endpoint_auth_signing_alg`）の両方を決める。**
+        ///
+        /// **中身は上流の都合である。** `JwtAssertion.Verify` が
+        /// **JWK の `kty` を見て `JWS_RS256_Param` / `JWS_ES256_Param` を選ぶ**ので、この 2 つになる。
+        /// **広げるには上流の対応が要る**（alg を受け取るオーバーロードが無い）。
+        /// </remarks>
+        public static readonly string[] TokenEndpointAuthSigningAlgs = new string[]
+        {
+            JwtConst.RS256, JwtConst.ES256
+        };
+
+        /// <summary>Request Object（`/ros` / `/par` / `request`）で受ける alg（#262）</summary>
+        /// <remarks>
+        /// **`RequestObject.Verify` が `JWS_RS256_Param` 固定**なので、いまは `RS256` だけ。
+        /// **CIBA の `request` は別**（`VerifyCiba` が `ES256` 固定。仕様でも別の登録項目）。
+        /// </remarks>
+        public static readonly string[] RequestObjectSigningAlgs = new string[]
+        {
+            JwtConst.RS256
+        };
+
+        /// <summary>登録された alg で絞ってよいか（#262）</summary>
+        /// <param name="registeredAlg">登録された alg（null / 空 なら絞らない）</param>
+        /// <param name="supported">受ける集合</param>
+        /// <param name="actualAlg">実際に来た JWT のヘッダの alg</param>
+        /// <returns>通してよければ true</returns>
+        /// <remarks>
+        /// **3 つに分かれる。**
+        ///
+        /// | 登録 | 判定 |
+        /// |---|---|
+        /// | 無い（null / 空） | **通す**（従来どおり。絞らない） |
+        /// | 在るが、**受ける集合に無い値** | **拒否**（不正な登録。#224 と同じ方針） |
+        /// | 在って、受ける集合の値 | **実際の alg と一致したときだけ通す** |
+        ///
+        /// **実際の alg が読めないとき（JWT でない等）は拒否**する。
+        /// </remarks>
+        private static bool AllowsVerifyingAlg(
+            string registeredAlg, string[] supported, string actualAlg)
+        {
+            if (string.IsNullOrEmpty(registeredAlg))
+            {
+                // 登録が無い ＝ 絞らない。
+                return true;
+            }
+
+            if (Array.IndexOf(supported, registeredAlg) < 0)
+            {
+                // **受ける集合に無い値が登録されている**（設定の誤り）。
+                return false;
+            }
+
+            return !string.IsNullOrEmpty(actualAlg)
+                && registeredAlg == actualAlg;
+        }
+
+        /// <summary>JWT のヘッダから alg を読む（読めなければ null）（#262）</summary>
+        /// <param name="jwt">JWS（コンパクト形式）</param>
+        /// <returns>alg（読めなければ null）</returns>
+        private static string TryReadJwtAlg(string jwt)
+        {
+            if (string.IsNullOrEmpty(jwt))
+            {
+                return null;
+            }
+
+            try
+            {
+                string[] segments = jwt.Split('.');
+
+                if (segments.Length != 3)
+                {
+                    return null;
+                }
+
+                JObject header = (JObject)JsonConvert.DeserializeObject(
+                    CustomEncode.ByteToString(
+                        CustomEncode.FromBase64UrlString(segments[0]), CustomEncode.UTF_8));
+
+                return (string)header[JwtConst.alg];
+            }
+            catch
+            {
+                // Base64Url・JSON として壊れている。
+                return null;
+            }
+        }
+
+        #endregion
+
         #region VerifyPkce
 
         /// <summary>PKCE（RFC 7636）の検証（#220）</summary>
@@ -2193,26 +2320,29 @@ namespace MultiPurposeAuthSite.TokenProviders
             {
                 // redirect_uriの指定が有る。
 
-                // 指定されたredirect_uriを使用する場合は、チェックが必要になる。
-                if (
-                    // self_code : Authorization Codeグラント種別
-                    redirect_uri == (Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage))
-                {
-                    // 特別に、許可されたredirect_uri
-                    valid_redirect_uri = redirect_uri;
-                    return true;
-                }
-                else
+                // **指定された redirect_uri は、必ず登録と突き合わせる。**
+                //   **以前は「管理画面の折り返し先なら、登録を確かめずに通す」分岐が在った**（C-10）。
+                //   **`IsLockedDownTestEndpoints` の対象外で、本番で閉じられなかった。**
+                //   **`test_self_code_manage` を記号にして登録値で表せるようにし、分岐を消した。**
+                //   **例外は無い。**
                 {
                     // クライアント識別子に対応する事前登録したredirect_uri
                     string preRegisteredUri = Helper.GetInstance().GetClientsRedirectUri(client_id, response_type);
-                    
+
                     // 定数値は変換する。
                     preRegisteredUri = CmnEndpoints.GetRedirectUriFromConstr(preRegisteredUri);
 
                     //if (redirect_uri.StartsWith(preRegisteredUri))
                     if (preRegisteredUri == null) preRegisteredUri = ""; // null対策
-                    if (redirect_uri.ToLower() == preRegisteredUri.ToLower()) // LowerCaseに揃える
+
+                    // **単純文字列比較**（#263）。**大文字小文字を区別する。**
+                    //   RFC 6749 §3.1.2.3 は RFC 3986 §6.2.1（Simple String Comparison）を指しており、
+                    //   **正規化せず、1 文字ずつ比べること**を求めている（OIDC Core §3.1.2.1 も exact match）。
+                    //   **URI 全体を比べる。** スキームとホストは RFC 3986 では大文字小文字を区別しないが、
+                    //   **仕様が「正規化しない比較」と言っているので、そこも揃っていなければ通さない。**
+                    //   以前は `ToLower()` 同士で比べていたため、**パスの大文字小文字だけが違う値でも通っていた**
+                    //   （`post_logout_redirect_uri` の方は #232 の時点から Ordinal で比べている）。
+                    if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
                     {
                         // 完全一致する場合。
                         valid_redirect_uri = redirect_uri;
@@ -2354,10 +2484,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // scopes_supported に無いスコープと、クライアントに許されていないスコープは発行しない（#198）
                 Helper.AddClaim(identity, client_id, Helper.FilterSupportedScopes(scopes, client_id), claims, nonce);
 
+                // **登録された署名 alg**（#129 の段階 2）
+                string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
+
                 // AccessTokenの生成
                 access_token = CmnAccessToken.CreateFromClaims(
                 	client_id, identity.Name, identity.Claims,
-                    DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes));
+                    DateTimeOffset.Now.AddMinutes(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes.TotalMinutes), signingAlg);
 
                 JObject jObj = (JObject)JsonConvert.DeserializeObject(
                     CustomEncode.ByteToString(CustomEncode.FromBase64UrlString(
@@ -2371,10 +2504,12 @@ namespace MultiPurposeAuthSite.TokenProviders
                     {
                         if (s == OAuth2AndOIDCConst.Scope_Openid)
                         {
+                            // **access_token に揃える**（#129 の段階 2）。
+                            //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
                             id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                                 access_token, "", state, // c_hash, は Implicit Flow で生成不可
                                 HashClaimType.AtHash | HashClaimType.SHash,
-                                Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
+                                Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString, signingAlg);
                         }
                     }
                 }
@@ -2462,7 +2597,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                 access_token = CmnAccessToken.ProtectFromPayload(
                 	client_id, tokenPayload,
                     DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                    null, clientMode, out string aud, out string sub);
+                    null, clientMode, out string aud, out string sub,
+                    // **登録された署名 alg で署名する**（#129 の段階 2）
+                    Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                 // Client認証のclient_idとToken類のaudをチェック
                 if (client_id != aud) { throw new Exception("[client_id != aud]"); }
@@ -2477,10 +2614,14 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     if (s == OAuth2AndOIDCConst.Scope_Openid)
                     {
+                        // **access_token に揃える**（#129 の段階 2）。
+                        //   **鍵は alg から引く**（#129 の段階 3。pfx の引数は JWE のときだけ使う）。
+                        string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
+
                         id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
                             access_token, code, state, // at_hash, c_hash, s_hash
                             HashClaimType.AtHash | HashClaimType.CHash | HashClaimType.SHash,
-                            Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString);
+                            Config.RsaPfxFilePath, Config.RsaPfxPassword, jwkString, signingAlg);
                     }
                 }
 
@@ -2650,7 +2791,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        x509, clientMode, out string aud, out string sub);
+                        x509, clientMode, out string aud, out string sub,
+                        // **登録された署名 alg で署名する**（#129 の段階 2）
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -2785,7 +2928,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                         string access_token = CmnAccessToken.ProtectFromPayload(
                             client_id, tokenPayload,
                             DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                            x509, clientMode, out string aud, out string sub);
+                            x509, clientMode, out string aud, out string sub,
+                            // **登録された署名 alg で署名する**（#129 の段階 2）
+                            Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                         // Client認証のclient_idとToken類のaudをチェック
                         if (client_id != aud)
@@ -2928,7 +3073,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                             // access_token
                             string access_token = CmnAccessToken.CreateFromClaims(
                             	client_id, identity.Name, identity.Claims,
-                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                                DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                                // **登録された署名 alg で署名する**（#129 の段階 2）
+                                Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                             // オペレーション・トレース・ログ出力
                             string name = Helper.GetInstance().GetClientName(client_id);
@@ -3051,7 +3198,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     // access_token
                     string access_token = CmnAccessToken.CreateFromClaims(
                         client_id, identity.Name, identity.Claims,
-                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                        DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                        // **登録された署名 alg で署名する**（#129 の段階 2）
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                     // オペレーション・トレース・ログ出力
                     Logging.MyOperationTrace(string.Format(
@@ -3149,7 +3298,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                                 // access_token
                                 string access_token = CmnAccessToken.CreateFromClaims(
                                     iss, identity.Name, identity.Claims,
-                                    DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes));
+                                    DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
+                                    // **登録された署名 alg で署名する**（#129 の段階 2。client_id は iss）
+                                    Helper.GetInstance().GetIdTokenSignedResponseAlg(iss));
 
                                 // オペレーション・トレース・ログ出力
                                 Logging.MyOperationTrace(string.Format(
@@ -3267,7 +3418,9 @@ namespace MultiPurposeAuthSite.TokenProviders
                     string access_token = CmnAccessToken.ProtectFromPayload(
                         client_id, tokenPayload,
                         DateTimeOffset.Now.Add(Config.OAuth2AccessTokenExpireTimeSpanFromMinutes),
-                        null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub);
+                        null,  OAuth2AndOIDCEnum.ClientMode.device, out string aud, out string sub,
+                        // **登録された署名 alg で署名する**（#129 の段階 2）
+                        Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id));
 
                     // Client認証のclient_idとToken類のaudをチェック
                     if (client_id != aud)
@@ -3788,6 +3941,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                 // Implicitグラント種別のテスト用のセルフRedirectエンドポイント
                 ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2ImplicitGrantClient_Account;
             }
+            else if (constr.ToLower() == Const.TestSelfCodeManage)
+            {
+                // **管理画面の自己テスト（GetOAuth2Token）の折り返し先**（C-10）。
+                //   **以前は CheckRedirectUri の分岐で、登録を確かめずに通していた。**
+                //   **記号にして、通常の照合に載せた。**
+                ret = Config.OAuth2ClientEndpointsRootURI + Config.OAuth2AuthorizationCodeGrantClient_Manage;
+            }
             else if (constr.ToLower() == Const.TestSelfLogout)
             {
                 // **ログアウト後の戻り先のテスト用**（#232）。
@@ -3802,6 +3962,98 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return ret;
         }
+
+        #region GetCorsAllowedOrigins
+
+        /// <summary>CORS で許可するオリジン（#265）</summary>
+        /// <returns>オリジンの一覧（重複なし。1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **2 つを合わせる。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **導出** | **構成ファイルの public クライアントの `redirect_uri_*`**（記号を解決し、`http` / `https` のオリジンだけ取る） |
+        /// | **追加分** | `Config.CorsAllowedOrigins`（空でよい） |
+        ///
+        /// **SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ので、
+        /// **登録を足せば、CORS の設定を別に書かなくてよい。**
+        /// **Keycloak の Web origins の既定値 `+`（Valid Redirect URIs のオリジンを使う）と、
+        /// Entra ID の SPA プラットフォームと同じ考え方**である。
+        ///
+        /// **`*` は受けない。** 書かれていても落とす（`ProductionCheck` が警告する）。
+        /// **カスタム スキーム**（`com.opentouryo:/oauthredirect` など）**も落とす。**
+        /// ネイティブの折り返し先はブラウザの話ではないため。
+        /// </remarks>
+        public static List<string> GetCorsAllowedOrigins()
+        {
+            List<string> origins = new List<string>();
+
+            // 1. 登録から導く。
+            foreach (string registered in Helper.GetInstance().GetConfigClientsPublicRedirectUris())
+            {
+                // 定数値（test_self_code など）は実 URL に変換する。
+                string origin = CmnEndpoints.ToOrigin(
+                    CmnEndpoints.GetRedirectUriFromConstr(registered));
+
+                if (!string.IsNullOrEmpty(origin)
+                    && !origins.Contains(origin))
+                {
+                    origins.Add(origin);
+                }
+            }
+
+            // 2. 追加分（設定）。
+            string extra = Config.CorsAllowedOrigins;
+
+            if (!string.IsNullOrEmpty(extra))
+            {
+                foreach (string value in extra.Split(
+                    new char[] { ' ', ',', '	' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string origin = CmnEndpoints.ToOrigin(value.Trim());
+
+                    if (!string.IsNullOrEmpty(origin)
+                        && !origins.Contains(origin))
+                    {
+                        origins.Add(origin);
+                    }
+                }
+            }
+
+            return origins;
+        }
+
+        /// <summary>URL をオリジン（scheme://host[:port]）にする（#265）</summary>
+        /// <param name="url">URL（またはオリジン）</param>
+        /// <returns>オリジン（`http` / `https` でなければ空）</returns>
+        /// <remarks>
+        /// **`http` / `https` だけを受ける。**
+        /// **カスタム スキームと `*` は空を返す**（ブラウザのオリジンにならないため）。
+        /// **既定のポートは付けない**（`Uri` の規則どおり。CORS の比較はヘッダの文字列同士）。
+        /// </remarks>
+        private static string ToOrigin(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+            {
+                return "";
+            }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+            {
+                return "";
+            }
+
+            if (uri.Scheme != Uri.UriSchemeHttp
+                && uri.Scheme != Uri.UriSchemeHttps)
+            {
+                return "";
+            }
+
+            // GetLeftPart(Authority) は、既定のポートを省いた「scheme://host[:port]」を返す。
+            return uri.GetLeftPart(UriPartial.Authority);
+        }
+
+        #endregion
 
         #region Redirect URLの組み立て
 
@@ -4141,6 +4393,21 @@ namespace MultiPurposeAuthSite.TokenProviders
                             Helper.GetInstance().GetJwkECDsaPublickey(assertionIss))
                     };
 
+                // **登録 token_endpoint_auth_signing_alg で絞る**（#262）。
+                //   **登録が無ければ、従来どおり両方を試す**（下位互換）。
+                //   **登録が在れば、その alg でなければ通さない**
+                //   （鍵を両方登録したクライアントを、片方に絞れるようにするため）。
+                //   **既知でない値が登録されていれば拒否する**（#224 と同じ方針）。
+                if (!CmnEndpoints.AllowsVerifyingAlg(
+                    Helper.GetInstance().GetTokenEndpointAuthSigningAlg(assertionIss),
+                    CmnEndpoints.TokenEndpointAuthSigningAlgs,
+                    CmnEndpoints.TryReadJwtAlg(assertion)))
+                {
+                    proof = ClientModePolicy.Proof.None;
+                    client_id = "";
+                    return false;
+                }
+
                 foreach (string pubKey in pubKeys)
                 {
                     if (string.IsNullOrEmpty(pubKey))
@@ -4215,6 +4482,19 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.invalid_client);
                 err.Add(OAuth2AndOIDCConst.error_description, string.Format("client_id is not set."));
                 return false; // NullOrEmptyだとmode無しとかになるのでここで切る。
+            }
+
+            // **登録された署名 alg が、扱える値かを確かめる**（#129 の段階 2）。
+            //   **既知でない値は、不正な登録として拒否する**（#224 と同じ方針）。
+            //   ここで止めないと、**発行の直前で既定（RS256）に落ちて、設定の誤りが分からない。**
+            string signingAlg = Helper.GetInstance().GetIdTokenSignedResponseAlg(client_id);
+
+            if (!CmnAccessToken.IsSupportedAlg(signingAlg))
+            {
+                err.Add(OAuth2AndOIDCConst.error, OAuth2AndOIDCConst.unauthorized_client);
+                err.Add(OAuth2AndOIDCConst.error_description,
+                    "The registered id_token_signed_response_alg is not supported.");
+                return false;
             }
 
             // 登録された種別
@@ -4307,21 +4587,13 @@ namespace MultiPurposeAuthSite.TokenProviders
                     if (string.IsNullOrEmpty(jwkString))
                     {
                         // JWS
-                        string alg = (string)jObjHeader[JwtConst.alg];
-                        if (alg == JwtConst.ES256)
-                        {
-                            // ES256
-                            id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
-                                access_token, "", "", // c_hash, s_hash は /token で生成不可
-                                HashClaimType.None, Config.EcdsaPfxFilePath, Config.EcdsaPfxPassword, "", alg);
-                        }
-                        else
-                        {
-                            // RS256
-                            id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
-                                access_token, "", "", // c_hash, s_hash は /token で生成不可
-                                HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "");
-                        }
+                        //   **access_token のヘッダ alg に揃える**（#129 の段階 2）。
+                        //   **渡さないと既定（RS256）に落ちて、access_token と食い違う。**
+                        //   **鍵は alg から引く**（#129 の段階 3）ので、ここで alg ごとに分けない。
+                        id_token = CmnIdToken.ChangeToIdTokenFromAccessToken(
+                            access_token, "", "", // c_hash, s_hash は /token で生成不可
+                            HashClaimType.None, Config.RsaPfxFilePath, Config.RsaPfxPassword, "",
+                            (string)jObjHeader[JwtConst.alg]);
                     }
                     else
                     {

@@ -32,6 +32,7 @@
 //*  2026/09/10  玄人 幸道         JSON の null など、オブジェクトでない本文でも落ちないよう修正
 //*  2026/09/12  玄人 幸道         本文を文字列として読む Text を追加（"OK" / "NG" で答えるエンドポイント用）（#196）
 //*  2026/09/18  玄人 幸道         discovery の配列を見る ArrayContains を追加（#220）
+//*  2026/10/02  玄人 幸道         配列を並びのまま返す Strings を追加（#129 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -237,6 +238,37 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return false;
+        }
+
+        /// <summary>配列のプロパティを、その並びのまま返す（#129 の段階 2）</summary>
+        /// <param name="name">プロパティ名（id_token_signing_alg_values_supported など）</param>
+        /// <returns>値の配列（配列でなければ null）</returns>
+        /// <remarks>
+        /// **並びまで見たいとき**に使う（`ArrayContains` は「入っているか」だけ）。
+        /// **文字列でない要素は ToString() で入れる**（広告の一覧は、どれも文字列のため）。
+        /// </remarks>
+        public string[] Strings(string name)
+        {
+            if (!this.IsJson || this.Json.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            JsonElement array;
+            if (!this.Json.TryGetProperty(name, out array)
+                || array.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            List<string> values = new List<string>();
+
+            foreach (JsonElement item in array.EnumerateArray())
+            {
+                values.Add((item.ValueKind == JsonValueKind.String) ? item.GetString() : item.ToString());
+            }
+
+            return values.ToArray();
         }
 
         /// <summary>プロパティの JsonValueKind を返す（無ければ Undefined）</summary>

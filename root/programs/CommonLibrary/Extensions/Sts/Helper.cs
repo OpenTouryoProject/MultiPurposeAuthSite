@@ -46,6 +46,9 @@
 //*  2026/09/28  玄人 幸道         PAR（/par）に認可リクエストを預ける口を追加（#246）
 //*  2026/10/01  玄人 幸道         subject_types の既定値を public に変更（#151 の段階 4）
 //*  2026/10/01  玄人 幸道         GetClientIdByName が、見つからないときに例外にならないようにした
+//*  2026/10/02  玄人 幸道         id_token_signed_response_alg を引く口を追加（#129 の段階 2）
+//*  2026/10/03  玄人 幸道         検証する側のalgを引く口を追加（#262）
+//*  2026/10/04  玄人 幸道         CORSのオリジン導出のため、publicクライアントのredirect_uriを返す口を追加（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -85,6 +88,7 @@ using Newtonsoft.Json.Linq;
 
 using Touryo.Infrastructure.Framework.Authentication;
 using Touryo.Infrastructure.Public.FastReflection;
+using Touryo.Infrastructure.Public.Security.Jwt;
 using Touryo.Infrastructure.Public.Str;
 
 namespace MultiPurposeAuthSite.Extensions.Sts
@@ -1251,6 +1255,202 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
             // 登録が無い
             return false;
+        }
+
+        #endregion
+
+        #region id_token_signed_response_alg
+
+        /// <summary>client_id から id_token_signed_response_alg を取得する（#129 の段階 2）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（登録が無ければ RS256）</returns>
+        /// <remarks>
+        /// **そのクライアントに発行する access_token と id_token の署名 alg** である
+        /// （OIDC Dynamic Registration の `id_token_signed_response_alg`）。
+        ///
+        /// **`/token` の id_token は、access_token のヘッダ alg に従って署名する**実装なので、
+        /// **2 つを揃える**（CIBA が ES256 を使う既存の作りと同じ形）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | 登録が無い | **`RS256`**（＝ 従来どおり） |
+        /// | 既知でない値 | **入口で拒否する**（`CmnEndpoints.CheckClientMode`。#224 と同じ方針） |
+        ///
+        /// **CIBA は ES256 のまま**である（FAPI-CIBA が PS256 / ES256 を求めるため、登録値で上書きしない）。
+        /// **JARM（`authorization_signing_alg_values_supported`）も RS256 のまま。**
+        /// </remarks>
+        public string GetIdTokenSignedResponseAlg(string client_id)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey("id_token_signed_response_alg")
+                    && !string.IsNullOrEmpty(dic["id_token_signed_response_alg"]))
+                {
+                    return dic["id_token_signed_response_alg"];
+                }
+
+                return JwtConst.RS256;
+            }
+
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                ManageAddSaml2OAuth2DataViewModel model =
+                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+
+                if (!string.IsNullOrEmpty(model.IdTokenSignedResponseAlg))
+                {
+                    return model.IdTokenSignedResponseAlg;
+                }
+            }
+
+            // 登録が無い
+            return JwtConst.RS256;
+        }
+
+        #endregion
+
+        #region token_endpoint_auth_signing_alg / request_object_signing_alg
+
+        /// <summary>client_id から token_endpoint_auth_signing_alg を取得する（#262）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（**登録が無ければ null** ＝ 絞らない）</returns>
+        /// <remarks>
+        /// **`client_assertion`（`private_key_jwt`）を、この alg だけに絞る**
+        /// （OIDC Registration 1.0 §2 の `token_endpoint_auth_signing_alg`）。
+        ///
+        /// **発行する側（`GetIdTokenSignedResponseAlg`）と既定が逆**である。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **発行する側** | 登録が無ければ **`RS256`**（何かで署名しなければならない） |
+        /// | **受ける側（これ）** | 登録が無ければ **null** ＝ **絞らない**（従来どおり、登録された鍵で順に試す） |
+        ///
+        /// **既知でない値は、使う側（`CmnEndpoints.ClientAuthentication`）が拒否する。**
+        /// 受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs`。
+        /// </remarks>
+        public string GetTokenEndpointAuthSigningAlg(string client_id)
+        {
+            return this.GetVerifyingAlg(client_id, "token_endpoint_auth_signing_alg",
+                model => model.TokenEndpointAuthSigningAlg);
+        }
+
+        /// <summary>client_id から request_object_signing_alg を取得する（#262）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <returns>alg（**登録が無ければ null** ＝ 絞らない）</returns>
+        /// <remarks>
+        /// **Request Object（`/ros` / `/par` / `request` パラメタ）を、この alg だけに絞る**
+        /// （OIDC Registration 1.0 §2 の `request_object_signing_alg`）。
+        ///
+        /// **CIBA の `request` は対象外**である。**あちらは `ES256` 固定**で、
+        /// **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+        ///
+        /// 受ける集合は `CmnEndpoints.RequestObjectSigningAlgs`。
+        /// </remarks>
+        public string GetRequestObjectSigningAlg(string client_id)
+        {
+            return this.GetVerifyingAlg(client_id, "request_object_signing_alg",
+                model => model.RequestObjectSigningAlg);
+        }
+
+        /// <summary>検証する側の alg を、登録から引く（#262）</summary>
+        /// <param name="client_id">client_id</param>
+        /// <param name="key">*.config の項目名</param>
+        /// <param name="fromModel">画面登録（saml2OAuth2Data）から取り出す式</param>
+        /// <returns>alg（登録が無ければ null）</returns>
+        /// <remarks>
+        /// **2 つの項目で同じ引き方になる**ので、1 か所にまとめた。
+        /// **`GetIdTokenSignedResponseAlg` と違い、既定値を持たない**（null ＝ 絞らない）。
+        /// </remarks>
+        private string GetVerifyingAlg(string client_id, string key,
+            Func<ManageAddSaml2OAuth2DataViewModel, string> fromModel)
+        {
+            client_id = client_id ?? "";
+
+            // *.config内を検索
+            if (this.Oauth2ClientsInfo.ContainsKey(client_id))
+            {
+                Dictionary<string, string> dic = this.Oauth2ClientsInfo[client_id];
+
+                if (dic.ContainsKey(key)
+                    && !string.IsNullOrEmpty(dic[key]))
+                {
+                    return dic[key];
+                }
+
+                return null;
+            }
+
+            // saml2OAuth2Dataを検索
+            string saml2OAuth2Data = DataProvider.Get(client_id);
+            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            {
+                ManageAddSaml2OAuth2DataViewModel model =
+                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
+
+                string value = fromModel(model);
+
+                if (!string.IsNullOrEmpty(value))
+                {
+                    return value;
+                }
+            }
+
+            // 登録が無い（＝ 絞らない）
+            return null;
+        }
+
+        #endregion
+
+        #region GetConfigClientsPublicRedirectUris
+
+        /// <summary>
+        /// 構成ファイルに登録された **public クライアント**の `redirect_uri_*` を返す（#265）
+        /// </summary>
+        /// <returns>登録値（記号のまま。重複は除いていない）</returns>
+        /// <remarks>
+        /// **CORS で許可するオリジンを導くために使う**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **記号の解決とオリジンの取り出しは、呼ぶ側で行う**（`GetRedirectUriFromConstr` が在る側）。
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **public クライアントに限る** | `client_secret` が空のもの。**confidential は `/token` をサーバ間で呼ぶ**ので、ブラウザから叩かせる必要が無い |
+        /// | **構成ファイルに限る** | **画面登録（`saml2OAuth2Data`）は含めない。** プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、`DataProvider` に全件を列挙する口が無く、分散キャッシュも無い（E-2） |
+        ///
+        /// **画面登録の SPA は、`Config.CorsAllowedOrigins` に足して通す。**
+        /// </remarks>
+        public List<string> GetConfigClientsPublicRedirectUris()
+        {
+            List<string> uris = new List<string>();
+
+            foreach (string clientId in this.Oauth2ClientsInfo.Keys)
+            {
+                Dictionary<string, string> client = this.Oauth2ClientsInfo[clientId];
+
+                // **confidential は対象外**（client_secret を持つもの）。
+                if (client.ContainsKey("client_secret")
+                    && !string.IsNullOrEmpty(client["client_secret"]))
+                {
+                    continue;
+                }
+
+                foreach (string key in new string[] { "redirect_uri_code", "redirect_uri_token" })
+                {
+                    if (client.ContainsKey(key)
+                        && !string.IsNullOrEmpty(client[key]))
+                    {
+                        uris.Add(client[key]);
+                    }
+                }
+            }
+
+            return uris;
         }
 
         #endregion

@@ -77,7 +77,10 @@ set appSettings__OAuth2AuthorizationServerEndpointsRootURI=https://localhost:443
 > 1 個の値として読むキー（`GetConfigValue`）は、上のとおり足せない。
 > net48 はクライアント一覧を 1 個の値（JSON 文字列）として読むので、
 > `FxContainerization=ON` のうえで `OAuth2ClientsInformation` を**一覧ごと差し替える**必要がある。
-> E2E はこれを使って、テスト専用のクライアントを差し込んでいる（`Tests/README.md`）。
+> **E2E は、これを使っていない**（#264）。テスト専用のクライアントは
+> **利用者の登録（`saml2OAuth2Data`）として種データで作る**ので、
+> **net48 の「一覧ごと差し替える」が要らない**（`Tests/README.md`）。
+> **一覧ごと差し替えると、環境ブロックの 32,767 文字に当たる**（`TESTING.md` 1 節）。
 
 ### `FxContainerization` — 環境変数を優先する（net48 / net10.0 の両方）
 
@@ -149,6 +152,9 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
     "redirect_uri_code": "test_self_code",
     "client_name": "TestClient",
     // "subject_types" は書かなければ public（既定。下記）
+    // "id_token_signed_response_alg" は書かなければ RS256（既定。下記）
+    // "token_endpoint_auth_signing_alg" / "request_object_signing_alg" は
+    //   書かなければ絞らない（#262。下記）
     "jwk_rsa_publickey": "..."
   },
   ...
@@ -200,6 +206,116 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 **つまり、既定値の変更が効くのは「これから」だけである。**
 **既存の配備で `sub` を `public` に揃えたいなら、表の行を消す**ことになる
 （消すと、その RP から見て別人になる）。
+
+### `id_token_signed_response_alg` — 署名アルゴリズム（#129 の段階 2〜4）
+
+| 値 | ダイジェスト | パディング | 鍵 | 設定キー | |
+|---|---|---|---|---|---|
+| **`RS256`** | SHA-256 | PKCS #1 v1.5 | RSA | `RsaPfxFilePath` | **既定**（書かなければこれ） |
+| `RS384` | SHA-384 | 同上 | **同じ RSA の鍵** | 同上 | |
+| `RS512` | SHA-512 | 同上 | **同じ RSA の鍵** | 同上 | |
+| `PS256` | SHA-256 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | #129 の段階 4。**FAPI が求める値** |
+| `PS384` | SHA-384 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | 同上 |
+| `PS512` | SHA-512 | **RSASSA-PSS** | **同じ RSA の鍵** | 同上 | 同上 |
+| `ES256` | SHA-256 | － | EC（**P-256**） | `EcdsaPfxFilePath` | |
+| `ES384` | SHA-384 | － | EC（**P-384**） | `Ecdsa384PfxFilePath` | #129 の段階 3 |
+| `ES512` | SHA-512 | － | EC（**P-521**） | `Ecdsa512PfxFilePath` | 同上。**曲線は 521**（512 ではない） |
+
+**access_token と id_token の両方に効く**（2 つは同じ alg になる）。
+**既知でない値を書いた登録は、入口で拒否される**（`unauthorized_client`。#224 と同じ方針）。
+**画面（`Manage/AddSaml2OAuth2Data`）からも選べる**（選択肢も下の表から作る）。
+
+**鍵は 4 本で、alg は 9 つある。**
+
+| | |
+|---|---|
+| **RSA は 1 本**（`RS*` と `PS*` の 6 つが共有） | **`kid` は kty / n / e から作る**ので、**6 つで同じ値**になる。RP は同じ鍵で検証でき、**どのダイジェストとパディングかはヘッダの `alg` が伝える**。**`jwkcerts` に鍵を足す必要は無い** |
+| **EC は 3 本**（`ES256` / `ES384` / `ES512`） | **曲線が alg に紐づく**（JWA）ので、**鍵そのものが別**。`kid` も別になる |
+
+> **`jwkcerts` の JWK の `alg` は `RS256` のまま**である（RSA の 1 本に対して 1 件なので、
+> 6 つを書き分けられない）。**それでよい** ——
+> RFC 7517 の `alg` は「用途」で任意であり、**この実装は `kty` で照合する。**
+
+**alg → 鍵の対応は `SigningKeys`（`CommonLibrary/TokenProviders`）の表 1 か所**にあり、
+**発行・検証・Discovery の広告・`jwkcerts` の生成が、すべてその表を見る**（#129 の段階 3 / D-9）。
+
+> **CIBA（`oauth2_oidc_mode=fapi_ciba`）は `ES256` 固定**で、登録値では上書きしない
+> （FAPI-CIBA が `PS256` / `ES256` を求めるため）。
+> **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま。**
+
+## 検証する側の alg を、クライアント単位で絞る（#262）
+
+**`id_token_signed_response_alg`（上記）は「発行する側」である。**
+**こちらは「受ける側」** — **そのクライアントから、どの alg で来るか**を宣言する
+（OIDC Registration 1.0 §2）。
+
+| 登録項目 | 効く口 | 書ける値 |
+|---|---|---|
+| `token_endpoint_auth_signing_alg` | `/token` の `client_assertion`（`private_key_jwt`） | **`RS256` / `ES256`** |
+| `request_object_signing_alg` | Request Object（`/ros` / `/par` / `request`） | **`RS256`** |
+
+**どちらも、書かなければ絞らない**（＝ 従来どおり）。**画面からも選べる**（先頭が「絞らない」）。
+
+### 何が変わるか
+
+**`client_assertion` で効く。**
+
+**クライアントが RSA と ECDSA の公開鍵を両方登録していると、
+`RS256` でも `ES256` でも認証が通る**（登録された鍵を順に試すため）。
+**`token_endpoint_auth_signing_alg` を書くと、その alg だけに絞れる。**
+
+| 登録 | 振る舞い |
+|---|---|
+| 書かない | **両方通る**（従来どおり） |
+| `RS256` | **`ES256` のアサーションは通らない** |
+| **書ける値の外**（例 : `PS256`） | **通らない**（不正な登録として拒否。#224 と同じ方針） |
+
+**E2E** : `RT-262.1`（絞ると `ES256` が通らない）／`RT-129.1`（絞らなければ両方通る）。
+
+### `request_object_signing_alg` は、いま書ける値が 1 つだけ
+
+**受ける側は `RS256` 固定**である（上流の `RequestObject.Verify` が `JWS_RS256_Param` 決め打ち）。
+**そのため、絞っても結果は変わらない。**
+
+**それでも項目を用意してある。**
+`request_object_signing_alg_values_supported`（広告）に対して
+**登録側の項目が無いという非対称を、先に解消しておくため**である。
+**受ける alg が増えた時点で、値を書けるようになるだけ**になる。
+
+> **CIBA の `request` は対象外**である。**`ES256` 固定**で、
+> **仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+
+### 一覧は 1 か所から作る
+
+**受ける集合は `CmnEndpoints.TokenEndpointAuthSigningAlgs` /
+`CmnEndpoints.RequestObjectSigningAlgs`** にあり、
+**広告（Discovery）と、登録値の検証と、画面の選択肢が、同じものを見る。**
+（発行する側が `SigningKeys` の表 1 か所を見るのと、同じ考え方。#129 の段階 3）
+
+### 署名鍵の入れ替え（ローテーション。D-9）
+
+**RP は `jwkcerts` をキャッシュする。** したがって**順序が要る。**
+
+| | すること | なぜ |
+|---|---|---|
+| 1 | 新しい鍵を作り、**`jwkcerts` に先に載せる**（まだ署名には使わない） | **RP が新しい `kid` を引けるようにしてから**署名を切り替える |
+| 2 | **RP のキャッシュが切れるのを待つ** | キャッシュの寿命は RP 側の都合。待たないと「知らない `kid`」で弾かれる |
+| 3 | **設定の `*PfxFilePath` を新しい鍵に向け、再起動** | ここから新しい `kid` で署名が始まる |
+| 4 | **旧いトークンの寿命が過ぎたら、旧い `kid` を `jwkcerts` から外す** | `OAuth2AccessTokenExpireTimeSpanFromMinutes` を過ぎれば、旧い鍵で検証する相手はいない |
+
+**1 は `CreateJwkSetJson` が行う**（`CommandLineTools`）。
+
+```
+CreateJwkSetJson.exe
+```
+
+**このツールは `SigningKeys` の表を回して、`jwkcerts` に載せる鍵を決める**
+（表をソース参照しているので、**アプリが署名に使う鍵と食い違わない**）。
+**追記しかしない**ので、**1 を繰り返しても旧い鍵は消えない。**
+**4（旧い鍵を外す）は `JwkSet.json` を手で編集する**（＝ 消すのは人が決める）。
+
+> **広告（Discovery）と公開鍵（`jwkcerts`）が揃っていることは E2E で測っている**（`RT-129.6`）。
+> **表に alg を足したのに `CreateJwkSetJson` を回していない**という食い違いは、そこで落ちる。
 
 ### 利用者名とメアド（#151 の段階 3）
 
@@ -263,7 +379,16 @@ net48 版を `app.config` の URL に置く必要がないのは、この仕組�
 | `TestClient3` | Device Authorization Grant。**`client_secret` を持たない**（パブリック クライアント） |
 | `TestClient4` | CIBA |
 | `TestClient5` | 登録の `scope` で、要求してよいスコープを制限した例（#198、E2E テスト用） |
+| `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221、E2E テスト用） |
 | `MVC_Sample` ほか | 絶対 URL の `redirect_uri` を持つサンプル |
+
+> **自己テスト画面は、この名前で選んでいる**（`HomeController`）。**消すと画面が動かない。**
+
+> **E2E だけが使うクライアントは、ここには無い**（#264）。
+> **テスト利用者の登録（`saml2OAuth2Data`）として種データが作る**
+> （`CommonLibrary/Extensions/Sts/TestClients.cs`。`IsDebug` ＋ `TestUserPWD` のときだけ）。
+> **一覧を環境変数で差し替えると、環境ブロックの 32,767 文字に当たる**ため
+> （`TESTING.md` 1 節）。
 
 ### `scope` — 要求してよいスコープ（任意）
 
@@ -321,13 +446,105 @@ OpenID Connect RP-Initiated Logout 1.0 §3.1 の `post_logout_redirect_uris` に
 サーバが `CmnEndpoints.GetRedirectUriFromConstr` で実 URL に解決する。
 
 ```
-test_self_code   → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Account
-test_self_token  → OAuth2ClientEndpointsRootURI + OAuth2ImplicitGrantClient_Account
-test_self_logout → OAuth2ClientEndpointsRootURI + /Home/Index（post_logout_redirect_uri 用。#232）
+test_self_code        → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Account
+test_self_token       → OAuth2ClientEndpointsRootURI + OAuth2ImplicitGrantClient_Account
+test_self_logout      → OAuth2ClientEndpointsRootURI + /Home/Index（post_logout_redirect_uri 用。#232）
+test_self_code_manage → OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Manage
 ```
+
+**`test_self_code_manage` は、管理画面の「トークンを取る」用**である（C-10）。
+
+`/Manage/Index` の「トークンを取る」（`GetOAuth2Token`）は、
+**サインイン中の利用者自身のクライアント登録**で認可を要求する。
+**その折り返し先が、この記号である。**
+
+| | |
+|---|---|
+| **新規登録** | `redirect_uri_code` の**既定がこの値**になっている。そのまま動作確認できる |
+| **動作確認の後** | **自分の RP の折り返し先に書き換える**（クライアント 1 件に `redirect_uri_code` は 1 つ） |
+| **既存の登録** | **この値でなければ、このボタンは通らない**（`invalid_request`）。画面で登録し直す |
+
+> **以前は、この URL だけ「登録を確かめずに通す」分岐が `CheckRedirectUri` に在った**（C-10）。
+> **`IsLockedDownTestEndpoints` の対象外で、本番で閉じられなかった**ので、
+> **記号にして通常の照合に載せ、分岐を消した。** **例外は無い。**
 
 **`OAuth2AuthorizationServerEndpointsRootURI` ではなく `OAuth2ClientEndpointsRootURI` を使う。**
 既定では同じ値だが、変えるときは両方見ること。
+
+### `redirect_uri` は、登録値と 1 文字も違っていてはならない（#263）
+
+**照合は単純文字列比較である**（RFC 6749 §3.1.2.3 が指す RFC 3986 §6.2.1 /
+OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/` の有無も区別する。**
+
+```
+登録 : https://rp.example.com/Callback
+要求 : https://rp.example.com/callback   → 通らない（invalid_request）
+要求 : https://rp.example.com/Callback/  → 通らない（invalid_request）
+```
+
+**#263 より前は、大文字小文字を無視していた**（`ToLower()` 同士で比べていた）。
+**登録と大文字小文字が違う `redirect_uri` を送っている RP は、認可に失敗するようになる。**
+**登録どおりに送っている RP には影響しない。**
+
+> **`post_logout_redirect_uri` は、#232 の時点から同じ比較である**（`StringComparison.Ordinal`）。
+> **`redirect_uri` だけが揃っていなかったので、揃えた。**
+
+### CORS — ブラウザから叩ける口を絞る（#265）
+
+**口の性質ごとに CORS を分けている。** **両系統で同じ振る舞い**である
+（仕組みは違う。net10.0 版はポリシー、net48 版は Web API の属性）。
+
+| 口 | 方針 |
+|---|---|
+| `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata` | **常に全開**（公開情報。RP の検出に使う） |
+| `/userinfo` / `/token` / `/SetDeviceToken` / `/ciba_result` / `/2fa_result` | **許すオリジンだけ** |
+| `/revoke` / `/introspect` / `/device_authz` / `/ciba_authz` / `/par` / `/ros` | **CORS を付けない**（ブラウザから叩く口ではない） |
+
+**`Access-Control-Allow-Credentials` は付けない**（Cookie は飛ばない）。
+
+#### 許すオリジンは、登録から導く
+
+**設定を書かなくてよい。**
+**構成ファイルの public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`**
+から、オリジンを取る。
+
+```json
+"AuthenticationDevice_Web": { "redirect_uri_code": "http://localhost:5610/" }
+```
+
+→ **`http://localhost:5610` が許される。**
+
+**SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ので、
+**クライアントを登録すれば、CORS のための作業は要らない。**
+
+> **Keycloak の Web origins の既定値 `+`（Valid Redirect URIs のオリジンを使う）と、
+> Entra ID の SPA プラットフォームと同じ考え方**である。
+
+**記号（`test_self_code` など）は解決してから取る。**
+**カスタム スキーム**（`com.opentouryo:/oauthredirect`）**は落とす** — ブラウザの話ではないため。
+
+#### `CorsAllowedOrigins` — 導出で拾えないものを足す（任意）
+
+```json
+"CorsAllowedOrigins": "https://spa.example https://spa2.example:8443"
+```
+
+- **区切りは空白かカンマ。** **末尾の `/` は付けない**（CORS の比較はオリジン同士）
+- **`*` は書かない。** 落とすので許可されず、`ProductionCheck` が警告する
+- **画面（`/Manage/AddSaml2OAuth2Data`）から登録した SPA は、ここに足す。**
+  画面登録は導出に含めていない（プリフライトは `client_id` を持たないため
+  オリジンの集合全体が要るが、user store には全件を列挙する口が無い）
+
+#### 影響しないもの
+
+| | 理由 |
+|---|---|
+| **サーバサイドの Web RP**（confidential） | `/token` は**サーバ間**で呼ぶ。ブラウザがするのは `/authorize` への遷移と戻りだけ |
+| **ネイティブ / デスクトップ / モバイル** | **CORS を課すのはブラウザ**で、HTTP スタック直叩きは `Origin` を送らない |
+| **同一オリジンの呼び出し** | **CORS は、別オリジンのときだけ働く。** 自己テスト画面からの呼び出しは、既定では同一オリジン |
+
+> **WebView / Electron / Cordova / Flutter Web は、ブラウザ実行なので対象**である。
+> 同梱の認証デバイスの web ビルドがこれに当たる（`AuthenticationDevice_Web` の登録から導出される）。
 
 ## 5. ルート URI と、自己テストの折り返し（重要）
 
@@ -548,9 +765,10 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。AntiForgery は**もともとアプリごとに違う名前**になるので対象外。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |
-| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4） |
+| `UserClaimsMapping` | `{}`（空） | **任意** | **`profile` / `address` で返すクレームの対応付け**（#230）。**空なら何も返らない。** 値の在り処は `UnstructuredData` の中のパスか、`user:UserName` / `user:Email` / `user:PhoneNumber`。**利用者名を RP に渡したいなら `{"preferred_username": "user:UserName"}`**（#151 の段階 1）。**`sub` は利用者を指す識別子なので、そこに載せてはならない**。**ID 連携の下流は、新規に作る利用者名にこれを使う**（#151 の段階 4）。**サンプルは下の「標準クレームを返す」**（#261） |
 | `EnableDebugTraceLog` | `true` | `false` | 冗長なトレースを止める（**改名した**。旧 `EnabeDebugTraceLog`。下の 12 節） |
 | `TestUserPWD` | `[password of TestUser]` | **空にする** | 空なら、テスト利用者（`super_tanaka@gmail.com` / `tanaka@gmail.com`）を**作らない** |
+| `TestUserSuffix` | `""`（空） | **E2E が渡す。手で設定しない** | **テスト利用者の名前に付ける接尾辞**（#260）。空なら `super_tanaka` / `tanaka`。**E2E は 2 つのサイトを同時に立てる**ので、**DB ストアでは同じ利用者の行を書き換え合う。**`test.ps1` がサイトごとに `_core` / `_netfx` を渡して分ける。**初期化済みの DB でも、居なければ作る**ので、接尾辞を変えても DB を作り直さなくてよい |
 | `AdministratorUID` / `AdministratorPWD` | `[Please fill in this input item.]` | 実運用の値 | **`IsDebug` に関係なく作られる**（下の注意 2）。既定のまま出さない |
 | `IsLockedDownTestEndpoints` | `false` | `true` | **テスト用の口をまとめて閉じる。** 自己テスト画面（`/Home/Saml2OAuth2Starters`）、テスト用のリダイレクト先、`/TestHybridFlow`、`api/Values`（net10.0）。**`/Ping` は閉じない**（下の注意 3） |
 | `EnableImplicitGrantType` / `EnableResourceOwnerPasswordCredentialsGrantType` | **`false`**（#220 で変更） | `false` のまま | **OAuth 2.1 で廃止されたフロー。** コードは残してあるので、必要なら `true` に戻せる |
@@ -665,6 +883,92 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 > 本番の値そのものは書かない。
 
 ---
+
+## 標準クレームを返す（#261）
+
+**`profile` / `address` のクレームは、設定の対応付けで返す**（#230）。
+**この実装は氏名・住所の項目を持たない。** 入れ物は `ApplicationUser.UnstructuredData`（JSON）で、
+**中身は導入する側が決める**という方針である（`Extensions/Sts/UserClaims.cs`）。
+
+### 入れ物（`UnstructuredData`）
+
+**OIDC Core 5.1 の標準クレームを、そのままのキー名で入れた例。**
+
+```json
+{
+  "given_name": "Taro",
+  "family_name": "Tanaka",
+  "nickname": "taro",
+  "profile": "https://example.com/taro",
+  "picture": "https://example.com/taro.png",
+  "website": "https://example.com/",
+  "gender": "male",
+  "birthdate": "1990-01-23",
+  "zoneinfo": "Asia/Tokyo",
+  "locale": "ja-JP",
+  "updated_at": 1759449600,
+  "address": {
+    "formatted": "100-0001 1-1 Chiyoda, Chiyoda-ku, Tokyo, JP",
+    "street_address": "1-1 Chiyoda, Chiyoda-ku",
+    "region": "Tokyo",
+    "postal_code": "100-0001",
+    "country": "JP"
+  }
+}
+```
+
+**`IsDebug` のときは、2 人目のテスト利用者（`tanaka`）にこれが入る**
+（`AccountController.SampleUnstructuredData`）。**E2E が `RT-261.1` で測っている。**
+
+### 対応付け（`UserClaimsMapping`）
+
+**キー名をクレーム名に合わせておけば、対応付けは 1 対 1 になる。**
+
+```json
+"UserClaimsMapping": {
+  "name":                   "name",
+  "family_name":            "family_name",
+  "given_name":             "given_name",
+  "birthdate":              "birthdate",
+  "updated_at":             "updated_at",
+  "address.postal_code":    "address.postal_code",
+  "address.country":        "address.country",
+  "preferred_username":     "user:UserName"
+}
+```
+
+| 値の書き方 | 意味 |
+|---|---|
+| `name` | `UnstructuredData` の `name` |
+| `address.postal_code` | `UnstructuredData` の `address` の中の `postal_code`（`.` で辿る） |
+| `user:UserName` | `ApplicationUser` から直に取る（白名簿は `UserName` / `Email` / `PhoneNumber`） |
+
+**`address.<副フィールド>` は、まとめて 1 つの `address` オブジェクトに組み立てて返す**（OIDC Core 5.1.1）。
+
+### 型は、入れた側の JSON が決める
+
+**`UserClaimsMapping` はクレーム名と在り処だけを持ち、型は持たない。**
+**`UnstructuredData` に入れた JSON の型が、そのまま返る**（#261）。
+
+| JSON | 返る型 |
+|---|---|
+| `"updated_at": 1759449600` | **数値**（OIDC Core 5.1 の NumericDate。これが正しい） |
+| `"updated_at": "1759449600"` | 文字列（**引用符付きで返るので、RP が落ちうる**） |
+
+> **以前は、すべて文字列にして返していた**（#261 で直した）。
+> **#184 と同じ種類の誤り**である（あちらは JWT のクレーム、こちらは `UnstructuredData` 由来）。
+
+### 管理画面で入れられるのは `usd1` / `usd2` だけ
+
+**`Manage/AddUnstructuredData` の画面は 2 欄しか持たない。**
+
+> **画面で保存すると、それ以外のキーは消える。**
+> 画面の ViewModel（`ManageAddUnstructuredDataViewModel`）は `usd1` / `usd2` しか持たないので、
+> **読み込みで他のキーが捨てられ、保存で JSON ごと置き換わる**
+> （`user.UnstructuredData = JsonConvert.SerializeObject(model)`）。
+
+**標準クレームを運用で入れるなら、画面を足すか、別の経路で `UnstructuredData` を書くことになる。**
+**#261 では画面を変えていない**（入れ物の中身は導入する側が決める、という方針を保つため）。
 
 ## 12. 改名した設定キー（#236）
 

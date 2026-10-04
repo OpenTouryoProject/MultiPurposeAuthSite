@@ -33,6 +33,7 @@
 //*  2026/09/11  玄人 幸道         scopes の読み取りを Jwt.Strings へ移し、補助関数を先頭にまとめる
 //*  2026/09/13  玄人 幸道         Tests/Issues へ移動（RT-198）
 //*  2026/09/18  玄人 幸道         既定で無効にした機能に依存するテストを Skip 対象にした（#220）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -229,7 +230,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 List<string> supported = await ScopesSupportedAsync(client);
 
                 r.Target("client_name=" + KnownClients.MvcSample
-                    + " / username=" + TestEnv.TestUserName + "（パスワードは構成ファイルから読む）");
+                    + " / username=" + TestEnv.TestUserName(targetKey) + "（パスワードは構成ファイルから読む）");
                 r.Note("Discovery の scopes_supported = [" + string.Join(", ", supported) + "]");
                 r.Step("POST /token に grant_type=password、scope=\"" + Requested + "\" を送る");
 
@@ -239,7 +240,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 JsonResponse token = await client.TokenAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
+                    { "username", TestEnv.TestUserName(targetKey) },
                     { "password", client.Config.Get("TestUserPWD") },
                     { "scope", Requested },
                     { "client_id", reg.ClientId },

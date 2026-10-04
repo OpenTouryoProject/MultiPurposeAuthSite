@@ -112,6 +112,9 @@
 
     // 登録されるTestUserのpassword
     "TestUserPWD": "[password of TestUser]",
+    // テスト利用者の名前に付ける接尾辞（#260）。空なら super_tanaka / tanaka。
+    //   E2E（test.ps1）が、サイトごとに _core / _netfx を与える。
+    "TestUserSuffix": "",
 
     "AllowOnlyAlphanumericUserNames": "false",
     // UserNameがEmailかどうか
@@ -161,6 +164,11 @@
     "CookieNamePrefix": "",
     "AuthCookieName": "",
     // Cookie認証チケットの有効期限は2週間 24 * 14 = 336 時間
+    // **CORS で追加して許可するオリジン**（任意。#265）。**空でよい。**
+    //   既定では、**構成ファイルの public クライアントの redirect_uri_* からオリジンを導く。**
+    //   ここは、その導出で拾えないものを足すための口（空白かカンマ区切り）。
+    //   **末尾の「/」は付けない。「*」は書かない**（落とすので許可されない）。
+    "CorsAllowedOrigins": "",
     "AuthCookieExpiresFromHours": "336",
     // Cookie認証チケットのSliding（再発行）機能
     "AuthCookieSlidingExpiration": "true",
@@ -226,6 +234,11 @@
     "RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.pfx",
     "EcdsaPfxPassword": "test",
     "EcdsaPfxFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.pfx",
+    // ES384 / ES512 は曲線が alg に紐づくので、鍵が分かれる（#129 の段階 3）
+    "Ecdsa384PfxPassword": "test",
+    "Ecdsa384PfxFilePath": "C:/root/files/resource/X509/SHA384ECDSA.pfx",
+    "Ecdsa512PfxPassword": "test",
+    "Ecdsa512PfxFilePath": "C:/root/files/resource/X509/SHA521ECDSA.pfx",
     "JwkSetFilePath": "C:/root/files/resource/MultiPurposeAuthSite/JwkSet.json",
     // Grant Typeの有効・無効
     "EnableAuthorizationCodeGrantType": "true",
@@ -324,6 +337,9 @@
         "post_logout_redirect_uri": "test_self_logout",
         "client_name": "TestClient",
         // "subject_types" は書かない → **既定は public**（OIDC Core 8 章）。
+        // **検証する側の alg は、書かなければ絞らない**（#262）。
+        //   "token_endpoint_auth_signing_alg": "RS256"  … client_assertion を RS256 だけに
+        //   "request_object_signing_alg":      "RS256"  … Request Object を RS256 だけに
         //   public   : sub = 利用者 ID（既定）
         //   pairwise : sub = RP ごとに違う値（PPID）
         //   **利用者名を RP に渡したいなら UserClaimsMapping で preferred_username に**。
@@ -459,6 +475,41 @@
     //   **sub は利用者を指す識別子なので、そこに利用者名を載せてはならない。**
     //   sub は「その RP の中で利用者を指す識別子」、preferred_username は「表示・照合用の属性」。
     //   **RP が主キーに使ってよいのは sub だけ**で、preferred_username は変わりうる（改名）。
+    // **標準クレームを返すときのサンプル**（#261）。**既定は空のまま**にしてある。
+    //   左がクレーム名（OIDC Core 5.1）、右が値の在り処。
+    //     ・`UnstructuredData`（JSON）の中のパス … `.` で辿る（例 : address.postal_code）
+    //     ・`user:<項目>` … ApplicationUser から直に取る（UserName / Email / PhoneNumber）
+    //   **IsDebug のとき、2 人目のテスト利用者（tanaka）に、この形の JSON が入る**
+    //   （AccountController.SampleUnstructuredData）。
+    //
+    //   "UserClaimsMapping": {
+    //     "name":                   "name",
+    //     "family_name":            "family_name",
+    //     "given_name":             "given_name",
+    //     "nickname":               "nickname",
+    //     "profile":                "profile",
+    //     "picture":                "picture",
+    //     "website":                "website",
+    //     "gender":                 "gender",
+    //     "birthdate":              "birthdate",
+    //     "zoneinfo":               "zoneinfo",
+    //     "locale":                 "locale",
+    //     "updated_at":             "updated_at",
+    //     "address.formatted":      "address.formatted",
+    //     "address.street_address": "address.street_address",
+    //     "address.locality":       "address.locality",
+    //     "address.region":         "address.region",
+    //     "address.postal_code":    "address.postal_code",
+    //     "address.country":        "address.country",
+    //     "preferred_username":     "user:UserName"
+    //   }
+    //
+    //   **管理画面で入れられるのは usd1 / usd2 の 2 欄だけ**である。
+    //   それ以外のキーは、**導入する側が入れる**（画面を足すか、別の経路で書く）。
+    //
+    //   **E2E だけは、name と address.locality を usd1 / usd2 に向けている**（test.ps1）。
+    //     **画面から入れた値が返ることを測り続けるため**である（RT-230.*）。
+    //     そのため **E2E の報告書には `name ← usd1` と出る。** 上のサンプルとは違う。
     "UserClaimsMapping": {
     },
 
@@ -477,6 +528,8 @@
     // Token検証用
     "SpRp_RsaCerFilePath": "C:/root/files/resource/X509/SHA256RSA_Server.cer",
     "SpRp_EcdsaCerFilePath": "C:/root/files/resource/X509/SHA256ECDSA_Server.cer",
+    "SpRp_Ecdsa384CerFilePath": "C:/root/files/resource/X509/SHA384ECDSA.cer",
+    "SpRp_Ecdsa512CerFilePath": "C:/root/files/resource/X509/SHA521ECDSA.cer",
     // クライアント認証用
     "SpRp_RsaPfxPassword": "test",
     "SpRp_RsaPfxFilePath": "C:/root/files/resource/X509/SHA256RSA_Client.pfx",

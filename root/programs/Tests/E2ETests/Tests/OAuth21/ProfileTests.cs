@@ -1,4 +1,4 @@
-//**********************************************************************************
+﻿//**********************************************************************************
 //* Copyright (C) 2026 Hitachi Solutions,Ltd.
 //**********************************************************************************
 
@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/19  玄人 幸道         新規（#222 : 許されない経路が抑止されること）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -110,7 +111,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.OAuth21
                 JsonResponse controlRopc = await client.TokenAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
+                    { "username", TestEnv.TestUserName(targetKey) },
                     { "password", client.Config.Get("TestUserPWD") },
                     { "scope", "email profile" },
                     { "client_id", normal.ClientId },
@@ -142,7 +143,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.OAuth21
                 JsonResponse ropc = await client.TokenAsync(new Dictionary<string, string>()
                 {
                     { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
+                    { "username", TestEnv.TestUserName(targetKey) },
                     { "password", client.Config.Get("TestUserPWD") },
                     { "scope", "email profile" },
                     { "client_id", fapi1.ClientId },

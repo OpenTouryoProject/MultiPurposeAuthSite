@@ -32,6 +32,8 @@
 //*  2026/09/11  玄人 幸道         EX-4.5 の Skip を解除し、EX-4.7 を追加（#199）
 //*  2026/09/11  玄人 幸道         /device_authz の要求を IdPClient.DeviceAuthorizationAsync へ移す
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ ボタン（RT-246.3）を追加（#246 の 3-a）
+//*  2026/10/01  玄人 幸道         承認した利用者の確認を /userinfo の email に替えた（#151 の段階 4）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System;
@@ -238,7 +240,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
 
                 r.Target("client_name=" + KnownClients.TestClient3
-                    + " / 承認するユーザ = " + TestEnv.TestUserName);
+                    + " / 承認するユーザ = " + TestEnv.TestUserName(targetKey));
                 r.Step("(1) 機器 : POST /device_authz で device_code と user_code を得る");
                 r.Step("(2) ユーザ : サインインした端末で /device_verify を開き、user_code を入力して許可する");
                 r.Step("(3) 機器 : grant_type=device_code でトークンを要求する");
@@ -279,7 +281,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                     JsonResponse userinfo = await client.UserInfoAsync(token.AccessToken);
 
                     r.VerifyEqual("承認したユーザのトークンである（/userinfo の email）",
-                        TestEnv.TestUserEmail, userinfo.String("email") ?? "（無し）");
+                        TestEnv.TestUserEmail(targetKey), userinfo.String("email") ?? "（無し）");
 
                     r.VerifyEqual("/userinfo の sub が、トークンの sub と一致する",
                         Jwt.String(Jwt.Payload(token.AccessToken), "sub"),
@@ -314,7 +316,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient3);
 
                 r.Target("client_name=" + KnownClients.TestClient3
-                    + " / 拒否するユーザ = " + TestEnv.TestUserName);
+                    + " / 拒否するユーザ = " + TestEnv.TestUserName(targetKey));
                 r.Step("(1) 機器 : device_code と user_code を得る");
                 r.Step("(2) ユーザ : /device_verify で user_code を入力して拒否する");
                 r.Step("(3) 機器 : トークンを要求する");

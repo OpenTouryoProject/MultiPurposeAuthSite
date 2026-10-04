@@ -854,7 +854,7 @@ sub = BASE64URL( SHA-256( client_id + user_id + salt ) )
   **DDL の 3 方言と、既存データベースへの移行が要らない**
 - E2E テスト : **`RT-140.2`**（`pairwise` でも `/userinfo` がクレームを返す）、
   **`RT-140.3`**（毎回同じ値になり、クライアントが違えば違う値になる）。
-  `test.ps1` が **`subject_types=pairwise` のクライアント（`TestClient_5`）を差し込む**
+  **`subject_types=pairwise` のクライアント（`TestClient_5`）は種データが作る**（#264）
 
 > **制約 : 秘密（`SaltParameter`）を替えると、発行済みの PPID が全部変わる。**
 > **RP は `sub` を主キーとして保存している**ので、**RP 側では全員が別人になる。**
@@ -1204,14 +1204,31 @@ OIDC Core §3.1.2.1 の `prompt=none` は
 
 `prompt=login` / `select_account` / `consent` は未処理。
 
-### C-4. 認可コードに有効期限が無い **[Lib]**
+### C-4. 認可コードに有効期限が無い **[Lib]** — **✅ 修正済み（#188）**
 
-`AuthenticationCodeDictionary` に `CreatedDate` を書いているが、**どこからも読んでいない。**
-`Receive` は経過時間を見ずに payload を返す。
+**直す前。** `AuthenticationCodeDictionary` に `CreatedDate` を書いているが、
+**どこからも読んでいなかった。** `Receive` は経過時間を見ずに payload を返していた。
 RFC 6749 §4.1.2 は「短命であること（推奨 10 分以内）」を求めている。
 
 Memory Provider の `ConcurrentDictionary` も未使用の code を回収しないため、
-**メモリ リークになる**（DBMS 側も行が残り続ける）。
+**メモリ リークになっていた**（DBMS 側も行が残り続けた）。
+
+**直し方**（`AuthorizationCodeProvider`。コミット `b7fd215`）。
+
+```csharp
+private static DateTime ExpireLimit
+{
+    get { return DateTime.Now - Config.OAuth2AuthorizationCodeExpireTimeSpanFromSeconds; }
+}
+```
+
+- **`Receive` が経過時間を見る**（`entry.CreatedDate < ExpireLimit` なら返さない）
+- **DBMS 側は `WHERE [Key] = @Key AND [CreatedDate] > @Limit`** で、期限切れを引かない
+- **回収も入れた。** `mem` は辞書を掃き、DBMS は `DELETE ... WHERE [CreatedDate] <= @Limit`
+  （`sqlserver` / `oracle` / `pstgrs` の 3 方言）
+- **期限は設定で決まる**（`OAuth2AuthorizationCodeExpireTimeSpanFromSeconds`。既定 600 秒）
+- **E2E** : **`RT-188`**（`test.ps1 -ShortLifetimes` で寿命を縮めて測る。`TESTING.md` 5 節）
+- **利用者への影響** : **無し**（既定の 600 秒は RFC の推奨内。**それより長く待つ RP が在れば影響する**）
 
 ### C-5. refresh_token に有効期限も再利用検知も無い **[Lib]** — **✅ 修正済み（#188）**
 
@@ -1281,7 +1298,9 @@ OAuth 2.0 Security BCP §4.14.2 は、この場合に一族の失効を挙げて
   （`ClientModePolicy` の表。#224）。**`normal` 以外の登録には、`refresh_token` を発行しない**
   （#224 の段階 2。以前は発行していたが、使えなかった。`FA-1.2` / `FA-3.1`。C-7）。
 
-### C-6. `state` を URL エンコードせずに連結している **[Core]**
+### C-6. `state` を URL エンコードせずに連結している **[Core]** — **✅ 修正済み（#187）**
+
+**直す前。**
 
 ```csharp
 // MultiPurposeAuthSiteCore/.../AccountController.cs:3017, 3035 ほか
@@ -1289,8 +1308,21 @@ string.Format("?code={0}&state={1}", code, state)
 ```
 
 `state` はクライアント（＝攻撃者が用意しうる RP）が自由に決められる値であり、
-`&` を含めればリダイレクト URL にパラメタを注入できる。
-`?` の無条件付与（A-6 と同じ）と併せて、リダイレクト URL の組み立てを一箇所に集約すべき。
+`&` を含めればリダイレクト URL にパラメタを注入できた。
+
+**直し方。** **リダイレクト URL の組み立てを 1 か所に集約した**
+（`CmnEndpoints.BuildRedirectUrl`。A-6 と同じ #187）。
+
+- **値は必ず URL エンコードする**
+- **区切りを `?` と `&` で切り替える**（既にクエリ文字列を持つ `redirect_uri` でも壊れない。A-6）
+- **値が空のパラメタは付けない。** `state` は**要求に含まれたときだけ**返す（RFC 6749 §4.1.2）
+- **認可応答は、成功も失敗も全てここを通る**（`BuildRedirectUrl` の呼び出し元は両アプリで多数）
+
+> **`"&state=" + state` の連結は、まだ 4 か所に残っている**
+> （両アプリの `AccountController` の ID 連携と、`ManageController` の `GetOAuth2Token`）。
+> **こちらは「この実装が RP として送る認可要求」で、`state` は自分で作っている**
+> （`GetPassword.Generate(32, 0)` / `(10, 0)`。**記号を入れない**）。
+> **C-6 が問題にしていた「クライアントから来た値を、そのまま応答に連結する」経路ではない。**
 
 ### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **✅ 修正済み（#220 / #221 / #224）**
 
@@ -1405,7 +1437,7 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 | fapi1 | 認可コード ＋ `client_secret` ＋ PKCE `S256`（併用） | 拒否（`unsupported_grant_type`）。併用の経路は、PKCE を検証だけに使い、`client_secret` の認証として扱うため。**段階 2 で「設計どおり」と判断**（D） |
 | fapi1 | Hybrid（`code id_token`） | 拒否。**ただし `error=access_denied` のリダイレクトで返る**（`/token` 側は `unsupported_grant_type`。経路でエラー コードがそろっていない）。**段階 2 で、要求の検証時に `unauthorized_client` を返すよう改めた**（B / C） |
 | fapi1 / fapi2 / fapi_ciba | Device AuthZ グラント | **修正前は client_secret だけで発行していた**（C-18）。修正後は `unauthorized_client` |
-| normal | CIBA | 拒否（`unsupported_grant_type`）。**ただしトークンの段階で。** 開始（`/ciba_authz`）は登録種別を見ないので、**利用者にプッシュ通知が届き、承認させた後で**拒否になる（`FA-5.1`）。**段階 2 で、開始の時点で `unauthorized_client` を返すよう改めた**（B / C）。測るために、TestClient4 を写して登録種別だけ normal にした `TestClient4_2` を、`test.ps1 -Launch` が環境変数で差し込む（公開鍵ごと写すので署名検証を通る。設定ファイルは変えない） |
+| normal | CIBA | 拒否（`unsupported_grant_type`）。**ただしトークンの段階で。** 開始（`/ciba_authz`）は登録種別を見ないので、**利用者にプッシュ通知が届き、承認させた後で**拒否になる（`FA-5.1`）。**段階 2 で、開始の時点で `unauthorized_client` を返すよう改めた**（B / C）。測るために、TestClient4 を写して登録種別だけ normal にした `TestClient4_2` を、**種データが作る**（公開鍵ごと写すので署名検証を通る。設定ファイルは変えない。#264） |
 
 
 **設計上の問題が 3 つある。**
@@ -1466,19 +1498,21 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
 
 | 口 | Discovery の広告 | **実際に通る** | 決めているもの |
 |---|---|---|---|
-| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる** |
-| `id_token` | `id_token_signing_alg_values_supported: ["RS256","ES256"]` | RS256 / ES256 | **クライアントは選べない。** `oauth2_oidc_mode=fapi_ciba` のときだけ ES256、他は RS256 |
-| access_token | （広告しない） | RS256 / ES256 | 同上（`id_token` と同じ alg になる） |
-| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify` |
+| `/token`（`client_assertion`。`private_key_jwt`） | `token_endpoint_auth_signing_alg_values_supported: ["RS256","ES256"]` | **RS256 / ES256**（#129 の段階 2 で ES256 を足した） | `CmnEndpoints.ClientAuthentication` が、**登録された RSA → ECDSA の公開鍵を順に試す**（`JwtAssertion.Verify` が JWK の `kty` で分岐する）。**クライアントが登録した鍵の種類で決まる。登録 `token_endpoint_auth_signing_alg` で片方に絞れる**（#262） |
+| `id_token` | `id_token_signing_alg_values_supported` : **`RS*` / `PS*` / `ES*` の 9 つ** | **左の 9 つ**（段階 2 で RS384 / RS512、段階 3 で ES384 / ES512、段階 4 で PS256 / PS384 / PS512 を足した） | **クライアントの登録 `id_token_signed_response_alg` で決まる**（既定は RS256。#129 の段階 2）。`oauth2_oidc_mode=fapi_ciba` は ES256 固定 |
+| access_token | （広告しない） | 同上（9 つ） | 同上（`id_token` と同じ alg になる） |
+| Request Object（`/ros` / `/par`） | `request_object_signing_alg_values_supported: ["RS256"]` | **RS256 固定** | `RequestObject.Verify`。**登録 `request_object_signing_alg` で絞れる**が、受ける集合が 1 つなので結果は変わらない（#262） |
 | CIBA の `request` | `backchannel_authentication_request_signing_alg_values_supported: ["ES256"]` | **ES256 固定** | `RequestObject.VerifyCiba` |
 | 認可応答（JARM） | `authorization_signing_alg_values_supported: ["RS256"]` | RS256 固定 | `CmnResponseObject` |
 
 **広告と実装は一致している**（#189 / A-10 で整えた）。
 
-**`PS256` はどこにも無い。**
-**Open棟梁 に `JWS_PS*` が存在しない**（`JWS_RS256/384/512` と `JWS_ES256/384/512` は在る）。
+**`PS256` は、段階 0 の時点ではどこにも無かった。**
+**Open棟梁 に `JWS_PS*` が存在しなかった**ためである。
 **FAPI 1.0 Advanced / FAPI-CIBA は `PS256` または `ES256` を求める**ので、
-**`PS256` を通すには上流の対応が要る。**
+**上流の対応が要った** → **✅ 上流に入った**
+（[OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)。
+**この実装も段階 4 で `PS256` / `PS384` / `PS512` を発行するようにした**。下記）。
 
 > **コード中の記述が実装と食い違っていた。**
 > CIBA の広告のあたりに **「RequestObjectの署名は、ES256 と PS256のみ許可」** と書かれていたが、
@@ -1495,51 +1529,384 @@ E2E で現状を固定した（`Tests/Fapi/`。`FA-1`〜`FA-3`）。**実測は�
   **アサーションの `alg` ヘッダでは選ばない**（C-8 と同じ轍を踏まないため）。
   E2E テスト : **`RT-129.1`**（ES256 で通る／RS256 の対照／Discovery の広告）
 - **ES384 / ES512 は鍵の差し替えを伴う**（JWA で `ES256`→P-256、`ES384`→P-384、`ES512`→P-521。
-  曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**
-- **登録（クライアント）側に alg の項目が無い**。OIDC Registration 1.0 の
-  `id_token_signed_response_alg` / `request_object_signing_alg` /
-  `token_endpoint_auth_signing_alg` に相当するものが無い
+  曲線が alg に紐づく）。**RS384 / RS512 は同じ RSA 鍵のままダイジェストだけ変えられる**。
+  **✅ 対応した（#129 の段階 3）。** **鍵はリポジトリに在った**（`SHA384ECDSA.pfx` / `SHA521ECDSA.pfx`）
+- **登録（クライアント）側の alg の項目**は、**`id_token_signed_response_alg` を ✅ 足した**（#129 の段階 2。下記）。
+  **検証する側**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）も
+  **✅ 足した**（#262。**書かなければ絞らない**。受ける alg を広げるのは別の話）
 
-### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]**
+### 署名アルゴリズムを登録で選べるようにした（#129 の段階 2）
 
-`VerifyAccessToken` は `header[JwtConst.alg]` を読んで `JWS_ES256_X509` / `JWS_RS256_X509` を選ぶ。
+**`RS384` / `RS512` を足し、クライアントの登録 `id_token_signed_response_alg` で選べるようにした。**
+**段階 0 の対照表で「登録側に alg の項目が無い」と書いた箇所**が、ここで埋まる。
+
+| | |
+|---|---|
+| 発行する alg | **`RS256` / `RS384` / `RS512` / `ES256`**（`CmnAccessToken.SupportedAlgs`） |
+| 選び方 | **クライアントの登録 `id_token_signed_response_alg`**。**書かなければ `RS256`**（＝ 従来どおり） |
+| 効く範囲 | **access_token と id_token の両方**（2 つは同じ alg になる） |
+| 既知でない値 | **入口で拒否する**（`CheckClientMode` → `unauthorized_client`。#224 と同じ方針） |
+
+**鍵は増えない。** `RS256` / `RS384` / `RS512` は**同じ RSA の鍵**で、**ダイジェストだけが違う。**
+**`kid` は鍵から作る**（RFC 7638 : kty / n / e）ので**3 つで同じ値**になり、
+**RP は `jwkcerts` の同じ鍵でそのまま検証できる**（どのダイジェストかはヘッダの `alg` が伝える）。
+
+**一覧は 1 か所に寄せた**（`CmnAccessToken.SupportedAlgs`）。
+**発行（`SelectJwsForSigning`）・検証（`SelectJws`）・広告（Discovery）が同じ一覧を見る**ので、
+**増やしても食い違わない。**
+
+> **id_token は、渡さないと既定に落ちる。**
+> `CmnIdToken.ChangeToIdTokenFromAccessToken` の `alg` は**既定が `RS256`** で、
+> **`/token` の呼び出し側が、ヘッダから読んだ `alg` を渡していなかった。**
+> **access_token だけ `RS512`、id_token は `RS256`** という状態になり、**`RT-129.3` で見つかった。**
+> **既定値のある引数は、渡し忘れても動く。** 測らないと分からない。
+
+- **CIBA は `ES256` のまま**（FAPI-CIBA が `PS256` / `ES256` を求めるため、登録値で上書きしない）
+- **JARM（`authorization_signing_alg_values_supported`）も `RS256` のまま**
+- **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は
+  **#262 で ✅ 足した**（**狭める側だけ**。受ける alg を広げるのは上流の対応が要る）
+- **E2E** : **`RT-129.3`**（`RS512` で署名され、`jwkcerts` の同じ鍵で検証でき、`kid` が `RS256` と同じ。
+  **自分の検証経路＝C-8 で固定した集合も、これを受ける**）／
+  **`RT-129.4`**（Discovery が `RS256 RS384 RS512 ES256` を、**この順で**広告する）
+- **`ES384` / `ES512` は段階 3**（鍵の差し替えを伴う）。
+  **`PS256` は段階 4**（上流の対応が要った。[OpenTouryo#596](https://github.com/OpenTouryoProject/OpenTouryo/issues/596)。✅ 対応済み）
+- **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
+
+### ES384 / ES512 と、鍵の表（#129 の段階 3 / D-9）
+
+**`ES384` / `ES512` を足し、alg → 鍵の対応を 1 か所に寄せた。**
+
+| | |
+|---|---|
+| 発行する alg | **6 つ**（`RS256` / `RS384` / `RS512` / `ES256` / `ES384` / `ES512`） |
+| 鍵 | **4 本**（RSA 1 本 ＋ EC 3 本）。**RSA は 3 つの alg で共有**し、**EC は曲線が alg に紐づく** |
+| 表の場所 | **`CommonLibrary/TokenProviders/SigningKeys.cs`** |
+| 表を見る側 | **発行**（`SelectJwsForSigning`）・**検証**（`SelectJws` / `SelectJwsFromCertificate`）・**広告**（Discovery）・**`jwkcerts` の生成**（`CreateJwkSetJson`） |
+
+**鍵は新しく作っていない。** `root/files/resource/X509/` に **`SHA384ECDSA.pfx`（P-384）** と
+**`SHA521ECDSA.pfx`（P-521）** が在った（`GenECDsaCertByOpenSSL.bat` が作ったもの）。
+**設定キーを足して、表から引くようにしただけ**である。
+
+#### D-9「発行側が 1 本を固定参照」の実体は、対応が散っていたこと
+
+**鍵の入れ替えそのものは、もともと回る形になっていた**（`JwkSet.json` は追記式で、
+検証は `kid` で引く）。**無停止の入れ替えを妨げていたのは、alg → 鍵の対応が 3 箇所に散っていたこと**である。
+
+| 散っていた場所 | 何が起きうるか |
+|---|---|
+| 発行（`CmnAccessToken`） | |
+| 証明書での検証（`CmnAccessToken`） | **署名した鍵と、検証に落ちる鍵が食い違う** |
+| `jwkcerts` の生成（`CreateJwkSetJson` が **RSA と ES256 を決め打ち**） | **載っていない鍵で署名する**（RP は検証できない） |
+
+**`CreateJwkSetJson` が `SigningKeys` の表を回すようにした。**
+**ツールは、その 1 ファイルだけをソース参照する**（`Compile Include` の `Link`。
+CommonLibrary ごと参照すると、コンソール ツールに DB ドライバまで付いてくる）。
+＝ **アプリが署名に使う鍵が、そのまま `jwkcerts` に載る。**
+
+**入れ替えの手順は `CONFIGURATION.md`** に書いた（**先に載せ、キャッシュを待ち、切り替え、後で外す**）。
+
+#### `kty` だけでは足りなかった（`crv` まで突き合わせる）
+
+**`ES256` / `ES384` / `ES512` は、どれも `kty=EC`** である。
+`IsSameKeyType` は **`kty` だけを見ていた**ので、
+**P-256 の鍵で `ES512` のトークンを受けうる形**だった。**`crv` まで突き合わせるようにした。**
+
+**実害は出ていない。** 段階 2 まで `ES384` / `ES512` は**受ける集合に無かった**ので、
+**alg の固定（C-8）で先に弾かれていた。**
+**発行し始めるのと同じ段階で入れた**のが、この修正である。
+E2E : **`RT-129.5`**（`ES384` のトークンの alg を `ES512` に書き換えると受けない）。
+
+#### 上流（Open棟梁）の不具合を踏んだ — **✅ 上流で修正済み（[OpenTouryo#595](https://github.com/OpenTouryoProject/OpenTouryo/issues/595)）**
+
+**`JWS_ES384_Param` / `JWS_ES512_Param` が、Windows では検証できなかった。**
+
+`DigitalSignECDsaCng(ECParameters, bool)` が**ダイジェストを受け取っていなかった**ため、
+検証が `ECDsaCng.VerifyData(data, sign)` ＝ **`ECDsaCng.HashAlgorithm` の既定（SHA-256）**になっていた。
+**`ES256` だけ、たまたま合っていた。**
+
+**実測（Open棟梁 の DLL を直に叩いて確認したもの）**
+
+| alg | `JWS_ES*_X509`（証明書） | `JWS_ES*_Param`（JWK）<br>2026/10/02（修正前） | `JWS_ES*_Param`（JWK）<br>2026/10/03（修正後） |
+|---|---|---|---|
+| `ES256` | ○ | ○ | ○ |
+| `ES384` | ○ | **×** | **○** |
+| `ES512` | ○ | **×** | **○** |
+
+（修正後は **net48 / net10.0 の両方**で確認した。`DigitalSignECDsaCng` に
+ダイジェストを渡す引数が増え、`JWS_ES*_Param` がそれを渡すようになっている。
+**`JWS_ES*_Param` の引数は変わっていない**ので、呼ぶ側は元のままで良い。）
+
+`_X509` は `DigitalSignECDsaX509(path, password, hashAlgorithmName)` に**ダイジェストを渡していた。**
+Linux の経路（`DigitalSignECDsaOpenSsl(param, SHA384.Create())`）も渡していた。
+**Windows（Cng）の経路だけが渡していなかった。**
+
+**`kid` で JWK を引く経路が、この `_Param` である。**
+＝ **鍵の入れ替え（D-9）で要る経路**なので、避けて通れなかった。
+
+| | |
+|---|---|
+| **修正前** | `SigningKeys` の中に `EcdsaJwkVerifier`（`JWS_ECDSA` の派生）を置いて回避していた |
+| **修正後** | **回避の派生 class は外し、上流の `JWS_ES*_Param` をそのまま使う** |
+
+> **これは「受けられない」不具合**（false negative）であって、**通してしまう類ではなかった。**
+> SHA-256 で検証されるのは**P-384 / P-521 の鍵で SHA-256 の署名を作れたときだけ**で、
+> この実装は **alg と鍵を対応させている**ので、そういう署名は発行しない。
+
+> **上流のアセンブリを入れ替えたら、アプリの出力も作り直すこと。**
+> **`bin_locked_*` のような「名前を変えて残した出力」が、参照の解決で先に当たる。**
+> 詳細 → [`BUILDING.md`](../BUILDING.md) 3 節
+
+- **E2E** : **`RT-129.5`**（`ES384` / `ES512` で署名され、`jwkcerts` の曲線の合う鍵で検証でき、
+  `kid` が曲線ごとに違い、曲線が食い違うトークンは受けない）／
+  **`RT-129.6`**（**Discovery が広告する alg すべてに、`jwkcerts` の鍵が在る**）
+- **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である
+- **残り** : **`PS256` は段階 4**（下記で ✅ 対応した）。
+  **検証する側の登録項目**（`request_object_signing_alg` / `token_endpoint_auth_signing_alg`）は **#262 で対応済み**
+
+### PS256 / PS384 / PS512（RSASSA-PSS）（#129 の段階 4）
+
+**FAPI 1.0 Advanced / FAPI-CIBA は、ID Token の署名に `PS256` または `ES256` を求める。**
+段階 3 までは `ES256` しか選べなかった（上流に `JWS_PS*` が無かった）。
+
+| | |
+|---|---|
+| 発行する alg | **9 つ**（`RS*` 3 ＋ `PS*` 3 ＋ `ES*` 3） |
+| 鍵 | **4 本のまま。** **`PS*` は `RS*` と同じ RSA の 1 本**で、**パディングだけが違う** |
+| `kid` | **`RS256` と同じ値**（RFC 7638 は kty / n / e から作る）。＝ **`jwkcerts` に鍵を足す必要が無い** |
+| 広告の並び | **`RS*` → `PS*` → `ES*`**（鍵ごとに固まる。**順序に仕様上の意味は無い**） |
+
+**実装はほぼ表への 3 行である**（#129 の段階 3 で `SigningKeys` に寄せてあるため）。
+`CreateJwsFromPfx` / `CreateJwsFromCer` / `CreateJwsFromJwk` に `JWS_PS*` の分岐を足し、
+**設定キーは `RS*` と同じものを指す。**
+
+> **`jwkcerts` の JWK の `alg` は `RS256` のまま**である。
+> RSA の鍵 1 本に対して JWK は 1 件なので、**6 つの alg を書き分けられない。**
+> **これでよい** —— RFC 7517 の `alg` は「用途」で任意であり、
+> **この実装は `kty`（と EC では `crv`）で照合する**（`IsSameKeyType`）。
+
+#### `kty` が同じなので、`PS*` は「3 つ目の関門」で落ちる
+
+**`RS256` のトークンの alg を `PS256` に書き換えると、鍵の照合は通ってしまう**
+（どちらも `kty=RSA` で、`kid` も同じ鍵を指す）。
+**落ちるのは署名の検証**である（PKCS #1 v1.5 の署名を RSASSA-PSS として検証するため）。
+
+| 関門 | 書き換えた alg | 落ちるところ |
+|---|---|---|
+| 1 | `HS256` / `HS384` / `none` | **`SupportedAlgs` に無い**（即、拒否） |
+| 2 | `ES256` / `ES384` / `ES512` | **`kty` が違う**（RSA ≠ EC） |
+| 3 | `PS256` / `PS384` / `PS512` | **`kty` は同じ。署名が合わない** |
+
+**実測で 3 つとも拒否することを確かめている**（`RT-129.2`）。
+
+- **E2E** : **`RT-129.7`**（`PS256` / `PS384` / `PS512` で署名され、
+  **`kid` が `RS256` と同じ**で、**`jwkcerts` の RSA 公開鍵で RSASSA-PSS として検証でき**、
+  `/userinfo` が受ける）／**`RT-129.2` の (4)**（パディングが違えば受けない）
+- **CIBA は `ES256` のまま**（登録値で上書きしない）。**JARM も `RS256` のまま**
+- **利用者への影響** : **無し。** **書かなければ `RS256`** で、**既存の登録は従来どおり**である。
+  **`jwkcerts` も変わらない**（鍵を足していないため、RP 側の作業も無い）
+- **残り** : 無し。**検証する側の登録項目**（`request_object_signing_alg` /
+  `token_endpoint_auth_signing_alg`）は **#262 で対応済み**（#129 は段階 4 で完了）
+
+### 検証する側の alg をクライアント単位で登録できるようにした（#262）
+
+**#129 で足したのは「発行する側」だけ**だった（`id_token_signed_response_alg`）。
+**「受ける側」の登録項目が無く、広告との非対称が残っていた。**
+
+| | 広告（Discovery） | 登録（クライアント） |
+|---|---|---|
+| `client_assertion` | `token_endpoint_auth_signing_alg_values_supported` | **無かった → ✅ 足した** |
+| Request Object | `request_object_signing_alg_values_supported` | **無かった → ✅ 足した** |
+
+**効くのは `client_assertion` である。**
+`ClientAuthentication` は**登録された RSA → ECDSA の公開鍵を順に試す**ため、
+**両方の鍵を登録したクライアントは `RS256` でも `ES256` でも認証が通っていた**。
+**登録で片方に絞れる**ようにした（OIDC Registration 1.0 §2 / FAPI 1.0 Advanced §8.6）。
+
+| 登録 | 振る舞い |
+|---|---|
+| 書かない | **両方通る**（従来どおり） |
+| `RS256` | **`ES256` のアサーションは通らない** |
+| **受ける集合の外**（例 : `PS256`） | **通らない**（不正な登録として拒否。#224 と同じ方針） |
+
+**`request_object_signing_alg` は、いま書ける値が 1 つだけ**である。
+**受ける側が `RS256` 固定**（上流の `RequestObject.Verify` が `JWS_RS256_Param` 決め打ち）なので、
+**絞っても結果は変わらない。** **それでも項目を用意したのは、広告との非対称を先に解消しておくため**で、
+**受ける alg が増えた時点で、値を書けるようになるだけ**になる。
+**受ける alg を広げるのは「広げる側」の話**で、#262 では扱っていない（上流の対応が要る）。
+
+**CIBA の `request` は対象外**である。**`ES256` 固定**で、
+**仕様でも別の登録項目**（`backchannel_authentication_request_signing_alg`）になっている。
+
+**受ける集合は 1 か所が持つ**（`CmnEndpoints.TokenEndpointAuthSigningAlgs` /
+`CmnEndpoints.RequestObjectSigningAlgs`）。**広告・登録値の検証・画面の選択肢が、同じものを見る**
+（発行する側が `SigningKeys` の表 1 か所を見るのと同じ考え方。#129 の段階 3）。
+
+- **絞る口は 3 つ** : `ClientAuthentication`（`client_assertion`）／
+  `/ros` の FAPI2-CC（`RequestObject.Verify`）／`request` パラメタ（JAR）
+- **E2E** : **`RT-262.1`**（`token_endpoint_auth_signing_alg=RS256` のクライアントは、
+  **`RS256` は通り、`ES256` は通らない**。**絞っていないクライアントは `ES256` でも通る**）／
+  **`RT-129.1`**（絞らなければ両方通る＝従来どおり）
+- **画面でも選べる**（`AddSaml2OAuth2Data`。**先頭が「絞らない」**）
+- **利用者への影響** : **無し。** **書かなければ絞らない**ので、**既存の登録は従来どおり**である
+
+### C-8. トークンの `alg` ヘッダで検証器を選んでいる **[Lib]** — **✅ 修正済み（#129 の段階 1）**
+
+`VerifyAccessToken` は `header[JwtConst.alg]` を読んで `JWS_ES256_X509` / `JWS_RS256_X509` を選んでいた。
 サーバ側で**期待する alg を固定していない**ため、アルゴリズム混同の温床になる。
-（`kid` が JWK Set に当たる経路では JWK 側の `alg` を使っており、そちらは妥当。）
+（`kid` が JWK Set に当たる経路では JWK 側の `alg` を使っており、そちらは妥当だった。）
 
-**修正:** 自分が発行するトークンは自分の署名鍵と alg で検証する形に固定する。
+**直し方**（`CmnAccessToken.SelectJws`）。
 
-### C-9. CORS が全エンドポイントで `AllowAnyOrigin` **[Core]**
+| | |
+|---|---|
+| **受ける alg を固定した** | **この認可サーバが発行するものだけ**（**`SigningKeys` の表**。段階 1 では `RS256` / `ES256`、**段階 2 で `RS384` / `RS512`、段階 3 で `ES384` / `ES512`、段階 4 で `PS*` を足した**）。**それ以外は即、検証失敗**（`none` / `HS256` / `HS384` …） |
+| **鍵を alg に対応させた** | **以前は、`kid` を引けないときに必ず RSA を選んでいた**ので、**ES256 で発行したトークンが検証できなかった** |
+| **JWK とヘッダの食い違いを拒む** | `kid` で引いた JWK の `alg` が**ヘッダの `alg` と違えば受けない**（どちらを信じるかという話にしない） |
+
+**以前も偽造はできなかった。** 署名は**自分の公開鍵**で確かめており、
+知らない alg は RS256 として扱われて**署名不一致で落ちていた**。
+**問題は「サーバが期待する alg を決めていなかった」こと**で、
+**alg の選択肢を増やす段階（#129 の段階 2 以降）の前に決めておく必要があった。**
+
+- **`kid` を引けないときに証明書へ落とす動きは、従来どおり**残した
+  （`JwkSet.json` を置いていない配備でも、自分の鍵で検証できる）
+- **E2E** : `RT-129.2`（`HS256` / `HS384` / `none` に書き換えたトークンを拒む。
+  **関門は 3 つ**で、**発行しない alg**は即、拒否し、
+  **発行する alg でも鍵（`kty` / `crv`）が合わなければ拒否**し、
+  **鍵まで合っても署名が合わなければ拒否する**（`PS*` はここで落ちる））。
+  **署名と `kid` はそのまま**にして**ヘッダの `alg` だけ**を書き換えるので、**alg の判定そのもの**を測れる
+  （`TC-6.4` はヘッダを丸ごと作り替えるため、`kid` が消えて alg の判定まで届かない）
+- **受ける集合を増やすときは、`RT-129.2` の一覧も直す**（黙って広がらないようにするため）
+
+### C-9. CORS が全エンドポイントで `AllowAnyOrigin` **[Core]** — **✅ 修正済み（#265）**
+
+**直す前。**
 
 ```csharp
 // Startup.cs:Configure
 app.UseCors(builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 ```
 
-`OAuth2EndpointController` の `[EnableCors]`（ポリシー名なし）はこのインライン ポリシーに解決される。
-`/token` `/revoke` `/introspect` まで任意オリジンから叩ける。
+`OAuth2EndpointController` の `[EnableCors]`（ポリシー名なし）がこのインライン ポリシーに解決され、
+**`/token` `/revoke` `/introspect` まで任意オリジンから叩けた**（実測）。
 `AllowCredentials` は付いていないので Cookie は飛ばないが、
-**任意のサイトの JS がユーザのブラウザからトークン エンドポイントを直接呼べる**状態ではある。
+**任意のサイトの JS が、利用者のブラウザからトークン エンドポイントを直接呼べる**状態だった。
 
-CORS を開くべきなのは `/userinfo` と `.well-known` 程度で、
-`/token` は SPA の PKCE 用に**必要なオリジンだけ**許可するのが定石。
+**直し方。** **既定のポリシーを置かず、口ごとに属性で選ぶ**ようにした。
 
-なお CORS の設定が **3 重**になっている（`AddCors` の名前付きポリシー `AllowAllOrigins`、
-`UseCors` のインライン、`[EnableCors]` の既定ポリシー）。整理対象。
+| 口 | 方針 |
+|---|---|
+| `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata` | **常に全開**（公開情報。`MpasPublicDocs`） |
+| `/userinfo` / `/token` / `/SetDeviceToken` / `/ciba_result` / `/2fa_result` | **許すオリジンだけ**（`MpasBrowserApi`） |
+| `/revoke` / `/introspect` / `/device_authz` / `/ciba_authz` / `/par` / `/ros` | **CORS を付けない** |
 
-### C-10. `redirect_uri` の比較が大文字小文字を無視 **[Lib]**
+**許すオリジンは、登録から導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+
+**構成ファイルの public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`** を
+記号を解決してから `http` / `https` のオリジンだけ集める。
+**SPA の `redirect_uri` は、必ずその SPA のオリジン上にある**ので、
+**登録を足せば、CORS の設定を別に書かなくてよい。**
+**Keycloak の Web origins の既定値 `+`（Valid Redirect URIs のオリジンを使う）と、
+Entra ID の SPA プラットフォームと同じ考え方**である。
+**追加分は `CorsAllowedOrigins`**（空でよい。導出で拾えないものを足す口）。
+
+- **`AllowCredentials` は、どちらのポリシーにも付けない。**
+  **Cookie で通る口をこの範囲に入れない**ため（入れると、他オリジンの JS から資格情報で呼べる）
+- **画面登録（`saml2OAuth2Data`）は導出に含めない。**
+  プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、
+  `DataProvider` に全件を列挙する口が無く、**分散キャッシュも無い**（E-2）。
+  **画面登録の SPA は `CorsAllowedOrigins` に足して通す**
+- **3 重定義（E-3）も片付いた。** `AllowAllOrigins` は**自己テスト用の口だけ**が使う
+  （`ValuesController` / `TestHybridFlow`。どちらも `IsLockedDownTestEndpoints` で経路ごと閉じる）
+- **E2E** : **`RT-265.1`**（公開情報は全開／ブラウザから叩く口は導出したオリジンだけ／
+  `/revoke` `/introspect` には付かない／`Allow-Credentials` を付けない）。**両系統に流す。**
+  **旧挙動に戻すと落ちることを確かめてある**（`/revoke` が `*` を返す）
+- **利用者への影響** : **挙動が変わる。**
+  **任意オリジンから `/token` を叩いている SPA は、登録から導出されるか
+  `CorsAllowedOrigins` に書かれていないと動かなくなる。**
+  **`.well-known` / `jwkcerts` は従来どおり。**
+  **サーバサイドの Web RP とネイティブ / モバイルは影響なし**（CORS はブラウザの仕組み）
+
+> **net48 版も、同じ方針に揃えてある。**
+> **仕組みは違う**（あちらは Web API の `[EnableCors]` ＝ `ICorsPolicyProvider` の属性）が、
+> **外から見た振る舞いは同じ**である。**`RT-265.1` を両系統に流して固定している。**
+
+### C-10. `redirect_uri` の比較が大文字小文字を無視 **[Lib]** — **✅ 修正済み（#263）**
+
+**2 つの論点が同居していた。起票先を分けた。**
+
+| | 論点 | 行き先 |
+|---|---|---|
+| 1 | **照合が大文字小文字を無視**（下記） | **✅ 修正済み（#263）** |
+| 2 | **自己テスト用の抜け道**（下記） | **✅ 修正済み** |
+
+#### 1. 照合が大文字小文字を無視（#263）— **✅ 修正済み**
 
 ```csharp
-// CommonLibrary/TokenProviders/CmnEndpoints.cs:717
+// 直す前（CommonLibrary/TokenProviders/CmnEndpoints.cs）
 if (redirect_uri.ToLower() == preRegisteredUri.ToLower())
 ```
 
 RFC 6749 §3.1.2.3 / OIDC Core §3.1.2.1 は **単純文字列比較（大文字小文字を区別）** を求める。
-URI のパス・クエリは大文字小文字を区別するため、緩めた分だけ一致範囲が広がる。
+URI のパス・クエリは大文字小文字を区別するため、緩めた分だけ一致範囲が広がっていた。
 
-また `CheckRedirectUri` には
+**直し方**（`CmnEndpoints.CheckRedirectUri`）。
+
+```csharp
+if (string.Equals(redirect_uri, preRegisteredUri, StringComparison.Ordinal))
+```
+
+**URI 全体を比べる。** スキームとホストは RFC 3986 では大文字小文字を区別しないが、
+**RFC 6749 §3.1.2.3 が指しているのは RFC 3986 §6.2.1（Simple String Comparison）**で、
+**正規化しない比較**を求めているため、そこも揃っていなければ通さない。
+
+**`post_logout_redirect_uri` の方は、#232 の時点から単純文字列比較だった**
+（`StringComparison.Ordinal`。仕様が exactly match と書いているため）。
+**`redirect_uri` だけが揃っていなかったので、揃えた。**
+
+- **E2E** : **`RT-245.4`**（パスの大文字小文字だけが違う `redirect_uri` では、
+  **認可コードを発行せず、その URI へリダイレクトもしない**）。
+  **Skip を外した。** それまでは**実測で認可コードが発行されていた**（2026/09/29）
+- **`/token` 側は元から完全一致だった**（`AuthorizationCodeProvider.CheckClientIdAndRedirectUri`）。
+  **認可の入口だけが緩かった**ため、**コードは発行され、交換まで通っていた**
+- **利用者への影響** : **挙動が変わる。**
+  **登録と大文字小文字が違う `redirect_uri` を送っている RP は、認可に失敗するようになる。**
+  **登録どおりに送っている RP には影響しない。** 設定キーの増減・DDL の変更は無し
+
+#### 2. 自己テスト用の抜け道 — **✅ 修正済み**
+
+`CheckRedirectUri` には
 **「`Config.OAuth2ClientEndpointsRootURI + OAuth2AuthorizationCodeGrantClient_Manage` は
-どの client_id でも無条件に許可」** という自己テスト用の抜け道がある。
-`Config.IsLockedDownTestEndpoints` の対象外なので、**本番で閉じられない。**
+どの client_id でも無条件に許可」** という自己テスト用の抜け道があった。
+`Config.IsLockedDownTestEndpoints` の対象外で、**本番で閉じられなかった。**
+
+**宛先は配備自身の設定から組み立てる固定値**で、攻撃者が選べるわけではないため、
+**深刻度は低いと評価していた。** 問題と見ていたのは**本番で閉じられないこと**である。
+
+**直し方。** **特別扱いを無くした。**
+
+| | |
+|---|---|
+| 足したもの | **`Const.TestSelfCodeManage`（`test_self_code_manage`）** — `GetRedirectUriFromConstr` が、管理画面の折り返し先に解決する |
+| 消したもの | **「この URL なら登録を確かめずに通す」分岐**（`CheckRedirectUri`）。**例外は無くなった** |
+| 画面 | **新規登録の `redirect_uri_code` の既定**を、この記号にした（両アプリの `Manage/AddSaml2OAuth2Data`） |
+
+**管理画面の「トークンを取る」（`GetOAuth2Token`）は、利用者自身のクライアント登録で認可を要求する。**
+**その折り返し先を登録値として表せるようにした**ので、**通常の照合に載り、分岐が要らなくなった。**
+
+- **E2E** : **`RT-C10.1`**（**登録していないクライアントは、この折り返し先では認可コードを得られない。
+  登録しているクライアントは得られる**）。
+  **分岐を戻して、両系統で落ちることを確かめてある**（戻すと `TestClient` がコードを得る）
+- **`IsLockedDownTestEndpoints` に足していない。** **分岐そのものを消した**ので、
+  ロックダウンの有無に関わらず迂回できない
+- **利用者への影響** : **挙動が変わる。**
+  **管理画面の「トークンを取る」は、`redirect_uri_code` にこの記号が登録されている必要がある。**
+  **既存の登録では通らなくなる**（`invalid_request`）ので、画面で登録し直す。
+  **新規登録は既定でこの値**になっており、**動作確認の後に自分の RP の折り返し先へ書き換える**使い方
+
+> **クライアント 1 件に `redirect_uri_code` は 1 つ**なので、
+> **本物の RP として使っている登録では、このボタンは使えない。**
+> **自己テストのための便宜であり、そこは割り切っている。**
 
 ### C-11. Request Object（`/ros`）に有効期限もワンタイム性も無い **[Core][Lib]** — **✅ 修正済み（#188 / #229）**
 
@@ -1591,18 +1958,42 @@ URI のパス・クエリは大文字小文字を区別するため、緩めた�
 > 読む回数を 1 回にまとめるのではなく、**応答を作り終えた時点で消す**ことで、
 > 「2 回目の認可要求には使えない」を実現した。
 
-### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]**
+### C-12. Cookie 認証の有効期限が 2 分にハードコード **[Core]** — **✅ 修正済み（#223）**
+
+**直す前。** net10.0 版は 2 分固定だった。
 
 ```csharp
-// Startup.cs:401
 options.ExpireTimeSpan = new TimeSpan(0, 2, 0);
 options.SlidingExpiration = true;
 ```
 
 `Config.AuthCookieExpiresFromHours` / `AuthCookieSlidingExpiration` は
-**net48 版（`App_Start/StartupAuth.cs:194,196`）でしか使われていない。**
-Core 側は設定を無視して 2 分固定。SlidingExpiration があるので操作中は延びるが、
-**2 分放置するとサインアウトする**。設定の意味が失われている。
+**net48 版（`App_Start/StartupAuth.cs:227,229`）でしか使われていなかった。**
+Core 側は設定を無視して 2 分固定で、`SlidingExpiration` があるので操作中は延びるが、
+**2 分放置するとサインアウトしていた**。設定の意味が失われていた。
+
+**直し方**（`Startup.ConfigureServices`。コミット `2af1915`）。
+**`ConfigureApplicationCookie` の中で、net48 と同じ設定キーを読む**ようにした。
+
+```csharp
+services.ConfigureApplicationCookie(options =>
+    {
+        // **net48 と同じ設定キーで揃える**（App_Start/StartupAuth.cs）。
+        options.ExpireTimeSpan = Config.AuthCookieExpiresFromHours;
+        options.SlidingExpiration = Config.AuthCookieSlidingExpiration;
+```
+
+**置き場所が本題だった。** 以前は `authenticationBuilder.AddCookie(options => ...)` に書いていたが、
+**それはスキーム `Cookies` の設定で、サインインには使われていなかった**
+（`AddIdentity` が既定を `Identity.Application` にするため）。
+**`LoginPath` も含めて、書いた設定が 1 つも効いていなかった。**
+`ConfigureApplicationCookie` は `Identity.Application` を設定するので、**ここに書いたことが効く。**
+
+- **設定キーは両系統の雛形にあり、値も同じ**（`AuthCookieExpiresFromHours` = 336 時間 /
+  `AuthCookieSlidingExpiration` = true）
+- **`new TimeSpan(0, 2, 0)` は、どちらのアプリにも残っていない**
+- **利用者への影響** : **設定が効くようになった。**
+  **既定の雛形では 2 分から 336 時間（14 日）に伸びる**ので、**net48 版と揃う**
 
 ### C-13. DataProtection の鍵が永続化されていない **[Core]** — **✅ 修正済み（#251）**
 
@@ -1906,8 +2297,8 @@ RFC 8705 §3 は、保護されたリソースが照合することを求めて�
 
 **英数字だけの秘密では、符号化しても同じ文字列になる**。
 このため**既存の E2E では現れず**（雛形の秘密は base64url の英数字）、
-**記号を含む秘密のクライアントを差し込んで測る**ようにした
-（`RT-237.1`〜`.3`。差し込みの仕組みは #224）。
+**記号を含む秘密のクライアントを用意して測る**ようにした
+（`RT-237.1`〜`.3`。**種データで作る**。#264。もとの仕組みは #224）。
 
 送り側（Open棟梁 の `CreateBasicAuthenticationHeaderValue`）は OpenTouryo #592 で符号化するようになった。
 **送り側だけを直すと、受け側が復号しない認可サーバに繋がらなくなる**ため、
@@ -2071,9 +2462,9 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
 | D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）／**✅ 修正済み（#252）**。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`）。**`form_post` だけ抜けていた**（`iss` は `BuildRedirectUrl` が付けており、**URL を組まない `form_post` はそこを通らない**）。**View で出すようにした**（`RT-231.5` / `RT-231.6`） | Mix-Up 攻撃への対策 |
 | D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
-| D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった |
+| D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった。**標準クレームのサンプルを持たせた**（#261）。`IsDebug` のとき **2 人目のテスト利用者に OIDC Core 5.1 の形で仕込み**、雛形には対応付けのサンプルを コメントで置いた（`RT-261.1`）。**画面は変えていない**（入れ物の中身は導入する側が決める方針を保つ）。あわせて**クレームの型を JSON のまま返すよう直した**（`updated_at` は数値。以前は文字列。#184 と同種） |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
-| D-9 | 署名鍵のローテーション運用 | JWK Set への追記はできる（`CreateJwkSetJson`）が、**発行側は `Config.RsaPfxFilePath` の 1 本を固定参照** | 無停止での鍵交換ができない |
+| D-9 | 署名鍵のローテーション運用 | **✅ 解けた（#129 の段階 3）。** **alg → 鍵の対応を `SigningKeys` の表 1 か所に寄せ**、**`CreateJwkSetJson` がその表を回して `jwkcerts` を作る**ようにした（ソース参照）。**JWK Set は追記式**なので、**新しい鍵を先に載せ、RP のキャッシュが切れてから署名に切り替えられる**（手順は `CONFIGURATION.md`）。**広告と鍵が揃っていることは `RT-129.6` で測る** | **無停止で替えられるようになった**（残り : 旧い `kid` を外すのは手作業） |
 | D-15 | **ID フェデレーションの上流が 1 つだけ** | `Config.IdFederation{Authorize,Token,UserInfo,Redirect}Endpoint` の 1 組しか持てない。**#140 の段階 3 で連携キーを `(iss, sub)` にしたので、複数を持てる下地はできた**（`UserLogins` は issuer ごとに行を持てる）。残るのは**設定の形と、どの上流へ飛ばすかの画面**。**`SpRp_Isser`（期待する issuer）も 1 つしか持てない**ので、そこも合わせて要る | 複数の IdP と連携できない |
 | D-9-2 | **PPID の秘密（`SaltParameter`）のローテーション** | **✅ 解けた（#151 の段階 2）。** **発行した `sub` を対応表（`SubjectIdentifier`）に記録する**ようにしたので、**秘密を替えても発行済みの値は動かない**（表から引くため）。以前は導出していたので替えられなかった（A-14） | **漏洩時に替えられるようになった** |
 | D-10 | **`typ: at+jwt`（RFC 9068）** | 未設定。加えて access_token のヘッダに `jku` を入れている | トークン取り違え（token confusion）対策が無い。`jku` は検証側に SSRF を誘発しうるので通常は付けない |
@@ -2089,8 +2480,8 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | # | 内容 |
 |---|---|
 | E-1 | `Startup.cs` 方式のまま。.NET 6 以降の Minimal Hosting（`WebApplication.CreateBuilder`）へ寄せると、`Program.cs` の `IWebHost` / `IHost` のコメント アウト群も整理できる |
-| E-2 | `AddDistributedMemoryCache()` / DataProtection 未永続化（C-13）でスケールアウト不可 |
-| E-3 | CORS が 3 重定義（C-9） |
+| E-2 | `AddDistributedMemoryCache()` のままなのでスケールアウト不可。**DataProtection の方は ✅ 永続化できるようにした**（C-13 / #251。`DataProtectionKeyPath`） |
+| E-3 | ✅ **CORS の 3 重定義を片付けた**（C-9 / #265）。既定のポリシーを置かず、口ごとに属性で選ぶ。`AllowAllOrigins` は自己テスト用の口だけが使う |
 | E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
 | E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
 | E-6 | 認可画面（`Views/Account/OAuth2Authorize.cshtml`）に **Deny ボタンが無い**。ユーザは拒否できず、`access_denied` を返す経路も無い。scope も生の識別子をそのまま表示している |
@@ -2145,11 +2536,11 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 |---|
 | ✅ **C-1 `/device_authz` のクライアント認証** #193 |
 | ✅ **C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化（net10.0 版）** #194 |
-| C-4 / C-5 / C-11 有効期限の実装（code / refresh_token / request object）＋ ワンタイム化 ＋ 再利用検知 |
-| C-8 検証アルゴリズムの固定 |
-| C-9 CORS をエンドポイント単位に |
-| C-10 `redirect_uri` の厳密比較、テスト用抜け道のロックダウン対象化 |
-| C-12 / C-13 Cookie 有効期限の設定反映、DataProtection の永続化 |
+| ✅ **C-4 / C-5 / C-11 有効期限の実装**（code / refresh_token / request object）**＋ ワンタイム化 ＋ 再利用検知** #188 / #229 |
+| ✅ **C-8 検証アルゴリズムの固定** #129 の段階 1 |
+| ✅ **C-9 CORS をエンドポイント単位に** #265 |
+| ✅ **C-10 `redirect_uri` の厳密比較** #263 ／ **テスト用抜け道の削除**（`test_self_code_manage`） |
+| ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251（`AddDistributedMemoryCache` は E-2 として残る） |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 
@@ -2173,7 +2564,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-4 Dynamic Client Registration |
 | D-7 `profile` / `address` クレーム |
 | D-8 複数 `redirect_uri` |
-| D-9 鍵ローテーション |
+| ✅ **D-9 鍵ローテーション**（alg → 鍵の表に寄せ、`jwkcerts` をその表から作る）**#129 の段階 3** |
 | D-13 レート制限 |
 
 ### フェーズ 5 — 土台

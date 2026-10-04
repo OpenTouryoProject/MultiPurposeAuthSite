@@ -120,8 +120,8 @@ MultiPurposeAuthSite/
    │   ├─ ManageController.cs         2981 行
    │   ├─ HomeController.cs           1429 行  ★テスト用クライアント（Starters）
    │   ├─ OAuth2EndpointController.cs 1332 行
-   │   ├─ UsersAdminController.cs      597 行  ★net48 のみ
-   │   ├─ RolesAdminController.cs      432 行  ★net48 のみ
+   │   ├─ UsersAdminController.cs      610 行  ★net10.0 版へ移植済み（#258）
+   │   ├─ RolesAdminController.cs      431 行  ★net10.0 版へ移植済み（#258）
    │   ├─ Fido2ServerController.cs     261 行  ★ファイルは在るがビルド対象外（10 節）
    │   ├─ ErrorController.cs           232 行
    │   ├─ OAuth2ResourceServerController.cs 203 行
@@ -262,7 +262,7 @@ net10.0 版と同じく、**`GET /Account/Login` / `GET /Account/Register` の�
 
 | 機能 | net48（本ディレクトリ） | net10.0（`../MultiPurposeAuthSiteCore`） |
 |---|---|---|
-| ユーザ・ロール管理画面 | **✓ `UsersAdminController` / `RolesAdminController`**（`Config.EnableAdministrationOfUsersAndRoles` で開閉） | ✗ 無し |
+| ユーザ・ロール管理画面 | ✓ `UsersAdminController` / `RolesAdminController`（`Config.EnableAdministrationOfUsersAndRoles` で開閉） | **✓ 移植済み**（#258。画面と導線は同じ） |
 | TOTP（Authenticator アプリ 2FA） | **✗ 無し** | ✓ あり（登録 / リカバリ コード / 管理） |
 | FIDO2 サーバ用 WebAPI | △ `Fido2ServerController.cs` は在るが**ビルド対象外** | ✗ 無し |
 | 疎通用 WebAPI | ✗ | ✓ `ValuesController`（`api/values/get`） |

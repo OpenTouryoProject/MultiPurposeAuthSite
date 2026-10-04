@@ -32,6 +32,7 @@
 //*  2018/12/26  西野 大介         分割
 //*  2020/02/27  西野 大介         課金エンドポイント（テスト用→解放）
 //*  2020/07/22  西野 大介         クリーンアーキテクチャ維持or放棄 → 放棄
+//*  2026/10/04  玄人 幸道         CORSを口ごとの属性にした（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -60,7 +61,9 @@ using Touryo.Infrastructure.Public.Security;
 namespace MultiPurposeAuthSite.Controllers
 {
     /// <summary>OAuth2ResourceServerのApiController（ライブラリ）</summary>
-    [EnableCors]
+    //  **CORS はクラスに付けない**（#265）。**口ごとに属性で選ぶ。**
+    //    ChageToUser は**サーバ間で呼ぶ**（Helper.CallOAuth2ChageToUserWebAPIAsync）ので、
+    //    **CORS は要らない。**
     //[ApiController]
     [MyBaseAsyncApiController(httpAuthHeader:
         EnumHttpAuthHeader.None // 認証無くても通すので、
@@ -136,6 +139,13 @@ namespace MultiPurposeAuthSite.Controllers
         /// <param name="formData">code</param>
         /// <returns>Dictionary(string, string)</returns>
         [HttpPost]
+        // **自己テストの画面（OAuth2ImplicitGrantClient）が jQuery で叩く**（#265）。
+        //   **既定では同一オリジン**（OAuth2AuthorizationServerEndpointsRootURI と
+        //   OAuth2ClientEndpointsRootURI が同じ値）なので、本来 CORS は要らない。
+        //   **2 つを別ホストにした配備では、クロス オリジンになる**ので開けておく。
+        //   **この口は IsLockedDownTestEndpoints で経路ごと閉じる**ため、
+        //   **本番では、このポリシーも届かない**（ValuesController と同じ扱い）。
+        [EnableCors("AllowAllOrigins")]
         public async Task<Dictionary<string, object>> TestHybridFlow(IFormCollection formData)
         {
             // 変数

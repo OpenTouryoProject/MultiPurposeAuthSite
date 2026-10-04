@@ -51,6 +51,9 @@
 //*  2026/09/30  玄人 幸道         DataProtectionKeyPath を追加（#251）
 //*  2026/09/30  玄人 幸道         AuthCookieName を追加（#250 の段階 4）
 //*  2026/09/30  玄人 幸道         CookieNamePrefix を追加（#255）
+//*  2026/10/01  玄人 幸道         RequireUniqueEmail の設定を削除（#151 の段階 3）
+//*  2026/10/03  玄人 幸道         TestUserSuffix を追加（#260）
+//*  2026/10/04  玄人 幸道         CorsAllowedOrigins を追加（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -323,6 +326,28 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("TestUserPWD");
+            }
+        }
+
+        /// <summary>TestUserSuffix（テスト利用者の名前に付ける接尾辞。#260）</summary>
+        /// <remarks>
+        /// **空なら従来どおり**（`super_tanaka` / `tanaka`）。
+        ///
+        /// **なぜ要るか。** E2E は **net48 版と net10.0 版を同時に立てて、同じケースを両方に流す。**
+        /// **DB ストアでは 1 つの DB を共有する**ので、
+        /// **両サイトが同じテスト利用者の属性（`DeviceToken` / `UnstructuredData`）を
+        /// 書き換え合って、間欠で落ちていた。**
+        ///
+        /// **サイトごとに違う接尾辞を与えると、テスト利用者が分かれる**（`_core` / `_netfx`）。
+        /// **`mem` では各サイトが自前のストアを持つので、以前から起きていない。**
+        ///
+        /// **製品の既定は空である。** 接尾辞を与えるのは `test.ps1` だけ。
+        /// </remarks>
+        public static string TestUserSuffix
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("TestUserSuffix") ?? "";
             }
         }
 
@@ -654,6 +679,25 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("CookieNamePrefix");
+            }
+        }
+
+        /// <summary>CORS で追加して許可するオリジン（任意。#265）</summary>
+        /// <remarks>
+        /// **空でよい。** 既定では、**構成ファイルに登録された public クライアントの
+        /// `redirect_uri_*` からオリジンを導く**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **ここは、その導出で拾えないものを足すための口**である。
+        ///
+        /// **区切りは空白かカンマ。** 値はオリジン（`https://host:port`）で書く。
+        /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
+        ///
+        /// **`*` は書かないこと。** 書いても拒否する（`ProductionCheck` が警告する）。
+        /// </remarks>
+        public static string CorsAllowedOrigins
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("CorsAllowedOrigins");
             }
         }
 

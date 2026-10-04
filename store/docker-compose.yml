@@ -1,4 +1,4 @@
-# ##################################################################################################
+﻿# ##################################################################################################
 # E2E テスト用の UserStore（SQL Server / Oracle / PostgreSQL）
 #
 #   **これは E2E 専用である。** 手動確認は LocalServicesOnDocker を使う。
@@ -201,8 +201,13 @@ services:
       - appSettings__JwkSetFilePath=/resource/MultiPurposeAuthSite/JwkSet.json
       - appSettings__RsaPfxFilePath=/resource/X509/SHA256RSA_Server.pfx
       - appSettings__EcdsaPfxFilePath=/resource/X509/SHA256ECDSA_Server.pfx
+      # ES384 / ES512 は曲線が alg に紐づくので、鍵が分かれる（#129 の段階 3）
+      - appSettings__Ecdsa384PfxFilePath=/resource/X509/SHA384ECDSA.pfx
+      - appSettings__Ecdsa512PfxFilePath=/resource/X509/SHA521ECDSA.pfx
       - appSettings__SpRp_RsaCerFilePath=/resource/X509/SHA256RSA_Server.cer
       - appSettings__SpRp_EcdsaCerFilePath=/resource/X509/SHA256ECDSA_Server.cer
+      - appSettings__SpRp_Ecdsa384CerFilePath=/resource/X509/SHA384ECDSA.cer
+      - appSettings__SpRp_Ecdsa512CerFilePath=/resource/X509/SHA521ECDSA.cer
       - appSettings__SpRp_RsaPfxFilePath=/resource/X509/SHA256RSA_Client.pfx
       - appSettings__SpRp_EcdsaPfxFilePath=/resource/X509/SHA256ECDSA_Client.pfx
       - appSettings__SpRp_ClientCertPfxFilePath=/resource/X509/SHA256RSAClientCert.pfx

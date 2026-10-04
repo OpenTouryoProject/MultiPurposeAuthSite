@@ -206,8 +206,9 @@ function Get-TrxResults([string]$path)
         #   TC-n.n        基本テストケース（input.md 由来）
         #   EX-n.n        拡張仕様（Revocation / Introspection / Device / Hybrid など）
         #   RT-<Issue>.n  個別 Issue の回帰
+        #   RT-C<n>.n     **公開の Issue を持たない項目**の回帰（ANALYSIS-IdP.md の番号。TESTING.md 5 節）
         $tc = ""
-        $m = [regex]::Match($stdout, '\[([A-Z0-9]{2}-[0-9]+(?:\.[0-9]+)?)\]')
+        $m = [regex]::Match($stdout, '\[([A-Z0-9]{2}-C?[0-9]+(?:\.[0-9]+)?)\]')
         if ($m.Success) { $tc = $m.Groups[1].Value }
 
         $rows += [pscustomobject]@{
@@ -290,7 +291,7 @@ function ConvertTo-Record
 
     foreach ($line in ($Text -split "`r?`n"))
     {
-        if ($line -match '^\s*\[[A-Z0-9]{2}-[0-9.]+\]\s*(.+)$')
+        if ($line -match '^\s*\[[A-Z0-9]{2}-C?[0-9.]+\]\s*(.+)$')
         {
             $rec.タイトル = $Matches[1].Trim()
             continue
@@ -457,7 +458,8 @@ function Get-IdPart
 
     if (-not $Id) { return 0 }
 
-    $m = [regex]::Match($Id, '^[A-Z0-9]{2}-([0-9]+)(?:\.([0-9]+))?$')
+    # **C は ANALYSIS の項目番号**（RT-C10.1）。数字の部分で並べる。
+    $m = [regex]::Match($Id, '^[A-Z0-9]{2}-C?([0-9]+)(?:\.([0-9]+))?$')
     if (-not $m.Success) { return 0 }
 
     $v = $m.Groups[$Index + 1].Value

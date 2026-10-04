@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
+//*  2026/10/04  玄人 幸道         クライアント作成時に種データを作らせる（#264）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -103,6 +104,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             TargetInfo target = TestEnv.Target(targetKey);
 
             Skip.IfNot(target.IsReachable(), target.UnavailableReason ?? "対象が起動していません。");
+
+            // **種データを作らせる**（#264）。**1 度だけ。**
+            //   **サインインしないテストが、差し込みのクライアントを使うことがある**ので、
+            //   **ここで揃えておく**（サインインは `GET /Account/Login` を通るが、
+            //   `Client()` だけでは通らない）。
+            target.EnsureSeedData();
 
             // **どのアプリが応答したのかを残す。**
             // 2 つのターゲットが同じURLで構成されているため、

@@ -33,6 +33,8 @@
 //*  2026/09/16  玄人 幸道         EX-8.4 の Skip を解消（2 人目の利用者でサインインできるようにした）
 //*  2026/09/22  玄人 幸道         補助処理を internal にして、FA-5（#224）からも使う
 //*  2026/09/25  玄人 幸道         認証要求を request で送り、クライアント認証を添えるようにした（#234）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/03  玄人 幸道         コレクションの意味を「既定の利用者の行を書く」に広げた（#260）
 //**********************************************************************************
 
 using System;
@@ -68,13 +70,26 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
     public class CibaTests : TargetTestBase
     {
         /// <summary>
-        /// 既定の利用者に端末（device_token）を登録するテストのコレクション（#224）。
+        /// **既定の利用者の行を書く**テストのコレクション（#224 / #260）。
         /// </summary>
         /// <remarks>
-        /// **同じコレクションのクラスは、並行して動かない。** 端末の登録は利用者ごとに 1 つなので、
-        /// 並行すると奪い合い、プッシュ通知が別の端末へ行く。FA-5（CibaClientModeTests）も入れる。
+        /// **同じコレクションのクラスは、並行して動かない。**
+        ///
+        /// | 入れる理由 | クラス |
+        /// |---|---|
+        /// | **端末の登録は利用者ごとに 1 つ**で、並行すると奪い合い、プッシュ通知が別の端末へ行く（#224） | `CibaTests` / `CibaRequestTests` / `CibaClientModeTests` |
+        /// | **同じ利用者の行を書く**ので、並行すると**先に書いた値が消える**（#260） | `UserClaimsTests` |
+        ///
+        /// **#260 で、テスト利用者はターゲットごとに分けた**（`super_tanaka_core` / `_netfx`）。
+        /// それで**サイト間**の書き換え合いは消えたが、
+        /// **同じサイトの中では、端末の登録（`DeviceToken`）と
+        /// 非構造化データの保存（`UnstructuredData`）が同じ行を書く。**
+        ///
+        /// **実測（2026/10/03。`sql`）** : `UserClaimsTests` と CIBA の 3 クラスだけを回しても、
+        /// **3 回に 1 回ほど `RT-230.1` が落ちた**（`usd1` に入れた値が消える）。
+        /// **このコレクションに入れると、落ちなくなる。**
         /// </remarks>
-        internal const string DeviceCollection = "CIBA の端末登録";
+        internal const string DeviceCollection = "既定の利用者の行を書くテスト";
 
         /// <summary>grant_type</summary>
         private const string GrantType = "urn:openid:params:grant-type:ciba";
@@ -117,7 +132,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
             string requestUri = await RequestObjectBuilder.RegisterAsync(client,
                 await RequestObjectBuilder.CreateCibaAsync(client, reg.ClientId, new Dictionary<string, object>()
                 {
-                    { "login_hint", TestEnv.TestUserName },
+                    // **static ヘルパなので、client からターゲットを引く**（#260）。
+                    { "login_hint", TestEnv.TestUserName(client.Target.Key) },
                     { "binding_message", bindingMessage }
                 }));
 
@@ -190,7 +206,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
                 string bindingMessage = "E2E-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（認証デバイスとプッシュ通知は、テストで置き換える）");
 
                 r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -267,7 +283,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（認証デバイスとプッシュ通知は、テストで置き換える）");
 
                 r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -325,7 +341,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
 
-                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName
+                r.Target("client_name=" + KnownClients.TestClient4 + " / login_hint=" + TestEnv.TestUserName(targetKey)
                     + "（同じ利用者の要求を 2 件、同時に保留にする）");
 
                 r.Step("(1) ユーザ : 認証デバイスを登録する（POST /SetDeviceToken）");
@@ -399,8 +415,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
 
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient4);
 
-                r.Target("宛先の利用者 = " + TestEnv.TestUserName
-                    + " / 返答するのは " + TestEnv.SecondUserName);
+                r.Target("宛先の利用者 = " + TestEnv.TestUserName(targetKey)
+                    + " / 返答するのは " + TestEnv.SecondUserName(targetKey));
 
                 r.Step("(1) 宛先の利用者 : 認証デバイスを登録し、CIBA の要求を 1 件保留にする");
 
@@ -419,7 +435,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Extended
                 // **別の利用者では、端末（device_token）を登録しない。**
                 //   RT-210.1（#210）が、この利用者を「端末が無い利用者」として使っているため。
                 //   ここで要るのはアクセス トークンだけで、端末の登録は要らない。
-                using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.SecondUserName))
+                using (IdPClient other = await this.SignedInClientAsync(targetKey, TestEnv.SecondUserName(targetKey)))
                 {
                     JsonResponse otherToken = await Flows.RunAuthorizationCodeFlowAsync(other);
 

@@ -32,6 +32,7 @@
 //*  2026/09/26  玄人 幸道         RT-239.5（fapi2 の refresh_token）を追加（#239 の段階 3）
 //*  2026/09/29  玄人 幸道         更新後も fapi クレームが載ることを確認（#245）
 //*  2026/09/30  玄人 幸道         RT-129.1（ES256 の client_assertion）を追加（#129 の段階 2）
+//*  2026/10/03  玄人 幸道         RT-262.1（登録で絞ったalg以外は通らない）を追加（#262）
 //**********************************************************************************
 
 using System;
@@ -498,6 +499,97 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**広告と実装を揃えた**（#129 の段階 0 で作った対照表の 1 行目）。"
                     + "**`PS256` は通らない**（Open棟梁 に `JWS_PS*` が無い）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-262.1 登録で絞った alg 以外の client_assertion は通らない</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT26201_登録で絞ったalg以外のアサーションは通らない(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                // **TestClient_8 は構成ファイルに無い**（test.ps1 -Launch が差し込む）。
+                //   写す元（TestClient）は **RSA と ECDSA の公開鍵を両方登録している。**
+                //   **RT-129.3 と同じクライアントを使っている**（#262）。
+                //   あちらは `id_token_signed_response_alg`（発行する側）、
+                //   こちらは `token_endpoint_auth_signing_alg`（受ける側）で、**別の項目。**
+                //   **専用のクライアントを足さないのは、net48 が一覧ごと 1 本の環境変数で受け、
+                //   件数に上限があるため**（test.ps1 の差し込み一覧 / TESTING.md 1 節）。
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_8);
+
+                TestReport r = this.Report("RT-262.1",
+                    "token_endpoint_auth_signing_alg を登録すると、その alg 以外の client_assertion は通らない",
+                    "**いまは「サーバが受ける集合」だけがあり、"
+                    + "「このクライアントはこの alg で来る」という宣言が無かった**（#262）。"
+                    + "**鍵を両方登録したクライアントは、RS256 でも ES256 でも認証が通る。**"
+                    + "**登録で片方に絞れる**ようにした（OIDC Registration 1.0 §2）。"
+                    + "**書かなければ、従来どおり両方が通る**（`RT-129.1`）。",
+                    "OIDC Registration 1.0 §2 / FAPI 1.0 Advanced §8.6 / #262");
+
+                r.Target("client_name=" + KnownClients.TestClient_8
+                    + "（token_endpoint_auth_signing_alg=RS256。鍵は RSA / ECDSA の両方を登録済み）");
+
+                r.Step("(1) 登録した alg（RS256）の client_assertion は通る");
+
+                JsonResponse rs256 = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "client_credentials" },
+                    { "scope", "profile" },
+                    { "client_assertion", AsymmetricAuthTests.CreateClientAssertion(client, reg.ClientId, false) },
+                    { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" }
+                });
+
+                r.Verify("トークンが返る", !string.IsNullOrEmpty(rs256.AccessToken),
+                    "返る",
+                    string.IsNullOrEmpty(rs256.AccessToken)
+                        ? "**返らない**（" + rs256.ToString() + "）" : "返った");
+
+                r.Step("(2) 絞った alg と違う ES256 の client_assertion は通らない");
+
+                JsonResponse es256 = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "client_credentials" },
+                    { "scope", "profile" },
+                    { "client_assertion", AsymmetricAuthTests.CreateClientAssertion(client, reg.ClientId, true) },
+                    { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" }
+                });
+
+                r.Verify("トークンが返らない", string.IsNullOrEmpty(es256.AccessToken),
+                    "返らない",
+                    string.IsNullOrEmpty(es256.AccessToken)
+                        ? "返らなかった（" + es256.ToString() + "）" : "**返してしまった**");
+
+                r.Step("(3)（対照）絞っていないクライアントは、ES256 でも通る");
+
+                ClientRegistration plain = Flows.Registration(client, KnownClients.TestClient);
+
+                JsonResponse notNarrowed = await client.TokenAsync(new Dictionary<string, string>()
+                {
+                    { "grant_type", "client_credentials" },
+                    { "scope", "profile" },
+                    { "client_assertion", AsymmetricAuthTests.CreateClientAssertion(client, plain.ClientId, true) },
+                    { "client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer" }
+                });
+
+                r.Verify("トークンが返る（登録を書かなければ従来どおり）",
+                    !string.IsNullOrEmpty(notNarrowed.AccessToken),
+                    "返る",
+                    string.IsNullOrEmpty(notNarrowed.AccessToken)
+                        ? "**返らない**（" + notNarrowed.ToString() + "）" : "返った");
+
+                r.Note("**絞るのは「受ける側」だけ**である。"
+                    + "**発行する側（`id_token_signed_response_alg`）は #129 の段階 2 で入っており、別の項目。**");
+
+                r.Note("**`request_object_signing_alg` も同じ形で足した**（#262）。"
+                    + "**ただし、受ける集合が `RS256` だけ**なので"
+                    + "（上流の `RequestObject.Verify` が RS256 固定）、"
+                    + "**いまは書ける値が 1 つしか無く、絞っても結果が変わらない。**"
+                    + "**受ける alg を増やすのは「広げる側」の話**で、#262 では扱っていない。");
 
                 r.Done();
             }

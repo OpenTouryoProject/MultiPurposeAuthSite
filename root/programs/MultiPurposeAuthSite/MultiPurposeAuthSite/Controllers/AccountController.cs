@@ -42,7 +42,13 @@
 //*  2026/09/30  玄人 幸道         ID 連携の Error に理由のトレースを足す（#253）
 //*  2026/09/30  玄人 幸道         未サインイン＋prompt=none で login_required を返す（#254）
 //*  2026/09/30  玄人 幸道         自身が書く Cookie の名前に接頭辞を付けられるようにした（#255）
+//*  2026/09/30  玄人 幸道         既存アカウントへメアドで結ぶとき email_verified を確かめるようにした（#140 の段階 1）
+//*  2026/09/30  玄人 幸道         Facebook / Twitter 固有のメアド取得を削除（#249）
+//*  2026/09/30  玄人 幸道         ID 連携の鍵を (iss, sub) にし、iss の検証と PKCE(S256) を追加（#140 の段階 3）
+//*  2026/10/01  玄人 幸道         利用者名とメアドの両方でサインインできるようにし、サインアップを見直した（#151 の段階 3）
 //*  2026/10/01  玄人 幸道         ID 連携の新規作成で preferred_username を優先（#151 の段階 4）
+//*  2026/10/03  玄人 幸道         テスト利用者の名前に接尾辞を付けられるようにした（#260）
+//*  2026/10/03  玄人 幸道         E2E専用のクライアント登録を種データにした（#264）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4475,6 +4481,163 @@ namespace MultiPurposeAuthSite.Controllers
         /// より後に動く処理の実装位置が不明だったので、巡り巡って
         /// MvcApplication(Global.asax).Application_Startからコチラに移動してきた。
         /// </summary>
+        /// <summary>
+        /// 2 人目のテスト利用者に仕込む、標準クレームのサンプル（#261）。
+        /// </summary>
+        /// <remarks>
+        /// **OIDC Core 5.1 の標準クレームを、`UnstructuredData`（JSON）に入れた例**である。
+        /// **`UserClaimsMapping` で対応付けると、`/userinfo` と id_token に出る**（#230）。
+        /// 雛形の対応付けは `_appsettings.json` / `_app.config` にコメントで置いてある。
+        ///
+        /// **`name` と `address.locality` は、わざと入れていない。**
+        /// 雛形の対応付けは、その 2 つを **`usd1` / `usd2`（管理画面で入れられる 2 欄）**に
+        /// 向けてある（**画面から入れた値が返ることを E2E で測り続けるため**。`RT-230.*`）。
+        ///
+        /// **`preferred_username` / `email` / `phone_number` も入れていない。**
+        /// **`user:` で `ApplicationUser` から直に取れる**ので、二重に持たない（#151 の段階 1）。
+        ///
+        /// > **この JSON は、管理画面で保存すると消える。**
+        /// > 画面（`ManageAddUnstructuredDataViewModel`）は `usd1` / `usd2` しか持たないので、
+        /// > **読み込みで他のキーが捨てられ、保存で JSON ごと置き換わる。**
+        /// > **仕込み先を 2 人目にしてあるのは、そのため**である
+        /// > （`RT-230.*` は 1 人目の画面を叩く）。
+        /// </remarks>
+        private const string SampleUnstructuredData =
+            "{"
+            + "\"given_name\":\"Taro\","
+            + "\"family_name\":\"Tanaka\","
+            + "\"nickname\":\"taro\","
+            + "\"profile\":\"https://example.com/taro\","
+            + "\"picture\":\"https://example.com/taro.png\","
+            + "\"website\":\"https://example.com/\","
+            + "\"gender\":\"male\","
+            + "\"birthdate\":\"1990-01-23\","
+            + "\"zoneinfo\":\"Asia/Tokyo\","
+            + "\"locale\":\"ja-JP\","
+            + "\"updated_at\":1759449600,"
+            + "\"address\":{"
+            + "\"formatted\":\"100-0001 1-1 Chiyoda, Chiyoda-ku, Tokyo, JP\","
+            + "\"street_address\":\"1-1 Chiyoda, Chiyoda-ku\","
+            + "\"region\":\"Tokyo\","
+            + "\"postal_code\":\"100-0001\","
+            + "\"country\":\"JP\""
+            + "}"
+            + "}";
+
+        /// <summary>
+        /// テスト利用者を作る（IsDebug ＋ TestUserPWD が在るときだけ）。
+        /// </summary>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **名前に接尾辞を付けられる**（`TestUserSuffix`。#260）。**空なら従来どおり。**
+        ///
+        /// **E2E は net48 版と net10.0 版を同時に立てて、同じケースを両方に流す。**
+        /// **DB ストアでは 1 つの DB を共有する**ため、分けないと
+        /// **同じ利用者の属性（`DeviceToken` / `UnstructuredData`）を書き換え合う。**
+        ///
+        /// **居なければ作る**（**初期化済みの DB でも呼ばれる**）。
+        /// **接尾辞を変えても、DB を作り直さなくてよい**ようにするため。
+        /// </remarks>
+        private async Task CreateTestUsers()
+        {
+            string password = Config.TestUserPWD;
+
+            if (!Config.IsDebug
+                || string.IsNullOrWhiteSpace(password))
+            {
+                return;
+            }
+
+            string suffix = Config.TestUserSuffix;
+            string superName = "super_tanaka" + suffix;
+            string normalName = "tanaka" + suffix;
+
+            // 管理者ユーザを作成
+            if (await this.UserManager.FindByNameAsync(superName) == null)
+            {
+                ApplicationUser user = ApplicationUser.CreateUser(
+                    superName, superName + "@gmail.com", true);
+
+                if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
+                {
+                    await this.UserManager.AddToRoleAsync(
+                        (await this.UserManager.FindByNameAsync(superName)).Id, Const.Role_User);
+                    await this.UserManager.AddToRoleAsync(
+                        (await this.UserManager.FindByNameAsync(superName)).Id, Const.Role_Admin);
+                }
+            }
+
+            // 一般ユーザを作成
+            if (await this.UserManager.FindByNameAsync(normalName) == null)
+            {
+                ApplicationUser user = ApplicationUser.CreateUser(
+                    normalName, normalName + "@gmail.com", true);
+
+                // **標準クレームのサンプルを持たせる**（#261）。
+                user.UnstructuredData = SampleUnstructuredData;
+
+                if ((await this.UserManager.CreateAsync(user, password)).Succeeded)
+                {
+                    await this.UserManager.AddToRoleAsync(
+                        (await this.UserManager.FindByNameAsync(normalName)).Id, Const.Role_User);
+                }
+            }
+            else
+            {
+                // **既に居る利用者にも、空なら入れる**（#261）。
+                //   **#260 より前に作られた DB を、作り直させないため。**
+                //   **空のときだけ**なので、利用者が自分で入れた値は上書きしない。
+                ApplicationUser user = await this.UserManager.FindByNameAsync(normalName);
+
+                if (user != null
+                    && string.IsNullOrEmpty(user.UnstructuredData))
+                {
+                    user.UnstructuredData = SampleUnstructuredData;
+                    await this.UserManager.UpdateAsync(user);
+                }
+            }
+
+            // **E2E 専用のクライアント登録**（#264）。
+            //   **以前は test.ps1 -Launch が環境変数で差し込んでいた**が、
+            //   **net48 版は一覧ごと 1 本の環境変数**で渡すため、**件数に上限があった**
+            //   （#262 で踏んだ。IIS Express が起動するのに全要求が 500 になる）。
+            //   **利用者の登録（saml2OAuth2Data）に寄せた**ので、**上限が無い。**
+            //
+            //   **接尾辞は付けない。** client_name は E2E が名前で引くため
+            //   （Sts.TestClients の表と、E2E の KnownClients を同じ値で揃える）。
+            //   **サイトごとに分ける必要も無い**（作った後は読むだけで、書き換え合わない。#260）。
+            foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
+            {
+                string saml2OAuth2Data = Sts.TestClients.CreateSaml2OAuth2Data(entry);
+
+                if (string.IsNullOrEmpty(saml2OAuth2Data))
+                {
+                    // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
+                    continue;
+                }
+
+                if (await this.UserManager.FindByNameAsync(entry.ClientName) == null)
+                {
+                    ApplicationUser user = ApplicationUser.CreateUser(
+                        entry.ClientName, entry.ClientName + "@gmail.com", true);
+
+                    // **client_id は固定値**（既定の Guid.NewGuid を上書きする）。
+                    user.ClientID = entry.ClientId;
+
+                    // **ロールは要らない**（このクライアントはサインインしない）。
+                    await this.UserManager.CreateAsync(user, password);
+                }
+
+                // **登録が無ければ入れる**（在れば触らない）。
+                //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
+                //   **書き込みを 1 回に閉じる。**
+                if (string.IsNullOrEmpty(Sts.DataProvider.Get(entry.ClientId)))
+                {
+                    Sts.DataProvider.Create(entry.ClientId, saml2OAuth2Data);
+                }
+            }
+        }
+
         private async Task CreateData()
         {
             // ロックを取得する
@@ -4508,6 +4671,11 @@ namespace MultiPurposeAuthSite.Controllers
                     // DBMS Providerの場合、
                     if (await DataAccess.IsDBMSInitialized())
                     {
+                        // **初期化済みでも、テスト利用者だけは作り足す**（#260）。
+                        //   **接尾辞（TestUserSuffix）を変えたら、その利用者は未作成**である。
+                        //   **DB を作り直させないため**に、足りなければここで作る。
+                        await this.CreateTestUsers();
+
                         // 初期化済み。
                         return; // break;
                     }
@@ -4543,32 +4711,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                 #region テスト・ユーザ
 
-                string password = Config.TestUserPWD;
-
-                if (Config.IsDebug
-                    && !string.IsNullOrWhiteSpace(password))
-                {
-                    // 管理者ユーザを作成
-                    user = ApplicationUser.CreateUser("super_tanaka", "super_tanaka@gmail.com", true);
-
-                    result = await this.UserManager.CreateAsync(user, password);
-                    if (result.Succeeded)
-                    {
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka")).Id, Const.Role_User);
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("super_tanaka")).Id, Const.Role_Admin);
-                    }
-
-                    // 一般ユーザを作成
-                    user = ApplicationUser.CreateUser("tanaka", "tanaka@gmail.com", true);
-                    result = await this.UserManager.CreateAsync(user, password);
-                    if (result.Succeeded)
-                    {
-                        await this.UserManager.AddToRoleAsync(
-                            (await this.UserManager.FindByNameAsync("tanaka")).Id, Const.Role_User);
-                    }
-                }
+                await this.CreateTestUsers();
 
                 #endregion
 

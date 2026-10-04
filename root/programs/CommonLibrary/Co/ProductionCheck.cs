@@ -19,6 +19,7 @@
 //*  2026/09/18  玄人 幸道         RequirePkce / RequirePkceS256 の確認を追加（#220）
 //*  2026/09/25  玄人 幸道         CibaProvider.DebugModeWithOutAD の確認を追加
 //*  2026/09/25  玄人 幸道         改名した設定キーの警告を、一覧（Config.RenamedKeys）から出す（#236）
+//*  2026/10/04  玄人 幸道         CorsAllowedOrigins の * を警告（#265）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -88,6 +89,17 @@ namespace MultiPurposeAuthSite.Co
                     {
                         warnings.Add("IsLockedDownTestEndpoints が false です。"
                             + "自己テスト画面（/Home/Saml2OAuth2Starters）が開いています。");
+                    }
+
+                    // **CORS の追加分に `*` が書かれていないか**（#265）。
+                    //   **`*` は落とす**実装だが、**書いた側は「開いたつもり」になる。**
+                    //   オリジンは `https://host[:port]` の形で書くこと。
+                    if (!string.IsNullOrWhiteSpace(Config.CorsAllowedOrigins)
+                        && Config.CorsAllowedOrigins.Contains("*"))
+                    {
+                        warnings.Add("CorsAllowedOrigins に * が含まれています。"
+                            + "オリジンとして扱えない値は落とすので、その分は許可されません。"
+                            + "https://host[:port] の形で書いてください。");
                     }
 
                     if (!string.IsNullOrWhiteSpace(Config.FcmOutboxDirectory))

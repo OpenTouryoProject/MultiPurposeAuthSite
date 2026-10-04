@@ -60,25 +60,44 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient5` | 登録の `scope` で、要求してよいスコープを制限（#198） |
 | `TestClient6` | **クライアント単位で PKCE を必須**（`require_pkce`。#221） |
 
-**構成ファイルに無いクライアントを、`test.ps1 -Launch` が環境変数で差し込むこともある**（#224）。
+**構成ファイルに無いクライアントもある**（#224 / #264）。
 雛形にも実設定にも足さずに済むので、**特定の組み合わせを試すためだけのクライアント**に使う。
+
+**種データが、テスト利用者の登録（`saml2OAuth2Data`）として作る**（#264）。
+表は **`CommonLibrary/Extensions/Sts/TestClients.cs`** にあり、
+**`IsDebug` ＋ `TestUserPWD` のときだけ**作られる。
 
 | client_name | 何か | 引き方 |
 |---|---|---|
 | `TestClient4_2` | `TestClient4`（fapi_ciba）の写しで、**登録種別だけ normal**。公開鍵ごと写すので、CIBA の要求の署名検証を通る | `Flows.InjectedRegistration` |
-| `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | `Flows.InjectedRegistration` |
-| `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | `Flows.InjectedRegistration` |
-| `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | `Flows.InjectedRegistration` |
-| `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | `Flows.InjectedRegistration` |
-| `TestClient_3` | 同じく写しで、**`client_secret` に `:` を含む**（`KnownClients.ColonSecret`）。符号化しないと資格情報として読めない値（#237） | `Flows.InjectedRegistration` |
-| `TestClient_4` | 同じく写しで、**`post_logout_redirect_uri` を登録**（`test_self_logout`）。ログアウト後に RP へ戻せるかを測る（#232） | `Flows.InjectedRegistration` |
+| `TestClient4_3` | 同じく写しで、**登録種別を既知でない値（`fapi_1`）**にしたもの。不正な登録値の扱いを測る | 同上 |
+| `TestClient2_2` | `TestClient2`（fapi2）の写しで、**`tls_client_auth_subject_dn` をテスト専用の値**（`KnownClients.MtlsSubjectDn`）にしたもの。mTLS を測る（#226） | 同上 |
+| `TestClient2_3` | `TestClient2_2` と同じ Subject で、**登録種別を既知でない値（`fapi_1`）**にしたもの | 同上 |
+| `TestClient_2` | `TestClient`（normal）の写しで、**`client_secret` を記号を含む値**（`KnownClients.SymbolSecret`）にしたもの。Basic の符号化を測る（#237） | 同上 |
+| `TestClient_3` | 同じく写しで、**`client_secret` に `:` を含む**（`KnownClients.ColonSecret`）。符号化しないと資格情報として読めない値（#237） | 同上 |
+| `TestClient_4` | 同じく写しで、**`post_logout_redirect_uri` を登録**（`test_self_logout`）。ログアウト後に RP へ戻せるかを測る（#232） | 同上 |
+| `TestClient_5` | 同じく写しで、**`subject_types = pairwise`**（#140 の段階 2） | 同上 |
+| `TestClient_6` / `_7` | **写しただけ**（`subject_types` を書かない）。**既定が public になった**ことを 2 つの client_id で測る（#151 の段階 4） | 同上 |
+| `TestClient_8`〜`_13` | 同じく写しで、**`id_token_signed_response_alg`** を `RS512` / `ES384` / `ES512` / `PS256` / `PS384` / `PS512` に（#129 の段階 2〜4）。`_8` は **`token_endpoint_auth_signing_alg = RS256`** も登録（#262） | 同上 |
+| `TestClient_15` | 同じく写しで、**`redirect_uri_code` を `test_self_code_manage`** に（C-10）。**管理画面の自己テストの折り返し先が、登録値として通る**ことを測る | 同上 |
 
-- net10.0 は `appSettings__OAuth2ClientsInformation__<client_id>__<項目>` で 1 件足し、
-  net48 は `OAuth2ClientsInformation` を一覧ごと差し替える（`CONFIGURATION.md` 2 節）
-- **差し込むのは `-Launch` のときだけ。** 既に動いているサイトへ向けたときは、使うテストが Skip する
-- **秘密を差し替えたものは、写す元の秘密では認証できない。**
-  `Flows.InjectedRegistration` が `KnownClients` の定数を返すので、**test.ps1 と同じ値にしておくこと**
-- 秘密は JSON の文字列に素で埋める（net48 は一覧ごと差し替える）ので、**`"` `\` `'` は使わない**
+- **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
+  **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**
+- **`client_id` は固定値。** E2E は構成ファイルを読む作りなので user store は読めない。
+  **`Flows.KnownClients.SeededClientIds` と `Sts.TestClients.Entries` を同じ値にしておくこと**
+- **`client_secret` を差し替えたものは、写す元の秘密では認証できない。**
+  **`KnownClients.SymbolSecret` / `ColonSecret` も、表と同じ値にしておくこと**
+- **`-Launch` は要らない。** **手で起動したサイトに対しても測れる**（種データはサイト側が作る）
+- **サイトは `GET /Account/Login` でしか種データを作らない**（`CreateData`。#210 で踏んだ）。
+  **`TargetTestBase.Client` が 1 度だけ呼んで揃えている**（`TargetInfo.EnsureSeedData`）。
+  **これが無いと、サインインしないテストが 401 になる**（`RT-237.*` で踏んだ。
+  **先に走る他のクラスがサインインしているかどうかに依存して、間欠で落ちる**）
+- **`isResourceOwner` はどこでも分岐に使われていない**ので、**構成ファイルの登録と同じに振る舞う**
+
+> **以前は `test.ps1 -Launch` が環境変数で差し込んでいた**（#224）。
+> **net48 版だけ `OAuth2ClientsInformation` を一覧ごと差し替える**ため、
+> **件数に上限があった**（#262 で踏んだ。`TESTING.md` 1 節）。**#264 で寄せた。**
+
 
 **クレームの対応付け（`UserClaimsMapping`）も、同じやり方で差し込む**（#230）。
 
@@ -179,7 +198,9 @@ OAuth2ClientEndpointsRootURI
 |---|---|
 | `MPAS_CORE_BASEURL` / `MPAS_NETFX_BASEURL` | 叩き先の URL |
 | `MPAS_CORE_CONFIG` / `MPAS_NETFX_CONFIG` | 構成ファイルのパス（`root/programs` からの相対） |
-| `MPAS_TESTUSER` | テスト ユーザ名 |
+| `MPAS_TESTUSER` | テスト ユーザ名（**両対象に効く**。接尾辞より強い） |
+| `MPAS_CORE_TESTUSER_SUFFIX` | net10.0 版のテスト利用者の接尾辞（#260。`test.ps1` が `_core` を渡す） |
+| `MPAS_NETFX_TESTUSER_SUFFIX` | net48 版のテスト利用者の接尾辞（同上。`_netfx`） |
 | `MPAS_CORE_FCM_OUTBOX` / `MPAS_NETFX_FCM_OUTBOX` | プッシュ通知の送信箱（`-Launch` が設定する。無ければ CIBA の `EX-8` は Skip） |
 | `MPAS_CONNSTR_SQL` / `MPAS_CONNSTR_ODP` / `MPAS_CONNSTR_NPS` | `-UserStoreType` で `sql` / `ora` / `npg` に切り替えるときの接続文字列（#207） |
 
@@ -389,7 +410,7 @@ cd root
 | 壊すもの | 既にあったもの | 足したもの |
 |---|---|---|
 | `client_id` / `client_secret` | `TC-2.3`（誤り・存在しない）／`FA-6.2`（証明書）／`EX-4.6` | — |
-| `redirect_uri` | `TC-1.3`（未登録）／`RT-186.2` `.3`（認可時と違う・省略） | `RT-245.4`（**パスの大文字小文字違い。C-10 が未修正なので Skip**） |
+| `redirect_uri` | `TC-1.3`（未登録）／`RT-186.2` `.3`（認可時と違う・省略） | `RT-245.4`（**パスの大文字小文字違い。#263 で直したので、いまは回帰**） |
 | `code` | `TC-2.2` `RT-186.4`（使用済み）／`RT-188.1`（期限切れ） | **`RT-245.2`**（改竄・他クライアントでの交換） |
 | `refresh_token` | `EX-1.2` `.3` `.4`／`RT-188.2` | — |
 | `device_code` | `EX-4.5` `.7` | — |
@@ -404,7 +425,7 @@ cd root
 | 出たもの | 扱い |
 |---|---|
 | **`code_challenge` を送ったコードが `code_verifier` 無しで交換できた** | **C-22 として修正**（#245。`RT-245.3` が守る） |
-| `redirect_uri` の比較が大文字小文字を無視 | **既知（C-10）。フェーズ 2 で直す。** `RT-245.4` は**その挙動のときだけ Skip** する形で置いた（直れば自動で緑になる） |
+| `redirect_uri` の比較が大文字小文字を無視 | **C-10 として記録し、#263 で修正した**（`StringComparison.Ordinal`）。`RT-245.4` は**その挙動のときだけ Skip** する形で置いてあったので、**Skip を外すだけで回帰になった** |
 
 **自己テスト側の取り違えも 1 件出た**（`RT-245.6`）。
 「FAPI1 PC, PKCE」のボタンが、**S256 で計算した `code_challenge` を `plain` と宣言**していたため、
@@ -472,10 +493,13 @@ cd root
 消さずに残すのは、直したときに `Skip` を外すだけで検証できるようにするため。
 `Skip` の理由に、実測した日付と結果を書く。
 
-**現在、未修正を理由に `Skip` にしているものは無い**（2026-09-17 時点）。
+**現在、未修正を理由に `Skip` にしているものは無い**（2026-10-03 時点）。
 
-最後まで残っていた `RT-187.4`（`ErrorResponseTests`。未知の `response_type` が、リダイレクトではなく
-エラー画面になる）は解消した。**Skip を外して、両ターゲットで通ることを確かめてある。**
+最後まで残っていた `RT-245.4`（`BrokenParameterTests`。`redirect_uri` の比較が大文字小文字を
+無視していた。C-10）は、**#263 で直して Skip を外した。両ターゲットで通ることを確かめてある。**
+
+> **それ以前に残っていたのは `RT-187.4`**（`ErrorResponseTests`。未知の `response_type` が、
+> リダイレクトではなくエラー画面になる）で、これも解消済み。
 
 > 対象ごとの `Skip`（「そのサイトが起動していない」）は、これとは別。
 > `-Launch` を付けずに片方だけで回せば出る。

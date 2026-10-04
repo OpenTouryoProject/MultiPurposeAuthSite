@@ -50,6 +50,9 @@
 //*  2026/09/28  玄人 幸道         自己テストの Device AuthZ のポーリングを押す口を追加（#246）
 //*  2026/09/28  玄人 幸道         自己テストに prompt / max_age を渡せるようにした（#246 の項目 3）
 //*  2026/09/28  玄人 幸道         サインインをやり直せるようにした（#247 の再認証）
+//*  2026/10/02  玄人 幸道         管理者でサインインする口を追加（#257）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/04  玄人 幸道         CORSを測る口（Origin付きGET / プリフライト）を追加（#265）
 //**********************************************************************************
 
 using System;
@@ -193,6 +196,57 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             HttpResponseMessage res = await this._http.PostAsync(this.Absolute(pathOrUrl), content);
 
             return await ToJsonResponseAsync(res);
+        }
+
+        /// <summary>Origin を付けて GET する（CORS を測るため。#265）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="origin">Origin ヘッダの値</param>
+        /// <returns>応答</returns>
+        public Task<HttpResponseMessage> GetWithOriginAsync(string pathOrUrl, string origin)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Get, this.Absolute(pathOrUrl));
+
+            req.Headers.Add("Origin", origin);
+
+            return this._http.SendAsync(req);
+        }
+
+        /// <summary>CORS のプリフライト（OPTIONS）を送る（#265）</summary>
+        /// <param name="pathOrUrl">パス（/始まり）または絶対URL</param>
+        /// <param name="origin">Origin ヘッダの値</param>
+        /// <param name="method">Access-Control-Request-Method（叩きたいメソッド）</param>
+        /// <returns>応答</returns>
+        /// <remarks>
+        /// **`Access-Control-Request-Method` は、実際に叩くメソッドを入れること。**
+        /// ASP.NET Core は**この値で経路を選ぶ**ので、
+        /// GET だけの口に `POST` を書くと、**経路が当たらず 404 になる**（実測で踏んだ）。
+        /// </remarks>
+        public Task<HttpResponseMessage> PreflightAsync(
+            string pathOrUrl, string origin, string method)
+        {
+            HttpRequestMessage req = new HttpRequestMessage(
+                HttpMethod.Options, this.Absolute(pathOrUrl));
+
+            req.Headers.Add("Origin", origin);
+            req.Headers.Add("Access-Control-Request-Method", method);
+            req.Headers.Add("Access-Control-Request-Headers", "authorization,content-type");
+
+            return this._http.SendAsync(req);
+        }
+
+        /// <summary>応答の Access-Control-Allow-Origin（無ければ空）（#265）</summary>
+        /// <param name="res">応答</param>
+        /// <returns>値（無ければ空）</returns>
+        public static string AllowOrigin(HttpResponseMessage res)
+        {
+            if (res == null
+                || !res.Headers.Contains("Access-Control-Allow-Origin"))
+            {
+                return "";
+            }
+
+            return string.Join(",", res.Headers.GetValues("Access-Control-Allow-Origin"));
         }
 
         /// <summary>JSONを返すエンドポイントをGETする</summary>
@@ -383,7 +437,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// UserStoreType=mem のとき、利用者は初回アクセスで作成される。
         ///
         /// **2 人目の利用者も、同じパスワード（TestUserPWD）で作られる。**
-        /// 認証サイトは IsDebug のとき super_tanaka@gmail.com と tanaka@gmail.com を作る
+        /// 認証サイトは IsDebug のとき super_tanaka / tanaka を作る
+        /// （**ターゲットごとに接尾辞が付く**。#260）
         /// （AccountController の CreateData）。EX-8.4 は、その 2 人目を使う。
         /// </summary>
         /// <param name="userName">サインインする利用者（null ならテスト ユーザ）</param>
@@ -400,6 +455,40 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 return;
             }
 
+            await this.SignInCoreAsync(
+                userName ?? TestEnv.TestUserName(this.Target.Key), this.Config.Get("TestUserPWD"));
+        }
+
+        /// <summary>
+        /// 管理者（AdministratorUID）でサインインする（#257）。
+        /// </summary>
+        /// <returns>Task</returns>
+        /// <remarks>
+        /// **利用者・ロールの管理画面は `SystemAdmin` ロールを要求する**
+        /// （`UsersAdminController` の `Authorize`）。
+        /// **雛形のテスト利用者（super_tanaka…）は `User` / `Admin` しか持たない**ので、
+        /// 管理画面を測るには、こちらで入る必要がある。
+        ///
+        /// **利用者名はメアドの「@」より前**（#151 の段階 3 で、そう作られる）。
+        /// **パスワードは構成ファイルから読む**（`AdministratorPWD`。**値は出力しない**）。
+        ///
+        /// **サインイン済みでも、入り直す**（別の利用者で入っていることがあるため）。
+        /// </remarks>
+        public async Task SignInAsAdministratorAsync()
+        {
+            string uid = this.Config.Get("AdministratorUID") ?? "";
+            int at = uid.IndexOf('@');
+
+            await this.SignInCoreAsync(
+                (at > 0) ? uid.Substring(0, at) : uid, this.Config.Get("AdministratorPWD"));
+        }
+
+        /// <summary>サインインの本体（利用者名とパスワードを指定する）</summary>
+        /// <param name="userName">利用者名</param>
+        /// <param name="password">パスワード</param>
+        /// <returns>Task</returns>
+        private async Task SignInCoreAsync(string userName, string password)
+        {
             HttpResponseMessage get = await this.GetAsync("/Account/Login");
             string html = await get.Content.ReadAsStringAsync();
 
@@ -414,8 +503,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             Dictionary<string, string> form = new Dictionary<string, string>()
             {
                 { "__RequestVerificationToken", m.Groups["value"].Value },
-                { "Email", userName ?? TestEnv.TestUserName },
-                { "Password", this.Config.Get("TestUserPWD") },
+                { "Email", userName },
+                { "Password", password },
                 { "RememberMe", "false" },
                 { "submitButtonName", "normal_signin" }
             };
@@ -429,8 +518,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 throw new InvalidOperationException(
                     "サインインに失敗しました（HTTP " + (int)post.StatusCode
-                    + "、利用者 " + (userName ?? TestEnv.TestUserName)
-                    + "）。TestUserPWD と testUserName を確認してください。");
+                    + "、利用者 " + userName
+                    + "）。構成ファイルの利用者名とパスワードを確認してください。");
             }
 
             this.IsSignedIn = true;

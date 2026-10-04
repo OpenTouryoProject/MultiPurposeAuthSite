@@ -30,6 +30,8 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/18  玄人 幸道         #220 でファイルを分けた（元 : Basic/PasswordAndClientCredentialsTests.cs）
+//*  2026/10/01  玄人 幸道         認証した利用者の確認を email に替えた（#151 の段階 4）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -80,7 +82,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Obsolete
                 ClientRegistration reg = Flows.Registration(client, KnownClients.MvcSample);
 
                 r.Target("client_name=" + KnownClients.MvcSample
-                    + " / username=" + TestEnv.TestUserName + "（パスワードは構成ファイルから読む）");
+                    + " / username=" + TestEnv.TestUserName(targetKey) + "（パスワードは構成ファイルから読む）");
                 r.Step("POST /token に grant_type=password と username / password を送る");
 
                 // テスト ユーザは、サインイン画面への初回アクセスで作られる。
@@ -89,7 +91,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Obsolete
                 Dictionary<string, string> form = new Dictionary<string, string>()
                 {
                     { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
+                    { "username", TestEnv.TestUserName(targetKey) },
                     { "password", client.Config.Get("TestUserPWD") },
                     { "scope", "email profile" },
                     { "client_id", reg.ClientId },
@@ -114,8 +116,8 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Obsolete
                     //   **このフローは scope=email を要求している**ので、
                     //   **誰のトークンかは email クレームで分かる。**
                     r.Verify("認証したユーザのトークンである（email）",
-                        Jwt.String(payload, "email") == TestEnv.TestUserEmail,
-                        TestEnv.TestUserEmail, "email = " + (Jwt.String(payload, "email") ?? "なし"));
+                        Jwt.String(payload, "email") == TestEnv.TestUserEmail(targetKey),
+                        TestEnv.TestUserEmail(targetKey), "email = " + (Jwt.String(payload, "email") ?? "なし"));
 
                     r.Verify("sub が返る", !string.IsNullOrEmpty(Jwt.String(payload, "sub")),
                         "返る", Jwt.String(payload, "sub") ?? "**返らない**");
@@ -152,7 +154,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Obsolete
                 Dictionary<string, string> wrongPassword = new Dictionary<string, string>()
                 {
                     { "grant_type", "password" },
-                    { "username", TestEnv.TestUserName },
+                    { "username", TestEnv.TestUserName(targetKey) },
                     { "password", "WRONG-PASSWORD-WRONG-PASSWORD" },
                     { "scope", "email" },
                     { "client_id", reg.ClientId },

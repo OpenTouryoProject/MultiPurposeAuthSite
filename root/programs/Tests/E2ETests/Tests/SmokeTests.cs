@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         TestReportで記録を残すよう変更（SM-1〜SM-5）
 //*  2026/10/01  玄人 幸道         SM-4.2（メアドでもサインイン）を追加（#151 の段階 3）
+//*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
 //**********************************************************************************
 
 using System.Net;
@@ -199,7 +200,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                     "このリポジトリの前提（UserStoreType=mem。"
                     + "テスト ユーザは初回アクセスで作られる）");
 
-                r.Target("username=" + TestEnv.TestUserName
+                r.Target("username=" + TestEnv.TestUserName(targetKey)
                     + "（パスワードは構成ファイルの TestUserPWD から読む）");
                 r.Step("(1) GET /Account/Login して __RequestVerificationToken を取る");
                 r.Step("(2) POST /Account/Login に資格情報を送る");
@@ -237,13 +238,13 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests
                     + "**どちらか一方しか通らないなら、片方の経路が壊れている。**",
                     "#151 の段階 3（利用者名とメアドの両方でサインイン）");
 
-                r.Target("email=" + TestEnv.TestUserEmail
-                    + "（利用者名は " + TestEnv.TestUserName + "）");
+                r.Target("email=" + TestEnv.TestUserEmail(targetKey)
+                    + "（利用者名は " + TestEnv.TestUserName(targetKey) + "）");
 
                 r.Step("(1) GET /Account/Login して __RequestVerificationToken を取る");
                 r.Step("(2) POST /Account/Login に、利用者名ではなくメアドを送る");
 
-                await client.SignInAsync(TestEnv.TestUserEmail);
+                await client.SignInAsync(TestEnv.TestUserEmail(targetKey));
 
                 r.Verify("メアドでサインインできた", client.IsSignedIn,
                     "リダイレクト（302）でセッションが確立する",

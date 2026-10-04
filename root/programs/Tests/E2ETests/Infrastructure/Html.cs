@@ -31,6 +31,7 @@
 //*  2026/09/08  玄人 幸道         新規（E2Eテスト基盤）
 //*  2026/09/10  玄人 幸道         form_post の自動送信フォームの解析を追加（拡張仕様のテスト）
 //*  2026/09/11  玄人 幸道         クラスの説明を中身に合わせる（form_post のフォームの解析を含む）
+//*  2026/10/02  玄人 幸道         画面の入力欄と検証エラーを読む口を追加（#257）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -146,6 +147,141 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             }
 
             return result;
+        }
+
+        /// <summary>フォームの __RequestVerificationToken を返す（無ければ空）</summary>
+        /// <param name="body">HTML</param>
+        /// <returns>トークン</returns>
+        /// <remarks>**値は出力しないこと。**</remarks>
+        public static string Antiforgery(string body)
+        {
+            Dictionary<string, string> hidden = Html.HiddenInputs(body);
+            string token;
+
+            return hidden.TryGetValue("__RequestVerificationToken", out token) ? token : "";
+        }
+
+        /// <summary>その名前の入力欄が在るか</summary>
+        /// <param name="body">HTML</param>
+        /// <param name="name">name 属性</param>
+        /// <returns>在れば true</returns>
+        /// <remarks>
+        /// **「どの画面が返ってきたか」を、文言に依らず見るために使う**（#257）。
+        /// 画面の言語は配備（サーバの既定カルチャ）で変わるので、
+        /// **タイトルや見出しの文字列では判定しない。**
+        /// </remarks>
+        public static bool HasField(string body, string name)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return false;
+            }
+
+            return Regex.IsMatch(body,
+                "<(?:input|button|select|textarea)[^>]*\\bname=\"" + Regex.Escape(name) + "\"",
+                RegexOptions.IgnoreCase);
+        }
+
+        /// <summary>検証エラーが出ているか（要約でも欄でも）</summary>
+        /// <param name="body">HTML</param>
+        /// <returns>出ていれば true</returns>
+        public static bool HasValidationError(string body)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return false;
+            }
+
+            return body.Contains("validation-summary-errors")
+                || body.Contains("input-validation-error")
+                || body.Contains("field-validation-error");
+        }
+
+        /// <summary>その欄のエラーになっているか</summary>
+        /// <param name="body">HTML</param>
+        /// <param name="name">name 属性</param>
+        /// <returns>その欄のエラーなら true</returns>
+        /// <remarks>
+        /// **ASP.NET MVC は、エラーのある入力欄に `input-validation-error` を付ける**
+        /// （net48 / net10.0 のどちらも）。
+        /// **モデル全体のエラー**（`ModelState.AddModelError("", …)`）では**付かない。**
+        ///
+        /// **この差で「どちらのエラーか」を判定する**（#257）。
+        /// 文言を読むと配備の言語に依存するため、そうしない。
+        /// </remarks>
+        public static bool HasFieldError(string body, string name)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return false;
+            }
+
+            // その name を持つタグに input-validation-error が付いているか
+            foreach (Match m in Regex.Matches(body,
+                "<(?:input|select|textarea)\\b[^>]*>", RegexOptions.IgnoreCase))
+            {
+                if (Html.Attribute(m.Value, "name") == name
+                    && (Html.Attribute(m.Value, "class") ?? "").Contains("input-validation-error"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>その名前の入力欄の値を返す（無ければ null）</summary>
+        /// <param name="body">HTML</param>
+        /// <param name="name">name 属性</param>
+        /// <returns>value 属性（HTML の文字参照は戻す）</returns>
+        /// <remarks>
+        /// **編集画面に、保存した値が出ているか**を見るために使う（#257）。
+        /// **秘密を持つ欄（パスワード）には使わないこと。**
+        /// </remarks>
+        public static string FieldValue(string body, string name)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return null;
+            }
+
+            foreach (Match m in Regex.Matches(body,
+                "<input\\b[^>]*>", RegexOptions.IgnoreCase))
+            {
+                if (Html.Attribute(m.Value, "name") == name)
+                {
+                    return Html.Attribute(m.Value, "value");
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>検証エラーの要約を1行で返す（診断用。入力値は含まない）</summary>
+        /// <param name="body">HTML</param>
+        /// <returns>要約</returns>
+        public static string ErrorSummary(string body)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return "(本文なし)";
+            }
+
+            List<string> items = new List<string>();
+
+            foreach (Match m in Regex.Matches(body,
+                "<li[^>]*>(?<value>.*?)</li>",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline))
+            {
+                string text = Html.Squash(m.Groups["value"].Value);
+
+                if (!string.IsNullOrEmpty(text) && !items.Contains(text))
+                {
+                    items.Add(text);
+                }
+            }
+
+            return (items.Count == 0) ? "(エラーの記述なし)" : string.Join(" / ", items);
         }
 
         /// <summary>タグから属性の値を取り出す（無ければ null）</summary>
