@@ -2042,11 +2042,47 @@ A-2 と表裏の関係にあり、**「nonce を必須にする」か「nonce �
 このブロックは `scope=openid` の内側に在るため、**単純にコメントを外すと
 Authorization Code フローまで必須になってしまう**点が要だった。
 
-### C-15. `response_type` の照合が文字列完全一致 **[Lib]**
+### C-15. `response_type` の照合が文字列完全一致 **[Lib]** — **✅ 修正済み（#267）**
 
-`response_type` は**順不同の空白区切り集合**（OAuth 2.0 Multiple Response Types §3）。
-現状は `response_type.ToLower() == "code id_token"` のような完全一致なので、
-`id_token code` と書く RP を弾く。
+`response_type` は**順不同の空白区切り集合**（OAuth 2.0 Multiple Response Types §3。
+**並びは意味を持たない**）。
+**直す前は `response_type.ToLower() == "code id_token"` のような完全一致**で、
+**`id_token code` と書く RP を `unsupported_response_type` で弾いていた。**
+
+**扱いが混ざっていた。** **フローの判定は既に集合として見ていた**
+（`GetFlowOfResponseType` が `Split(' ')` ＋ `Any`）のに、
+**要求の検証・`redirect_uri` の選択・応答の振り分けが完全一致**だった。
+
+**直し方。** **正規化を 1 か所に作り、入口で 1 回だけ掛ける。**
+
+```csharp
+// CmnEndpoints
+public static string NormalizeResponseType(string response_type)
+//   空白で分け、空を捨て、重複を除き、辞書順に並べて、空白 1 個で繋ぐ
+```
+
+**辞書順が、そのまま `OAuth2AndOIDCConst` の並びになる**（`code` < `id_token` < `token`）ので、
+**定数側を変えなくてよい。**
+
+| | |
+|---|---|
+| 掛ける場所 | **`ValidateAuthZReqParam` の入口**（`CheckRedirectUri` より前） |
+| 渡し方 | **`ref string response_type`。** 呼び出し元の変数も正規化された値になるので、**この後ろの完全一致の照合は、そのままで正しくなる** |
+| `ref` にした理由 | **呼び出し元を取りこぼさないため。** コンパイラが全ての呼び出し元（両アプリの `AccountController` ×2、`/par`）に `ref` を書かせる |
+| 直していない場所 | `GetFlowOfResponseType` と `CmnEndpoints.cs:810`（**既に集合として見ている**） |
+
+**`/par` は、正規化した値を payload に書き戻す**（預けた Request Object は `/authorize` で読み直すため）。
+
+- **大文字小文字の扱いは変えていない。**
+  **仕様では値は case-sensitive** だが、**以前から `ToLower()` していて `CODE` も通っていた。**
+  **弾く範囲が変わるだけ**なので寛容さを残した（`Contributing.ja.md` の下位互換の方針）。
+  #263 で `redirect_uri` を厳密にしたのは、**仕様が単純文字列比較を明示し、
+  かつ照合の緩さが安全性に効く**ためで、性質が違う
+- **E2E** : **`RT-267.1`**（`code id_token` / `id_token token` / `code token` /
+  `code id_token token` の 4 組について、**並べ替えても同じ応答になる**）。
+  **正規化を外すと、両系統で `unsupported_response_type` になって落ちることを確かめてある**
+- **利用者への影響** : **通る範囲が広がるだけ。**
+  **いま通っている `response_type` は、すべてそのまま通る。** Discovery の広告も変えていない
 
 ### C-16. 送られていない `nonce` を `state` から捏造している **[Lib]** — **✅ 修正済み（#191）**
 

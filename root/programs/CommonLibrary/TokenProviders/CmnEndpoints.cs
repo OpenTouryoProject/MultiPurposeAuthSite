@@ -113,6 +113,7 @@
 //*  2026/10/03  玄人 幸道         redirect_uriを単純文字列比較にした（#263）
 //*  2026/10/04  玄人 幸道         redirect_uriの登録迂回の分岐を削除（C-10）
 //*  2026/10/04  玄人 幸道         CORSで許可するオリジンの導出を追加（#265）
+//*  2026/10/04  玄人 幸道         response_typeを順不同の集合として扱う（#267）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -646,10 +647,18 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// 既定（false）では、渡さなくても従来どおり動く。
         /// </remarks>
         public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
-            string response_type, string scope, string nonce,
+            ref string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
             string code_challenge = "")
         {
+            // **response_type を正規化する**（#267）。**ここで 1 回だけ掛ける。**
+            //   **`ref` で受けているので、呼び出し元の変数も正規化された値になる。**
+            //   そのため、**この後ろの照合（検証・redirect_uri の選択・応答の振り分け）は、
+            //   完全一致のままで正しくなる。**
+            //   **`ref` にしたのは、呼び出し元を取りこぼさないため**
+            //   （コンパイラが全ての呼び出し元に `ref` を書かせる）。
+            response_type = CmnEndpoints.NormalizeResponseType(response_type);
+
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription, code_challenge);
@@ -1540,10 +1549,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             #region 認可エンドポイントと同じ検証（RFC 9126 §2.1）
 
+            // **`response_type` は `ref` で渡す**（#267。正規化した値が返る）。
+            //   **預けた Request Object は、/authorize でもう一度読む**ので、
+            //   **ここで正規化した値を payload に書き戻しておく**（並びを揃える）。
+            string parResponseType = (string)payload[OAuth2AndOIDCConst.response_type];
+
             if (!CmnEndpoints.ValidateAuthZReqParam(
                 (string)payload[OAuth2AndOIDCConst.client_id],
                 (string)payload[OAuth2AndOIDCConst.redirect_uri],
-                (string)payload[OAuth2AndOIDCConst.response_type],
+                ref parResponseType,
                 (string)payload[OAuth2AndOIDCConst.scope] ?? "",
                 (string)payload[OAuth2AndOIDCConst.nonce],
                 out string _, out string error, out string errorDescription,
@@ -1553,6 +1567,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 err.Add(OAuth2AndOIDCConst.error_description, errorDescription);
                 return false;
             }
+
+            payload[OAuth2AndOIDCConst.response_type] = parResponseType;
 
             #endregion
 
@@ -3962,6 +3978,60 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             return ret;
         }
+
+        #region NormalizeResponseType
+
+        /// <summary>response_type を正規化する（#267）</summary>
+        /// <param name="response_type">response_type</param>
+        /// <returns>正規化した response_type</returns>
+        /// <remarks>
+        /// **`response_type` は順不同の空白区切り集合**である
+        /// （OAuth 2.0 Multiple Response Type Encoding Practices §3。**並びは意味を持たない**）。
+        /// **以前は文字列の完全一致で照合していたため、`id_token code` と書く RP を弾いていた。**
+        ///
+        /// **空白で分け、空を捨て、重複を除き、辞書順に並べて、空白 1 個で繋ぐ。**
+        /// **辞書順が、そのまま `OAuth2AndOIDCConst` の並びになる**ので、定数側は変えなくてよい。
+        ///
+        /// ```
+        /// code &lt; id_token &lt; token
+        ///   → "code id_token token" / "id_token token" / "code token" / "code id_token"
+        /// ```
+        ///
+        /// **大文字小文字は、いまの扱いを変えない。**
+        /// **仕様では値は case-sensitive** だが、**以前から `ToLower()` していて `CODE` も通っていた。**
+        /// **ここは安全性の性質ではなく、弾く範囲が変わるだけ**なので、
+        /// **寛容さを残す**（`Contributing.ja.md` の下位互換の方針）。
+        /// #263 で `redirect_uri` を厳密にしたのは、**仕様が単純文字列比較を明示し、
+        /// かつ照合の緩さが安全性に効く**ためで、性質が違う。
+        /// </remarks>
+        public static string NormalizeResponseType(string response_type)
+        {
+            if (string.IsNullOrEmpty(response_type))
+            {
+                return response_type;
+            }
+
+            // **区切りは空白。** 連続した空白やタブでも分かれるようにする。
+            string[] types = response_type.ToLower().Split(
+                new char[] { ' ', '	' }, StringSplitOptions.RemoveEmptyEntries);
+
+            List<string> normalized = new List<string>();
+
+            foreach (string type in types)
+            {
+                // **重複は 1 つにする**（"code code" は "code"）。
+                if (!normalized.Contains(type))
+                {
+                    normalized.Add(type);
+                }
+            }
+
+            normalized.Sort(StringComparer.Ordinal);
+
+            return string.Join(" ", normalized);
+        }
+
+        #endregion
 
         #region GetCorsAllowedOrigins
 

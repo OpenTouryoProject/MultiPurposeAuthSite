@@ -5290,6 +5290,41 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **`Access-Control-Allow-Credentials` は、どちらのポリシーにも付けていない。****Cookie で通る口をこの範囲に入れない**ため（入れると、他オリジンの JS から利用者の資格情報で呼べる）。
 - **プリフライトは、実際に叩くメソッドで測ること。**ASP.NET Core は `Access-Control-Request-Method` で経路を選ぶので、**GET だけの口に `POST` を書くと、経路が当たらず 404 になる**（実測で踏んだ）。
 
+## RT-267.1 response_type の並びを変えても、同じ応答になる
+
+| | |
+|---|---|
+| 観点 | **`response_type` は順不同の空白区切り集合**である（OAuth 2.0 Multiple Response Type Encoding Practices §3。**並びは意味を持たない**）。**以前は文字列の完全一致で照合していた**ため、`OAuth2AndOIDCConst` の定数の並び（`code id_token token` など）でなければ**`unsupported_response_type` で弾いていた**（#267）。**`id_token code` と書く RP が通らない**という相互運用性の問題である。 |
+| 根拠 | OAuth 2.0 Multiple Response Type Encoding Practices §3 / OIDC Core §3.3 / #267 |
+| テスト | `RT26701_response_typeの並びを変えても同じ応答になる` |
+
+**手順**
+
+1. (code id_token) と、並べ替えた (id_token code) を比べる
+1. (id_token token) と、並べ替えた (token id_token) を比べる
+1. (code token) と、並べ替えた (token code) を比べる
+1. (code id_token token) と、並べ替えた (token id_token code) を比べる
+
+**検証（合否を判定する）**
+
+- `code id_token` は通る（前提）
+- `id_token code` のエラー（`code id_token` と同じ）
+- `id_token code` が返す項目（`code id_token` と同じ）
+- `id_token token` は通る（前提）
+- `token id_token` のエラー（`id_token token` と同じ）
+- `token id_token` が返す項目（`id_token token` と同じ）
+- `code token` は通る（前提）
+- `token code` のエラー（`code token` と同じ）
+- `token code` が返す項目（`code token` と同じ）
+- `code id_token token` は通る（前提）
+- `token id_token code` のエラー（`code id_token token` と同じ）
+- `token id_token code` が返す項目（`code id_token token` と同じ）
+
+**補足**
+
+- **値そのものは比べていない。** code / id_token / access_token は毎回変わるため、**返る項目の有無**で比べている。**どの項目が返るかは `response_type` の集合で決まる**ので、これで十分である。
+- **大文字小文字の扱いは変えていない。****仕様では値は case-sensitive** だが、**以前から `ToLower()` していて `CODE` も通っていた。** **弾く範囲が変わるだけ**なので、寛容さを残した。
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

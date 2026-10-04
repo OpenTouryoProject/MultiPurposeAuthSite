@@ -52,6 +52,7 @@
 //*  2026/10/01  玄人 幸道         ID 連携の新規作成で preferred_username を優先（#151 の段階 4）
 //*  2026/10/03  玄人 幸道         テスト利用者の名前に接尾辞を付けられるようにした（#260）
 //*  2026/10/03  玄人 幸道         E2E専用のクライアント登録を種データにした（#264）
+//*  2026/10/04  玄人 幸道         response_typeを正規化して受ける（#267）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3052,7 +3053,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   **valid_redirect_uri も err も空のまま、文面の無いエラー画面**になっていた
             //   （`ANALYSIS-IdP.md` の A-12）。
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                client_id, redirect_uri, response_type, scope, nonce,
+                client_id, redirect_uri, ref response_type, scope, nonce,
                 out valid_redirect_uri, out err, out errDescription, code_challenge))
             {
                 // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
@@ -3319,7 +3320,7 @@ namespace MultiPurposeAuthSite.Controllers
             }
 
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
-                client_id, redirect_uri, response_type, scope, nonce,
+                client_id, redirect_uri, ref response_type, scope, nonce,
                 out string valid_redirect_uri, out string err, out string errDescription, code_challenge))
             {
                 // Cookie認証チケットからClaimsPrincipalを取得しておく。
