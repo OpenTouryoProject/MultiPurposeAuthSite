@@ -5290,6 +5290,32 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **`Access-Control-Allow-Credentials` は、どちらのポリシーにも付けていない。****Cookie で通る口をこの範囲に入れない**ため（入れると、他オリジンの JS から利用者の資格情報で呼べる）。
 - **プリフライトは、実際に叩くメソッドで測ること。**ASP.NET Core は `Access-Control-Request-Method` で経路を選ぶので、**GET だけの口に `POST` を書くと、経路が当たらず 404 になる**（実測で踏んだ）。
 
+## RT-266.1 クライアント登録の web_origins が、CORS の許可オリジンになる
+
+| | |
+|---|---|
+| 観点 | **#265 では、許可オリジンを「構成ファイルの public クライアントの `redirect_uri_*`」から導いていた。****画面から登録した SPA は導出に含まれず**、配備側で `CorsAllowedOrigins` に 書く必要があった。**クライアント単位の登録項目 `web_origins` を足した**（#266）。**空なら従来どおり `redirect_uri_*` から導く**（Keycloak の Web origins の既定値 `+` と同じ考え方）。 |
+| 根拠 | Fetch Standard（CORS）/ OIDC Dynamic Client Registration（web_origins 相当）/ #266 |
+| テスト | `RT26601_web_originsを登録するとそのオリジンだけが許される` |
+
+**手順**
+
+1. 登録した web_origins は許される（画面登録＝user store の経路）
+1. web_origins を書いたら、redirect_uri_code からは導出しない
+1. CORS を付けない口は、web_origins を登録しても開かない
+
+**検証（合否を判定する）**
+
+- /token が web_origins を許す
+- /token は redirect_uri_code のオリジンを許さない
+- /revoke は CORS を付けない
+
+**補足**
+
+- **(1) が #266 の本題である。****画面から登録したクライアントのオリジンが、設定を書かずに効く。**種データは user store（`saml2OAuth2Data`）に入るので、**画面登録と同じ経路**である。
+- **(2) は、`web_origins` が `redirect_uri_*` に勝つことを見ている。****書いたときは導出しない**（登録どおりに絞る）。**空なら従来どおり導出する**（`RT-265.1` が、その経路を測っている）。
+- **許可オリジンはキャッシュしている**（60 秒＋登録の保存で破棄）。**複数インスタンスでは、他のインスタンスのキャッシュは捨てられない。****期限が、その取りこぼしを拾う**（共有キャッシュには E-2 が要る）。
+
 ## RT-267.1 response_type の並びを変えても、同じ応答になる
 
 | | |

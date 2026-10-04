@@ -47,6 +47,7 @@
 //*  2026/10/03  玄人 幸道         TestClient_8に検証する側のalgの登録を相乗りさせた（#262）
 //*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
 //*  2026/10/04  玄人 幸道         TestClient_15とtest_self_code_manageの解決を追加（C-10）
+//*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
 //**********************************************************************************
 
 using System;
@@ -237,6 +238,23 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public const string TestClient_15 = "TestClient_15";
 
+        /// <summary>
+        /// TestClient（normal）を写し、**`web_origins` を登録した public クライアント**（#266）。
+        /// **構成ファイルには無い。** 種データが作る（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **`client_secret` を空にして public にしてある**（CORS は public クライアントだけに効く）。
+        /// **`redirect_uri_code` には別のオリジン**（`https://notallowed.example/cb`）を入れてあり、
+        /// **`web_origins`（`https://spa.example`）が勝つ**ことを `RT-266.1` で測る。
+        /// </remarks>
+        public const string TestClient_16 = "TestClient_16";
+
+        /// <summary>TestClient_16 に登録した web_origins（#266）</summary>
+        public const string WebOrigin = "https://spa.example";
+
+        /// <summary>TestClient_16 の redirect_uri_code のオリジン（#266。許されない側）</summary>
+        public const string NotAllowedOrigin = "https://notallowed.example";
+
         #region 種データで登録される client_id（#264）
 
         /// <summary>
@@ -260,6 +278,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_5,  "e2e0tc05000000000000000000000000" },
                 { KnownClients.TestClient_6,  "e2e0tc06000000000000000000000000" },
                 { KnownClients.TestClient_7,  "e2e0tc07000000000000000000000000" },
+                { KnownClients.TestClient_16, "e2e0tc16000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
@@ -719,6 +738,14 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2〜4）。
                 sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_16)
+            {
+                // **web_origins を登録した public クライアント**（#266）。
+                //   **client_secret は空**にしてある（CORS は public だけに効く）ので、
+                //   写す元の秘密では認証できない。**このテストは CORS だけを測る。**
+                sourceName = KnownClients.TestClient;
+                overriddenSecret = "";
             }
             else if (clientName == KnownClients.TestClient_15)
             {

@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/04  玄人 幸道         新規（#265）
 //*  2026/10/04  玄人 幸道         両系統に流すようにし、資格情報の確認を足した
+//*  2026/10/04  玄人 幸道         RT-266.1（web_originsの登録）を追加（#266）
 //**********************************************************************************
 
 using System;
@@ -198,6 +199,75 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Note("**プリフライトは、実際に叩くメソッドで測ること。**"
                     + "ASP.NET Core は `Access-Control-Request-Method` で経路を選ぶので、"
                     + "**GET だけの口に `POST` を書くと、経路が当たらず 404 になる**（実測で踏んだ）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-266.1 web_origins を登録すると、そのオリジンだけが許される</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT26601_web_originsを登録するとそのオリジンだけが許される(string targetKey)
+        {
+            using (IdPClient client = this.Client(targetKey))
+            {
+                TestReport r = this.Report("RT-266.1",
+                    "クライアント登録の web_origins が、CORS の許可オリジンになる",
+                    "**#265 では、許可オリジンを「構成ファイルの public クライアントの "
+                    + "`redirect_uri_*`」から導いていた。**"
+                    + "**画面から登録した SPA は導出に含まれず**、配備側で `CorsAllowedOrigins` に "
+                    + "書く必要があった。"
+                    + "**クライアント単位の登録項目 `web_origins` を足した**（#266）。"
+                    + "**空なら従来どおり `redirect_uri_*` から導く**"
+                    + "（Keycloak の Web origins の既定値 `+` と同じ考え方）。",
+                    "Fetch Standard（CORS）/ OIDC Dynamic Client Registration（web_origins 相当）/ #266");
+
+                // **TestClient_16 は構成ファイルに無い**（種データが user store に作る。#264）。
+                //   **client_secret を空にした public クライアント**で、
+                //   **`web_origins` と、別のオリジンの `redirect_uri_code` を持つ。**
+                Flows.InjectedRegistration(client, KnownClients.TestClient_16);
+
+                r.Target("client_name=" + KnownClients.TestClient_16
+                    + "（web_origins=" + KnownClients.WebOrigin
+                    + " / redirect_uri_code のオリジン=" + KnownClients.NotAllowedOrigin + "）");
+
+                r.Step("(1) 登録した web_origins は許される（画面登録＝user store の経路）");
+
+                HttpResponseMessage allowed =
+                    await client.PreflightAsync("/token", KnownClients.WebOrigin, "POST");
+
+                r.VerifyEqual("/token が web_origins を許す",
+                    KnownClients.WebOrigin, IdPClient.AllowOrigin(allowed));
+
+                r.Step("(2) web_origins を書いたら、redirect_uri_code からは導出しない");
+
+                HttpResponseMessage notAllowed =
+                    await client.PreflightAsync("/token", KnownClients.NotAllowedOrigin, "POST");
+
+                r.VerifyEqual("/token は redirect_uri_code のオリジンを許さない",
+                    "（無し）", CorsTests.Shown(IdPClient.AllowOrigin(notAllowed)));
+
+                r.Step("(3) CORS を付けない口は、web_origins を登録しても開かない");
+
+                HttpResponseMessage revoke =
+                    await client.PreflightAsync("/revoke", KnownClients.WebOrigin, "POST");
+
+                r.VerifyEqual("/revoke は CORS を付けない",
+                    "（無し）", CorsTests.Shown(IdPClient.AllowOrigin(revoke)));
+
+                r.Note("**(1) が #266 の本題である。**"
+                    + "**画面から登録したクライアントのオリジンが、設定を書かずに効く。**"
+                    + "種データは user store（`saml2OAuth2Data`）に入るので、**画面登録と同じ経路**である。");
+
+                r.Note("**(2) は、`web_origins` が `redirect_uri_*` に勝つことを見ている。**"
+                    + "**書いたときは導出しない**（登録どおりに絞る）。"
+                    + "**空なら従来どおり導出する**（`RT-265.1` が、その経路を測っている）。");
+
+                r.Note("**許可オリジンはキャッシュしている**（60 秒＋登録の保存で破棄）。"
+                    + "**複数インスタンスでは、他のインスタンスのキャッシュは捨てられない。**"
+                    + "**期限が、その取りこぼしを拾う**（共有キャッシュには E-2 が要る）。");
 
                 r.Done();
             }

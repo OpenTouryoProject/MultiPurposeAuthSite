@@ -26,6 +26,8 @@
 //*  2026/10/02  玄人 幸道         id_token_signed_response_alg を追加（#129 の段階 2）
 //*  2026/10/02  玄人 幸道         署名アルゴリズムの選択肢を SigningKeys の表から作る（#129 の段階 3）
 //*  2026/10/03  玄人 幸道         検証する側のalgの登録項目を追加（#262）
+//*  2026/10/04  玄人 幸道         web_origins を追加（#266）
+//*  2026/10/04  玄人 幸道         画面の選択肢を直列化しないようにした（#266 で踏んだ）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -134,6 +136,12 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **先頭が既定の選択**なので、**public を先頭に置く**。
         /// **利用者名を渡したいなら `preferred_username`**（`UserClaimsMapping`）。
         /// </remarks>
+        // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
+        //   **付けていないと、選択肢そのものが saml2OAuth2Data に書き込まれる。**
+        //   `Ddl*Items` を全部足すと **2 KB 近くになり**、
+        //   **Oracle / PostgreSQL の UnstructuredData（varchar(2000)）に収まらない**
+        //   （`CreateTestUsers` の登録が 3,108 文字になって 22001 で落ちた。実測）。
+        [JsonIgnore]
         public List<SelectListItem> DdlSubjectTypesItems
         {
             get
@@ -168,6 +176,12 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **並びも表のまま**で、**既定（`RS256`）が先頭に来る。**
         /// ＝ **表に 1 行足せば、画面の選択肢も増える。**
         /// </remarks>
+        // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
+        //   **付けていないと、選択肢そのものが saml2OAuth2Data に書き込まれる。**
+        //   `Ddl*Items` を全部足すと **2 KB 近くになり**、
+        //   **Oracle / PostgreSQL の UnstructuredData（varchar(2000)）に収まらない**
+        //   （`CreateTestUsers` の登録が 3,108 文字になって 22001 で落ちた。実測）。
+        [JsonIgnore]
         public List<SelectListItem> DdlIdTokenSignedResponseAlgItems
         {
             get
@@ -190,6 +204,30 @@ namespace MultiPurposeAuthSite.ViewModels
 
         #endregion
 
+        #region WebOrigins
+
+        /// <summary>WebOrigins</summary>
+        /// <remarks>
+        /// **CORS で許可するオリジン**（#266。空白かカンマ区切り）。
+        /// **空なら `redirect_uri_*` から導く**（#265 の挙動。Keycloak の Web origins の
+        /// 既定値 `+`、Entra ID の SPA プラットフォームと同じ考え方）。
+        ///
+        /// **public クライアント（`client_secret` を持たないもの）にだけ効く。**
+        /// confidential は `/token` をサーバ間で呼ぶので、ブラウザから叩かせる必要が無い。
+        ///
+        /// **末尾の `/` は付けない**（CORS の比較はオリジン同士で、パスを含まない）。
+        /// **`*` は書かない**（オリジンとして扱えない値は落ちる）。
+        /// </remarks>
+        [Display(Name = "WebOrigins", ResourceType = typeof(Resources.CommonViewModels))]
+        [StringLength(
+            Const.MaxLengthOfUri,
+            ErrorMessageResourceName = "MaxLengthErrMsg",
+            ErrorMessageResourceType = typeof(Resources.CommonViewModels))]
+        [JsonProperty(PropertyName = "web_origins")]
+        public string WebOrigins { get; set; }
+
+        #endregion
+
         #region TokenEndpointAuthSigningAlg / RequestObjectSigningAlg
 
         /// <summary>TokenEndpointAuthSigningAlg</summary>
@@ -207,6 +245,12 @@ namespace MultiPurposeAuthSite.ViewModels
         /// ＝ **受ける alg が増えれば、画面の選択肢も増える**（`SigningKeys` と同じ考え方）。
         /// **先頭は空**（＝ 絞らない）である。
         /// </remarks>
+        // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
+        //   **付けていないと、選択肢そのものが saml2OAuth2Data に書き込まれる。**
+        //   `Ddl*Items` を全部足すと **2 KB 近くになり**、
+        //   **Oracle / PostgreSQL の UnstructuredData（varchar(2000)）に収まらない**
+        //   （`CreateTestUsers` の登録が 3,108 文字になって 22001 で落ちた。実測）。
+        [JsonIgnore]
         public List<SelectListItem> DdlTokenEndpointAuthSigningAlgItems
         {
             get
@@ -233,6 +277,12 @@ namespace MultiPurposeAuthSite.ViewModels
         /// **いまは `RS256` だけ**である（上流の `RequestObject.Verify` が RS256 固定のため）。
         /// **増やすのは「広げる側」の話**で、#262 では扱っていない。
         /// </remarks>
+        // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
+        //   **付けていないと、選択肢そのものが saml2OAuth2Data に書き込まれる。**
+        //   `Ddl*Items` を全部足すと **2 KB 近くになり**、
+        //   **Oracle / PostgreSQL の UnstructuredData（varchar(2000)）に収まらない**
+        //   （`CreateTestUsers` の登録が 3,108 文字になって 22001 で落ちた。実測）。
+        [JsonIgnore]
         public List<SelectListItem> DdlRequestObjectSigningAlgItems
         {
             get
@@ -297,6 +347,12 @@ namespace MultiPurposeAuthSite.ViewModels
         public string ClientMode { get; set; }
 
         /// <summary>ClientModeアイテムリスト</summary>
+        // **直列化しない。** これは**画面の選択肢**で、登録の内容ではない（#266 で踏んだ）。
+        //   **付けていないと、選択肢そのものが saml2OAuth2Data に書き込まれる。**
+        //   `Ddl*Items` を全部足すと **2 KB 近くになり**、
+        //   **Oracle / PostgreSQL の UnstructuredData（varchar(2000)）に収まらない**
+        //   （`CreateTestUsers` の登録が 3,108 文字になって 22001 で落ちた。実測）。
+        [JsonIgnore]
         public List<SelectListItem> DdlClientModeItems
         {
             get

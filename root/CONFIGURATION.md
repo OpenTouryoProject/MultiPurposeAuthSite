@@ -502,11 +502,29 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 
 **`Access-Control-Allow-Credentials` は付けない**（Cookie は飛ばない）。
 
-#### 許すオリジンは、登録から導く
+#### クライアント単位で書ける — `web_origins`（#266）
+
+**クライアント登録に `web_origins` を書くと、そのオリジンだけが許される。**
+**構成ファイルと画面（`/Manage/AddSaml2OAuth2Data`）の両方**で使える。
+
+```json
+"web_origins": "https://spa.example https://spa2.example:8443"
+```
+
+| | |
+|---|---|
+| **書いたとき** | **その値だけ**（`redirect_uri_*` からは導出しない） |
+| **空のとき** | **`redirect_uri_*` から導出**（下記） |
+| **効く範囲** | **public クライアントのみ**（`client_secret` を持たないもの） |
+
+> **Keycloak の Web origins、Auth0 の `web_origins`、
+> Duende IdentityServer の `AllowedCorsOrigins` に相当する。**
+
+#### 空なら、`redirect_uri` から導く
 
 **設定を書かなくてよい。**
-**構成ファイルの public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`**
-から、オリジンを取る。
+**public クライアント（`client_secret` を持たないもの）の `redirect_uri_*`**
+から、オリジンを取る。**構成ファイルと画面登録の両方を見る**（#266）。
 
 ```json
 "AuthenticationDevice_Web": { "redirect_uri_code": "http://localhost:5610/" }
@@ -531,9 +549,8 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 
 - **区切りは空白かカンマ。** **末尾の `/` は付けない**（CORS の比較はオリジン同士）
 - **`*` は書かない。** 落とすので許可されず、`ProductionCheck` が警告する
-- **画面（`/Manage/AddSaml2OAuth2Data`）から登録した SPA は、ここに足す。**
-  画面登録は導出に含めていない（プリフライトは `client_id` を持たないため
-  オリジンの集合全体が要るが、user store には全件を列挙する口が無い）
+- **画面から登録した SPA も、導出に含まれる**（#266）。**ここに足す必要は無い。**
+  `CorsAllowedOrigins` は、**どちらの登録にも書けないものを足すための口**である
 
 #### 影響しないもの
 
@@ -545,6 +562,11 @@ OIDC Core §3.1.2.1 の exact match）。**大文字小文字も、末尾の `/`
 
 > **WebView / Electron / Cordova / Flutter Web は、ブラウザ実行なので対象**である。
 > 同梱の認証デバイスの web ビルドがこれに当たる（`AuthenticationDevice_Web` の登録から導出される）。
+
+> **許可オリジンはキャッシュしている**（#266）。
+> **60 秒で期限切れ**になり、**画面から登録を保存したときにも捨てる。**
+> **複数インスタンスでは、他のインスタンスのキャッシュは捨てられない**ので、
+> **期限が、その取りこぼしを拾う**（共有キャッシュにするには `AddDistributedMemoryCache` が要る）。
 
 ## 5. ルート URI と、自己テストの折り返し（重要）
 

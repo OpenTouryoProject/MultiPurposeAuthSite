@@ -32,6 +32,7 @@
 //*  2026/09/12  玄人 幸道         プッシュ通知の送信箱（MPAS_CORE_FCM_OUTBOX / MPAS_NETFX_FCM_OUTBOX）を受け取る（#196）
 //*  2026/10/01  玄人 幸道         テスト利用者の利用者名とメアドを分けた（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに分けた（#260）
+//*  2026/10/04  玄人 幸道         到達性のプローブを数回試す（#266。DBストアで踏んだ）
 //**********************************************************************************
 
 using System;
@@ -39,6 +40,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Text.Json;
 
 namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
@@ -174,6 +176,46 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </summary>
         /// <returns>起動していれば true</returns>
         public bool IsReachable()
+        {
+            if (this._reachable.HasValue)
+            {
+                return this._reachable.Value;
+            }
+
+            // **時間切れは、1 回で「居ない」と決めない**（#266 で踏んだ）。
+            //   **DB ストアでは、初回の種データ作成が重い**
+            //   （ロール・管理者・テスト利用者に加えて、クライアント登録を 17 件作る。#264）。
+            //   **その間に走ったプローブが 10 秒で時間切れになり、
+            //   `_reachable = false` を掴むと、その対象のテストが全部 Skip になっていた**
+            //   （`sql` で 247 件 Skip。実測）。
+            //   **数回に分けて待つ。** 本当に居なければ、どの回も失敗する。
+            for (int i = 0; i < TargetInfo.ReachableRetryCount; i++)
+            {
+                if (this.Probe())
+                {
+                    return true;
+                }
+
+                // **最後の回でなければ、少し待ってもう一度。**
+                if (i < TargetInfo.ReachableRetryCount - 1)
+                {
+                    this._reachable = null;
+                    Thread.Sleep(TargetInfo.ReachableRetryWait);
+                }
+            }
+
+            return this._reachable.Value;
+        }
+
+        /// <summary>プローブの試行回数（#266）</summary>
+        private const int ReachableRetryCount = 3;
+
+        /// <summary>プローブの間隔（#266）</summary>
+        private static readonly TimeSpan ReachableRetryWait = TimeSpan.FromSeconds(5);
+
+        /// <summary>1 回だけ、到達性を確かめる（#266 で IsReachable から切り出した）</summary>
+        /// <returns>到達できれば true</returns>
+        private bool Probe()
         {
             if (this._reachable.HasValue)
             {

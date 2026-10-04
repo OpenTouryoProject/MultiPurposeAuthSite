@@ -443,8 +443,6 @@ namespace MultiPurposeAuthSite
             //   **`AllowCredentials` は、どちらにも付けない。**
             //   **Cookie で通る口をこの範囲に入れない**ためである
             //   （入れると、他オリジンの JS から利用者の資格情報で呼べる）。
-            string[] corsOrigins = CmnEndpoints.GetCorsAllowedOrigins().ToArray();
-
             services.AddCors(o =>
             {
                 // **公開情報。** 誰でも読んでよい（RP の検出に使う）。
@@ -458,10 +456,16 @@ namespace MultiPurposeAuthSite
 
                 // **ブラウザから叩く口。** **許すオリジンだけ。**
                 //   **1 件も無ければ、どのオリジンも通さない**（安全側の既定）。
+                //
+                //   **要求ごとに判定する**（#266）。**起動時に配列を固定しない。**
+                //   **画面から登録したクライアントのオリジンは、起動の後に増える**
+                //   （種データも含めて、サイトが動き出してから作られる）。
+                //   `GetCorsAllowedOrigins` はキャッシュを持つので、毎要求で DB は読まない。
                 o.AddPolicy(Const.CorsPolicyBrowserApi, builder =>
                 {
                     builder
-                    .WithOrigins(corsOrigins)
+                    .SetIsOriginAllowed(origin =>
+                        CmnEndpoints.GetCorsAllowedOrigins().Contains(origin))
                     .AllowAnyMethod()
                     .AllowAnyHeader();
                 });

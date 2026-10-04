@@ -114,6 +114,7 @@
 //*  2026/10/04  玄人 幸道         redirect_uriの登録迂回の分岐を削除（C-10）
 //*  2026/10/04  玄人 幸道         CORSで許可するオリジンの導出を追加（#265）
 //*  2026/10/04  玄人 幸道         response_typeを順不同の集合として扱う（#267）
+//*  2026/10/04  玄人 幸道         CORSのオリジンにweb_originsと画面登録を含める（#266）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4056,19 +4057,84 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// </remarks>
         public static List<string> GetCorsAllowedOrigins()
         {
+            lock (CmnEndpoints._corsLock)
+            {
+                if (CmnEndpoints._corsOrigins != null
+                    && DateTime.Now < CmnEndpoints._corsExpiresAt)
+                {
+                    return CmnEndpoints._corsOrigins;
+                }
+
+                CmnEndpoints._corsOrigins = CmnEndpoints.BuildCorsAllowedOrigins();
+                CmnEndpoints._corsExpiresAt = DateTime.Now + CmnEndpoints.CorsCacheTtl;
+
+                return CmnEndpoints._corsOrigins;
+            }
+        }
+
+        /// <summary>キャッシュした許可オリジンを捨てる（#266）</summary>
+        /// <remarks>
+        /// **画面からクライアント登録を保存したときに呼ぶ**（`Manage/AddSaml2OAuth2Data` の POST）。
+        /// **呼ばなくても期限で捨てる**が、**その間は新しい登録が効かない。**
+        ///
+        /// **複数インスタンスでは、他のインスタンスのキャッシュは捨てられない。**
+        /// **期限（下記）が、その取りこぼしを拾う。**
+        /// 共有キャッシュにするには `AddDistributedMemoryCache`（E-2）が要る。
+        /// </remarks>
+        public static void InvalidateCorsAllowedOrigins()
+        {
+            lock (CmnEndpoints._corsLock)
+            {
+                CmnEndpoints._corsOrigins = null;
+            }
+        }
+
+        /// <summary>キャッシュの寿命（#266）</summary>
+        /// <remarks>
+        /// **保存時の明示的な破棄で足りない分を拾うための保険**である。
+        /// **利用者の削除（`UsersAdmin`）など、登録が間接的に消える経路**は捕まえていない。
+        /// **短すぎると毎回 DB を読み、長すぎると消した登録が効き続ける。**
+        /// </remarks>
+        private static readonly TimeSpan CorsCacheTtl = TimeSpan.FromSeconds(60);
+
+        /// <summary>キャッシュした許可オリジン（#266）</summary>
+        private static List<string> _corsOrigins = null;
+
+        /// <summary>キャッシュの期限（#266）</summary>
+        private static DateTime _corsExpiresAt = DateTime.MinValue;
+
+        /// <summary>キャッシュの番をする錠（#266）</summary>
+        private static readonly object _corsLock = new object();
+
+        /// <summary>許可オリジンを作る（#266）</summary>
+        /// <returns>オリジンの一覧（重複なし）</returns>
+        /// <remarks>
+        /// **3 つを合わせる。** **登録（構成ファイル）→ 登録（画面）→ 設定の追加分**の順。
+        /// </remarks>
+        private static List<string> BuildCorsAllowedOrigins()
+        {
             List<string> origins = new List<string>();
 
-            // 1. 登録から導く。
-            foreach (string registered in Helper.GetInstance().GetConfigClientsPublicRedirectUris())
-            {
-                // 定数値（test_self_code など）は実 URL に変換する。
-                string origin = CmnEndpoints.ToOrigin(
-                    CmnEndpoints.GetRedirectUriFromConstr(registered));
+            // 1. 登録から導く（構成ファイル ＋ 画面）。
+            List<string> registeredAll = Helper.GetInstance().GetConfigClientsPublicRedirectUris();
+            registeredAll.AddRange(Helper.GetInstance().GetStoredClientsPublicRedirectUris());
 
-                if (!string.IsNullOrEmpty(origin)
-                    && !origins.Contains(origin))
+            foreach (string registered in registeredAll)
+            {
+                // **`web_origins` は複数書ける**（#266）ので、区切って 1 つずつ解決する。
+                //   `redirect_uri_*` は 1 つだけなので、分けても 1 件のまま。
+                foreach (string value in registered.Split(
+                    new char[] { ' ', ',', '	' }, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    origins.Add(origin);
+                    // 定数値（test_self_code など）は実 URL に変換する。
+                    string origin = CmnEndpoints.ToOrigin(
+                        CmnEndpoints.GetRedirectUriFromConstr(value.Trim()));
+
+                    if (!string.IsNullOrEmpty(origin)
+                        && !origins.Contains(origin))
+                    {
+                        origins.Add(origin);
+                    }
                 }
             }
 

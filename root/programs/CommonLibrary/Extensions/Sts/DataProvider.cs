@@ -30,12 +30,14 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2017/06/07  西野 大介         新規
 //*  2019/05/2*  西野 大介         SAML2対応実施
+//*  2026/10/04  玄人 幸道         GetAll を追加（#266）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
 using MultiPurposeAuthSite.Data;
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Collections.Concurrent;
 
@@ -165,6 +167,72 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             return unstructuredData;
         }
         
+        #endregion
+
+        #region GetAll
+
+        /// <summary>全件の UnstructuredData を返す（#266）</summary>
+        /// <returns>UnstructuredData の一覧（1 件も無ければ空）</returns>
+        /// <remarks>
+        /// **CORS の許可オリジンを作るために要る**（`CmnEndpoints.GetCorsAllowedOrigins`）。
+        /// **プリフライト（`OPTIONS`）は `client_id` を持たない**ので、
+        /// **オリジンの集合全体**が必要になる。
+        ///
+        /// **`clientID` は返さない。** 呼ぶ側は中身（JSON）だけを使うため。
+        ///
+        /// **毎回呼ばないこと。** 呼ぶ側でキャッシュする
+        /// （`CmnEndpoints` が持つ。登録の保存で捨て、期限でも捨てる）。
+        /// </remarks>
+        public static List<string> GetAll()
+        {
+            List<string> all = new List<string>();
+
+            switch (Config.UserStoreType)
+            {
+                case EnumUserStoreType.Memory:
+                    all.AddRange(DataProvider.Saml2OAuth2Data.Values);
+
+                    break;
+
+                case EnumUserStoreType.SqlServer:
+                case EnumUserStoreType.ODPManagedDriver:
+                case EnumUserStoreType.PostgreSQL: // DMBMS
+
+                    using (IDbConnection cnn = DataAccess.CreateConnection())
+                    {
+                        cnn.Open();
+
+                        switch (Config.UserStoreType)
+                        {
+                            case EnumUserStoreType.SqlServer:
+
+                                all.AddRange(cnn.Query<string>(
+                                    "SELECT [UnstructuredData] FROM [Saml2OAuth2Data]"));
+
+                                break;
+
+                            case EnumUserStoreType.ODPManagedDriver:
+
+                                all.AddRange(cnn.Query<string>(
+                                    "SELECT \"UnstructuredData\" FROM \"Saml2OAuth2Data\""));
+
+                                break;
+
+                            case EnumUserStoreType.PostgreSQL:
+
+                                all.AddRange(cnn.Query<string>(
+                                    "SELECT \"unstructureddata\" FROM \"saml2oauth2data\""));
+
+                                break;
+                        }
+                    }
+
+                    break;
+            }
+
+            return all;
+        }
+
         #endregion
 
         #region Update

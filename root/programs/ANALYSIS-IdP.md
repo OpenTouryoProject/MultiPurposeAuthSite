@@ -1812,10 +1812,12 @@ Entra ID の SPA プラットフォームと同じ考え方**である。
 
 - **`AllowCredentials` は、どちらのポリシーにも付けない。**
   **Cookie で通る口をこの範囲に入れない**ため（入れると、他オリジンの JS から資格情報で呼べる）
-- **画面登録（`saml2OAuth2Data`）は導出に含めない。**
-  プリフライト（`OPTIONS`）は `client_id` を持たないため**オリジンの集合全体**が要るが、
-  `DataProvider` に全件を列挙する口が無く、**分散キャッシュも無い**（E-2）。
-  **画面登録の SPA は `CorsAllowedOrigins` に足して通す**
+- **画面登録（`saml2OAuth2Data`）も導出に含める**（#266）。
+  `DataProvider.GetAll` を足し、**クライアント単位の登録項目 `web_origins`** を持たせた
+  （**空なら `redirect_uri_*` から導出**。Keycloak の Web origins / Auth0 の `web_origins` に相当）。
+  **許可オリジンはキャッシュする**（60 秒 ＋ 登録の保存で破棄）。
+  **複数インスタンスでは他のインスタンスのキャッシュを捨てられない**ので、
+  **期限が取りこぼしを拾う**（共有キャッシュには E-2 が要る）
 - **3 重定義（E-3）も片付いた。** `AllowAllOrigins` は**自己テスト用の口だけ**が使う
   （`ValuesController` / `TestHybridFlow`。どちらも `IsLockedDownTestEndpoints` で経路ごと閉じる）
 - **E2E** : **`RT-265.1`**（公開情報は全開／ブラウザから叩く口は導出したオリジンだけ／

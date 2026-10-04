@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/03  玄人 幸道         新規（#264）
 //*  2026/10/04  玄人 幸道         TestClient_15（test_self_code_manage）を追加（C-10）
+//*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -264,6 +265,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **CORS の許可オリジンを登録で決めたクライアント**（#266）。
+                //   **`client_secret` を空にして public にする**（CORS は public だけに効く）。
+                //   **`web_origins` が `redirect_uri_code` に勝つ**ことを測るため、
+                //   **`redirect_uri_code` には別のオリジン**を入れてある（`RT-266.1`）。
+                //   **画面登録（user store）の経路そのもの**でもある（種データは user store に入る）。
+                ClientName = "TestClient_16", ClientId = "e2e0tc16000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "client_secret", "" },
+                    { "redirect_uri_code", "https://notallowed.example/cb" },
+                    { "web_origins", "https://spa.example" }
+                }
+            },
+            new Entry()
+            {
                 // **管理画面の自己テストの折り返し先を登録したもの**（C-10）。
                 //   **記号が解決され、通常の照合で通ること**を測る（`RT-C10.1`）。
                 //   以前は `CheckRedirectUri` の分岐が、**登録を確かめずにこの URL を通していた。**
@@ -389,6 +406,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case "request_object_signing_alg":
                     model.RequestObjectSigningAlg = value;
+                    break;
+
+                case "web_origins":
+                    model.WebOrigins = value;
                     break;
 
                 default:

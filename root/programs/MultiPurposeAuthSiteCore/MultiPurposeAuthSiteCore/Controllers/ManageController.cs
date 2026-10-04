@@ -22,6 +22,7 @@
 //*  2026/10/01  玄人 幸道         メアドの追加・削除を引退させ、利用者名の変更と分けた（#151 の段階 3）
 //*  2026/10/02  玄人 幸道         メアドの追加・削除のアクションを削除（#151 の段階 5）
 //*  2026/10/04  玄人 幸道         折り返し先の既定をtest_self_code_manageに（C-10）
+//*  2026/10/04  玄人 幸道         登録の保存でCORSのキャッシュを捨てる（#266）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -36,6 +37,7 @@ using MultiPurposeAuthSite.Util.Sts;
 using MultiPurposeAuthSite.Extensions;
 //using FIDO = MultiPurposeAuthSite.Extensions.FIDO;
 using Sts = MultiPurposeAuthSite.Extensions.Sts;
+using Token = MultiPurposeAuthSite.TokenProviders;
 
 using System;
 using System.IO;
@@ -2195,6 +2197,11 @@ namespace MultiPurposeAuthSite.Controllers
                                 // ClientIDに変更がない場合、更新操作
                                 Sts.DataProvider.Update(user.ClientID, unstructuredData);
 
+                                // **CORS の許可オリジンのキャッシュを捨てる**（#266）。
+                                //   登録の web_origins / redirect_uri_* から作っているため。
+                                //   **呼ばなくても期限で捨てる**が、その間は新しい登録が効かない。
+                                Token.CmnEndpoints.InvalidateCorsAllowedOrigins();
+
                                 // 再ログイン
                                 await this.ReSignInAsync(user.Id);
                                 return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
@@ -2214,6 +2221,9 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
                                     if (!string.IsNullOrEmpty(temp)) Sts.DataProvider.Delete(temp);
                                     Sts.DataProvider.Create(user.ClientID, unstructuredData);
+
+                                    // **CORS の許可オリジンのキャッシュを捨てる**（#266）。
+                                    Token.CmnEndpoints.InvalidateCorsAllowedOrigins();
 
                                     // 再ログイン
                                     await this.ReSignInAsync(user.Id);

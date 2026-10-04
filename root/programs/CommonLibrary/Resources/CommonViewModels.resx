@@ -225,6 +225,9 @@
   <data name="TokenEndpointAuthSigningAlg" xml:space="preserve">
     <value>Client assertion signing algorithm (token_endpoint_auth_signing_alg)</value>
   </data>
+  <data name="WebOrigins" xml:space="preserve">
+    <value>CORS allowed origins (web_origins)</value>
+  </data>
   <data name="SubjectTypes" xml:space="preserve">
     <value>Subject Identifier types</value>
   </data>
