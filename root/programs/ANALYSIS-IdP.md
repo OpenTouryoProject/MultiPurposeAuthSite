@@ -1204,14 +1204,31 @@ OIDC Core §3.1.2.1 の `prompt=none` は
 
 `prompt=login` / `select_account` / `consent` は未処理。
 
-### C-4. 認可コードに有効期限が無い **[Lib]**
+### C-4. 認可コードに有効期限が無い **[Lib]** — **✅ 修正済み（#188）**
 
-`AuthenticationCodeDictionary` に `CreatedDate` を書いているが、**どこからも読んでいない。**
-`Receive` は経過時間を見ずに payload を返す。
+**直す前。** `AuthenticationCodeDictionary` に `CreatedDate` を書いているが、
+**どこからも読んでいなかった。** `Receive` は経過時間を見ずに payload を返していた。
 RFC 6749 §4.1.2 は「短命であること（推奨 10 分以内）」を求めている。
 
 Memory Provider の `ConcurrentDictionary` も未使用の code を回収しないため、
-**メモリ リークになる**（DBMS 側も行が残り続ける）。
+**メモリ リークになっていた**（DBMS 側も行が残り続けた）。
+
+**直し方**（`AuthorizationCodeProvider`。コミット `b7fd215`）。
+
+```csharp
+private static DateTime ExpireLimit
+{
+    get { return DateTime.Now - Config.OAuth2AuthorizationCodeExpireTimeSpanFromSeconds; }
+}
+```
+
+- **`Receive` が経過時間を見る**（`entry.CreatedDate < ExpireLimit` なら返さない）
+- **DBMS 側は `WHERE [Key] = @Key AND [CreatedDate] > @Limit`** で、期限切れを引かない
+- **回収も入れた。** `mem` は辞書を掃き、DBMS は `DELETE ... WHERE [CreatedDate] <= @Limit`
+  （`sqlserver` / `oracle` / `pstgrs` の 3 方言）
+- **期限は設定で決まる**（`OAuth2AuthorizationCodeExpireTimeSpanFromSeconds`。既定 600 秒）
+- **E2E** : **`RT-188`**（`test.ps1 -ShortLifetimes` で寿命を縮めて測る。`TESTING.md` 5 節）
+- **利用者への影響** : **無し**（既定の 600 秒は RFC の推奨内。**それより長く待つ RP が在れば影響する**）
 
 ### C-5. refresh_token に有効期限も再利用検知も無い **[Lib]** — **✅ 修正済み（#188）**
 
@@ -1281,7 +1298,9 @@ OAuth 2.0 Security BCP §4.14.2 は、この場合に一族の失効を挙げて
   （`ClientModePolicy` の表。#224）。**`normal` 以外の登録には、`refresh_token` を発行しない**
   （#224 の段階 2。以前は発行していたが、使えなかった。`FA-1.2` / `FA-3.1`。C-7）。
 
-### C-6. `state` を URL エンコードせずに連結している **[Core]**
+### C-6. `state` を URL エンコードせずに連結している **[Core]** — **✅ 修正済み（#187）**
+
+**直す前。**
 
 ```csharp
 // MultiPurposeAuthSiteCore/.../AccountController.cs:3017, 3035 ほか
@@ -1289,8 +1308,21 @@ string.Format("?code={0}&state={1}", code, state)
 ```
 
 `state` はクライアント（＝攻撃者が用意しうる RP）が自由に決められる値であり、
-`&` を含めればリダイレクト URL にパラメタを注入できる。
-`?` の無条件付与（A-6 と同じ）と併せて、リダイレクト URL の組み立てを一箇所に集約すべき。
+`&` を含めればリダイレクト URL にパラメタを注入できた。
+
+**直し方。** **リダイレクト URL の組み立てを 1 か所に集約した**
+（`CmnEndpoints.BuildRedirectUrl`。A-6 と同じ #187）。
+
+- **値は必ず URL エンコードする**
+- **区切りを `?` と `&` で切り替える**（既にクエリ文字列を持つ `redirect_uri` でも壊れない。A-6）
+- **値が空のパラメタは付けない。** `state` は**要求に含まれたときだけ**返す（RFC 6749 §4.1.2）
+- **認可応答は、成功も失敗も全てここを通る**（`BuildRedirectUrl` の呼び出し元は両アプリで多数）
+
+> **`"&state=" + state` の連結は、まだ 4 か所に残っている**
+> （両アプリの `AccountController` の ID 連携と、`ManageController` の `GetOAuth2Token`）。
+> **こちらは「この実装が RP として送る認可要求」で、`state` は自分で作っている**
+> （`GetPassword.Generate(32, 0)` / `(10, 0)`。**記号を入れない**）。
+> **C-6 が問題にしていた「クライアントから来た値を、そのまま応答に連結する」経路ではない。**
 
 ### C-7. PKCE の扱いが OAuth 2.1 と噛み合わない **[Lib]** — **✅ 修正済み（#220 / #221 / #224）**
 
@@ -2504,7 +2536,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 |---|
 | ✅ **C-1 `/device_authz` のクライアント認証** #193 |
 | ✅ **C-2 `/revoke` `/introspect` の所有者確認、mTLS の有効化（net10.0 版）** #194 |
-| C-4 / C-5 / C-11 有効期限の実装（code / refresh_token / request object）＋ ワンタイム化 ＋ 再利用検知 |
+| ✅ **C-4 / C-5 / C-11 有効期限の実装**（code / refresh_token / request object）**＋ ワンタイム化 ＋ 再利用検知** #188 / #229 |
 | ✅ **C-8 検証アルゴリズムの固定** #129 の段階 1 |
 | ✅ **C-9 CORS をエンドポイント単位に** #265 |
 | ✅ **C-10 `redirect_uri` の厳密比較** #263 ／ **テスト用抜け道の削除**（`test_self_code_manage`） |
