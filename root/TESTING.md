@@ -253,15 +253,18 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 
 ### 4 つのストアの実測
 
-**実測 2026/10/06**（#269 で `UnstructuredData` の型を揃えた後）。
+**実測 2026/10/06**（#270 でクライアント登録を専用列に切り出した後）。
 ビルドは net48 / net10.0 とも エラー 0 / 警告 0。
 
 | ストア | 成功 | 失敗 | Skip | 備考 |
 |---|---|---|---|---|
-| `mem`（既定） | **490** | **0** | 1 | `RT-246.3` core（mTLS フックの副作用） |
-| `sql` | **490** | **0** | 1 | 同上 |
-| `ora` | **490** | **0** | 1 | 同上 |
-| `npg` | **247** | **0** | 244 | **net48 版を起動しないぶんが Skip**（`Npgsql` が `#if NETCORE`。netfx 243）＋ 上記 1 件 |
+| `mem`（既定） | **492** | **0** | 1 | `RT-246.3` core（mTLS フックの副作用） |
+| `sql` | **492** | **0** | 1 | 同上 |
+| `ora` | **492** | **0** | 1 | 同上 |
+| `npg` | **248** | **0** | 245 | **net48 版を起動しないぶんが Skip**（`Npgsql` が `#if NETCORE`。netfx 244）＋ 上記 1 件 |
+
+> **#269 の時点（同じ日）** : 4 ストアとも **490 / 0 / 1**（`npg` は 247 / 0 / 244）。
+> **#270 で `RT-270.1` が 2 件増えた**（core / netfx）。
 
 **DB ストアだけで出る失敗が 3 つ出た。** どれも直してある（下記）。
 
@@ -288,15 +291,21 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 
 | テーブル | SQL Server | Oracle | PostgreSQL |
 |---|---|---|---|
-| `Users` / `Saml2OAuth2Data` / `FIDO2Data` / `CibaData` | `nvarchar(max)` | **`NVARCHAR2(2000)` → `NCLOB`** | **`varchar(2000)` → `text`** |
+| `Users` / `FIDO2Data` / `CibaData` | `nvarchar(max)` | **`NVARCHAR2(2000)` → `NCLOB`** | **`varchar(2000)` → `text`** |
+| ~~`Saml2OAuth2Data`~~ | — | — | — | **#270 で列を落とした** |
 
 **Oracle は単純に広げられない。** **`NVARCHAR2` は 2000 文字（4000 バイト）が上限**で、
 **`MAX_STRING_SIZE = EXTENDED`**（データベース全体の設定。戻せない）か **`NCLOB`** しかない。
 **配備側の設定に踏み込まない**ので `NCLOB` にした。
 
-**クライアント登録は全項目が 1 つの JSON に入る**（`Saml2OAuth2Data.UnstructuredData`）ので、
-**画面から入れられる範囲でも 2000 文字を超える** —
+**クライアント登録は全項目が 1 つの JSON に入っていた**（`Saml2OAuth2Data.UnstructuredData`）ので、
+**画面から入れられる範囲でも 2000 文字を超えた** —
 `Const.MaxLengthOfUri`（**512**）の項目が 5 つ ＋ JWK 2 本（約 890 文字）。
+
+> **そのクライアント登録は、#270 で専用列に切り出した。**
+> **`Saml2OAuth2Data` に `UnstructuredData` 列はもう無い**（下の「専用列に切り出した」）。
+> **列ごとに幅を決めたので、この節の問題はクライアント登録には起きない。**
+> **残る 3 表（`Users` / `FIDO2Data` / `CibaData`）には引き続き効く**ので、#269 の型を揃えたことは無駄になっていない。
 
 - **E2E** : **`RT-269.1`**（`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つで
   **2000 文字を超える登録**を作り、**先頭と末尾のオリジンの両方で CORS が通る**ことを見る）
@@ -305,6 +314,28 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
   **`ALTER` で広げるなら**、PostgreSQL は `ALTER TABLE ... ALTER COLUMN ... TYPE text`、
   **Oracle は `NVARCHAR2` から `NCLOB` へ直接変更できない**ので
   **列を足して移してから入れ替える**
+
+#### クライアント登録を専用列に切り出した（#270）
+
+**`Saml2OAuth2Data` は `ClientID` ＋ `UnstructuredData`（JSON 1 列）だった。**
+**17 列にした**（属性名と同じ列名。幅は `Const.MaxLengthOfUri` などに合わせてある）。
+
+**測るときに注意が要るのは 1 列だけである。**
+
+| | |
+|---|---|
+| **`RequirePkce` は、登録項目で唯一の `bool`** | **方言ごとに形が違う** — SQL Server `bit` / PostgreSQL `boolean` / **Oracle は `NUMBER(3)` の `-1`**（`Users` の bool 列と同じ流儀） |
+| **そこが落ちても、画面とビルドは黙っている** | **「登録で PKCE を必須にしたつもりのクライアントが、PKCE 無しを受け入れる」**になる |
+| **既存の `RT-221.1` では測れない** | `TestClient6` は**構成ファイル側**なので、`Helper` は user store を見に来ない |
+
+- **E2E** : **`RT-270.1`**（**画面登録側**の `require_pkce`。種データ `TestClient_18`）
+- **歯が立つことを確かめてある** : `mem` の複製と Oracle の書き込みを
+  それぞれ `false` / `0` に崩して、**両方で落ちる**ことを見た
+  （Oracle は**行を消してから回す**こと。種データは**登録が無いときだけ書く**ので、
+  行が残っていると壊した書き込みが走らず、**通ってしまって測れない**）
+- **幅の実測**（`sql` / `npg` / `ora` とも同じ） : 19 行。`WebOrigins` 最大 **503**、
+  `JwkRsaPublickey` 最大 **586**、`RedirectUriSaml` 最大 **486**
+  — **以前はこれを全部足して 1 列に入れていた**ので 2000 文字を超えていた
 
 **以前の実測（2026/10/02）** : `sql` と `ora` は**毎回 1 件ほど落ちていた**
 （`RT-230.3` / `RT-233.2` など。回すたびに変わる）。

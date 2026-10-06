@@ -666,6 +666,23 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 > `NVARCHAR2(800)` の列への一意制約も、`db_block_size` 8192・`max_string_size` STANDARD の
 > 既定のままで作成された。
 
+> **クライアント登録（`Saml2OAuth2Data`）は、JSON 1 列から専用列になった**（#270）。
+>
+> **`UnstructuredData` 列は無くなり、`ClientID` 以下 17 列になった**
+> （`ClientSecret` / `RedirectUri*` / `WebOrigins` / `Jwk*` / `*Alg` / `ClientMode` /
+> `RequirePkce` / `ClientName` など。列名は属性名と同じ）。
+>
+> **移行用のスクリプトは置いていない。** 既存のデータベースは次のどちらか。
+>
+> - **`Create_UserStore.sql` を流し直す**（E2E 用の `store/` は使い捨てなのでこれ）
+> - **`ALTER` で 16 列を足し、画面から再登録する**
+>
+> **列を足しただけでは、登録済みのクライアントは読めない**
+> （古い JSON は読まないため。**値を残したい場合は、落とす前に JSON 関数で列へ写せる**
+> — SQL Server `JSON_VALUE`、PostgreSQL `::json ->>`、Oracle `JSON_VALUE`）。
+>
+> **`RequirePkce` だけは `NOT NULL`** なので、`ALTER` で足すときは既定値が要る。
+
 **3 つの DDL がミラーかどうかは、機械的に確かめられる。**
 
 ```powershell

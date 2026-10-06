@@ -224,7 +224,7 @@ namespace MultiPurposeAuthSite.Controllers
                 ApplicationUser user = await UserManager.FindByIdAsync(User.Identity.GetUserId());
 
                 // モデルの生成
-                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
+                bool hasSaml2OAuth2Data = (Sts.DataProvider.Get(user.ClientID) != null);
 
                 ManageIndexViewModel model = new ManageIndexViewModel
                 {
@@ -243,7 +243,7 @@ namespace MultiPurposeAuthSite.Controllers
                     // 非構造化データ
                     HasUnstructuredData = !string.IsNullOrEmpty(user.UnstructuredData),
                     // Saml2OAuth2Data
-                    HasSaml2OAuth2Data = !string.IsNullOrEmpty(saml2OAuth2Data),
+                    HasSaml2OAuth2Data = hasSaml2OAuth2Data,
                     // FIDO2PublicKey
                     /*HasFIDO2Data = new Func<bool>(() =>
                     {
@@ -1850,11 +1850,10 @@ namespace MultiPurposeAuthSite.Controllers
 
                 ManageAddSaml2OAuth2DataViewModel model = null;
 
-                string saml2OAuth2Data = Sts.DataProvider.Get(user.ClientID);
+                model = Sts.DataProvider.Get(user.ClientID);
 
-                if (!string.IsNullOrEmpty(saml2OAuth2Data))
+                if (model != null)
                 {
-                    model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                     if (string.IsNullOrEmpty(model.ClientID))
                     {
                         // 空（userから取得
@@ -1924,12 +1923,11 @@ namespace MultiPurposeAuthSite.Controllers
                         {
                             // ユーザを取得できた。
                             model.ClientName = user.UserName; // ClientNameはUser入力ではない。
-                            string unstructuredData = JsonConvert.SerializeObject(model);
 
                             if (user.ClientID == model.ClientID)
                             {
                                 // ClientIDに変更がない場合、更新操作
-                                Sts.DataProvider.Update(user.ClientID, unstructuredData);
+                                Sts.DataProvider.Update(user.ClientID, model);
 
                                 // **CORS の許可オリジンのキャッシュを捨てる**（#266）。
                                 //   登録の web_origins / redirect_uri_* から作っているため。
@@ -1954,7 +1952,7 @@ namespace MultiPurposeAuthSite.Controllers
 
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
                                     if (!string.IsNullOrEmpty(temp)) Sts.DataProvider.Delete(temp);
-                                    Sts.DataProvider.Create(user.ClientID, unstructuredData);
+                                    Sts.DataProvider.Create(user.ClientID, model);
 
                                     // **CORS の許可オリジンのキャッシュを捨てる**（#266）。
                                     Token.CmnEndpoints.InvalidateCorsAllowedOrigins();

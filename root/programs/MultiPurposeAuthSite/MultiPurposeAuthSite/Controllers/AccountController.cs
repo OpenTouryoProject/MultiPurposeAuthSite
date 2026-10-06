@@ -4609,9 +4609,10 @@ namespace MultiPurposeAuthSite.Controllers
             //   **サイトごとに分ける必要も無い**（作った後は読むだけで、書き換え合わない。#260）。
             foreach (Sts.TestClients.Entry entry in Sts.TestClients.Entries)
             {
-                string saml2OAuth2Data = Sts.TestClients.CreateSaml2OAuth2Data(entry);
+                ViewModels.ManageAddSaml2OAuth2DataViewModel saml2OAuth2Data
+                    = Sts.TestClients.CreateSaml2OAuth2Data(entry);
 
-                if (string.IsNullOrEmpty(saml2OAuth2Data))
+                if (saml2OAuth2Data == null)
                 {
                     // **写す元が構成ファイルに無い。** その分は E2E が Skip する。
                     continue;
@@ -4632,7 +4633,7 @@ namespace MultiPurposeAuthSite.Controllers
                 // **登録が無ければ入れる**（在れば触らない）。
                 //   **DB ストアでは 2 つのサイトが同じ user store を共有する**（#260）ので、
                 //   **書き込みを 1 回に閉じる。**
-                if (string.IsNullOrEmpty(Sts.DataProvider.Get(entry.ClientId)))
+                if (Sts.DataProvider.Get(entry.ClientId) == null)
                 {
                     Sts.DataProvider.Create(entry.ClientId, saml2OAuth2Data);
                 }

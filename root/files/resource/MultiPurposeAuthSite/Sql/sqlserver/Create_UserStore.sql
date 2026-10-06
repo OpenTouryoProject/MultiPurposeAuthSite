@@ -134,9 +134,24 @@ CREATE TABLE [CustomizedConfirmation](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
-CREATE TABLE [Saml2OAuth2Data](
+CREATE TABLE [Saml2OAuth2Data](   -- 専用列に切り出した（#270）
     [ClientID] [nvarchar](256) NOT NULL,     -- PK
-    [UnstructuredData] [nvarchar](max) NULL, -- Saml2/OAuth2 Unstructured Data
+    [ClientSecret] [nvarchar](256) NULL,
+    [RedirectUriSaml] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
+    [RedirectUriCode] [nvarchar](512) NULL,          -- Const.MaxLengthOfUri
+    [RedirectUriToken] [nvarchar](512) NULL,         -- Const.MaxLengthOfUri
+    [PostLogoutRedirectUri] [nvarchar](512) NULL,    -- Const.MaxLengthOfUri
+    [WebOrigins] [nvarchar](max) NULL,               -- 空白・カンマ区切りの列挙
+    [JwkRsaPublickey] [nvarchar](max) NULL,
+    [JwkECDsaPublickey] [nvarchar](max) NULL,
+    [TlsClientAuthSubjectDn] [nvarchar](512) NULL,
+    [SubjectTypes] [nvarchar](32) NULL,
+    [IdTokenSignedResponseAlg] [nvarchar](16) NULL,
+    [TokenEndpointAuthSigningAlg] [nvarchar](16) NULL,
+    [RequestObjectSigningAlg] [nvarchar](16) NULL,
+    [ClientMode] [nvarchar](32) NULL,                -- oauth2_oidc_mode
+    [RequirePkce] [bit] NOT NULL,
+    [ClientName] [nvarchar](256) NULL,               -- Users.UserName と同じ幅
     CONSTRAINT [PK.Saml2OAuth2Data] PRIMARY KEY NONCLUSTERED ([ClientID] ASC)
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]

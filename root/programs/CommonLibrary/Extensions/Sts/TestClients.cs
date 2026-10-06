@@ -32,6 +32,7 @@
 //*  2026/10/04  玄人 幸道         TestClient_15（test_self_code_manage）を追加（C-10）
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
 //*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
+//*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -284,6 +285,22 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **登録で require_pkce を立てたクライアント**（#270）。
+                //   **構成ファイル側の TestClient6 と対をなす。**
+                //   `require_pkce` は**唯一の bool の登録項目**で、
+                //   **列に切り出した後は方言で形が違う**
+                //   （SQL Server : bit / PostgreSQL : boolean / Oracle : NUMBER(3) の -1）。
+                //   **これが落ちると「締めたつもりが締まっていない」になる**ので、
+                //   **登録経由で測る**（`RT-270.1`）。
+                ClientName = "TestClient_18", ClientId = "e2e0tc18000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "require_pkce", "true" }
+                }
+            },
+            new Entry()
+            {
                 // **CORS の許可オリジンを登録で決めたクライアント**（#266）。
                 //   **`client_secret` を空にして public にする**（CORS は public だけに効く）。
                 //   **`web_origins` が `redirect_uri_code` に勝つ**ことを測るため、
@@ -316,19 +333,19 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
         #region CreateSaml2OAuth2Data
 
-        /// <summary>登録（saml2OAuth2Data）の JSON を作る（#264）</summary>
+        /// <summary>登録（saml2OAuth2Data）を作る（#264）</summary>
         /// <param name="entry">表の 1 件</param>
-        /// <returns>saml2OAuth2Data の JSON（写す元が無ければ空）</returns>
+        /// <returns>クライアント登録（写す元が無ければ null）</returns>
         /// <remarks>
         /// **`AddSaml2OAuth2Data` 画面が保存するものと同じ形**にする
-        /// （`ManageAddSaml2OAuth2DataViewModel` を `JsonConvert` する）。
-        /// **読む側（`Helper` の各 `Get*`）は、この形で逆変換する**ため、
+        /// （同じ `ManageAddSaml2OAuth2DataViewModel` を `DataProvider` に渡す。#270）。
+        /// **読む側（`Helper` の各 `Get*`）も同じ型で受け取る**ため、
         /// **画面から登録したのと区別がつかない。**
         ///
         /// **写す元は `Helper` の公開の取得口から読む。**
         /// 構成ファイルの辞書を直接見ないので、**写す項目がここで明示される。**
         /// </remarks>
-        public static string CreateSaml2OAuth2Data(Entry entry)
+        public static ManageAddSaml2OAuth2DataViewModel CreateSaml2OAuth2Data(Entry entry)
         {
             Helper helper = Helper.GetInstance();
 
@@ -337,7 +354,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             if (string.IsNullOrEmpty(sourceId))
             {
                 // **写す元が構成ファイルに無い。** 種データを作らない（E2E はその分を Skip する）。
-                return "";
+                return null;
             }
 
             ManageAddSaml2OAuth2DataViewModel model = new ManageAddSaml2OAuth2DataViewModel()
@@ -370,7 +387,7 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                 }
             }
 
-            return JsonConvert.SerializeObject(model);
+            return model;
         }
 
         #endregion
@@ -433,6 +450,12 @@ namespace MultiPurposeAuthSite.Extensions.Sts
 
                 case "web_origins":
                     model.WebOrigins = value;
+                    break;
+
+                case "require_pkce":
+                    // **ここだけ bool**（#270）。
+                    //   **綾り違いを黙って false にしない**ため、`Parse` で落とす。
+                    model.RequirePkce = bool.Parse(value);
                     break;
 
                 default:

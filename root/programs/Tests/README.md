@@ -81,6 +81,8 @@ net48 版は IIS Express での手動起動が前提で、常に動いている�
 | `TestClient_8`〜`_13` | 同じく写しで、**`id_token_signed_response_alg`** を `RS512` / `ES384` / `ES512` / `PS256` / `PS384` / `PS512` に（#129 の段階 2〜4）。`_8` は **`token_endpoint_auth_signing_alg = RS256`** も登録（#262） | 同上 |
 | `TestClient_15` | 同じく写しで、**`redirect_uri_code` を `test_self_code_manage`** に（C-10）。**管理画面の自己テストの折り返し先が、登録値として通る**ことを測る | 同上 |
 | `TestClient_16` | 同じく写しで、**`client_secret` を空（public）**にし、**`web_origins`** と**別オリジンの `redirect_uri_code`** を登録（#266）。**`web_origins` が勝つ**ことを測る | 同上 |
+| `TestClient_17` | 同じく public で、**`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つ**を登録（#269）。**登録全体が 2000 文字を超えても保存できる**ことを測る（#270 で列に切り出した後も、列ごとの幅に入ることの確かめになっている） | 同上 |
+| `TestClient_18` | 同じく写しで、**`require_pkce = true`** を登録（#270）。**登録項目で唯一の `bool`** で、**方言ごとに形が違う**（`bit` / `boolean` / `NUMBER(3)` の -1）。`RT-221.1` の `TestClient6` は**構成ファイル側**なので、**こちらが画面登録側を測る**（`RT-270.1`） | 同上 |
 
 - **`client_name` は利用者名そのもの**である（`GetClientIdByName` が `CmnUserStore.FindByName` を引く）。
   **したがって 1 利用者 ＝ 1 クライアント登録**で、**この表のぶんだけテスト利用者が居る**

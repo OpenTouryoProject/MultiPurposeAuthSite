@@ -109,9 +109,24 @@ CREATE TABLE CustomizedConfirmation(
     CONSTRAINT PK_CustomizedConfirmation PRIMARY KEY (UserId)
 );
 
-CREATE TABLE Saml2OAuth2Data(
+CREATE TABLE Saml2OAuth2Data(   -- 専用列に切り出した（#270）
     ClientID varchar(256) NOT NULL,          -- PK
-    UnstructuredData text NULL,     -- Saml2/OAuth2 Unstructured Data
+    ClientSecret varchar(256) NULL,
+    RedirectUriSaml varchar(512) NULL,               -- Const.MaxLengthOfUri
+    RedirectUriCode varchar(512) NULL,               -- Const.MaxLengthOfUri
+    RedirectUriToken varchar(512) NULL,              -- Const.MaxLengthOfUri
+    PostLogoutRedirectUri varchar(512) NULL,         -- Const.MaxLengthOfUri
+    WebOrigins text NULL,                            -- 空白・カンマ区切りの列挙
+    JwkRsaPublickey text NULL,
+    JwkECDsaPublickey text NULL,
+    TlsClientAuthSubjectDn varchar(512) NULL,
+    SubjectTypes varchar(32) NULL,
+    IdTokenSignedResponseAlg varchar(16) NULL,
+    TokenEndpointAuthSigningAlg varchar(16) NULL,
+    RequestObjectSigningAlg varchar(16) NULL,
+    ClientMode varchar(32) NULL,                     -- oauth2_oidc_mode
+    RequirePkce boolean NOT NULL,
+    ClientName varchar(256) NULL,                    -- Users.UserName と同じ幅
     CONSTRAINT PK_Saml2OAuth2Data PRIMARY KEY (ClientID)
 );
 

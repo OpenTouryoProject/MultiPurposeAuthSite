@@ -49,6 +49,7 @@
 //*  2026/10/04  玄人 幸道         TestClient_15とtest_self_code_manageの解決を追加（C-10）
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
 //*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
+//*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
 //**********************************************************************************
 
 using System;
@@ -261,6 +262,9 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public const string TestClient_17 = "TestClient_17";
 
+        /// <summary>登録で require_pkce を立てたクライアント（#270）</summary>
+        public const string TestClient_18 = "TestClient_18";
+
         /// <summary>TestClient_17 の web_origins の先頭（#269）</summary>
         public const string LongRegistrationOrigin = "https://o001.example";
 
@@ -295,6 +299,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_7,  "e2e0tc07000000000000000000000000" },
                 { KnownClients.TestClient_16, "e2e0tc16000000000000000000000000" },
                 { KnownClients.TestClient_17, "e2e0tc17000000000000000000000000" },
+                { KnownClients.TestClient_18, "e2e0tc18000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
@@ -760,6 +765,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 // **2000 文字を超える登録**（#269）。**client_secret は空**（public）。
                 sourceName = KnownClients.TestClient;
                 overriddenSecret = "";
+            }
+            else if (clientName == KnownClients.TestClient_18)
+            {
+                // **登録で require_pkce を立てた**（#270）。client_secret は写す元のまま。
+                sourceName = KnownClients.TestClient;
             }
             else if (clientName == KnownClients.TestClient_16)
             {

@@ -110,9 +110,24 @@ CREATE TABLE "CustomizedConfirmation"(
     CONSTRAINT "PK.CustomizedConfirmation" PRIMARY KEY ("UserId")
 );
 
-CREATE TABLE "Saml2OAuth2Data"(
+CREATE TABLE "Saml2OAuth2Data"(   -- 専用列に切り出した（#270）
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
-    "UnstructuredData" NCLOB NULL, -- Saml2/OAuth2 Unstructured Data
+    "ClientSecret" NVARCHAR2(256) NULL,
+    "RedirectUriSaml" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
+    "RedirectUriCode" NVARCHAR2(512) NULL,           -- Const.MaxLengthOfUri
+    "RedirectUriToken" NVARCHAR2(512) NULL,          -- Const.MaxLengthOfUri
+    "PostLogoutRedirectUri" NVARCHAR2(512) NULL,     -- Const.MaxLengthOfUri
+    "WebOrigins" NCLOB NULL,                         -- 空白・カンマ区切りの列挙
+    "JwkRsaPublickey" NCLOB NULL,
+    "JwkECDsaPublickey" NCLOB NULL,
+    "TlsClientAuthSubjectDn" NVARCHAR2(512) NULL,
+    "SubjectTypes" NVARCHAR2(32) NULL,
+    "IdTokenSignedResponseAlg" NVARCHAR2(16) NULL,
+    "TokenEndpointAuthSigningAlg" NVARCHAR2(16) NULL,
+    "RequestObjectSigningAlg" NVARCHAR2(16) NULL,
+    "ClientMode" NVARCHAR2(32) NULL,                 -- oauth2_oidc_mode
+    "RequirePkce" NUMBER(3) NOT NULL,                -- 真は -1（Users の bool 列と同じ）
+    "ClientName" NVARCHAR2(256) NULL,                -- Users.UserName と同じ幅
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 

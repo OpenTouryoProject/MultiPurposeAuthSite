@@ -34,6 +34,7 @@
 //*  2026/09/18  玄人 幸道         RT-220.4（S256 と fapi クレーム）を追加（#220）
 //*  2026/09/18  玄人 幸道         RT-221.1 / RT-221.2（クライアント単位の PKCE）を追加（#221）
 //*  2026/09/22  玄人 幸道         観点の文面を、ClientModePolicy の表に合わせた（#224 の段階 1。判定は変えていない）
+//*  2026/10/06  玄人 幸道         RT-270.1（登録経由の require_pkce）を追加（#270）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -409,6 +410,70 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**サーバ全体の RequirePkce を true にすれば、こちらも通らなくなる。**"
                     + "クライアント側の設定は「個別の引き上げ」であって、**床を下げることはできない**。");
+
+                r.Done();
+            }
+        }
+        /// <summary>RT-270.1 画面登録（user store）の require_pkce も効く</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27001_登録経由のrequire_pkceも効く(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-270.1",
+                    "画面登録（user store）に書いた require_pkce も、構成ファイルと同じように効く",
+                    "**`RT-221.1` の TestClient6 は構成ファイル側のクライアントである。**"
+                    + "そのため、**画面登録側の `require_pkce` は測られていなかった**。"
+                    + "**#270 で登録を JSON 1 列から専用列に切り出した**とき、"
+                    + "**`require_pkce` だけが bool** で、**方言ごとに形が違う**"
+                    + "（SQL Server : `bit` / PostgreSQL : `boolean` / Oracle : `NUMBER(3)` の -1）。"
+                    + "**この往復が落ちると、登録で締めたつもりのクライアントが、"
+                    + "黙って PKCE 無しを受け入れる。**",
+                    "OAuth 2.1 draft §4.1.1 / #221 / #270");
+
+                // **TestClient_18 は構成ファイルに無い**（種データが user store に作る。#264）。
+                ClientRegistration reg = Flows.InjectedRegistration(
+                    client, KnownClients.TestClient_18);
+
+                r.Target("client_name=" + KnownClients.TestClient_18
+                    + "（**画面登録**で require_pkce=true）");
+                r.Step("(1) code_challenge を送らずに認可リクエストを出す");
+
+                AuthZResponse without = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri);
+
+                r.Verify("認可コードを発行しない",
+                    string.IsNullOrEmpty(without.Code),
+                    "code を返さない",
+                    string.IsNullOrEmpty(without.Code)
+                        ? "返さなかった（error=" + (without.Error ?? "なし") + "）" : "**返してしまった**");
+
+                r.Verify("エラーは invalid_request",
+                    without.Error == "invalid_request",
+                    "invalid_request",
+                    without.Error ?? "（無し）");
+
+                r.Step("(2) 同じクライアントに、PKCE（S256）を付けて出す");
+
+                AuthZResponse with = await Flows.AuthorizeCodeAsync(
+                    client, reg, redirectUri: reg.RedirectUri,
+                    extra: new Dictionary<string, string>()
+                    {
+                        { "code_challenge", PkceTests.Challenge },
+                        { "code_challenge_method", "S256" }
+                    });
+
+                r.Verify("PKCE を付ければ認可コードが返る",
+                    !string.IsNullOrEmpty(with.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(with.Code)
+                        ? "**返らなかった**（error=" + (with.Error ?? "なし") + "）" : "あり（値は伏せる）");
+
+                r.Note("**4 つのストアで回すと、方言ごとの往復をまとめて測れる**"
+                    + "（`mem` は変換無し、`sql` は `bit`、`npg` は `boolean`、`ora` は `NUMBER(3)`）。");
 
                 r.Done();
             }

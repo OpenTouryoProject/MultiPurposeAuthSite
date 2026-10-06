@@ -727,11 +727,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.ClientSecret;
             }
 
@@ -793,12 +793,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
 
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 if (string.IsNullOrEmpty(response_type))
                 {
@@ -850,12 +849,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
 
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            if (model != null)
             {
-                ManageAddSaml2OAuth2DataViewModel model =
-                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.PostLogoutRedirectUri ?? "";
             }
 
@@ -893,12 +890,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // Saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
 
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.RedirectUriSaml;
             }
 
@@ -938,11 +934,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.JwkRsaPublickey;
             }
 
@@ -980,11 +976,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.JwkECDsaPublickey;
             }
 
@@ -1024,11 +1020,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.TlsClientAuthSubjectDn;
             }
 
@@ -1088,11 +1084,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 if (!string.IsNullOrEmpty(model.SubjectTypes))
                 {
@@ -1148,11 +1144,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 if (!string.IsNullOrEmpty(model.ClientMode))
                 {
@@ -1245,11 +1241,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
-                ManageAddSaml2OAuth2DataViewModel model =
-                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 return model.RequirePkce;
             }
@@ -1299,11 +1294,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
-                ManageAddSaml2OAuth2DataViewModel model =
-                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 if (!string.IsNullOrEmpty(model.IdTokenSignedResponseAlg))
                 {
@@ -1389,11 +1383,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
-                ManageAddSaml2OAuth2DataViewModel model =
-                    JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
 
                 string value = fromModel(model);
 
@@ -1480,33 +1473,16 @@ namespace MultiPurposeAuthSite.Extensions.Sts
         /// | **`web_origins` が在れば、それを使う** | **書いたときは導出しない** |
         /// | **無ければ `redirect_uri_*`** | #265 の挙動 |
         ///
-        /// **`DataProvider.GetAll` を呼ぶので、毎回呼ばないこと。**
+        /// **`DataProvider.GetAllUris` を呼ぶので、毎回呼ばないこと。**
+        /// **読むのは URI 関連の列だけ**（#270 で列にしたので、絞れる）。
         /// 呼ぶ側（`CmnEndpoints.GetCorsAllowedOrigins`）がキャッシュする。
         /// </remarks>
         public List<string> GetStoredClientsPublicRedirectUris()
         {
             List<string> uris = new List<string>();
 
-            foreach (string saml2OAuth2Data in DataProvider.GetAll())
+            foreach (ManageAddSaml2OAuth2DataViewModel model in DataProvider.GetAllUris())
             {
-                if (string.IsNullOrEmpty(saml2OAuth2Data))
-                {
-                    continue;
-                }
-
-                ManageAddSaml2OAuth2DataViewModel model = null;
-
-                try
-                {
-                    model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(
-                        saml2OAuth2Data);
-                }
-                catch
-                {
-                    // **壊れている行は飛ばす。** ここで落とすと、CORS ごと止まる。
-                    continue;
-                }
-
                 if (model == null)
                 {
                     continue;
@@ -1568,11 +1544,11 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             }
 
             // saml2OAuth2Dataを検索
-            string saml2OAuth2Data = DataProvider.Get(client_id);
-            if (!string.IsNullOrEmpty(saml2OAuth2Data))
+            ManageAddSaml2OAuth2DataViewModel model = DataProvider.Get(client_id);
+
+            if (model != null)
             {
                 isResourceOwner = true;
-                ManageAddSaml2OAuth2DataViewModel model = JsonConvert.DeserializeObject<ManageAddSaml2OAuth2DataViewModel>(saml2OAuth2Data);
                 return model.ClientName;
             }
 
