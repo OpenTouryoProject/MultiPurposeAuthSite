@@ -29,6 +29,7 @@
 //*  日時        更新者            内容
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/10/06  玄人 幸道         新規（#272 の段階 1）
+//*  2026/10/06  玄人 幸道         RT-272.8 / RT-272.9（prompt=login / select_account）を追加（#272）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -478,6 +479,142 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Note("**このテストは、終わった時点で記録を残さない。**"
                     + "**DB ストアでも 2 回目以降の実行で同じ結果になる。**");
+
+                r.Done();
+            }
+        }
+        /// <summary>RT-272.8 prompt=login は再認証を求める</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27208_promptのloginは再認証を求める(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-272.8",
+                    "prompt=login は、サインイン済みでも再認証を求める",
+                    "**`prompt=login` は「利用者を認証し直せ」という指定**（OIDC Core §3.1.2.1）。"
+                    + "**以前は未処理で、無視していた**（`ANALYSIS-IdP.md` の C-3）。"
+                    + "**`max_age` の再認証と同じ経路**を使う — 印を残してサインアウトし、同じ URL に戻す。"
+                    + "**印（`re_auth_at`）が無いと、戻ってきた要求にも `prompt=login` が付いているので"
+                    + "永久に送り返すことになる。**",
+                    "OIDC Core §3.1.2.1 / #272 の段階 2");
+
+                // **同意を記録しておく。** prompt を付けなければ飛ぶ状態にしてから測る。
+                await Flows.EnsureConsentAsync(client, reg);
+
+                r.Target("client_name=" + KnownClients.TestClient + " / prompt=login");
+                r.Step("(1) prompt=login を付けて認可リクエストを送る");
+
+                AuthZResponse authz = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2728", "login"));
+
+                r.Verify("認可コードは発行されない", string.IsNullOrEmpty(authz.Code),
+                    "code なし", string.IsNullOrEmpty(authz.Code) ? "なし" : "**発行された**");
+
+                r.Verify("同じ URL へ戻される（再認証の経路）",
+                    !string.IsNullOrEmpty(authz.Location)
+                        && authz.Location.Contains("/authorize"),
+                    "/authorize へ戻る",
+                    string.IsNullOrEmpty(authz.Location)
+                        ? "**移らない**（" + authz.ToString() + "）" : authz.Location);
+
+                Skip.If(string.IsNullOrEmpty(authz.Location), "戻り先が無いので、先に進めません。");
+
+                r.Step("(2) 戻された先は、サインイン画面（サインアウトされている）");
+
+                HttpResponseMessage again = await client.GetAsync(authz.Location);
+
+                string toLogin = (again.Headers.Location == null)
+                    ? "" : again.Headers.Location.ToString();
+
+                r.Verify("サインイン画面へ送られる", toLogin.Contains("/Account/Login"),
+                    "/Account/Login へ",
+                    string.IsNullOrEmpty(toLogin)
+                        ? "**移らない**（HTTP " + ((int)again.StatusCode) + "）" : toLogin);
+
+                r.Step("(3) 再認証すると先へ進む（繰り返しにならない）");
+
+                // **force が要る。** サーバ側はサインアウトしているが、
+                //   **IdPClient は 「サインイン済み」の印を持っている**ので、
+                //   **force 無しでは素通りする**（実測で踏んだ）。
+                await client.SignInAsync(force: true);
+
+                AuthZResponse after = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2728b", "login"));
+
+                r.Verify("認可コードが返る（印が効いている）",
+                    !string.IsNullOrEmpty(after.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(after.Code)
+                        ? "**返らなかった**（" + after.ToString() + "）" : "あり（値は伏せる）");
+
+                r.Note("**印が無いと、ここで永久に送り返す。** `max_age=0` でも同じことが起きるので、"
+                    + "**#247 で入れた印（`re_auth_at`）をそのまま使っている。**");
+
+                r.Note("**`prompt=none login` は段階 1 で `invalid_request`** になる（`none` の併記）。"
+                    + "**「UI を出せないのに再認証」にはならない。**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-272.9 prompt=select_account は同意画面を出す</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27209_promptのselect_accountは同意画面を出す(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-272.9",
+                    "prompt=select_account は、同意済みでも同意画面を出す（アカウントを選べる画面へ）",
+                    "**`prompt=select_account` は「アカウントを選ばせろ」という指定**（OIDC Core §3.1.2.1）。"
+                    + "**以前は未処理で、無視していた**。"
+                    + "**この実装はアカウントの一覧から選ぶ仕組みを持っていない**ので、"
+                    + "**同意画面を出す**ところまでである"
+                    + "（その画面に「別のアカウントでログイン」が在り、そこから切り替えられる）。",
+                    "OIDC Core §3.1.2.1 / #272 の段階 2");
+
+                await Flows.EnsureConsentAsync(client, reg);
+
+                r.Target("client_name=" + KnownClients.TestClient + " / prompt=select_account");
+                r.Step("(1) prompt を付けなければ、同意画面は出ない（記録が効いている）");
+
+                AuthZResponse without = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2729a", null));
+
+                r.Verify("同意画面は出ない", !without.NeedsConsent,
+                    "出ない", without.NeedsConsent ? "**出た**" : "出なかった（code あり）");
+
+                r.Step("(2) prompt=select_account を付けると、同意画面が出る");
+
+                AuthZResponse with = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2729b", "select_account"));
+
+                r.Verify("同意画面が出る", with.NeedsConsent,
+                    "同意画面が返る",
+                    with.NeedsConsent ? "返った" : "**返らなかった**（" + with.ToString() + "）");
+
+                r.Step("(3) その画面から、別のアカウントへ切り替えられる");
+
+                r.Verify("「別のアカウントでログイン」が在る",
+                    with.NeedsConsent && !string.IsNullOrEmpty(with.Body)
+                        && with.Body.Contains("submit.Login"),
+                    "submit.Login が在る",
+                    (with.NeedsConsent && !string.IsNullOrEmpty(with.Body)
+                        && with.Body.Contains("submit.Login")) ? "在る" : "**無い**");
+
+                r.Note("**アカウントの一覧から選ぶ仕組みは持っていない。** "
+                    + "仕様（§3.1.2.1）は「選ばせろ」だが、**この実装は 1 利用者ずつのサインインしか持たない**。"
+                    + "**`account_selection_required` を返す道もあった**が、"
+                    + "**切り替えの口が画面に在るので、画面を出す方を選んだ。**");
 
                 r.Done();
             }
