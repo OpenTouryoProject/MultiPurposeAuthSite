@@ -5351,6 +5351,29 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 - **値そのものは比べていない。** code / id_token / access_token は毎回変わるため、**返る項目の有無**で比べている。**どの項目が返るかは `response_type` の集合で決まる**ので、これで十分である。
 - **大文字小文字の扱いは変えていない。****仕様では値は case-sensitive** だが、**以前から `ToLower()` していて `CODE` も通っていた。** **弾く範囲が変わるだけ**なので、寛容さを残した。
 
+## RT-269.1 2000 文字を超えるクライアント登録も、保存でき、読み出せる
+
+| | |
+|---|---|
+| 観点 | **`UnstructuredData` の幅が 3 方言で揃っていなかった**（#269）。**SQL Server は `nvarchar(max)`、Oracle と PostgreSQL は 2000 文字**で、**SQL Server で保存できる登録が Oracle / PostgreSQL では保存できなかった**（`22001: value too long`）。**クライアント登録は全項目が 1 つの JSON に入る**ので（`Saml2OAuth2Data.UnstructuredData`）、**画面から入れられる範囲でも 2000 文字を超える**（`Const.MaxLengthOfUri` = 512 の項目が 5 つ ＋ JWK 2 本）。**Oracle は `NCLOB`、PostgreSQL は `text`** にした。 |
+| 根拠 | #269 / #266 で踏んだ |
+| テスト | `RT26901_2000文字を超える登録も保存でき読み出せる` |
+
+**手順**
+
+1. 保存できていれば、登録した web_origins で CORS が通る
+1. 24 件の末尾まで読めている（途中で切れていない）
+
+**検証（合否を判定する）**
+
+- /token が、長い登録の web_origins を許す
+- /token が、web_origins の末尾のオリジンも許す
+
+**補足**
+
+- **`mem` では、このテストは幅の問題を測れない**（辞書なので上限が無い）。**効くのは `sql` / `ora` / `npg`** で、**直す前は Oracle / PostgreSQL で種データの作成そのものが失敗していた**（`GET /Account/Login` が HTTP 500 になり、その対象のテストが大量に落ちる）。**4 ストアの実測は `TESTING.md` 1 節。**
+- **切れていないことを、先頭と末尾の両方で見ている。****幅が足りないと、黙って切り捨てる方言もある**ため（今回の Oracle / PostgreSQL は例外にしたが、設定で変わりうる）。
+
 # FA
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

@@ -31,6 +31,7 @@
 //*  2026/10/03  玄人 幸道         新規（#264）
 //*  2026/10/04  玄人 幸道         TestClient_15（test_self_code_manage）を追加（C-10）
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
+//*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -265,6 +266,24 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             },
             new Entry()
             {
+                // **2000 文字を超える登録**（#269）。
+                //   **Oracle / PostgreSQL の UnstructuredData が 2000 文字だと保存できない。**
+                //   **画面から入れられる範囲で作ってある**（各項目は Const.MaxLengthOfUri = 512 以内）。
+                //   **`web_origins` に 24 件**＋**長い redirect_uri を 2 つ**で、
+                //   JWK 2 本と合わせて **2000 文字を超える**。
+                //   **保存できていれば、先頭のオリジンで CORS が通る**（`RT-269.1`）。
+                ClientName = "TestClient_17", ClientId = "e2e0tc17000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient",
+                Overrides = new Dictionary<string, string>()
+                {
+                    { "client_secret", "" },
+                    { "web_origins", "https://o001.example https://o002.example https://o003.example https://o004.example https://o005.example https://o006.example https://o007.example https://o008.example https://o009.example https://o010.example https://o011.example https://o012.example https://o013.example https://o014.example https://o015.example https://o016.example https://o017.example https://o018.example https://o019.example https://o020.example https://o021.example https://o022.example https://o023.example https://o024.example" },
+                    { "redirect_uri_saml", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+                    { "post_logout_redirect_uri", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+                }
+            },
+            new Entry()
+            {
                 // **CORS の許可オリジンを登録で決めたクライアント**（#266）。
                 //   **`client_secret` を空にして public にする**（CORS は public だけに効く）。
                 //   **`web_origins` が `redirect_uri_code` に勝つ**ことを測るため、
@@ -374,6 +393,10 @@ namespace MultiPurposeAuthSite.Extensions.Sts
             {
                 case "client_secret":
                     model.ClientSecret = value;
+                    break;
+
+                case "redirect_uri_saml":
+                    model.RedirectUriSaml = value;
                     break;
 
                 case "redirect_uri_code":

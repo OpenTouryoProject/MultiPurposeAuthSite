@@ -246,17 +246,17 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 
 ### 4 つのストアの実測
 
-**実測 2026/10/04**（#266 で `DataProvider.GetAll` を足した後）。
+**実測 2026/10/06**（#269 で `UnstructuredData` の型を揃えた後）。
 ビルドは net48 / net10.0 とも エラー 0 / 警告 0。
 
 | ストア | 成功 | 失敗 | Skip | 備考 |
 |---|---|---|---|---|
-| `mem`（既定） | **488** | **0** | 1 | `RT-246.3` core（mTLS フックの副作用） |
-| `sql` | **488** | **0** | 1 | 同上 |
-| `ora` | **488** | **0** | 1 | 同上 |
-| `npg` | **246** | **0** | 243 | **net48 版を起動しないぶんが Skip**（`Npgsql` が `#if NETCORE`。netfx 242）＋ 上記 1 件 |
+| `mem`（既定） | **490** | **0** | 1 | `RT-246.3` core（mTLS フックの副作用） |
+| `sql` | **490** | **0** | 1 | 同上 |
+| `ora` | **490** | **0** | 1 | 同上 |
+| `npg` | **247** | **0** | 244 | **net48 版を起動しないぶんが Skip**（`Npgsql` が `#if NETCORE`。netfx 243）＋ 上記 1 件 |
 
-**この回で、DB ストアだけで出る失敗が 2 つ出た。** どちらも直してある（下記）。
+**DB ストアだけで出る失敗が 3 つ出た。** どれも直してある（下記）。
 
 > **#260 を直したときの記録（2026/10/03）** : 4 ストアとも **474 / 0 / 3**
 > （`npg` は 239 / 0 / 238）。**その後 #261〜#267 でケースが増え**、
@@ -270,10 +270,34 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 |---|---|---|---|
 | 1 | **`core` が 247 件 Skip**（`sql`） | **初回の種データ作成が重く**（クライアント登録 17 件）、並行して走ったクラスの**到達性プローブが 10 秒で時間切れ**。`_reachable = false` を掴むと、その対象が全部 Skip になる | **プローブを 3 回まで試す**（`TargetInfo.Probe`。間隔 5 秒） |
 | 2 | **`npg` で 190 件失敗**（`GET /Account/Login` が HTTP 500） | **画面の選択肢（`Ddl*Items`）が登録 JSON に直列化されていた。** 登録 1 件が **3,108 文字**になり、**Oracle / PostgreSQL の `UnstructuredData`（2000 文字）に収まらない**（`22001`） | **`Ddl*Items` に `[JsonIgnore]`**（`ManageAddSaml2OAuth2DataViewModel`） |
+| 3 | 2 を直しても、**長い登録はまだ入らない** | **`UnstructuredData` の型が 3 方言で揃っていない**（#269） | **Oracle は `NCLOB`、PostgreSQL は `text`**（下記） |
 
 > **2 は、画面から登録するときにも起きていた**（E2E が画面登録を駆動していなかったので見えていなかった）。
-> **`UnstructuredData` の幅は 3 方言で揃っていない** — SQL Server は `nvarchar(max)`、
-> **Oracle と PostgreSQL は 2000**。**揃えるのは別の課題**である。
+
+#### `UnstructuredData` の型を 3 方言で揃えた（#269）
+
+**揃っていなかった。** **SQL Server だけ上限が無く、Oracle と PostgreSQL は 2000 文字**だった。
+**SQL Server で保存できる登録が、Oracle / PostgreSQL では保存できない**という形である。
+
+| テーブル | SQL Server | Oracle | PostgreSQL |
+|---|---|---|---|
+| `Users` / `Saml2OAuth2Data` / `FIDO2Data` / `CibaData` | `nvarchar(max)` | **`NVARCHAR2(2000)` → `NCLOB`** | **`varchar(2000)` → `text`** |
+
+**Oracle は単純に広げられない。** **`NVARCHAR2` は 2000 文字（4000 バイト）が上限**で、
+**`MAX_STRING_SIZE = EXTENDED`**（データベース全体の設定。戻せない）か **`NCLOB`** しかない。
+**配備側の設定に踏み込まない**ので `NCLOB` にした。
+
+**クライアント登録は全項目が 1 つの JSON に入る**（`Saml2OAuth2Data.UnstructuredData`）ので、
+**画面から入れられる範囲でも 2000 文字を超える** —
+`Const.MaxLengthOfUri`（**512**）の項目が 5 つ ＋ JWK 2 本（約 890 文字）。
+
+- **E2E** : **`RT-269.1`**（`web_origins` 24 件 ＋ 長い `redirect_uri` 2 つで
+  **2000 文字を超える登録**を作り、**先頭と末尾のオリジンの両方で CORS が通る**ことを見る）
+- **`mem` では幅の問題を測れない**（辞書なので上限が無い）。**効くのは `sql` / `ora` / `npg`**
+- **既存のデータベースは作り直すのが早い**（`store/` は使い捨て）。
+  **`ALTER` で広げるなら**、PostgreSQL は `ALTER TABLE ... ALTER COLUMN ... TYPE text`、
+  **Oracle は `NVARCHAR2` から `NCLOB` へ直接変更できない**ので
+  **列を足して移してから入れ替える**
 
 **以前の実測（2026/10/02）** : `sql` と `ora` は**毎回 1 件ほど落ちていた**
 （`RT-230.3` / `RT-233.2` など。回すたびに変わる）。
@@ -607,7 +631,7 @@ TC が倒れている状態の EX は、拡張の問題なのか土台の問題�
 ### net48 版も同時に測る
 
 **`-Launch` は 2 つのサイトを立てる。** **原本のケースを、両系統に同じだけ流す。**
-実測 2026/10/04 : **489 件**（原本 247 件 × 2 − 片系統だけのもの）。**成功 488 / 失敗 0 / Skip 1**。**数は増え続けるので、ここに書いた値は目安である**（正確な数は実行結果と `TESTCASES.md` を見る）。
+実測 2026/10/06 : **491 件**（原本 248 件 × 2 − 片系統だけのもの）。**成功 490 / 失敗 0 / Skip 1**。**数は増え続けるので、ここに書いた値は目安である**（正確な数は実行結果と `TESTCASES.md` を見る）。
 
 | 対象 | 待ち受け | 立て方 |
 |---|---|---|
@@ -1184,6 +1208,26 @@ E2ETests OK    220    0    1 146.7
 | 証明書 | `SpRp_RsaPfxFilePath` の pfx。Request Object の署名に使う |
 | `FxContainerization` | `ON`。**待ち受け URL の上書きに要る**（4 節）。雛形には入っている |
 | IIS Express | net48 版を測るときだけ。無ければその分が Skip される |
+| **ASP.NET 状態サービス**（`aspnet_state`） | **net48 版を測るときだけ。** `Web.config` が `mode="StateServer"`（`tcpip=127.0.0.1:42424`）なので、**止まっていると画面が HTTP 500 になる**（下記） |
+
+#### net48 版の画面が 500 になるのに、ログに例外が出ないとき
+
+**`aspnet_state` が止まっていないかを見る。** **スタートアップが「手動」なので、OS の再起動で止まる。**
+
+```powershell
+Get-Service aspnet_state          # Stopped なら
+Start-Service aspnet_state        # 管理者権限が要る
+Set-Service aspnet_state -StartupType Automatic   # 毎回やりたくないなら
+```
+
+**見分け方。** **`/.well-known/openid-configuration` は 200 を返すのに、`/Account/Login` が 500** になる。
+**Web API の口はセッションを使わないが、画面は使う**ためである。
+**応答の本文に理由が出る**（「セッション状態要求をセッション状態サーバーに対して作成できませんでした」）。
+**アプリのログ（`root/files/resource/Log`）には出ない。** ASP.NET が先に落としている。
+
+> **全部の口が 500 になるときは、別の原因**である（`OAuth2ClientsInformation` を
+> 環境変数で渡していた頃の、環境ブロックの上限。1 節）。
+> **画面だけが 500 なら、まずこのサービスを疑う。**
 
 **`-Launch` は、mTLS のテスト（`FA-6`）のために net10.0 版にクライアント証明書を要求させる**
 （`Tests\MtlsTestHook`。#226。net48 版は `-NetFxMtls` のときだけ）。

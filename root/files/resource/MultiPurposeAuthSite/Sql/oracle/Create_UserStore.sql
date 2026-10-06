@@ -1,4 +1,4 @@
--- For the information of using Oracle database and ODP.NET managed driver
+﻿-- For the information of using Oracle database and ODP.NET managed driver
 -- for the user store of multi-purpose authentication site, see the following site.
 --     Oracle11gXE + ODP.NET Managed Driver - マイクロソフト系技術情報 Wiki
 --     https://techinfoofmicrosofttech.osscons.jp/index.php?Oracle11gXE%20%2B%20ODP.NET%20Managed%20Driver
@@ -24,7 +24,7 @@ CREATE TABLE "Users"(              -- Users
     -- 追加の情報
     "ClientID" NVARCHAR2(256) NOT NULL,
     "PaymentInformation" NVARCHAR2(256) NULL,
-    "UnstructuredData" NVARCHAR2(2000) NULL,
+    "UnstructuredData" NCLOB NULL,
     "FIDO2PublicKey" NVARCHAR2(2000) NULL,
     "DeviceToken" NVARCHAR2(2000) NULL,
     "CreatedDate" TIMESTAMP NOT NULL,
@@ -112,14 +112,14 @@ CREATE TABLE "CustomizedConfirmation"(
 
 CREATE TABLE "Saml2OAuth2Data"(
     "ClientID" NVARCHAR2(256) NOT NULL,      -- PK
-    "UnstructuredData" NVARCHAR2(2000) NULL, -- Saml2/OAuth2 Unstructured Data
+    "UnstructuredData" NCLOB NULL, -- Saml2/OAuth2 Unstructured Data
     CONSTRAINT "PK.Saml2OAuth2Data" PRIMARY KEY ("ClientID")
 );
 
 CREATE TABLE "FIDO2Data"(
     "PublicKeyId" NVARCHAR2(256) NOT NULL,   -- PK
     "UserName" NVARCHAR2(256) NOT NULL,      -- Value
-    "UnstructuredData" NVARCHAR2(2000) NULL, -- FIDO2 Unstructured Data
+    "UnstructuredData" NCLOB NULL, -- FIDO2 Unstructured Data
     CONSTRAINT "PK.FIDO2Data" PRIMARY KEY ("PublicKeyId")
 );
 
@@ -144,7 +144,7 @@ CREATE TABLE "CibaData"(
     "AuthReqId" NVARCHAR2(800) NOT NULL,         -- 乱数(800)
     "AuthReqExp" NUMBER(19) NOT NULL,            -- UNIX時刻(long)
     "AuthZCode" NVARCHAR2(64) NOT NULL,          -- AuthZCode
-    "UnstructuredData" NVARCHAR2(2000) NULL,     -- binding_message, user_code, etc.
+    "UnstructuredData" NCLOB NULL,     -- binding_message, user_code, etc.
     "Result" NUMBER(3) NULL,                     -- Result of CIBA
     "UserId" NVARCHAR2(128) NULL,                -- 承認する利用者 (Users.Id)
     CONSTRAINT "PK.CibaData" PRIMARY KEY ("Id")

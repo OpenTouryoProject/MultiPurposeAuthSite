@@ -48,6 +48,7 @@
 //*  2026/10/03  玄人 幸道         差し込みを種データに寄せ、client_idを固定値にした（#264）
 //*  2026/10/04  玄人 幸道         TestClient_15とtest_self_code_manageの解決を追加（C-10）
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
+//*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
 //**********************************************************************************
 
 using System;
@@ -249,6 +250,20 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
         /// </remarks>
         public const string TestClient_16 = "TestClient_16";
 
+        /// <summary>
+        /// TestClient（normal）を写し、**2000 文字を超える登録**にした public クライアント（#269）。
+        /// **構成ファイルには無い。** 種データが作る（#264）。
+        /// </summary>
+        /// <remarks>
+        /// **Oracle / PostgreSQL の `UnstructuredData` が 2000 文字だと保存できない。**
+        /// **画面から入れられる範囲で作ってある**（各項目は `Const.MaxLengthOfUri` = 512 以内）。
+        /// **保存できていれば、`web_origins` の先頭のオリジンで CORS が通る**（`RT-269.1`）。
+        /// </remarks>
+        public const string TestClient_17 = "TestClient_17";
+
+        /// <summary>TestClient_17 の web_origins の先頭（#269）</summary>
+        public const string LongRegistrationOrigin = "https://o001.example";
+
         /// <summary>TestClient_16 に登録した web_origins（#266）</summary>
         public const string WebOrigin = "https://spa.example";
 
@@ -279,6 +294,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                 { KnownClients.TestClient_6,  "e2e0tc06000000000000000000000000" },
                 { KnownClients.TestClient_7,  "e2e0tc07000000000000000000000000" },
                 { KnownClients.TestClient_16, "e2e0tc16000000000000000000000000" },
+                { KnownClients.TestClient_17, "e2e0tc17000000000000000000000000" },
                 { KnownClients.TestClient_15, "e2e0tc15000000000000000000000000" },
                 { KnownClients.TestClient4_2, "e2e0tc42000000000000000000000000" },
                 { KnownClients.TestClient4_3, "e2e0tc43000000000000000000000000" },
@@ -738,6 +754,12 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             {
                 // client_secret は写す元のまま（登録で変えたのは alg だけ。#129 の段階 2〜4）。
                 sourceName = KnownClients.TestClient;
+            }
+            else if (clientName == KnownClients.TestClient_17)
+            {
+                // **2000 文字を超える登録**（#269）。**client_secret は空**（public）。
+                sourceName = KnownClients.TestClient;
+                overriddenSecret = "";
             }
             else if (clientName == KnownClients.TestClient_16)
             {
