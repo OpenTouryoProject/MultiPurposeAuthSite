@@ -115,6 +115,7 @@
 //*  2026/10/04  玄人 幸道         CORSで許可するオリジンの導出を追加（#265）
 //*  2026/10/04  玄人 幸道         response_typeを順不同の集合として扱う（#267）
 //*  2026/10/04  玄人 幸道         CORSのオリジンにweb_originsと画面登録を含める（#266）
+//*  2026/10/06  玄人 幸道         CORSの許可オリジンをキャッシュしないようにした（#271）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4054,57 +4055,28 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// **`*` は受けない。** 書かれていても落とす（`ProductionCheck` が警告する）。
         /// **カスタム スキーム**（`com.opentouryo:/oauthredirect` など）**も落とす。**
         /// ネイティブの折り返し先はブラウザの話ではないため。
+        ///
+        /// **キャッシュしない**（#271）。**毎回作る。**
+        ///
+        /// 以前は 60 秒のキャッシュを持ち、登録の保存で破棄していた。
+        /// **やめた理由は 3 つ。**
+        ///
+        /// | | |
+        /// |---|---|
+        /// | **読む量が減った** | #270 で専用列に切り出したので、`DataProvider.GetAllUris` は **URI 関連の 6 列だけ**を読む。以前は**全行の JSON を読んで 1 件ずつ逆直列化**していた |
+        /// | **複数インスタンスでは正しく捨てられない** | `static` なので、**他のインスタンスの分は捨てられない**。登録を保存してから最長 60 秒、そちらでは新しいオリジンが許されなかった |
+        /// | **間接的に消える経路を捕まえていなかった** | **利用者の削除**（`UsersAdmin`）で登録も FK で消えるが、破棄を呼んでいなかった。**消した登録のオリジンが、最長 60 秒許され続けていた** |
+        ///
+        /// **呼ばれるのは、`Origin` 付きの要求のときだけ**である
+        /// （`MpasBrowserApi` ポリシー。**公開情報の口は全開なので、この一覧を引かない**）。
+        /// **重くなったときは、共有キャッシュ（`IDistributedCache`。#256）を考えること。
+        /// **プロセス内に戻すのは、上の 2 つ目・3 つ目を戻すことになる。**
         /// </remarks>
         public static List<string> GetCorsAllowedOrigins()
         {
-            lock (CmnEndpoints._corsLock)
-            {
-                if (CmnEndpoints._corsOrigins != null
-                    && DateTime.Now < CmnEndpoints._corsExpiresAt)
-                {
-                    return CmnEndpoints._corsOrigins;
-                }
-
-                CmnEndpoints._corsOrigins = CmnEndpoints.BuildCorsAllowedOrigins();
-                CmnEndpoints._corsExpiresAt = DateTime.Now + CmnEndpoints.CorsCacheTtl;
-
-                return CmnEndpoints._corsOrigins;
-            }
+            // **キャッシュしない**（#271）。理由は上の remarks。
+            return CmnEndpoints.BuildCorsAllowedOrigins();
         }
-
-        /// <summary>キャッシュした許可オリジンを捨てる（#266）</summary>
-        /// <remarks>
-        /// **画面からクライアント登録を保存したときに呼ぶ**（`Manage/AddSaml2OAuth2Data` の POST）。
-        /// **呼ばなくても期限で捨てる**が、**その間は新しい登録が効かない。**
-        ///
-        /// **複数インスタンスでは、他のインスタンスのキャッシュは捨てられない。**
-        /// **期限（下記）が、その取りこぼしを拾う。**
-        /// 共有キャッシュにするには `AddDistributedMemoryCache`（E-2）が要る。
-        /// </remarks>
-        public static void InvalidateCorsAllowedOrigins()
-        {
-            lock (CmnEndpoints._corsLock)
-            {
-                CmnEndpoints._corsOrigins = null;
-            }
-        }
-
-        /// <summary>キャッシュの寿命（#266）</summary>
-        /// <remarks>
-        /// **保存時の明示的な破棄で足りない分を拾うための保険**である。
-        /// **利用者の削除（`UsersAdmin`）など、登録が間接的に消える経路**は捕まえていない。
-        /// **短すぎると毎回 DB を読み、長すぎると消した登録が効き続ける。**
-        /// </remarks>
-        private static readonly TimeSpan CorsCacheTtl = TimeSpan.FromSeconds(60);
-
-        /// <summary>キャッシュした許可オリジン（#266）</summary>
-        private static List<string> _corsOrigins = null;
-
-        /// <summary>キャッシュの期限（#266）</summary>
-        private static DateTime _corsExpiresAt = DateTime.MinValue;
-
-        /// <summary>キャッシュの番をする錠（#266）</summary>
-        private static readonly object _corsLock = new object();
 
         /// <summary>許可オリジンを作る（#266）</summary>
         /// <returns>オリジンの一覧（重複なし）</returns>

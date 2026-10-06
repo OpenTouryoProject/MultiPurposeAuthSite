@@ -253,7 +253,7 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 
 ### 4 つのストアの実測
 
-**実測 2026/10/06**（#270 でクライアント登録を専用列に切り出した後）。
+**実測 2026/10/06**（#271 で CORS の許可オリジンのキャッシュをやめた後。件数は #270 から変わらない）。
 ビルドは net48 / net10.0 とも エラー 0 / 警告 0。
 
 | ストア | 成功 | 失敗 | Skip | 備考 |
@@ -314,6 +314,88 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
   **`ALTER` で広げるなら**、PostgreSQL は `ALTER TABLE ... ALTER COLUMN ... TYPE text`、
   **Oracle は `NVARCHAR2` から `NCLOB` へ直接変更できない**ので
   **列を足して移してから入れ替える**
+
+#### CORS の許可オリジンのキャッシュをやめた（#271）
+
+**`GetCorsAllowedOrigins` は毎回作るようになった。**
+**話題になるのは「要求ごとに DB を読むのか」だが、**
+**引くのは `Origin` 付きの要求のときだけ**である。
+
+| | |
+|---|---|
+| **引く口** | `MpasBrowserApi` ポリシーのみ（`/token` `/userinfo` `/SetDeviceToken` `/ciba_result` `/2fa_result`） |
+| **公開情報の口** | **全開なので引かない**（`MpasPublicDocs`） |
+| **通しの中で `Origin` を送る箇所** | **12**（すべて `CorsTests`） |
+
+**通しの所要時間は、この変更の指標にならない。**
+`sql` は**同じコードで 170 秒と 229 秒**を記録しており、
+このセッションでは **131〜229 秒**の幅で変動した。
+**1 要求あたりのコストは、下のように別で測る。**
+
+##### 1 要求あたりのコスト（実測 2026/10/06）
+
+**同じミドルウェアで A/B にする。**
+**一覧を引くポリシー（`MpasBrowserApi`）と、引かないポリシー（`MpasPublicDocs`。全開）**に、
+**同じプリフライト（`OPTIONS`）を 300 回ずつ**当てる。
+**プリフライトなので、本体の処理は走らない。**
+
+| `UserStoreType` | 引かない | 引く | **差** |
+|---|---|---|---|
+| `mem` | 0.22 ms（p50 0.20） | 0.29 ms（p50 0.28） | **＋0.07 ms** |
+| `sql`（`store/` 1434、19 行） | 0.22 ms（p50 0.20） | **2.10 ms**（p50 2.05 / p95 2.80 / 最大 7.86） | **＋1.9 ms** |
+
+**尺度の参考** : 同じ機械で `GET /.well-known/openid-configuration`（200。
+Discovery の JSON を組む）が **平均 0.96 ms**（p95 1.26）。
+
+**キャッシュが当たっていた頃のコストは、「引かない」の 0.2 ms 相当**である
+（錠を取って `List` を返すだけ）。**DB ストアでは 1 要求あたり約 1.9 ms の上乗せ**になった。
+
+| | |
+|---|---|
+| **払うのはクロスオリジンの要求だけ** | `Origin` が無ければ **CORS の評価そのものが走らない** |
+| **SPA の 1 回の呼び出し** | **プリフライト ＋ 本体の 2 要求**なので、実質 **＋約 3.8 ms**（`sql`） |
+| **測っていないこと** | **`/token` 自体のコストとの比**。署名と DB 書き込みを伴うので相対的には小さいはずだが、**数値は持っていない** |
+| **条件** | **ローカルの Docker の SQL Server** での値。**DB が遠い配備では比例して増える** |
+
+**重くなったときは `IDistributedCache`**（#256）。
+**redis 往復 1 回に置き換わる**が、**net10.0 だけ**で、
+`SessionStoreType` が `mem` なら効かない。
+
+###### 測り方の記録（同じことをするなら）
+
+**クライアント側の時間では測れない。**
+PowerShell の `HttpClient` では **1 要求約 9 ms のオーバヘッド**が乗り、
+**0.2〜2 ms の信号が埋もれる。**
+
+**実際に一度しくじった。** PowerShell で測った「＋0.72 ms / ＋0.19 ms」は、
+**要求がサーバに届いていなかった**（Kestrel のログに 4 行しか無かった）。
+**数値が出ていても、当たっているとは限らない。**
+
+```powershell
+# サイトを単体で起動する（パスの前置きは付かないので、口は / 直下）
+cd root\programs\MultiPurposeAuthSiteCore\MultiPurposeAuthSiteCore\bin\Debug\net10.0
+$env:FxContainerization = 'ON'; $env:ASPNETCORE_URLS = 'https://localhost:44300'
+Start-Process .\MultiPurposeAuthSite.exe -RedirectStandardOutput "$env:TEMP\mpas.out.log"
+
+# 種データを作らせる（これが無いと登録が 0 件になる）
+Invoke-WebRequest https://localhost:44300/Account/Login -SkipCertificateCheck
+
+# curl で当てる（url = を並べると接続を使い回す）
+curl.exe --config preflight.cfg
+
+# 時間は Kestrel のログから読む
+#   "Request finished HTTP/1.1 OPTIONS <url> - 204 - - 2.0510ms"
+```
+
+**`Access-Control-Allow-Origin` が返っていることを先に確かめること。**
+**許可されていなくても 204 は返る**ので、状態コードだけでは分からない。
+
+**E2E は足していない。**
+**この変更で消える「最長 60 秒の窓」は、インスタンス 1 つでは見えない**
+（サイトは 1 インスタンスずつしか立てない）。
+**利用者の削除で消える側は 1 インスタンスでも見える**が、
+**種データのクライアントを消すことになり、同じ通しの他のテストを壊す**。
+**許可オリジンの計算そのものは `RT-265.1` / `RT-266.1` / `RT-269.1` が見ている。**
 
 #### クライアント登録を専用列に切り出した（#270）
 

@@ -24,6 +24,8 @@
 //*  2026/10/02  玄人 幸道         メアドの追加・削除のアクションを削除（#151 の段階 5）
 //*  2026/10/04  玄人 幸道         折り返し先の既定をtest_self_code_manageに（C-10）
 //*  2026/10/04  玄人 幸道         登録の保存でCORSのキャッシュを捨てる（#266）
+//*  2026/10/06  玄人 幸道         クライアント登録を専用列に保存する（#270）
+//*  2026/10/06  玄人 幸道         CORSの許可オリジンのキャッシュをやめた（#271）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -1929,11 +1931,6 @@ namespace MultiPurposeAuthSite.Controllers
                                 // ClientIDに変更がない場合、更新操作
                                 Sts.DataProvider.Update(user.ClientID, model);
 
-                                // **CORS の許可オリジンのキャッシュを捨てる**（#266）。
-                                //   登録の web_origins / redirect_uri_* から作っているため。
-                                //   **呼ばなくても期限で捨てる**が、その間は新しい登録が効かない。
-                                Token.CmnEndpoints.InvalidateCorsAllowedOrigins();
-
                                 // 再ログイン
                                 await this.ReSignInAsync();
                                 return RedirectToAction("Index", new { Message = EnumManageMessageId.AddSaml2OAuth2DataSuccess });
@@ -1953,9 +1950,6 @@ namespace MultiPurposeAuthSite.Controllers
                                     // 追加操作（Memory Provider があるので del -> ins にする。）
                                     if (!string.IsNullOrEmpty(temp)) Sts.DataProvider.Delete(temp);
                                     Sts.DataProvider.Create(user.ClientID, model);
-
-                                    // **CORS の許可オリジンのキャッシュを捨てる**（#266）。
-                                    Token.CmnEndpoints.InvalidateCorsAllowedOrigins();
 
                                     // 再ログイン
                                     await this.ReSignInAsync();

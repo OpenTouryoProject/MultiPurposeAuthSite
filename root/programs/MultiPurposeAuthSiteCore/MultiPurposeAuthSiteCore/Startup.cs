@@ -516,7 +516,9 @@ namespace MultiPurposeAuthSite
                 //   **要求ごとに判定する**（#266）。**起動時に配列を固定しない。**
                 //   **画面から登録したクライアントのオリジンは、起動の後に増える**
                 //   （種データも含めて、サイトが動き出してから作られる）。
-                //   `GetCorsAllowedOrigins` はキャッシュを持つので、毎要求で DB は読まない。
+                //   `GetCorsAllowedOrigins` は**毎回作る**（#271）。
+                //   **呼ばれるのは `Origin` 付きの要求のときだけ**で、読むのは
+                //   URI 関連の 6 列だけ（#270）。キャッシュは取りこぼしを生んでいた。
                 o.AddPolicy(Const.CorsPolicyBrowserApi, builder =>
                 {
                     builder
