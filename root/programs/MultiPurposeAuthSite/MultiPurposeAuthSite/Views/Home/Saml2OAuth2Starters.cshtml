@@ -27,6 +27,7 @@
     //*  2026/09/28  玄人 幸道         prompt / max_age を選べるようにした（#246 の項目 3）
     //*  2026/09/28  玄人 幸道         SAML2 の 4 つ目の組み合わせを追加し、Hybrid-IdP の記述を直した（#246 の項目 2）
     //*  2026/09/29  玄人 幸道         OIDC ボタンが prompt=none を送ることを明記（#247）
+    //*  2026/10/06  玄人 幸道         prompt の解説を実態に合わせた（#272）
     //**********************************************************************************
 *@
 
@@ -78,18 +79,28 @@
         </div>
         <text>
             ※ <b>prompt / max_age は、認可エンドポイントへ行くボタンすべてに効く</b>（#246 の項目 3）。<br />
-            　　<b>prompt=none</b> … 認可画面を出さずに code が返る。<b>本来は UI が要るなら
-            <code>login_required</code> 等を返す指定</b>なので、**無音で認可が通ることを観測できる**
-            （`ANALYSIS-IdP.md` C-3）。<br />
-            　　<b>prompt=login / consent / select_account</b> … <b>この実装は未対応。無視される</b>ことを観測できる。<br />
-            　　<b>max_age</b> … 前回の認証からの経過時間の上限。<b>超えていれば再認証を求めるべき</b>もの。<br />
+            　　<b>prompt=none</b> … <b>UI を一切出さずに済ませるかを試す指定</b>。<br />
+            　　　　<b>同意が記録されていれば code が返る</b>。
+            <b>記録が無ければ <code>consent_required</code></b> が
+            <code>redirect_uri</code> へ返る（#272 の段階 2）。<br />
+            　　　　未サインインなら <code>login_required</code>（#254）、
+            max_age 超過でも <code>login_required</code>（#247）。<br />
+            　　　　<b><code>none</code> を他の値と併記すると <code>invalid_request</code></b>（#272 の段階 1）。<br />
+            　　<b>prompt=consent</b> … <b>同意済みでも、必ず同意画面を出す</b>（#272 の段階 2）。<br />
+            　　<b>prompt=login</b> … <b>再認証を求める</b>（サインアウトして同じ URL に戻る。#272 の段階 2）。<br />
+            　　<b>prompt=select_account</b> … <b>同意画面を出す</b>（その画面に
+            「別のアカウントでログイン」が在る）。
+            <b>アカウントの一覧から選ぶ仕組みは持っていない</b>。<br />
+            　　<b>max_age</b> … 前回の認証からの経過時間の上限。<b>超えていれば再認証を求める</b>。<br />
             　　OIDC のボタンは、指定しなければ従来どおり <code>max_age=600</code> を付ける。<br />
-            ※ <b>「Test Authorization Code Flow (OIDC)」は、prompt を選ばないと <code>prompt=none</code> を送る</b>
-            （同意画面を飛ばすため。#247 で気付いた）。<br />
-            　　このため <b>max_age の超過で「再認証」を見るときは、OIDC でないボタン
-            （Test Authorization Code Flow）を使う</b>か、prompt を明示的に選ぶ。<br />
-            　　<code>prompt=none</code> のままだと、仕様どおり <code>login_required</code> が
-            <code>redirect_uri</code> へ返る（#247）。
+            ※ <b>どのボタンも、prompt を選ばなければ prompt を送らない</b>（#272 の段階 2）。<br />
+            　　以前は「Test Authorization Code Flow (OIDC)」だけが
+            <b>固定で <code>prompt=none</code> を送っていた</b>が、
+            <b>同意を記録するようになったので外した</b>
+            （記録が無い配備では、初回に必ず <code>consent_required</code> になってしまう）。<br />
+            　　<b>初回だけ同意画面を通る</b>。2 回目以降は記録が効いて飛ぶ。<br />
+            　　同意を消すには、<b>「認可したアプリケーション」</b>
+            （<code>/Manage/ConsentGrants</code>）から取り消す。
         </text>
         <ul>
             <li>
