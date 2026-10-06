@@ -1817,7 +1817,8 @@ Entra ID の SPA プラットフォームと同じ考え方**である。
   （**空なら `redirect_uri_*` から導出**。Keycloak の Web origins / Auth0 の `web_origins` に相当）。
   **許可オリジンはキャッシュする**（60 秒 ＋ 登録の保存で破棄）。
   **複数インスタンスでは他のインスタンスのキャッシュを捨てられない**ので、
-  **期限が取りこぼしを拾う**（共有キャッシュには E-2 が要る）
+  **期限が取りこぼしを拾う**
+  （**E-2 が片付いた（#256）ので、`IDistributedCache` へ移せる**。載せ替えは未着手）
 - **3 重定義（E-3）も片付いた。** `AllowAllOrigins` は**自己テスト用の口だけ**が使う
   （`ValuesController` / `TestHybridFlow`。どちらも `IsLockedDownTestEndpoints` で経路ごと閉じる）
 - **E2E** : **`RT-265.1`**（公開情報は全開／ブラウザから叩く口は導出したオリジンだけ／
@@ -2015,8 +2016,9 @@ services.ConfigureApplicationCookie(options =>
 > - **有効にした配備では、有効にした時点で 1 度だけ全員がサインアウトする**（鍵の置き場が変わるため）。
 >   **以降は再起動に耐える**
 >
-> **`AddDistributedMemoryCache`（E-2）は、まだそのまま。**
-> **スケールアウトするには、そちらも要る。**
+> **`AddDistributedMemoryCache`（E-2）も ✅ 片付いた**（#256）。
+> **`SessionStoreType` で `sql` / `redis` を選べる。**
+> **DataProtection の鍵とセッションは別物**で、**両方そろって初めてスケールアウトできる。**
 
 `services.AddDataProtection().PersistKeysTo***()` を呼んでいない。
 既定では鍵はローカル プロファイル（コンテナでは揮発）に置かれるため、
@@ -2518,7 +2520,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | # | 内容 |
 |---|---|
 | E-1 | `Startup.cs` 方式のまま。.NET 6 以降の Minimal Hosting（`WebApplication.CreateBuilder`）へ寄せると、`Program.cs` の `IWebHost` / `IHost` のコメント アウト群も整理できる |
-| E-2 | `AddDistributedMemoryCache()` のままなのでスケールアウト不可。**DataProtection の方は ✅ 永続化できるようにした**（C-13 / #251。`DataProtectionKeyPath`） |
+| E-2 | **✅ 修正済み（#256）**。`AddDistributedMemoryCache()` 固定をやめ、**`SessionStoreType`（`mem` / `sql` / `redis`）で選べるようにした**（`UserStoreType` と同じ流儀）。**既定は `mem`**（キーを書かなければも `mem`。既存の配備は従来どおり）。**単一インスタンスならそれが正しい**ので、**雛形を `redis` にはしない**（[`TESTING.md`](../TESTING.md) 1 節の「既定は `mem`」と同じ理由）。**セッションには途中の状態が載っている** — ID 連携の `state` / `nonce` / `code_verifier`、管理画面の `access_token`、FIDO2 の challenge、自己テスト画面の値（**実測 13 キー・約 40 か所**）。`mem` のまま増やすと、要求が別のインスタンスへ回った時にそれらが読めず、**途中で失敗する**。**Cookie へ寄せる案（案 B）は採らなかった**（量と、`access_token` を Cookie に置きたくないため）。**`sql` は `Create_SessionCache.sql`**（`dotnet sql-cache create` と同じスキーマ。スキーマ名・表名は `Const` に置き、設定キーにしない）。**Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、**3 方言が揃わない唯一の設定**であり、それらのストアでは `redis` を使う。**`mem` 以外で接続文字列が空なら、`ConfigureServices` で落とす**（`IDistributedCache` は遅延で落ちるため、放っておくと「画面が 500 を返すだけ」になる）。**DataProtection の方は C-13 / #251 で済んでいる**（`DataProtectionKeyPath`）。**検証は通し × 3 通り ＋ ストア側の件数**（[`TESTING.md`](../TESTING.md) 1 節） |
 | E-3 | ✅ **CORS の 3 重定義を片付けた**（C-9 / #265）。既定のポリシーを置かず、口ごとに属性で選ぶ。`AllowAllOrigins` は自己テスト用の口だけが使う |
 | E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
 | E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
@@ -2578,7 +2580,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | ✅ **C-8 検証アルゴリズムの固定** #129 の段階 1 |
 | ✅ **C-9 CORS をエンドポイント単位に** #265 |
 | ✅ **C-10 `redirect_uri` の厳密比較** #263 ／ **テスト用抜け道の削除**（`test_self_code_manage`） |
-| ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251（`AddDistributedMemoryCache` は E-2 として残る） |
+| ✅ **C-12 Cookie 有効期限の設定反映** #223 ／ ✅ **C-13 DataProtection の永続化** #251 ／ ✅ **E-2 セッションの置き場を選べるように** #256（`SessionStoreType`） |
 | ✅ **C-17 宣言外のスコープと、クライアントに許されていないスコープを発行しない** #198 |
 | ✅ **C-22 `code_challenge` を送ったコードは `code_verifier` を必須にする** #245 |
 

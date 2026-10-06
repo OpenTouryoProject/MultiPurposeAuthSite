@@ -34,6 +34,7 @@
 //*  2026/10/01  玄人 幸道         TempData の Cookie にも接頭辞を付ける（#255）
 //*  2026/10/01  玄人 幸道         メアドの一意を常に必須にした（#151 の段階 3）
 //*  2026/10/04  玄人 幸道         CORSをエンドポイント単位にした（#265）
+//*  2026/10/06  玄人 幸道         セッションの置き場を設定で選べるようにした（#256）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -359,10 +360,65 @@ namespace MultiPurposeAuthSite
                 options.CheckConsentNeeded = context => true;
             });
 
-                // Sessionのモード
-                services.AddDistributedMemoryCache(); // 開発用
-                //services.AddDistributedSqlServerCache();
-                //services.AddDistributedRedisCache();
+            #region セッションの置き場（#256）
+
+            //  **プロセス内だと、インスタンスを増やすと壊れる。**
+            //    要求が別のインスタンスへ回ると、セッションに置いた値が読めない
+            //    （ID フェデレーションの `state` / `nonce` / `code_verifier`、
+            //     自己テスト画面の値、管理画面の `access_token`、FIDO2 の challenge）。
+            //
+            //  **`UserStoreType` と同じ流儀で選ぶ**（`SessionStoreType`）。
+            //    **書かなければ `mem`**（＝ 従来どおり）。
+            //
+            //  **net48 版は `Web.config` の `sessionState` で選ぶ**ので、ここは net10.0 版だけの話。
+            //
+            //  **Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い。**
+            //    **3 方言は揃わない**ので、それらのストアで複数インスタンスにするなら `redis`。
+            if (Config.SessionStoreType != EnumSessionStoreType.Memory
+                && string.IsNullOrEmpty(Config.SessionStoreConnectionString))
+            {
+                // **ここで落とす。** 接続文字列が無いと、
+                //   `IDistributedCache` は**最初にセッションを触った時に**落ちる。
+                //   起動は通ってしまうので、**画面が 500 を返すだけで理由が分からない。**
+                throw new InvalidOperationException(
+                    "SessionStoreType が " + Config.SessionStoreType
+                    + " なので、SessionStoreConnectionString が必要です。");
+            }
+
+            switch (Config.SessionStoreType)
+            {
+                case EnumSessionStoreType.SqlServer:
+
+                    // **テーブルが要る**（`Create_SessionCache.sql`）。
+                    //   スキーマ名・テーブル名は `Const` に置いてある（DDL と食い違わせない）。
+                    services.AddDistributedSqlServerCache(options =>
+                    {
+                        options.ConnectionString = Config.SessionStoreConnectionString;
+                        options.SchemaName = Const.SessionCacheSchemaName;
+                        options.TableName = Const.SessionCacheTableName;
+                    });
+
+                    break;
+
+                case EnumSessionStoreType.Redis:
+
+                    // **方言に依らない。** `UserStoreType` が `ora` / `npg` でも使える。
+                    services.AddStackExchangeRedisCache(options =>
+                    {
+                        options.Configuration = Config.SessionStoreConnectionString;
+                    });
+
+                    break;
+
+                default:
+
+                    // **プロセス内**（既定）。**単一インスタンスなら、これで足りる。**
+                    services.AddDistributedMemoryCache();
+
+                    break;
+            }
+
+            #endregion
 
             // Sessionを使用する。
             services.AddSession();

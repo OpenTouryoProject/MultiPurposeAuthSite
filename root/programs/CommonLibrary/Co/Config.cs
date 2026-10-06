@@ -54,6 +54,7 @@
 //*  2026/10/01  玄人 幸道         RequireUniqueEmail の設定を削除（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         TestUserSuffix を追加（#260）
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins を追加（#265）
+//*  2026/10/06  玄人 幸道         SessionStoreType / SessionStoreConnectionString を追加（#256）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
@@ -679,6 +680,68 @@ namespace MultiPurposeAuthSite.Co
             get
             {
                 return GetConfigParameter.GetConfigValue("CookieNamePrefix");
+            }
+        }
+
+        /// <summary>セッションの置き場（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`mem`（既定） / `sql` / `redis`。**
+        /// **書かなければ `mem`**（＝ 従来どおり。プロセス内のメモリ）。
+        ///
+        /// **net48 版は読まない。** あちらは `Web.config` の `sessionState` で選ぶ。
+        ///
+        /// | 値 | 置き場 | 複数インスタンス |
+        /// |---|---|---|
+        /// | `mem` | プロセス内 | **共有されない**（単一インスタンス向け） |
+        /// | `sql` | SQL Server のテーブル | 共有される。`Create_SessionCache.sql` を流しておく |
+        /// | `redis` | Redis | 共有される。**`UserStoreType` の方言に依らない** |
+        ///
+        /// **`UserStoreType` と同じ流儀**にしてある（`EnumSessionStoreType`）。
+        /// **Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い**ので、
+        /// **それらのストアで複数インスタンスにするなら `redis` を使う。**
+        /// </remarks>
+        public static EnumSessionStoreType SessionStoreType
+        {
+            get
+            {
+                // **キーが無いと null が返る。** `UserStoreType` と違い、
+                //   **このキーは雛形以外では無いことがある**（既存の配備）ので、
+                //   そのまま `ToUpper()` すると、起動時に落ちる。
+                string sessionStoreType = GetConfigParameter.GetConfigValue("SessionStoreType");
+
+                switch ((sessionStoreType ?? "").ToUpper())
+                {
+                    case "MEM":
+                        return EnumSessionStoreType.Memory;
+                    case "SQL":
+                        return EnumSessionStoreType.SqlServer;
+                    case "REDIS":
+                        return EnumSessionStoreType.Redis;
+                    default:
+                        // **書かなければプロセス内**（＝ 従来どおり）。
+                        return EnumSessionStoreType.Memory;
+                }
+            }
+        }
+
+        /// <summary>セッションの置き場への接続文字列（net10.0 版だけ。#256）</summary>
+        /// <remarks>
+        /// **`SessionStoreType` で意味が変わる。**
+        ///
+        /// | `SessionStoreType` | 書くもの |
+        /// |---|---|
+        /// | `mem` | **要らない**（読まない） |
+        /// | `sql` | **SQL Server の接続文字列。** `ConnectionString_SQL` と同じでよいが、別の DB にもできる |
+        /// | `redis` | **Redis の接続文字列**（`localhost:6379` など） |
+        ///
+        /// **`UserStoreType` のように方言ごとに分けていない**のは、
+        /// **`SessionStoreType` が置き場を一意に決める**ためである。
+        /// </remarks>
+        public static string SessionStoreConnectionString
+        {
+            get
+            {
+                return GetConfigParameter.GetConfigValue("SessionStoreConnectionString");
             }
         }
 

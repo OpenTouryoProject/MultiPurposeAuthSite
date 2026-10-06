@@ -679,6 +679,75 @@ cd root
 **SQL が実行できるかは分からない。** それは、ストアを切り替えて E2E を回して確かめる
 （[`TESTING.md`](TESTING.md) 1 節「ストアを切り替える」、#207）。
 
+### セッションの置き場 — `SessionStoreType`（#256）
+
+**`UserStoreType` とは別のストアである。** 利用者やトークンではなく、
+**画面のセッション**（`HttpContext.Session`）の置き場を決める。
+
+```json
+"SessionStoreType": "mem",   // mem / sql / redis
+"SessionStoreConnectionString": "",
+```
+
+| 値 | 置き場 | 複数インスタンス |
+|---|---|---|
+| `mem` | プロセス内（`AddDistributedMemoryCache`） | **共有されない** |
+| `sql` | SQL Server のテーブル（`AddDistributedSqlServerCache`） | 共有される |
+| `redis` | Redis（`AddStackExchangeRedisCache`） | 共有される |
+
+**雛形の既定は `mem`で、キーを書かなければも `mem`。**
+**単一インスタンスなら、これで正しい**（既存の配備も従来どおり動く）。
+**インスタンスを増やすなら `redis` または `sql` にする**（次項）。
+
+**net10.0 版だけが読む。** net48 版は `Web.config` の `sessionState` で選ぶ
+（`InProc` / `StateServer` / `SQLServer` / Oracle は `Custom`）。雛形は `StateServer` で、
+**ASP.NET 状態サービス（`aspnet_state`）が止まっていると画面が 500 になる**
+（[`TESTING.md`](TESTING.md) 8 節）。
+
+#### `mem` のままスケールアウトすると、途中で失敗する
+
+**セッションに置いているのは、途中の状態である。** 要求が別のインスタンスへ回ると読めない。
+
+| 置いているもの | 壊れるとどうなるか |
+|---|---|
+| ID 連携の `state` / `nonce` / `code_verifier` | 上流から戻った先が別のインスタンスだと、照合できずサインインが失敗する |
+| 管理画面の `access_token` / `get_oauth2_token_state` | 「OAuth2 のトークンを取得」以降の操作ができない |
+| FIDO2 の challenge | 登録・認証が成立しない |
+| 自己テスト画面の値 | 画面の往復が途切れる |
+
+**実測では 13 キー・約 40 か所がセッションを使っている。**
+**Cookie へ寄せる案は採らなかった**（量と、`access_token` を Cookie に置きたくないため）。
+
+#### `sql` はテーブルが要る
+
+```powershell
+sqlcmd -S localhost,1433 -U sa -P '...' -i root\files\resource\MultiPurposeAuthSite\Sql\sqlserver\Create_SessionCache.sql
+```
+
+**`dotnet sql-cache create` が作るものと同じスキーマ**である（列名・型・索引を変えると動かない）。
+スキーマ名・テーブル名は `Const.SessionCacheSchemaName` / `Const.SessionCacheTableName` に
+置いてあり、**設定キーにはしていない**（DDL とコードを食い違わせないため）。
+
+> **`Create_UserStore.sql` は DATABASE を作り直す。**
+> 後から流すと `SessionCache` は消える。**UserStore を作り直したら、これも流し直す。**
+
+#### `redis` は方言に依らない
+
+**Oracle / PostgreSQL 用の `IDistributedCache` は標準に無い。**
+`UserStoreType` が `ora` / `npg` の配備でセッションを共有するなら、**`redis` を選ぶ。**
+（3 方言が揃わない唯一の設定である。）
+
+#### 接続文字列が無ければ、起動時に落とす
+
+**`mem` 以外で `SessionStoreConnectionString` が空なら、`ConfigureServices` で例外を投げる。**
+`IDistributedCache` は**最初にセッションを触った時に**落ちるので、
+そのままだと**起動は通り、画面が 500 を返すだけで理由が分からない。**
+
+```
+Unhandled exception. System.InvalidOperationException:
+SessionStoreType が SqlServer なので、SessionStoreConnectionString が必要です。
+```
+
 ## 8. 証明書
 
 ```json
@@ -760,6 +829,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | 既定の起動 | IIS Express | IIS Express / Kestrel |
 | パッケージ | `packages.config` ＋ `PackageReference` | `PackageReference` |
 | 認証クッキーの設定 | `App_Start/StartupAuth.cs` | `Startup.cs` の `ConfigureApplicationCookie`（#223） |
+| セッションの置き場 | `Web.config` の `sessionState`（既定 `StateServer`） | `SessionStoreType`（`mem` / `sql` / `redis`。#256） |
 
 **両者は共通ライブラリを使う別アプリである。** 片方にしか無い問題があり得る。
 
@@ -783,6 +853,7 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 |---|---|---|---|
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
+| `SessionStoreType` | `mem`（#256） | **複数インスタンスなら `redis` / `sql`** | **画面のセッションの置き場**（7 節「セッションの置き場」）。**`mem` は複数インスタンスで共有されない** — ID 連携の `state` / `nonce` / `code_verifier`、管理画面の `access_token`、FIDO2 の challenge が読めず、**途中で失敗する**。**書かなければ `mem`**（既存の配備は従来どおり）。`sql` は `Create_SessionCache.sql` が要る。**`ora` / `npg` 用の実装は標準に無いので `redis`。** **net10.0 版だけ**（net48 版は `Web.config` の `sessionState`） |
 | `DataProtectionKeyPath` | `""`（空） | **コンテナでは必須**（#251） | **DataProtection の鍵の置き場。** 空なら `%LOCALAPPDATA%` 配下（**コンテナでは揮発 → 再起動で全員サインアウト**）。**net48 の `machineKey` と同じ役割**だが、**鍵そのものは書かない**（置き場を共有する。鍵は自動生成・自動ローテーション）。**効くのは画面のセッション**（認証 Cookie / AntiForgery / メール確認のリンク）で、**access_token・PPID・refresh_token には影響しない**。**鍵リングは平文の XML**。**net10.0 版だけ** |
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。AntiForgery は**もともとアプリごとに違う名前**になるので対象外。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |

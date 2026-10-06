@@ -106,6 +106,7 @@
     <Compile Include="Util\PPIDExtension.cs" />
     <Compile Include="Util\UriExtension.cs" />
     <Compile Include="Util\Sts\OnlySts.cs" />
+    <Compile Include="Data\EnumSessionStoreType.cs" />
     <Compile Include="Data\EnumUserStoreType.cs" />
     <Compile Include="Entity\ApplicationRole.cs" />
     <Compile Include="Entity\ApplicationUser.cs" />

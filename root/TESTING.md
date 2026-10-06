@@ -53,6 +53,13 @@ cd root\programs\Tests
 **既定は `mem`。** これは変えない。`sql` / `ora` / `npg` は、対応する DBMS が
 動いていることが前提になるため、既定にすると DBMS の無い環境でテストが回らなくなる。
 
+> **`SessionStoreType`（#256）も、同じ理由で `mem` が既定である。**
+> `redis` / `sql` を既定にすると、**Redis や SQL Server の無い環境でテストが回らなくなる。**
+> **E2E はサイトを 1 インスタンスずつしか立てない**ので、共有する必要がない
+> （**実測でも、置き場を変えても結果は変わらない**。下の「セッションの置き場も」）。
+> **キーが無ければ `mem`** なので、書かない配備もそのまま回る。
+> net48 版は `Web.config` の `sessionState` で選ぶので、この設定は読まない。
+
 ```powershell
 # 接続文字列は環境変数で渡す（キー名ではなく、専用の名前を使う）
 $env:MPAS_CONNSTR_SQL = '...'
@@ -447,6 +454,40 @@ ALTER TABLE "RefreshTokenDictionary" MODIFY ("FamilyId" NOT NULL);
 
 > **`mem` と違い、状態が残る。** 同じデータベースを使い回すと、前回のテスト ユーザや
 > クライアント登録がそのまま残る。作り直したいときは、データベースを作り直す。
+
+### セッションの置き場も、3 通りで測った（#256）
+
+**`SessionStoreType` は `UserStoreType` と直交する。** 回し方は同じで、
+**`appsettings.json` を書き換えてから net10.0 版を建て直す**（環境変数の口は作っていない）。
+
+```powershell
+# appsettings.json の SessionStoreType / SessionStoreConnectionString を書き換えてから
+cd root
+.\1_BuildAll.ps1 -Only net10.0 -SkipClean
+.\2_RunAllTests.ps1 -Launch
+```
+
+**2026/10/06 の実測**（`UserStoreType` は `mem`）。
+
+| `SessionStoreType` | 成功 | 失敗 | Skip | 置き場に入ったか |
+|---|---|---|---|---|
+| `mem`（既定。**キー無しも同じ経路**） | 490 | 0 | 1 | － |
+| `redis` | 490 | 0 | 1 | **Redis のキーが 1 → 27 件に増えた**（`redis-cli dbsize`） |
+| `sql` | 490 | 0 | 1 | **`dbo.SessionCache` に 26 行**（`SELECT COUNT(*)`） |
+
+**「通った」だけでは足りない。** `mem` でも全部通るので、
+**置き場に本当に書かれたかを、ストア側から数えて確かめる。**
+
+**Skip 1 件は `core` の未修正項目**（6 節）で、この設定とは関係しない。
+
+**接続文字列を空にすると、起動時に落ちることも確かめた**（`InvalidOperationException`）。
+**歯が立つことの確認** — 空のまま起動を通してしまうと、
+**画面が 500 を返すだけで理由が分からない**（`IDistributedCache` は遅延で落ちるため）。
+
+**E2E に専用のテストは足していない。**
+**どの置き場を使っているかは、外から叩いて区別できない**（同じ画面が同じように動く）。
+**通し × 3 通り ＋ ストア側の件数**が、この変更の検証である
+（`UserStoreType` の 4 ストアと同じ測り方）。
 
 ### テスト専用クライアントは、種データで作る（#264）
 
@@ -1205,6 +1246,7 @@ E2ETests OK    220    0    1 146.7
 | ビルド済み | `1_BuildAll.ps1`、または Visual Studio |
 | 設定ファイル | `appsettings.json` / `app.config`。テストは**ここから資格情報を読む** |
 | `UserStoreType` | **既定は `mem`**。テスト ユーザは初回アクセスで作られ、再起動で消える。`sql` / `ora` / `npg` に切り替えるときは 1 節「ストアを切り替える」（#207） |
+| `SessionStoreType` | **既定は `mem`**（#256）。**そのままで回る**— E2E は 1 インスタンスずつなので共有が要らない。`redis` / `sql` でも測れる（1 節「セッションの置き場も」）。`sql` にするなら `Create_SessionCache.sql` を流しておく。**net10.0 版だけ**（net48 版は下の `aspnet_state`） |
 | 証明書 | `SpRp_RsaPfxFilePath` の pfx。Request Object の署名に使う |
 | `FxContainerization` | `ON`。**待ち受け URL の上書きに要る**（4 節）。雛形には入っている |
 | IIS Express | net48 版を測るときだけ。無ければその分が Skip される |

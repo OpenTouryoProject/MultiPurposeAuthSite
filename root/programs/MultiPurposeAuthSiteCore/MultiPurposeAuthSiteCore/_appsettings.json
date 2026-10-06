@@ -84,6 +84,22 @@
 
     // User store type (mem, sql, ora, npg)
     "UserStoreType": "mem",
+    // **セッションの置き場**（mem, sql, redis。#256）。**net10.0 版だけが読む。**
+    //   net48 版は Web.config の sessionState で選ぶ（InProc / StateServer / SQLServer）。
+    //   **書かなければ mem**（＝ プロセス内。**単一インスタンスなら、これで正しい**）。
+    //   **インスタンスを増やすなら、redis または sql にする。**
+    //   mem は共有されないので、要求が別のインスタンスへ回ると、
+    //   セッションに置いた値（state / nonce / code_verifier、access_token、FIDO2 の
+    //   challenge）が読めず、途中で失敗する。
+    //   **redis は方言に依らない。** UserStoreType が ora / npg でも使える。
+    //   **sql は SQL Server のテーブルが要る**（Sql\sqlserver\Create_SessionCache.sql）。
+    //   Oracle / PostgreSQL 用の実装は標準に無い。
+    "SessionStoreType": "mem",
+    // **セッションの置き場の接続文字列**（#256）。**mem なら空のまま。**
+    //   redis : StackExchange.Redis の構成文字列（例 localhost:6379）
+    //   sql   : SQL Server の接続文字列（ConnectionString_SQL と同じでよい）
+    //   **mem 以外で空なら、起動時に落とす**（後で 500 になるよりよい）。
+    "SessionStoreConnectionString": "",
     // UserListCount
     "UserListCount": "50",
 
