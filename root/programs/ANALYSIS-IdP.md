@@ -1186,10 +1186,13 @@ RFC 7009 §2.1 / RFC 7662 §2.1 はいずれも所有者確認を要求してい
 `/introspect` の `active` が **`"true"` という文字列**だったのも真偽値に直した
 （A-3 / A-4 と同じ defect だが #184 では未列挙だった分）。
 
-### C-3. `prompt=none` が同意画面を無条件にスキップする **[Core]**
+### C-3. `prompt=none` が同意画面を無条件にスキップする **[Lib][Core][NetFx]** — **段階 1 のみ ✅（#272）**
+
+> **`[Core]` と書いていたが、誤り。** **同じコードが net48 版にもある。**
+> 判定を `CommonLibrary` へ寄せたので、いまは `[Lib]` でもある。
 
 ```csharp
-// MultiPurposeAuthSiteCore/.../AccountController.cs:2764
+// 直す前（両アプリに同じコードがあった）
 if (isAuth || prompt.ToLower() == "none")   // 認可画面をスキップ
 ```
 
@@ -1203,6 +1206,35 @@ OIDC Core §3.1.2.1 の `prompt=none` は
 「以前に同意済みか」を判定する土台が無いのが根本原因（D-6）。
 
 `prompt=login` / `select_account` / `consent` は未処理。
+
+**段階 1 は片付いた（#272）** — **`prompt` の照合を集合に寄せた。**
+
+**同じ要求の中で、照合規則が 2 つ混在していた。**
+
+| 書き方 | 問題 |
+|---|---|
+| `prompt.ToLower().Contains("none")`（#247 / #254 で入れた側） | **部分文字列**なので、**`prompt=nonexistent` でも `none` 扱い** |
+| `prompt.ToLower() == "none"`（同意スキップの側） | **完全一致**なので、**`prompt=none login` で `none` 扱いにならない** |
+
+その結果、**`prompt=none login` は「`login_required` の判定では none 扱い、
+同意画面の判定では none でない」**という状態になっていた。
+
+- **`CmnEndpoints.SplitPrompt` / `HasPrompt` / `CheckPrompt` に寄せた**
+  （#267 の `NormalizeResponseType` と同じ流儀。**大文字小文字の寛容さも残す**）
+- **`none` の併記は `invalid_request`**（§3.1.2.1 :
+  「If this parameter contains none with any other value, an error is returned.」）。
+  **これを入れないと、集合に揃えたことで振る舞いが悪くなる** —
+  以前は同意画面を出していたが、**同意を飛ばして code を発行する**ことになる
+- **判定は `redirect_uri` を確かめた後**（`ValidateAuthZReqParamCore`）。
+  **でないとエラーを RP へ返せない**（#187 / #247 と同じ理由）
+- **PAR（`/par`）にも掛かる**（RFC 9126 §2.1 が「認可エンドポイントと同じ検証」を求めるため）
+- **E2E** : **`RT-272.1`**（`none` の併記で `invalid_request`）/
+  **`RT-272.2`**（`none` 単体は従来どおり）/
+  **`RT-272.3`**（`nonexistent` を `none` 扱いにしない。**同意画面で止まるか**で見る）。
+  **旧挙動に戻すと `RT-272.1` と `RT-272.3` が落ちることを確かめてある**
+
+**残るのは段階 2（同意の永続化。D-6）**。
+**`prompt=none` が同意画面を無条件に飛ばすことそのものは、まだ直していない。**
 
 ### C-4. 認可コードに有効期限が無い **[Lib]** — **✅ 修正済み（#188）**
 
@@ -2593,7 +2625,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | 項目 |
 |---|
 | ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換え**（#224 の段階 1）、**振る舞いを見直した**（段階 2 : 使えない `refresh_token` を出さない・早い拒否・`unauthorized_client`・不正な登録値の拒否）。**mTLS の経路の E2E も張った**（#226。`FA-6`） |
-| C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`） |
+| C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`）。**段階 1（`prompt` を集合として扱う）は ✅ #272**。段階 2（同意の記録）が残る |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |
 | D-10 `typ: at+jwt`、`jku` の除去 |

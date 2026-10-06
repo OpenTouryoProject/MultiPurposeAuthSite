@@ -54,6 +54,7 @@
 //*  2026/10/03  玄人 幸道         E2E専用のクライアント登録を種データにした（#264）
 //*  2026/10/04  玄人 幸道         response_typeを正規化して受ける（#267）
 //*  2026/10/06  玄人 幸道         種データのクライアント登録を専用列で作る（#270）
+//*  2026/10/06  玄人 幸道         promptの照合を集合に寄せた（#272 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -3055,7 +3056,7 @@ namespace MultiPurposeAuthSite.Controllers
             //   （`ANALYSIS-IdP.md` の A-12）。
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge))
+                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt))
             {
                 // **max_age と auth_time の照合**（#247。判定は CommonLibrary）。
                 Token.CmnEndpoints.AuthTimeCheck authTimeCheck = Token.CmnEndpoints.CheckAuthTime(
@@ -3070,7 +3071,7 @@ namespace MultiPurposeAuthSite.Controllers
                     errDescription = "max_age must be a non-negative integer.";
                 }
                 else if (!this.User.Identity.IsAuthenticated
-                    && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))
+                    && Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptNone))
                 {
                     // **そもそもサインインしていない**（OIDC Core 3.1.2.6 : login_required）。
                     //   **#247 で足したのは「セッションは在るが古い」場合だけ**だった。
@@ -3088,7 +3089,7 @@ namespace MultiPurposeAuthSite.Controllers
                     return new ChallengeResult();
                 }
                 else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication
-                    && !string.IsNullOrEmpty(prompt) && prompt.ToLower().Contains("none"))
+                    && Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptNone))
                 {
                     // **prompt=none では UI を出せない**（OIDC Core 3.1.2.6 : login_required）。
                     err = OAuth2AndOIDCConst.login_required;
@@ -3157,7 +3158,8 @@ namespace MultiPurposeAuthSite.Controllers
                         if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
                         if (isAuth                           // OAuth2 拡張仕様
-                            || prompt.ToLower() == "none")   // OIDC   RFC仕様
+                            || Token.CmnEndpoints.HasPrompt(
+                                prompt, Token.CmnEndpoints.PromptNone))   // OIDC   RFC仕様
                         {
                             // 認可画面をスキップ
 
@@ -3322,7 +3324,8 @@ namespace MultiPurposeAuthSite.Controllers
 
             if (Token.CmnEndpoints.ValidateAuthZReqParam(
                 client_id, redirect_uri, ref response_type, scope, nonce,
-                out string valid_redirect_uri, out string err, out string errDescription, code_challenge))
+                out string valid_redirect_uri, out string err, out string errDescription,
+                code_challenge, prompt))
             {
                 // Cookie認証チケットからClaimsPrincipalを取得しておく。
                 AuthenticateResult ticket = await HttpContext.AuthenticateAsync();

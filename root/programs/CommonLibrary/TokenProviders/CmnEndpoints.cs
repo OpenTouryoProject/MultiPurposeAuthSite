@@ -116,6 +116,7 @@
 //*  2026/10/04  玄人 幸道         response_typeを順不同の集合として扱う（#267）
 //*  2026/10/04  玄人 幸道         CORSのオリジンにweb_originsと画面登録を含める（#266）
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンをキャッシュしないようにした（#271）
+//*  2026/10/06  玄人 幸道         promptを空白区切りの集合として扱う（#272 の段階 1）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -637,6 +638,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         /// <param name="err">string</param>
         /// <param name="errDescription">string</param>
         /// <param name="code_challenge">string</param>
+        /// <param name="prompt">string</param>
         /// <returns>成功 or 失敗</returns>
         /// <remarks>
         /// **エラーは、返せるなら RP へリダイレクトで返す**（RFC 6749 4.1.2.1。#187 の残り）。
@@ -651,7 +653,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         public static bool ValidateAuthZReqParam(string client_id, string redirect_uri,
             ref string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge = "")
+            string code_challenge = "", string prompt = "")
         {
             // **response_type を正規化する**（#267）。**ここで 1 回だけ掛ける。**
             //   **`ref` で受けているので、呼び出し元の変数も正規化された値になる。**
@@ -663,7 +665,7 @@ namespace MultiPurposeAuthSite.TokenProviders
 
             bool isValid = CmnEndpoints.ValidateAuthZReqParamCore(
                 client_id, redirect_uri, response_type, scope, nonce,
-                out valid_redirect_uri, out err, out errDescription, code_challenge);
+                out valid_redirect_uri, out err, out errDescription, code_challenge, prompt);
 
             if (!isValid && string.IsNullOrEmpty(valid_redirect_uri))
             {
@@ -692,7 +694,7 @@ namespace MultiPurposeAuthSite.TokenProviders
         private static bool ValidateAuthZReqParamCore(string client_id, string redirect_uri,
             string response_type, string scope, string nonce,
             out string valid_redirect_uri, out string err, out string errDescription,
-            string code_challenge)
+            string code_challenge, string prompt)
         {
             valid_redirect_uri = "";
             // 各分岐で上書きする。ここは想定外のケースの既定値（#187）。
@@ -824,6 +826,17 @@ namespace MultiPurposeAuthSite.TokenProviders
                 {
                     err = OAuth2AndOIDCConst.invalid_request;
                     errDescription = "code_challenge is required.";
+                    return false;
+                }
+
+                #endregion
+
+                #region prompt（#272 の段階 1）
+
+                // **`none` を他の値と併記していないか**（OIDC Core §3.1.2.1）。
+                //   ※ redirect_uri を確かめた後に置く。エラーを RP へ返せるようにするため（#187）。
+                if (!CmnEndpoints.CheckPrompt(prompt, ref err, ref errDescription))
+                {
                     return false;
                 }
 
@@ -1563,7 +1576,8 @@ namespace MultiPurposeAuthSite.TokenProviders
                 (string)payload[OAuth2AndOIDCConst.scope] ?? "",
                 (string)payload[OAuth2AndOIDCConst.nonce],
                 out string _, out string error, out string errorDescription,
-                (string)payload[OAuth2AndOIDCConst.code_challenge] ?? ""))
+                (string)payload[OAuth2AndOIDCConst.code_challenge] ?? "",
+                (string)payload[OAuth2AndOIDCConst.prompt] ?? ""))
             {
                 err.Add(OAuth2AndOIDCConst.error, error);
                 err.Add(OAuth2AndOIDCConst.error_description, errorDescription);
@@ -4031,6 +4045,99 @@ namespace MultiPurposeAuthSite.TokenProviders
             normalized.Sort(StringComparer.Ordinal);
 
             return string.Join(" ", normalized);
+        }
+
+        #endregion
+
+        #region Prompt
+
+        /// <summary>prompt の値 : none（OIDC Core §3.1.2.1）</summary>
+        public const string PromptNone = "none";
+
+        /// <summary>prompt を空白区切りの集合として分ける（#272 の段階 1）</summary>
+        /// <param name="prompt">prompt</param>
+        /// <returns>値の一覧（重複なし。空なら空の一覧）</returns>
+        /// <remarks>
+        /// **`prompt` は空白区切りの集合**である（OIDC Core §3.1.2.1）。
+        /// **並びは意味を持たない**ので、`response_type`（#267）と同じ扱いにする。
+        ///
+        /// **大文字小文字は、いまの扱いを変えない。**
+        /// **仕様では値は case-sensitive** だが、**以前から `ToLower()` していた**。
+        /// #267 と同じ理由で、**寛容さを残す**（`Contributing.ja.md` の下位互換の方針）。
+        /// </remarks>
+        public static List<string> SplitPrompt(string prompt)
+        {
+            List<string> values = new List<string>();
+
+            if (string.IsNullOrEmpty(prompt))
+            {
+                return values;
+            }
+
+            foreach (string value in prompt.ToLower().Split(
+                new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!values.Contains(value))
+                {
+                    values.Add(value);
+                }
+            }
+
+            return values;
+        }
+
+        /// <summary>prompt に、その値が入っているか（#272 の段階 1）</summary>
+        /// <param name="prompt">prompt</param>
+        /// <param name="value">探す値（`PromptNone` など）</param>
+        /// <returns>入っていれば true</returns>
+        /// <remarks>
+        /// **以前は、同じ要求の中で照合規則が 2 つあった。**
+        ///
+        /// | 書き方 | 問題 |
+        /// |---|---|
+        /// | `prompt.ToLower().Contains("none")` | **部分文字列**なので、**`prompt=nonexistent` でも true になっていた** |
+        /// | `prompt.ToLower() == "none"` | **完全一致**なので、**`prompt=none login` で false になっていた** |
+        ///
+        /// **同じ `/authorize` の中でこの 2 つが混在していた**ので、
+        /// **`prompt=none login` は「login_required の判定では none 扱い、
+        /// 同意画面の判定では none でない」という状態になっていた。**
+        /// </remarks>
+        public static bool HasPrompt(string prompt, string value)
+        {
+            return CmnEndpoints.SplitPrompt(prompt).Contains(value);
+        }
+
+        /// <summary>prompt の組み合わせを確かめる（#272 の段階 1）</summary>
+        /// <param name="prompt">prompt</param>
+        /// <param name="err">string</param>
+        /// <param name="errDescription">string</param>
+        /// <returns>正しければ true</returns>
+        /// <remarks>
+        /// **`none` は、他の値と併記できない**（OIDC Core §3.1.2.1 :
+        /// 「If this parameter contains none with any other value, an error is returned.」）。
+        ///
+        /// **これを入れないと、集合にしたことで振る舞いが悪くなる。**
+        /// 以前の `prompt=none login` は**同意画面を出していた**が、
+        /// 集合の判定に揃えると**同意を飛ばして code を発行する**ことになる。
+        /// **仕様どおりエラーにするのが、安全側でもある。**
+        ///
+        /// **既知でない値は、それ自身ではエラーにしない**
+        /// （§3.1.2.1 は未知の値を `invalid_request` とはしていない）。
+        /// **ただし `none` と併記されたときは「他の値」なので、エラーになる。**
+        /// </remarks>
+        public static bool CheckPrompt(string prompt, ref string err, ref string errDescription)
+        {
+            List<string> values = CmnEndpoints.SplitPrompt(prompt);
+
+            if (values.Contains(CmnEndpoints.PromptNone)
+                && 1 < values.Count)
+            {
+                err = OAuth2AndOIDCConst.invalid_request;
+                errDescription = "prompt=none must not be combined with other values.";
+                return false;
+            }
+
+            return true;
         }
 
         #endregion
