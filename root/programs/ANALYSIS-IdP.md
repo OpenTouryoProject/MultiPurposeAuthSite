@@ -1186,7 +1186,7 @@ RFC 7009 §2.1 / RFC 7662 §2.1 はいずれも所有者確認を要求してい
 `/introspect` の `active` が **`"true"` という文字列**だったのも真偽値に直した
 （A-3 / A-4 と同じ defect だが #184 では未列挙だった分）。
 
-### C-3. `prompt=none` が同意画面を無条件にスキップする **[Lib][Core][NetFx]** — **段階 1 のみ ✅（#272）**
+### C-3. `prompt=none` が同意画面を無条件にスキップする **[Lib][Core][NetFx]** — **✅ 修正済み（#272）**
 
 > **`[Core]` と書いていたが、誤り。** **同じコードが net48 版にもある。**
 > 判定を `CommonLibrary` へ寄せたので、いまは `[Lib]` でもある。
@@ -1233,8 +1233,47 @@ OIDC Core §3.1.2.1 の `prompt=none` は
   **`RT-272.3`**（`nonexistent` を `none` 扱いにしない。**同意画面で止まるか**で見る）。
   **旧挙動に戻すと `RT-272.1` と `RT-272.3` が落ちることを確かめてある**
 
-**残るのは段階 2（同意の永続化。D-6）**。
-**`prompt=none` が同意画面を無条件に飛ばすことそのものは、まだ直していない。**
+**段階 2（同意の永続化。D-6）も片付いた（#272）** — **`ConsentGrant` 表を持った。**
+
+| 状況 | いまの振る舞い |
+|---|---|
+| 要求 scope が記録の部分集合 | **同意画面を飛ばす** |
+| 記録が無い ＋ `prompt=none` | **`consent_required`**（§3.1.2.6）。**これが C-3 そのもの** |
+| 記録が無い | 同意画面を出し、**許可で記録する**（scope は足し込む） |
+| `prompt=consent` | **記録が在っても出す** |
+| `prompt=select_account` | **出す**（画面に「別のアカウントでログイン」が在る） |
+| `prompt=login` | **再認証する**（`max_age` の再認証と同じ経路。印で繰り返しを防ぐ） |
+
+- **置き場** : `ConsentGrant`（`UserId` / `ClientID` の PK、`Scopes`、`CreatedDate`、`UpdatedDate`）。
+  **DDL 3 方言**。**`Users.Id` への FK（`ON DELETE CASCADE`）**なので、
+  **利用者を消せば同意も消える**
+- **粒度は（利用者, クライアント）で 1 行**。**scope は集合として足し込む**
+  （並びは辞書順に正規化して持つ。**"openid email" と "email openid" を別物にしない**）
+- **管理画面から取り消せる**（`/Manage/ConsentGrants`）。
+  **記録するなら、取り消せなければならない**。
+  **発行済みのトークンは失効しない**（そちらは `/revoke`。RFC 7009）
+- **設定キーは置いていない。** **常に仕様どおり**である
+  （「記録が無いときは従来どおり通す」逃げ道を作らないという判断）
+- **E2E** : `RT-272.4`（記録が無ければ `consent_required`）/
+  `RT-272.5`（`prompt=consent`）/ `RT-272.6`（拒否 → `access_denied`）/
+  `RT-272.7`（管理画面からの取り消し）
+- **自己テスト画面も直した。** **OIDC のボタンが `prompt=none` を固定で付けていた**ので、
+  **記録が無い配備では初回に必ず `consent_required`** になる。
+  **固定を外した**ので、**初回だけ同意画面を通る**（2 回目以降は記録が効いて飛ぶ）。
+  `prompt` を試したいときは**画面の選択**で指定する（#246 の項目 3）
+- **測っていないもの** : **`prompt=login`**（再認証。`max_age` の経路は `RT-247.1` が測っているが、
+  **`prompt=login` がきっかけの場合は測っていない**）と
+  **`prompt=select_account`**（同意画面を出すだけで、
+  **アカウントの切り替えそのものは持っていない**）
+
+**あわせて E-6（認可画面の Deny ボタン）も入れた。**
+**同意を記録するなら、拒否もできなければ筋が通らない。**
+**拒否は記録しない**（「拒否した」を覚えて次回以降自動で断ると、
+**利用者が気を変えられなくなる**）。
+
+> **Implicit の経路には同意画面が無い（以前から）。**
+> 同意の判定を入れたのは **`response_type=code` の経路だけ**である。
+> **Implicit は既定で無効**（#220）で、OAuth 2.1 でも廃止されているため。
 
 ### C-4. 認可コードに有効期限が無い **[Lib]** — **✅ 修正済み（#188）**
 
@@ -2537,7 +2576,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | D-3 | **DPoP（RFC 9449）** | 未実装 | Sender-Constrained は mTLS のみ。パブリック クライアント（SPA / ネイティブ）を縛れない |
 | D-4 | **Dynamic Client Registration（RFC 7591 / 7592）** | 未実装。クライアントは `appsettings.json` の `OAuth2ClientsInformation` に手書き | クライアント追加に再デプロイが要る。運用でスケールしない |
 | D-5 | **`iss` 認可応答パラメタ（RFC 9207）** | **✅ 実装済み**（#231）／**✅ 修正済み（#252）**。成功・失敗の両方に付け、Discovery でも広告する。JARM は JWT 内の `iss`（`RT-231`）。**`form_post` だけ抜けていた**（`iss` は `BuildRedirectUrl` が付けており、**URL を組まない `form_post` はそこを通らない**）。**View で出すようにした**（`RT-231.5` / `RT-231.6`） | Mix-Up 攻撃への対策 |
-| D-6 | **同意（consent）の永続化** | 未実装。毎回同意画面を出すか、`prompt=none` で丸ごとスキップするかの二択 | C-3 の根本原因。UX と安全性の両方に効く |
+| D-6 | **同意（consent）の永続化** | **✅ 実装済み（#272 の段階 2）**。`ConsentGrant` 表（DDL 3 方言）。**粒度は（利用者, クライアント）で 1 行、scope は集合として足し込む**。管理画面から取り消せる | C-3 の根本原因だった。これで `prompt=none` を仕様どおり扱える |
 | D-7 | `profile` / `address` スコープのクレーム | **✅ 実装済み**（#230）。**設定で対応付ける**（`UserClaimsMapping`）。この実装は氏名・住所の項目を持たず、入れ物（`UnstructuredData`）の中身は導入する側が決めるため、**「どのキーをどのクレームとして返すか」だけを設定に置く**。`claims_supported` も対応付けから作る（`RT-230`） | `scopes_supported` に載っているのに何も返らなかった。**標準クレームのサンプルを持たせた**（#261）。`IsDebug` のとき **2 人目のテスト利用者に OIDC Core 5.1 の形で仕込み**、雛形には対応付けのサンプルを コメントで置いた（`RT-261.1`）。**画面は変えていない**（入れ物の中身は導入する側が決める方針を保つ）。あわせて**クレームの型を JSON のまま返すよう直した**（`updated_at` は数値。以前は文字列。#184 と同種） |
 | D-8 | クライアントあたり複数 `redirect_uri` | 不可（`redirect_uri_code` / `redirect_uri_token` の 1 本ずつ） | 開発／本番の共存、複数プラットフォーム対応ができない |
 | D-9 | 署名鍵のローテーション運用 | **✅ 解けた（#129 の段階 3）。** **alg → 鍵の対応を `SigningKeys` の表 1 か所に寄せ**、**`CreateJwkSetJson` がその表を回して `jwkcerts` を作る**ようにした（ソース参照）。**JWK Set は追記式**なので、**新しい鍵を先に載せ、RP のキャッシュが切れてから署名に切り替えられる**（手順は `CONFIGURATION.md`）。**広告と鍵が揃っていることは `RT-129.6` で測る** | **無停止で替えられるようになった**（残り : 旧い `kid` を外すのは手作業） |
@@ -2560,7 +2599,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | E-3 | ✅ **CORS の 3 重定義を片付けた**（C-9 / #265）。既定のポリシーを置かず、口ごとに属性で選ぶ。`AllowAllOrigins` は自己テスト用の口だけが使う |
 | E-4 | `Views/_ViewImports.cshtml` と `Views/Manage/ManageTwoFactorAuthenticator.cshtml` が Shift_JIS（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 10 節） |
 | E-5 | `log4net` 3.2.0 に既知の脆弱性（[`MultiPurposeAuthSiteCore/ANALYSIS.md`](MultiPurposeAuthSiteCore/ANALYSIS.md) 9.1 節） |
-| E-6 | 認可画面（`Views/Account/OAuth2Authorize.cshtml`）に **Deny ボタンが無い**。ユーザは拒否できず、`access_denied` を返す経路も無い。scope も生の識別子をそのまま表示している |
+| E-6 | **✅ Deny ボタンは入れた（#272 の段階 2）**。認可画面で拒否でき、**`access_denied` を `redirect_uri` へ返す**（RFC 6749 §4.1.2.1。`RT-272.6`）。**拒否は記録しない**。残るのは **scope が生の識別子のまま**であること |
 | E-7 | `/jwkcerts` は毎回ファイルを読む（キャッシュ・`Cache-Control` なし） |
 | E-8 | `AccountController.cs` 4402 行 / `ManageController.cs` 3262 行。STS 部分（`#region STS` 以下 約 1800 行）を別 Controller へ切り出すと、以降の改修が安全になる |
 | E-9 | **✅ 修正済み（#140 の段階 3）**。ID フェデレーションの `/token` 呼び出しが **`Sts.Helper` を通っており、宛先のホストがコンテナの認可サーバへ書き換えられていた**（`GetContainerizatedAuthZServerUri`）。**相手は他の IdP なので壊れる。** `/userinfo` は #246 で外していたが、こちらが残っていた |
@@ -2625,7 +2664,7 @@ Basic を受ける **6 つの口**（`/token`・`/revoke`・`/introspect`・`/de
 | 項目 |
 |---|
 | ✅ **C-7 PKCE**（#220 / #221。同時送信・`plain`・`code_challenge` の必須化・クレームと権限判定の分離・クライアント単位の必須化）。**判定側（`CheckClientMode`）は表に置き換え**（#224 の段階 1）、**振る舞いを見直した**（段階 2 : 使えない `refresh_token` を出さない・早い拒否・`unauthorized_client`・不正な登録値の拒否）。**mTLS の経路の E2E も張った**（#226。`FA-6`） |
-| C-3 / D-6 同意の永続化と `prompt` の正しい処理（`login_required` / `consent_required`）。**段階 1（`prompt` を集合として扱う）は ✅ #272**。段階 2（同意の記録）が残る |
+| ✅ **C-3 / D-6 同意の永続化と `prompt` の正しい処理** #272（段階 1 : `prompt` を集合として扱う / 段階 2 : `ConsentGrant` 表。**あわせて E-6 の Deny ボタンも**） |
 | D-2 `/ros` を PAR（RFC 9126）へ寄せる |
 | D-5 `iss` 認可応答パラメタ |
 | D-10 `typ: at+jwt`、`jku` の除去 |

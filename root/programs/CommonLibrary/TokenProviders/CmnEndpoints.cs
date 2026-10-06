@@ -117,6 +117,7 @@
 //*  2026/10/04  玄人 幸道         CORSのオリジンにweb_originsと画面登録を含める（#266）
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンをキャッシュしないようにした（#271）
 //*  2026/10/06  玄人 幸道         promptを空白区切りの集合として扱う（#272 の段階 1）
+//*  2026/10/06  玄人 幸道         promptのlogin/consent/select_accountの値を追加（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -4053,6 +4054,15 @@ namespace MultiPurposeAuthSite.TokenProviders
 
         /// <summary>prompt の値 : none（OIDC Core §3.1.2.1）</summary>
         public const string PromptNone = "none";
+
+        /// <summary>prompt の値 : login（再認証を求める。#272 の段階 2）</summary>
+        public const string PromptLogin = "login";
+
+        /// <summary>prompt の値 : consent（同意を取り直す。#272 の段階 2）</summary>
+        public const string PromptConsent = "consent";
+
+        /// <summary>prompt の値 : select_account（アカウントを選ばせる。#272 の段階 2）</summary>
+        public const string PromptSelectAccount = "select_account";
 
         /// <summary>prompt を空白区切りの集合として分ける（#272 の段階 1）</summary>
         /// <param name="prompt">prompt</param>

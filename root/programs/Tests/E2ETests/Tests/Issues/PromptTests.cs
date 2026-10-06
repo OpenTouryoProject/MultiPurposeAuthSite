@@ -32,6 +32,7 @@
 //**********************************************************************************
 
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 using MultiPurposeAuthSite.Tests.E2E.Infrastructure;
@@ -173,6 +174,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Target("client_name=" + KnownClients.TestClient + " / prompt=none");
 
+                // **先に同意を記録する**（#272 の段階 2）。
+                //   **記録が無ければ `consent_required`** になるので、
+                //   **ここで測るのは「記録が在るときの `prompt=none`」**である。
+                await Flows.EnsureConsentAsync(client, reg);
+
                 r.Step("prompt=none を指定して認可リクエストを送る");
 
                 AuthZResponse authz = await client.AuthorizeAsync(
@@ -202,7 +208,10 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
         {
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
-                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+                // **TestClient_19 は、どのテストも同意を通していない**（#272 の段階 2）。
+                //   **記録が在るクライアントでは、`none` 扱いかどうかを区別できない**
+                //   （どちらでも同意画面を飛ばして code が返る）。
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_19);
 
                 TestReport r = this.Report("RT-272.3",
                     "prompt=nonexistent は none として扱わない（部分文字列で照合しない）",
@@ -241,6 +250,241 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 r.Note("**`none` を含む語でも併記のエラーにならないこと**を見ている"
                     + "（`nonexistent` は `none` ではないので、単独の未知の値として扱う）。"
                     + "**`prompt=nonexistent none` なら併記のエラーになる。**");
+
+                r.Done();
+            }
+        }
+        /// <summary>RT-272.4 同意の記録が無ければ prompt=none は consent_required</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27204_同意の記録が無ければpromptのnoneはconsent_required(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-272.4",
+                    "同意の記録が無いまま prompt=none で来たら、redirect_uri へ consent_required を返す",
+                    "**これが C-3 そのものである。** 以前は**同意の記録を持っていなかった**ため、"
+                    + "`prompt=none` は**同意画面を出さずに code を発行**していた。"
+                    + "**セッションさえ生きていれば、どのクライアントも無音で認可を取得できた。**"
+                    + "いまは**記録が無ければ UI が必要**と判断し、"
+                    + "**UI を出せない指定なのでエラーを返す**（OIDC Core §3.1.2.6）。",
+                    "OIDC Core §3.1.2.1 / §3.1.2.6（consent_required）/ #272 の段階 2 / C-3 / D-6");
+
+                // **TestClient_19 は、どのテストも同意を通していない**（#272 の段階 2）。
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_19);
+
+                r.Target("client_name=" + KnownClients.TestClient_19 + "（同意の記録が無い）/ prompt=none");
+                r.Step("prompt=none を指定して認可リクエストを送る");
+
+                AuthZResponse authz = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2724", "none"));
+
+                r.Verify("エラー画面ではなく、リダイレクトで返る", authz.Redirected,
+                    "リダイレクトする",
+                    authz.Redirected ? authz.RedirectTo : "**リダイレクトしない**（" + authz.ToString() + "）");
+
+                bool toRp = !string.IsNullOrEmpty(authz.Location)
+                    && authz.Location.StartsWith(reg.RedirectUri);
+
+                r.Verify("redirect_uri へ返る", toRp,
+                    "登録した redirect_uri へ",
+                    string.IsNullOrEmpty(authz.Location) ? "**移らない**" : authz.Location);
+
+                r.VerifyEqual("エラーは consent_required", "consent_required", authz.Error ?? "（無し）");
+
+                r.VerifyEqual("state が返る", "state-rt2724", authz.State ?? "（無し）");
+
+                r.Verify("認可コードは発行されない", string.IsNullOrEmpty(authz.Code),
+                    "code なし", string.IsNullOrEmpty(authz.Code) ? "なし" : "**発行された**");
+
+                r.Note("**このテストは「許可」を押さない。** 押すと記録が残り、"
+                    + "**DB ストアでは 2 回目の実行から測れなくなる**（`TestClients` の表に注記してある）。");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-272.5 prompt=consent は記録が在っても同意画面を出す</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27205_promptのconsentは記録が在っても同意画面を出す(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-272.5",
+                    "prompt=consent は、同意済みでも同意画面を出す",
+                    "**同意を記録すると「2 回目からは出ない」**ことになるが、"
+                    + "**利用者が確かめ直したいときの口が要る。**"
+                    + "§3.1.2.1 は `prompt=consent` を「同意を取り直せ」と定めている。",
+                    "OIDC Core §3.1.2.1 / #272 の段階 2");
+
+                r.Target("client_name=" + KnownClients.TestClient + " / prompt=consent");
+                r.Step("(1) まず同意を記録する（記録が在る状態を作る）");
+
+                await Flows.EnsureConsentAsync(client, reg);
+
+                r.Step("(2) prompt を付けずに送ると、同意画面は出ない（記録が効いている）");
+
+                AuthZResponse without = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2725a", null));
+
+                r.Verify("同意画面は出ない", !without.NeedsConsent,
+                    "出ない", without.NeedsConsent ? "**出た**" : "出なかった（code あり）");
+
+                r.Step("(3) prompt=consent を付けると、同意画面が出る");
+
+                AuthZResponse with = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2725b", "consent"));
+
+                r.Verify("同意画面が出る", with.NeedsConsent,
+                    "同意画面が返る",
+                    with.NeedsConsent ? "返った" : "**返らなかった**（" + with.ToString() + "）");
+
+                r.Note("**`prompt=none consent` は段階 1 で `invalid_request`** になる"
+                    + "（`none` の併記）。**矛盾する指定は、そこで弾いている。**");
+
+                r.Done();
+            }
+        }
+
+        /// <summary>RT-272.6 同意画面で拒否すると access_denied</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27206_同意画面で拒否するとaccess_denied(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                TestReport r = this.Report("RT-272.6",
+                    "同意画面で「拒否」を押すと、redirect_uri へ access_denied を返す",
+                    "**以前は認可画面に Deny ボタンが無く、利用者は拒否できなかった**"
+                    + "（`ANALYSIS-IdP.md` の E-6）。**`access_denied` を返す経路も無かった。**"
+                    + "**同意を記録するなら、拒否もできなければ筋が通らない。**",
+                    "RFC 6749 §4.1.2.1（access_denied）/ E-6 / #272 の段階 2");
+
+                r.Target("client_name=" + KnownClients.TestClient + " / prompt=consent で同意画面を出す");
+                r.Step("(1) prompt=consent で同意画面を出す");
+
+                AuthZResponse authz = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2726", "consent"));
+
+                r.Verify("同意画面が出る", authz.NeedsConsent,
+                    "同意画面が返る",
+                    authz.NeedsConsent ? "返った" : "**返らなかった**（" + authz.ToString() + "）");
+
+                Skip.If(!authz.NeedsConsent, "同意画面が出ないので、拒否を押せません。");
+
+                r.Step("(2) 「拒否」を押す");
+
+                AuthZResponse denied = await client.DenyConsentAsync(authz);
+
+                r.Verify("リダイレクトで返る", denied.Redirected,
+                    "リダイレクトする",
+                    denied.Redirected ? denied.RedirectTo : "**リダイレクトしない**（" + denied.ToString() + "）");
+
+                r.VerifyEqual("エラーは access_denied", "access_denied", denied.Error ?? "（無し）");
+
+                r.Verify("認可コードは発行されない", string.IsNullOrEmpty(denied.Code),
+                    "code なし", string.IsNullOrEmpty(denied.Code) ? "なし" : "**発行された**");
+
+                r.Note("**拒否は記録しない。** 「拒否した」を覚えて次回以降自動で断ると、"
+                    + "**利用者が気を変えられなくなる。**");
+
+                r.Done();
+            }
+        }
+        /// <summary>RT-272.7 管理画面から同意を取り消すと、prompt=none が通らなくなる</summary>
+        /// <param name="targetKey">core / netfx</param>
+        /// <returns>Task</returns>
+        [SkippableTheory]
+        [MemberData(nameof(AllTargets))]
+        public async Task RT27207_管理画面から同意を取り消せる(string targetKey)
+        {
+            using (IdPClient client = await this.SignedInClientAsync(targetKey))
+            {
+                TestReport r = this.Report("RT-272.7",
+                    "管理画面から同意を取り消すと、次の prompt=none が consent_required になる",
+                    "**記録するなら、取り消せなければならない。**"
+                    + "取り消さないと**記録が増えるだけ**になり、"
+                    + "**利用者が「どのアプリに何を許したか」を解除できない。**"
+                    + "**取り消しても、発行済みのトークンは失効しない**"
+                    + "（そちらは `/revoke`（RFC 7009）の役目）。"
+                    + "**効果は「次の認可で同意画面が出る」こと**である。",
+                    "OIDC Core §3.1.2.6 / #272 の段階 2 / D-6");
+
+                // **TestClient_20 は、この測定のためだけに在る**（取り消しが他のテストに響かないように）。
+                ClientRegistration reg = Flows.InjectedRegistration(client, KnownClients.TestClient_20);
+
+                r.Target("client_name=" + KnownClients.TestClient_20);
+                r.Step("(1) 同意を記録する");
+
+                await Flows.EnsureConsentAsync(client, reg);
+
+                AuthZResponse before = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2727a", "none"));
+
+                r.Verify("prompt=none で認可コードが返る（記録が効いている）",
+                    !string.IsNullOrEmpty(before.Code),
+                    "code あり",
+                    string.IsNullOrEmpty(before.Code)
+                        ? "**返らなかった**（error=" + (before.Error ?? "なし") + "）" : "あり（値は伏せる）");
+
+                r.Step("(2) 管理画面の一覧に、このクライアントが出る");
+
+                // **管理画面は、別のクライアントで触る。**
+                //   **認可フローを通した後のセッションでは /Manage が 302 になる**（実測）。
+                //   **同じ利用者でサインインし直せば、同じ記録を見られる。**
+                string list = null;
+                bool revoked = false;
+                int manageStatus = 0;
+
+                using (IdPClient manage = await this.SignedInClientAsync(targetKey))
+                {
+                    HttpResponseMessage page = await manage.GetAsync("/Manage/ConsentGrants");
+                    manageStatus = (int)page.StatusCode;
+
+                    if (page.IsSuccessStatusCode)
+                    {
+                        list = await page.Content.ReadAsStringAsync();
+                    }
+
+                r.Verify("一覧に client_name が出る",
+                    list != null && list.Contains(KnownClients.TestClient_20),
+                    "出る",
+                    list == null
+                        ? "**画面が出ない**（HTTP " + manageStatus + "）"
+                        : (list.Contains(KnownClients.TestClient_20)
+                            ? "出た" : "**一覧に無い**"));
+
+                r.Step("(3) 管理画面から取り消す");
+
+                    revoked = await manage.RevokeConsentAsync(reg.ClientId);
+                }
+
+                r.Verify("取り消しが受け付けられる", revoked,
+                    "受け付けられる", revoked ? "受け付けられた" : "**失敗した**");
+
+                r.Step("(4) 取り消した後の prompt=none は consent_required");
+
+                AuthZResponse after = await client.AuthorizeAsync(
+                    PromptTests.Parameters(reg, "state-rt2727b", "none"));
+
+                r.VerifyEqual("エラーは consent_required", "consent_required", after.Error ?? "（無し）");
+
+                r.Verify("認可コードは発行されない", string.IsNullOrEmpty(after.Code),
+                    "code なし", string.IsNullOrEmpty(after.Code) ? "なし" : "**発行された**");
+
+                r.Note("**このテストは、終わった時点で記録を残さない。**"
+                    + "**DB ストアでも 2 回目以降の実行で同じ結果になる。**");
 
                 r.Done();
             }

@@ -31,6 +31,7 @@
     //*  ----------  ----------------  -------------------------------------------------
     //*  2017/04/24  西野 大介         新規
     //*  2026/09/28  玄人 幸道         何を確かめる画面なのかを出す（#246 の項目 3。自己テストが開いている配置だけ）
+    //*  2026/10/06  玄人 幸道         Deny ボタンと、同意の記録の解説（#272 の段階 2）
     //**********************************************************************************
 *@
 
@@ -68,6 +69,7 @@
             </ul>
             <p>
                 <input class="btn btn-primary" type="submit" name="submit.Grant" value="@AccountViews.OAuth2AuthorizeGrantButton" />
+                <input class="btn btn-primary" type="submit" name="submit.Deny" value="@AccountViews.OAuth2AuthorizeDenyButton" />
                 <input class="btn btn-primary" type="submit" name="submit.Login" value="@AccountViews.OAuth2AuthorizeSIDUButton" />
             </p>
         </form>
@@ -84,9 +86,13 @@
                 <tr>
                     <th style="width:30%;">なぜこの画面が出たか</th>
                     <td>
-                        <b>prompt が none ではなく、認証用の scope でもないため</b>、同意を求めている。<br />
-                        <b>この実装は同意を記録しない</b>ので、同じ要求でも毎回この画面になる
-                        （<code>ANALYSIS-IdP.md</code> の D-6）。
+                        <b>このクライアントに対する同意の記録が無い（または要求された scope に
+                        記録に無いものが在る）ため</b>、同意を求めている。<br />
+                        <b>許可すれば記録する</b>ので、<b>次回以降はこの画面は出ない</b>
+                        （#272 の段階 2。<code>ANALYSIS-IdP.md</code> の D-6）。<br />
+                        <b><code>prompt=consent</code> を指定すれば、記録が在っても出す。</b>
+                        記録を消すには <code>/Manage/ConsentGrants</code> から取り消す。<br />
+                        <b>認証用の scope（<code>auth</code>）のときは、従来どおりこの画面を出さない。</b>
                     </td>
                 </tr>
                 <tr>
@@ -105,10 +111,15 @@
                     <th>prompt</th>
                     <td>
                         @(string.IsNullOrEmpty((string)ViewBag.Prompt) ? "（指定なし）" : ViewBag.Prompt)<br />
-                        <b>none を指定すると、この画面は出ずに code が返る。</b>
-                        本来は UI が要るなら <code>login_required</code> 等を返す指定なので、
-                        <b>無音で認可が通ることを確かめられる</b>（C-3）。<br />
-                        <b>login / consent / select_account は未対応で、無視される。</b>
+                        <b>none を指定すると、UI を出さずに済ませるかを試せる。</b><br />
+                        <b>同意が記録されていれば code が返る</b>が、
+                        <b>記録が無ければ <code>consent_required</code></b> が <code>redirect_uri</code> へ返る
+                        （#272 の段階 2。以前は記録を持たず、<b>無音で通していた</b>。C-3）。<br />
+                        <b><code>none</code> を他の値と併記すると <code>invalid_request</code></b>（#272 の段階 1）。<br />
+                        <b>consent</b> … 記録が在ってもこの画面を出す。
+                        <b>login</b> … 再認証を求める。
+                        <b>select_account</b> … この画面を出す
+                        （<b>アカウントの一覧から選ぶ仕組みは持っていない</b>）。
                     </td>
                 </tr>
                 <tr>

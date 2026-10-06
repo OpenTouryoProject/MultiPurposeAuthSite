@@ -275,5 +275,14 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("SetTwoFactorSuccess", resourceCulture);
             }
         }
+        /// <summary>
+        ///   The consent has been revoked. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string RevokeConsentSuccess {
+            get {
+                return ResourceManager.GetString("RevokeConsentSuccess", resourceCulture);
+            }
+        }
+        
     }
 }

@@ -189,4 +189,7 @@
   <data name="SetTwoFactorSuccess" xml:space="preserve">
     <value>2FAプロバイダーが設定されました。</value>
   </data>
+  <data name="RevokeConsentSuccess" xml:space="preserve">
+    <value>同意を取り消しました。</value>
+  </data>
 </root>

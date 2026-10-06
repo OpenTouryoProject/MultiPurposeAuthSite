@@ -1103,5 +1103,59 @@ namespace MultiPurposeAuthSite.Resources {
                 return ResourceManager.GetString("VerifyPhoneNumberTitle", resourceCulture);
             }
         }
+        /// <summary>
+        ///   Client に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsClient {
+            get {
+                return ResourceManager.GetString("ConsentGrantsClient", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   No application has been granted access. に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsNone {
+            get {
+                return ResourceManager.GetString("ConsentGrantsNone", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Revoke に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsRevokeButton {
+            get {
+                return ResourceManager.GetString("ConsentGrantsRevokeButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Granted scopes に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsScopes {
+            get {
+                return ResourceManager.GetString("ConsentGrantsScopes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Applications you have granted access to に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string ConsentGrantsTitle {
+            get {
+                return ResourceManager.GetString("ConsentGrantsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Manage に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string IndexConsentGrantsActionLink {
+            get {
+                return ResourceManager.GetString("IndexConsentGrantsActionLink", resourceCulture);
+            }
+        }
+        
     }
 }

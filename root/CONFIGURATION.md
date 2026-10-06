@@ -688,6 +688,34 @@ E2E テストは既定で `mem` を使う。**前後で状態を掃除する必�
 >
 > **`RequirePkce` だけは `NOT NULL`** なので、`ALTER` で足すときは既定値が要る。
 
+> **同意（consent）を記録する表を足した**（#272 の段階 2）。
+>
+> ```sql
+> CREATE TABLE [ConsentGrant](
+>     [UserId] [nvarchar](38) NOT NULL,        -- *PK
+>     [ClientID] [nvarchar](256) NOT NULL,     -- *PK
+>     [Scopes] [nvarchar](1024) NOT NULL,      -- 許可した scope（空白区切り。辞書順）
+>     [CreatedDate] [smalldatetime] NOT NULL,
+>     [UpdatedDate] [smalldatetime] NOT NULL
+> )
+> ```
+>
+> **これが無いと `prompt=none` の判定ができない。**
+> 以前は**記録を持たず、`prompt=none` で無条件に同意画面を飛ばしていた**
+> （`ANALYSIS-IdP.md` の C-3）。
+>
+> **既存のデータベースにはこの表が要る。**
+> **`Create_UserStore.sql` を流し直す**か、**表を 1 つ足す**
+> （`Users.Id` への FK（`ON DELETE CASCADE`）も張る。おかないと利用者を消しても同意が残る）。
+> **表が無いと、認可が通らなくなる**（同意の読み書きで落ちる）。
+>
+> **設定キーは置いていない。** **常に仕様どおり**である。
+> **記録が無いクライアントの `prompt=none` は `consent_required`** になるので、
+> **初回は必ず同意画面を通る**（一度通せば、その後は飛ぶ）。
+>
+> **利用者は `/Manage/ConsentGrants` から取り消せる。**
+> **発行済みのトークンは失効しない**（そちらは `/revoke`。RFC 7009）。
+
 **3 つの DDL がミラーかどうかは、機械的に確かめられる。**
 
 ```powershell

@@ -33,6 +33,7 @@
 //*  2026/10/04  玄人 幸道         web_originsのTestClient_16を追加（#266）
 //*  2026/10/04  玄人 幸道         2000文字を超える登録のTestClient_17を追加（#269）
 //*  2026/10/06  玄人 幸道         require_pkceのTestClient_18を追加（#270）
+//*  2026/10/06  玄人 幸道         同意を記録しないTestClient_19を追加（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.ViewModels;
@@ -282,6 +283,24 @@ namespace MultiPurposeAuthSite.Extensions.Sts
                     { "redirect_uri_saml", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
                     { "post_logout_redirect_uri", "https://long.example/cb?p=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
                 }
+            },
+            new Entry()
+            {
+                // **同意を記録しないクライアント**（#272 の段階 2）。
+                //   **「同意の記録が無い」状態を測るためだけに在る。**
+                //   **このクライアントに対しては、どのテストも「許可」を押さない。**
+                //   **押すと記録が残り、DB ストアでは 2 回目の実行から
+                //   `RT-272.3` / `RT-272.4` が測れなくなる。**
+                ClientName = "TestClient_19", ClientId = "e2e0tc19000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient"
+            },
+            new Entry()
+            {
+                // **同意の取り消しを測るためのクライアント**（#272 の段階 2）。
+                //   **`RT-272.7` が「許可 → 取り消し → prompt=none」を回す。**
+                //   **専用にしてあるのは、取り消しが他のテストに影響しないようにするため。**
+                ClientName = "TestClient_20", ClientId = "e2e0tc20000000000000000000000000",
+                ClientMode = "normal", SourceName = "TestClient"
             },
             new Entry()
             {

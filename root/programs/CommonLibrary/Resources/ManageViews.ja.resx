@@ -468,4 +468,22 @@
   <data name="RemoveWebAuthnDataTitle" xml:space="preserve">
     <value>WebAuthnデータの削除</value>
   </data>
+  <data name="ConsentGrantsClient" xml:space="preserve">
+    <value>クライアント</value>
+  </data>
+  <data name="ConsentGrantsNone" xml:space="preserve">
+    <value>認可したアプリケーションはありません。</value>
+  </data>
+  <data name="ConsentGrantsRevokeButton" xml:space="preserve">
+    <value>取り消す</value>
+  </data>
+  <data name="ConsentGrantsScopes" xml:space="preserve">
+    <value>許可した scope</value>
+  </data>
+  <data name="ConsentGrantsTitle" xml:space="preserve">
+    <value>認可したアプリケーション</value>
+  </data>
+  <data name="IndexConsentGrantsActionLink" xml:space="preserve">
+    <value>管理</value>
+  </data>
 </root>

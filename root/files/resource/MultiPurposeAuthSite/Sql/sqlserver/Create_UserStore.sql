@@ -126,6 +126,16 @@ CREATE TABLE [SubjectIdentifier](
         WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
 ) ON [PRIMARY]
 
+CREATE TABLE [ConsentGrant](   -- 同意の記録（#272 の段階 2）
+    [UserId] [nvarchar](38) NOT NULL,              -- *PK, guid
+    [ClientID] [nvarchar](256) NOT NULL,        -- *PK
+    [Scopes] [nvarchar](1024) NOT NULL,           -- 許可した scope（空白区切り。辞書順）
+    [CreatedDate] [smalldatetime] NOT NULL,
+    [UpdatedDate] [smalldatetime] NOT NULL,  -- scope を足したときに更新
+    CONSTRAINT [PK.ConsentGrant] PRIMARY KEY NONCLUSTERED ([UserId] ASC, [ClientID] ASC)
+        WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
+) ON [PRIMARY]
+
 CREATE TABLE [CustomizedConfirmation](
     [UserId] [nvarchar](38) NOT NULL,        -- PK, guid
     [Value] [nvarchar](max) NOT NULL,        -- Value
@@ -256,5 +266,7 @@ ALTER TABLE [TotpTokens] WITH CHECK ADD CONSTRAINT [FK.TotpTokens.Users_UserId] 
 ALTER TABLE [Saml2OAuth2Data] WITH CHECK ADD CONSTRAINT [FK.Saml2OAuth2Data.Users_ClientID] FOREIGN KEY([ClientID]) REFERENCES [Users] ([ClientID]) ON DELETE CASCADE
 ---- FIDO2Data
 ALTER TABLE [FIDO2Data] WITH CHECK ADD CONSTRAINT [FK.FIDO2Data.Users_UserName] FOREIGN KEY([UserName]) REFERENCES [Users] ([UserName]) ON DELETE CASCADE
+---- ConsentGrant
+ALTER TABLE [ConsentGrant] WITH CHECK ADD CONSTRAINT [FK.ConsentGrant.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE
 ---- SubjectIdentifier
 ALTER TABLE [SubjectIdentifier] WITH CHECK ADD CONSTRAINT [FK.SubjectIdentifier.Users_UserId] FOREIGN KEY([UserId]) REFERENCES [Users] ([Id]) ON DELETE CASCADE

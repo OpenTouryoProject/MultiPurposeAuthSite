@@ -33,6 +33,7 @@
 //*  2026/10/01  玄人 幸道         テスト利用者の利用者名とメアドを分けた（#151 の段階 3）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに分けた（#260）
 //*  2026/10/04  玄人 幸道         到達性のプローブを数回試す（#266。DBストアで踏んだ）
+//*  2026/10/06  玄人 幸道         構成ファイルのクライアントの同意を先に通す（#272 の段階 2）
 //**********************************************************************************
 
 using System;
@@ -392,7 +393,80 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
                     // 取れなくても、ここでは落とさない。
                 }
 
+                this.EnsureConsentSeed();
+
                 this._seeded = true;
+            }
+        }
+
+        #endregion
+
+        #region EnsureConsentSeed
+
+        /// <summary>構成ファイルのクライアントの同意を、先に通しておく（#272 の段階 2）</summary>
+        /// <remarks>
+        /// **同意を記録するようになった**ので、
+        /// **記録が無いクライアントに `prompt=none` で認可を求めると `consent_required`** になる。
+        ///
+        /// **`prompt=none` を自分で送るテストは 12 ファイルに散っている。**
+        /// それぞれに「先に同意を通す」を書くと、
+        /// **書き忘れたものが「先に走ったテスト次第で落ちる」**ことになる。
+        /// **順序で結果が変わるテストは、落ちたときに原因に辿り着けない。**
+        ///
+        /// **そこで、種データと同じところで 1 度だけ通す。**
+        /// **通すのは構成ファイルのクライアントだけ**で、
+        /// **種データのクライアント（`TestClient_*`）は通さない**
+        /// （`TestClient_19` は**記録が無いこと**を測るために在る。`RT-272.3` / `RT-272.4`）。
+        ///
+        /// **落ちても無視する。** ここで測りたいのは同意ではなく、
+        /// 足りなければテスト自身が落ちて分かる。
+        /// </remarks>
+        private void EnsureConsentSeed()
+        {
+            string[] clientNames = new string[]
+            {
+                KnownClients.TestClient,
+                KnownClients.TestClient1,
+                KnownClients.TestClient2,
+                KnownClients.TestClient3,
+                KnownClients.TestClient4,
+                KnownClients.TestClient5,
+                KnownClients.TestClient6,
+                KnownClients.MvcSample
+            };
+
+            try
+            {
+                using (IdPClient client = new IdPClient(this))
+                {
+                    client.SignInAsync().GetAwaiter().GetResult();
+
+                    foreach (string name in clientNames)
+                    {
+                        ClientRegistration reg = null;
+
+                        try
+                        {
+                            reg = Flows.Registration(client, name);
+                        }
+                        catch
+                        {
+                            // 構成ファイルに無いクライアントは飛ばす。
+                            continue;
+                        }
+
+                        if (reg == null || string.IsNullOrEmpty(reg.ClientId))
+                        {
+                            continue;
+                        }
+
+                        Flows.EnsureConsentAsync(client, reg).GetAwaiter().GetResult();
+                    }
+                }
+            }
+            catch
+            {
+                // 通せなくても、ここでは落とさない。
             }
         }
 

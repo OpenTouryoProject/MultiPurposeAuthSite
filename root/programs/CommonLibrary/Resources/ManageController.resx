@@ -189,4 +189,7 @@
   <data name="SetTwoFactorSuccess" xml:space="preserve">
     <value>Your two-factor authentication provider has been set.</value>
   </data>
+  <data name="RevokeConsentSuccess" xml:space="preserve">
+    <value>The consent has been revoked.</value>
+  </data>
 </root>

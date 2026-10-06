@@ -78,6 +78,7 @@
     <Compile Include="Extensions\Sts\IssuedTokenProvider.cs" />
     <Compile Include="Extensions\Sts\RequestObjectProvider.cs" />
     <Compile Include="Extensions\Sts\SelfTestClient.cs" />
+    <Compile Include="Extensions\Sts\ConsentProvider.cs" />
     <Compile Include="Extensions\Sts\SubjectIdProvider.cs" />
     <Compile Include="Extensions\Sts\TestClients.cs" />
     <Compile Include="Extensions\Sts\UserClaims.cs" />
@@ -193,6 +194,7 @@
     <Compile Include="ViewModels\ManageChangeUserNameViewModel.cs" />
     <Compile Include="ViewModels\ManageConfigureTwoFactorViewModel.cs" />
     <Compile Include="ViewModels\ManageEmailViewModel.cs" />
+    <Compile Include="ViewModels\ManageConsentGrantsViewModel.cs" />
     <Compile Include="ViewModels\ManageIndexViewModel.cs" />
     <Compile Include="ViewModels\ManageLoginsViewModel.cs" />
     <Compile Include="ViewModels\ManageSetPasswordViewModel.cs" />

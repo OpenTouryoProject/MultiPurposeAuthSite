@@ -465,4 +465,22 @@
   <data name="VerifyPhoneNumberTitle" xml:space="preserve">
     <value>Verify Phone Number</value>
   </data>
+  <data name="ConsentGrantsClient" xml:space="preserve">
+    <value>Client</value>
+  </data>
+  <data name="ConsentGrantsNone" xml:space="preserve">
+    <value>No application has been granted access.</value>
+  </data>
+  <data name="ConsentGrantsRevokeButton" xml:space="preserve">
+    <value>Revoke</value>
+  </data>
+  <data name="ConsentGrantsScopes" xml:space="preserve">
+    <value>Granted scopes</value>
+  </data>
+  <data name="ConsentGrantsTitle" xml:space="preserve">
+    <value>Applications you have granted access to</value>
+  </data>
+  <data name="IndexConsentGrantsActionLink" xml:space="preserve">
+    <value>Manage</value>
+  </data>
 </root>

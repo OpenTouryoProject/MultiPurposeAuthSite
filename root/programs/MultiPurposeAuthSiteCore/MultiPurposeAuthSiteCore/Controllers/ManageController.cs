@@ -25,6 +25,7 @@
 //*  2026/10/04  玄人 幸道         登録の保存でCORSのキャッシュを捨てる（#266）
 //*  2026/10/06  玄人 幸道         クライアント登録を専用列に保存する（#270）
 //*  2026/10/06  玄人 幸道         CORSの許可オリジンのキャッシュをやめた（#271）
+//*  2026/10/06  玄人 幸道         同意の一覧と取り消しを追加（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -106,6 +107,8 @@ namespace MultiPurposeAuthSite.Controllers
             ChangePasswordSuccess,
             /// <summary>RemoveExternalLoginSuccess</summary>
             RemoveExternalLoginSuccess,
+            /// <summary>RevokeConsentSuccess（#272 の段階 2）</summary>
+            RevokeConsentSuccess,
             /// <summary>AccountConflictInSocialLogin</summary>
             AccountConflictInSocialLogin,
             /// <summary>SetTwoFactorSuccess</summary>
@@ -324,6 +327,7 @@ namespace MultiPurposeAuthSite.Controllers
                 : message == EnumManageMessageId.ChangeEmailFailure ? Resources.ManageController.ChangeEmailFailure
                 : message == EnumManageMessageId.ChangePasswordSuccess ? Resources.ManageController.ChangePasswordSuccess
                 : message == EnumManageMessageId.RemoveExternalLoginSuccess ? Resources.ManageController.RemoveExternalLoginSuccess
+                : message == EnumManageMessageId.RevokeConsentSuccess ? Resources.ManageController.RevokeConsentSuccess
                 : message == EnumManageMessageId.AccountConflictInSocialLogin ? Resources.ManageController.AccountConflictInSocialLogin
                 : message == EnumManageMessageId.SetTwoFactorSuccess ? Resources.ManageController.SetTwoFactorSuccess
                 : message == EnumManageMessageId.AddPhoneSuccess ? Resources.ManageController.AddPhoneSuccess
@@ -1383,6 +1387,66 @@ namespace MultiPurposeAuthSite.Controllers
         #endregion
 
         #region (External) Logins
+
+        /// <summary>
+        /// 同意（consent grant）の一覧（#272 の段階 2 / D-6）
+        /// GET: /Manage/ConsentGrants
+        /// </summary>
+        /// <param name="message">ManageMessageId</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **利用者が「どのアプリケーションに何を許したか」を見る画面である。
+        /// **記録するなら、取り消せなければならない**（そうでないと記録が増えるだけになる）。
+        /// </remarks>
+        [HttpGet]
+        public async Task<ActionResult> ConsentGrants(EnumManageMessageId? message)
+        {
+            ApplicationUser user = await UserManager.GetUserAsync(User);
+
+            ViewBag.StatusMessage = (message == EnumManageMessageId.RevokeConsentSuccess)
+                ? Resources.ManageController.RevokeConsentSuccess : "";
+
+            List<ConsentGrantViewModel> grants = new List<ConsentGrantViewModel>();
+
+            foreach (KeyValuePair<string, string> kv
+                in Sts.ConsentProvider.GetByUser(user.Id))
+            {
+                // **client_name を引けなければ client_id を出す**
+                //   （登録を消した後でも、同意の記録は残る）。
+                string clientName = Sts.Helper.GetInstance().GetClientName(kv.Key);
+
+                grants.Add(new ConsentGrantViewModel()
+                {
+                    ClientId = kv.Key,
+                    ClientName = string.IsNullOrEmpty(clientName) ? kv.Key : clientName,
+                    Scopes = kv.Value
+                });
+            }
+
+            return View(new ManageConsentGrantsViewModel() { Grants = grants });
+        }
+
+        /// <summary>
+        /// 同意を取り消す（#272 の段階 2 / D-6）
+        /// POST: /Manage/RevokeConsent
+        /// </summary>
+        /// <param name="clientId">client_id</param>
+        /// <returns>ActionResultを非同期に返す</returns>
+        /// <remarks>
+        /// **次の認可で同意画面が出る**（`prompt=none` なら `consent_required`）。
+        /// **発行済みのトークンは失効しない。** そちらは `/revoke`（RFC 7009）の役目である。
+        /// </remarks>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<ActionResult> RevokeConsent(string clientId)
+        {
+            ApplicationUser user = await UserManager.GetUserAsync(User);
+
+            Sts.ConsentProvider.Revoke(user.Id, clientId);
+
+            return RedirectToAction("ConsentGrants",
+                new { Message = EnumManageMessageId.RevokeConsentSuccess });
+        }
 
         /// <summary>
         /// 外部ログイン管理画面（初期表示）

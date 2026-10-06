@@ -102,6 +102,15 @@ CREATE TABLE SubjectIdentifier(
     CONSTRAINT PK_SubjectIdentifier PRIMARY KEY (Sector, UserId)
 );
 
+CREATE TABLE ConsentGrant(   -- 同意の記録（#272 の段階 2）
+    UserId varchar(38) NOT NULL,                   -- *PK, guid
+    ClientID varchar(256) NOT NULL,             -- *PK
+    Scopes varchar(1024) NOT NULL,                -- 許可した scope（空白区切り。辞書順）
+    CreatedDate timestamp NOT NULL,
+    UpdatedDate timestamp NOT NULL,          -- scope を足したときに更新
+    CONSTRAINT PK_ConsentGrant PRIMARY KEY (UserId, ClientID)
+);
+
 CREATE TABLE CustomizedConfirmation(
     UserId varchar(38) NOT NULL,             -- PK, guid
     Value varchar(2000) NOT NULL,            -- Value
@@ -224,5 +233,7 @@ ALTER TABLE TotpTokens ADD CONSTRAINT FK_TotpTokens_Users_UserId FOREIGN KEY(Use
 ALTER TABLE Saml2OAuth2Data ADD CONSTRAINT FK_Saml2OAuth2Data_Users_ClientID FOREIGN KEY(ClientID) REFERENCES Users (ClientID) ON DELETE CASCADE;
 ---- FIDO2Data
 ALTER TABLE FIDO2Data ADD CONSTRAINT FK_FIDO2Data_Users_UserName FOREIGN KEY(UserName) REFERENCES Users (UserName) ON DELETE CASCADE;
+---- ConsentGrant
+ALTER TABLE ConsentGrant ADD CONSTRAINT FK_ConsentGrant_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;
 ---- SubjectIdentifier
 ALTER TABLE SubjectIdentifier ADD CONSTRAINT FK_SubjectIdentifier_Users_UserId FOREIGN KEY(UserId) REFERENCES Users (Id) ON DELETE CASCADE;

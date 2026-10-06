@@ -32,6 +32,7 @@
 //*  2026/09/29  玄人 幸道         自己テスト経由の経路（手順 4・5）を追加（#247）
 //*  2026/09/29  玄人 幸道         秒単位の判定に合わせ、サインインから 1 秒以上ずらす（#247）
 //*  2026/09/30  玄人 幸道         未サインインの場合を追加（#254）
+//*  2026/10/06  玄人 幸道         RT-247.1の観測点を同意の記録に合わせた（#272 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -137,29 +138,51 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 // **ここでは待たない。** 再認証の直後（同じ秒）は超過にならないのが期待。
                 AuthZResponse after = await client.AuthorizeAsync(form);
 
-                r.Verify("同意画面まで進む（再びサインインへ送られない）", after.NeedsConsent,
-                    "同意画面", after.NeedsConsent ? "同意画面" : "**進まない**（" + after.ToString() + "）");
+                // **観測点は「再びサインインへ送られない」である**（#272 の段階 2 で直した）。
+                //   以前は「同意画面まで進む」を見ていたが、
+                //   **同意を記録するようになった**ので、
+                //   **記録が在ると同意画面を飛ばして code が返る。**
+                //   **どちらでも「再認証を繰り返していない」ことは示せる。**
+                bool wentOn = after.NeedsConsent || !string.IsNullOrEmpty(after.Code);
+
+                r.Verify("先へ進む（再びサインインへ送られない）", wentOn,
+                    "同意画面 または 認可コード",
+                    after.NeedsConsent ? "同意画面"
+                        : (!string.IsNullOrEmpty(after.Code) ? "認可コード（同意済み）"
+                            : "**進まない**（" + after.ToString() + "）"));
 
                 // **秒単位で判定する**ので、手順 3 のサインインから 1 秒以上ずらす（#247）。
                 await Task.Delay(1500);
 
-                r.Step("(4) OIDC のボタンは prompt=none を送るので login_required になる");
+                r.Step("(4) OIDC のボタンは prompt を固定しない（#272 の段階 2）");
 
+                // **以前は、画面で prompt を選んでいなければ `prompt=none` を付けていた。**
+                //   **同意を記録するようになったので、それでは回らない**
+                //   （**記録が無い配備では、初回に必ず `consent_required`**）。
+                //   **これが付いていると、新しい配備で自己テストが使えない。**
                 HttpResponseMessage oidc = await client.StartSelfTestAsync(
                     "AuthorizationCode_OIDC", "normal", maxAge: "0");
 
                 string oidcUrl = (oidc.Headers.Location == null)
                     ? "" : client.ToLocalUrl(oidc.Headers.Location.ToString());
 
-                r.Verify("prompt=none が付く（同意画面を飛ばすため）",
-                    oidcUrl.Contains("prompt=none"),
-                    "prompt=none", oidcUrl.Contains("prompt=none") ? "付いている" : "**付いていない**");
+                r.Verify("prompt は付かない（画面で選んでいないので）",
+                    !oidcUrl.Contains("prompt="),
+                    "prompt なし",
+                    oidcUrl.Contains("prompt=") ? "**付いている**" : "付いていない");
 
-                AuthZResponse viaOidc = await IdPClient.ToAuthZResponseAsync(
-                    await client.GetAsync(oidcUrl));
+                // **ここでは URL を辿らない。**
+                //   **辿ると max_age=0 で再認証が起き、サインアウトしてしまう**ので、
+                //   **手順 5（自己テストのボタンでの再認証）が測れなくなる。**
+                //   以前は `prompt=none` が付いていて `login_required` が返るだけだったので、
+                //   辿ってもセッションが残っていた。
 
-                r.VerifyEqual("login_required が返る（エラー画面ではない）",
-                    "login_required", viaOidc.Error ?? "（無し）");
+                r.Note("**`prompt=none` を試したいときは、画面の選択で指定する**（#246 の項目 3）。"
+                    + "**手順 1〜3 が、`prompt=none` を送ったときの `login_required` を測っている。**");
+
+                r.Note("**固定で `prompt=none` を付けていたのをやめた**（#272 の段階 2）。"
+                    + "**同意を記録するようになったので、付けたままだと"
+                    + "記録が無い配備で初回に必ず `consent_required` になる。**");
 
                 r.Step("(5) 自己テストのボタン（max_age=0）でも、再認証へ送られることを確かめる");
 

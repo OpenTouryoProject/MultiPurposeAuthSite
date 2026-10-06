@@ -626,11 +626,117 @@ namespace MultiPurposeAuthSite.Tests.E2E.Infrastructure
             return await ToAuthZResponseAsync(res);
         }
 
+        /// <summary>画面を GET して本文を返す（#272 の段階 2）</summary>
+        /// <param name="pathOrUrl">パスまたは URL</param>
+        /// <returns>本文（失敗したら null）</returns>
+        public async Task<string> GetStringAsync(string pathOrUrl)
+        {
+            HttpResponseMessage res = await this.GetAsync(pathOrUrl);
+
+            return res.IsSuccessStatusCode
+                ? await res.Content.ReadAsStringAsync() : null;
+        }
+
+        /// <summary>管理画面から同意を取り消す（#272 の段階 2）</summary>
+        /// <param name="clientId">client_id</param>
+        /// <returns>受け付けられたら true</returns>
+        /// <remarks>
+        /// **一覧画面から `__RequestVerificationToken` を取って POST する。**
+        /// 画面を駆動するので、**ボタンが無ければ落ちる**（#257 と同じ考え方）。
+        /// </remarks>
+        public async Task<bool> RevokeConsentAsync(string clientId)
+        {
+            string html = await this.GetStringAsync("/Manage/ConsentGrants");
+
+            if (string.IsNullOrEmpty(html))
+            {
+                return false;
+            }
+
+            Match m = IdPClient.AntiforgeryRegex.Match(html);
+
+            if (!m.Success)
+            {
+                return false;
+            }
+
+            HttpResponseMessage res = await this.PostFormAsync("/Manage/RevokeConsent",
+                new Dictionary<string, string>()
+                {
+                    { "__RequestVerificationToken", m.Groups["value"].Value },
+                    { "clientId", clientId }
+                });
+
+            // **成功すれば一覧へリダイレクトする。**
+            return res.IsSuccessStatusCode
+                || res.StatusCode == System.Net.HttpStatusCode.Found
+                || res.StatusCode == System.Net.HttpStatusCode.Redirect;
+        }
+
+        /// <summary>
+        /// 同意画面（OAuth2Authorize）で「拒否」を押す（E-6 / #272 の段階 2）。
+        ///
+        /// prompt=none を付けない認可リクエスト（Request Object 経由など）は、
+        /// 一度この画面で止まる。フォームは action を持たず、
+        /// 認可リクエストと同じURL（クエリ文字列込み）へPOSTされる。
+        /// </summary>
+        /// <param name="authz">同意画面が返ってきた応答</param>
+        /// <returns>AuthZResponse</returns>
+        public async Task<AuthZResponse> DenyConsentAsync(AuthZResponse authz)
+        {
+            if (!authz.NeedsConsent)
+            {
+                throw new InvalidOperationException(
+                    "同意画面ではありません: " + authz.ToString());
+            }
+
+            Match m = AntiforgeryRegex.Match(authz.Body);
+
+            if (!m.Success)
+            {
+                throw new InvalidOperationException(
+                    "同意画面から __RequestVerificationToken を取得できませんでした。");
+            }
+
+            Dictionary<string, string> form = new Dictionary<string, string>()
+            {
+                { "__RequestVerificationToken", m.Groups["value"].Value },
+                { "submit.Deny", "Deny" }
+            };
+
+            HttpResponseMessage res = await this.PostFormAsync(authz.RequestUrl, form);
+            return await ToAuthZResponseAsync(res);
+        }
+
         /// <summary>
         /// 認可リクエストを送り、同意画面が出たら「許可」まで進める。
         /// </summary>
         /// <param name="url">認可リクエストのURL</param>
         /// <returns>AuthZResponse</returns>
+        /// <summary>
+        /// 認可リクエストを送り、同意画面が出たら「許可」まで進める（#272 の段階 2）。
+        /// </summary>
+        /// <param name="parameters">クエリ パラメタ</param>
+        /// <param name="path">エンドポイント（既定は /authorize）</param>
+        /// <returns>AuthZResponse</returns>
+        /// <remarks>
+        /// **同意を記録するようになった**ので（#272 の段階 2）、
+        /// **初回の認可は同意画面を通る。**
+        /// **2 回目以降は記録が在るので出ない**ので、この口で両方を扱える。
+        /// </remarks>
+        public async Task<AuthZResponse> AuthorizeAndGrantAsync(
+            IDictionary<string, string> parameters, string path = "/authorize")
+        {
+            AuthZResponse authz = await this.AuthorizeAsync(parameters, path);
+
+            if (authz.NeedsConsent)
+            {
+                authz = await this.GrantConsentAsync(authz);
+            }
+
+            return authz;
+        }
+
         public async Task<AuthZResponse> AuthorizeAndGrantAsync(string url)
         {
             HttpResponseMessage res = await this.GetAsync(url);

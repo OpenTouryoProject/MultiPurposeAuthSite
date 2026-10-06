@@ -216,6 +216,9 @@
   <data name="MsPassLoginSubmit" xml:space="preserve">
     <value>Microsoft Passport認証器でログインする。</value>
   </data>
+  <data name="OAuth2AuthorizeDenyButton" xml:space="preserve">
+    <value>拒否する</value>
+  </data>
   <data name="OAuth2AuthorizeGrantButton" xml:space="preserve">
     <value>権限を付与</value>
   </data>

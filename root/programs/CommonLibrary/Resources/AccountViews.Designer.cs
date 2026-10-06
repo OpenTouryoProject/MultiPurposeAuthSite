@@ -358,6 +358,15 @@ namespace MultiPurposeAuthSite.Resources {
         }
         
         /// <summary>
+        ///   Deny に類似しているローカライズされた文字列を検索します。
+        /// </summary>
+        public static string OAuth2AuthorizeDenyButton {
+            get {
+                return ResourceManager.GetString("OAuth2AuthorizeDenyButton", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Grant に類似しているローカライズされた文字列を検索します。
         /// </summary>
         public static string OAuth2AuthorizeGrantButton {

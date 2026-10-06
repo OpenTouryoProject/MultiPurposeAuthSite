@@ -52,6 +52,7 @@
 //*  2026/10/04  玄人 幸道         response_typeを正規化して受ける（#267）
 //*  2026/10/06  玄人 幸道         種データのクライアント登録を専用列で作る（#270）
 //*  2026/10/06  玄人 幸道         promptの照合を集合に寄せた（#272 の段階 1）
+//*  2026/10/06  玄人 幸道         同意を記録し、promptの各値を処理（#272 の段階 2）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -2820,6 +2821,19 @@ namespace MultiPurposeAuthSite.Controllers
                     err = OAuth2AndOIDCConst.login_required;
                     errDescription = "Re-authentication is required, but prompt=none was specified.";
                 }
+                else if (Token.CmnEndpoints.HasPrompt(prompt, Token.CmnEndpoints.PromptLogin)
+                    && string.IsNullOrEmpty(Request.Cookies[Config.ReAuthenticatedAtCookieName] == null ? "" : Request.Cookies[Config.ReAuthenticatedAtCookieName].Value))
+                {
+                    // **prompt=login は、再認証を求める**（OIDC Core §3.1.2.1。#272 の段階 2）。
+                    //   **max_age の再認証と同じ経路**を使う（印を残してサインアウトし、同じ URL に戻す）。
+                    //   **印（re_auth_at）が在るときはここを通らない。**
+                    //   **戻ってきた要求にも prompt=login が付いている**ので、
+                    //   印が無いと永久に送り返すことになる。
+                    Response.Cookies.Add(new HttpCookie(Config.ReAuthenticatedAtCookieName,
+                        FormatConverter.ToW3cTimestamp(DateTime.UtcNow)));
+                    this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
+                    return new RedirectResult(Request.RawUrl);
+                }
                 else if (authTimeCheck == Token.CmnEndpoints.AuthTimeCheck.NeedsReAuthentication)
                 {
                     // **再認証する**（OIDC Core 3.1.2.1）。
@@ -2879,9 +2893,31 @@ namespace MultiPurposeAuthSite.Controllers
 
                         if (string.IsNullOrWhiteSpace(prompt)) prompt = "";
 
-                        if (isAuth                           // OAuth2 拡張仕様
-                            || Token.CmnEndpoints.HasPrompt(
-                                prompt, Token.CmnEndpoints.PromptNone))   // OIDC   RFC仕様
+                        #region 同意の判定（#272 の段階 2 / D-6）
+
+                        // **以前は「`prompt=none` なら無条件に飛ばす」だった**（C-3）。
+                        //   **記録を持ったので、「以前に同意済みか」で判定できる。**
+                        //
+                        //   | 状況 | ここでの扱い |
+                        //   |---|---|
+                        //   | scope に `auth`（独自の認証用） | **従来どおり飛ばす** |
+                        //   | 要求 scope が記録の部分集合 | **飛ばす** |
+                        //   | `prompt=consent` | **記録が在っても出す**（§3.1.2.1） |
+                        //   | `prompt=select_account` | **出す**（画面に「別のアカウントでログイン」が在る） |
+                        //   | 記録が無い ＋ `prompt=none` | **`consent_required`**（§3.1.2.6） |
+                        //   | 記録が無い | 同意画面を出す |
+                        string userId = User.Identity.GetUserId();
+
+                        bool hasConsent = Sts.ConsentProvider.HasConsent(userId, client_id, scopes);
+                        bool asksConsent = Token.CmnEndpoints.HasPrompt(
+                                               prompt, Token.CmnEndpoints.PromptConsent)
+                                           || Token.CmnEndpoints.HasPrompt(
+                                               prompt, Token.CmnEndpoints.PromptSelectAccount);
+
+                        #endregion
+
+                        if (isAuth                              // OAuth2 拡張仕様
+                            || (hasConsent && !asksConsent))    // 同意済み（#272 の段階 2）
                         {
                             // 認可画面をスキップ
 
@@ -2899,6 +2935,17 @@ namespace MultiPurposeAuthSite.Controllers
                             ActionResult actionResult = this.RedirectCode(
                                 client_id, response_mode, valid_redirect_uri, code, state);
                             if (actionResult != null) return actionResult;
+                        }
+                        else if (Token.CmnEndpoints.HasPrompt(
+                            prompt, Token.CmnEndpoints.PromptNone))
+                        {
+                            // **UI を出せないので、エラーを RP へ返す**
+                            //   （OIDC Core §3.1.2.6 : consent_required。#272 の段階 2）。
+                            //   **ここが C-3 そのものである** — 以前は同意を飛ばして
+                            //   code を発行していたので、**セッションが生きていれば
+                            //   どのクライアントも無音で認可を取れた。**
+                            err = OAuth2AndOIDCConst.consent_required;
+                            errDescription = "Consent is required, but prompt=none was specified.";
                         }
                         else
                         {
@@ -3063,6 +3110,16 @@ namespace MultiPurposeAuthSite.Controllers
                     this.AuthenticationManager.SignOut(DefaultAuthenticationTypes.ApplicationCookie);
                     return new RedirectResult(Request.RawUrl);
                 }
+                else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Deny")))
+                {
+                    // **拒否した**（E-6 / #272 の段階 2）。
+                    //   **RFC 6749 §4.1.2.1 : access_denied を redirect_uri へ返す。**
+                    //   **以前は拒否できず、access_denied を返す経路も無かった。**
+                    //   **記録は残さない**（「拒否した」を覚えて、
+                    //   次回以降自動で断ることはしない。利用者が気を変えられなくなる）。
+                    err = OAuth2AndOIDCConst.access_denied;
+                    errDescription = "The resource owner denied the request.";
+                }
                 else if (!string.IsNullOrEmpty(Request.Form.Get("submit.Grant")))
                 {
                     // アクセス要求を保存して、仲介コードを発行する。
@@ -3070,6 +3127,12 @@ namespace MultiPurposeAuthSite.Controllers
                         identity.Claims, OAuth2AndOIDCConst.Bearer, identity.NameClaimType, identity.RoleClaimType);
 
                     // ★ Codeの生成
+                    // **同意を記録する**（#272 の段階 2 / D-6）。
+                    //   **これが次回以降の `prompt=none` の判定の土台になる。**
+                    //   **scope は足し込む**（増えた scope で同意し直しても、以前の分を失わない）。
+                    Sts.ConsentProvider.Grant(
+                        User.Identity.GetUserId(), client_id, scopes);
+
                     string code = Token.CmnEndpoints.CreateCodeInAuthZNRes(
                         identity, Request.QueryString, client_id, state, scopes, claims, nonce);
 

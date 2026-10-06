@@ -189,6 +189,9 @@
                 <dt>@ManageViews.IndexExternalLogins :</dt>
                 <dd>
                     @Model.Logins.Count [ @Html.ActionLink(ManageViews.IndexExternalLoginsActionLink, "ManageLogins") ]
+                    <br />
+                    @* 同意（consent grant）の一覧（#272 の段階 2） *@
+                    @ManageViews.ConsentGrantsTitle [ @Html.ActionLink(ManageViews.IndexConsentGrantsActionLink, "ConsentGrants") ]
                 </dd>
             }
             else

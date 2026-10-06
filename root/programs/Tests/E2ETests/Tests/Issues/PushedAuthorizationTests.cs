@@ -31,6 +31,7 @@
 //*  2026/09/24  玄人 幸道         新規（#229 : PAR のエンドポイントを追加）
 //*  2026/09/28  玄人 幸道         自己テストの PAR ボタンを駆動する RT-246.1 を追加（#246）
 //*  2026/09/28  玄人 幸道         RT-246.1 を結果画面（トークン交換）まで延長（#246）
+//*  2026/10/06  玄人 幸道         先に同意を記録するようにした（#272 の段階 2）
 //**********************************************************************************
 
 using System.Collections.Generic;
@@ -103,6 +104,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
+                // **先に同意を記録する**（#272 の段階 2）。
+                //   このテストは **`prompt=none` を自分で送る**ので、
+                //   **記録が無いと `consent_required`** になる。
+                await Flows.EnsureConsentAsync(client, reg);
+
                 TestReport r = this.Report("RT-229.1",
                     "/par に認可要求を預けると request_uri と expires_in が返り、その request_uri で認可できる",
                     "**PAR は、認可要求をブラウザ経由ではなく、先にサーバ同士で預ける仕組み。**"
@@ -172,6 +178,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             {
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
 
+                // **先に同意を記録する**（#272 の段階 2）。
+                //   このテストは **`prompt=none` を自分で送る**ので、
+                //   **記録が無いと `consent_required`** になる。
+                await Flows.EnsureConsentAsync(client, reg);
+
                 TestReport r = this.Report("RT-229.2",
                     "/par は、クライアント認証がなければ受け付けない",
                     "**これが独自の `/ros` との一番の違い。**"
@@ -223,6 +234,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                // **先に同意を記録する**（#272 の段階 2）。
+                //   このテストは **`prompt=none` を自分で送る**ので、
+                //   **記録が無いと `consent_required`** になる。
+                await Flows.EnsureConsentAsync(client, reg);
 
                 TestReport r = this.Report("RT-229.3",
                     "/par は、フォームの request に署名付き Request Object（JAR）を入れる形でも受け付ける",
@@ -292,6 +308,11 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
             using (IdPClient client = await this.SignedInClientAsync(targetKey))
             {
                 ClientRegistration reg = Flows.Registration(client, KnownClients.TestClient);
+
+                // **先に同意を記録する**（#272 の段階 2）。
+                //   このテストは **`prompt=none` を自分で送る**ので、
+                //   **記録が無いと `consent_required`** になる。
+                await Flows.EnsureConsentAsync(client, reg);
 
                 TestReport r = this.Report("RT-229.4",
                     "/par に request_uri を渡すと invalid_request になる",

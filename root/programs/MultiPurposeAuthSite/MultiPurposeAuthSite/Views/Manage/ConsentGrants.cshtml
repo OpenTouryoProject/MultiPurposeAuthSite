@@ -1,0 +1,79 @@
+﻿@*
+    //**********************************************************************************
+    //* テンプレート
+    //**********************************************************************************
+
+    // 以下のLicenseに従い、このProjectをTemplateとして使用可能です。Release時にCopyright表示してSublicenseして下さい。
+    // https://github.com/OpenTouryoProject/MultiPurposeAuthSite/blob/master/license/LicenseForTemplates.txt
+
+    //**********************************************************************************
+    //* クラス名        ：ConsentGrants
+    //* クラス日本語名  ：同意（consent grant）の一覧用のView
+    //*
+    //* 作成日時        ：－
+    //* 作成者          ：－
+    //* 更新履歴        ：－
+    //*
+    //*  日時        更新者            内容
+    //*  ----------  ----------------  -------------------------------------------------
+    //*  2026/10/06  玄人 幸道         新規（#272 の段階 2 / D-6）
+    //**********************************************************************************
+*@
+
+@using MultiPurposeAuthSite.Resources
+@using MultiPurposeAuthSite.ViewModels
+
+@model ManageConsentGrantsViewModel
+
+@{
+    ViewBag.Title = ManageViews.ConsentGrantsTitle;
+}
+
+@* スクリプト・セクション（RenderSection("HeaderScriptsSection", required: true)に出力されます） *@
+@section HeaderScriptsSection{
+    <!-- Head 部の section -->
+}
+
+<h2>@ViewBag.Title</h2>
+
+<p class="text-success">@ViewBag.StatusMessage</p>
+
+@if (Model.Grants.Count == 0)
+{
+    <p>@ManageViews.ConsentGrantsNone</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>@ManageViews.ConsentGrantsClient</th>
+                <th>@ManageViews.ConsentGrantsScopes</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (ConsentGrantViewModel grant in Model.Grants)
+            {
+                <tr>
+                    <td>@grant.ClientName</td>
+                    <td>@grant.Scopes</td>
+                    <td>
+                        @using (Html.BeginForm("RevokeConsent", "Manage"))
+                        {
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="clientId" value="@grant.ClientId" />
+                            <input type="submit" class="btn btn-default"
+                                   value="@ManageViews.ConsentGrantsRevokeButton" />
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@* スクリプト・セクション（RenderSection("FooterScriptsSection", required: true)に出力されます） *@
+@section FooterScriptsSection{
+    <!-- Footer 部の section -->
+}
