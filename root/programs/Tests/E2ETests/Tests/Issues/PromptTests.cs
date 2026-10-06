@@ -440,22 +440,16 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(2) 管理画面の一覧に、このクライアントが出る");
 
-                // **管理画面は、別のクライアントで触る。**
-                //   **認可フローを通した後のセッションでは /Manage が 302 になる**（実測）。
-                //   **同じ利用者でサインインし直せば、同じ記録を見られる。**
                 string list = null;
-                bool revoked = false;
                 int manageStatus = 0;
 
-                using (IdPClient manage = await this.SignedInClientAsync(targetKey))
-                {
-                    HttpResponseMessage page = await manage.GetAsync("/Manage/ConsentGrants");
-                    manageStatus = (int)page.StatusCode;
+                HttpResponseMessage page = await client.GetAsync("/Manage/ConsentGrants");
+                manageStatus = (int)page.StatusCode;
 
-                    if (page.IsSuccessStatusCode)
-                    {
-                        list = await page.Content.ReadAsStringAsync();
-                    }
+                if (page.IsSuccessStatusCode)
+                {
+                    list = await page.Content.ReadAsStringAsync();
+                }
 
                 r.Verify("一覧に client_name が出る",
                     list != null && list.Contains(KnownClients.TestClient_20),
@@ -467,8 +461,7 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
                 r.Step("(3) 管理画面から取り消す");
 
-                    revoked = await manage.RevokeConsentAsync(reg.ClientId);
-                }
+                bool revoked = await client.RevokeConsentAsync(reg.ClientId);
 
                 r.Verify("取り消しが受け付けられる", revoked,
                     "受け付けられる", revoked ? "受け付けられた" : "**失敗した**");
