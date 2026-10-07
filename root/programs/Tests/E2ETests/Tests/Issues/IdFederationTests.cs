@@ -30,6 +30,7 @@
 //*  ----------  ----------------  -------------------------------------------------
 //*  2026/09/30  玄人 幸道         新規（#250 の段階 5 : ID フェデレーションを E2E で駆動する）
 //*  2026/10/03  玄人 幸道         テスト利用者をターゲットごとに引く（#260）
+//*  2026/10/08  玄人 幸道         上流の同意の記録が無ければ、準備するようにした（#280）
 //**********************************************************************************
 
 using System;
@@ -61,6 +62,15 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
     /// （`OAuth2AndOidcClientID` / `IdFederationRedirectEndpoint` を差し込む）。
     ///
     /// **目視で見つかった欠陥は、どれもここで出るはずのものだった**（#250 の段階 4）。
+    ///
+    /// **上流には「同意の記録」という前提がある**（#280）。
+    /// **上流は `UserStoreType=mem` なので、コンテナを作り直すと記録が消える。**
+    /// **この E2E は `prompt=none` で委譲する**ので、
+    /// **記録が無い上流に対しては `consent_required` になる**
+    /// （OIDC Core §3.1.2.6。#272 の段階 2。**IdP の側は仕様どおり**）。
+    ///
+    /// **それは前提が整っていないだけ**なので、
+    /// `EnsureUpstreamConsentAsync` で整える。**測るのは ID 連携の一巡である。**
     /// </remarks>
     public class IdFederationTests : TargetTestBase
     {
@@ -171,6 +181,74 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
                 || post.StatusCode == HttpStatusCode.SeeOther;
         }
 
+        /// <summary>上流に同意の記録が無ければ、1 度だけ「許可」を押して整える（#280）</summary>
+        /// <param name="client">IdPClient</param>
+        /// <param name="authorizeUrl">下流が組み立てた認可要求の URL（<c>prompt=none</c> 付き）</param>
+        /// <returns>押したら true（記録が在った・押せなかったなら false）</returns>
+        /// <remarks>
+        /// **上流は `UserStoreType=mem` なので、コンテナを作り直すと同意の記録が消える**
+        /// （`Sts.ConsentProvider.ConsentGrants` は静的な辞書）。
+        /// **この E2E は `prompt=none` で委譲し、どこでも「許可」を押さない**ため、
+        /// **記録が無い上流に対しては必ず `consent_required` になる**
+        /// （OIDC Core §3.1.2.6。IdP の側は仕様どおりである）。
+        ///
+        /// **それはテストの前提が整っていないだけ**なので、ここで整える。
+        /// **`store/` の DBMS や IIS Express と同じ扱い**である。
+        ///
+        /// **測りたいのは ID 連携の一巡であって、「許可」が押せることではない。**
+        /// そのため、**ここでの成否は判定に出さない**（整えられなければ、
+        /// 呼び出し側が「code が返らない」として落ちる）。
+        ///
+        /// **`prompt=none` を外して 1 回だけ叩く。**
+        /// 同意画面（`submit.Grant` を持つ）が返ってきたときだけ押す。
+        /// **記録が在れば同意画面は出ない**ので、何もせずに戻る。
+        /// **上流が未サインインならログイン画面が返る**ので、これも押さない（`RT-140.6`）。
+        /// </remarks>
+        private static async Task<bool> EnsureUpstreamConsentAsync(
+            IdPClient client, string authorizeUrl)
+        {
+            // **`prompt=none` だけを落とす。** 他のパラメタ（PKCE・state・nonce）は触らない。
+            string url = authorizeUrl
+                .Replace("&prompt=none", "")
+                .Replace("?prompt=none&", "?");
+
+            HttpResponseMessage res = await client.GetAsync(url);
+
+            // リダイレクト（＝ 認可応答かエラー応答）なら、同意画面ではない。
+            if (res.Headers.Location != null)
+            {
+                return false;
+            }
+
+            string html = await res.Content.ReadAsStringAsync();
+
+            // **同意画面の目印は `submit.Grant`**（`Responses.NeedsConsent` と同じ見方）。
+            if (string.IsNullOrEmpty(html) || !html.Contains("submit.Grant"))
+            {
+                return false;
+            }
+
+            Match m = IdFederationTests.AntiforgeryRegex.Match(html);
+
+            if (!m.Success)
+            {
+                return false;
+            }
+
+            // **フォームは action を持たない**ので、認可要求と同じ URL へ POST される。
+            HttpResponseMessage granted = await client.PostFormAsync(
+                url,
+                new Dictionary<string, string>()
+                {
+                    { "__RequestVerificationToken", m.Groups["value"].Value },
+                    { "submit.Grant", "Grant" }
+                });
+
+            return granted.IsSuccessStatusCode
+                || granted.StatusCode == HttpStatusCode.Found
+                || granted.StatusCode == HttpStatusCode.Redirect;
+        }
+
         #endregion
 
         #region 連携の一巡
@@ -240,6 +318,21 @@ namespace MultiPurposeAuthSite.Tests.E2E.Tests.Issues
 
             string authzHtml = await result.AuthorizeResponse.Content.ReadAsStringAsync();
             result.Hidden = Html.HiddenInputs(authzHtml);
+
+            if (!result.Authorized)
+            {
+                // **同意の記録が無いだけなら、整えてもう一度だけ叩く**（#280）。
+                //   **上流を作り直すと記録が消える**ので、ここが無いと
+                //   **作り直した直後の通しで必ず落ちる**（実測 : 6 件）。
+                if (await IdFederationTests.EnsureUpstreamConsentAsync(
+                        client, result.AuthorizeUrl))
+                {
+                    result.AuthorizeResponse = await client.GetAsync(result.AuthorizeUrl);
+
+                    authzHtml = await result.AuthorizeResponse.Content.ReadAsStringAsync();
+                    result.Hidden = Html.HiddenInputs(authzHtml);
+                }
+            }
 
             if (!result.Authorized)
             {
