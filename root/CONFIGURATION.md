@@ -620,6 +620,45 @@ net48 版と書き方が揃うので、両方を扱うスクリプトはそち�
 `max_age` を使うフロー（FAPI2）は `auth_time` Cookie を見るので、
 http で動かすと認可エンドポイントがエラー画面になる。
 
+### リバース プロキシや TLS 終端の背後に置く（#279）
+
+**プロキシが https で受けて、アプリへは http で渡す配備**
+（ALB / nginx / Front Door、コンテナの前段）では、
+**アプリは「自分は http で呼ばれた」と思っている。**
+
+| 見るもの | 何が起きるか |
+|---|---|
+| `Request.Scheme` | `http`。**`issuer` やリダイレクト先の URI が http で組まれる** |
+| `Request.IsHttps` | `false`。**`Secure` を伴う Cookie の判定が狂う** |
+| `UseHttpsRedirection` | **転送先のポートが判らないので、黙って素通りする** |
+
+**転送ヘッダの取り込みを、設定で切り替えられる**（上流 Open棟梁 #549）。
+
+```json
+// appsettings.json
+"UseForwardedHeaders": "on",
+"ForwardedHeadersKnownProxies": "10.0.0.4, 10.0.0.5",
+"UseHttpsRedirection": "on",
+"CookieSecurePolicy": "always",
+```
+
+- **`UseForwardedHeaders` はパイプラインの先頭で呼んでいる**（`Startup.Configure`）。
+  後ろに置くと、**それより前に動いたものが古いスキームを見る**
+- **`KnownProxies` / `KnownIPNetworks` は空にしてから詰めている。**
+  既定は `127.0.0.1` / `::1` だけで、**コンテナ間のプロキシは別のアドレスから来るため弾かれる**
+- **`ForwardedHeadersKnownProxies` を書かないと、転送ヘッダを送った相手を問わない。**
+  **プロキシを経由せずアプリに直接届く経路があるなら、列挙すること**
+- **`UseHttpsRedirection` には転送先のポートが要る。**
+  `ASPNETCORE_HTTPS_PORT`（**単数形**。`ASPNETCORE_HTTPS_PORTS` ではない）か、上の転送ヘッダ経由。
+  **判らないときは例外にならず、リダイレクトしないだけ**なので気付きにくい
+
+> **Cookie ポリシーは DI 側に一本化した**（#279。`services.Configure<CookiePolicyOptions>`）。
+> **`app.UseCookiePolicy()` に引数を渡す overload は、DI の設定を読まない。**
+> **`SameSite=None` の明示は外していない** — **外すと `samesite` 属性ごと出なくなり**（実測）、
+> **ブラウザ側の既定（Chrome は `Lax`）になる**ため。**ID 連携の戻りで Cookie が送られなくなる。**
+
+**ここに挙げたのはすべて net10.0 版だけである**（net48 版は IIS 側の設定）。
+
 ## 6. 秘密の扱い
 
 **`app.config` / `appsettings.json` の内容を、報告・コミット メッセージ・Issue 本文に転記しない。**
@@ -951,6 +990,9 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | 認証クッキーの設定 | `App_Start/StartupAuth.cs` | `Startup.cs` の `ConfigureApplicationCookie`（#223） |
 | セッションの置き場 | `Web.config` の `sessionState`（既定 `StateServer`） | `SessionStoreType`（`mem` / `sql` / `redis`。#256） |
 | WebAuthn | **無し**（設定キーも無い。#137） | `FIDOServerMode`（`none` / `webauthn`。既定 `webauthn`） |
+| 転送ヘッダの取り込み | IIS 側（ARR の `<proxy>` など） | `UseForwardedHeaders` / `ForwardedHeadersKnownProxies`（#279） |
+| HTTPS へのリダイレクト | IIS 側（URL Rewrite） | `UseHttpsRedirection`（#279） |
+| Cookie の `Secure` を全部に付ける | `Web.config` の `<httpCookies requireSSL>` | `CookieSecurePolicy`（#279。`CookiePolicyOptions` は DI 側に一本化） |
 
 **両者は共通ライブラリを使う別アプリである。** 片方にしか無い問題があり得る。
 
@@ -975,7 +1017,11 @@ XML 1.0 §3.3.3 のとおり、パーサは属性値の改行を空白へ正規�
 | `UserStoreType` | `mem` | `sql` / `ora` / `npg` | `mem` は**再起動で消える**。**`mem` のままだと `IsDebug` が常に true になる**（下の注意 1） |
 | `IsDebug` | `true` | `false` | テスト利用者の生成、メール / SMS の送信の代替、ログの扱いが変わる |
 | `SessionStoreType` | `mem`（#256） | **複数インスタンスなら `redis` / `sql`** | **画面のセッションの置き場**（7 節「セッションの置き場」）。**`mem` は複数インスタンスで共有されない** — ID 連携の `state` / `nonce` / `code_verifier`、管理画面の `access_token`、FIDO2 の challenge が読めず、**途中で失敗する**。**書かなければ `mem`**（既存の配備は従来どおり）。`sql` は `Create_SessionCache.sql` が要る。**`ora` / `npg` 用の実装は標準に無いので `redis`。** **net10.0 版だけ**（net48 版は `Web.config` の `sessionState`） |
-| `DataProtectionKeyPath` | `""`（空） | **コンテナでは必須**（#251） | **DataProtection の鍵の置き場。** 空なら `%LOCALAPPDATA%` 配下（**コンテナでは揮発 → 再起動で全員サインアウト**）。**net48 の `machineKey` と同じ役割**だが、**鍵そのものは書かない**（置き場を共有する。鍵は自動生成・自動ローテーション）。**効くのは画面のセッション**（認証 Cookie / AntiForgery / メール確認のリンク）で、**access_token・PPID・refresh_token には影響しない**。**鍵リングは平文の XML**。**net10.0 版だけ** |
+| `DataProtectionKeyPath` | `""`（空） | **コンテナでは必須**（#251） | **DataProtection の鍵の置き場。** 空なら `%LOCALAPPDATA%` 配下（**コンテナでは揮発 → 再起動で全員サインアウト**）。**net48 の `machineKey` と同じ役割**だが、**鍵そのものは書かない**（置き場を共有する。鍵は自動生成・自動ローテーション）。**効くのは画面のセッション**（認証 Cookie / AntiForgery / メール確認のリンク）で、**access_token・PPID・refresh_token には影響しない**。**鍵リングは平文の XML**。**#279 で、アプリケーション名を固定した**（`SetApplicationName`） — 既定は**コンテンツ ルートのパスから導かれる**ため、**同じ置き場を見ていても、配備先のパスが違うと復号できなかった**（コンテナの入れ替えやスケール アウトで全員サインアウト）。**裏返しとして、別の配備と同じ置き場を共有すると Cookie を相互に復号できる**ので、**配備ごとに別の置き場を与えること**（`CookieNamePrefix` / `AuthCookieName` と同じ話）。**net10.0 版だけ** |
+| `UseHttpsRedirection` | `""`（空＝呼ばない） | **TLS 終端を前段に置くなら `on`** | **http で来た要求を https へリダイレクトする**（#279。上流 Open棟梁 #549）。**空なら呼ばない**（従来どおり）。**効かせるには転送先のポートが判る必要がある** — `ASPNETCORE_HTTPS_PORT`（**単数形**）か `UseForwardedHeaders` 経由。**判らないと、例外にならずリダイレクトしない**（気付きにくい）。5 節「リバース プロキシや TLS 終端の背後に置く」。**net10.0 版だけ** |
+| `CookieSecurePolicy` | `""`（空） | **`always`** | **すべての Cookie に `Secure` を付ける**（#279）。空なら、各 Cookie 自身の宣言に従う（認証まわりは元から `Secure`）。**`always` にすると、平文 HTTP ではサインインできなくなる**ので、開発では空のままにする。**net10.0 版だけ**（net48 版は `Web.config` の `<httpCookies requireSSL>`） |
+| `UseForwardedHeaders` | `""`（空＝取り込まない） | **リバース プロキシの背後なら `on`** | **`X-Forwarded-Proto` / `X-Forwarded-For` を取り込む**（#279。上流 Open棟梁 #549）。**取り込まないと、プロキシが https で受けていてもアプリは http だと思う** → `issuer`・リダイレクト先の URI・`Secure` の判定がずれる。**パイプラインの先頭で呼んでいる。** **net10.0 版だけ** |
+| `ForwardedHeadersKnownProxies` | `""`（空） | **プロキシの IP を列挙する** | **転送ヘッダを信じるプロキシの IP**（#279。カンマ区切り）。**`UseForwardedHeaders` が `on` のときだけ読む。** 空なら、**送った相手を問わない**（`KnownProxies` / `KnownIPNetworks` を空にしてあるため）。**プロキシを経由せずアプリに直接届く経路があるなら、必ず列挙する。** **net10.0 版だけ** |
 | `OAuth2ContainerizatedAuthSvrFqdnAndPort` / `OAuth2ContainerizatedAuthSvrEPRootURI` | `""`（空） | **コンテナ配備で自己テストを使うときだけ** | **サーバが自分自身を呼ぶときの宛先**（#250）。宛先は `OAuth2AuthorizationServerEndpointsRootURI` から組み立てられるが、**コンテナの中からは外向けのホスト名・ポートに届かない**（実測 : コンテナ内から `localhost:44301` は CLOSED、待ち受けは 8080 / 8081）。`Helper.GetContainerizatedAuthZServerUri` が差し替える（**Windows でないときだけ働く**）。`FqdnAndPort` はホスト名とポートだけ、`EPRootURI` はスキームごと差し替える。**HTTPS のままにすると、コンテナの中で証明書を検証できない**ので、`store/` の上流は `EPRootURI` に **HTTP のループバック**を与えている |
 | `CookieNamePrefix` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **Cookie の名前に付ける接頭辞**（#255）。**先頭が `.` なら、その後ろに入る**（`.MultiPurposeAuthSite` → `.upstream_MultiPurposeAuthSite`）。**名前を決められるものすべてに掛かる** — 認証・外部ログイン・2FA（Identity の 4 スキーム）、セッション、`auth_time` / `re_auth_at`、TempData。**`max_age` の判定に使う**ので、混ざると**再認証の要否を誤る**（サインインは妨げない）。**名前そのものは `AuthCookieName` と `sessionState:SessionCookieName` で決め、この設定は「どの配備か」を表す**（役割が違う）。**分けられないのは `SessionTimeOut`（Open棟梁 の定数）だけ**だが、雛形は `FxSessionTimeOutCheck` を `off` にしているため読まれない。AntiForgery は**もともとアプリごとに違う名前**になるので対象外。**net48 版のセッション Cookie は ASP.NET のもの**（`system.web/sessionState`）で、これも対象外 |
 | `AuthCookieName` | `""`（空） | **同じホストに 2 つ立てるときだけ** | **認証 Cookie の名前**（#250 の段階 4）。空なら既定（net10.0 : `.AspNetCore.Identity.Application` / net48 : `.AspNet.ApplicationCookie`）。**Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、`localhost:44300`（下流）と `localhost:44301`（上流）は **Cookie を共有し、後にサインインした側が相手を蹴り出す。** **パスが違っても解決しない**（仮想ディレクトリ配下と root で同名・別パスの Cookie が 2 つ並ぶ）。**ID フェデレーションは毎回この経路を通る**ので、上流には別名を与えること |

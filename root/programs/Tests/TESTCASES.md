@@ -5718,6 +5718,31 @@ JWT のデコードと署名検証は、実装側のコードを使わず独立�
 
 - **アカウントの一覧から選ぶ仕組みは持っていない。** 仕様（§3.1.2.1）は「選ばせろ」だが、**この実装は 1 利用者ずつのサインインしか持たない**。**`account_selection_required` を返す道もあった**が、**切り替えの口が画面に在るので、画面を出す方を選んだ。**
 
+## RT-279.1 SameSite=None を宣言した Cookie が、Cookie ポリシーで格上げされない
+
+| | |
+|---|---|
+| 観点 | **`app.UseCookiePolicy()` の引数を外し、DI 側に一本化した**（#279）。**引数を渡す overload は DI の設定を読まない**ので、**一本化し損なうと `MinimumSameSitePolicy` の明示が失われ、`samesite` 属性ごと出なくなる**（実測）。**属性が無ければブラウザ側の既定（Chrome は `Lax`）が適用される**ので、**ID 連携の外部ログインや `response_mode=form_post` の戻りで、Cookie が送られなくなる。****ブラウザを使わないと気付けない**ので、ここで固定する。 |
+| 根拠 | #279（上流 Open棟梁 #541） |
+| テスト | `RT27901_SameSiteがNoneのCookieが格上げされない` |
+
+**手順**
+
+1. 自己テストのボタンを押して、Set-Cookie を受け取る
+1. test_state の Cookie が SameSite=None のままである
+1. HttpOnly も効いている
+
+**検証（合否を判定する）**
+
+- Set-Cookie が返る
+- test_state の Set-Cookie がある
+- samesite=none である
+- httponly が付く
+
+**補足**
+
+- **`CookieSecurePolicy` は既定（空）のままなので、`Secure` 属性は各 Cookie の宣言に従う。**`always` にすると全部に付くが、**平文 HTTP ではサインインできなくなる**ので既定では変えない（#279）。
+
 # FA. FAPI（クライアント登録ごとに通る経路）
 
 ## FA-1.1 oauth2_oidc_mode=fapi1 のクライアントは、PKCE(S256) の認可コードだけが通る

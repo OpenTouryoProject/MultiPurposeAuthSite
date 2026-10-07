@@ -41,6 +41,7 @@
 //*  2026/10/06  玄人 幸道         セッション キャッシュの表名を追加（#256）
 //*  2026/10/07  玄人 幸道         WebAuthn の RP の表示名を追加（#137）
 //*  2026/10/07  玄人 幸道         SAML2 の AuthnRequest の ID を保存するキーを追加（#276）
+//*  2026/10/07  玄人 幸道         データ保護のアプリケーション名を追加（#279）
 //**********************************************************************************
 
 using Touryo.Infrastructure.Framework.Authentication;
@@ -190,6 +191,21 @@ namespace MultiPurposeAuthSite.Co
         /// **設定キーにしていない**のは、**表示名を変えても振る舞いが変わらない**ため。
         /// </remarks>
         public const string WebAuthnRpName = "MultiPurposeAuthSite";
+
+        #endregion
+
+        #region データ保護のアプリケーション名（#279）
+
+        /// <summary>データ保護のアプリケーション名（#279）</summary>
+        /// <remarks>
+        /// **`DataProtectionKeyPath` で鍵を共有しても、これが揃わないと復号できない。**
+        /// **既定ではコンテンツ ルートのパスから決まる**ため、
+        /// **配置先のパスが違うと鍵を読めない**（Windows の `C:\…` とコンテナの `/app` など）。
+        ///
+        /// **固定値にしてある。** 設定キーにすると、
+        /// **揃っていない配備ができてしまい、症状が「ログインし直しになる」だけなので気付けない。**
+        /// </remarks>
+        public const string DataProtectionApplicationName = "MultiPurposeAuthSite";
 
         #endregion
 

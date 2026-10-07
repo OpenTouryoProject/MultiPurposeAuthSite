@@ -158,9 +158,11 @@ public Startup(IConfiguration configuration)
 
 public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 {
+    app.UseForwardedHeaders(...);    // #279。**先頭**。Config.UseForwardedHeaders が on のときだけ
+    app.UseHttpsRedirection();       // #279。Config.UseHttpsRedirection が on のときだけ
     app._UseHttpContextAccessor();   // ★必須。MyHttpContext.Current を有効化する Open棟梁の拡張
     app.UseStaticFiles();
-    app.UseCookiePolicy(...);        // HttpOnly=Always / MinimumSameSitePolicy=None
+    app.UseCookiePolicy();           // #279。**引数なし**。設定は DI 側（4.0 節）
     app.UseSession(...);             // IdleTimeout 30 分、Cookie 名は sessionState:SessionCookieName
     app.UseRouting();
     app.UseAuthentication();
@@ -173,6 +175,26 @@ public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 **この 3 点（`InitConfiguration` / `_UseHttpContextAccessor` / `UseSession`）が
 .NET (Core) で Open棟梁を動かすための定型。** Open棟梁側の `Samples4NetCore/Backend/MVC_Sample`
 と同じ形なので、迷ったらそちらも参照する。
+
+### 4.0 配備で切り替えるもの（✅ 修正済み。#279）
+
+**Open棟梁の `MVC_Sample/Startup.cs` に合わせて整理した**（上流 #541 / #549）。
+
+| | 以前 | これから |
+|---|---|---|
+| 転送ヘッダ（`X-Forwarded-*`） | **取り込んでいない** | `UseForwardedHeaders`（設定。**パイプラインの先頭**） |
+| HTTPS へのリダイレクト | **コメント アウトしてあった** | `UseHttpsRedirection`（設定） |
+| Cookie ポリシー | `Configure` 側に引数で渡していた（**DI 側は効いていなかった**） | **DI 側に一本化**。`app.UseCookiePolicy()` は引数なし |
+| Cookie の `Secure` | 各 Cookie の宣言まかせ | `CookieSecurePolicy`（設定。`always` で全部に付く） |
+| DataProtection のアプリケーション名 | **コンテンツ ルートのパスから導かれていた** | `SetApplicationName`（固定。`Const.DataProtectionApplicationName`） |
+| セッション Cookie の `Expiration` | `TimeSpan.FromDays(1)`（**効かない**） | **書かない**。寿命は `IdleTimeout` で決まる |
+
+**設定キーの意味は [`CONFIGURATION.md`](../../CONFIGURATION.md) 5 節・11 節。**
+
+> **`app.UseCookiePolicy()` に引数を渡す overload は、DI の設定を読まない。**
+> 両方に書いてあったので、**DI 側は読まれていなかった。**
+> **`MinimumSameSitePolicy = None` の明示は外していない** —
+> **外すと `samesite` 属性ごと出なくなる**（実測。`RT-279.1` で固定）。
 
 ### 4.1 ASP.NET Core Identity の登録
 

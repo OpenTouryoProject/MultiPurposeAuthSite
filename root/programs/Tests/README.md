@@ -324,6 +324,16 @@ CIBA（`EX-8`）は、**認証デバイス（`authentication_device`）とプッ
 > **この基盤は HttpClient だけ**なので、**そこは測らないと決めてある。**
 > 測っているのは**サーバ側が要求を組み立てる段と、壊れた入力の扱い**である。
 
+| ファイル | 識別子 | 対象 |
+|---|---|---|
+| `Tests/Issues/CookiePolicyTests.cs` | `RT-279` | **Cookie ポリシー**（`CookiePolicyOptions`）。**`SameSite=None` を宣言した Cookie が、属性ごと消えたり格上げされたりしないこと**と `HttpOnly`。**net10.0 版だけ**（net48 版は `Web.config` の `<httpCookies>`） |
+
+> **`RT-279` は、E2E がこれまで測っていなかったところを測る。**
+> **Cookie の属性を見ているテストは、まだこれだけである。**
+> `app.UseCookiePolicy()` に**引数を渡す overload は DI の設定を読まない**ため、
+> **一本化を損なうと `MinimumSameSitePolicy` の明示が失われ、`samesite` 属性ごと出なくなる**
+> （実測。「`Lax` に格上げ」ではない）。**ブラウザを使わないと気付けない類の退行**なので固定している。
+
 **`Tests/Fapi/` は、クライアント登録（`oauth2_oidc_mode`）ごとに通る経路**（#222）。
 
 | ファイル | 識別子 | 対象 |

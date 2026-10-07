@@ -36,6 +36,9 @@
 //*  2026/10/04  玄人 幸道         CORSをエンドポイント単位にした（#265）
 //*  2026/10/04  玄人 幸道         CORSの許可オリジンを要求ごとに判定（#266）
 //*  2026/10/06  玄人 幸道         セッションの置き場を設定で選べるようにした（#256）
+//*  2026/10/07  玄人 幸道         Open棟梁 MVC_Coreに倣い、配備で切り替える形に整理（#279）。
+//*                                転送ヘッダの取り込み、HTTPSリダイレクト、Cookieの
+//*                                Secure属性を設定で切り替え、CookiePolicyをDIに一本化。
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -46,12 +49,14 @@ using MultiPurposeAuthSite.Notifications;
 
 using System;
 using System.IO;
+using System.Net;   // IPAddress（#279）
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.CookiePolicy;
+using Microsoft.AspNetCore.HttpOverrides;   // 転送ヘッダ（#279）
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication;
@@ -114,6 +119,59 @@ namespace MultiPurposeAuthSite
             //   起動は止めない。警告を OPERATION ログに出すだけ。
             ProductionCheck.WarnIfRisky();
 
+            #region 転送ヘッダの取り込み（#279。上流 #549）
+
+            //  **リバース プロキシで TLS を終端すると、アプリから見た接続は HTTP になる。**
+            //    利用者のブラウザは HTTPS で繋いでいるのに `Request.IsHttps` は false のままで、
+            //    **Cookie に Secure 属性が付かず、組み立てる絶対 URL も http になる**
+            //    （SAML の ACS URL や、OIDC の `redirect_uri` の照合に効く）。
+            //
+            //  **必ずパイプラインの先頭に置く。**
+            //    後ろに置くと、それより前のミドルウェア（`UseHttpsRedirection` など）が
+            //    **取り込み前のスキームを見てしまう。**
+            //
+            //  **既定は off**（`Config.UseForwardedHeaders`）。
+            if (Config.UseForwardedHeaders)
+            {
+                ForwardedHeadersOptions forwardedHeadersOptions = new ForwardedHeadersOptions()
+                {
+                    ForwardedHeaders =
+                        ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor
+                };
+
+                // **既定ではループバックからの転送しか信用しない。**
+                //   コンテナや Kubernetes では前段が別アドレスになるため、
+                //   **指定しないとヘッダが黙って捨てられ、何も起きない。**
+                forwardedHeadersOptions.KnownIPNetworks.Clear();
+                forwardedHeadersOptions.KnownProxies.Clear();
+
+                string knownProxies = Config.ForwardedHeadersKnownProxies;
+
+                if (!string.IsNullOrEmpty(knownProxies))
+                {
+                    foreach (string ip in knownProxies.Split(','))
+                    {
+                        string trimmed = ip.Trim();
+
+                        if (!string.IsNullOrEmpty(trimmed))
+                        {
+                            forwardedHeadersOptions.KnownProxies.Add(IPAddress.Parse(trimmed));
+                        }
+                    }
+                }
+                else
+                {
+                    // **前段を特定できない場合（コンテナ等）は、範囲の制限を外したまま使う。**
+                    //   **アプリが前段を経由せず直接叩ける状態では使わないこと。**
+                    //   クライアントが `X-Forwarded-Proto` を詐称でき、
+                    //   **HTTP で来ているのに HTTPS だと判断させられる。**
+                }
+
+                app.UseForwardedHeaders(forwardedHeadersOptions);
+            }
+
+            #endregion
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -125,7 +183,28 @@ namespace MultiPurposeAuthSite
                 // The default HSTS value is 30 days.
                 // You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
-                //app.UseHttpsRedirection();
+            }
+
+            //  **HTTPS へのリダイレクト**（#279。上流 #541）。
+            //    **以前はコメントアウトで置いてあった**ので、
+            //    **本番で有効にするにはソースを書き換えることになっていた。**
+            //
+            //    **既定は off**（`Config.UseHttpsRedirection`）。
+            //    **on にするだけでは足りない。リダイレクト先のポートも要る。**
+            //    決められないと、ミドルウェアは警告を出すだけで素通りする（見落としやすい）。
+            //
+            //      warn: ...HttpsRedirectionMiddleware[3]
+            //            Failed to determine the https port for redirect.
+            //
+            //    ポートは次のいずれかで決まる。
+            //      ・https の URL を Kestrel にバインドする（`--urls` に https://… を含める）
+            //      ・環境変数 `ASPNETCORE_HTTPS_PORT=443`（**単数**）
+            //      ・環境変数 `HTTPS_PORT=443`
+            //
+            //    **`ASPNETCORE_HTTPS_PORTS`（複数）では決まらない。** 紛らわしいので注意。
+            if (Config.UseHttpsRedirection)
+            {
+                app.UseHttpsRedirection();
             }
 
             // HttpContextのマイグレーション用
@@ -136,13 +215,12 @@ namespace MultiPurposeAuthSite
             app.UseStaticFiles();
 
             // Cookieを使用する。
-            app.UseCookiePolicy(new CookiePolicyOptions()
-            {
-                HttpOnly = HttpOnlyPolicy.Always,
-                // https://github.com/aspnet/Security/issues/1822
-                MinimumSameSitePolicy = SameSiteMode.None, //SameSiteMode.Strict,
-                //Secure= CookieSecurePolicy.Always
-            });
+            //  **引数を渡さない**（#279。上流 #541）。
+            //    **引数を渡すと、`ConfigureServices` の
+            //    `services.Configure<CookiePolicyOptions>` が使われなくなる。**
+            //    以前は両方に書いてあり、**DI 側は効いていなかった。**
+            //    **設定は `ConfigureServices` 側に一本化してある。**
+            app.UseCookiePolicy();
 
             // Sessionを使用する。
             app.UseSession(new SessionOptions()
@@ -151,7 +229,10 @@ namespace MultiPurposeAuthSite
                 IOTimeout = TimeSpan.FromSeconds(30),
                 Cookie = new CookieBuilder()
                 {
-                    Expiration = TimeSpan.FromDays(1), // 効かない
+                    // **Expiration は書かない**（#279。上流 #541）。
+                    //   **セッション Cookie は有効期限を持たない**（ブラウザを閉じると消える）
+                    //   ため、指定しても無視される。
+                    //   **持続時間を変えたいなら、上の `IdleTimeout` を使う。**
                     HttpOnly = true,
                     // **接頭辞を掛ける**（#255。同じホストに 2 つ立てたときに分けるため）
                     Name = Config.PrefixCookieName(
@@ -346,7 +427,13 @@ namespace MultiPurposeAuthSite
             {
                 services.AddDataProtection()
                     .PersistKeysToFileSystem(
-                        new DirectoryInfo(Config.DataProtectionKeyPath));
+                        new DirectoryInfo(Config.DataProtectionKeyPath))
+                    // **アプリケーション名も固定する**（#279。上流 #541）。
+                    //   **既定ではコンテンツ ルートのパスから決まる**ため、
+                    //   **鍵を共有していても、配置先のパスが違うと復号できない**
+                    //   （Windows の `C:\…` とコンテナの `/app` など）。
+                    //   **症状は「ログインし直しになる」だけなので、気付きにくい。**
+                    .SetApplicationName(Const.DataProtectionApplicationName);
 
                 // **鍵リングは平文の XML である。** マウント先の保護は運用側の責任。
                 //   証明書で包む（ProtectKeysWithCertificate）かどうかは、ここでは決めない。
@@ -354,12 +441,44 @@ namespace MultiPurposeAuthSite
 
             #endregion
 
+            #region Cookie ポリシー（#279。上流 #541）
+
+            //  **`Configure` 側の `app.UseCookiePolicy()` が、ここの設定を使う。**
+            //    **以前は `Configure` 側で引数を渡しており、ここは効いていなかった。**
+            //    **値は、効いていた側（`Configure` 側の引数）をそのまま移している。**
             services.Configure<CookiePolicyOptions>(options =>
             {
-                // This lambda determines whether user consent
-                // for non-essential cookies is needed for a given request.
-                options.CheckConsentNeeded = context => true;
+                options.HttpOnly = HttpOnlyPolicy.Always;
+
+                // https://github.com/aspnet/Security/issues/1822
+                //   **`Strict` にしない。** ID 連携の外部ログインや
+                //   `response_mode=form_post` の戻りで、Cookie が送られなくなる。
+                //
+                //   **明示を外すと、`samesite` 属性ごと出なくなる**（#279 で実測）。
+                //   **「`Lax` に格上げされる」ではない。**
+                //   属性が無ければ**ブラウザ側の既定（Chrome は `Lax`）**が適用されるので、
+                //   **結果として `None` ではなくなる。**
+                //   **`RT-279.1` が、この属性を見て固定している。**
+                options.MinimumSameSitePolicy = SameSiteMode.None;
+
+                // **Cookie の Secure 属性**（既定は空＝各 Cookie の設定に従う）。
+                //   TLS で公開するなら `always` にする。
+                //   **平文 HTTP の環境で `always` にすると、Cookie が送られず
+                //   サインインできなくなる**ので、既定では変えない。
+                if (Config.CookieSecurePolicyAlways)
+                {
+                    options.Secure = CookieSecurePolicy.Always;
+                }
+
+                // **同意の確認は、明示的に書かない**（＝ 既定の false のまま）。
+                //   **以前は `options.CheckConsentNeeded = context => true;` と書いてあったが、
+                //   `Configure` 側で引数を渡していたため効いていなかった。**
+                //   **有効にすると、同意前は必須でない Cookie（セッションを含む）が
+                //   送られなくなる**ので、挙動が変わる。
+                //   **同意を取る画面を用意したうえで有効にすること**（この Issue では変えない）。
             });
+
+            #endregion
 
             #region セッションの置き場（#256）
 
