@@ -408,6 +408,38 @@ Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つ
 **認証を疑って時間を使った**が、原因は画面側だった。
 **net10.0 側の 500 を先に見れば、すぐに分かる**（ログに例外の文面が出る）。
 
+#### SAML2 の E2E を足した（#275 / #276）
+
+**DDL は変えていないが、種データの `client_id` を変えたので `store/` は作り直す**こと。
+
+**種データの `client_id` を変えたら、必ず作り直す。**
+**`Saml2OAuth2Data.ClientID` は `Users.ClientID` への外部キーを持っている**ので、
+**古い id の利用者が残っていると、新しい id の登録を入れられない。**
+
+```
+INSERT ステートメントが FOREIGN KEY 制約 "FK.Saml2OAuth2Data.Users_ClientID" と競合しています。
+```
+
+**種データは `CreateData`（`GET /Account/Login`）の中で作られる**ので、
+**ここで落ちると `/Account/Login` そのものが落ちる。**
+
+| 症状 | |
+|---|---|
+| **net10.0 版** | `GET /Account/Login` が **HTTP 500** |
+| **net48 版** | **HTTP 302**（`customErrors` が例外をリダイレクトに変える） |
+| **E2E** | **`__RequestVerificationToken` が取れず、サインインを要する全件が落ちる**（実測 416 / 543） |
+
+**「ほぼ全件が落ちる」ときは、まず `/Account/Login` を 1 回叩くこと。**
+**個々のテストを追っても何も分からない**（どれも同じ 1 行で落ちている）。
+
+> **`client_id` の接頭辞の付け方に注意。**
+> **`e2e0tcNN` の `NN` は `TestClient_NN` ではない。**
+> `TestClient2_2` が `e2e0tc22`、`TestClient2_3` が `e2e0tc23`、
+> `TestClient4_2` が `e2e0tc42`、`TestClient4_3` が `e2e0tc43` を使っている。
+> **`TestClient_22` に `e2e0tc22` を取ろうとして衝突した**（#275）。
+> **先に在る方が登録され、こちらは「登録されていない」ことになり、**
+> **SAML の応答が返らないという形で出た。** SAML の分は `e2e0saNN` にしてある。
+
 #### WebAuthn を復活させ、`Users.FIDO2PublicKey` を落とした（#137）
 
 **DDL が変わったので、`store/` は作り直すこと**
@@ -876,12 +908,15 @@ Open棟梁 の `GetConfigParameter` は、`appSettings` の `FxContainerization`
 | `EX-n.n` | 拡張仕様（Revocation / Introspection / Device / Hybrid / response_mode / JWT Bearer / CIBA） | `Tests/Extended/` |
 | `RT-<Issue>.n` | 個別 Issue の回帰（`RT-186.2` なら #186 の 2 番目） | `Tests/Issues/` |
 | `RT-C<n>.n` | **公開の Issue を持たない項目**の回帰（`RT-C10.1` なら `ANALYSIS-IdP.md` の C-10） | `Tests/Issues/` |
+| `FA-n.n` | FAPI（クライアント登録 ＝ `oauth2_oidc_mode` ごとに通る経路） | `Tests/Fapi/` |
+| `21-n.n` | OAuth 2.1（許されない経路の抑止） | `Tests/OAuth21/` |
+| `SA-n.n` | **SAML2**（Web Browser SSO。#275） | `Tests/Saml/` |
 
 > **段階に分けた Issue は、段階ごとに番号を伸ばす**。
 > 例 : **#272 の段階 1** は `RT-272.1`〜`RT-272.3`で、
 > **段階 2（同意の永続化）はその続き番号になる。**
 
-報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT**）に並ぶ。
+報告書の一覧と詳細、原本は、この順（**SM → TC → EX → RT → FA → 21 → SA**）に並ぶ。
 
 **土台から順に並べる。**
 SM が倒れていれば、TC の合否は読む意味がない。
