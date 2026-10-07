@@ -55,6 +55,7 @@
 //*  2026/10/03  玄人 幸道         TestUserSuffix を追加（#260）
 //*  2026/10/04  玄人 幸道         CorsAllowedOrigins を追加（#265）
 //*  2026/10/06  玄人 幸道         SessionStoreType / SessionStoreConnectionString を追加（#256）
+//*  2026/10/07  玄人 幸道         FIDOServerModeをnet10.0版だけで復活（#137）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Data;
