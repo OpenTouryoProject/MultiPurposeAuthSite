@@ -273,32 +273,22 @@ upstream_MultiPurposeAuthSiteSession  downstream_MultiPurposeAuthSiteSession
 **`token` / `userinfo` が `http://upstream:8080` で届いていることは、6 で分かる**
 （届いていなければ `/Manage/Index` は 200 にならない）。
 
-##### AntiForgery の Cookie だけは、名前が分かれない（未修正）
+##### AntiForgery の Cookie も、名前が分かれる（✅ 修正済み。#282）
 
-**実測** : 両方が **同じ名前**の AntiForgery Cookie を発行する。
+**#281 の時点では、AntiForgery だけが同じ名前であった**（`CookieNamePrefix` が掛かっていなかった）。
+**片方がもう片方のトークンを上書きし、ログに復号失敗が残っていた。**
 
-```
-44301 : upstream_Identity.External,   .AspNetCore.Antiforgery.hhXVj9pTQHs, .upstream_AspNetCore.Mvc...
-44303 : downstream_Identity.External, .AspNetCore.Antiforgery.hhXVj9pTQHs, .downstream_AspNetCore.Mvc...
-                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 同じ
-```
+| | AntiForgery の Cookie 名 |
+|---|---|
+| #282 より前 | 上流 `.AspNetCore.Antiforgery.xxxxxxxxxxx` / 下流 `.AspNetCore.Antiforgery.xxxxxxxxxxx`（**同じ**） |
+| #282 より後 | 上流 `.upstream_AspNetCore.Antiforgery.…` / 下流 `.downstream_AspNetCore.Antiforgery.…`（**分かれた**） |
 
-**`CookieNamePrefix`（#255）は AntiForgery に掛かっていない。**
-名前は**アプリのコンテンツ ルートから導かれる**が、
-**2 つのコンテナは同じアプリ・同じパス（`/app`）**なので、**同じ名前になる。**
+**実測（2026/10/08。#282 の後）** : ID 連携を 2 巡させて、
+**`The antiforgery token could not be decrypted.` が両方とも 0 件**（直す前は上流 5 件 / 下流 10 件）。
 
-**症状** : 片方がもう片方の Cookie を上書きするため、ログにこれが残る。
-
-```
-fail: Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery[7]
-      The antiforgery token could not be decrypted.
-      ---> The key {...} was not found in the key ring.
-```
-
-- **通る。** トークンは**落とす側に倒れる**ので、画面を開き直せば新しいトークンが出る
-- **ただし、2 つを交互に使うと POST が間欠で 400 になり得る**
-- **直すには製品コードの変更が要る**（`AddAntiforgery` で Cookie 名を与える）ので、
-  **#281 の範囲には入れていない**
+> **名前は DataProtection の識別子から導かれる**（net10.0 版。実測）。
+> **#279 で `SetApplicationName` を入れたので、`DataProtectionKeyPath` を設定した配備同士は、
+> パスが違っても同じ名前になる。** そのため、**接頭辞で分けるのが必須になった。**
 
 #### 上流コンテナの自己テスト（#250）
 

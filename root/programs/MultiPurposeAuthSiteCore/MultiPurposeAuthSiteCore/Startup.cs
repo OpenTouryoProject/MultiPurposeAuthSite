@@ -39,6 +39,7 @@
 //*  2026/10/07  玄人 幸道         Open棟梁 MVC_Coreに倣い、配備で切り替える形に整理（#279）。
 //*                                転送ヘッダの取り込み、HTTPSリダイレクト、Cookieの
 //*                                Secure属性を設定で切り替え、CookiePolicyをDIに一本化。
+//*  2026/10/08  玄人 幸道         AntiForgery の Cookie にも接頭辞を掛ける（#282）
 //**********************************************************************************
 
 using MultiPurposeAuthSite.Co;
@@ -56,6 +57,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.CookiePolicy;
+using Microsoft.AspNetCore.Antiforgery;   // AntiforgeryOptions（#282）
 using Microsoft.AspNetCore.HttpOverrides;   // 転送ヘッダ（#279）
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -576,6 +578,21 @@ namespace MultiPurposeAuthSite
             if (!string.IsNullOrEmpty(Config.CookieNamePrefix))
             {
                 services.PostConfigure<CookieTempDataProviderOptions>(options =>
+                {
+                    options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
+                });
+
+                // **AntiForgery の Cookie にも掛ける**（#282）。
+                //   **既定の名前は DataProtection の識別子から導かれる**ので、
+                //   **#279 で SetApplicationName を入れた後は、
+                //   `DataProtectionKeyPath` を設定した配備同士が同じ名前になる**
+                //   （実測 : 置き場の有無だけで名前が変わった。#282）。
+                //
+                //   **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+                //   **同じホストに 2 つ建てると互いに上書きする。**
+                //   **検証は落とす側に倒れる**（復号できなければ拒む）ので、
+                //   **CSRF の穴にはならないが、正しい POST が 400 になる。**
+                services.PostConfigure<AntiforgeryOptions>(options =>
                 {
                     options.Cookie.Name = Config.PrefixCookieName(options.Cookie.Name);
                 });
