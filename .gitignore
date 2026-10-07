@@ -320,3 +320,7 @@ __pycache__/
 /store/keys/
 /store/logs/
 /store/app/artifacts/
+
+# 下流 IdP コンテナの生成物（#281。上流とは別の置き場にする）
+/store/keys-downstream/
+/store/logs-downstream/

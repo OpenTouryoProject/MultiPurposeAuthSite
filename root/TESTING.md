@@ -184,18 +184,121 @@ docker compose up -d upstream
 > E2E の net10.0 版（`https://localhost:44300`）も**既に root で配信している**ので、
 > **root がこのアプリの Kestrel での通常の形である。**
 
+**どの口も、ポートで分けている。**
+**仮想パスを VS と同じにできない**（コンテナは root 配信）ため、
+**パスでは分けられないからである。**
+
+| ポート | 何 |
+|---|---|
+| **44300** | 下流（net10.0）。VS / `test.ps1 -Launch` の Kestrel |
+| **44301** | **上流コンテナ**（雛形が上流として書いている番号） |
+| **44302** | 下流（net48）。IIS Express |
+| **44303** | **下流コンテナ用に空けてある**（#281） |
+
+> **ポートを分けても Cookie は分かれない。**
+> **Cookie のスコープにポートは入らない**（RFC 6265 §8.5）ので、
+> **名前で分ける**（`CookieNamePrefix` / `AuthCookieName` / `sessionState:SessionCookieName`）。
+> **パスが違っても解決しない**のも同じ理由である（#250 の段階 4 で実測）。
+>
+> **44300〜44399 は IIS Express の開発用証明書が http.sys に登録済み**なので、
+> この範囲を使っている（5 節「net48 版も同時に測る」）。
+
 **リソースはイメージに入れず、ホストの `C:\root\files\resource` をマウントする**（読み取り専用）。
 **署名鍵（`X509` の pfx、`JwkSet.json`）を含む**ため、イメージに焼くべきではない。
 中身は [`Readme.ja.md`](Readme.ja.md) の手順で用意されているものを、そのまま使う。
 
-> **雛形の設定は 15 箇所が `C:/root/files/resource/...` である**（Windows 前提）。
+> **雛形の設定は 19 箇所が `C:/root/files/resource/...` である**
+> （Windows 前提。**実測 2026/10/08**。以前の記述は 15 で、古くなっていた）。
 > **Linux ではドライブ文字が効かない**ので、`docker-compose.yml` が
-> **15 個すべてをマウント先（`/resource`）に振り替えている。**
+> **19 個すべてをマウント先（`/resource`）に振り替えている。**
 > **1 つでも漏らすと、その設定を使った瞬間に落ちる**ので、
 > `appsettings.json` を `"C:/root/files` で grep した数と突き合わせること。
 >
 > **`log4net` だけは中身（出力先）も Windows のパス**なので、
 > **差し替えた構成**（`store/app/LogConf.xml`）をイメージに入れてある。
+
+#### 下流もコンテナで建てる（#281）
+
+**上流と同じイメージを、別の設定で建てる。**
+**これでコンテナ 2 つだけでハイブリッド IdP 構成が取れる。**
+
+```powershell
+cd store
+.\3_PublishUpstream.ps1          # 成果物は 1 つ。上流も下流も同じイメージ
+docker compose up -d upstream
+docker compose up -d downstream   # ※ profile が付いているので、名指しか --profile hybrid
+```
+
+> **`1_DockerComposeUp.bat` では起動しない。**
+> **E2E は下流をホストで動かす**ので、既定の挙動を変えないため
+> （compose の profile `hybrid`）。
+
+| | 値 | なぜ |
+|---|---|---|
+| URL | **`https://localhost:44303`** | **口はポートで分ける**（上のポートの表） |
+| `IssuerId` | **`https://downstream.ssoauth.opentouryo.com`** | **2 つの IdP が同じ `iss` を名乗らない**ようにする |
+| `SpRp_Isser` | **上流の `IssuerId`**（据え置き） | **こちらは「上流に期待する `iss`」**で、役割が違う |
+| `IdFederationAuthorizeEndpoint` | `https://localhost:44301/authorize` | **ブラウザが行く先**なので、ホストから届く URL |
+| `IdFederationTokenEndpoint` / `UserInfoEndpoint` | **`http://upstream:8080/...`** | **サーバが呼ぶ先**なので、コンテナから届く宛先 |
+| 鍵の置き場 / ログ | `store/keys-downstream` / `store/logs-downstream` | **上流と分ける**（同じ鍵の置き場を共有すると Cookie を相互に復号できる。#279） |
+
+**どのコンテナにも要る設定は `store/mpas-common.env` に 1 か所だけ置いてある**
+（リソースのパス 19 件 ＋ log4net）。
+**サービスごとに書くと 2 回書くことになり、片方だけ直す事故が起きる。**
+
+> **`env_file` は LF でなければならない**（`.gitattributes` で `*.env text eol=lf` にしてある）。
+> **CRLF になると値の末尾に CR が残り**、**そのパスを使った瞬間に落ちる。**
+
+##### 目視の手順（実測 2026/10/08）
+
+**両方を作り直した状態から 1 巡測った。**
+
+| 手順 | 実測 |
+|---|---|
+| 1. 両方の Discovery | **`issuer` が違う**（`https://ssoauth.opentouryo.com` / `https://downstream.ssoauth.opentouryo.com`） |
+| 2. 下流の `jwkcerts` | **鍵が 4 つ**（マウントした署名鍵まで読めている） |
+| 3. 上流でサインイン | HTTP 302 |
+| 4. 下流で「ID 連携でサインイン」 | 上流の `/authorize` へリダイレクト（`prompt=none`） |
+| 5. 1 回目 | **`consent_required`**（#280 と同じ。同意を 1 度整える）→ `code` |
+| 6. 下流へ戻す | `/Manage/Index` が **HTTP 200**（サインインできた） |
+| 7. 2 回目 | **同じ利用者**（`super_tanaka`）。連携キーが `(iss, sub)` であること |
+| 8. Cookie | **上流・下流が並んだ**（下記） |
+
+```
+.upstream_MultiPurposeAuthSite        .downstream_MultiPurposeAuthSite
+upstream_auth_time                    downstream_auth_time
+upstream_MultiPurposeAuthSiteSession  downstream_MultiPurposeAuthSiteSession
+```
+
+**`token` / `userinfo` が `http://upstream:8080` で届いていることは、6 で分かる**
+（届いていなければ `/Manage/Index` は 200 にならない）。
+
+##### AntiForgery の Cookie だけは、名前が分かれない（未修正）
+
+**実測** : 両方が **同じ名前**の AntiForgery Cookie を発行する。
+
+```
+44301 : upstream_Identity.External,   .AspNetCore.Antiforgery.hhXVj9pTQHs, .upstream_AspNetCore.Mvc...
+44303 : downstream_Identity.External, .AspNetCore.Antiforgery.hhXVj9pTQHs, .downstream_AspNetCore.Mvc...
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 同じ
+```
+
+**`CookieNamePrefix`（#255）は AntiForgery に掛かっていない。**
+名前は**アプリのコンテンツ ルートから導かれる**が、
+**2 つのコンテナは同じアプリ・同じパス（`/app`）**なので、**同じ名前になる。**
+
+**症状** : 片方がもう片方の Cookie を上書きするため、ログにこれが残る。
+
+```
+fail: Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery[7]
+      The antiforgery token could not be decrypted.
+      ---> The key {...} was not found in the key ring.
+```
+
+- **通る。** トークンは**落とす側に倒れる**ので、画面を開き直せば新しいトークンが出る
+- **ただし、2 つを交互に使うと POST が間欠で 400 になり得る**
+- **直すには製品コードの変更が要る**（`AddAntiforgery` で Cookie 名を与える）ので、
+  **#281 の範囲には入れていない**
 
 #### 上流コンテナの自己テスト（#250）
 
@@ -234,7 +337,7 @@ docker compose up -d upstream
 
 ```powershell
 Invoke-RestMethod https://localhost:44301/.well-known/openid-configuration
-Invoke-RestMethod https://localhost:44301/jwkcerts   # RS256 と ES256 の 2 つが出る
+Invoke-RestMethod https://localhost:44301/jwkcerts   # 鍵が 4 つ出る（実測 2026/10/08）
 ```
 
 **`jwkcerts` が返れば、マウントした署名鍵まで読めている。**
