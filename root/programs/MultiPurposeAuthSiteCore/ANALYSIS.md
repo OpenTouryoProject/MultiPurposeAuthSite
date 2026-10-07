@@ -167,7 +167,7 @@ public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();
-    app.UseCors(...);                // ★認証・認可の後ろ。AllowAnyOrigin/Method/Header
+    app.UseCors();                   // ★認証・認可の後ろ。ポリシーは属性で選ぶ（#265）
     app.UseEndpoints(...);           // 5 節
 }
 ```
@@ -262,15 +262,40 @@ services.ConfigureApplicationCookie(options =>
 `authenticationBuilder.Add***()` する。**OAuth2 / OIDC の IdP 側はスクラッチ実装**であり、
 ここには何も登録されない（`#region OAuth2 / OIDC` に「スクラッチ実装」とだけ書いてある）。
 
-### 4.3 Session は開発用のまま
+### 4.3 Session の置き場は設定で選ぶ（✅ 修正済み。#256）
+
+**以前は `AddDistributedMemoryCache()` 固定で、
+他の選択肢はコメント アウトして置いてあった**（← この節の旧記述）。
+**`UserStoreType` と同じ流儀で選べるようにした**（`SessionStoreType`）。
 
 ```csharp
-services.AddDistributedMemoryCache(); // 開発用
-//services.AddDistributedSqlServerCache();
-//services.AddDistributedRedisCache();
+switch (Config.SessionStoreType)
+{
+    case EnumSessionStoreType.SqlServer:   // sql    テーブルが要る（Create_SessionCache.sql）
+        services.AddDistributedSqlServerCache(...);   break;
+    case EnumSessionStoreType.Redis:       // redis  方言に依らない
+        services.AddStackExchangeRedisCache(...);     break;
+    default:                               // mem（既定）。単一インスタンスならこれで足りる
+        services.AddDistributedMemoryCache();         break;
+}
 ```
 
-**複数インスタンスで動かすなら差し替えが要る。** 現状は単一プロセス前提。
+| | |
+|---|---|
+| 書かなければ | **`mem`**（← 従来どおり。既存の配備はそのまま動く） |
+| 接続文字列 | `SessionStoreConnectionString`。**`mem` 以外で空なら起動時に落とす** |
+| `ora` / `npg` | **専用の `IDistributedCache` は標準に無い。** 複数インスタンスにするなら `redis` |
+| net48 版 | **`Web.config` の `sessionState`** で選ぶ（この設定は読まない） |
+
+**接続文字列が無いまま起動したときを、わざと落としている。**
+`IDistributedCache` は**最初にセッションを触った時に**落ちるので、
+**そのままだと「起動は通るが画面が 500」になり、理由が分からない。**
+
+> **`mem` は複数インスタンスで共有されない。**
+> 要求が別のインスタンスへ回ると、**セッションに置いた値が読めない**
+> — ID 連携の `state` / `nonce` / `code_verifier`、自己テスト画面の値、
+> 管理画面の `access_token`、FIDO2 の challenge。
+> **詳細は [`CONFIGURATION.md`](../../CONFIGURATION.md) 7 節「セッションの置き場」。**
 
 ---
 
@@ -492,7 +517,7 @@ AccountController.Login/Register  →  CreateData()   （SemaphoreSlim で 1 本
 
 - **自己テストの画面と口は、`IsLockedDownTestEndpoints` を `true` にすれば塞がる**
   （`/Home/Saml2OAuth2Starters`、テスト用のリダイレクト先、`/TestHybridFlow`、
-  `api/Values`。詳細は [`CONFIGURATION.md`](../CONFIGURATION.md) 11 節「本番へ切り替えるときに見るもの」）
+  `api/Values`。詳細は [`CONFIGURATION.md`](../../CONFIGURATION.md) 11 節「本番へ切り替えるときに見るもの」）
 - **認可画面（同意）のように、利用者にも見せる画面へ自己テスト用の表示を足すときは、
   同じ設定で隠す**（`OAuth2Authorize.cshtml` の「この画面で確かめること」。#246 の項目 3）
 - **`IsDebug` / `TestUserPWD` / `FcmOutboxDirectory` を本番で有効にしない**
@@ -589,9 +614,23 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
 5. **初期データは `/Account/Login` の初回アクセスで作られる**（6 節）。
    「起動しただけでは管理者が居ない」ことに気付きにくい。
 6. **`IsDebug: true` でテスト ユーザが作られる**（6 節）。
-7. **CORS が `AllowAnyOrigin` / `AllowAnyMethod` / `AllowAnyHeader`。**
-   `Startup` で `UseCors` と `AddCors("AllowAllOrigins")` の**二重定義**になっている。
-8. **Session が `AddDistributedMemoryCache`（開発用）のまま**（4.3 節）。
+7. ~~**CORS が `AllowAnyOrigin` / `AllowAnyMethod` / `AllowAnyHeader`。**~~
+   **✅ 口の性質で分けた（#265）。既定のポリシーは置かず、属性で選ぶ。**
+
+   | ポリシー | 付ける口 |
+   |---|---|
+   | `MpasPublicDocs` | `.well-known/openid-configuration` / `jwkcerts` / `samlmetadata`（**絞らない**。GET のみ） |
+   | `MpasBrowserApi` | `/token` `/userinfo` `/SetDeviceToken` `/ciba_result` `/2fa_result`（**許すオリジンだけ**。`CorsAllowedOrigins` とクライアント登録から、**要求ごとに判定**。#266 / #271） |
+   | `AllowAllOrigins` | **自己テスト用の `ValuesController` だけ**（`IsLockedDownTestEndpoints` で口ごと塞がる） |
+   | （付けない） | `/revoke` `/introspect` `/device_authz` `/ciba_authz` `/par` `/ros` |
+
+   **`AllowCredentials` はどのポリシーにも付けていない**
+   （Cookie で通る口をこの範囲に入れない）。
+   **1 件も許さないときは、どのオリジンも通らない**（安全側の既定）。
+   詳細は [`CONFIGURATION.md`](../../CONFIGURATION.md) 4 節「CORS」。
+8. ~~**Session が `AddDistributedMemoryCache`（開発用）のまま。**~~
+   **✅ `SessionStoreType`（`mem` / `sql` / `redis`）で選べる（#256。4.3 節）。**
+   **既定は `mem`** なので、**複数インスタンスにするなら設定が要る**ことは変わらない。
 9. **UTF-8 でないファイルが 2 件ある**（Shift_JIS）。
    - `Views/_ViewImports.cshtml`（ヘッダ コメントが文字化けする）
    - `Views/Manage/ManageTwoFactorAuthenticator.cshtml`
@@ -611,7 +650,8 @@ dotnet run --project MultiPurposeAuthSiteCore/MultiPurposeAuthSiteCore.csproj
     **Newtonsoft で読むと base64url の `byte[]` が壊れる**。
     **キー名の大文字小文字も区別される**ので、
     **JS 側も `attestationObject` / `clientDataJSON` に直してある**。
-11. **`AccountController.cs` は 4402 行、`ManageController.cs` は 3262 行と巨大。**
+11. **`AccountController.cs` は 5088 行、`ManageController.cs` は 3048 行と巨大**
+    （実測 2026/10/08。以前の記述は 4402 / 3262 で、古くなっていた）。
     変更は該当 `#region` に閉じ、全体リファクタは避ける。
 12. **`ErrorController` は `MyBaseMVControllerCore` を継承するが、net48 側は素の `Controller`。**
     両系統でエラー処理の基底が違う。
